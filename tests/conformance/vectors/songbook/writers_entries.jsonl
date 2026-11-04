@@ -1,0 +1,83 @@
+{"corpus":"songbook/writers_entries","header":true,"made_by":"tests/test_conformance_songbook.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["Radiohead - Creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["radiohead/creep"]}
+{"args":["radiohead - creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["radiohead/creep"]}
+{"args":["Earth - Wind - Fire - September"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["earth-wind-fire/september","earth-wind/fire-september","earth/wind-fire-september"]}
+{"args":["A - B - C"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a-b/c","a/b-c"]}
+{"args":["Creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":[" - Creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["Radiohead - "],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["Radiohead -Creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["Radiohead- Creep"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["a  -  b"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["A - B"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["A - B - "],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["- A - B"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":[" - A - B"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["A -  - B"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["A - - B"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["Soda Stereo - De Música Ligera (Remastered 2007)"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["soda-stereo/de-musica-ligera"]}
+{"args":["Soda Stereo - De Musica Ligera"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["soda-stereo/de-musica-ligera"]}
+{"args":["宋冬野 - 斑馬，斑馬"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["宋冬野/斑马斑马"]}
+{"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["宋冬野/斑马斑马"]}
+{"args":["Ⓐ - Ⓑ"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["😀 - 🎵"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["/"]}
+{"args":["Café - Ça va"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["cafe/ca-va"]}
+{"args":["Café - Ça va"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["cafe/ca-va"]}
+{"args":["AC/DC - T.N.T."],"fn":"caracole.songbook.entry_keys","kw":{},"out":["ac-dc/t-n-t"]}
+{"args":["Ⅻ - 二"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["xii/二"]}
+{"args":["  Oasis   -   Wonderwall  "],"fn":"caracole.songbook.entry_keys","kw":{},"out":["oasis/wonderwall"]}
+{"args":["Oasis\t-\tWonderwall"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["Oasis - Wonderwall - Live"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["oasis-wonderwall/live","oasis/wonderwall"]}
+{"args":["Oasis - Wonderwall (Live)"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["oasis/wonderwall"]}
+{"args":[""],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":[" - "],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["-"],"fn":"caracole.songbook.entry_keys","kw":{},"out":[]}
+{"args":["a - b"],"fn":"caracole.songbook.entry_keys","kw":{},"out":["a/b"]}
+{"args":["Soda Stereo - De Musica Ligera","soda stereo - De Música Ligera (Remastered 2007)"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["soda stereo - De Música Ligera (Remastered 2007)","Soda Stereo - De Musica Ligera"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["宋冬野 - 斑馬，斑馬","宋冬野 - 斑马，斑马"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["宋冬野 - 斑马，斑马","宋冬野 - 斑馬，斑馬"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Radiohead - Creep","Stone Temple Pilots - Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Stone Temple Pilots - Creep","Radiohead - Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Earth - Wind - Fire","Earth - Wind - Fire"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Earth - Wind - Fire","Earth - Wind - Fire"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Earth - Wind - Fire - September","Earth - Wind - Fire - September"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Earth - Wind - Fire - September","Earth - Wind - Fire - September"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["A - B - C","A - B - C"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["A - B - C","A - B - C"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["A - B - C","A - B"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["A - B","A - B - C"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["A - B - C","A - B C"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["A - B C","A - B - C"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Creep","Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Creep","Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Creep","Radiohead - Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Radiohead - Creep","Creep"],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["",""],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["",""],"fn":"caracole.songbook.same_entry","kw":{},"out":false}
+{"args":["Oasis - Wonderwall","  oasis -  WONDERWALL "],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["  oasis -  WONDERWALL ","Oasis - Wonderwall"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Oasis - Wonderwall","Oasis - Wonderwall (Live)"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Oasis - Wonderwall (Live)","Oasis - Wonderwall"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Café - Ça va","Café - Ça va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Café - Ça va","Café - Ça va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Café - Ça va","Cafe - Ca va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["Cafe - Ca va","Café - Ça va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
+{"args":["radiohead - karma police"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
+{"args":["Radiohead - Karma Police"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
+{"args":["宋冬野 - 斑馬，斑馬"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"宋冬野/斑马斑马"}
+{"args":["Radiohead - Karma Police Live"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["ban ma ban ma"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Song Dongye - Ban Ma Ban Ma"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Earth - Wind - Fire - September"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"earth-wind-fire/september"}
+{"args":["Earth - Wind - Fire"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["A - B - C"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"a-b/c"}
+{"args":["A - B"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Soda Stereo - De Musica Ligera"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
+{"args":["Soda Stereo - De Música Ligera (Remastered 2007)"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
+{"args":["Nobody - Nothing"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":[""],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Creep"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Oasis - Wonderwall"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
+{"args":["Oasis  -  Wonderwall"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
+{"args":["oasis - wonderwall (live)"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}

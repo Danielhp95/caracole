@@ -1210,7 +1210,27 @@ Not built yet. (lookup.)
 
 ##### The Requests tab on the phone
 
-Not built yet. (job-views, requests-feed.)
+- **Its lines** (server/jobs: `Status`, `Outcomes`, `SongFacts`, `JobViews`, `JobsRoutes`): every job's line, chips
+  and outcome as status.py, outcome.py and jobs_routes.view say them, for every kind caracole serve queues and the
+  phone's own:
+  - a job of commands is read as caracole serve's; one of the phone's own (a run, no command) as caracole serve's of
+    the same request (`Shape`): an add's or a removal's stage its one command, a staged one's stages under its title;
+  - with no to-do page: status.job_line's `todo=None`, the same words with no link;
+  - its song as the library has it now (`SongFacts.songOf`, jobs_routes.song_of: the sheet its card opens, review,
+    the picker, ignored and a LaCuerda pick by the phone's overrides, `checked_now` by `ug_checked_at` and the
+    artist page's check, read as strptime reads them, `elsewhere` from the local indexes and `Health.isCooling`);
+  - what a job over came to worked out once, the queue's one answer (`SongFacts.ended(queue)`, jobs_routes'
+    `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
+  - PhoneKinds' kinds (render, inbox, backup, restore) say §5.3's table's words, the ones their run filled in as
+    their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
+    wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
+    and the phone's index import "Merging the computer's index…";
+  - vectors/web/job_views.jsonl (the phone's own jobs), job_views_kinds.jsonl (every kind of commands in every state,
+    every stage a line words running, a sync's, a take's and a merge's commands), outcome.jsonl (the same and each
+    site's waits and errors, then the tables of words whole, its `tables` record) and job_views_song_of.jsonl
+    (song_of over a small library a record, its fixture), written by tests/test_conformance_sync_routes.py and
+    test_conformance_web.py (`JobViewsReplay`, area `job-views`).
+- The tab itself: not built yet (requests-feed).
 
 ##### The computer's settings on the phone
 
@@ -1243,7 +1263,25 @@ Not built yet. (job-views, requests-feed.)
   - tests/helpers/viewer_corpus.py is the seeded inputs every M5 generator reads (its docstring), the same in every
     process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
     regenerates the corpus.
-- A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
+- A sheet read, ChordPro and a song's key (sheet-keys): `viewer.sheet`'s `Sheets` (viewer/sheet.py: `parse`,
+  `directive`, `written`, `isLegend`, `isLegendLine`, `preambleSection`, `splitPreamble`), `SheetView` (page.py's
+  reading functions that hold no HTML, below the page, so that a version's and the harp's reading need no page:
+  `shown`, `drawnLines`, `writtenTexts`, `peek`, `places`, `played`, `songKey` and `viewerKey`, `givenShapes` and
+  `shapesOf`), `ChordPro` (chordpro.py, with render.py's `chordProText`, `asLatin` and `needsFontFile` and
+  ug/page.py's `decodeTwice`) and `MusicKeys` (keys.py: `sheetKey`, `sheetKeys`, `songKey` and `letterAlone` over the
+  phone's `files` and `versions` as core.library reads them, `Kept.keptFiles` and `Versions.get`, each file read only
+  as a regular file, never through a link; `SongKey`).
+  - Their constants and patterns exported from the modules by tests/test_conformance_viewer_sheet.py into
+    data/caracole/viewer/sheet.json, a member a module, never retyped; Python's lines, whitespace and lengths
+    throughout (str.splitlines, str.isspace, code points, a chord's column a display column), never Kotlin's trim or
+    lines.
+  - Every answer held by vectors/viewer/sheet, chordpro and musickeys (`SheetReplay`, the `sheet` area), a sheet's
+    derived lists by their digest; estimate_key's sums Python's (`Py.fsum`), its correlation compared to the bit.
+  - Their inputs include every string literal of tests/test_viewer_sheet.py, test_viewer_preamble.py,
+    test_chordpro.py and test_keys.py (`SHEET_LITERALS`, `CHORDPRO_LITERALS`, `KEYS_LITERALS`): an edit to one
+    regenerates the corpus.
+  - Where Kotlin holds less than Python: a `{capo}` or a sheet.json capo past an Int is none; and as in Python, a
+    solfège name sre's IGNORECASE reads but no table holds (`[ch]ſol[/ch]`) raises.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): `viewer.shapes`' `Voicings` (chords-db's
   fingerings from viewer/'s own voicings.json and voicings-ukulele.json, a legend's and a `{define}`'s shapes,
   `voicingKeys`, `sheetShapes`) and `Instruments` (`INSTRUMENTS`, easy keys, each one's shapes of a chord, a page's
@@ -1271,7 +1309,15 @@ Not built yet. (job-views, requests-feed.)
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
   function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
   (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
-  and tables (harmony-progressions): not built yet.
+  and tables (harmony-progressions):
+  - `progressions`, `progressionKey`, `nameOf`, `readTyped` (each of a list or of a string typed) and `catalogue`
+    (`catalogue_keys`), `HarmonyProgressions` function for function (`_fold`, `_passes`, `_varies`, `_whole`, `_rows`,
+    `_contained`, `_ending`, public for the replay), CATALOGUE, `_LOOPS` and its other tables and patterns exported to
+    harmony.json too, a key's turn chosen by code point as Python compares str;
+  - `HarmonyTables.tables`, harmony_tables.py's, each object in Python's insertion order (a chord's reading the one most
+    of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
+  - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
+    kept whole).
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
   - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
