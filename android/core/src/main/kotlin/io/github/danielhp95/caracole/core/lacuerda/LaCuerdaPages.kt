@@ -292,7 +292,7 @@ object LaCuerdaPages {
                                             .joinToString("") { it.text(deep = true) }.replace(' ', ' '))
             val count = item.cssFirst("span")
             val number = if (count != null) PyRe.match(LEADING_NUMBER, count.text(deep = true)) else null
-            val songs = number?.let { PyInt.parse(it.groups[1]!!.value)!!.toLong() } ?: 0L
+            val songs = number?.let { PyInt.parse(it.groups[1]!!.value)!!.longValueExact() } ?: 0L
             artists += LaCuerdaArtist(slug, name.ifEmpty { slug }, songs)
         }
         if (items.isNotEmpty() && artists.isEmpty()) {
