@@ -32,9 +32,20 @@ settings, a file read from the phone's server for another app, an index fetched 
 
 ## Install
 
-- With USB debugging on: `adb install android/app/build/outputs/apk/debug/app-debug.apk`.
-- Or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
-  once.
+1. **Install the debug APK**, which [Build](#build) made:
+   - with USB or wireless debugging on: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r`
+     keeps the app's data when it is already there);
+   - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
+     once.
+2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
+   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
+   pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
+   library's name when its caracole.toml gives one (`name`), which the pages then show after caracole's.
+3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
+   indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
+   with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
+   say). It runs in the background and Settings says how it ended ([Search with the computer
+   off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`). An update must be signed
 with the same key.
@@ -232,6 +243,16 @@ serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
 `ANDROID_AVD_HOME` is where avdmanager made the AVD (the emulator looks in `~/.android/avd` otherwise);
 `QT_QPA_PLATFORM=xcb` runs its window through XWayland on a Wayland desktop.
 
+To try the app by hand there, install it as on a phone
+(`adb install -r android/app/build/outputs/apk/debug/app-debug.apk`), start it
+(`adb shell am start -n io.github.danielhp95.caracole/.MainActivity`, or from the emulator's launcher), and point it
+at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`
+builds a library of 20 songs in DIR with no request and serves it on the host's loopback alone (caracole serve has
+no sign-in: never on the LAN for a test), which the emulator reaches at `http://10.0.2.2:PORT`. Its
+Settings then imports that computer's indexes (From the computer), or a file pushed to the emulator's Download
+folder (`adb push indexes.sqlite /sdcard/Download/`, then From a file). `adb shell pm clear
+io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
+
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
 the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
@@ -241,12 +262,12 @@ LocalServerTest needs no computer: the app's server answers its page only with t
 never loads another loopback port, and a first start's database is made whole. SyncTabTest opens the Sync tab from
 the menu, compares with the computer and syncs, then compares again and finds nothing that differs (it changes the
 phone's library, so give it a computer of its own, such as `nix develop -c python -m tests.helpers.e2e_library serve
-DIR PORT`):
+DIR PORT --address 127.0.0.1`):
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
     adb install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-    adb shell am instrument -w -e server http://10.0.2.2:8737 \
+    adb shell am instrument -w -e server http://10.0.2.2:PORT \
         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
 
 Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
@@ -267,7 +288,60 @@ Not built yet.
 
 ## Performance notes
 
-Not built yet.
+**The WAL after an import.** An import (Settings' Import indexes, or a sync's newer indexes) merges the computer's
+indexes in a few big transactions, and SQLite's WAL grows with them: on the owner's phone it was left at 387 MB, and
+the first search after the import, or after a start, took more than 30 s while every search waited behind it. A WAL
+SQLite has copied back stays on disk at its largest unless told otherwise, every read before the next checkpoint
+goes through its index, and a start after Android stopped the app reads the whole file again to rebuild that index.
+Now:
+
+- every connection keeps `PRAGMA journal_size_limit` at 16 MiB (`Database.JOURNAL_SIZE_LIMIT`), so a WAL SQLite
+  restarts is cut down to that;
+- the import and the sync's index stage end with `Database.checkpoint()` on the writer: `PRAGMA
+  wal_checkpoint(PASSIVE)` first, which copies the frames back while searches go on, then `TRUNCATE` with every
+  reader taken, which has little left to copy and leaves no WAL at all;
+- opening a database whose WAL is over the limit (a phone killed before its checkpoint) checkpoints it first;
+- a merge that changed many of UG's rows (`Warmup.OPTIMIZE_AFTER`, 100,000 rows written, its triggers' included: an
+  import, never a sync's nightly few, which FTS5's own merging keeps) makes each of UG's three full-text indexes one
+  segment (`'optimize'`, a fraction of a second for 300,000 rows);
+- the app's start runs one search in the background (`Database.warmUp`), so that the code, the data it loads lazily
+  and the pages a search reads are ready before the owner's first search; a search that comes meanwhile runs beside
+  it;
+- the words of UG's keys a search kept are read again, whole, after an import added more than 1,000 of them
+  (`Vocabulary.REREAD`), rather than added one at a time to lists of tens of thousands.
+
+**Measured** (`ColdSearch`: a synthetic index of 300,000 ug_index rows, 70,687 words of their keys, imported, the
+phone killed with it open, started again, its warm-up, then a misspelt query that looks for close spellings too).
+"Before" is the same run over the same index with the fixes off (`ColdSearch(fixed = false)`: no journal size limit,
+no checkpoint after the import or as the database opens, no optimize, no warm-up; Vocabulary's re-read, which it
+can't turn off, is in both), each in a process of its own, as a start is:
+
+| Emulator (Android 36, x86_64) | Before | After | What moved it |
+|---|---|---|---|
+| The WAL the import left | 72.7 MiB | 0 | the import's checkpoint (without it, the journal size limit: 16 MiB) |
+| The import: merge, then checkpoint | 5.5 s | 5.5 s, the checkpoint 3 ms | nothing (the optimize is under 0.1 s of it) |
+| A start: the database opened, and the WAL it finds | 3 ms, 72.7 MiB | 3 ms, none | the import's checkpoint (killed before it: the one at open) |
+| The first search's steps in a new process, cold | 133 ms | 116 ms | nothing: the same steps (your songs 32 to 42 ms, MuseScore 44 ms, the close spellings 25 to 29 ms), which the warm-up now pays as the app starts |
+| The first /api/search after a start, and a warm one | 21 ms, 14 ms | 20 ms after a 22 ms warm-up, 12 ms | nothing beyond the emulator's noise |
+| The first search after an import while the app runs, and a warm one | 18 ms, 10 ms | 12 ms, 8 ms | a few ms, near the noise: the optimize's one segment each |
+
+ColdSearch runs the cold steps first, so the start after them finds the code loaded: the first search after it, and
+the warm-up's 22 ms, are the database's alone. On the JVM (`gradle bench`) the import's WAL is the same, 72.7 MiB
+before and 0 after, and CheckpointBench's merge of 200,000 rows alone leaves 16 MiB (the limit), which its checkpoint
+gives back (PASSIVE 10 ms, then TRUNCATE 2 ms); its search times are left out, within the noise of a machine other
+builds share.
+
+Neither the emulator nor the JVM shows the phone's 30 s: over an index in the page cache the first search's own steps
+take about 0.13 s cold on the emulator (`ColdSearch.Result.steps`), which the warm-up now pays. What was cold on the
+phone is what a big WAL costs on its storage: the rebuild of the WAL's index from a 387 MB file at a start, and reads
+through it until a checkpoint, which the import's checkpoint now leaves none of. The owner's phone's numbers are the
+M4 check's to take.
+
+Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, its two runs each
+in a JVM of its own, and MergeSpeedBench) and `android/scripts/device-test.sh
+'ColdSearchTest#asThePhoneRanBeforeTheFixes' 'ColdSearchTest#theFirstSearchAfterAStartAnswersAsAWarmOneDoes'` (each in
+a process of its own; `ColdSearchTest` alone runs both in one); `Timings` (core.db, behind `-Dcaracole.timings=1`,
+never in a page) times each step.
 
 ## Pages built on the phone
 

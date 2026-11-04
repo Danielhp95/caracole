@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.sync.internal.take
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
@@ -14,7 +15,6 @@ import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
 import io.github.danielhp95.caracole.core.library.internal.PyRepr
 import io.github.danielhp95.caracole.core.library.internal.Removal
 import io.github.danielhp95.caracole.core.library.internal.SongKv
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.Upsert
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode

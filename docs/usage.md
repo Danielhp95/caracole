@@ -5757,7 +5757,10 @@ your home database's indexes into a service's, see
 
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
     caracole peer sync ADDRESS [--here ADDRESS | --push] [--prefer here|there] [--choose SIDE:ID]...
-                               [--compared HASH] [--progress] [--yes]
+                               [--compared HASH] [--parts PARTS] [--progress] [--yes]
+    caracole peer export FILE [--parts PARTS]                  # this library in a .caracole file
+    caracole peer import SOURCE [--prefer here|there] [--choose SIDE:ID]... [--compared HASH] [--parts PARTS]
+                                [--progress] [--yes]           # a sync with such a file
     caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
     caracole peer take [--progress] DIR                        # a push caracole serve staged (it queues this)
     caracole peer new-id                                       # for a database copied from another caracole's
@@ -5900,6 +5903,74 @@ address and name, which caracole serve's Sync tab lists. A unit left doesn't fai
 **`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
 for caracole serve.
 
+### Export and import: peer export, peer import
+
+**`caracole peer export FILE`** writes this library to one file, to give to another caracole (a friend's, the
+phone's), to keep, or to carry where the two can't reach each other: `caracole peer export ~/tabs.caracole`, or a
+folder (`caracole peer export ~/Downloads`), where it is named for the library and the day,
+`horde_logbook-03-11-26.caracole`. `--parts` says what it holds, by commas:
+
+- **library** (with songbooks, the default): every song (its line, versions, kept files, lyrics and overrides.toml
+  entries), removal, alias, artist's UG page and blocked tab, and the pages caracole made of the songs (their sheets'
+  pages and PDFs, as the phone's app copies them), so that a phone that takes a song from it opens its sheet;
+- **songbooks**: every songbook, and the songs they list, even without the library;
+- **indexes** (`--parts library,songbooks,indexes`): the site indexes, as `caracole index export` writes them
+  (hundreds of MB).
+
+It reads the library in one go, takes no lock, waits for nothing and writes over no file, then says what it wrote. A
+song a kept file of which changed since caracole kept it (edited on a synced device), or is bigger than 64 MiB, is
+left out, and said with why; without the library page as caracole last wrote it the file holds no pages (`caracole
+todo` writes it again), and a page caracole rewrites as the file is made is left out. Everything
+caracole keeps goes in it, what harptabs.com, gametabs.net and AZLyrics gave included: it is yours to share as you
+like (your choice of 2026-11-03), and caracole sends it nowhere.
+
+The file is a zip (format 1) of what a sync reads from the other side: its manifest (`caracole.json`: the library's
+id and name, when it was made, its parts), the state and each unit's document as `GET /api/peer/state` and `GET
+/api/peer/unit` give them, what that caracole last agreed on with each other, the kept files and the pages, each by its
+SHA-256 and each once (a page that is a kept file, a song's sheet.txt, is held as the kept file), and the indexes.
+
+**`caracole peer import SOURCE`** syncs this library with such a file, as if the caracole that exported it were here:
+it compares the two, takes what changed there, and keeps what the two agree on, so that the next file from that
+caracole, or a sync with it over the network, shows only what changed since. A file takes nothing back: what changed
+here stays here (export a file of your own to give it). Its steps, as `--progress` names them:
+
+1. **check**: the file read whole, every part of it checked, then compared. Refused before anything changes (exit 2):
+   something that isn't a file caracole exported; a file of another version of caracole; one cut short, damaged or
+   holding anything else ("That file can't be read whole (…): export it again."); this library's own export ("a
+   library takes nothing from itself": `caracole backup` keeps copies to go back to); and a file no newer than your
+   last sync with its caracole ("Nothing in this file is newer than your sync with horde_logbook on 03/11/26."), the
+   same file imported twice among them.
+2. **take**: the database backed up (`…-before-sync.sqlite`), then each unit the file gives, as `caracole peer pull`
+   takes one. A conflict (changed here and in the file since the two last agreed) goes by `--choose`, else
+   `--prefer`, else asked, else is left. A song the file's library removed since then is removed here; a part the file
+   doesn't hold (a file of the songbooks alone) never removes anything, and its songs come along with their songbooks.
+3. **render**: the songs taken rendered again, the songbooks made, the pages written.
+4. **agree**: what the two agree on, stamped with when the file was made. A conflict you answered **here** (keep
+   mine), or a change of the file's you chose to keep here's for, is remembered: the next file from that caracole
+   doesn't ask it again while neither side changes it, and the next `caracole peer sync` with that caracole gives it
+   your version. Once the file has been imported, it is no newer than your last sync with its caracole: an import of
+   some of its parts (`--parts songbooks`) leaves the rest for a newer file. An import of its indexes alone
+   (`--parts indexes`) agrees on nothing, so its library may still be imported after.
+5. **index**: the file's indexes, when it holds them and `--parts` names them, merged as `caracole index merge`
+   merges a file. A merge that fails says why, and the import exits 1, its units taken all the same.
+
+SOURCE may also be an index export (`caracole index export`'s file): its indexes are merged, nothing else, and no
+agreement is kept. Or it is the folder an upload to caracole serve is staged in, part by part
+(`state_dir/peer/import-<id>/`, one at a time, 8 GiB at most): it is taken only once every part has come (else
+refused, "That file isn't whole yet: send the rest of it.", and left for the rest), deleted once the import is over,
+or an hour after its last part if it is never taken. `--choose`, `--prefer`, `--compared`, `--progress` and `--yes`
+are `peer sync`'s; with `--progress` it ends with a report of what it did, for caracole serve, even when it could
+take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
+
+**`--parts`**, of `peer sync` and `peer import`: the parts of the sync, `library`, `songbooks` and `indexes` by
+commas, all three by default. A difference outside them is neither taken nor given nor listed, but a song a songbook
+lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
+
+A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
+chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
+--compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
+`--prefer`.
+
 ### The Sync tab
 
 The library page caracole serve serves has a **Sync** tab, before Requests, which syncs this library with another
@@ -5955,13 +6026,52 @@ thresholds; and each provider's `per_day`, which caracole.toml can't set (Megalo
 null for every other site). Never a run's `budget` or `delay` (the phone does no nightly work), a folder, a program or
 your ntfy topic. The phone sends no settings back, and another computer syncing with this one passes over them.
 
-The phone doesn't take them yet: until it does, it looks songs up with config.py's defaults, whatever the computer's
-caracole.toml says. Once it does, a provider you turn off on the computer (`[providers.megalobiz] enabled = false`)
-is off on the phone too after the next sync.
+The phone takes them at each sync, as it records what the two agree on, replacing the last ones it took: a computer
+that gives none leaves the phone's as they were, and a sync that fails before then takes none. It lays them over its
+own defaults, value by value as caracole.toml's would be read, and passes over a provider it doesn't know. Its own
+lookups, which read them as each one begins, aren't on the phone yet, and its pages still call the library "Phone".
 
 ### The phone's reads go to the computer (POST /peer/index)
 
-Not built yet.
+The pages the phone's lookups read are the computer's too: an artist's Ultimate Guitar pages, LaCuerda's artist
+pages and what its search answered, harptabs.com's artist pages, gametabs.net's game pages. The phone notes each one
+as it stores it, and at the end of every sync (the sync's index stage) sends the computer those noted since its last
+push to that computer, whatever the sync merged from the computer's indexes, and even when that merge failed (never
+a time window: LaCuerda's pages carry no time, and UG's move with the computer's nightly refresh). Its caracole
+exports them as `caracole index export` would, only those pages' rows in each site's tables, with the records of how
+they are keyed, never a sitemap's or a listing's record nor how far an index has got, and posts the file:
+
+    POST /peer/index        an index export, its bytes (64 MiB at most), with the form token in its header
+
+caracole serve checks the token and that the bytes are a SQLite file's, keeps the file as
+`state_dir/peer/index-<16 hex>.sqlite` (only its owner reads it), and reads it as the merge will before it answers:
+an export of pages alone (no sitemap rows, no record but how its rows are keyed, tables and nothing else), of this
+caracole's layout, schema and columns. One that isn't is deleted and refused, `409` for another version of caracole
+(bring both to one version: the phone keeps its pages until then) and `400` for anything else. Otherwise it queues
+the merge and answers `202 {"job": N}`:
+
+    caracole index merge --delete --progress -- FILE
+
+The phone forgets the pages it sent once it has that answer; the sync's index stage says so ("sent 3 pages read
+here, none left to send: its request 12 merges them"). Refused, or not answered, they stay on the phone for the next
+sync, and the stage says why ("1 page read here kept for the next sync: …"); a computer older than this route
+answers 404, which the stage names too. Nothing is sent when the phone read no page since. The pages go to the
+computer the phone syncs with next: a second computer gets only those read after.
+
+It merges as `caracole index merge` always does (see [caracole index export and
+merge](#caracole-index-export-and-merge)): backed up first, a page the file read later taken, a LaCuerda page or
+search answer the computer has already kept as it is, and no progress record moved. The backup is the whole
+database, as before any merge: a sync that brings pages the computer lacks makes one (a few seconds for a large
+library, holding caracole's lock), and the newest three copies are kept, whatever made them, so three such syncs
+in a day leave merges' copies where the nightly ones were (each a whole copy all the same). **`--progress`** reports its one stage, merge, as a JSON
+line, which the Requests tab reads ("Index pages from another caracole": Merged, and what each site took), ending
+`failed` however the command stops short of a merge (caracole's lock or its database not to be had too), and waits
+for the nightly run as a lookup does, which lets it go first at its next pause. **`--delete`** deletes FILE once it
+is merged; refused, only a file caracole serve staged (`state_dir/peer/index-<16 hex>.sqlite`, which can never be
+merged here), never a file named by hand (the database itself, a backup, a typo stay as they were); one that found
+no room for the backup first, or whose merge couldn't have the lock or the database, stays, for Try again. At most
+two such files wait at once (409 for another: the phone sends its pages at the next sync), and one an hour old that
+no waiting request names is deleted as the next one comes.
 
 ### What the offline copy lists
 

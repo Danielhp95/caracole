@@ -7,8 +7,21 @@ databases as a file: ``export`` copies a site's tables, with the kv records it k
 into a new SQLite file, in one read transaction (a consistent copy, which takes no lock); and ``merge`` takes into
 the database what the file read more recently, under the lock the command holds.
 
-**A merge** checks first that the file is an export (its ``META`` table) of this schema version, and that every
-table it merges has the database's columns, else it changes nothing (``TransferError``). Then it decides, per site,
+**An export of pages** (``export(pages=)``) is what the phone sends the computer at a sync (``POST /peer/index``):
+the pages its lookups read, which core.index.Reads noted, never a time window (UG's artist pages' stamp moves with
+the computer's nightly refresh, and LaCuerda's pages hold no time). Each site's tables are made as a whole export
+makes them, but filled only with the rows of the pages named, by the column that names a page (``PAGES``: UG's
+artist pages' tabs, LaCuerda's artist pages and its search's rows, ``busca.php``, harptabs.com's artist pages and
+their tabs, gametabs.net's game pages and theirs), and its kv only with the records of how those rows are keyed,
+which a merge compares to make keys again: never a sitemap's or a listing page's record, nor how far an index has
+got, whose rows such a file never holds (a record of it the other side lacks would be taken with no row). A site
+whose index has no page a lookup reads (gtptabs.com's, MuseScore's: sitemaps alone) is refused. ``check_pages`` holds
+a file posted to caracole serve to that shape before its merge is queued, so that nothing but pages comes of it.
+
+**A merge** checks first that the file is an export (its ``META`` table, and tables alone: no view, trigger, index of
+its own or virtual table), read with no function its schema names trusted, of this schema version, and that every
+table it merges has the database's columns, else it changes nothing (``TransferError``; ``OtherVersion`` for another
+layout, schema or columns). Then it decides, per site,
 what the file read more recently, the database's records and the file's compared:
 
 - a sitemap (UG's ``ug:sitemaps``, site_index.py's ``<provider>:sitemaps``) or a listing page of LaCuerda's
@@ -38,7 +51,7 @@ import json
 import os
 import secrets
 import sqlite3
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -55,6 +68,15 @@ _TAKEN = "temp._merge_taken"
 
 class TransferError(Exception):
     """An export or a merge refused, nothing written: its words say why."""
+
+
+class NoBackup(TransferError):
+    """A merge refused for want of room for the backup it makes first: the file itself may merge later."""
+
+
+class OtherVersion(TransferError):
+    """An export of another layout, schema or columns than this caracole's: it merges once both sides are of one
+    version, never before."""
 
 
 @dataclass(frozen=True)
@@ -98,6 +120,31 @@ def _sites() -> dict[str, Site]:
 
 
 SITES: dict[str, Site] = _sites()
+
+
+@dataclass(frozen=True)
+class Pages:
+    """What of a site's index a lookup reads a page at a time (``export(pages=)``): each table holding a page's
+    rows, with the column that names the page, and the kv records of how those rows are keyed."""
+
+    tables: tuple[tuple[str, str], ...]
+    kv: tuple[str, ...]
+
+
+def _pages() -> dict[str, Pages]:
+    from caracole import gametabs_index, harptabs_index, lacuerda_index
+    from caracole.ug import artist_tabs
+
+    return {
+        "ug": Pages((("ug_artist_tabs", "page"),), (artist_tabs.KEYS_KEY,)),
+        "lacuerda": Pages((("lacuerda_index", "page"),), (lacuerda_index.KEYS_KEY,)),
+        "harptabs": Pages((("harptabs_artists", "path"), ("harptabs_artist_tabs", "artist")),
+                          (harptabs_index.KEYS_KEY,)),
+        "gametabs": Pages((("gametabs_games", "path"), ("gametabs_game_tabs", "page")), (gametabs_index.KEYS_KEY,)),
+    }
+
+
+PAGES: dict[str, Pages] = _pages()
 
 
 _PLURALS = {"tab of its artist pages": "tabs of its artist pages",
@@ -157,10 +204,27 @@ def chosen(names: Iterable[str] | None, among: Sequence[str] | None = None) -> t
 # --- export --------------------------------------------------------------------------------------------------------
 
 
-def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = None, *, now: datetime) -> Exported:
+def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = None, *, now: datetime,
+           pages: Mapping[str, Sequence[str]] | None = None) -> Exported:
     """The indexes of ``sites`` (every one with none) into a new file at ``path``, in one read transaction; a file
-    there already, or the database itself, is refused. Written under a name of its own, then renamed."""
-    names = chosen(sites)
+    there already, or the database itself, is refused. Written under a name of its own, then renamed.
+
+    With ``pages`` (``{site: [page, …]}``, a lookup's reads: none of ``sites`` then), those sites alone, each table
+    of theirs holding only those pages' rows (``PAGES``) and the kv only their keys records; with no site at all for
+    an empty one."""
+    if pages is not None:
+        if sites is not None:
+            raise TransferError("an export of pages exports their sites alone: name no site beside them")
+        names = chosen(pages) if pages else ()
+        lacking = [n for n in names if n not in PAGES]
+        if lacking:
+            raise TransferError(f"{SITES[lacking[0]].title}'s index has no pages a lookup reads, its sitemaps alone: "
+                                f"pages are of {', '.join(PAGES)}")
+        chosen_pages = {table: (column, list(dict.fromkeys(pages[n])))
+                        for n in names for table, column in PAGES[n].tables}
+    else:
+        names = chosen(sites)
+        chosen_pages = None
     if _same_file(path, _db_path(conn)):
         raise TransferError(f"{path} is the database itself: name a new file")
     if os.path.lexists(path):
@@ -169,9 +233,9 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
         raise TransferError(f"{path.parent} is no folder: name a file in one")
     part = path.with_name(f"{path.name}.{secrets.token_hex(6)}.part")
     tables = [t for n in names for t in SITES[n].tables]
-    keys = [k for n in names for k in SITES[n].kv]
+    keys = [k for n in names for k in (SITES[n].kv if chosen_pages is None else PAGES[n].kv)]
     try:
-        _write_export(conn, part, names, tables, keys, now)
+        _write_export(conn, part, names, tables, keys, now, chosen_pages)
         os.replace(part, path)
     except (OSError, sqlite3.Error) as e:
         raise TransferError(f"can't write {path}: {e}") from e
@@ -182,9 +246,12 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
 
 
 def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], tables: Sequence[str],
-                  keys: Sequence[str], now: datetime) -> None:
+                  keys: Sequence[str], now: datetime,
+                  pages: Mapping[str, tuple[str, list[str]]] | None = None) -> None:
     """The export's tables, as the database has them, made in a file of their own, then filled from the
-    database in one transaction: one snapshot of it for every table, a consistent copy."""
+    database in one transaction: one snapshot of it for every table, a consistent copy. With ``pages`` (a table's
+    column and the pages it names, by table), only those pages' rows, and no row of a table it doesn't name, each
+    table's in the database's order, the kv by key."""
     out = sqlite3.connect(part)
     try:
         for table in tables:
@@ -207,10 +274,16 @@ def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], ta
         try:
             for table in tables:
                 cols = ", ".join(_columns(conn, "main", table))
-                conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table}")
+                if pages is None:
+                    conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table}")
+                elif table in pages:
+                    column, named = pages[table]
+                    conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table} "
+                                 f"WHERE {column} IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+                                 (json.dumps(named),))
             marks = ", ".join("?" for _ in keys)
             conn.execute(f"INSERT INTO exported.kv (key, value) SELECT key, value FROM main.kv WHERE key IN "
-                         f"({marks})", list(keys))
+                         f"({marks})" + ("" if pages is None else " ORDER BY key"), list(keys))
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")
@@ -239,11 +312,12 @@ def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = No
           now: datetime) -> Merged:
     """Take into the database what the export at ``path`` read more recently, site by site (``sites``: every one
     the file holds, with none), after a copy of it in ``state_dir``'s backups; see the module docstring.
-    ``TransferError`` when it is refused, nothing written; backup.py's ``BackupError`` when the copy fails."""
-    meta = _meta(path)
-    names = _merged_sites(path, meta, sites)
+    ``TransferError`` when it is refused, nothing written (``NoBackup`` when only the room for that copy is
+    lacking); backup.py's ``BackupError`` when the copy fails."""
     if _same_file(path, _db_path(conn)):
         raise TransferError(f"{path} is the database itself")
+    meta = _meta(path)
+    names = _merged_sites(path, meta, sites)
     with _attached(conn, path):
         _check_columns(conn, path, names)
         plans = [_plan(conn, name) for name in names]
@@ -251,7 +325,7 @@ def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = No
         return Merged([SiteMerge(p.site) for p in plans], None)
     copy = backup.make(conn, state_dir, now, label=backup.MERGE)
     if isinstance(copy, backup.Skipped):
-        raise TransferError(f"{copy.reason}, and a merge backs the database up first")
+        raise NoBackup(f"{copy.reason}, and a merge backs the database up first")
     done: list[SiteMerge] = []
     with _attached(conn, path):
         for plan in plans:
@@ -259,24 +333,85 @@ def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = No
     return Merged(done, copy.backup.path)
 
 
+def check_pages(conn: sqlite3.Connection, path: Path) -> tuple[str, ...]:
+    """That the file at ``path`` is an export of pages (``export(pages=)``'s: the phone's reads, posted to caracole
+    serve) this database merges, read with nothing written: an export ``_meta`` takes; every site of it one of
+    ``PAGES``', with its tables alone beside kv and ``META``, each of the database's columns (generated ones too);
+    no row in a table no page fills (a sitemap's: ``ug_index``, ``harptabs_index``, ``gametabs_index``); and its kv
+    only how those rows are keyed, never a sitemap's or a listing page's record, nor how far an index has got, which
+    a merge would take with no row of theirs. Its sites; ``TransferError`` else, ``OtherVersion`` for another layout,
+    schema or columns."""
+    meta = _meta(path)
+    names = _merged_sites(path, meta, None)
+    lacking = [n for n in names if n not in PAGES]
+    if lacking:
+        raise TransferError(f"{path} holds {SITES[lacking[0]].title}'s index, of which no lookup reads a page: it "
+                            "is no export of pages")
+    try:
+        file = _untrusted(path)
+        try:
+            held = {r[0] for r in file.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            tables = [t for n in names for t in SITES[n].tables]
+            if held != {META, "kv", *tables}:
+                raise TransferError(f"{path} holds the tables {', '.join(sorted(held))}, and an export of its sites' "
+                                    f"pages {', '.join(sorted({META, 'kv', *tables}))}")
+            paged = {t for n in names for t, _ in PAGES[n].tables}
+            for table in tables:
+                mine = [(r[1], r[6]) for r in conn.execute(f"PRAGMA main.table_xinfo({table})")]
+                theirs = [(r[1], r[6]) for r in file.execute(f"PRAGMA main.table_xinfo({table})")]
+                if mine != theirs:
+                    raise OtherVersion(f"{path}'s {table} has the columns ({', '.join(c for c, _ in theirs)}), and "
+                                       f"the database's ({', '.join(c for c, _ in mine)}): nothing changed")
+                if table not in paged and file.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None:
+                    raise TransferError(f"{path}'s {table} holds rows, and an export of pages none: a sitemap's rows "
+                                        "come of the computer's own reads")
+            keys = {k for n in names for k in PAGES[n].kv}
+            other = [r[0] for r in file.execute("SELECT key FROM kv ORDER BY key") if r[0] not in keys]
+        finally:
+            file.close()
+    except sqlite3.Error as e:
+        raise TransferError(f"{path} can't be read as an export of pages ({e})") from e
+    if other:
+        raise TransferError(f"{path}'s kv holds {other[0]!r}, and an export of pages only how its rows are keyed: "
+                            "a sitemap's or a listing's record, or how far an index has got, comes of the computer's "
+                            "own reads")
+    return names
+
+
+def _untrusted(path: Path) -> sqlite3.Connection:
+    """The file at ``path``, opened read-only as a file of anyone's: no function its schema names runs
+    (``trusted_schema`` off)."""
+    file = sqlite3.connect(_read_only(path), uri=True)
+    file.execute("PRAGMA trusted_schema = OFF")
+    return file
+
+
 def _meta(path: Path) -> dict[str, str]:
+    """The export's META, once the file is one: of tables alone, as ``export`` makes it (no view, trigger, index of
+    its own or virtual table, whose reading could run what its maker wrote), of this layout and schema."""
     if not path.exists():
         raise TransferError(f"{path}: no such file")
     try:
-        file = sqlite3.connect(_read_only(path), uri=True)
+        file = _untrusted(path)
         try:
             meta = dict(file.execute(f"SELECT key, value FROM {META}").fetchall())
+            odd = file.execute(
+                "SELECT type, name FROM sqlite_master WHERE NOT (type = 'table' AND sql LIKE 'CREATE TABLE %') "
+                "AND NOT (type = 'index' AND sql IS NULL) ORDER BY rowid").fetchone()
         finally:
             file.close()
     except sqlite3.Error as e:
         raise TransferError(f"{path} is no index export of caracole's ({e}): `caracole index export` makes one") from e
+    if odd is not None:
+        raise TransferError(f"{path} holds the {odd[0]} {odd[1]}, and an index export of caracole's holds tables "
+                            "alone: `caracole index export` makes one")
     if meta.get("format") != str(FORMAT):
-        raise TransferError(f"{path} is an index export of another layout ({meta.get('format')!r}, this caracole's "
-                            f"is {FORMAT}): export it again with this caracole")
+        raise OtherVersion(f"{path} is an index export of another layout ({meta.get('format')!r}, this caracole's "
+                           f"is {FORMAT}): export it again with this caracole")
     if meta.get("schema") != str(db.SCHEMA_VERSION):
-        raise TransferError(f"{path} was exported at schema version {meta.get('schema')}, and this caracole's "
-                            f"database is at {db.SCHEMA_VERSION}: merge it with a caracole of the same version "
-                            "(export it again with this one, or bring both to the same caracole); nothing changed")
+        raise OtherVersion(f"{path} was exported at schema version {meta.get('schema')}, and this caracole's "
+                           f"database is at {db.SCHEMA_VERSION}: merge it with a caracole of the same version "
+                           "(export it again with this one, or bring both to the same caracole); nothing changed")
     return meta
 
 
@@ -294,11 +429,18 @@ def _merged_sites(path: Path, meta: dict[str, str], sites: Iterable[str] | None)
 
 @contextmanager
 def _attached(conn: sqlite3.Connection, path: Path) -> Iterator[None]:
-    conn.execute(f"ATTACH DATABASE ? AS {THEIRS}", (str(path),))
+    """The export attached as ``THEIRS``, the connection trusting no schema's functions meanwhile (``_untrusted``):
+    the file may be anyone's (a phone's, posted to caracole serve)."""
+    (trusted,) = conn.execute("PRAGMA trusted_schema").fetchone()
+    conn.execute("PRAGMA trusted_schema = OFF")
     try:
-        yield
+        conn.execute(f"ATTACH DATABASE ? AS {THEIRS}", (str(path),))
+        try:
+            yield
+        finally:
+            conn.execute(f"DETACH DATABASE {THEIRS}")
     finally:
-        conn.execute(f"DETACH DATABASE {THEIRS}")
+        conn.execute(f"PRAGMA trusted_schema = {'ON' if trusted else 'OFF'}")
 
 
 def _columns(conn: sqlite3.Connection, schema: str, table: str) -> list[str]:
@@ -310,7 +452,7 @@ def _check_columns(conn: sqlite3.Connection, path: Path, names: Sequence[str]) -
         for table in SITES[name].tables:
             mine, theirs = _columns(conn, "main", table), _columns(conn, THEIRS, table)
             if mine != theirs:
-                raise TransferError(f"{path}'s {table} has the columns ({', '.join(theirs) or 'none'}), and the "
+                raise OtherVersion(f"{path}'s {table} has the columns ({', '.join(theirs) or 'none'}), and the "
                                     f"database's ({', '.join(mine)}): nothing changed")
 
 

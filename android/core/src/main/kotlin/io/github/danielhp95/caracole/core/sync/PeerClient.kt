@@ -19,7 +19,17 @@ import java.io.InputStream
 /** /api/peer/state, as the phone reads it. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
-                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null)
+                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null) {
+    companion object {
+        /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
+         * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
+        fun read(document: JsonElement): PeerState = try {
+            Documents.state(document)
+        } catch (e: Documents.Unreadable) {
+            throw PeerError("A state document that can't be read: ${e.message}.", cause = e)
+        }
+    }
+}
 
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
@@ -39,7 +49,8 @@ class PeerError(message: String, val status: Int? = null, cause: Throwable? = nu
  *   token send the fresh one.
  * - **The index**: [index] streams `GET /api/peer/index` to a file, with a read timeout of [INDEX_TIMEOUT_MS]
  *   between two reads (the file is as large as the computer's indexes, and made before its first byte comes: a
- *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever).
+ *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [pushIndex]
+ *   streams the pages the phone's lookups read to `POST /peer/index`, a `bytes` route of the push's kind.
  *
  * Every answer that says no is a [PeerError] in the words peer_sync.Peer says it; a document that can't be read, too.
  */
@@ -118,9 +129,33 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         return job
     }
 
-    /** POST /peer/index: the index export at [file] (the pages the phone's lookups stored), staged by the computer and
-     * merged by a queued `caracole index merge --delete --progress`; the computer's job id. */
-    fun pushIndex(token: String, file: File): Int = TODO("lane index-push")
+    /** POST /peer/index: the index export at [file] (the pages the phone's lookups stored, IndexExport's), its bytes
+     * streamed with the form token, staged by the computer and merged by a queued `caracole index merge --delete
+     * --progress`: the computer's job id, once it answers 202. A [PeerError] for a file past [INDEX_MAX] (sent
+     * nothing), for a computer that takes no index pages (404: older than the app), and for each refusal in the
+     * computer's words (400 an export it can't take, 409 one of another version or two waiting there already, 413,
+     * 503), so that the caller keeps what it would have forgotten. */
+    fun pushIndex(token: String, file: File): Int {
+        val length = file.length()
+        if (length > INDEX_MAX) {
+            throw PeerError("The pages read here make an index export of ${(length + MIB - 1) / MIB} MiB, and the " +
+                            "computer takes ${INDEX_MAX / MIB} MiB at most: they stay here.")
+        }
+        val answer = posting(token) { use ->
+            http.post(address, address.resolve(INDEX_PUSH_PATH), OCTETS, mapOf(TOKEN_HEADER to use, "Accept" to JSON),
+                      length, { out -> file.inputStream().use { it.copyTo(out, 64 * 1024) } }) {
+                Answered(it.status, readAtMost(it.body, MAX_JSON))
+            }
+        }
+        if (answer.status == 404) {
+            throw PeerError("The caracole at $address takes no index pages: it may be older than the app.", 404)
+        }
+        if (answer.status != 202 && answer.status != 200) throw refused(answer)
+        val job = (answer.json() as? JsonObject)?.get("job")
+        return (job as? JsonPrimitive)?.takeIf { !it.isString }?.contentOrNull?.toIntOrNull()
+            ?: throw PeerError("The caracole at $address took the index pages, but didn't say which request merges " +
+                               "them.", answer.status)
+    }
 
     /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], [INDEX_TIMEOUT_MS] at
      * most between two reads. */
@@ -250,6 +285,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_NEW_PATH = "/peer/push/new"
         const val PUSH_FILE_PATH = "/peer/push/file"
         const val PUSH_PATH = "/peer/push"
+        const val INDEX_PUSH_PATH = "/peer/index"
         const val JOBS_PATH = "/api/jobs/"
         const val TOKEN_HEADER = "X-Caracole-Form-Token"
 
@@ -264,6 +300,10 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
 
         /** A kept file read at most: peer_push.FILE_MAX, what a push may send of one. */
         const val MAX_FILE = 64 * 1024 * 1024
+
+        /** An index export sent at most: peer_push.INDEX_MAX, POST /peer/index's limit. */
+        const val INDEX_MAX = 64L * 1024 * 1024
+        private const val MIB = 1024L * 1024
 
         private const val JSON = "application/json"
         private const val OCTETS = "application/octet-stream"
