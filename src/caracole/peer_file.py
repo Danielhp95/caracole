@@ -816,3 +816,97 @@ class FileSource:
         if hashlib.sha256(data).hexdigest() != sha256:
             raise sync.PeerError(UNREADABLE.format(why=f"{PAGE_BLOBS}{sha256} isn't the page its name says"))
         return data
+
+
+# --- an import: the comparison, and what the two agree on after ------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Compared:
+    """This library compared with a file (``compare_file``): the differences within the parts the file holds, in
+    ``peer_sync._order``; this side's units; the base and the kept answers they were compared against; the songs
+    the two sides' songbooks list (``peer_sync.listed_songs``); whether the two synced before."""
+
+    found: list[sync.Difference]
+    mine: dict[str, sync.Unit]
+    base: dict[str, str | None] | None
+    kept: dict[str, sync.KeptPair]
+    listed: dict[str, list[str]]
+
+    @property
+    def synced_before(self) -> bool:
+        return self.base is not None
+
+
+def compare_file(conn: sqlite3.Connection, overrides, books: Sequence, file: SyncFile, source: FileSource
+                 ) -> Compared:
+    """This library (``overrides``, ``books``: songbook.py's) and ``file`` compared, as a sync compares two sides:
+    against this side's base for the file's caracole merged with the one the file keeps for this side, with the
+    answers both remembered, within the parts the file holds (see the module's docstring). PeerError when the file's
+    documents can't be read. An index export: no difference."""
+    from caracole.songbook import name_key
+
+    mine = sync.library_state(conn, overrides, books)
+    if file.index_only or file.state is None:
+        return Compared([], mine, None, {}, {})
+    own = sync.own_id(conn)
+    here_base = sync.base_of(conn, file.id) if file.id else None
+    file_base, file_kept = file.base_for(own)
+    base = sync.merged_base(here_base, file_base)
+    kept = sync.merged_kept(here_base, sync.kept_of(conn, file.id) if file.id else {}, file_base, file_kept)
+    found = sync.compare(mine, file.state.units, base, kept)
+    units = set(mine) | set(file.state.units)
+    listed: dict[str, set[str]] = {}
+    here_books = {f"songbook/{name_key(b.name)}": sync.songbook_value(b) for b in books}
+    file_books = {u: doc["unit"] for u, doc in source.documents().items() if u.startswith("songbook/")}
+    for books_of in (here_books, file_books):
+        for song, by in sync.listed_songs(books_of, units).items():
+            listed.setdefault(song, set()).update(by)
+    listed_songs = {song: sorted(by) for song, by in sorted(listed.items())}
+    holds = file.holds
+    return Compared(sync.in_scope(found, holds, listed=listed_songs, holds=holds), mine, base, kept, listed_songs)
+
+
+def in_parts(compared: Compared, parts: Iterable[str]) -> list[sync.Difference]:
+    """The differences of ``compared`` an import of ``parts`` is about (``peer_sync.in_scope``)."""
+    return sync.in_scope(compared.found, parts, listed=compared.listed)
+
+
+def speaks_for(file: SyncFile, unit_id: str) -> bool:
+    """Whether ``file`` says what its caracole holds of the unit: one of a part it holds, or one it carries (a song
+    its songbooks list). Of any other unit it says nothing, and an import keeps no agreement of it."""
+    return (file.state is not None and unit_id in file.state.units) or sync.part_of(unit_id) in file.holds
+
+
+def record_import(conn: sqlite3.Connection, file: SyncFile, mine: Mapping[str, sync.Unit],
+                  kept_here: Mapping[str, tuple[str | None, str | None]]) -> int:
+    """After an import of ``file``, keep, as agreed with its caracole at its ``made``, each unit the file speaks for
+    (``speaks_for``) that this library (``mine``, its whole state now) and the file hold the same, or both lack;
+    then remember each answer "keep mine" (``kept_here``: a unit's digest here and the file's, as compared) beside
+    the base (``peer_sync.record_kept``). The base and the kept answer of every unit the file says nothing of stay as
+    they were. Return how many units were agreed; an index export records nothing."""
+    from caracole.db import savepoint
+
+    if file.index_only or file.state is None or file.id is None or file.made is None:
+        return 0
+    peer, made = file.id, file.made
+    with savepoint(conn, "peer_import_agreement"):
+        before_base, before_kept = sync.base_of(conn, peer) or {}, sync.kept_of(conn, peer)
+        agreed = sync.record_agreement(conn, peer, {u: x for u, x in mine.items() if speaks_for(file, u)},
+                                       {u: x for u, x in file.state.units.items() if speaks_for(file, u)}, made)
+        base, kept = sync.base_of(conn, peer) or {}, sync.kept_of(conn, peer)
+        for unit_id in set(base) | set(before_base):
+            if not speaks_for(file, unit_id):
+                if unit_id in before_base:
+                    base[unit_id] = before_base[unit_id]
+                else:
+                    base.pop(unit_id, None)
+        for unit_id in set(kept) | set(before_kept):
+            if not speaks_for(file, unit_id):
+                if unit_id in before_kept:
+                    kept[unit_id] = before_kept[unit_id]
+                else:
+                    kept.pop(unit_id, None)
+        sync._write_base(conn, peer, base, kept)
+        sync.record_kept(conn, peer, kept_here, made)
+    return agreed
