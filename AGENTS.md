@@ -374,6 +374,7 @@ Below the table, a section for each step whose modules have more to say.
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
+| politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
@@ -435,6 +436,23 @@ Below the table, a section for each step whose modules have more to say.
     (`merged_base`).
   - A unit changed on one side is that side's; on both, differently, a `CONFLICT` (`decide`: as chosen, else
     `--prefer`, else left).
+- **The remembered answer**: an import's "keep mine", kept beside the base (`record_kept`, `kept_of`: its `"kept"`,
+  `{unit: [digest here, digest there, when]}`, at the file's `made`), since a file can't take this side's version.
+  - `state_document(kept=)` carries those kept for the asker (`"kept"`, no member unless given; `PeerState.kept`),
+    which `GET /api/peer/state` serves from sync-exchange on; `merged_kept` takes, a unit at a time, the latest of
+    each side's agreement and kept answer, an agreement on a tie, the other's swapped.
+  - `compare(..., kept=)`: a unit changed on neither side since is the chooser's (`KEPT_HERE`, `KEPT_THERE`), never
+    a conflict asked again; a change after it is compared as usual.
+  - An agreement (`record_agreement`, given each side's whole state) drops the answer of each unit it agrees on,
+    both sides' alike or both lacking it, and a base with none is written as before.
+- **Parts** (`PARTS`: library, songbooks, indexes; `part_of`, by a unit's kind; no unit is of the indexes):
+  - `in_scope` keeps a unit of a part asked for, or a song a songbook lists while the songbooks are (`listed_songs`:
+    by any cut of an entry's "Artist - Title", `songbook.entry_keys`), which comes along to a side that lacks it and
+    is never removed (a removal given, taken or asked, the library's, is left out);
+  - with a file's `holds`, a unit the file lacks of a part it doesn't hold is never read as removed;
+  - `change_of`: what each side did since the base (new, changed, gone); `names_of`: a song's names from its label.
+- Both are written for the phone, `vectors/sync/kept.jsonl` and `scope.jsonl` (tests/test_conformance_sync_kept.py),
+  which sync-core ports.
 - **Ids**: each side's id is kv `sync:id`, made by schema 15 for every database, so caracole serve answers one
   without writing; `new_id` gives a copied database another.
 - `Peer` is the other's caracole serve over HTTP, never a site.
@@ -933,8 +951,8 @@ It is rows.js's, shared by both pages:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
 - **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker and the form token (no wider than a page's, which any client that reaches the server reads,
-  for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
+  agreed on with the asker, the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
+  page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
@@ -1107,13 +1125,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
 - Milestones 1–3 are built (docs/android_port.md's status); lookups, the page builder, songbooks and PDFs on the phone
-  are later rounds', their routes `server/routes/Stubs.kt`'s "… isn't on the phone yet." (409), or a route module of
-  their own answering it neutrally until its lane lands; a declaration not built yet is `TODO("lane <id>")` in a file
-  its lane owns (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5).
+  are later rounds' (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5):
+  - each route a module of its own, answering "… isn't on the phone yet." (409) until its lane lands;
+    `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, for good;
+  - a declaration not built yet is `TODO("lane <id>")` in a file its lane owns, or, for a seam the phone already
+    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer;
+  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, `SongPages.NONE` and
+    `SongbookPages.NONE` until their lanes make it the real one, so it calls no milestone's code before it lands.
+- Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
+  the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
+- The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
+  words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
-  `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays` and
-  `server.testing.ServerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`, `LocalServerTest`,
-  `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+  `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
+  `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
 
 ##### core.http, core.health, core.config
 
@@ -1143,6 +1169,41 @@ Not built yet. (job-views, requests-feed.)
 ##### The computer's settings on the phone
 
 Not built yet. (crossing-phone.)
+
+##### :viewer
+
+- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory): not built yet.
+- A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
+- Voicings, instruments, the harmonica and the winds (shapes-harp-winds): not built yet.
+- Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
+- Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): not built yet.
+- A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
+- The sheet page (pages): not built yet.
+- A harmonica tab's page (harmonica-page): not built yet.
+- The phone's own pages, `PhoneRender` (phone-render): not built yet.
+
+##### The phone's written pages
+
+Not built yet. (written-pages.)
+
+##### Songbooks, versions and printing on the phone
+
+- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- Export PDF and Make this my version (export-print): not built yet.
+
+##### Guitar Pro on the phone
+
+Not built yet. (guitar-alphatab.)
+
+##### Files shared to the app
+
+Not built yet. (inbox-share.)
+
+##### Alerts and backups on the phone
+
+Not built yet. (alerts-backups.)
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
@@ -1450,7 +1511,8 @@ picks one).
 - So two caracoles at one address may together send a site more than either one's limits; each keeps every rule
   here on its own, and the phone looks songs up at the lookup pace alone.
 - What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
-  user agent, the library's name: kv `phone:settings`), never its politeness.
+  user agent, the library's name: `GET /api/peer/state`'s `settings`, politeness.py `settings_document`, which the
+  phone keeps as kv `phone:settings`), never its politeness.
 
 #### Turning a provider off
 
