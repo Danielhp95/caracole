@@ -1,9 +1,9 @@
 package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.internal.LibraryFiles
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.writes.Place
 import java.io.IOException
 import java.nio.file.Files
@@ -66,7 +66,8 @@ object Kept {
      * by the version [versionId] at [rank], `created_at` [now] (a stored time, as SQLite's clock stamps Python's);
      * false, with nothing written, when identical bytes are kept already under another name of the song (a
      * duplicate). A file of the same name is replaced. A file another song keeps at that place ([keeperOf]) is never
-     * replaced: [SharedFolder], with nothing written. IllegalArgumentException for a [now] that is no time.
+     * replaced: [SharedFolder], with nothing written. IllegalArgumentException for a [now] that is no time
+     * (Stamps.stampOf; an ArithmeticException for one whose UTC leaves years 1 to 9999).
      */
     fun keepFile(db: Db, lib: LibraryStore, song: SongRow, versionId: Long, name: String, data: ByteArray,
                  rank: Int, now: String): Boolean {
