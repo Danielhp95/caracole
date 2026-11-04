@@ -1318,7 +1318,25 @@ Not built yet. (lookup.)
     of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
   - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
     kept whole).
-- A sheet's versions and progressions (version-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): `viewer.version`'s `Versions`, viewer/version.py's page
+  side function for function, and render.py's `own_version` (`ownVersion`); `apply_version`, a sheet's ChordPro for
+  chordpro's PDF of a version, is the computer's alone.
+  - `fromQuery` and `query`, a version as the viewer's address reads and writes it (Python's parse_qsl, JavaScript's
+    Number(), URLSearchParams' bytes); `playedKey`, `forInstrument`, `label` and `playedLabel`; `settingProblem` in
+    Python's words and reprs, of any value a form or a file gives; `inSetting`; `keyVersion` (an
+    IllegalArgumentException with key_version's words, which `Overrides.read` and `OverrideWriters.addVersion` take as
+    their check), `inKey`, `entry` and `KeyVersion.query` and `label`, byte for byte, as `[version]` is in a song's
+    sync unit.
+  - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
+    text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
+    library-cards' to wire (Found.kt).
+  - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
+    tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
+    (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of
+    room.
+  - Where Kotlin holds less than Python: a chord's index, a shape's number or a swap's root or bass past an Int, in an
+    address, is dropped, and a record's song id past a Long is none.
 - A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
   - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
     harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
