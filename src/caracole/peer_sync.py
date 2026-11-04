@@ -44,6 +44,25 @@ settle; one both changed the same way, or neither, no difference at all. With no
 one side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so
 that a change made on what was compared is refused once either side moved on.
 
+**The remembered answer.** A file of the other's imported can't take this side's version back, so a conflict the
+owner answers "keep mine" in an import is remembered beside the base (``record_kept``: its ``"kept"`` member,
+``{unit: [digest here, digest there, when]}``, the two versions chosen between and the file's ``made``). The state
+document gives the asker the entries kept for it (``"kept"``, read into ``PeerState.kept``), and for each unit the
+latest of the four records (each side's agreement and kept answer) counts, an agreement on a tie (``merged_kept``,
+the other side's read with its two digests swapped): a kept answer that counts makes the unit, while neither side has
+changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change on either
+side after it is compared as usual (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
+agrees on, both sides' versions alike or both lacking it (``record_agreement``), and a base with no kept answer is
+written as before, with no ``"kept"``; the state document carries ``"kept"`` only when given one.
+
+**Parts.** A sync, or a file, is of some of three parts (``PARTS``): the library (songs, tombstones and the entries
+about an artist or a tab), the songbooks, and the site indexes, which no unit is of (``part_of``). A difference is in
+a sync's scope when its unit is of a part asked for, or is a song a songbook lists (``listed_songs``, by any cut of
+an entry's "Artist - Title", ``songbook.entry_keys``) while the songbooks are, which brings it along to a side that
+lacks it but never removes it, a part left out never read as a removal; and a unit a file lacks of a part the file
+doesn't hold is never read as removed there (``in_scope``'s ``holds``). ``change_of`` says what each side did to
+a unit since the base, and ``names_of`` reads a song's names from its label, for the pages.
+
 **Taking** (``apply_units``) reads each chosen unit's document from a ``UnitSource`` (the peer, ``Peer``, or a push
 staged here) and leaves it when it is no longer what was compared, on either side (a compare-and-swap of both
 digests), then makes it this side's (``_take_song``): a song through its wanted.txt line (``songs.upsert_song``, by
@@ -84,7 +103,8 @@ from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
 FORMAT = 2  # of every document a side answers, and of the base it keeps: changes only with their shapes
 ID_KEY = "sync:id"
-# kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed
+# kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed,
+# and "kept": {unit: [digest here, digest there, when]}, the answers an import remembered (none: no member)
 BASE_KEY = "sync:base:"
 
 # What a comparison proposes for a unit.
@@ -106,6 +126,9 @@ LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
 # Why a unit is left: either side holds it otherwise than when the two were compared.
 CHANGED_HERE = "changed here since the comparison"
 CHANGED_THERE = "changed there since the comparison"
+# Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered.
+KEPT_HERE = "kept here, as you chose when a file of the other's was imported"
+KEPT_THERE = "kept there, as you chose when a file of this one's was imported"
 
 
 @dataclass(frozen=True)
@@ -174,6 +197,10 @@ def new_id(conn: sqlite3.Connection) -> str:
 
 
 Base = dict[str, tuple[str | None, str]]  # a unit's digest (None: both lacked it) and when the two agreed on it
+# An answer an import remembered, by unit: this side's digest kept, the other's not taken (None: lacking it), when.
+Kept = dict[str, tuple[str | None, str | None, str]]
+# A kept answer as a comparison reads it: the digest here and there when it was kept, and whose it was, MINE or THEIRS.
+KeptPair = tuple[str | None, str | None, str]
 
 
 def _read_units(value: Any) -> Base | None:
@@ -205,6 +232,80 @@ def base_of(conn: sqlite3.Connection, peer: str) -> Base | None:
         return None
 
 
+def _read_kept(value: Any) -> Kept:
+    """Kept answers, ``{unit: [here, there, when]}``, their odd entries left out; none for no mapping."""
+    if not isinstance(value, Mapping):
+        return {}
+    read: Kept = {}
+    for unit_id, entry in value.items():
+        if (isinstance(entry, (list, tuple)) and len(entry) == 3
+                and all(side is None or isinstance(side, str) for side in entry[:2]) and isinstance(entry[2], str)):
+            read[str(unit_id)] = (entry[0], entry[1], entry[2])
+    return read
+
+
+def kept_of(conn: sqlite3.Connection, peer: str) -> Kept:
+    """The answers this side's imports of ``peer``'s files remembered, unit by unit (the base's ``"kept"``): none if
+    there are none, or the base is of another format or can't be read."""
+    try:
+        value = kv_get_json(conn, BASE_KEY + peer)
+    except ValueError:
+        return {}
+    if not isinstance(value, Mapping) or value.get("format") != FORMAT:
+        return {}
+    return _read_kept(value.get("kept"))
+
+
+def _write_base(conn: sqlite3.Connection, peer: str, base: Base, kept: Kept) -> None:
+    """The base kept for ``peer``, its units and, when there are any, its kept answers, each by unit id."""
+    stored: dict[str, Any] = {"format": FORMAT, "units": {k: list(v) for k, v in sorted(base.items())}}
+    if kept:
+        stored["kept"] = {k: list(v) for k, v in sorted(kept.items())}
+    kv_set_json(conn, BASE_KEY + peer, stored)
+
+
+def record_kept(conn: sqlite3.Connection, peer: str, chosen: Mapping[str, tuple[str | None, str | None]],
+                at: str) -> int:
+    """Remember, beside the base kept for ``peer``, each conflict an import of its file answered "keep mine":
+    ``chosen`` ``{unit: (this side's digest, the file's)}``, at ``at``, the file's ``made``; a unit kept before
+    takes the new answer. The base's units stay as they are, and none answered writes nothing. Return how many were
+    recorded."""
+    if not chosen:
+        return 0
+    base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
+    for unit_id, (here, there) in chosen.items():
+        kept[unit_id] = (here, there, at)
+    _write_base(conn, peer, base, kept)
+    return len(chosen)
+
+
+def merged_kept(mine: Base | None, mine_kept: Mapping[str, tuple], theirs: Base | None,
+                theirs_kept: Mapping[str, tuple]) -> dict[str, KeptPair]:
+    """The kept answers a comparison reads: for each unit, the latest of the four records (this side's agreement,
+    the other's, this side's kept answer, the other's) by when (ISO 8601 UTC, so the latest sorts last), an
+    agreement on a tie, then this side's. A unit whose latest record is a kept answer comes back as a ``KeptPair``:
+    this side's as stored, ``MINE``'s; the other's with its two digests swapped, ``THEIRS``'s."""
+    merged: dict[str, KeptPair] = {}
+    for unit_id in sorted(set(mine_kept) | set(theirs_kept)):
+        records: list[tuple[str, KeptPair | None]] = []
+        for agreed in (mine, theirs):
+            if agreed is not None and unit_id in agreed:
+                records.append((agreed[unit_id][1], None))
+        if unit_id in mine_kept:
+            here, there, when = mine_kept[unit_id]
+            records.append((when, (here, there, MINE)))
+        if unit_id in theirs_kept:
+            there, here, when = theirs_kept[unit_id]
+            records.append((when, (here, there, THEIRS)))
+        latest = records[0]
+        for record in records[1:]:
+            if record[0] > latest[0]:
+                latest = record
+        if latest[1] is not None:
+            merged[unit_id] = latest[1]
+    return merged
+
+
 def merged_base(mine: Base | None, theirs: Base | None) -> dict[str, str | None] | None:
     """The base a comparison reads: for each unit, the later of the two sides' agreements on it (``at`` is ISO 8601
     UTC, so the later sorts last); None when neither side has one."""
@@ -220,17 +321,20 @@ def merged_base(mine: Base | None, theirs: Base | None) -> dict[str, str | None]
 def record_agreement(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
                      at: str) -> int:
     """Keep, as agreed with ``peer`` at ``at``, every unit the two hold the same now (and those both lack that the
-    base names); the others keep what they had. Return how many were agreed."""
-    base = base_of(conn, peer) or {}
+    base names or an answer was kept for), dropping the kept answer of each (``record_kept``); the others keep what
+    they had. ``mine`` and ``theirs`` are each side's whole state. Return how many were agreed."""
+    base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
     agreed = 0
-    for unit_id in set(mine) | set(theirs) | set(base):
+    for unit_id in set(mine) | set(theirs) | set(base) | set(kept):
         a, b = mine.get(unit_id), theirs.get(unit_id)
         if a is not None and b is not None and a.digest == b.digest:
             base[unit_id] = (a.digest, at)
+            kept.pop(unit_id, None)
             agreed += 1
         elif a is None and b is None:
             base[unit_id] = (None, at)
-    kv_set_json(conn, BASE_KEY + peer, {"format": FORMAT, "units": {k: list(v) for k, v in sorted(base.items())}})
+            kept.pop(unit_id, None)
+    _write_base(conn, peer, base, kept)
     return agreed
 
 
@@ -324,18 +428,24 @@ def artist_url_value(name: str, page: str) -> dict[str, str]:
 
 def state_document(server: str | None, version: str, name: str, units: Mapping[str, Unit],
                    base: Base | None = None, *, now: str | None = None,
-                   indexes: Mapping[str, str] | None = None) -> dict[str, Any]:
+                   indexes: Mapping[str, str] | None = None,
+                   kept: Mapping[str, tuple] | None = None) -> dict[str, Any]:
     """``GET /api/peer/state``'s answer: who this side is, its units by id, and, for the peer that asked, what this
-    side last agreed on with it (``base``, null if never); ``now``, this side's clock (a stamp; the time it answers,
-    unless given), which a sync stamps its agreement with on both sides, and ``indexes``, the newest read of each of
-    its site indexes (``index_transfer.newest``), so the other side asks only for what is newer."""
+    side last agreed on with it (``base``, null if never) and the answers its imports of that peer's files remembered
+    (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no member unless given); ``now``, this side's clock (a
+    stamp; the time it answers, unless given), which a sync stamps its agreement with on both sides, and ``indexes``,
+    the newest read of each of its site indexes (``index_transfer.newest``), so the other side asks only for what is
+    newer."""
     from caracole import stamps
 
-    return {"format": FORMAT, "server": server, "caracole": version, "name": name,
-            "now": now if now is not None else stamps.stamp(datetime.now(UTC)),
-            "indexes": dict(indexes or {}),
-            "units": {u.id: {"label": u.label, "digest": u.digest} for u in sorted(units.values(), key=_order)},
-            "base": None if base is None else {k: list(v) for k, v in sorted(base.items())}}
+    doc = {"format": FORMAT, "server": server, "caracole": version, "name": name,
+           "now": now if now is not None else stamps.stamp(datetime.now(UTC)),
+           "indexes": dict(indexes or {}),
+           "units": {u.id: {"label": u.label, "digest": u.digest} for u in sorted(units.values(), key=_order)},
+           "base": None if base is None else {k: list(v) for k, v in sorted(base.items())}}
+    if kept is not None:
+        doc["kept"] = {k: list(v) for k, v in sorted(kept.items())}
+    return doc
 
 
 @dataclass(frozen=True)
@@ -350,6 +460,7 @@ class PeerState:
     token: str | None = None  # its form token, which a pull's form posts (``Peer.ask_to_pull``)
     now: str | None = None  # its clock when it answered
     indexes: dict[str, str] = field(default_factory=dict)  # the newest read of each of its site indexes
+    kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as kept
 
 
 class StateError(ValueError):
@@ -374,7 +485,8 @@ def read_state_document(data: Any) -> PeerState:
     stamps = {site: stamp for site, stamp in (indexes.items() if isinstance(indexes, Mapping) else ())
               if isinstance(site, str) and isinstance(stamp, str)}
     return PeerState(server, str(version or "?"), str(name or ""), read, _read_units(data.get("base")),
-                     token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps)
+                     token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps,
+                     _read_kept(data.get("kept")))
 
 
 def unit_document(conn: sqlite3.Connection, cfg, overrides, books: Iterable, unit_id: str) -> dict[str, Any] | None:
@@ -561,9 +673,12 @@ def song_file(conn: sqlite3.Connection, library_dir: Path, key: str, name: str) 
 
 
 def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
-            base: Mapping[str, str | None] | None) -> list[Difference]:
+            base: Mapping[str, str | None] | None,
+            kept: Mapping[str, KeptPair] | None = None) -> list[Difference]:
     """Every unit the two sides hold differently, with what the sync proposes for it (see the module's docstring),
-    in ``_order``: songs first, by their label."""
+    in ``_order``: songs first, by their label. A unit ``kept`` names (``merged_kept``) is compared with the two
+    versions kept, whatever the base says: changed on neither side since, the chooser's (``KEPT_HERE``,
+    ``KEPT_THERE``); else as usual."""
     found = []
     for unit_id in set(mine) | set(theirs):
         a, b = mine.get(unit_id), theirs.get(unit_id)
@@ -571,7 +686,10 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
             continue
         label = (a or b).label
         was = None if base is None else base.get(unit_id)
-        if base is None:
+        pair = None if kept is None else kept.get(unit_id)
+        if pair is not None:
+            proposal, why = _since_kept(a, b, pair)
+        elif base is None:
             proposal, why = _first_time(a, b)
         else:
             a_changed = (a.digest if a else None) != was
@@ -584,6 +702,19 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
                 proposal, why = CONFLICT, "changed on both sides since the last sync"
         found.append(Difference(unit_id, label, a, b, proposal, why))
     return sorted(found, key=_order)
+
+
+def _since_kept(a: Unit | None, b: Unit | None, pair: KeptPair) -> tuple[str, str]:
+    was_here, was_there, chooser = pair
+    a_changed = (a.digest if a else None) != was_here
+    b_changed = (b.digest if b else None) != was_there
+    if not a_changed and not b_changed:
+        return (MINE, KEPT_HERE) if chooser == MINE else (THEIRS, KEPT_THERE)
+    if a_changed and not b_changed:
+        return MINE, _changed("here", a, was_here)
+    if b_changed and not a_changed:
+        return THEIRS, _changed("there", b, was_there)
+    return CONFLICT, "changed on both sides since the last sync"
 
 
 def _first_time(a: Unit | None, b: Unit | None) -> tuple[str, str]:
@@ -634,6 +765,105 @@ def compared_hash(found: Iterable[Difference]) -> str:
     rows = [[d.id, d.proposal, d.mine.digest if d.mine else None, d.theirs.digest if d.theirs else None]
             for d in sorted(found, key=_order)]
     return hashlib.sha256(canonical.dumps(rows).encode("utf-8")).hexdigest()
+
+
+# --- a sync's parts ---------------------------------------------------------------------------------------------
+
+PARTS = ("library", "songbooks", "indexes")  # what a sync, or a file, may be of; no unit is of the indexes
+_PART_OF = {"song": "library", "removed": "library", "alias": "library", "artist_url": "library",
+            "block": "library", "songbook": "songbooks"}
+
+
+def part_of(unit_id: str) -> str | None:
+    """The part a unit is of, by its kind: ``"library"`` or ``"songbooks"``; None for a kind caracole doesn't know."""
+    return _PART_OF.get(unit_id.partition("/")[0]) if "/" in unit_id else None
+
+
+def listed_songs(books: Mapping[str, Any], units: Iterable[str]) -> dict[str, list[str]]:
+    """The songs songbooks list: for each song unit of ``units`` an entry of a songbook of ``books`` (``{songbook
+    unit: its value, {"name", "songs": [[text, parts], …]}}``, of either side) names by any cut of its "Artist -
+    Title" (``songbook.entry_keys``), the songbook units listing it, sorted, each once. A songbook or an entry that
+    isn't of that shape lists nothing."""
+    from caracole.songbook import entry_keys
+
+    held = set(units)
+    listed: dict[str, set[str]] = {}
+    for book_id, book in books.items():
+        songs = book.get("songs") if isinstance(book, Mapping) else None
+        if not isinstance(songs, list):
+            continue
+        for entry in songs:
+            if not (isinstance(entry, (list, tuple)) and len(entry) == 2 and isinstance(entry[0], str)):
+                continue
+            for key in entry_keys(entry[0]):
+                if f"song/{key}" in held:
+                    listed.setdefault(f"song/{key}", set()).add(book_id)
+    return {song: sorted(found) for song, found in sorted(listed.items())}
+
+
+def in_scope(found: Sequence[Difference], parts: Iterable[str], *, listed: Mapping[str, Sequence[str]] | None = None,
+             holds: Iterable[str] | None = None) -> list[Difference]:
+    """The differences of ``found`` (in its order) a sync of ``parts`` is about: a unit of a part asked for, or a song
+    a songbook lists (``listed``, ``listed_songs``'s) while the songbooks are, which comes along to the side that
+    lacks it, never removed from either (a removal, given, taken or asked, is the library's: left out). With
+    ``holds``, the parts a file holds, a unit of a part it doesn't hold that the file lacks is left out: a file of the
+    songbooks alone removes no song."""
+    asked, listed = set(parts), listed or {}
+    held = None if holds is None else set(holds)
+    kept = []
+    for d in found:
+        part = part_of(d.id)
+        if part not in asked:
+            if not (d.id.startswith("song/") and "songbooks" in asked and d.id in listed) or _removes(d):
+                continue
+        if held is not None and part not in held and d.theirs is None:
+            continue
+        kept.append(d)
+    return kept
+
+
+def _removes(d: Difference) -> bool:
+    """Whether ``d`` may remove its unit on a side: one side lacks it and the proposal isn't to bring it there."""
+    return d.mine is None and d.proposal != THEIRS or d.theirs is None and d.proposal != MINE
+
+
+def change_of(d: Difference, base: Mapping[str, str | None] | None,
+              kept: Mapping[str, KeptPair] | None = None) -> tuple[str | None, str | None]:
+    """What each side did to ``d``'s unit since the base (or since the answer ``kept`` remembers for it), this
+    side's then the other's: ``"new"``, ``"changed"``, ``"gone"``, or None for a side that didn't change it. With no
+    base, a unit on one side alone is new there, and one on both changed on both."""
+    here, there = (d.mine.digest if d.mine else None), (d.theirs.digest if d.theirs else None)
+    pair = None if kept is None else kept.get(d.id)
+    if pair is not None:
+        return _change(here, pair[0]), _change(there, pair[1])
+    if base is not None:
+        was = base.get(d.id)
+        return _change(here, was), _change(there, was)
+    if here is not None and there is not None:
+        return "changed", "changed"
+    return ("new" if here is not None else None), ("new" if there is not None else None)
+
+
+def _change(now: str | None, was: str | None) -> str | None:
+    if now == was:
+        return None
+    if was is None:
+        return "new"
+    return "gone" if now is None else "changed"
+
+
+def names_of(unit_id: str, label: str) -> tuple[str, str] | None:
+    """A song unit's artist and title, read from its label ("Artist - Title"): the cut at a " - " whose
+    ``normalize.identity_key`` is the unit's key (an artist's name may hold one: "Earth - Wind - Fire"), else the
+    first; None for a label with no cut and for a unit of another kind."""
+    from caracole.normalize import identity_key
+
+    kind, _, key = unit_id.partition("/")
+    parts = label.split(" - ")
+    if kind != "song" or len(parts) < 2:
+        return None
+    cuts = [(" - ".join(parts[:i]), " - ".join(parts[i:])) for i in range(1, len(parts))]
+    return next((cut for cut in cuts if identity_key(*cut) == key), cuts[0])
 
 
 # --- the peer ----------------------------------------------------------------------------------------------------
