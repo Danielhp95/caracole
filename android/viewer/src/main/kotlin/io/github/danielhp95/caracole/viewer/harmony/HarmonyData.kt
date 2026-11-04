@@ -12,8 +12,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.Collections
 
 /**
- * harmony.py's constants and patterns, as tests/test_conformance_viewer_harmony.py wrote them from the module itself
- * into caracole/viewer/harmony.json (that file's docstring is the format's), read once ([ViewerData]). Every pattern
+ * harmony.py's constants and patterns, and harmony_tables.py's, as tests/test_conformance_viewer_harmony.py wrote them
+ * from the modules themselves into caracole/viewer/harmony.json (that file's docstring is the format's), read once
+ * ([ViewerData]). Every pattern
  * is compiled as Python reads it (PyRegex), once; every collection handed out is one nothing can change.
  */
 internal object HarmonyData {
@@ -45,7 +46,42 @@ internal object HarmonyData {
     }
     val tokens: Regex by lazy { pattern("_TOKENS") }
 
+    // --- the progressions ----------------------------------------------------------------------------------------
+
+    /** CATALOGUE: (name, numerals, source), in its order. */
+    val catalogue: List<Triple<String, List<String>, String>> by lazy {
+        Collections.unmodifiableList(json.getValue("CATALOGUE").jsonArray.map { row ->
+            val (name, numerals, source) = row.jsonArray
+            Triple(name.jsonPrimitive.content, strings(numerals), source.jsonPrimitive.content)
+        })
+    }
+    val loops: Set<List<String>> by lazy {
+        Collections.unmodifiableSet(json.getValue("_LOOPS").jsonArray.mapTo(LinkedHashSet()) { strings(it) })
+    }
+    val onItsTonic: Set<String> by lazy { set("_ON_ITS_TONIC") }
+    val turnsOnItsTonic: Set<String> by lazy { set("_TURNS_ON_ITS_TONIC") }
+    val naturalMinor: Set<String> by lazy { set("_NATURAL_MINOR") }
+    val onTheTonic: Map<String, String> by lazy { stringMap("_ON_THE_TONIC") }
+    val steps: Map<String, Int> by lazy { intMap("_STEPS") }
+    val accidentals: Map<String, Int> by lazy { intMap("_ACCIDENTALS") }
+    val longestCycle: Int by lazy { json.getValue("_LONGEST_CYCLE").jsonPrimitive.int }
+    val numeral: Regex by lazy { pattern("_NUMERAL") }
+    val romanOnly: Regex by lazy { pattern("_ROMAN_ONLY") }
+    val separators: Regex by lazy { pattern("_SEPARATORS") }
+
+    // --- harmony_tables.py's own ---------------------------------------------------------------------------------
+
+    val note: Regex by lazy { tablesPattern("_NOTE") }
+    val afterNote: Regex by lazy { tablesPattern("_AFTER_NOTE") }
+
     private fun pattern(name: String): Regex = PyRegex.compile(json.obj("patterns").getValue(name).jsonPrimitive.content)
+
+    private fun tablesPattern(name: String): Regex =
+        PyRegex.compile(json.obj("harmony_tables").obj("patterns").getValue(name).jsonPrimitive.content)
+
+    private fun set(name: String): Set<String> = Collections.unmodifiableSet(LinkedHashSet(list(name)))
+
+    private fun intMap(name: String): Map<String, Int> = frozenMap(json.obj(name).mapValues { (_, v) -> v.jsonPrimitive.int })
 
     private fun JsonObject.obj(name: String): JsonObject = getValue(name).jsonObject
 
