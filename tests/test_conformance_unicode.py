@@ -35,7 +35,7 @@ said:
   literal ``c`` matches exactly its class under IGNORECASE (checked below), and a class's members are all in the
   BMP or all beyond it, so mapping each code point to its representative keeps a string's UTF-16 length.
 - ``east_asian_width.txt``: ``start end width`` lines, the runs of one ``unicodedata.east_asian_width`` (``F``,
-  ``H``, ``W``, ``Na`` or ``A``); ``N`` left out (``PyUnicode.eastAsianWidth``; tests/test_conformance_py_format.py's
+  ``H``, ``W``, ``Na`` or ``A``); ``N`` left out (``PyUnicode.eastAsianWidth``; tests/test_conformance_py.py's
   ``format_width.jsonl`` checks the phone's answers).
 
 Vectors, tests/conformance/vectors/unicode/:

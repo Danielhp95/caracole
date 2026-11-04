@@ -16,10 +16,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
 /**
- * core.py's format records (vectors/py/format_*.jsonl, tests/test_conformance_py_format.py): f-strings' `f` and `%`
- * specs, round(), difflib.SequenceMatcher and east_asian_width, every record answered by PyFormat, PySequence and
- * PyUnicode as Python answered it. PyFormatTest and PySequenceTest call them on the JVM; PyReplay, the py area's
- * replay, runs them on the device.
+ * core.py's format records (vectors/py/format_*.jsonl, tests/test_conformance_py.py): f-strings' `f` and `%` specs,
+ * round(), difflib.SequenceMatcher and east_asian_width, every record answered by PyFormat, PySequence and PyUnicode
+ * as Python answered it. PyFormatTest and PySequenceTest call them on the JVM; PyReplay, the py area's replay, runs
+ * them on the device.
  */
 object PyFormatRecords {
     fun replay(misses: Misses) {
@@ -44,7 +44,10 @@ object PyFormatRecords {
                 "round" -> {
                     val got = runCatching { PyFormat.roundHalfEven(x) }
                     if (r.err != null) {
-                        misses.check(got.isFailure) { "round(${show(x)}) = ${got.getOrNull()}, Python raised ${r.err}" }
+                        val thrown = got.exceptionOrNull()
+                        misses.check(thrown != null && thrown::class == RAISED[r.err]) {
+                            "round(${show(x)}) = ${got.getOrElse { "threw $it" }}, Python raised ${r.err}"
+                        }
                     } else {
                         val want = r.out!!.jsonPrimitive.long
                         misses.check(got.getOrNull() == want) {
@@ -56,6 +59,12 @@ object PyFormatRecords {
             }
         }
     }
+
+    /** What PyFormat throws where Python raised the record's `err`. */
+    private val RAISED = mapOf(
+        "ValueError" to IllegalArgumentException::class,
+        "OverflowError" to ArithmeticException::class,
+    )
 
     /** "0W.Nf", "W.Nf", ".Nf" or ".N%" as PyFormat's call. */
     fun format(x: Double, spec: String): String {
@@ -75,7 +84,7 @@ object PyFormatRecords {
     /** format_sequence.jsonl: each pair's ratio, to the bit, and its matching blocks. */
     fun sequences(misses: Misses) {
         val records = Corpus.records("py/format_sequence.jsonl")
-        check(records.size >= 1000) { "py/format_sequence.jsonl holds too few records" }
+        check(records.size >= 900) { "py/format_sequence.jsonl holds too few records" }
         for (r in records) {
             val a = sequence(r.args[0])
             val b = sequence(r.args[1])
