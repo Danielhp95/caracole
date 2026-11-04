@@ -315,3 +315,21 @@ def test_a_sheet_from_youtube_is_ready_once_its_chords_are_made():
     assert job_line(youtube_job("done", waited), sheet) == Line("waiting", "Not made yet", details=details_href(5))
     failed = youtube_job("failed", every | {"audio": ("failed", "can't download this video; try another")})
     assert job_line(failed, None) == Line("failed", "can't download this video; try another.", details=details_href(5))
+
+
+def test_a_caracole_with_no_to_do_page_says_the_same_line_with_no_link_to_it():
+    # The phone has no to-do page (todo=None): a Not found or a Needs review with no candidates says the same words,
+    # with nothing to open; its picker's link stays, and the to-do page is the computer's default.
+    done = job("done", states=["done"] * 4)
+    assert job_line(done, SongFacts(review=True), todo=None) == Line("review", "Needs review")
+    assert job_line(done, SongFacts(review=True, picker="review?song=7"), todo=None).link == (
+        "Pick the match", "review?song=7")
+    assert job_line(done, SongFacts(checked_now=True), todo=None) == Line("missing", "Not found")
+    bare = job("failed", states=["done", "done", "failed", "skipped"], outputs=[[], [], ["error: no"], []])
+    assert job_line(bare, SongFacts(not_found=True), todo=None) == Line("missing", "Not found",
+                                                                        details=details_href(3))
+    assert job_line(bare, SongFacts(review=True), todo=None) == Line("review", "Needs review",
+                                                                     details=details_href(3))
+    assert job_line(done, SongFacts(checked_now=True), todo="_todo.md") == job_line(done, SongFacts(checked_now=True))
+    assert job_line(done, SongFacts(checked_now=True), todo="elsewhere.md").link == ("see the to-do page",
+                                                                                     "elsewhere.md")
