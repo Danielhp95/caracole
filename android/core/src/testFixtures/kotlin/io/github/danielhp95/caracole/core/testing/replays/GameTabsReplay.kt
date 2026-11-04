@@ -1,6 +1,5 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
-import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.http.GameTabsParseError
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -38,10 +37,6 @@ object GameTabsReplay : AreaReplay {
 
     const val SITES = "sites/gametabs.jsonl"
     const val LOOKUP = "lookup/gametabs.jsonl"
-
-    /** Phase A guard: core.html is lane html-tree's, and until it merges no page can be parsed; the records that
-     * parse one wait on it (waiting on html-tree). */
-    val htmlReady: Boolean by lazy { runCatching { Html.parse("<p>") }.isSuccess }
 
     override fun replay(misses: Misses) {
         pages(misses)
@@ -87,7 +82,6 @@ object GameTabsReplay : AreaReplay {
     // --- the pages -----------------------------------------------------------------------------------------------
 
     private fun pages(misses: Misses) {
-        if (!htmlReady) return  // waiting on html-tree
         for (r in Corpus.records(SITES).filter { it.fn.endsWith("parse_tab_page") || it.fn.endsWith("parse_game_page") }) {
             val case = r.extra["case"]?.jsonPrimitive?.content ?: r.fn
             val body = Scenarios.body(r.args[0])
@@ -157,13 +151,6 @@ object GameTabsReplay : AreaReplay {
 
     // --- a lookup's pass -------------------------------------------------------------------------------------------
 
-    /** Whether a record's pass reads a page: an answer or a cached copy of 200, which waits on html-tree. */
-    private fun parsesAPage(record: JsonObject): Boolean {
-        val answers = (record["answers"] as? JsonObject)?.values.orEmpty()
-        val cached = (record["cache"] as? JsonObject)?.values.orEmpty().flatMap { it.jsonObject.values }
-        return (answers + cached).any { it.jsonObject["status"]?.jsonPrimitive?.long == 200L }
-    }
-
     /** The pass's stats as the record writes them (its fields by Python's names; each failure its song's key, its
      * error's type and words). */
     fun stats(s: GameTabsStats): Map<String, Any?> = linkedMapOf(
@@ -172,9 +159,8 @@ object GameTabsReplay : AreaReplay {
         "sitemaps" to s.sitemaps, "kept" to s.kept, "missing" to s.missing,
     )
 
-    /** The lookup's scenario records, or those that read no page while core.html waits. */
-    fun lookupRecords(): List<JsonObject> =
-        Corpus.lines(LOOKUP).filter { it["header"] != JsonPrimitive(true) }.filter { htmlReady || !parsesAPage(it) }
+    /** The lookup's scenario records. */
+    fun lookupRecords(): List<JsonObject> = Corpus.lines(LOOKUP).filter { it["header"] != JsonPrimitive(true) }
 
     private fun lookups(misses: Misses) {
         for (record in lookupRecords()) {

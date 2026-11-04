@@ -28,7 +28,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.nio.file.Files
 import java.time.Instant
@@ -48,7 +47,6 @@ class GameTabsTest {
     }
 
     @Test fun aPageNumberIntRefusesIsAParseErrorNeverACrash() {
-        assumeTrue("waiting on html-tree", GameTabsReplay.htmlReady)
         val page = Corpus.fixture("gametabs/game_final-fantasy-vii.html").toString(Charsets.UTF_8)
         for (number in listOf("²", "①", "1²")) {
             val e = assertFailsWith<GameTabsParseError> {
@@ -102,13 +100,11 @@ class GameTabsTest {
         }
 
     @Test fun aTabKeptIsSaidSo() {
-        assumeTrue("waiting on html-tree", GameTabsReplay.htmlReady)
         assertEquals(StageEnd("done", "game music tab kept"),
                      stage("a song named by its game: the first candidate gone, the second kept as gametab-1.txt"))
     }
 
     @Test fun candidatesNoneOfWhichIsTheSongsAreNoTabThere() {
-        assumeTrue("waiting on html-tree", GameTabsReplay.htmlReady)
         assertEquals(StageEnd("done", "no tab there of its game or composer"),
                      stage("a page of another title, and one of another game: a miss"))
     }
