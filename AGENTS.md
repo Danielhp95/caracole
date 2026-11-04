@@ -1274,7 +1274,23 @@ Not built yet. (job-views, requests-feed.)
   and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
-- The sheet page (pages): not built yet.
+- The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
+  writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
+  inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
+    writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
+    a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
+    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
+    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - Phase A, waiting on sheet-keys and harmony-progressions: `pages/internal/SheetReads.kt` holds the lines of
+    sheet.py the frame reads until `Sheets` and `SheetView` replace it, and the whole pages are skipped until then.
+  - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
+    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
+    Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 
