@@ -1,0 +1,288 @@
+{"corpus":"html/tree_selectors","header":true,"made_by":"tests/test_conformance_html.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"fn":"test_conformance_html.SELECTOR_PAGES","out":{"quirks":"<div id=X class='A b' lang=EN><a href=Q type=TeXt title='Hello World' rel=NoFollow data-x=AbC>x</a><svg viewBox='0 0 1 1' class=K id=S><clipPath id=c></clipPath><title>t</title></svg><a href>y</a><p id>z</p><p class>w</p><ul><li>1<li>2<li>3</ul><span class='x-y  z\tq'>s</span><input type=Hidden></div><custom-el foo=bar></custom-el><p id=dup class=dup>d</p><div id=1><div id=2><p id=3><span id=4></span></p><p id=5></p></div></div><p id=6><span id=7></span></p>","standards":"<!DOCTYPE html><div id=X class='A b' lang=EN><a href=Q type=TeXt title='Hello World' rel=NoFollow data-x=AbC>x</a><svg viewBox='0 0 1 1' class=K id=S><clipPath id=c></clipPath><title>t</title></svg><a href>y</a><p id>z</p><p class>w</p><ul><li>1<li>2<li>3</ul><span class='x-y  z\tq'>s</span><input type=Hidden></div><custom-el foo=bar></custom-el><p id=dup class=dup>d</p><div id=1><div id=2><p id=3><span id=4></span></p><p id=5></p></div></div><p id=6><span id=7></span></p>"}}
+{"args":["quirks",null,"DIV"],"case":"quirks DIV","fn":"test_conformance_html.select","out":[3,29,30]}
+{"args":["quirks",null,"Div"],"case":"quirks Div","fn":"test_conformance_html.select","out":[3,29,30]}
+{"args":["quirks",null,"[HREF]"],"case":"quirks [HREF]","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"[Href]"],"case":"quirks [Href]","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"a[href=q]"],"case":"quirks a[href=q]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[href=Q]"],"case":"quirks a[href=Q]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[type=text]"],"case":"quirks a[type=text]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[type=TEXT]"],"case":"quirks a[type=TEXT]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[rel=nofollow]"],"case":"quirks a[rel=nofollow]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[data-x=abc]"],"case":"quirks a[data-x=abc]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[data-x=abc i]"],"case":"quirks a[data-x=abc i]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[data-x=AbC]"],"case":"quirks a[data-x=AbC]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[type=text s]"],"case":"quirks a[type=text s]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[data-x='abc' I]"],"case":"quirks a[data-x='abc' I]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[title='hello world']"],"case":"quirks a[title='hello world']","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[title='Hello World']"],"case":"quirks a[title='Hello World']","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[title=\"Hello World\"]"],"case":"quirks a[title=\"Hello World\"]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"[title^=Hello]"],"case":"quirks [title^=Hello]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"[title^=hello]"],"case":"quirks [title^=hello]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"[title$=World]"],"case":"quirks [title$=World]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"[title$=world]"],"case":"quirks [title$=world]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"[title*='o W']"],"case":"quirks [title*='o W']","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"[title*='o w']"],"case":"quirks [title*='o w']","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[href='']"],"case":"quirks a[href='']","fn":"test_conformance_html.select","out":[10]}
+{"args":["quirks",null,"a[href]"],"case":"quirks a[href]","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"a[href=\"\"]"],"case":"quirks a[href=\"\"]","fn":"test_conformance_html.select","out":[10]}
+{"args":["quirks",null,"#x"],"case":"quirks #x","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"#X"],"case":"quirks #X","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,".a"],"case":"quirks .a","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,".A"],"case":"quirks .A","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,".b"],"case":"quirks .b","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,".B"],"case":"quirks .B","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"svg"],"case":"quirks svg","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"SVG"],"case":"quirks SVG","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"clippath"],"case":"quirks clippath","fn":"test_conformance_html.select","out":[7]}
+{"args":["quirks",null,"clipPath"],"case":"quirks clipPath","fn":"test_conformance_html.select","out":[7]}
+{"args":["quirks",null,"[viewbox]"],"case":"quirks [viewbox]","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"[viewBox]"],"case":"quirks [viewBox]","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"title"],"case":"quirks title","fn":"test_conformance_html.select","out":[8]}
+{"args":["quirks",null,"#s"],"case":"quirks #s","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"#S"],"case":"quirks #S","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,".k"],"case":"quirks .k","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,".K"],"case":"quirks .K","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"p[id]"],"case":"quirks p[id]","fn":"test_conformance_html.select","out":[12,27,31,33,34]}
+{"args":["quirks",null,"p[id='']"],"case":"quirks p[id='']","fn":"test_conformance_html.select","out":[12]}
+{"args":["quirks",null,"p[class]"],"case":"quirks p[class]","fn":"test_conformance_html.select","out":[14,27]}
+{"args":["quirks",null,"p[class='']"],"case":"quirks p[class='']","fn":"test_conformance_html.select","out":[14]}
+{"args":["quirks",null,"custom-el"],"case":"quirks custom-el","fn":"test_conformance_html.select","out":[26]}
+{"args":["quirks",null,"[foo=bar]"],"case":"quirks [foo=bar]","fn":"test_conformance_html.select","out":[26]}
+{"args":["quirks",null,"[foo=BAR]"],"case":"quirks [foo=BAR]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[href*='']"],"case":"quirks a[href*='']","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[href^='']"],"case":"quirks a[href^='']","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"a[href$='']"],"case":"quirks a[href$='']","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"div a"],"case":"quirks div a","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"div>a"],"case":"quirks div>a","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"div > a + svg"],"case":"quirks div > a + svg","fn":"test_conformance_html.select","out":[6]}
+{"args":["quirks",null,"a ~ a"],"case":"quirks a ~ a","fn":"test_conformance_html.select","out":[10]}
+{"args":["quirks",null,"a ~ p"],"case":"quirks a ~ p","fn":"test_conformance_html.select","out":[12,14]}
+{"args":["quirks",null,"a+a"],"case":"quirks a+a","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"svg title"],"case":"quirks svg title","fn":"test_conformance_html.select","out":[8]}
+{"args":["quirks",null,"html > body > div"],"case":"quirks html > body > div","fn":"test_conformance_html.select","out":[3,29]}
+{"args":["quirks",null,"* > a"],"case":"quirks * > a","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"a[title~=World]"],"case":"quirks a[title~=World]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[title~=world]"],"case":"quirks a[title~=world]","fn":"test_conformance_html.select","out":[]}
+{"args":["quirks",null,"[lang|=en]"],"case":"quirks [lang|=en]","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"[lang|=EN]"],"case":"quirks [lang|=EN]","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"[lang=en]"],"case":"quirks [lang=en]","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"[lang=EN]"],"case":"quirks [lang=EN]","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"li + li"],"case":"quirks li + li","fn":"test_conformance_html.select","out":[19,21]}
+{"args":["quirks",null,"li ~ li"],"case":"quirks li ~ li","fn":"test_conformance_html.select","out":[19,21]}
+{"args":["quirks",null,"ul > li"],"case":"quirks ul > li","fn":"test_conformance_html.select","out":[17,19,21]}
+{"args":["quirks",null,"ul li, li"],"case":"quirks ul li, li","fn":"test_conformance_html.select","out":[17,17,19,19,21,21]}
+{"args":["quirks",null,"p, p"],"case":"quirks p, p","fn":"test_conformance_html.select","out":[12,12,14,14,27,27,31,31,33,33,34,34]}
+{"args":["quirks",null,"p, #dup"],"case":"quirks p, #dup","fn":"test_conformance_html.select","out":[12,14,27,27,31,33,34]}
+{"args":["quirks",null,".dup, #dup, p"],"case":"quirks .dup, #dup, p","fn":"test_conformance_html.select","out":[12,14,27,27,27,31,33,34]}
+{"args":["quirks",null,"span[class~=z]"],"case":"quirks span[class~=z]","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,"span[class~=q]"],"case":"quirks span[class~=q]","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,"span[class|=x]"],"case":"quirks span[class|=x]","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,".x-y"],"case":"quirks .x-y","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,"span.x-y.z"],"case":"quirks span.x-y.z","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,".z.x-y"],"case":"quirks .z.x-y","fn":"test_conformance_html.select","out":[23]}
+{"args":["quirks",null,"div p"],"case":"quirks div p","fn":"test_conformance_html.select","out":[12,14,31,33]}
+{"args":["quirks",null,"body *"],"case":"quirks body *","fn":"test_conformance_html.select","out":[3,4,6,7,8,10,12,14,16,17,19,21,23,25,26,27,29,30,31,32,33,34,35]}
+{"args":["quirks",null,"*"],"case":"quirks *","fn":"test_conformance_html.select","out":[0,1,2,3,4,6,7,8,10,12,14,16,17,19,21,23,25,26,27,29,30,31,32,33,34,35]}
+{"args":["quirks",null,"html"],"case":"quirks html","fn":"test_conformance_html.select","out":[0]}
+{"args":["quirks",null,"head"],"case":"quirks head","fn":"test_conformance_html.select","out":[1]}
+{"args":["quirks",null,"body > *"],"case":"quirks body > *","fn":"test_conformance_html.select","out":[3,26,27,29,34]}
+{"args":["quirks",null,"div div p"],"case":"quirks div div p","fn":"test_conformance_html.select","out":[31,33]}
+{"args":["quirks",null,"div span"],"case":"quirks div span","fn":"test_conformance_html.select","out":[23,32]}
+{"args":["quirks",null,"p span"],"case":"quirks p span","fn":"test_conformance_html.select","out":[32,35]}
+{"args":["quirks",null,"div > p"],"case":"quirks div > p","fn":"test_conformance_html.select","out":[12,14,31,33]}
+{"args":["quirks",null,"p + p"],"case":"quirks p + p","fn":"test_conformance_html.select","out":[14,33]}
+{"args":["quirks",null,"p ~ p"],"case":"quirks p ~ p","fn":"test_conformance_html.select","out":[14,33,34]}
+{"args":["quirks",null,"div p, p"],"case":"quirks div p, p","fn":"test_conformance_html.select","out":[12,12,14,14,27,31,31,33,33,34]}
+{"args":["quirks",null,"div span, p span"],"case":"quirks div span, p span","fn":"test_conformance_html.select","out":[23,32,32,35]}
+{"args":["quirks",null,"div *"],"case":"quirks div *","fn":"test_conformance_html.select","out":[4,6,7,8,10,12,14,16,17,19,21,23,25,30,31,32,33]}
+{"args":["quirks",null,"* span"],"case":"quirks * span","fn":"test_conformance_html.select","out":[23,32,35]}
+{"args":["quirks",null,"div, div"],"case":"quirks div, div","fn":"test_conformance_html.select","out":[3,3,29,29,30,30]}
+{"args":["quirks",null,"div p span"],"case":"quirks div p span","fn":"test_conformance_html.select","out":[32]}
+{"args":["quirks",null,"#1 p, #2 p"],"case":"quirks #1 p, #2 p","fn":"test_conformance_html.select","out":[31,31,33,33]}
+{"args":["quirks",null,"input[type=hidden]"],"case":"quirks input[type=hidden]","fn":"test_conformance_html.select","out":[25]}
+{"args":["quirks",null,"[type]"],"case":"quirks [type]","fn":"test_conformance_html.select","out":[4,25]}
+{"args":["quirks",null,"[TYPE=hidden]"],"case":"quirks [TYPE=hidden]","fn":"test_conformance_html.select","out":[25]}
+{"args":["quirks",null,"div#X.A"],"case":"quirks div#X.A","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"div.b#X"],"case":"quirks div.b#X","fn":"test_conformance_html.select","out":[3]}
+{"args":["quirks",null,"a[href][title]"],"case":"quirks a[href][title]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"a[href=Q][title]"],"case":"quirks a[href=Q][title]","fn":"test_conformance_html.select","out":[4]}
+{"args":["quirks",null,"#X a"],"case":"quirks #X a","fn":"test_conformance_html.select","out":[4,10]}
+{"args":["quirks",null,"#X > svg > title"],"case":"quirks #X > svg > title","fn":"test_conformance_html.select","out":[8]}
+{"args":["quirks",null,"p#3 > span#4"],"case":"quirks p#3 > span#4","fn":"test_conformance_html.select","out":[32]}
+{"args":["quirks",null,"  p  ,  span  "],"case":"quirks   p  ,  span  ","fn":"test_conformance_html.select","out":[12,14,23,27,31,32,33,34,35]}
+{"args":["quirks",null,"p,span"],"case":"quirks p,span","fn":"test_conformance_html.select","out":[12,14,23,27,31,32,33,34,35]}
+{"args":["quirks",null,"a[title=hello world]"],"case":"quirks a[title=hello world]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"#"],"case":"quirks #","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a["],"case":"quirks a[","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a]"],"case":"quirks a]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a >"],"case":"quirks a >","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a,"],"case":"quirks a,","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,",a"],"case":"quirks ,a","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a[href=]"],"case":"quirks a[href=]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"[]"],"case":"quirks []","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a..b"],"case":"quirks a..b","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks",null,"a##b"],"case":"quirks a##b","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["quirks","#X","a"],"case":"quirks #X then a","fn":"test_conformance_html.select","out":[[3,[4,10]]]}
+{"args":["quirks","#X","div a"],"case":"quirks #X then div a","fn":"test_conformance_html.select","out":[[3,[4,10]]]}
+{"args":["quirks","#X","body a"],"case":"quirks #X then body a","fn":"test_conformance_html.select","out":[[3,[4,10]]]}
+{"args":["quirks","#X","div"],"case":"quirks #X then div","fn":"test_conformance_html.select","out":[[3,[3]]]}
+{"args":["quirks","#X","*"],"case":"quirks #X then *","fn":"test_conformance_html.select","out":[[3,[3,4,6,7,8,10,12,14,16,17,19,21,23,25]]]}
+{"args":["quirks","#2","div p"],"case":"quirks #2 then div p","fn":"test_conformance_html.select","out":[[30,[31,33]]]}
+{"args":["quirks","#2","div"],"case":"quirks #2 then div","fn":"test_conformance_html.select","out":[[30,[30]]]}
+{"args":["quirks","#2","body div p"],"case":"quirks #2 then body div p","fn":"test_conformance_html.select","out":[[30,[31,33]]]}
+{"args":["quirks","#2","#1 > div"],"case":"quirks #2 then #1 > div","fn":"test_conformance_html.select","out":[[30,[30]]]}
+{"args":["quirks","#2","div > div"],"case":"quirks #2 then div > div","fn":"test_conformance_html.select","out":[[30,[30]]]}
+{"args":["quirks","#3","span"],"case":"quirks #3 then span","fn":"test_conformance_html.select","out":[[31,[32]]]}
+{"args":["quirks","#3","p"],"case":"quirks #3 then p","fn":"test_conformance_html.select","out":[[31,[31]]]}
+{"args":["quirks","#3","p span"],"case":"quirks #3 then p span","fn":"test_conformance_html.select","out":[[31,[32]]]}
+{"args":["quirks","ul","li"],"case":"quirks ul then li","fn":"test_conformance_html.select","out":[[16,[17,19,21]]]}
+{"args":["quirks","li","li"],"case":"quirks li then li","fn":"test_conformance_html.select","out":[[17,[17]],[19,[19]],[21,[21]]]}
+{"args":["quirks","svg","title"],"case":"quirks svg then title","fn":"test_conformance_html.select","out":[[6,[8]]]}
+{"args":["quirks","svg","svg title"],"case":"quirks svg then svg title","fn":"test_conformance_html.select","out":[[6,[8]]]}
+{"args":["quirks","a","*"],"case":"quirks a then *","fn":"test_conformance_html.select","out":[[4,[4]],[10,[10]]]}
+{"args":["quirks","p","p, p"],"case":"quirks p then p, p","fn":"test_conformance_html.select","out":[[12,[12,12]],[14,[14,14]],[27,[27,27]],[31,[31,31]],[33,[33,33]],[34,[34,34]]]}
+{"args":["quirks","#1","p, div"],"case":"quirks #1 then p, div","fn":"test_conformance_html.select","out":[[29,[29,30,31,33]]]}
+{"args":["standards",null,"DIV"],"case":"standards DIV","fn":"test_conformance_html.select","out":[4,30,31]}
+{"args":["standards",null,"Div"],"case":"standards Div","fn":"test_conformance_html.select","out":[4,30,31]}
+{"args":["standards",null,"[HREF]"],"case":"standards [HREF]","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"[Href]"],"case":"standards [Href]","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"a[href=q]"],"case":"standards a[href=q]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[href=Q]"],"case":"standards a[href=Q]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[type=text]"],"case":"standards a[type=text]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[type=TEXT]"],"case":"standards a[type=TEXT]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[rel=nofollow]"],"case":"standards a[rel=nofollow]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[data-x=abc]"],"case":"standards a[data-x=abc]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[data-x=abc i]"],"case":"standards a[data-x=abc i]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[data-x=AbC]"],"case":"standards a[data-x=AbC]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[type=text s]"],"case":"standards a[type=text s]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[data-x='abc' I]"],"case":"standards a[data-x='abc' I]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[title='hello world']"],"case":"standards a[title='hello world']","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[title='Hello World']"],"case":"standards a[title='Hello World']","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[title=\"Hello World\"]"],"case":"standards a[title=\"Hello World\"]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"[title^=Hello]"],"case":"standards [title^=Hello]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"[title^=hello]"],"case":"standards [title^=hello]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"[title$=World]"],"case":"standards [title$=World]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"[title$=world]"],"case":"standards [title$=world]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"[title*='o W']"],"case":"standards [title*='o W']","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"[title*='o w']"],"case":"standards [title*='o w']","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[href='']"],"case":"standards a[href='']","fn":"test_conformance_html.select","out":[11]}
+{"args":["standards",null,"a[href]"],"case":"standards a[href]","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"a[href=\"\"]"],"case":"standards a[href=\"\"]","fn":"test_conformance_html.select","out":[11]}
+{"args":["standards",null,"#x"],"case":"standards #x","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"#X"],"case":"standards #X","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,".a"],"case":"standards .a","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,".A"],"case":"standards .A","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,".b"],"case":"standards .b","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,".B"],"case":"standards .B","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"svg"],"case":"standards svg","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"SVG"],"case":"standards SVG","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"clippath"],"case":"standards clippath","fn":"test_conformance_html.select","out":[8]}
+{"args":["standards",null,"clipPath"],"case":"standards clipPath","fn":"test_conformance_html.select","out":[8]}
+{"args":["standards",null,"[viewbox]"],"case":"standards [viewbox]","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"[viewBox]"],"case":"standards [viewBox]","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"title"],"case":"standards title","fn":"test_conformance_html.select","out":[9]}
+{"args":["standards",null,"#s"],"case":"standards #s","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"#S"],"case":"standards #S","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,".k"],"case":"standards .k","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,".K"],"case":"standards .K","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"p[id]"],"case":"standards p[id]","fn":"test_conformance_html.select","out":[13,28,32,34,35]}
+{"args":["standards",null,"p[id='']"],"case":"standards p[id='']","fn":"test_conformance_html.select","out":[13]}
+{"args":["standards",null,"p[class]"],"case":"standards p[class]","fn":"test_conformance_html.select","out":[15,28]}
+{"args":["standards",null,"p[class='']"],"case":"standards p[class='']","fn":"test_conformance_html.select","out":[15]}
+{"args":["standards",null,"custom-el"],"case":"standards custom-el","fn":"test_conformance_html.select","out":[27]}
+{"args":["standards",null,"[foo=bar]"],"case":"standards [foo=bar]","fn":"test_conformance_html.select","out":[27]}
+{"args":["standards",null,"[foo=BAR]"],"case":"standards [foo=BAR]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[href*='']"],"case":"standards a[href*='']","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[href^='']"],"case":"standards a[href^='']","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"a[href$='']"],"case":"standards a[href$='']","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"div a"],"case":"standards div a","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"div>a"],"case":"standards div>a","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"div > a + svg"],"case":"standards div > a + svg","fn":"test_conformance_html.select","out":[7]}
+{"args":["standards",null,"a ~ a"],"case":"standards a ~ a","fn":"test_conformance_html.select","out":[11]}
+{"args":["standards",null,"a ~ p"],"case":"standards a ~ p","fn":"test_conformance_html.select","out":[13,15]}
+{"args":["standards",null,"a+a"],"case":"standards a+a","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"svg title"],"case":"standards svg title","fn":"test_conformance_html.select","out":[9]}
+{"args":["standards",null,"html > body > div"],"case":"standards html > body > div","fn":"test_conformance_html.select","out":[4,30]}
+{"args":["standards",null,"* > a"],"case":"standards * > a","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"a[title~=World]"],"case":"standards a[title~=World]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[title~=world]"],"case":"standards a[title~=world]","fn":"test_conformance_html.select","out":[]}
+{"args":["standards",null,"[lang|=en]"],"case":"standards [lang|=en]","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"[lang|=EN]"],"case":"standards [lang|=EN]","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"[lang=en]"],"case":"standards [lang=en]","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"[lang=EN]"],"case":"standards [lang=EN]","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"li + li"],"case":"standards li + li","fn":"test_conformance_html.select","out":[20,22]}
+{"args":["standards",null,"li ~ li"],"case":"standards li ~ li","fn":"test_conformance_html.select","out":[20,22]}
+{"args":["standards",null,"ul > li"],"case":"standards ul > li","fn":"test_conformance_html.select","out":[18,20,22]}
+{"args":["standards",null,"ul li, li"],"case":"standards ul li, li","fn":"test_conformance_html.select","out":[18,18,20,20,22,22]}
+{"args":["standards",null,"p, p"],"case":"standards p, p","fn":"test_conformance_html.select","out":[13,13,15,15,28,28,32,32,34,34,35,35]}
+{"args":["standards",null,"p, #dup"],"case":"standards p, #dup","fn":"test_conformance_html.select","out":[13,15,28,28,32,34,35]}
+{"args":["standards",null,".dup, #dup, p"],"case":"standards .dup, #dup, p","fn":"test_conformance_html.select","out":[13,15,28,28,28,32,34,35]}
+{"args":["standards",null,"span[class~=z]"],"case":"standards span[class~=z]","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,"span[class~=q]"],"case":"standards span[class~=q]","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,"span[class|=x]"],"case":"standards span[class|=x]","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,".x-y"],"case":"standards .x-y","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,"span.x-y.z"],"case":"standards span.x-y.z","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,".z.x-y"],"case":"standards .z.x-y","fn":"test_conformance_html.select","out":[24]}
+{"args":["standards",null,"div p"],"case":"standards div p","fn":"test_conformance_html.select","out":[13,15,32,34]}
+{"args":["standards",null,"body *"],"case":"standards body *","fn":"test_conformance_html.select","out":[4,5,7,8,9,11,13,15,17,18,20,22,24,26,27,28,30,31,32,33,34,35,36]}
+{"args":["standards",null,"*"],"case":"standards *","fn":"test_conformance_html.select","out":[1,2,3,4,5,7,8,9,11,13,15,17,18,20,22,24,26,27,28,30,31,32,33,34,35,36]}
+{"args":["standards",null,"html"],"case":"standards html","fn":"test_conformance_html.select","out":[1]}
+{"args":["standards",null,"head"],"case":"standards head","fn":"test_conformance_html.select","out":[2]}
+{"args":["standards",null,"body > *"],"case":"standards body > *","fn":"test_conformance_html.select","out":[4,27,28,30,35]}
+{"args":["standards",null,"div div p"],"case":"standards div div p","fn":"test_conformance_html.select","out":[32,34]}
+{"args":["standards",null,"div span"],"case":"standards div span","fn":"test_conformance_html.select","out":[24,33]}
+{"args":["standards",null,"p span"],"case":"standards p span","fn":"test_conformance_html.select","out":[33,36]}
+{"args":["standards",null,"div > p"],"case":"standards div > p","fn":"test_conformance_html.select","out":[13,15,32,34]}
+{"args":["standards",null,"p + p"],"case":"standards p + p","fn":"test_conformance_html.select","out":[15,34]}
+{"args":["standards",null,"p ~ p"],"case":"standards p ~ p","fn":"test_conformance_html.select","out":[15,34,35]}
+{"args":["standards",null,"div p, p"],"case":"standards div p, p","fn":"test_conformance_html.select","out":[13,13,15,15,28,32,32,34,34,35]}
+{"args":["standards",null,"div span, p span"],"case":"standards div span, p span","fn":"test_conformance_html.select","out":[24,33,33,36]}
+{"args":["standards",null,"div *"],"case":"standards div *","fn":"test_conformance_html.select","out":[5,7,8,9,11,13,15,17,18,20,22,24,26,31,32,33,34]}
+{"args":["standards",null,"* span"],"case":"standards * span","fn":"test_conformance_html.select","out":[24,33,36]}
+{"args":["standards",null,"div, div"],"case":"standards div, div","fn":"test_conformance_html.select","out":[4,4,30,30,31,31]}
+{"args":["standards",null,"div p span"],"case":"standards div p span","fn":"test_conformance_html.select","out":[33]}
+{"args":["standards",null,"#1 p, #2 p"],"case":"standards #1 p, #2 p","fn":"test_conformance_html.select","out":[32,32,34,34]}
+{"args":["standards",null,"input[type=hidden]"],"case":"standards input[type=hidden]","fn":"test_conformance_html.select","out":[26]}
+{"args":["standards",null,"[type]"],"case":"standards [type]","fn":"test_conformance_html.select","out":[5,26]}
+{"args":["standards",null,"[TYPE=hidden]"],"case":"standards [TYPE=hidden]","fn":"test_conformance_html.select","out":[26]}
+{"args":["standards",null,"div#X.A"],"case":"standards div#X.A","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"div.b#X"],"case":"standards div.b#X","fn":"test_conformance_html.select","out":[4]}
+{"args":["standards",null,"a[href][title]"],"case":"standards a[href][title]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"a[href=Q][title]"],"case":"standards a[href=Q][title]","fn":"test_conformance_html.select","out":[5]}
+{"args":["standards",null,"#X a"],"case":"standards #X a","fn":"test_conformance_html.select","out":[5,11]}
+{"args":["standards",null,"#X > svg > title"],"case":"standards #X > svg > title","fn":"test_conformance_html.select","out":[9]}
+{"args":["standards",null,"p#3 > span#4"],"case":"standards p#3 > span#4","fn":"test_conformance_html.select","out":[33]}
+{"args":["standards",null,"  p  ,  span  "],"case":"standards   p  ,  span  ","fn":"test_conformance_html.select","out":[13,15,24,28,32,33,34,35,36]}
+{"args":["standards",null,"p,span"],"case":"standards p,span","fn":"test_conformance_html.select","out":[13,15,24,28,32,33,34,35,36]}
+{"args":["standards",null,"a[title=hello world]"],"case":"standards a[title=hello world]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"#"],"case":"standards #","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a["],"case":"standards a[","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a]"],"case":"standards a]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a >"],"case":"standards a >","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a,"],"case":"standards a,","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,",a"],"case":"standards ,a","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a[href=]"],"case":"standards a[href=]","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"[]"],"case":"standards []","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a..b"],"case":"standards a..b","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards",null,"a##b"],"case":"standards a##b","err":"SelectolaxError","fn":"test_conformance_html.select"}
+{"args":["standards","#X","a"],"case":"standards #X then a","fn":"test_conformance_html.select","out":[[4,[5,11]]]}
+{"args":["standards","#X","div a"],"case":"standards #X then div a","fn":"test_conformance_html.select","out":[[4,[5,11]]]}
+{"args":["standards","#X","body a"],"case":"standards #X then body a","fn":"test_conformance_html.select","out":[[4,[5,11]]]}
+{"args":["standards","#X","div"],"case":"standards #X then div","fn":"test_conformance_html.select","out":[[4,[4]]]}
+{"args":["standards","#X","*"],"case":"standards #X then *","fn":"test_conformance_html.select","out":[[4,[4,5,7,8,9,11,13,15,17,18,20,22,24,26]]]}
+{"args":["standards","#2","div p"],"case":"standards #2 then div p","fn":"test_conformance_html.select","out":[[31,[32,34]]]}
+{"args":["standards","#2","div"],"case":"standards #2 then div","fn":"test_conformance_html.select","out":[[31,[31]]]}
+{"args":["standards","#2","body div p"],"case":"standards #2 then body div p","fn":"test_conformance_html.select","out":[[31,[32,34]]]}
+{"args":["standards","#2","#1 > div"],"case":"standards #2 then #1 > div","fn":"test_conformance_html.select","out":[[31,[31]]]}
+{"args":["standards","#2","div > div"],"case":"standards #2 then div > div","fn":"test_conformance_html.select","out":[[31,[31]]]}
+{"args":["standards","#3","span"],"case":"standards #3 then span","fn":"test_conformance_html.select","out":[[32,[33]]]}
+{"args":["standards","#3","p"],"case":"standards #3 then p","fn":"test_conformance_html.select","out":[[32,[32]]]}
+{"args":["standards","#3","p span"],"case":"standards #3 then p span","fn":"test_conformance_html.select","out":[[32,[33]]]}
+{"args":["standards","ul","li"],"case":"standards ul then li","fn":"test_conformance_html.select","out":[[17,[18,20,22]]]}
+{"args":["standards","li","li"],"case":"standards li then li","fn":"test_conformance_html.select","out":[[18,[18]],[20,[20]],[22,[22]]]}
+{"args":["standards","svg","title"],"case":"standards svg then title","fn":"test_conformance_html.select","out":[[7,[9]]]}
+{"args":["standards","svg","svg title"],"case":"standards svg then svg title","fn":"test_conformance_html.select","out":[[7,[9]]]}
+{"args":["standards","a","*"],"case":"standards a then *","fn":"test_conformance_html.select","out":[[5,[5]],[11,[11]]]}
+{"args":["standards","p","p, p"],"case":"standards p then p, p","fn":"test_conformance_html.select","out":[[13,[13,13]],[15,[15,15]],[28,[28,28]],[32,[32,32]],[34,[34,34]],[35,[35,35]]]}
+{"args":["standards","#1","p, div"],"case":"standards #1 then p, div","fn":"test_conformance_html.select","out":[[30,[30,31,32,34]]]}

@@ -14,18 +14,21 @@ The evidence: [the probes](../spikes/2026-11-03-android/html-probes/), run again
 object Html { fun parse(text: String): HtmlDoc; fun parse(bytes: ByteArray): HtmlDoc }  // bytes: PyCodec.utf8Replace
 class HtmlDoc(val quirks: Boolean) { fun css(sel: String): List<HtmlNode>; fun cssFirst(sel: String): HtmlNode? }
 class HtmlNode {
-    val tag: String                     // lowercase; "-text", "-comment" as selectolax names them
-    fun attr(name: String): String?
-    val attributes: Map<String, String?>   // the first of duplicates wins; null where no value was written
+    val tag: String                     // lowercase (an SVG element's in its own case, "clipPath"); "-text", "-comment"
+                                        // as selectolax names them, "-pi" for a processing instruction (selectolax: None)
+    fun attr(name: String): String?     // attributes[name]
+    val attributes: Map<String, String?>   // as selectolax's dict: null where no value was written
     fun text(deep: Boolean = true): String
-    fun children(includeText: Boolean = true): List<HtmlNode>
-    val textContent: String?            // a text node's text; null for an element
-    val next: HtmlNode?
+    fun children(includeText: Boolean = true): List<HtmlNode>   // selectolax's iter(include_text=)
+    val textContent: String?            // a text node's text; null for anything else
+    val next: HtmlNode?                 // the next sibling, of any kind
     val isText: Boolean
     fun css(sel: String): List<HtmlNode>; fun cssFirst(sel: String): HtmlNode?
     fun replaceWith(text: String); fun insertAfter(text: String)
 }
 ```
+
+Two `HtmlNode`s of one node are equal. `HtmlDoc(quirks)` alone is an empty document in that mode.
 
 ## Input
 
@@ -148,28 +151,105 @@ the SVG and MathML ones their case) and the tokenizer's compared as it gives the
 ## Text
 
 - `text(deep = true)` is lexbor's: every descendant text node's text concatenated with no separator, a `<script>`'s or
-  `<style>`'s data included (`var x='<b>';TUV`), nothing for `<br>`, comments left out.
-- `text(deep = false)`: the node's own text children alone.
-- `children(includeText = true)` lists text nodes as `-text` with their `textContent` (`[('a', None), ('-text',
-  '  x '), ('b', None)]`); whitespace-only text nodes kept where the tree builder keeps them.
+  `<style>`'s data included (`var x='<b>';TUV`), nothing for `<br>`, comments and processing instructions left out; a
+  text node's is its own text, a comment's "".
+- `text(deep = false)`: the node's own text children alone (`<a>x<!--c-->y<b>q</b>s</a>` is `xys`).
+- `children(includeText = true)` lists every child, text nodes as `-text` with their `textContent` (`[('a', None),
+  ('-text', '  x '), ('b', None)]`); with `includeText = false` it leaves the text nodes out but keeps comments and
+  processing instructions, as selectolax's `iter()` does. Whitespace-only text nodes are kept where the tree builder
+  keeps them.
+- `attributes` is selectolax's dict: in order, a value null where none was written. The tokenizer kept the first of
+  duplicates; of two attributes the tree builder keeps under one shown name (a foreign attribute, adjusted), the dict's
+  last value at the first's place.
+- `replaceWith(text)` puts a text node of `text` in the node's place, `insertAfter(text)` one right after it; neither
+  merges with the text beside it (harptabs.py's `<pre>`: `a<br>b` then has the texts `a`, `\n`, `b`).
 
 ## The tree
 
-- The insertion modes caracole's pages reach: initial, before html, before head, in head, after head, in body (the
-  adoption agency, implied end tags, the scopes), text, in table and its family (in table text, in caption, in column
-  group, in table body, in row, in cell, in select in table), after body, after after body.
-- Foreign content (svg, math) as the spec builds it: self-closing tags acknowledged, the breakout tags honoured.
-- A `<template>`'s contents as ordinary children, as selectolax shows them.
+`core.html.internal.tree` (lane html-tree): `TreeBuilder`, a port of lexbor 3.1.0's tree builder (lexbor/html/tree.c
+and tree/insertion_mode/, Apache-2.0), insertion mode by insertion mode, with lexbor's tables of each tag's categories
+in each namespace, of SVG's element and attribute names in their own case and of the foreign attributes
+(`Tags`); `Dom.kt`, lexbor's nodes linked to their parent and siblings.
+
+- Every insertion mode: initial, before html, before head, in head, in head noscript (scripting is off, as selectolax
+  parses), after head, in body (the adoption agency, the active formatting elements and their Noah's Ark clause, the
+  implied end tags, the scopes), text, in table, in table text, in caption, in column group, in table body, in row,
+  in cell, in template, after body, in frameset, after frameset, after after body, after after frameset; foreign
+  content (svg and math in their namespaces, their integration points, a self-closing tag popped, the breakout tags
+  that leave it, a `<font>` with `color`, `face` or `size`).
+- A `<template>`'s contents are a fragment of their own, as lexbor builds them: selectolax shows a template with no
+  children, its text "", and no selector finds what it holds (`<template><p>a</p></template>`: `css("p")` finds
+  nothing).
+- A processing instruction is a node, placed as a comment is (in a table, fostered as an element is).
+- A document with no doctype is in quirks mode; a doctype sets it as The tokenizer, "Quirks mode", says.
+
+Where lexbor reads the standard its own way, core.html does too:
+
+- **`<select>`** is an ordinary element (the customizable select's parsing: there is no "in select" mode) and a
+  scope, so a `<p>` or a `<button>` outside it is not in scope inside it (`<button><select><button>` nests the second
+  button); `<select>` in a select's scope closes it and is dropped, `<input>` closes it, `<option>`, `<optgroup>` and
+  `<hr>` in one imply their end tags; anything else nests (`<select><div>x</div>` keeps the div).
+- **In table**, a token "anything else" hands to in body is never processed again, whatever in body says: `<table>
+  <image src=x>` drops the image (in body would make it an `<img>` and process it again).
+- **Implied end tags** pop an element of any namespace by its tag name, as lexbor compares tag ids.
+- **`sup`** is no breakout tag of foreign content (`<svg><sup>` is an SVG element); `sub` is.
+- **Text after `</html>` after a frameset** goes to in body only when the whole text between two other tokens is
+  whitespace: `</html> x ` adds nothing, its spaces neither (the tokenizer's pieces of it are read together there).
+- A start tag's attributes are its first of duplicates everywhere but one place lexbor reads them all: Divergences.
 
 ## Quirks mode
 
 - Set from the doctype in the initial insertion mode (The tokenizer, "Quirks mode": `Token.Doctype.mode`), or by a
-  missing doctype; `HtmlDoc.quirks` says which.
+  missing doctype; `HtmlDoc.quirks` says which (limited quirks is not quirks).
 - In quirks mode, `#id` and `.class` match without ASCII case (`ul#b_main` finds `<ul id=B_MAIN>`); in standards mode
-  they match as written.
+  they match as written. A `<table>` closes an open `<p>` only outside quirks mode.
 
 ## Selectors
 
-The ones caracole's parsers use (the lane greps every `css(` and `css_first(` of `src/caracole/`): a tag, `#id`,
-`.class`, `[a]`, `[a=v]`, `[a^=v]`, `[a*=v]`, `[a$=v]`, the descendant combinator, `>`, `+`, and `,`. Matches are in
-document order, each node once.
+`core.html.internal.select.Selectors`, lexbor/selectors' matching of the selectors caracole's parsers write (each
+`css(` and `css_first(` of src/caracole/): a type or `*`, `#id`, `.class`, `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`,
+`[a^=v]`, `[a$=v]`, `[a*=v]` (a value quoted or not, an `i` or `s` flag), the descendant combinator, `>`, `+`, `~`, and
+`,`. A selector of anything else (a pseudo-class, a namespace, an escape) or one that won't parse (`a[title=hello
+world]`, `#`, `a >`) is an `IllegalArgumentException`, as selectolax raises for one it can't parse.
+
+- `css` walks the node it is asked of and its descendants in document order (a node's search finds the node itself:
+  `div.css("div")` gives the div), and gives each element once for each selector of the list it matches: `p, #a`
+  gives a `<p id=a>` twice, `p, p` every `<p>` twice. `HtmlDoc.css` starts at the `<html>` element.
+- A combinator reads the whole tree, outside the node searched from too: `div.css("body p")` finds the div's `<p>`.
+- A type or an attribute name matches without ASCII case, in any namespace (`title` finds an SVG `<title>`,
+  `clippath` an SVG `<clipPath>`, `[viewbox]` its `viewBox`).
+- `#id` and `.class`: as Quirks mode says; a class is any of the value's words (split at ASCII whitespace).
+- An attribute's value matches without ASCII case for the attributes HTML lists as such (`type`, `lang`, `rel`,
+  `dir`, `media`, `target`… lexbor's 46) on an HTML element, as written otherwise; with `i` always without case, with
+  `s` never. A value-less attribute's value is "" to `=`, `~=` and the others; `^=`, `$=` and `*=` of "" find nothing.
+
+## The tree's vectors
+
+`tests/test_conformance_html.py`'s tree half (`HtmlReplay`'s, `HtmlTreeReplay`):
+
+- `tree.jsonl`, a record of every page of `tokens.jsonl` (each fixture page by reference, each helper-built page):
+  its `shape`, every node in document order with its depth (an element's name and attributes, a text's, a comment's
+  and a processing instruction's data, the doctype's name); `texts`, the SHA-256 of every element's `text(deep=True)`
+  and `text(deep=False)`; `queries`, what each selector caracole's parsers write finds from the document; `scoped`,
+  what each search the parsers make from a node finds from each node its first selector finds; `pre`, what
+  harptabs.py's `_pre_text` (`replace_with`, `insert_after`, `next`) reads of each `<pre>`.
+- `tree_edges.jsonl`, the same of the tree's edge set: `<pre>`'s first newline, the adoption agency, nested `<a>`,
+  unclosed `<p>`, `<li>`, `<dd>`, tables and foster parenting, select, svg and math with their self-closing children,
+  integration points and breakout tags, templates, the head, framesets, script and style, odd tags, quirks and
+  standards mode, pages cut short.
+- `tree_selectors.jsonl`, selectors alone over one page in quirks and in standards mode, from the document and from
+  the nodes a scope finds, and the selectors selectolax refuses.
+- `mutations.jsonl`, 400 seeded tag-soup edits of the fixtures (a fixture, a cut of it in code points and up to 12
+  edits, each inserting a tag that moves the tree builder or a piece of the page): each shape's canonical digest
+  (`canonical.digest`, `core.json.Canonical`) and length.
+- The token vectors are read through core.html's tree too (`HtmlTreeReplay.tokensRead`).
+
+All match on the JVM and on the device: 400 of 400 mutations. A local differential run of about 80,000 more seeded
+pages (tag soup of up to 300 pieces, 6,000 more fixture mutations, the token vectors' pages), compared node for node
+with selectolax, found none that differ.
+
+## Divergences
+
+- `<input type=text type=hidden>` in a table: lexbor reads every `type` the tag was written with, its duplicates too,
+  and keeps the input in the table when any says `hidden`; core.html's tokenizer keeps the first of duplicates alone,
+  so the input (`type=text`, as both show it) is fostered before the table. (`TreeTest` pins it.)
