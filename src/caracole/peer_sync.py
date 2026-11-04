@@ -266,7 +266,10 @@ def record_kept(conn: sqlite3.Connection, peer: str, chosen: Mapping[str, tuple[
                 at: str) -> int:
     """Remember, beside the base kept for ``peer``, each conflict an import of its file answered "keep mine":
     ``chosen`` ``{unit: (this side's digest, the file's)}``, at ``at``, the file's ``made``; a unit kept before
-    takes the new answer. The base's units stay as they are. Return how many were recorded."""
+    takes the new answer. The base's units stay as they are, and none answered writes nothing. Return how many were
+    recorded."""
+    if not chosen:
+        return 0
     base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
     for unit_id, (here, there) in chosen.items():
         kept[unit_id] = (here, there, at)

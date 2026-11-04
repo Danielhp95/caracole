@@ -95,6 +95,11 @@ def test_odd_kept_entries_and_a_base_of_another_format_are_read_as_none(conn):
     assert sync.kept_of(conn, "never") == {}
 
 
+def test_no_answer_to_remember_writes_nothing(conn):
+    assert sync.record_kept(conn, PEER, {}, T1) == 0
+    assert kv_get(conn, sync.BASE_KEY + PEER) is None and sync.base_of(conn, PEER) is None
+
+
 def test_a_kept_answer_recorded_again_takes_the_place_of_the_one_before(conn):
     sync.record_kept(conn, PEER, {"song/b": ("bh", "bt")}, T1)
     assert sync.record_kept(conn, PEER, {"song/b": ("bh2", "bt2")}, T2) == 1
