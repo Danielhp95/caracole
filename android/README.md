@@ -38,8 +38,9 @@ settings, a file read from the phone's server for another app, an index fetched 
    - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
      once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
-   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty. Its
-   pages say caracole, with a Phone badge beside it (a sync doesn't bring the computer's library name yet).
+   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
+   pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
+   library's name when its caracole.toml gives one (`name`), which the pages then show after caracole's.
 3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
    indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
    with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
