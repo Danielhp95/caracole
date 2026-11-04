@@ -1254,7 +1254,18 @@ Not built yet. (job-views, requests-feed.)
     pentatonic boxes too) and winds.json (harmony's `_BASS_DEGREES` too: a chord's tones in harmony's order).
   - Every answer held by vectors/viewer/voicings, instruments, harp_* and winds (`ShapesReplay`, the `shapes` area),
     a page's objects in Python's order too (a kept answer's `sha256`).
-- Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
+- Pinyin with tones, OpenCC and hanzi (chinese):
+  - core.pinyin's data is pypinyin's in Style.TONE alone (data/caracole/pinyin/, `symbols.txt` its tone marks):
+    `Pinyin.lazyPinyin(text, errors, style)` (`DEFAULT`, `IGNORE`, `EMPTY_EACH`; `TONE`, `NORMAL`), NORMAL derived as
+    pypinyin's `to_normal` (`Pinyin.normal`), which M1's NORMAL vectors guard, vectors/pinyin/tone.jsonl the TONE.
+  - `viewer.chinese.OpenCC` is OpenCC's algorithm as hanzi.py runs `t2s`, `tw2s` and `s2tw` without tofu-risk
+    dictionaries: normalization, mmseg, the chain, groups by `short_circuit` and `union`, an IDS written whole, a
+    segment ending at a NUL. Its configs are the package's as shipped (data/caracole/hanzi/opencc.json, with
+    `opencc.__version__`, 1.4.0) and its dictionaries the package's opencc_dict dumps (`hanzi/<Name>.txt`): an OpenCC
+    bump regenerates them, and OpenCCTest names the version it ports.
+  - `Hanzi` and `ViewerPinyin` are hanzi.py's and pinyin.py's, in code points (pinyin.py's constants from
+    `viewer/pinyin.json`); hanzi.py's `chordpro` is the computer's PDFs' alone. tests/test_conformance_viewer_chinese.py
+    writes their data and vectors (viewer/opencc, hanzi, pinyin_page), each also read back from the data alone.
 - Harmony (harmony): `viewer.harmony.Harmony`, harmony.py's chord half: `numeral` (`Numeral.text`), `relation`,
   `family`, `explain` (the numeral's tooltip line), `glossary`, `chordTones`, `soloScale`, `keyScale`, `pentatonic`
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
