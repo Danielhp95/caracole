@@ -19,16 +19,22 @@ made of them, and its site indexes. Its members, in this order:
 - ``units.jsonl``: a line a unit, ``peer_sync.unit_document``'s answer, in ``peer_sync._order``;
 - ``files/<sha256>``: each kept file the song documents name, once;
 - ``pages.json``: the ``GET /api/offline`` manifest (web/offline_routes.py) cut to the file's units and its start
-  page, ``pages/<sha256>`` each page's bytes once: the phone builds no page of its own yet, so a song taken from a
-  file opens with the sheet its library made. None without the library;
+  page, ``pages/<sha256>`` each page's bytes once, none for a page whose bytes are a kept file's (a song's sheet.txt,
+  its Guitar Pro file: the library page links them too), held once as ``files/<sha256>``: a page is read from
+  ``pages/``, else ``files/``. The phone builds no page of its own yet, so a song taken from a file opens with the
+  sheet its library made. None without the library;
 - ``indexes.sqlite``: ``index_transfer.export`` of every site, with the indexes.
 
 Its JSON members are deflated, written as ``json.dumps`` with sorted keys writes them (so each float stays a float),
 the others stored; every member is dated ``made``. Its units are a library's (``Library``: every song, tombstone and
 entry about an artist or a tab) and its songbooks with the songs they list (``Songbooks``: ``peer_sync.listed_songs``).
-A song a kept file of which can no longer be read as recorded (``peer_sync.song_file`` reads none) is left out, its
-pages with it, and said (``Made.left``); its state still names it, so that a file never reads as having lost it. It
-is read in one read transaction, taking no lock, and written under a name of its own beside the file, then renamed.
+A song a kept file of which can no longer be read as recorded (``peer_sync.song_file`` reads none), or is bigger than
+a file carries (``FILE_MAX``), is left out, its pages with it, and said with why (``Made.left``: ``CHANGED``,
+``TOO_BIG``); its state still names it, so that a file never reads as having lost it. Its units are read in one read
+transaction and its indexes in their own (``index_transfer.export``'s), state.json naming the newest read of the
+indexes it holds as read from them (``index_transfer.newest`` of indexes.sqlite); each page is read once, and one no
+longer as its manifest says is left out. It takes no lock, and is written under a name of its own beside the file,
+then renamed.
 
 **Reading it** (``read_file``): its manifest first (a zip whose first member isn't ``caracole.json`` is no file of
 caracole's, ``NOT_A_FILE``; another ``format``, or another sync's, ``OTHER_FORMAT``), then its central directory,
@@ -39,7 +45,8 @@ indexes only when its schema is this database's. A file of ``caracole index expo
 ``index_transfer.META``) is a file of the indexes alone, with no id, named by its own name. Blobs are read when asked
 for, each checked by its SHA-256; ``check_whole`` reads every member through before an import takes anything (a CRC
 error, a member cut short, a blob that isn't its name, a unit document that isn't what its state says, a file a song
-names that the file lacks: ``UNREADABLE``), so a file that can't be read whole is refused whole.
+names or a page pages.json lists that the file lacks: ``UNREADABLE``), so a file that can't be read whole is refused
+whole.
 
 **Importing it** is a sync with the file (commands/peer.py's ``peer import``): ``check_importable`` refuses a
 library's own export (``OWN_EXPORT``) and a file no newer than this side's last sync with its caracole (``OLDER``:
@@ -101,6 +108,9 @@ OWN_EXPORT = ("That file is this library's own export: a library takes nothing f
               "copies of the computer's database to go back to.")
 OLDER = "Nothing in this file is newer than your sync with {name} on {day}."
 UNREADABLE = "That file can't be read whole ({why}): export it again."
+# Why a song is left out of an export (``Made.left``).
+CHANGED = "a file it keeps changed, or is gone, since caracole kept it"
+TOO_BIG = "a file it keeps is bigger than a file carries (64 MiB)"
 
 
 class FileError(ValueError):
@@ -109,15 +119,15 @@ class FileError(ValueError):
 
 @dataclass(frozen=True)
 class Made:
-    """An export written: its path, its parts, the songs and songbooks it holds, its size, and the songs left out
-    (their unit ids: a kept file that can no longer be read as recorded)."""
+    """An export written: its path, its parts, the songs and songbooks it holds, its size, and the songs left out,
+    each ``(unit id, why)``: ``CHANGED``, a kept file that can no longer be read as recorded, or ``TOO_BIG``."""
 
     path: Path
     parts: tuple[str, ...]
     songs: int
     songbooks: int
     size: int
-    left: tuple[str, ...]
+    left: tuple[tuple[str, str], ...]
 
 
 # The pages a file holds: the exporter's GET /api/offline manifest, and a listed file's bytes by its path, as a GET of
@@ -157,8 +167,16 @@ class _Snapshot:
     documents: list[dict[str, Any]]  # the unit documents it holds, in order
     files: dict[str, tuple[str, int]]  # each kept file, by its SHA-256: its path in the library, its size
     bases: dict[str, Any]
-    indexes: dict[str, str]
-    left: tuple[str, ...]
+    left: tuple[tuple[str, str], ...]  # the songs left out: (unit id, why)
+
+
+@dataclass
+class _HeldPages:
+    """The pages a file holds (``_pages_held``): the manifest cut to them, and each page's bytes to write under
+    ``pages/``, by SHA-256, where they lie in the spool (an offset, a size), in the order they came."""
+
+    listed: dict[str, Any]
+    blobs: dict[str, tuple[int, int]]
 
 
 def export_file(conn: sqlite3.Connection, cfg, overrides, books: Sequence, path: Path, parts: Sequence[str], *,
@@ -180,34 +198,52 @@ def export_file(conn: sqlite3.Connection, cfg, overrides, books: Sequence, path:
     made = stamps.stamp(now)
     part = path.with_name(f".{path.name}.{secrets.token_hex(6)}.part")
     indexes = path.with_name(f".{path.name}.{secrets.token_hex(6)}.indexes") if "indexes" in parts else None
+    spool = path.with_name(f".{path.name}.{secrets.token_hex(6)}.pages")
     try:
         sites: tuple[str, ...] = ()
+        newest: dict[str, str] = {}
         if indexes is not None:
             try:
                 sites = index_transfer.export(conn, indexes, now=now).sites
-            except index_transfer.TransferError as e:
+                newest = _newest_of(indexes)
+            except (index_transfer.TransferError, sqlite3.Error) as e:
                 raise FileError(f"its indexes can't be exported: {e}") from e
         snapshot = _snapshot(conn, cfg, overrides, books, parts)
         held = {d["id"] for d in snapshot.documents}
-        listed = _pages_held(pages, snapshot.state, held) if pages is not None and "library" in parts else None
-        manifest = {
-            "format": FORMAT, "caracole": version, "schema": _schema(), "sync": sync.FORMAT, "id": snapshot.own,
-            "name": name, "made": made, "parts": list(parts),
-            "songs": sum(1 for d in snapshot.documents if d["id"].startswith("song/")),
-            "songbooks": sum(1 for d in snapshot.documents if d["id"].startswith("songbook/")),
-            "units": len(snapshot.documents), "files": len(snapshot.files),
-            "pages": 0 if listed is None else len(listed[0]["files"]), "indexes": list(sites)}
-        state = sync.state_document(snapshot.own, version, name, snapshot.state, None, now=made,
-                                    indexes=snapshot.indexes if indexes is not None else {}, kept={})
-        _write(part, made, cfg.library_dir, manifest, state, snapshot, listed, indexes)
+        with open(os.open(spool, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "w+b") as spooled:
+            listed = (_pages_held(pages, snapshot.state, held, set(snapshot.files), spooled)
+                      if pages is not None and "library" in parts else None)
+            manifest = {
+                "format": FORMAT, "caracole": version, "schema": _schema(), "sync": sync.FORMAT, "id": snapshot.own,
+                "name": name, "made": made, "parts": list(parts),
+                "songs": sum(1 for d in snapshot.documents if d["id"].startswith("song/")),
+                "songbooks": sum(1 for d in snapshot.documents if d["id"].startswith("songbook/")),
+                "units": len(snapshot.documents), "files": len(snapshot.files),
+                "pages": 0 if listed is None else len(listed.listed["files"]), "indexes": list(sites)}
+            state = sync.state_document(snapshot.own, version, name, snapshot.state, None, now=made, indexes=newest,
+                                        kept={})
+            _write(part, made, cfg.library_dir, manifest, state, snapshot, listed, spooled, indexes)
         os.replace(part, path)
     except OSError as e:
         raise FileError(f"can't write {path}: {e}") from e
     finally:
         part.unlink(missing_ok=True)
+        spool.unlink(missing_ok=True)
         if indexes is not None:
             indexes.unlink(missing_ok=True)
     return Made(path, parts, manifest["songs"], manifest["songbooks"], path.stat().st_size, snapshot.left)
+
+
+def _newest_of(path: Path) -> dict[str, str]:
+    """Each site's newest read in the index export at ``path`` (``index_transfer.newest`` of it): what state.json
+    says of the indexes the file holds, whatever the database read since."""
+    from caracole import index_transfer
+
+    file = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        return index_transfer.newest(file)
+    finally:
+        file.close()
 
 
 def _schema() -> int:
@@ -217,9 +253,8 @@ def _schema() -> int:
 
 
 def _snapshot(conn: sqlite3.Connection, cfg, overrides, books: Sequence, parts: tuple[str, ...]) -> _Snapshot:
-    """The file's units, their documents and kept files, the bases and the indexes' newest reads, in one read
-    transaction (no lock: a writer goes on beside it)."""
-    from caracole import index_transfer
+    """The file's units, their documents and kept files, and the bases, in one read transaction (no lock: a writer
+    goes on beside it)."""
     from caracole.songbook import name_key
 
     conn.execute("BEGIN")
@@ -238,9 +273,9 @@ def _snapshot(conn: sqlite3.Connection, cfg, overrides, books: Sequence, parts: 
             doc = sync.unit_document(conn, cfg, overrides, books, unit.id)
             if doc is None or doc["digest"] != unit.digest:  # the library is read in one transaction: never
                 raise FileError(f"{unit.id} changed while it was read: export again")
-            kept = _kept_files(conn, cfg.library_dir, unit.id, doc) if unit.kind == "song" else {}
-            if kept is None:
-                left.append(unit.id)
+            kept, why = _kept_files(conn, cfg.library_dir, unit.id, doc) if unit.kind == "song" else ({}, None)
+            if why is not None:
+                left.append((unit.id, why))
                 continue
             documents.append(json.loads(json.dumps(doc, ensure_ascii=False)))
             files.update(kept)
@@ -253,16 +288,16 @@ def _snapshot(conn: sqlite3.Connection, cfg, overrides, books: Sequence, parts: 
                 continue
             bases[peer] = {"units": {u: list(v) for u, v in sorted(base.items())},
                            "kept": {u: list(v) for u, v in sorted(sync.kept_of(conn, peer).items())}}
-        indexes = index_transfer.newest(conn) if "indexes" in parts else {}
     finally:
         conn.execute("COMMIT")
-    return _Snapshot(own, state, documents, files, bases, indexes, tuple(left))
+    return _Snapshot(own, state, documents, files, bases, tuple(left))
 
 
-def _kept_files(conn: sqlite3.Connection, library_dir: Path, unit_id: str,
-                doc: Mapping[str, Any]) -> dict[str, tuple[str, int]] | None:
+def _kept_files(conn: sqlite3.Connection, library_dir: Path, unit_id: str, doc: Mapping[str, Any]
+                ) -> tuple[dict[str, tuple[str, int]], str | None]:
     """The song's kept files, each by its SHA-256 (its path, its size), once each is read through and is what was
-    recorded; None when one isn't (changed or gone since, or no regular file)."""
+    recorded, and None; or why the song is left out: ``CHANGED`` (changed or gone since, or no regular file),
+    ``TOO_BIG`` (more than ``FILE_MAX``)."""
     key = unit_id.partition("/")[2]
     found: dict[str, tuple[str, int]] = {}
     for version in doc["unit"]["versions"]:
@@ -270,36 +305,44 @@ def _kept_files(conn: sqlite3.Connection, library_dir: Path, unit_id: str,
             row = conn.execute("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id "
                                "WHERE songs.key = ? AND files.name = ?", (key, f["name"])).fetchone()
             if row is None:
-                return None
+                return {}, CHANGED
             size = _hashed_size(library_dir / row[0], f["sha256"])
             if size is None:
-                return None
+                return {}, CHANGED
+            if size > FILE_MAX:
+                return {}, TOO_BIG
             found.setdefault(f["sha256"], (row[0], size))
-    return found
+    return found, None
 
 
 def _hashed_size(path: Path, sha256: str) -> int | None:
-    """The size of the regular file at ``path`` (no link followed) when its bytes have that SHA-256, read through in
-    chunks; None else."""
+    """The size of the regular file at ``path`` (no link followed): past ``FILE_MAX`` as it is, else once its bytes,
+    read through in chunks, have that SHA-256; None else."""
     from caracole.library import open_regular
 
     digest, size = hashlib.sha256(), 0
     try:
         with open(open_regular(path), "rb") as f:
+            whole = os.fstat(f.fileno()).st_size
+            if whole > FILE_MAX:
+                return whole
             while chunk := f.read(CHUNK):
                 digest.update(chunk)
                 size += len(chunk)
     except (OSError, ValueError):
         return None
-    return size if digest.hexdigest() == sha256 and size <= FILE_MAX else None
+    return size if digest.hexdigest() == sha256 else None
 
 
-def _pages_held(pages: Pages, state: Mapping[str, sync.Unit], held: set[str]) -> Pages:
+def _pages_held(pages: Pages, state: Mapping[str, sync.Unit], held: set[str], in_files: set[str],
+                spool) -> _HeldPages:
     """The pages a file holds: its start page and each page of a unit it holds as the manifest saw it (its digest
-    the state's), each whose bytes are still what the manifest says; the manifest cut to them."""
+    the state's), each read once (``fetch``) and kept while its bytes are still what the manifest says, written to
+    ``spool`` to be copied into the file; a page whose bytes the file holds already (a kept file's, under ``files/``,
+    ``in_files``; another page's) is neither read nor written again. The manifest cut to them."""
     manifest, fetch = pages
     start = manifest.get("start")
-    kept = []
+    kept, blobs = [], {}
     for entry in manifest.get("files") or ():
         unit = entry.get("unit")
         if unit is None:
@@ -307,13 +350,21 @@ def _pages_held(pages: Pages, state: Mapping[str, sync.Unit], held: set[str]) ->
                 continue
         elif unit not in held or entry.get("digest") != state[unit].digest:
             continue
-        try:
-            data = fetch(entry["path"])
-        except (OSError, KeyError, ValueError):
+        sha256 = entry.get("sha256")
+        if not (isinstance(sha256, str) and _SHA256.fullmatch(sha256)):
             continue
-        if hashlib.sha256(data).hexdigest() == entry.get("sha256") and len(data) <= FILE_MAX:
-            kept.append(dict(entry))
-    return {**manifest, "files": kept}, fetch
+        if sha256 not in in_files and sha256 not in blobs:
+            try:
+                data = fetch(entry["path"])
+            except (OSError, KeyError, ValueError):
+                continue
+            if hashlib.sha256(data).hexdigest() != sha256 or len(data) > FILE_MAX:
+                continue
+            blobs[sha256] = (spool.tell(), len(data))
+            spool.write(data)
+        kept.append(dict(entry))
+    spool.flush()
+    return _HeldPages({**manifest, "files": kept}, blobs)
 
 
 def _text(value: Any) -> bytes:
@@ -327,8 +378,9 @@ def _date(made: str) -> tuple[int, int, int, int, int, int]:
 
 
 def _write(part: Path, made: str, library_dir: Path, manifest: Mapping[str, Any], state: Mapping[str, Any],
-           snapshot: _Snapshot, pages: Pages | None, indexes: Path | None) -> None:
-    """The file written to ``part``, its members in the layout's order, then synced to the disk."""
+           snapshot: _Snapshot, pages: _HeldPages | None, spool, indexes: Path | None) -> None:
+    """The file written to ``part``, its members in the layout's order (each page's bytes from ``spool``), then
+    synced to the disk."""
     fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666)
     with open(fd, "wb") as raw:
         with zipfile.ZipFile(raw, "w") as z:
@@ -340,13 +392,9 @@ def _write(part: Path, made: str, library_dir: Path, manifest: Mapping[str, Any]
             for sha256, (path, size) in sorted(snapshot.files.items()):
                 out.copy(FILES + sha256, library_dir / path, size, sha256)
             if pages is not None:
-                listed, fetch = pages
-                out.json(PAGES, listed)
-                written = set()
-                for entry in listed["files"]:
-                    if entry["sha256"] not in written:
-                        out.blob(PAGE_BLOBS + entry["sha256"], fetch(entry["path"]), entry["sha256"], entry["path"])
-                        written.add(entry["sha256"])
+                out.json(PAGES, pages.listed)
+                for sha256, (offset, size) in pages.blobs.items():
+                    out.spooled(PAGE_BLOBS + sha256, spool, offset, size, sha256)
             if indexes is not None:
                 out.copy(INDEXES, indexes, indexes.stat().st_size, None)
         raw.flush()
@@ -373,10 +421,17 @@ class _Out:
     def text(self, name: str, data: bytes) -> None:
         self.z.writestr(self._info(name, True), data)
 
-    def blob(self, name: str, data: bytes, sha256: str, shown: str) -> None:
-        if hashlib.sha256(data).hexdigest() != sha256:
-            raise FileError(f"{shown} changed while the file was made: export again")
-        self.z.writestr(self._info(name, False), data)
+    def spooled(self, name: str, spool, offset: int, size: int, sha256: str) -> None:
+        """The ``size`` bytes at ``offset`` of ``spool`` as the member ``name``, checked against ``sha256``."""
+        digest, left = hashlib.sha256(), size
+        spool.seek(offset)
+        with self.z.open(self._info(name, False, size), "w") as out:
+            while left and (chunk := spool.read(min(CHUNK, left))):
+                digest.update(chunk)
+                out.write(chunk)
+                left -= len(chunk)
+        if left or digest.hexdigest() != sha256:
+            raise FileError(f"{name} changed while the file was made: export again")
 
     def copy(self, name: str, path: Path, size: int, sha256: str | None) -> None:
         """The file at ``path`` (a regular file, no link followed) as the member ``name``, checked against
@@ -598,8 +653,9 @@ def check_importable(file: SyncFile, conn: sqlite3.Connection, *, own: str | Non
 
 def check_whole(file: SyncFile) -> None:
     """Every member of ``file`` read through (its CRC and its size as the zip declares them), each blob what its
-    name says, each unit document what the state says of it, and each kept file a song names held; FileError
-    (``UNREADABLE``) else. An index export: SQLite's ``quick_check``."""
+    name says, each unit document what the state says of it, each kept file a song names held, and each page
+    pages.json lists (under ``pages/``, else ``files/``); FileError (``UNREADABLE``) else. An index export: SQLite's
+    ``quick_check``."""
     if file.index_only:
         _check_sqlite(file.path)
         return
@@ -622,6 +678,16 @@ def check_whole(file: SyncFile) -> None:
             if info.filename.startswith((FILES, PAGE_BLOBS)) and digest.hexdigest() != blob:
                 raise _unreadable(f"{info.filename} isn't the file its name says")
         named = _documents(z, file.state)
+        listed = _json_member(z, z.getinfo(PAGES)) if PAGES in names else {"files": []}
+    entries = listed.get("files") if isinstance(listed, dict) else None
+    if not isinstance(entries, list):
+        raise _unreadable(f"its {PAGES} lists no pages")
+    for entry in entries:
+        sha256 = entry.get("sha256") if isinstance(entry, dict) else None
+        if not (isinstance(sha256, str) and _SHA256.fullmatch(sha256)):
+            raise _unreadable(f"its {PAGES} lists a page with no SHA-256")
+        if PAGE_BLOBS + sha256 not in names and FILES + sha256 not in names:
+            raise _unreadable(f"it lists a page it doesn't hold: {str(entry.get('path'))[:80]}")
     for unit_id, doc in named.items():
         if unit_id.partition("/")[0] != "song":
             continue
@@ -747,7 +813,7 @@ class FileSource:
         state = self.sync_file.state
         if state is not None and unit_id in state.units:
             raise sync.PeerError("the file names it but doesn't hold it: it was left out as it was exported (a file "
-                                 "it keeps had changed there)")
+                                 "it keeps had changed there, or was too big for it)")
         if sync.part_of(unit_id) in self.sync_file.holds and "/" in unit_id:
             return None
         raise sync.PeerError("the file doesn't hold that part of its library, so it says nothing of it")
@@ -808,16 +874,19 @@ class FileSource:
         return found if isinstance(found, dict) else None
 
     def page(self, sha256: str) -> bytes:
-        """A page's bytes, by its SHA-256; PeerError when the file holds none of it."""
+        """A page's bytes, by its SHA-256: under ``pages/``, else under ``files/`` (a page that is a kept file is
+        held once, there); PeerError when the file holds none of it."""
         if not _SHA256.fullmatch(sha256):
             raise sync.PeerError("no SHA-256 to find that page by")
-        try:
-            data = self._read(PAGE_BLOBS + sha256, FILE_MAX)
-        except KeyError:
-            raise sync.PeerError("the file holds no such page") from None
-        if hashlib.sha256(data).hexdigest() != sha256:
-            raise sync.PeerError(UNREADABLE.format(why=f"{PAGE_BLOBS}{sha256} isn't the page its name says"))
-        return data
+        for folder in (PAGE_BLOBS, FILES):
+            try:
+                data = self._read(folder + sha256, FILE_MAX)
+            except KeyError:
+                continue
+            if hashlib.sha256(data).hexdigest() != sha256:
+                raise sync.PeerError(UNREADABLE.format(why=f"{folder}{sha256} isn't the page its name says"))
+            return data
+        raise sync.PeerError("the file holds no such page")
 
 
 # --- an import: the comparison, and what the two agree on after ------------------------------------------------------

@@ -130,13 +130,35 @@ def test_a_song_whose_kept_file_changed_on_disk_is_left_out_and_said(desk, tmp_p
 
     (song_dir(desk.cfg.library_dir, get_song(desk.conn, wonderwall)) / "sheet.txt").write_bytes(b"edited elsewhere")
     made = export(desk, tmp_path / "x.caracole")
-    assert made.left == (WONDERWALL,) and made.songs == 1
+    assert made.left == ((WONDERWALL, peer_file.CHANGED),) and made.songs == 1
     got = members(made.path)
     assert [u["id"] for u in lines_of(got["units.jsonl"])] == [CREEP, CAMPFIRE]
     assert sorted(n for n in got if n.startswith("files/")) == [f"files/{s}" for s in kept_shas(desk, "radiohead/creep")]
     # still named by its state, so that a file never says it is gone: an import leaves it, saying why
     assert WONDERWALL in json.loads(got["state.json"])["units"]
     assert json.loads(got["caracole.json"])["units"] == 2
+
+
+def test_a_song_whose_kept_file_is_bigger_than_a_file_carries_is_left_out_saying_so(desk, tmp_path, monkeypatch):
+    monkeypatch.setattr(peer_file, "FILE_MAX", len(b"[Am]Creep"))  # Creep's sheet fits, Wonderwall's doesn't
+    made = export(desk, tmp_path / "x.caracole")
+    assert made.left == ((WONDERWALL, peer_file.TOO_BIG),)
+    assert WONDERWALL in json.loads(members(made.path)["state.json"])["units"]
+
+
+def test_the_states_indexes_are_those_the_file_holds_whatever_was_read_since(desk, tmp_path, monkeypatch):
+    db.kv_set(desk.conn, "gtptabs:index:complete_at", "2026-11-02T08:00:00Z")
+    real = index_transfer.export
+
+    def then_a_refresh(conn, path, *args, **kw):  # the nightly run reads the index again between the two reads
+        done = real(conn, path, *args, **kw)
+        db.kv_set(conn, "gtptabs:index:complete_at", "2026-11-03T08:00:00Z")
+        return done
+
+    monkeypatch.setattr(index_transfer, "export", then_a_refresh)
+    got = members(export(desk, tmp_path / "i.caracole", ["library", "songbooks", "indexes"]).path)
+    assert json.loads(got["state.json"])["indexes"] == {"gtptabs": "2026-11-02T08:00:00Z"}
+    assert index_transfer.newest(desk.conn) == {"gtptabs": "2026-11-03T08:00:00Z"}
 
 
 def test_every_base_this_side_keeps_goes_into_bases_json(desk, tmp_path):
@@ -163,6 +185,7 @@ def test_a_files_pages_are_those_of_its_units_and_its_start_page(desk, tmp_path)
                  "sha256": hashlib.sha256(page[path]).hexdigest(), "type": "text/html", "headers": {}}
         return found | ({"unit": unit, "digest": digest} if unit else {})
 
+    page["Radiohead/Creep/sheet.txt"] = b"[Am]Creep"  # a kept file, which the library page links too
     manifest = {"format": 1, "start": "index.html", "files": [
         entry("index.html"),
         entry("Gone/Away/sheet.html", "song/gone/away", "0" * 64),  # a unit the file hasn't got
@@ -170,6 +193,7 @@ def test_a_files_pages_are_those_of_its_units_and_its_start_page(desk, tmp_path)
         entry("Radiohead/Creep/again.pdf", CREEP, digests[CREEP]),  # the same bytes as sheet.pdf: one blob
         entry("Radiohead/Creep/sheet.html", CREEP, digests[CREEP]),
         entry("Radiohead/Creep/sheet.pdf", CREEP, digests[CREEP]),
+        entry("Radiohead/Creep/sheet.txt", CREEP, digests[CREEP]),  # held once, under files/
     ]}
     asked = []
 
@@ -182,15 +206,22 @@ def test_a_files_pages_are_those_of_its_units_and_its_start_page(desk, tmp_path)
     listed = json.loads(got["pages.json"])
     assert listed["format"] == 1 and listed["start"] == "index.html"
     assert [e["path"] for e in listed["files"]] == ["index.html", "Radiohead/Creep/again.pdf",
-                                                   "Radiohead/Creep/sheet.html", "Radiohead/Creep/sheet.pdf"]
+                                                   "Radiohead/Creep/sheet.html", "Radiohead/Creep/sheet.pdf",
+                                                   "Radiohead/Creep/sheet.txt"]
     blobs = sorted(n for n in got if n.startswith("pages/"))
     assert blobs == sorted({f"pages/{hashlib.sha256(page[p]).hexdigest()}" for p in
                             ("index.html", "Radiohead/Creep/sheet.html", "Radiohead/Creep/sheet.pdf")})
+    sheet = hashlib.sha256(b"[Am]Creep").hexdigest()
+    assert f"files/{sheet}" in got and f"pages/{sheet}" not in got
     names = list(got)
     assert names.index("pages.json") > max(names.index(n) for n in names if n.startswith("files/"))
     assert names.index("pages.json") < min(names.index(n) for n in blobs)
-    assert json.loads(got["caracole.json"])["pages"] == 4
-    assert "Gone/Away/sheet.html" not in asked
+    assert json.loads(got["caracole.json"])["pages"] == 5
+    # each page read once, none that the file doesn't hold, nor one whose bytes it holds already
+    assert sorted(asked) == ["Radiohead/Creep/again.pdf", "Radiohead/Creep/sheet.html", "index.html"]
+    with peer_file.FileSource(peer_file.read_file(made.path), None, tmp_path) as src:
+        assert src.page(sheet) == b"[Am]Creep"  # a page held as a kept file is read from files/
+    peer_file.check_whole(peer_file.read_file(made.path))
 
     without = members(export(desk, tmp_path / "s.caracole", ["songbooks"], pages=(manifest, fetch)).path)
     assert "pages.json" not in without and not [n for n in without if n.startswith("pages/")]
@@ -205,6 +236,31 @@ def test_a_page_that_changed_since_its_manifest_is_left_out(desk, tmp_path):
          "headers": {}, "unit": CREEP, "digest": desk.digests()[CREEP]}]}
     got = members(export(desk, tmp_path / "x.caracole", pages=(manifest, lambda path: good)).path)
     assert [e["path"] for e in json.loads(got["pages.json"])["files"]] == ["index.html"]
+
+
+def test_a_page_read_once_is_written_as_read_and_one_no_longer_sent_is_left_out(desk, tmp_path):
+    good = b"<html>the library</html>"
+    sheet = b"<html>Creep</html>"
+    manifest = {"format": 1, "start": "index.html", "files": [
+        {"path": "index.html", "url": "/offline/index.html", "size": len(good),
+         "sha256": hashlib.sha256(good).hexdigest(), "type": "text/html", "headers": {}},
+        {"path": "Radiohead/Creep/sheet.html", "url": "/x", "size": len(sheet),
+         "sha256": hashlib.sha256(sheet).hexdigest(), "type": "text/html", "headers": {}, "unit": CREEP,
+         "digest": desk.digests()[CREEP]}]}
+    asked = []
+
+    def fetch(path):  # the nightly run writes index.html again as the file is made: it is no longer sent
+        asked.append(path)
+        if path == "index.html" and asked.count(path) == 1:
+            raise OSError("index.html isn't sent now")
+        return sheet if asked.count(path) == 1 else b"<html>written again</html>"
+
+    made = export(desk, tmp_path / "x.caracole", pages=(manifest, fetch))
+    got = members(made.path)
+    assert [e["path"] for e in json.loads(got["pages.json"])["files"]] == ["Radiohead/Creep/sheet.html"]
+    assert got[f"pages/{hashlib.sha256(sheet).hexdigest()}"] == sheet and asked == ["index.html",
+                                                                                    "Radiohead/Creep/sheet.html"]
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".x.caracole")]
 
 
 def test_the_file_name_is_the_librarys_name_and_the_day():
@@ -451,6 +507,10 @@ def test_a_document_or_a_file_that_isnt_as_its_state_says_is_refused_whole(desk,
                           {"format": sync.FORMAT, "id": "song/not/named", "digest": "0" * 64, "unit": {}}).encode()})
     with pytest.raises(peer_file.FileError, match="can't be read whole"):
         peer_file.check_whole(peer_file.read_file(extra))
+    listed = {"format": 1, "start": "index.html", "files": [{"path": "index.html", "sha256": "e" * 64}]}
+    no_page = rewritten(exported.path, tmp_path / "page.caracole", {"pages.json": json.dumps(listed).encode()})
+    with pytest.raises(peer_file.FileError, match=r"can't be read whole \(it lists a page it doesn't hold"):
+        peer_file.check_whole(peer_file.read_file(no_page))
 
 
 @pytest.mark.parametrize("content", [b"hello", b"", b"PK\x05\x06" + bytes(18)])

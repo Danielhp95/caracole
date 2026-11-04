@@ -14,7 +14,10 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   goes there: pushed (``--push``, peer_push.py, as the phone pushes), or asked of the other to pull (``--here``, this
   side's address as the other reaches it), or, with neither, the line to run there. ``--compared HASH`` refuses,
   before any change, a comparison that isn't the one the choices were made on (``peer_sync.compared_hash``: the
-  Sync tab's). Then it keeps what the two agree on, and the peer's address and name (kv ``sync:peer:<id>``,
+  Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it, or,
+  once one was, without them, as caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), so that a
+  Sync from the tab does what the tab showed. Then it keeps what the two agree on, and the peer's address and name
+  (kv ``sync:peer:<id>``,
   ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. ``--progress``: get.py's JSON lines, its stages
   compare, take, give and agree (web/jobs.py ``PEER_SYNC_STAGES``), and ``{"event": "unit", "id", "outcome",
   "why"}`` for each unit taken, given or left.
@@ -25,19 +28,22 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   ``--progress``, get.py's JSON lines and a unit's event) for each; then DIR is deleted. It exits 0 unless a bug.
 - ``caracole peer export FILE`` writes this library to a ``.caracole`` file (peer_file.py): its songs with their
   kept files and pages, its songbooks with the songs they list, and with ``--parts`` its site indexes too
-  (``--parts library,songbooks``, the default; ``indexes`` adds them), in one read transaction, taking no lock as
-  ``caracole index export`` takes none. FILE is a new file, or a folder to write ``<library>-dd-mm-yy.caracole`` in.
-  It says what it wrote and each song it left out (a kept file that changed since caracole kept it).
+  (``--parts library,songbooks``, the default; ``indexes`` adds them), its units in one read transaction, taking no
+  lock as ``caracole index export`` takes none. FILE is a new file, or a folder to write
+  ``<library>-dd-mm-yy.caracole`` in. It says what it wrote and each song it left out, and why (a kept file that
+  changed since caracole kept it, or one bigger than a file carries).
 - ``caracole peer import SOURCE`` syncs this library with a file another caracole exported, as if that caracole
   were here (SOURCE a ``.caracole`` file, an index export, or the folder caracole serve staged one in,
   ``state_dir/peer/import-<id>``, deleted once it is over): its stages check (the file read whole, then refused, in
   your words, when it is this library's own export or no newer than the last sync with its caracole:
   ``peer_file.check_importable``), take (a backup first, then each unit the file gives, as a pull takes one),
-  render, agree (what the two now agree on, stamped with the file's ``made``, and each conflict you answered
-  "keep mine" remembered: a file takes nothing back) and index (its indexes merged, ``index_transfer.merge``),
-  ``PEER_IMPORT_STAGES``. ``--parts``, ``--choose``, ``--prefer``, ``--compared``, ``--progress`` and ``--yes`` as
-  ``peer sync``'s; at the end, with ``--progress``, ``{"event": "report", "report": …}``, what it did for the Sync
-  tab's summary. It exits 2 for a file refused, 1 for a unit left, else 0.
+  render, agree (what the two now agree on, stamped with the file's ``made``, and each answer "keep mine" to what
+  the file would give remembered: a file takes nothing back; none for an import of the indexes alone) and index (its
+  indexes merged, ``index_transfer.merge``), ``PEER_IMPORT_STAGES``. A staged folder is taken only once its file is
+  whole (``peer_import.whole``: else refused and left, to be sent on). ``--parts``, ``--choose``, ``--prefer``,
+  ``--compared``, ``--progress`` and ``--yes`` as ``peer sync``'s; at the end, with ``--progress``, ``{"event":
+  "report", "report": …}``, what it did for the Sync tab's summary, also when it took nothing. It exits 2 for a file
+  refused, 1 for a unit left or its indexes not merged, else 0.
 - ``caracole peer new-id`` gives this caracole another id, for a database copied from another's.
 
 ``peer sync`` and ``peer import`` take ``--parts``, the parts of the sync (``peer_sync.PARTS``: library, songbooks,
@@ -52,7 +58,7 @@ from __future__ import annotations
 
 import json
 from contextlib import closing
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import typer
 
@@ -92,18 +98,20 @@ def register(app: typer.Typer) -> None:
         from caracole import peer_sync as sync
 
         cfg = load_cfg(ctx)
-        address, found, state, synced, here_count, _, _ = _compare(cfg, address)
+        c = _compare(cfg, address)
+        state = c.state
         if as_json:
             typer.echo(json.dumps({
-                "peer": {"address": address, "server": state.server, "caracole": state.version, "name": state.name},
-                "synced_before": synced,
-                "compared": sync.compared_hash(found),
+                "peer": {"address": c.address, "server": state.server, "caracole": state.version,
+                         "name": state.name},
+                "synced_before": c.synced_before,
+                "compared": sync.compared_hash(c.found),
                 "differences": [{"id": d.id, "label": d.label, "proposal": d.proposal, "why": d.why,
                                  "here": d.mine.digest if d.mine else None,
-                                 "there": d.theirs.digest if d.theirs else None} for d in found],
+                                 "there": d.theirs.digest if d.theirs else None} for d in c.found],
             }, ensure_ascii=False, indent=2))
             return
-        typer.echo(_report(address, state, synced, here_count, found))
+        typer.echo(_report(c.address, state, c.synced_before, len(c.mine), c.found))
 
     @peer_app.command("pull")
     def pull_cmd(
@@ -156,7 +164,7 @@ def register(app: typer.Typer) -> None:
         if push and here is not None:
             fail("--push or --here: one way to give there what goes there", 2)
         choices = _choices(choose)
-        asked = _parts(parts) if parts is not None else sync.PARTS
+        wanted_parts = _parts(parts) if parts is not None else sync.PARTS
         cfg = load_cfg(ctx)
         if here is not None:
             try:
@@ -165,19 +173,22 @@ def register(app: typer.Typer) -> None:
                 fail(str(e), 2)
         said = _Said(progress)
         said.stage("compare", "running")
-        address, every, state, synced, here_count, _, listed = _compare(cfg, address, asked)
-        if compared is not None and sync.compared_hash(every) != compared.strip().lower():
-            said.stage("compare", "failed", STALE)
-            fail(STALE)
+        c = _compare(cfg, address, wanted_parts)
+        address, state, every = c.address, c.state, c.found
+        if compared is not None:
+            every = c.named(compared.strip().lower())
+            if every is None:
+                said.stage("compare", "failed", STALE)
+                fail(STALE)
         unknown = sorted(set(choices) - {d.id for d in every})
         if unknown:
             said.stage("compare", "failed", f"--choose names {unknown[0]}, which isn't a difference now")
             fail(f"--choose names {', '.join(unknown[:3])}, which the two don't hold differently now: compare "
                  "them again.", 2)
         # The differences of the parts asked for alone are taken, given or said (the hash is of every one).
-        found = sync.in_scope(every, asked, listed=listed)
+        found = sync.in_scope(every, wanted_parts, listed=c.listed)
         said.stage("compare", "done", f"{len(found)} {'difference' if len(found) == 1 else 'differences'}")
-        typer.echo(_report(address, state, synced, here_count, found))
+        typer.echo(_report(address, state, c.synced_before, len(c.mine), found))
 
         def asked(d) -> str | None:
             if prefer is not None or not _interactive():
@@ -309,11 +320,11 @@ def register(app: typer.Typer) -> None:
         if prefer is not None and prefer not in PREFER:
             fail("--prefer is here or there", 2)
         choices = _choices(choose)
-        asked = _parts(parts) if parts is not None else sync.PARTS
+        wanted_parts = _parts(parts) if parts is not None else sync.PARTS
         cfg = load_cfg(ctx)
         said = _Said(progress)
         given = Path(source)
-        options = {"said": said, "parts": asked, "choices": choices, "prefer": prefer, "compared": compared,
+        options = {"said": said, "parts": wanted_parts, "choices": choices, "prefer": prefer, "compared": compared,
                    "yes": yes}
         if not given.exists():
             said.stage("check", "failed", f"no file at {source}")
@@ -325,9 +336,10 @@ def register(app: typer.Typer) -> None:
             folder = peer_import.staged_folder(cfg.state_dir, given)
             try:
                 with peer_import.held(folder):
+                    # Not whole yet: refused, and left for the rest to come (a sweep deletes it after an hour).
+                    path = peer_import.whole(cfg.state_dir, folder.name[len(peer_import.PREFIX):])
                     try:
-                        _import(cfg, folder / peer_import.FILE, name=peer_import.opened_name(folder), staged=True,
-                                **options)
+                        _import(cfg, path, name=peer_import.opened_name(folder), **options)
                     finally:
                         peer_import.remove(folder)
             finally:
@@ -417,12 +429,44 @@ def _as_chosen(found: list, choices: dict[str, str]) -> list:
     return chosen
 
 
-def _compare(cfg, address: str, parts: tuple[str, ...] | None = None):
-    """The other caracole's state and the comparison: (address, differences, its state, whether the two synced
-    before, how many units here, the answers an import remembered, ``peer_sync.merged_kept``'s, and the songs the
-    two sides' songbooks list, ``peer_sync.listed_songs``'s). The comparison reads the kept answers, so a unit kept
-    here at an import is this side's to give. The songs songbooks list are read only for a sync of the songbooks
-    without the library (``parts``), which needs them: the other side's songbooks asked for, one request each."""
+@dataclass(frozen=True)
+class _Compared:
+    """This library and the other caracole compared (``_compare``): its address and state; the differences, with
+    the answers an import remembered (``peer_sync.merged_kept``, ``kept``), so that a unit kept here at an import is
+    this side's to give; this side's units and the base compared against; and the songs the two sides' songbooks
+    list (``peer_sync.listed_songs``)."""
+
+    address: str
+    state: object
+    found: list
+    mine: dict
+    base: dict | None
+    kept: dict
+    listed: dict
+
+    @property
+    def synced_before(self) -> bool:
+        return self.base is not None
+
+    def named(self, hash_: str) -> list | None:
+        """The comparison ``hash_`` names (``peer_sync.compared_hash``): this one, or, once an import remembered an
+        answer, the same made without the answers, as caracole serve's Sync tab compares (web/sync_routes.py
+        ``_compared``); None for neither, a comparison the two no longer agree with."""
+        from caracole import peer_sync as sync
+
+        if sync.compared_hash(self.found) == hash_:
+            return self.found
+        if self.kept:
+            plain = sync.compare(self.mine, self.state.units, self.base)
+            if sync.compared_hash(plain) == hash_:
+                return plain
+        return None
+
+
+def _compare(cfg, address: str, parts: tuple[str, ...] | None = None) -> _Compared:
+    """The other caracole's state and the comparison (``_Compared``). The songs songbooks list are read only for a
+    sync of the songbooks without the library (``parts``), which needs them: the other side's songbooks asked for,
+    one request each."""
     from caracole import peer_sync as sync
     from caracole.songbook import name_key
 
@@ -461,8 +505,7 @@ def _compare(cfg, address: str, parts: tuple[str, ...] | None = None):
             for song, by in sync.listed_songs(books_of, units).items():
                 found_by.setdefault(song, set()).update(by)
         listed = {song: sorted(by) for song, by in sorted(found_by.items())}
-    return (address, sync.compare(mine, state.units, base, kept), state, base is not None, len(mine), kept,
-            listed)
+    return _Compared(address, state, sync.compare(mine, state.units, base, kept), mine, base, kept, listed)
 
 
 def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None, *,
@@ -696,8 +739,8 @@ def _export(cfg, file: str, parts: tuple[str, ...]) -> None:
     if "library" in parts and pages is None:
         typer.echo("  No pages in it: the library page isn't as caracole last wrote it (caracole todo writes it "
                    "again), so a phone that takes its songs opens them as their sheets' text.")
-    for unit_id in made.left:
-        typer.echo(f"  Left out {unit_id}: a file it keeps changed since caracole kept it.")
+    for unit_id, why in made.left:
+        typer.echo(f"  Left out {unit_id}: {why}.")
 
 
 def _counted(n: int, noun: str) -> str:
@@ -705,8 +748,8 @@ def _counted(n: int, noun: str) -> str:
 
 
 def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...], choices: dict[str, str],
-            prefer: str | None, compared: str | None, yes: bool, staged: bool = False) -> None:
-    """``caracole peer import``'s work, the file at ``path`` (held, when ``staged``): see the module's docstring."""
+            prefer: str | None, compared: str | None, yes: bool) -> None:
+    """``caracole peer import``'s work, the file at ``path``: see the module's docstring."""
     from caracole import peer_file
     from caracole import peer_sync as sync
 
@@ -757,18 +800,19 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             raise typer.Exit(1)
         for unit_id, why in left:
             said.unit(unit_id, "left", why)
-        done = _import_under_lock(cfg, conn, file, source, said, parts, take, kept_here)
+        done, indexed = _import_under_lock(cfg, conn, file, source, said, parts, take, kept_here)
     typer.echo(f"From {shown}'s file: " + _pulled(done, units=False))
     if done.respelled:
         typer.echo("Respelled as it writes their artist: " + ", ".join(done.respelled))
-    if done.left:
+    if done.left or not indexed:
         raise typer.Exit(1)
 
 
 def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], take: list,
-                       kept_here: dict) -> object:
+                       kept_here: dict) -> tuple[object, bool]:
     """An import's take, render, agree and index, under caracole's lock, waiting for the nightly run as a lookup
-    does; then its report. Returns peer_sync's ``Applied``."""
+    does; then its report, also when nothing could be taken. Returns peer_sync's ``Applied``, and whether its
+    indexes were merged as asked (False: the index stage failed, or was never reached)."""
     from caracole import backup, stamps
     from caracole import peer_file
     from caracole import peer_sync as sync
@@ -776,6 +820,7 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
     from caracole.songbook import SongbookError, load_songbooks, render_songbooks, songbooks_file
 
     done = sync.Applied()
+    held = [p for p in sync.PARTS if p in parts and p in file.holds]
     with exclusive(cfg, "peer import", interactive=True):
         now = utcnow()
         if take:
@@ -793,7 +838,9 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
                 for stage in ("render", "agree", "index"):
                     said.stage(stage, "skipped")
                 typer.echo(nothing)
-                return done
+                said.report({"with": {"name": file.name, "kind": "file", "address": None}, "at": stamps.stamp(now),
+                             "parts": held, "indexes": []})
+                return done, "indexes" not in held
             said.stage("take", "running", _count(len(take)))
             done = sync.apply_units(conn, cfg, source, [(d.id, d.theirs.digest if d.theirs else None) for d in take],
                                     stamps.stamp(now), expected_here={d.id: d.mine.digest if d.mine else None
@@ -809,8 +856,8 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
         else:
             said.stage("take", "skipped")
             said.stage("render", "skipped")
-        if file.index_only:
-            said.stage("agree", "skipped")
+        if file.index_only or not ({"library", "songbooks"} & set(held)):
+            said.stage("agree", "skipped")  # no unit asked of it: nothing agreed, nor this file made older
         else:
             said.stage("agree", "running")
             try:
@@ -824,14 +871,15 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
                                             + (f", {len(kept_here)} kept here" if kept_here else ""))
         indexes = _merge_indexes(cfg, conn, file, source, said, parts, now)
     said.report({"with": {"name": file.name, "kind": "file", "address": None}, "at": stamps.stamp(now),
-                 "parts": [p for p in sync.PARTS if p in parts and p in file.holds], "indexes": indexes})
-    return done
+                 "parts": held, "indexes": indexes or []})
+    return done, indexes is not None
 
 
-def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], now) -> list[dict]:
+def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], now) -> list[dict] | None:
     """The file's indexes merged into this database (``index_transfer.merge``), when it holds them and they are
     asked for: the report's ``indexes``, each site that took something, its first table's rows before and after
-    and its newest read. Copied out of the file beside it when staged, else into ``cache_dir/peer``, and deleted."""
+    and its newest read; None when the merge failed. An index export is merged where it is; a ``.caracole`` file's
+    indexes.sqlite is copied out into ``cache_dir/peer`` (0700), merged, and deleted."""
     import os
     import secrets
 
@@ -856,7 +904,7 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
     except (index_transfer.TransferError, backup.BackupError, sync.PeerError, OSError) as e:
         said.stage("index", "failed", str(e))
         typer.echo(f"The file's indexes weren't merged: {e}")
-        return []
+        return None
     finally:
         if copy is not None:
             copy.unlink(missing_ok=True)

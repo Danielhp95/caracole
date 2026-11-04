@@ -29,7 +29,7 @@ from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 
 from test_commands_peer import CREEP, InProcess, Side, run
-from test_web_app import ALLOWED, HOST, Recorder
+from test_web_app import ALLOWED, HOST, Recorder, post
 
 def write_config(root: Path, name: str) -> Path:
     path = root / "caracole.toml"
@@ -382,6 +382,56 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     other.conn.close()
 
 
+def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tmp_path, monkeypatch):
+    desk, studio, _ = libraries
+    desk.song()
+    gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/3/oasis.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+
+    def refused(*args, **kw):
+        raise index_transfer.TransferError("the disk is full")
+
+    monkeypatch.setattr(index_transfer, "merge", refused)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 1 and "The file's indexes weren't merged: the disk is full" in out.output
+    assert ("index", "failed") in [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e]
+    [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
+    assert report["indexes"] == [] and studio.units() == desk.units()  # its units taken all the same
+
+
+def test_the_indexes_alone_asked_of_a_whole_file_agree_on_nothing_so_its_library_comes_later(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/3/oasis.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    out = run(studio, "peer", "import", "--yes", "--progress", "--parts", "indexes", str(f))
+    assert out.exit_code == 0, out.output
+    assert ("agree", "skipped") in [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e]
+    assert studio.songs() == set() and sync.base_of(studio.conn, desk.id()) is None
+    assert studio.conn.execute("SELECT COUNT(*) FROM gtptabs_index").fetchone()[0] == 1
+    out = run(studio, "peer", "import", "--yes", "--parts", "library,songbooks", str(f))
+    assert out.exit_code == 0, out.output
+    assert studio.units() == desk.units()
+
+
+def test_an_import_that_cant_back_up_first_takes_nothing_and_still_reports(libraries, tmp_path, monkeypatch):
+    from caracole import backup
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    f = exported(desk, tmp_path / "d.caracole")
+
+    def full(*args, **kw):
+        raise backup.BackupError("no room")
+
+    monkeypatch.setattr(backup, "make", full)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 1 and "Nothing taken: the database couldn't be backed up first: no room" in out.output
+    [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
+    assert report["with"]["name"] == "Desk" and report["indexes"] == []
+    assert studio.songs() == set() and sync.base_of(studio.conn, desk.id()) is None
+
+
 def test_an_index_file_is_merged_and_records_no_agreement(libraries, tmp_path):
     desk, studio, _ = libraries
     gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/3/oasis.html"])
@@ -428,6 +478,23 @@ def test_a_staged_index_export_goes_by_the_name_it_was_sent_under_and_is_deleted
     assert out.exit_code == 0, out.output
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
     assert report["with"]["name"] == "phone-indexes.sqlite" and not folder.exists()
+
+
+def test_a_staged_file_not_whole_yet_is_refused_and_left_for_the_rest_to_come(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    data = exported(desk, tmp_path / "d.caracole").read_bytes()
+    state = studio.cfg.state_dir
+    import_id = peer_import.open_import(state, size=len(data), name="d.caracole")
+    peer_import.add_part(state, import_id, 0, data[:len(data) // 2])
+    folder = state / "peer" / f"import-{import_id}"
+    out = run(studio, "peer", "import", "--yes", "--progress", str(folder))
+    assert out.exit_code == 2 and peer_import.NOT_WHOLE in out.output
+    assert folder.exists() and studio.songs() == set()
+    peer_import.add_part(state, import_id, len(data) // 2, data[len(data) // 2:])
+    out = run(studio, "peer", "import", "--yes", str(folder))
+    assert out.exit_code == 0, out.output
+    assert studio.units() == desk.units() and not folder.exists()
 
 
 def test_a_folder_that_isnt_an_import_here_is_refused_and_left(libraries, tmp_path):
@@ -482,3 +549,32 @@ def test_a_unit_kept_here_at_an_import_is_given_at_the_next_network_sync(librari
     assert out.exit_code == 0, out.output
     assert load_overrides(desk.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
     assert desk.units() == studio.units() and sync.kept_of(studio.conn, desk.id()) == {}
+
+
+def test_a_sync_from_the_tab_after_an_import_kept_a_unit_does_what_the_tab_showed(libraries, tmp_path, monkeypatch):
+    """caracole serve's Sync tab compares without the answers an import remembered (web/sync_routes.py): its Sync,
+    ``peer sync --compared`` with its hash, is the comparison it showed, never refused as stale for them."""
+    from caracole.commands import peer as peer_cmd
+    from caracole.web import sync_routes
+
+    desk, studio, _ = libraries
+    desk.song(version="key=Am&capo=0")
+    studio.song(version="key=Gm&capo=0")
+    unit = "song/radiohead/creep"
+    out = run(studio, "peer", "import", "--yes", f"--choose=here:{unit}", str(exported(desk, tmp_path / "d.caracole")))
+    assert out.exit_code == 0, out.output
+    monkeypatch.setattr(sync_routes, "transport", peer_cmd.transport_for_peer)
+    compared = json.loads(post(studio.app, "/sync/compare", {"address": HOST}, accept="application/json").body)
+    assert [(d["id"], d["proposal"]) for d in compared["differences"]] == [(unit, "conflict")]
+    answer = post(studio.app, "/sync/apply", {"comparison": compared["comparison"], "prefer": "there", "choices": ""},
+                  accept="application/json")
+    assert answer.status == 200, answer.body
+    studio.app.queue.run_pending()
+    (job,) = studio.app.queue.snapshot()
+    assert job.state == "done", [s.output for s in job.steps]
+    # the conflict the tab showed, settled the way it was preferred: there's taken here
+    assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Am&capo=0"}
+    assert studio.units() == desk.units() and sync.kept_of(studio.conn, desk.id()) == {}
+    # a hash that names neither comparison is refused all the same
+    stale = run(studio, "peer", "sync", HOST, "--push", "--yes", "--compared", "0" * 64)
+    assert stale.exit_code == 1 and "changed since that comparison" in stale.output

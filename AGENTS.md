@@ -484,19 +484,24 @@ Below the table, a section for each step whose modules have more to say.
   - `state.json` (`peer_sync.state_document` of its units), `bases.json` (every base it keeps), `units.jsonl` (each
     unit's document), `files/<sha256>` (each kept file once);
   - with the library, `pages.json` and `pages/<sha256>`, the pages made of its units (`offline_routes.library_pages`:
-    `GET /api/offline`'s manifest cut to them), so a phone that takes a song opens its sheet;
+    `GET /api/offline`'s manifest cut to them), so a phone that takes a song opens its sheet: each page's bytes
+    once, none for a page that is a kept file (held once, under `files/`), so a page is read from `pages/`, else
+    `files/` (`FileSource.page`);
   - with the indexes, `indexes.sqlite` (`index_transfer.export`).
   - Its parts (`peer_sync.PARTS`): the library whole, the songbooks with the songs they list (`listed_songs`), the
     indexes. JSON deflated, blobs stored and copied by the MiB, every member dated `made`.
-  - Read in one read transaction, taking no lock; written under a name of its own and renamed, never over a file.
-  - A song whose kept file changed since caracole kept it is left out (`Made.left`), its state still naming it, so
-    the file never reads as having lost it.
+  - Its units read in one read transaction and its indexes in their own (`index_transfer.export`'s), state.json
+    naming their newest read as indexes.sqlite holds it; each page read once, one no longer as its manifest says
+    left out; taking no lock; written under a name of its own and renamed, never over a file.
+  - A song whose kept file changed since caracole kept it, or is past `FILE_MAX`, is left out (`Made.left`, with
+    why: `CHANGED`, `TOO_BIG`), its state still naming it, so the file never reads as having lost it.
   - `file_name`: download_names' cleaning of the library's name, then `-dd-mm-yy.caracole`.
 - **Reading** (`read_file`, `SyncFile`): the manifest first, then every name in the layout, each once, each blob at
   most `FILE_MAX` (64 MiB), each JSON member `JSON_MAX`, the whole `IMPORT_MAX` (8 GiB); the indexes held only at this
   database's schema; an index export (`index_transfer.META`) a file of the indexes alone, with no id.
   - `check_whole` reads every member through before an import takes anything (its CRC, each blob its SHA-256, each
-    document its state's digest, each kept file a song names held): a file that can't be read whole is refused whole.
+    document its state's digest, each kept file a song names and each page pages.json lists held): a file that can't
+    be read whole is refused whole.
 - **Refusals**, in the owner's words and the phone's alike, the whys caracole's own (`NOT_A_FILE`, `OTHER_FORMAT`,
   `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export and a file no newer than
   this side's last sync with its caracole (its base's latest time, the kept answers' included).
@@ -508,14 +513,21 @@ Below the table, a section for each step whose modules have more to say.
     or of a part it doesn't hold, a `PeerError`, left, never a removal;
   - `record_import`: what the two agree on, stamped `made`, of the units the file speaks for alone (`speaks_for`: of a
     part it holds, or that it carries), every other unit's base as it was; then each "keep mine" (`kept_answers`)
-    remembered (`peer_sync.record_kept`), a file taking nothing back.
+    remembered (`peer_sync.record_kept`), a file taking nothing back; none for an import of the indexes alone, so the
+    same file's library may still be imported after.
+  - commands/peer.py's `peer import` takes a staged folder only once its file is whole (`peer_import.whole`), and
+    exits 1 for a unit left or its indexes not merged; with `--progress` its report comes whatever it took.
 - **peer_import.py**: an upload staged part by part, `state_dir/peer/import-<16 hex>/` (0700: `file.caracole` and
   `open.json`, 0600), one at a time, each part 8 MiB at most and the next one, 8 GiB in all; one untouched an hour is
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
-- Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` and the fixtures `file_conflict`
-  and `file_indexed` (tests/test_conformance_sync_file.py), which sync-core ports.
+  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s), or
+    without them, as caracole serve's Sync tab compares (sync_routes.py `_compared`), so the tab's Sync does what it
+    showed (commands/peer.py `_Compared.named`).
+- Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` (`full`, `songbooks`, `indexes`,
+  `left`) and the fixtures `file_conflict` and `file_indexed` (tests/test_conformance_sync_file.py), which the Kotlin
+  sync ports: an export, a file read and refused, a unit taken from one, an import.
 
 #### service.py
 
