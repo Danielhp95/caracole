@@ -258,18 +258,18 @@ A zip. Member names, in this order:
 | Member | What |
 |---|---|
 | `caracole.json` | `{"format": 1, "caracole": "<version>", "schema": <db.SCHEMA_VERSION>, "sync": 2, "id": "<16 hex>", "name": "<library name>", "made": "<stamp>", "parts": [...], "songs": n, "songbooks": n, "units": n, "files": n, "pages": n, "indexes": ["ug", …]}` |
-| `state.json` | `peer_sync.state_document(id, version, name, units, None, now=made, indexes=newest or {}, kept={})`: the units of the file (§3.2: Library's kinds whole when ticked; songbooks when ticked, with the songs they list) |
+| `state.json` | `peer_sync.state_document(id, version, name, units, None, now=made, indexes=newest or {}, kept={})`: the units of the file (§3.2: Library's kinds whole when ticked; songbooks when ticked, with the songs they list); `newest` is `index_transfer.newest` of the `indexes.sqlite` it holds |
 | `bases.json` | `{"<peer id>": {"units": …, "kept": …}}`: every base this side keeps (kv `sync:base:*`) |
 | `units.jsonl` | a line per unit of `state.json`, in `peer_sync._order`: `peer_sync.unit_document(...)` |
 | `files/<sha256>` | each kept file the song documents name, once |
 | `pages.json` | the exporter's `GET /api/offline` manifest (format 1), `files` cut to the file's units and its start page; absent without Library |
-| `pages/<sha256>` | each page's bytes, once |
+| `pages/<sha256>` | each page's bytes, once; none for a page whose bytes are a kept file's, held under `files/` (a page is read from `pages/`, else `files/`) |
 | `indexes.sqlite` | `index_transfer.export` of every site, when `"indexes"` is in parts |
 
 - JSON members are `ZIP_DEFLATED`, the others `ZIP_STORED`. Every member's date is the manifest's `made`. The file is
   written to `.<name>.<12 hex>.part` beside it, then renamed.
-- A song with a kept file that can no longer be read as recorded (`peer_sync.song_file` gives None) is left out with
-  its pages, and said (`Made.left`).
+- A song with a kept file that can no longer be read as recorded (`peer_sync.song_file` gives None), or past
+  `FILE_MAX`, is left out with its pages, and said (`Made.left`: `(unit, why)`, `CHANGED` or `TOO_BIG`).
 - **Reading:** `caracole.json` comes first. Every name is in the layout: `files/` and `pages/` names are 64
   lowercase hex, and nothing else is allowed. Each blob is at most `FILE_MAX` (64 MiB), each JSON member at most
   64 MiB, and the declared sizes sum to at most `IMPORT_MAX` (8 GiB). A blob's SHA-256 is checked as it is read, and
