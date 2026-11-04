@@ -34,6 +34,9 @@ said:
   point grouped by ``_sre.unicode_tolower``, the groups ``re._casefix._EXTRA_CASES`` links joined. A pattern's
   literal ``c`` matches exactly its class under IGNORECASE (checked below), and a class's members are all in the
   BMP or all beyond it, so mapping each code point to its representative keeps a string's UTF-16 length.
+- ``east_asian_width.txt``: ``start end width`` lines, the runs of one ``unicodedata.east_asian_width`` (``F``,
+  ``H``, ``W``, ``Na`` or ``A``); ``N`` left out (``PyUnicode.eastAsianWidth``; tests/test_conformance_py_format.py's
+  ``format_width.jsonl`` checks the phone's answers).
 
 Vectors, tests/conformance/vectors/unicode/:
 
@@ -273,18 +276,29 @@ def _representatives() -> dict[int, int]:
     return {cp: members[0] for members in _ignorecase_classes() for cp in members}
 
 
+@functools.cache
+def _width_runs() -> list[tuple[int, int, object]]:
+    return _runs(list(map(unicodedata.east_asian_width, map(chr, range(MAX)))), "N")
+
+
+def east_asian_width_txt() -> str:
+    lines = [f"{s:04X} {e:04X} {v}\n" for s, e, v in _width_runs()]
+    return _header("east_asian_width.txt", "start end width, N left out") + "".join(lines)
+
+
 def ignorecase_txt() -> str:
     lines = [" ".join(f"{c:04X}" for c in members) + "\n" for members in _ignorecase_classes()]
     return _header("ignorecase.txt", "a class a line, its representative first") + "".join(lines)
 
 
 TABLES = {"flags.txt": flags_txt, "category.txt": category_txt, "combining.txt": combining_txt,
-          "decomposition.txt": decomposition_txt, "case.txt": case_txt, "ignorecase.txt": ignorecase_txt}
+          "decomposition.txt": decomposition_txt, "case.txt": case_txt, "ignorecase.txt": ignorecase_txt,
+          "east_asian_width.txt": east_asian_width_txt}
 
 
 # The tables, and the tests, that ask Python about every code point (_properties): about half a second in a process
 # of its own, several on the shared machine, so outside the quick loop (-m "not slow").
-EVERY_CODE_POINT = {"flags.txt", "category.txt", "combining.txt"}
+EVERY_CODE_POINT = {"flags.txt", "category.txt", "combining.txt", "east_asian_width.txt"}
 
 
 @pytest.mark.parametrize(
