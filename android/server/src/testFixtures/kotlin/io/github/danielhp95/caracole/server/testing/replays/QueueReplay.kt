@@ -63,7 +63,9 @@ object QueueReplay : AreaReplay {
                     else -> builder(misses, r)
                 }
             }
-            for (r in Corpus.records("web/history.jsonl")) history(misses, r, File(dir, "h${misses.checked}"))
+            for (r in Corpus.records("web/history.jsonl")) {
+                if (r.fn == "caracole.web.history._time") time(misses, r) else history(misses, r, File(dir, "h${misses.checked}"))
+            }
         } finally {
             dir.deleteRecursively()
         }
@@ -154,6 +156,9 @@ object QueueReplay : AreaReplay {
         fun jobs(): JsonArray =
             JsonArray(queue.snapshot().asReversed().map { JobHistory.record(it, Int.MAX_VALUE, Int.MAX_VALUE) })
 
+        /** Each job as `/api/jobs/N` answers it (Job.asJson, Python's Job.as_json). */
+        fun views(): JsonArray = JsonArray(queue.snapshot().asReversed().map { it.asJson() })
+
         fun text(): JsonElement = file?.takeIf { it.isFile }?.readText(Charsets.UTF_8)?.let(::JsonPrimitive) ?: JsonNull
 
         /** The queue's jobs and its history's file as the record says they are now. */
@@ -162,6 +167,11 @@ object QueueReplay : AreaReplay {
             misses.check(same(jobs, want["jobs"])) {
                 "$note, $at: the jobs\n  ${PyJson.dumps(jobs, sortKeys = true).take(3000)}\n  Python's " +
                     PyJson.dumps(want["jobs"] ?: JsonNull, sortKeys = true).take(3000)
+            }
+            val views = views()
+            misses.check(same(views, want["as_json"])) {
+                "$note, $at: the jobs as /api/jobs/N gives them\n  ${PyJson.dumps(views, sortKeys = true).take(3000)}\n" +
+                    "  Python's " + PyJson.dumps(want["as_json"] ?: JsonNull, sortKeys = true).take(3000)
             }
             if (file != null) {
                 val text = text()
@@ -286,6 +296,14 @@ object QueueReplay : AreaReplay {
     }
 
     // --- the history ------------------------------------------------------------------------------------------
+
+    /** history.py's `_time` of a text: microseconds since 1970 UTC, as `datetime.fromisoformat` reads it. */
+    private fun time(misses: Misses, r: Record) {
+        misses.expect(r) {
+            val at = JobHistory.time(r.args[0])
+            JsonPrimitive(Math.addExact(Math.multiplyExact(at.epochSecond, 1_000_000L), (at.nano / 1000).toLong()))
+        }
+    }
 
     private fun history(misses: Misses, r: Record, dir: File) {
         val note = r.extra["note"]?.jsonPrimitive?.content ?: "a history"

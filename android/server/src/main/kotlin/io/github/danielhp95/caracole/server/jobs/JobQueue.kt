@@ -6,10 +6,12 @@ import io.github.danielhp95.caracole.server.http.Refused
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -54,11 +56,18 @@ interface JobContext {
     /** The files a reader can open already, and how long they took (get.py's `readable` event). */
     fun readable(files: Map<String, String>, seconds: Double) {}
 
-    /** Runs the lookups queued since (JobCommands.isLookup's jobs, in the order queued, those queued meanwhile too),
-     * in this worker, then returns: a long job of the phone's own (the render job) calls it between two songs. It
-     * suspends, so it is never called inside a Database.write, whose block never suspends: no write is held while
-     * they run. A call from a job it runs, or from no job of the queue's, does nothing. */
-    suspend fun yieldToQueued() {}
+    /**
+     * Runs the lookups queued since (JobCommands.isLookup's jobs, in the order queued, those queued meanwhile too),
+     * then returns: a long job of the phone's own (the render job) calls it between two songs, from its run or a
+     * plain callback of it (PhoneRender's `between`). They run in the queue's one worker, on the caller's thread,
+     * which waits for them (a job's run is the worker's: nothing else of the queue runs meanwhile), and a stop of the
+     * queue's scope stops them and then the caller (a CancellationException).
+     *
+     * It is called holding no Database.write: the lookups write. A write held on this thread fails a lookup's own
+     * write at once (Database's "a write inside a write's block"); one it makes on another thread would wait for it.
+     * A call from a job it runs, from a job that is no longer running, or with no lookup queued does nothing.
+     */
+    fun yieldToQueued() {}
 }
 
 /** A stage of a job: its state (waiting, running, done, skipped, failed, interrupted), what it says now, and what it
@@ -149,6 +158,9 @@ class Job internal constructor(val id: Int, spec: JobSpec, queuedAt: Instant = I
     /** What its run said, before any command ran (its commands' output is theirs, [Step.output]). */
     internal var said: List<String> = emptyList()
 
+    /** Read back from the history as a job of the phone's own (a run of its own, which the history can't keep). */
+    internal var readOwn: Boolean = false
+
     /** The name it was queued with, as web/jobs.py keeps `display` (its title then, when none was given). */
     internal var named: String = spec.display.ifEmpty { spec.title }
 
@@ -186,6 +198,7 @@ class Job internal constructor(val id: Int, spec: JobSpec, queuedAt: Instant = I
         it.steps = steps.map(Step::copy)
         it.stages = stages.map(Stage::copy)
         it.said = said
+        it.readOwn = readOwn
         it.outcome = outcome
         it.songId = songId
         it.songDisplay = songDisplay
@@ -268,6 +281,10 @@ class JobStarted(val id: Int, val state: String) : Exception("request $id is $st
 /** A job asked to run again that waits or runs still ([state]): Try again is for a request that is over. */
 class JobNotOver(val id: Int, val state: String) : Exception("request $id is $state")
 
+/** A job the queue remembers but can't run again: one of the phone's own (an add, a removal, a sync, an index import)
+ * read back from the history, which keeps no run (format 1 keeps commands alone), so there is nothing to run. */
+class JobNotRepeatable(val id: Int) : Exception("request $id can't be run again: the phone ran it itself")
+
 /**
  * web/jobs.py's JobQueue on the phone: jobs in order, run by one worker coroutine in [scope], so they never write
  * beside each other (an index import, a sync, a lookup, an add).
@@ -286,7 +303,10 @@ class JobNotOver(val id: Int, val state: String) : Exception("request $id is $st
  *   caracole serve's: a command that throws fails its step (its `error:` line said, its code [CommandExit]'s or 1),
  *   the job's running stage failed and the rest skipped. A run that throws fails its job as milestone 3's did: the
  *   first line of what it threw said (`error: …`) and the words of its stage that ran (else the first that waited),
- *   failed. One the scope's end stops is interrupted, its step and stage that ran so too. The worker goes on.
+ *   failed. The worker goes on. One the scope's end stops is interrupted, its step and stage that ran so too, whatever
+ *   the command threw, and the commands after it skipped, a stop between two of them too (caracole serve's
+ *   `_stopping`); the worker stops. A progress event of a command that writes none (JobCommands.reports) is a line of
+ *   its output, as caracole serve keeps such a line.
  * - [history]: the jobs it remembers read back as the queue starts (history.py: those that waited or ran
  *   interrupted), each saved to it as it is queued or joined, starts and is over, under the queue's lock, in order.
  * - The last [keep] jobs over are remembered.
@@ -302,7 +322,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private var started = false
     private var busy = false
-    private var yielding = false  // the worker's own: a long job lets the lookups behind it go first
+    private var yielding = false  // under the lock: a long job lets the lookups behind it go first
 
     /** Told true as the queue gets busy and false as it goes idle (the app's foreground service listens). */
     var onBusy: (Boolean) -> Unit = {}
@@ -379,16 +399,15 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
      * search the page sent by itself asked by hand now, no `--auto`; a lookup Get the missing songs queued made with
      * its songbooks, no `--no-songbooks`; a pick's `caracole review` after the song's own request, never joined), and
      * a run of the phone's own run again; the job it is now, a song's job that waits or runs if that is its answer.
-     * [NoSuchElementException] for one the queue doesn't remember, or one it can't run again (read back from the
-     * history with nothing to run: the phone's own add, say); [JobNotOver] for one that waits or runs.
+     * [NoSuchElementException] for one the queue doesn't remember (jobs_routes.again's 404); [JobNotOver] for one
+     * that waits or runs; [JobNotRepeatable] for one it remembers with nothing to run (the phone's own add, say, read
+     * back from the history).
      */
     fun again(id: Int): Job {
         val spec = synchronized(lock) {
             val job = jobs.firstOrNull { it.id == id } ?: throw NoSuchElementException("no request $id")
             if (job.active) throw JobNotOver(id, job.state)
-            if (job.spec.run == null && job.steps.isEmpty()) {
-                throw NoSuchElementException("request $id has nothing to run again")
-            }
+            if (job.spec.run == null && job.steps.isEmpty()) throw JobNotRepeatable(id)
             var commands = job.steps.map { it.command }
             if (job.key.startsWith(JobCommands.LACUERDA_SEARCH)) {  // you ask for it now: by hand
                 commands = commands.map { command -> command.copy(args = command.args.filter { it != "--auto" }) }
@@ -554,8 +573,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     }
 
     private suspend fun run(job: Job) {
-        val running = currentCoroutineContext()[kotlinx.coroutines.Job]
-        val context = Context(job) { running?.isCancelled == true }
+        val context = Context(job, currentCoroutineContext()[kotlinx.coroutines.Job])
         val own = job.spec.run  // a running job's spec never changes: a request joins one that waits
         if (own != null) {
             try {
@@ -575,6 +593,12 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         }
         var failed = false
         for (step in job.steps) {
+            // The queue stopped (its scope's end, as caracole serve's `_stopping`): this step and the rest skipped,
+            // the job interrupted, and the worker stops.
+            if (!currentCoroutineContext().isActive) {
+                end(job, Job.INTERRUPTED)
+                throw CancellationException("the queue stopped")
+            }
             val starts = synchronized(lock) {
                 if (failed) {
                     step.state = Job.SKIPPED
@@ -597,10 +621,12 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                     0
                 }
             } catch (e: Throwable) {
-                if (e is CancellationException && !currentCoroutineContext().isActive) {
+                // A command the queue's stop ended, whatever it threw, is interrupted, never failed (web/jobs.py's
+                // `INTERRUPTED if self._stopping`).
+                if (!currentCoroutineContext().isActive) {
                     synchronized(lock) { context.step = null }
                     end(job, Job.INTERRUPTED)
-                    throw e
+                    throw e as? CancellationException ?: CancellationException("the queue stopped").apply { initCause(e) }
                 }
                 context.say("error: ${said(e)}")
                 (e as? CommandExit)?.code ?: 1
@@ -611,6 +637,11 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                 failed = failed || code != 0
                 context.step = null
             }
+        }
+        // Stopped as its last command ended: interrupted unless every command was done (web/jobs.py's `interrupted`).
+        if (!currentCoroutineContext().isActive && job.steps.any { it.state != Job.DONE }) {
+            end(job, Job.INTERRUPTED)
+            throw CancellationException("the queue stopped")
         }
         end(job, if (failed) Job.FAILED else Job.DONE)
     }
@@ -630,12 +661,18 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         }
     }
 
-    /** The lookups queued since a long job of the phone's own began, run here, one by one (JobContext.yieldToQueued). */
+    /** Whether [job] is to let the lookups queued behind it go first now: it runs, isn't one of them, isn't being
+     * let go before, and a lookup waits. */
+    private fun yields(job: Job): Boolean = synchronized(lock) {
+        !yielding && job.state == Job.RUNNING && !isLookup(job) && jobs.any { it.state == Job.QUEUED && isLookup(it) }
+    }
+
+    /** The lookups queued since a long job of the phone's own began, run here, one by one, until none waits or the
+     * queue stops (JobContext.yieldToQueued). */
     private suspend fun yieldFrom(job: Job) {
-        if (yielding || job.state != Job.RUNNING || isLookup(job)) return
-        yielding = true
+        synchronized(lock) { yielding = true }
         try {
-            while (true) {
+            while (currentCoroutineContext().isActive) {
                 val next = synchronized(lock) {
                     val lookups = jobs.filter { it.state == Job.QUEUED && isLookup(it) }
                     job.waitingFor = lookups.size
@@ -644,8 +681,10 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                 run(next)
             }
         } finally {
-            yielding = false
-            synchronized(lock) { job.waitingFor = 0 }
+            synchronized(lock) {
+                yielding = false
+                job.waitingFor = 0
+            }
         }
     }
 
@@ -717,17 +756,32 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         onBusy(now)
     }
 
-    /** What a running job tells its view, under the queue's lock. */
-    private inner class Context(private val job: Job, private val cancelled: () -> Boolean) : JobContext {
+    /** What a running job tells its view, under the queue's lock; [worker] is the coroutine that runs it (the queue's
+     * worker, or the yield that runs it in the worker's stead). */
+    private inner class Context(private val job: Job, private val worker: kotlinx.coroutines.Job?) : JobContext {
         /** The command that runs now, whose output a line is; null while the job's own run runs. */
         var step: Step? = null
 
-        override fun stage(name: String, state: String, detail: String) = synchronized(lock) {
-            val stage = job.stages.firstOrNull { it.name == name }
-                ?: Stage(name, name).also { job.stages = job.stages + it }
-            stage.state = state
-            stage.detail = detail
-            if (state == Job.RUNNING) stage.runningDetail = detail
+        /** Whether an event of [step]'s is a line of its output instead: a command that writes no progress lines
+         * (JobCommands.reports: `lacuerda --artist`, `review`, any without `--progress`), whose `caracole-progress:`
+         * line caracole serve keeps as output (web/jobs.py's emit). */
+        private fun asLine(event: JsonObject): Boolean {
+            val step = step ?: return false
+            if (JobCommands.reports(step.args)) return false
+            say(JobCommands.progressLine(event))
+            return true
+        }
+
+        override fun stage(name: String, state: String, detail: String) {
+            if (asLine(JsonObject(linkedMapOf("stage" to JsonPrimitive(name), "state" to JsonPrimitive(state),
+                                              "detail" to JsonPrimitive(detail))))) return
+            synchronized(lock) {
+                val stage = job.stages.firstOrNull { it.name == name }
+                    ?: Stage(name, name).also { job.stages = job.stages + it }
+                stage.state = state
+                stage.detail = detail
+                if (state == Job.RUNNING) stage.runningDetail = detail
+            }
         }
 
         /** A line of its output; one with line breaks in it is said a line at a time, as a command prints them. */
@@ -745,19 +799,38 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
 
         override fun outcome(value: JsonObject) = synchronized(lock) { job.outcome = value }
 
-        override val isCancelled: Boolean get() = cancelled()
+        override val isCancelled: Boolean get() = worker?.isCancelled == true
 
-        override fun song(id: Long, display: String) = synchronized(lock) {
-            job.songId = id
-            job.songDisplay = display
+        override fun song(id: Long, display: String) {
+            if (asLine(JsonObject(linkedMapOf("song" to JsonObject(linkedMapOf(
+                    "id" to JsonPrimitive(id), "display" to JsonPrimitive(display))))))) return
+            synchronized(lock) {
+                job.songId = id
+                job.songDisplay = display
+            }
         }
 
-        override fun readable(files: Map<String, String>, seconds: Double) = synchronized(lock) {
-            job.files = LinkedHashMap(files)
-            if (job.secondsToSheet == null) job.secondsToSheet = seconds
+        override fun readable(files: Map<String, String>, seconds: Double) {
+            if (asLine(JsonObject(linkedMapOf("files" to JsonObject(files.mapValues { JsonPrimitive(it.value) }),
+                                              "seconds" to PyJson.float(JobCommands.round3(seconds)))))) return
+            synchronized(lock) {
+                job.files = LinkedHashMap(files)
+                if (job.secondsToSheet == null) job.secondsToSheet = seconds
+            }
         }
 
-        override suspend fun yieldToQueued() = yieldFrom(job)
+        /** The lookups queued behind it run on this thread, in the worker's stead: under a supervisor that is the
+         * worker's child, so that the queue's stop stops them (and then this job: a CancellationException) while an
+         * error of theirs is never the worker's. */
+        override fun yieldToQueued() {
+            if (!yields(job)) return
+            val link = SupervisorJob(worker)
+            try {
+                runBlocking(link) { yieldFrom(job) }
+            } finally {
+                link.cancel()  // no child of the worker's left behind
+            }
+        }
     }
 
     companion object {

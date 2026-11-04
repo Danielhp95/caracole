@@ -93,20 +93,53 @@ class JobHistoryTest {
         assertEquals(listOf(Job.DONE), queue.snapshot().map { it.state })
     }
 
-    @Test fun aJobOfThePhonesOwnReadBackCantBeRunAgainAndSaysSo() = runTest {
+    @Test fun aJobOfThePhonesOwnReadBackKeepsItsKindDoneLineAndWordsButCantBeRunAgain() = runTest {
         val state = tmp.newFolder("state")
-        val first = JobQueue(backgroundScope, clock = clock, history = JobHistory.at(state))
+        val commands = Commands(mapOf("get" to CommandRunner { _, _ -> }))
+        val first = JobQueue(backgroundScope, clock = clock, commands = commands, history = JobHistory.at(state))
         val add = first.submit(JobSpec("Add Radiohead - Creep", "radiohead/creep", "add",
-                                       listOf("add" to "Adding to the library"), display = "Radiohead - Creep") {
+                                       listOf("add" to "Adding to the library"), display = "Radiohead - Creep",
+                                       doneLine = "Added: the computer's next run fetches it.") {
+            it.say("Added Radiohead - Creep to wanted.txt.")
             it.stage("add", "done")
         }).first
+        val sync = first.submit(JobSpec("Sync", JobCommands.SYNCING + "http://computer:8737", "sync",
+                                        listOf("compare" to "Comparing")) { it.stage("compare", "done") }).first
+        val render = first.submit(JobSpec("Make the pages again", "render:b1", "render",
+                                          listOf("render" to "Making the pages")) {
+            it.say("Pages made again for 3 songs")
+        }).first
+        val lookup = first.submit(lookup("Muse", "Hysteria")).first
         runCurrent()
-        assertEquals(Job.DONE, first.await(add.id).state)
-        val next = JobQueue(backgroundScope, clock = clock, history = JobHistory.at(state))
+        assertEquals(Job.DONE, first.await(lookup.id).state)
+        val lines = File(state, JobHistory.FILE_NAME).readLines()
+        // What format 1 can't say, beside the line of a job of the phone's own; none beside one of commands.
+        val records = lines.map { Json.parseToJsonElement(it).jsonObject }.filter { "id" in it }
+        assertEquals(listOf(true, true, true, false), listOf(add.id, sync.id, render.id, lookup.id).map { id ->
+            records.last { it.getValue("id").jsonPrimitive.content.toInt() == id }.containsKey("phone")
+        })
+        val next = JobQueue(backgroundScope, clock = clock, commands = commands, history = JobHistory.at(state))
         val read = next.job(add.id)!!
         assertEquals("add" to "Radiohead - Creep", read.spec.kind to read.display)
+        assertEquals("Added: the computer's next run fetches it.", read.spec.doneLine)
+        assertEquals(listOf("Added Radiohead - Creep to wanted.txt."), read.output)
         assertEquals(listOf("add" to Job.DONE), read.stages.map { it.name to it.state })
-        assertFailsWith<NoSuchElementException> { next.again(add.id) }
+        assertEquals("sync", next.job(sync.id)!!.spec.kind)  // by its key, as caracole serve's
+        assertEquals("render" to listOf("Pages made again for 3 songs"), next.job(render.id)!!.let { it.spec.kind to it.output })
+        assertFailsWith<JobNotRepeatable> { next.again(add.id) }
+        assertFailsWith<NoSuchElementException> { next.again(99) }
+        assertEquals("song", next.job(lookup.id)!!.spec.kind)
+        // Written whole again as the next queue read it, they keep it.
+        val third = JobQueue(backgroundScope, clock = clock, history = JobHistory.at(state))
+        assertEquals("render" to listOf("Pages made again for 3 songs"), third.job(render.id)!!.let { it.spec.kind to it.output })
+    }
+
+    @Test fun aKindOfThePhonesOwnIsToldByItsKeysPrefix() {
+        val render = PhoneKinds.Kind("render", "render:", "render" to "Making the pages", "{done} of {total}",
+                                     "Pages made again", "Not made: {why}")
+        assertEquals("render", JobCommands.kindOf("render:b1", emptyList(), listOf("render"), listOf(render)))
+        assertEquals("song", JobCommands.kindOf("render/song", emptyList(), emptyList(), listOf(render)))
+        assertEquals("remove", JobCommands.kindOf("remove:a/t", emptyList(), emptyList(), listOf(render)))
     }
 
     @Test fun aTimeIsWrittenAsPythonsIsoformatInUtcAndReadAsFromisoformatReadsIt() {

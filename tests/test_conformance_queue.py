@@ -10,8 +10,8 @@ JobHistory (lane jobs-queue) replay (QueueReplay, QueueVectorsTest).
   - queues, a record each: ``{"fn": "caracole.web.jobs.JobQueue", "note", "kw": {"limit", "keep"}, "history": null |
     {"file": <the history's text before the queue starts, or null for none>}, "loaded": {"jobs", "file"}, "ops":
     […]}``. Every op is followed by what the queue answered (``out``), its jobs after it (``jobs``, oldest first, each as
-    history.py's line holds it, its output whole) and, for a queue with a history, the file's text after it
-    (``file``). An op is one of:
+    history.py's line holds it, its output whole; ``as_json``, each as ``Job.as_json`` gives it, ``/api/jobs/N``'s
+    answer) and, for a queue with a history, the file's text after it (``file``). An op is one of:
 
     - ``{"op": "submit", "request": {title, song_key, steps, fetching, note, display, join, song_id}}``: ``out``
       ``{"job": N, "new": bool}`` or ``{"err": "QueueFull"}``;
@@ -35,6 +35,9 @@ JobHistory (lane jobs-queue) replay (QueueReplay, QueueVectorsTest).
   ``{"op": "save", "job": <its line's record>, "jobs": [<records>], "next", "now"}`` (``job`` is ``jobs``' of its id
   when there is one; ``now`` is when a save that writes the file whole reads the time) and ``{"op": "rewrite", "jobs",
   "next"}``, their ``out`` ``{"file"}``: the file's text after it.
+  And history.py's ``_time`` (``datetime.fromisoformat``, a naive time UTC) of a request's times, spellings of every
+  kind: ``{"fn": "caracole.web.history._time", "args": [text], "out": <microseconds since 1970 UTC>}``, or ``"err":
+  "ValueError"`` for one it can't read.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import random
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -321,7 +325,8 @@ def queue_record(note: str, ops: list[dict[str, Any]], *, limit: int = jobs.LIMI
     stopped = [False]
 
     def state() -> dict[str, Any]:
-        out: dict[str, Any] = {"jobs": [_record(job, WHOLE, WHOLE) for job in queue._jobs]}
+        out: dict[str, Any] = {"jobs": [_record(job, WHOLE, WHOLE) for job in queue._jobs],
+                               "as_json": [job.as_json() for job in queue._jobs]}
         if hist is not None:
             out["file"] = path.read_text(encoding="utf-8") if path.exists() else None
         return out
@@ -788,6 +793,11 @@ def history_cases() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
         json.dumps([1, 2]),
         json.dumps({"v": 1, "next": "40"}),
         json.dumps({"v": 1, "next": 2.0}),
+        json.dumps(_job_line(19)).replace('"v": 1', '"v": 01'),  # no JSON: json.loads refuses a leading zero
+        '{"v":1,"next":01}',
+        json.dumps({**_job_line(18), "seconds_to_sheet": 1}).replace('"seconds_to_sheet": 1', '"seconds_to_sheet": 1.5f'),
+        "\ufeff" + json.dumps(_job_line(17)),  # a BOM: json.loads of a text refuses it
+        json.dumps({**_job_line(16), "queued_at": "2026-11-02T09:00:00.5 +01:00"}),
     ]
     odd = [
         json.dumps({**_job_line(34), "v": 1.0}),
@@ -797,6 +807,10 @@ def history_cases() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
                                     "seconds_to_sheet", "together", "units", "started_at", "finished_at")}}),
         json.dumps({**_job_line(37), "seconds_to_sheet": 1e-05, "extra": "ignored"}),
         json.dumps({**_job_line(38), "stages": [{"name": "song", "label": "Find the song", "state": "whatever"}]}),
+        json.dumps({**_job_line(39), "seconds_to_sheet": float("nan"), "song_id": 2**40}),
+        json.dumps({**_job_line(40), "seconds_to_sheet": 10**20}),
+        json.dumps({**_job_line(41), "seconds_to_sheet": -0.0, "queued_at": "2026-11-02T09:00:00 +01:00"}),
+        json.dumps({**_job_line(42), "queued_at": "2026-W45-1T09:00"}),
     ]
     old = [_job_line(n, at="2026-09-01T08:00:00+00:00") for n in (50, 51)]
     many = [_job_line(n, at=f"2026-11-0{1 + n % 3}T08:00:00+00:00") for n in range(60, 66)]
@@ -865,6 +879,58 @@ def history_records(tmp: Path) -> list[dict[str, Any]]:
         options = dict(options)
         file = options.pop("file", None)
         out.append(history_record(note, ops, file=file, tmp=tmp, **{**KW, **options}))
+    return out + time_records()
+
+
+# --- a request's times, as fromisoformat reads them -----------------------------------------------------------------
+
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+DATES = ["2026-11-03", "20261103", "2026-W45-2", "2026W452", "2026-W45", "2026W45", "2026-W53-7", "2026W537",
+         "2025-W53-1", "2020-W53-5", "2024-W53-1", "2026-W00-1", "2026-W45-0", "2026-W45-8", "0001-01-01", "0000-01-01",
+         "9999-12-31", "9999-W52-5", "9999-W52-6", "0001-W01-1", "0000-W01-1", "2024-02-29", "2026-02-29", "2026-1-03",
+         "2026-11-3", "2026-1103", "202611-03", "2026-13-01", "2026-00-10", "2026-11-00", "2026-11-31", "2026/11/03",
+         "２０２６-11-03", "2026-110", "2026-307", "2026-W4", "2026W4x"]
+SEPARATORS = ["T", " ", "t", "x", "é", "\u3000", "\U0001f3b8", "0", "-", "W", "\x00"]
+CLOCKS = ["", "09", "0930", "09:30", "093000", "09:30:00", "09:30:00.5", "09:30:00,5", "09:30:00.123456",
+          "09:30:00.1234567", "09:30:00.", "093000.5", "093000123", "09:3000", "0930:00", "24", "24:00", "24:00:00",
+          "24:00:00.000001", "24:01", "23:59:59.999999", "23:60", "25:00", "9:30", "09:30:0", "09:30:00.5x", "09.5",
+          "09:30.5", "09:30:00:00", "09::30", "093", "09:30:00.000000", "0930001", "09:30:00\x00", "09:30:00é"]
+GAPS = ["", " ", "  ", "x", "\t"]
+OFFSETS = ["", "Z", "z", "+00:00", "-00:00", "+01", "+0100", "+01:00", "+01:30:00", "+013000", "+01:30:00.12",
+           "+01:30:00.123456", "+01:30:00.1234567", "+24:00", "-24:00", "+23:59:59.999999", "-23:59:59.999999", "+01:3",
+           "+1", "-05:00", "+01:00Z", "Z+01:00", "+01:00 ", "+01:99", "+99:00", "+0130.5", "+01:30.5", "+01:30:00.",
+           "+01:30:00,5", "ZZ", "+", "-", "+01:00:00:00", "+0130005", "Z\x00", "+00:00:00.000001", "-00:00:00.5"]
+
+
+def time_spellings() -> list[str]:
+    """Every date alone and with a time, every separator, every time with no offset, with Z and with one, every
+    gap before every offset after three times, then a fixed draw of the rest of their product."""
+    texts = ["", "2026", "2026-11", "202611", "2026W4", "2026-W", "2026-W45-", "2026-W45-1x", "2026-W45-123",
+             "2026-W45-1T09", "2026W45T09", "2026W4509", "2026W451T09", "2026W45109", "2026-11-03T", "2026-11-03TT09"]
+    texts += DATES + [f"{date}T09:30:00" for date in DATES]
+    texts += [f"2026-11-03{sep}09:30:00" for sep in SEPARATORS] + [f"2026-W45-2{sep}09:30" for sep in SEPARATORS]
+    texts += [f"2026-11-03T{clock}{offset}" for clock in CLOCKS for offset in ("", "Z", "+01:00")]
+    texts += [f"2026-11-03T{clock}{gap}{offset}" for clock in ("09:30:00", "09:30:00.5", "0930")
+              for gap in GAPS for offset in OFFSETS]
+    draw = random.Random(20261103)
+    for _ in range(700):
+        texts.append(draw.choice(DATES) + draw.choice(SEPARATORS) + draw.choice(CLOCKS) + draw.choice(GAPS)
+                     + draw.choice(OFFSETS))
+    for _ in range(300):  # of parts that read, mostly
+        texts.append(draw.choice(DATES[:11] + DATES[14:20]) + draw.choice(SEPARATORS[:8]) + draw.choice(CLOCKS[1:9])
+                     + draw.choice(GAPS[:2]) + draw.choice(OFFSETS[:17]))
+    return list(dict.fromkeys(texts))
+
+
+def time_records() -> list[dict[str, Any]]:
+    out = []
+    for text in time_spellings():
+        record: dict[str, Any] = {"fn": "caracole.web.history._time", "args": [text]}
+        try:
+            record["out"] = (history_module._time(text) - EPOCH) // timedelta(microseconds=1)
+        except ValueError:
+            record["err"] = "ValueError"
+        out.append(record)
     return out
 
 

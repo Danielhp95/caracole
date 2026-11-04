@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
 import io.github.danielhp95.caracole.core.json.PyJson
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -46,9 +45,15 @@ import java.util.logging.Logger
  * - The file is private (0600) in a private folder (0700). Nothing here ever stops a request: a history that can't be
  *   read or written is logged, and the queue goes on.
  *
- * A request the phone ran with a run of its own (an add, a removal, a sync, an index import) has no command: what it
- * said is not kept (format 1 keeps a command's output alone), and read back it can't be run again (JobQueue.again).
- * [clock] is when a save writes the file whole (the requests of the last [days] days kept).
+ * A request the phone ran with a run of its own (an add, a removal, a sync, an index import, the render job) has no
+ * command, and format 1 keeps a command's output alone: its line adds what format 1 can't say, `"phone": {"kind",
+ * "done_line", "said"}` (its JobSpec.kind, its doneLine, what its run said), which history.py's reader leaves be, so
+ * the file is one it reads still; a request of commands alone has none (its kind JobCommands.kindOf's, as caracole
+ * serve's views tell it), so its line is caracole serve's byte for byte. Read back, such a request can't be run again (JobQueue.again's
+ * JobNotRepeatable). Its times are read as Python 3.14's `datetime.fromisoformat` reads them ([parseIso]); its whole
+ * numbers as Python's ints, but an id, a code, a count or a `together` past Int's range, which the phone never writes,
+ * makes its line one that can't be read. [clock] is when a save writes the file whole (the requests of the last [days]
+ * days kept).
  */
 class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = DAYS, val lines: Int = LINES,
                  val lineChars: Int = LINE_CHARS, val maxBytes: Long = MAX_BYTES,
@@ -77,7 +82,7 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
         for (line in splitLines(data)) {
             if (line.all { it.toInt().toChar() in ASCII_SPACE }) continue
             try {
-                val record = Json.parseToJsonElement(decode(line)) as? JsonObject ?: throw Bad("not an object")
+                val record = PyJson.loads(decode(line)) as? JsonObject ?: throw Bad("not an object")
                 if (!isVersion(record["v"])) throw Bad("not a record of this version")
                 if ("next" in record && "id" !in record) {
                     nextId = maxOf(nextId, int(record.getValue("next")))
@@ -86,7 +91,7 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
                 val job = jobOf(record)
                 jobs[job.id] = job
                 nextId = maxOf(nextId, job.id + 1)
-            } catch (e: Exception) {  // Bad, kotlinx's SerializationException (an IllegalArgumentException), a decoding's
+            } catch (e: Exception) {  // Bad, PyJson's DecodeError and RecursionError, a decoding's
                 skipped++
             }
         }
@@ -279,7 +284,20 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
             "together" to JsonArray(job.together.map(::JsonPrimitive)),
             "units" to JsonArray(job.units.map { JsonArray(listOf(JsonPrimitive(it.id), JsonPrimitive(it.outcome),
                                                                    JsonPrimitive(it.why))) }),
-        ))
+        ) + phone(job, lines, lineChars))
+
+        /** What a request of the phone's own (a run of its own, or read back as one) says that format 1 can't: its
+         * kind, its doneLine, what its run said (its last [lines] lines, each of [lineChars] at most); nothing for a
+         * request of commands alone, as caracole serve queues them. */
+        private fun phone(job: Job, lines: Int, lineChars: Int): Map<String, JsonElement> {
+            if (job.spec.run == null && !job.readOwn) return emptyMap()
+            val said = if (lines > 0) job.said.takeLast(lines) else emptyList()
+            return mapOf("phone" to JsonObject(linkedMapOf(
+                "kind" to JsonPrimitive(job.spec.kind),
+                "done_line" to (job.spec.doneLine?.let(::JsonPrimitive) ?: JsonNull),
+                "said" to JsonArray(said.map { JsonPrimitive(cut(it, lineChars)) }),
+            )))
+        }
 
         private fun step(step: Step, lines: Int, lineChars: Int): JsonObject {
             val output = if (lines > 0) step.output.takeLast(lines) else emptyList()
@@ -301,8 +319,9 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
 
         /**
          * A request from its line (history.py's _job), as the queue holds it: its [JobSpec] made of what the line
-         * keeps (its kind JobCommands.kindOf's: the line keeps none), never a run of its own. [IllegalArgumentException]
-         * for one that isn't one.
+         * keeps (its kind the line's `phone` one, else JobCommands.kindOf's), never a run of its own.
+         * [IllegalArgumentException] for one that isn't one; a `phone` that isn't one is left be, as history.py
+         * leaves it.
          */
         fun jobOf(record: JsonObject): Job {
             val state = str(record.required("state"))
@@ -318,7 +337,7 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
             val startedAt = maybe(record["started_at"])?.let(::time)
             val finishedAt = maybe(record["finished_at"])?.let(::time)
             val stages = list(record.opt("stages", JsonArray(emptyList()))).map(::stageOf)
-            val songId = maybe(record["song_id"])?.let { int(it).toLong() }
+            val songId = maybe(record["song_id"])?.let(::long)
             val songDisplay = maybe(record["song_display"])?.let(::str)
             val files = dict(record.opt("files", JsonObject(emptyMap()))).mapValues { str(it.value) }
             val seconds = maybe(record["seconds_to_sheet"])?.let(::number)
@@ -329,10 +348,11 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
                 JobUnit(str(parts[0]), str(parts[1]), str(parts[2]))
             }
             val commands = steps.map { it.command }
+            val phone = runCatching { phoneOf(record["phone"]) }.getOrNull()
             val spec = JobSpec(title = title, key = key,
-                               kind = JobCommands.kindOf(key, commands.map { it.args }, stages.map { it.name }),
+                               kind = phone?.kind ?: JobCommands.kindOf(key, commands.map { it.args }, stages.map { it.name }),
                                stages = emptyList(), display = display, songId = songId, commands = commands,
-                               fetching = fetching, note = note)
+                               fetching = fetching, note = note, doneLine = phone?.doneLine)
             return Job(id, spec, queuedAt).also { job ->
                 job.state = state
                 job.startedAt = startedAt
@@ -346,7 +366,17 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
                 job.together = together
                 job.units = units
                 job.named = display
+                job.said = phone?.said ?: emptyList()
+                job.readOwn = phone != null
             }
+        }
+
+        private class Phone(val kind: String, val doneLine: String?, val said: List<String>)
+
+        private fun phoneOf(value: JsonElement?): Phone? {
+            val record = value as? JsonObject ?: return null
+            return Phone(str(record.required("kind")), maybe(record["done_line"])?.let(::str),
+                         list(record.opt("said", JsonArray(emptyList()))).map(::str))
         }
 
         private fun stepOf(value: JsonElement): Step {
@@ -382,23 +412,38 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
 
         private val WHOLE = Regex("-?(0|[1-9][0-9]*)")
 
-        /** A whole number, never true or false, nor one JSON writes as a float. */
-        private fun int(value: JsonElement): Int {
+        /** The text of a whole number as PyJson.loads gives a Python int (never true or false, nor a float). */
+        private fun whole(value: JsonElement): String {
             val primitive = value as? JsonPrimitive
             if (primitive == null || primitive.isString || primitive is JsonNull || !WHOLE.matches(primitive.content)) {
                 throw Bad("not a whole number: $value")
             }
-            return primitive.content.toIntOrNull() ?: throw Bad("too large: $value")
+            return primitive.content
         }
 
+        /** A whole number that is an Int (an id, a code, a count): one past its range can't be the phone's. */
+        private fun int(value: JsonElement): Int = whole(value).toIntOrNull() ?: throw Bad("too large: $value")
+
+        /** A whole number that is a Long (a song's id). */
+        private fun long(value: JsonElement): Long = whole(value).toLongOrNull() ?: throw Bad("too large: $value")
+
+        /** A Python int or float as `float(value)`: a literal of PyJson.loads (an int's digits, a float's repr, NaN,
+         * Infinity), never true or false. */
         private fun number(value: JsonElement): Double {
             val primitive = value as? JsonPrimitive
             if (primitive == null || primitive.isString || primitive is JsonNull ||
                 primitive.content == "true" || primitive.content == "false") {
                 throw Bad("not a number: $value")
             }
-            return primitive.content.toDoubleOrNull() ?: throw Bad("not a number: $value")
+            return when (primitive.content) {
+                "NaN" -> Double.NaN
+                "Infinity" -> Double.POSITIVE_INFINITY
+                "-Infinity" -> Double.NEGATIVE_INFINITY
+                else -> if (NUMBER.matches(primitive.content)) primitive.content.toDouble() else throw Bad("not a number: $value")
+            }
         }
+
+        private val NUMBER = Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][-+]?[0-9]+)?")
 
         private fun bool(value: JsonElement): Boolean {
             val primitive = value as? JsonPrimitive
@@ -487,118 +532,256 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
 
         private fun pad(n: Int, width: Int): String = n.toString().padStart(width, '0')
 
-        /** `datetime.fromisoformat` of a text (a naive time is UTC, as stamps.py's): the date (`YYYY-MM-DD` or
-         * `YYYYMMDD`), then, after any one character, the time (`HH[:MM[:SS[.f…]]]` or `HHMM[SS[.f…]]`, a fraction's
-         * digits past six cut, `24:00:00` the next day's start) and its offset (`Z`, `±HH[:MM[:SS[.ffffff]]]`,
-         * `±HHMM[SS]`). ISO weeks are not read. */
+        /** history.py's `_time`: `datetime.fromisoformat` of a text ([parseIso]), a naive time UTC (stamps.py's). */
         fun time(value: JsonElement): Instant = parseIso(str(value))
 
-        internal fun parseIso(text: String): Instant {
-            val p = IsoReader(text)
-            val date = p.date()
-            if (p.done()) return LocalDateTime.of(date, java.time.LocalTime.MIDNIGHT).toInstant(ZoneOffset.UTC)
-            p.skipOne()
-            val (seconds, nanos) = p.clock()
-            val offset = p.offset()
-            if (!p.done()) throw Bad("not an ISO time: $text")
-            val local = date.atStartOfDay().plusSeconds(seconds).plusNanos(nanos.toLong())
-            return local.toInstant(ZoneOffset.UTC).minusNanos(offset)
-        }
+        /**
+         * `datetime.fromisoformat(text)` as CPython 3.14's C implementation reads it (Modules/_datetimemodule.c's
+         * datetime_fromisoformat, step for step, over the text's UTF-8 bytes, a read past their end a NUL as the C
+         * string's), a naive time taken as UTC; [IllegalArgumentException] where it raises ValueError. Its quirks are
+         * Python's: a date `YYYY-MM-DD`, `YYYYMMDD` or an ISO week (`2026-W45-1`, `2026W451`, `2026-W45`); any one
+         * character before the time; `HH[:MM[:SS[.f…]]]` or `HHMM[SS[f…]]`, a fraction's digits past six cut;
+         * `24:00` the next day's start; any one character between the time and an offset (`09:30:00 +01:00`); an
+         * offset `Z` or `±HH[:MM[:SS[.f…]]]` (`±HHMM…`), its parts unchecked but its whole within a day either way.
+         * vectors/web/history.jsonl's `_time` records hold it to Python's answers.
+         */
+        internal fun parseIso(text: String): Instant = FromIsoformat(text).read()
 
-        private class IsoReader(val text: String) {
-            var i = 0
-            fun done() = i >= text.length
-            fun skipOne() { i += Character.charCount(text.codePointAt(i)) }
+        /** CPython 3.14's datetime_fromisoformat over [text], its functions by their C names. */
+        private class FromIsoformat(val text: String) {
+            private lateinit var b: ByteArray
 
-            private fun digits(n: Int): Int {
-                if (i + n > text.length) throw Bad("not an ISO time: $text")
+            private fun bad(): Nothing = throw Bad("Invalid isoformat string: $text")
+
+            /** The byte at [i], NUL past the end (the C string's terminator). */
+            private fun at(i: Int): Int = if (i in b.indices) b[i].toInt() and 0xff else 0
+
+            private fun isDigit(c: Int): Boolean = c in '0'.code..'9'.code
+
+            /** parse_digits: [n] digits from [p] into a number, or null where one isn't a digit. */
+            private fun digits(p: Int, n: Int): Int? {
                 var v = 0
                 for (k in 0 until n) {
-                    val c = text[i + k]
-                    if (c !in '0'..'9') throw Bad("not an ISO time: $text")
-                    v = v * 10 + (c - '0')
+                    val c = at(p + k)
+                    if (!isDigit(c)) return null
+                    v = v * 10 + (c - '0'.code)
                 }
-                i += n
                 return v
             }
 
-            private fun at(c: Char) = i < text.length && text[i] == c
+            // datetime_fromisoformat ---------------------------------------------------------------------------
 
-            fun date(): LocalDate {
-                val year = digits(4)
-                val extended = at('-')
-                if (extended) i++
-                val month = digits(2)
-                if (extended) { if (!at('-')) throw Bad("not an ISO date: $text"); i++ }
-                val day = digits(2)
-                return try {
-                    LocalDate.of(year, month, day)
-                } catch (e: java.time.DateTimeException) {
-                    throw Bad("not a date: $text")
+            fun read(): Instant {
+                val points = text.codePoints().toArray()
+                if (points.size < 7) bad()  // _sanitize_isoformat_str: "at least 7 characters long"
+                for (pos in intArrayOf(7, 8, 10)) {  // a surrogate separator is read as T
+                    if (pos > points.size) break
+                    if (pos < points.size && points[pos] in 0xD800..0xDFFF) {
+                        points[pos] = 'T'.code
+                        break
+                    }
                 }
-            }
-
-            private fun isTimeEnd() = done() || text[i] == '+' || text[i] == '-' || text[i] == 'Z'
-
-            /** Seconds into the day, and nanoseconds. */
-            fun clock(): Pair<Long, Int> {
-                val hour = digits(2)
-                var minute = 0
-                var second = 0
-                var nanos = 0
-                var extended: Boolean? = null
-                if (!isTimeEnd()) {
-                    extended = at(':')
-                    if (extended) i++
-                    minute = digits(2)
-                    if (!isTimeEnd()) {
-                        if (extended) { if (!at(':')) throw Bad("not an ISO time: $text"); i++ }
-                        second = digits(2)
-                        if (!isTimeEnd()) {
-                            if (!at('.') && !at(',')) throw Bad("not an ISO time: $text")
-                            i++
-                            val start = i
-                            while (i < text.length && text[i] in '0'..'9') i++
-                            if (i == start) throw Bad("not an ISO time: $text")
-                            val fraction = text.substring(start, i).take(6).padEnd(6, '0')
-                            nanos = fraction.toInt() * 1000
+                if (points.any { it in 0xD800..0xDFFF }) bad()  // PyUnicode_AsUTF8AndSize's UnicodeEncodeError
+                b = String(points, 0, points.size).toByteArray(Charsets.UTF_8)
+                val len = b.size
+                val separator = separator(len)
+                if (separator < 0) bad()  // YYYY-Www- (9): no date reads
+                val date = IntArray(3)
+                var rv = date(separator, date)
+                val time = IntArray(4)
+                val tz = LongArray(2)
+                if (rv == 0 && len > separator) {
+                    var p = separator
+                    val lead = at(p)
+                    p += if (lead and 0x80 == 0) 1 else when (lead and 0xf0) {
+                        0xe0 -> 3
+                        0xf0 -> 4
+                        else -> 2
+                    }
+                    rv = time(p, len - p, time, tz)
+                }
+                if (rv < 0) bad()
+                // tzinfo_from_isoformat_results: an offset strictly within a day either way (new_timezone)
+                val offsetMicros = if (rv == 1) tz[0] * 1_000_000L + tz[1] else null
+                if (offsetMicros != null && (offsetMicros <= -DAY_MICROS || offsetMicros >= DAY_MICROS)) bad()
+                var (year, month, day) = date
+                var (hour, minute, second, micro) = time
+                if (hour == 24 && month in 1..12) {
+                    val inMonth = daysInMonth(year, month)
+                    if (day <= inMonth) {
+                        if (minute != 0 || second != 0 || micro != 0) {
+                            throw Bad("minute, second, and microsecond must be 0 when hour is 24")
+                        }
+                        hour = 0
+                        day += 1
+                        if (day > inMonth) {
+                            day = 1
+                            month += 1
+                            if (month > 12) {
+                                month = 1
+                                year += 1
+                            }
                         }
                     }
                 }
-                if (hour == 24) {
-                    if (minute != 0 || second != 0 || nanos != 0) throw Bad("not an ISO time: $text")
-                    return 86_400L to 0
-                }
-                if (hour > 23 || minute > 59 || second > 59) throw Bad("not an ISO time: $text")
-                return (hour * 3600L + minute * 60L + second) to nanos
+                // new_datetime: check_date_args, check_time_args
+                if (year !in 1..9999 || month !in 1..12 || day < 1 || day > daysInMonth(year, month)) bad()
+                if (hour !in 0..23 || minute !in 0..59 || second !in 0..59 || micro !in 0..999_999) bad()
+                val local = LocalDateTime.of(year, month, day, hour, minute, second, micro * 1000)
+                return local.toInstant(ZoneOffset.UTC).minusNanos((offsetMicros ?: 0L) * 1000L)
             }
 
-            /** The offset, in nanoseconds east of UTC (0 for none and for Z). */
-            fun offset(): Long {
-                if (done()) return 0
-                if (at('Z')) { i++; return 0 }
-                val sign = if (at('-')) -1 else 1
-                i++
-                val hours = digits(2)
-                var minutes = 0
-                var seconds = 0
-                var micros = 0
-                if (!done()) {
-                    val extended = at(':')
-                    if (extended) i++
-                    minutes = digits(2)
-                    if (!done()) {
-                        if (extended) { if (!at(':')) throw Bad("not an offset: $text"); i++ }
-                        seconds = digits(2)
-                        if (!done()) {
-                            if (!at('.')) throw Bad("not an offset: $text")
-                            i++
-                            micros = digits(6)
+            private fun daysInMonth(year: Int, month: Int): Int = when (month) {
+                2 -> if (isLeap(year)) 29 else 28
+                4, 6, 9, 11 -> 30
+                else -> 31
+            }
+
+            private fun isLeap(year: Int): Boolean = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+
+            /** _find_isoformat_datetime_separator: where the date ends, by its characters 4, 5, 8 and 10. */
+            private fun separator(len: Int): Int {
+                if (len == 7) return 7
+                if (at(4) == '-'.code) {
+                    if (at(5) == 'W'.code) {
+                        if (len < 8) return -1
+                        if (len > 8 && at(8) == '-'.code) {
+                            if (len == 9) return -1
+                            if (len > 10 && isDigit(at(10))) return 8
+                            return 10
                         }
+                        return 8
                     }
+                    return 10
                 }
-                if (hours > 23 || minutes > 59 || seconds > 59) throw Bad("not an offset: $text")
-                return sign * ((hours * 3600L + minutes * 60L + seconds) * 1_000_000_000L + micros * 1000L)
+                if (at(4) == 'W'.code) {
+                    var idx = 7
+                    while (idx < len) {
+                        if (!isDigit(at(idx))) break
+                        idx++
+                    }
+                    if (idx < 9) return idx
+                    return if (idx % 2 == 0) 7 else 8
+                }
+                return 8
+            }
+
+            /** parse_isoformat_date: 0, its year, month and day in [out]; or a negative code. */
+            private fun date(len: Int, out: IntArray): Int {
+                var p = 0
+                out[0] = digits(p, 4) ?: return -1
+                p += 4
+                val usesSeparator = at(p) == '-'.code
+                if (usesSeparator) p++
+                if (at(p) == 'W'.code) {
+                    p++
+                    val week = digits(p, 2) ?: return -3
+                    p += 2
+                    val weekDay: Int
+                    if (p < len) {
+                        if (usesSeparator && at(p++) != '-'.code) return -2
+                        weekDay = digits(p, 1) ?: return -4
+                    } else {
+                        weekDay = 1
+                    }
+                    val rv = isoToYmd(out[0], week, weekDay, out)
+                    return if (rv != 0) -3 + rv else 0
+                }
+                out[1] = digits(p, 2) ?: return -1
+                p += 2
+                if (usesSeparator && at(p++) != '-'.code) return -2
+                out[2] = digits(p, 2) ?: return -1
+                return 0
+            }
+
+            /** iso_to_ymd: an ISO year, week and weekday as a date in [out]; 0, or a negative code. */
+            private fun isoToYmd(isoYear: Int, week: Int, weekDay: Int, out: IntArray): Int {
+                if (isoYear < 1 || isoYear > 9999) return -4
+                if (week <= 0 || week >= 53) {
+                    var outOfRange = true
+                    if (week == 53) {
+                        val first = LocalDate.of(isoYear, 1, 1).dayOfWeek.value - 1  // Monday 0
+                        if (first == 3 || (first == 2 && isLeap(isoYear))) outOfRange = false
+                    }
+                    if (outOfRange) return -2
+                }
+                if (weekDay <= 0 || weekDay >= 8) return -3
+                val january1 = LocalDate.of(isoYear, 1, 1)
+                val first = january1.dayOfWeek.value - 1
+                var monday = -first.toLong()  // iso_week1_monday, from January 1st
+                if (first > 3) monday += 7
+                val date = january1.plusDays(monday + (week - 1) * 7L + weekDay - 1)
+                out[0] = date.year
+                out[1] = date.monthValue
+                out[2] = date.dayOfMonth
+                return 0
+            }
+
+            /** parse_hh_mm_ss_ff over [start, end): 0 at the string's end, 1 before something else, or a negative
+             * code; hour, minute, second and microsecond in [out]. */
+            private fun hhMmSsFf(start: Int, end: Int, out: IntArray): Int {
+                out.fill(0)
+                var p = start
+                var hasSeparator = true
+                var i = 0
+                while (i < 3) {
+                    out[i] = digits(p, 2) ?: return -3
+                    p += 2
+                    val c = at(p)
+                    p++
+                    if (i == 0) hasSeparator = c == ':'.code
+                    if (c == '.'.code || c == ','.code) {
+                        if (i < 2) return -3  // a decimal mark on the hour or the minute
+                        if (p >= end) return -3  // no digit after it
+                        break
+                    } else if (p >= end) {
+                        return if (c != 0) 1 else 0
+                    } else if (hasSeparator && c == ':'.code) {
+                        if (i == 2) return -4
+                    } else if (!hasSeparator) {
+                        p--
+                    } else {
+                        return -4
+                    }
+                    i++
+                }
+                val toParse = minOf(end - p, 6)
+                var micro = digits(p, toParse) ?: return -3
+                p += toParse
+                if (toParse < 6) micro *= CORRECTION[toParse - 1]
+                out[3] = micro
+                while (isDigit(at(p))) p++  // the digits past six cut
+                return if (at(p) != 0) 1 else 0
+            }
+
+            /** parse_isoformat_time over [len] bytes from [start]: 0 (no offset), 1 (an offset in [tz]: seconds,
+             * microseconds), or a negative code; the time in [out]. */
+            private fun time(start: Int, len: Int, out: IntArray, tz: LongArray): Int {
+                val end = start + len
+                var at = start
+                do {
+                    val c = at(at)
+                    if (c == 'Z'.code || c == '+'.code || c == '-'.code) break
+                } while (++at < end)
+                val rv = hhMmSsFf(start, at, out)
+                if (rv < 0) return rv
+                if (at == end) return if (rv == 1) -5 else 0
+                if (at(at) == 'Z'.code) {
+                    tz[0] = 0
+                    tz[1] = 0
+                    return if (at(at + 1) != 0) -5 else 1
+                }
+                val sign = if (at(at) == '-'.code) -1 else 1
+                val offset = IntArray(4)
+                val parsed = hhMmSsFf(at + 1, end, offset)
+                tz[0] = sign * (offset[0] * 3600L + offset[1] * 60L + offset[2])
+                tz[1] = sign * offset[3].toLong()
+                return if (parsed != 0) -5 else 1
+            }
+
+            companion object {
+                private val CORRECTION = intArrayOf(100000, 10000, 1000, 100, 10)
+                private const val DAY_MICROS = 86_400_000_000L
             }
         }
     }

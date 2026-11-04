@@ -1,5 +1,10 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.json.PyJson
+import kotlinx.serialization.json.JsonObject
+import java.math.BigDecimal
+import java.math.RoundingMode
+
 /** One of a job's commands: its step's [label] and its command line after `caracole` ([args]), as web/jobs.py's Step
  * spells it (JobCommands' builders). */
 data class Command(val label: String, val args: List<String>)
@@ -189,6 +194,18 @@ object JobCommands {
         return listOf(Command("Writing the answer to overrides.toml", listOf("review", "--song=$display") + answer))
     }
 
+    /** get.py's PROGRESS_PREFIX: a line of `caracole get --progress` (and the other commands' `--progress`). */
+    const val PROGRESS_PREFIX = "caracole-progress: "
+
+    /** get.py's progress_line: a progress event as a line a command with `--progress` prints, `json.dumps(event,
+     * ensure_ascii=False, separators=(",", ":"))` after [PROGRESS_PREFIX]. */
+    fun progressLine(event: JsonObject): String = PROGRESS_PREFIX + PyJson.dumps(event, compact = true)
+
+    /** `round(seconds, 3)`, Python's: the double's exact value rounded half to even at the third decimal, then the
+     * double nearest that (a NaN or an infinity as it is). */
+    fun round3(seconds: Double): Double =
+        if (!seconds.isFinite()) seconds else BigDecimal(seconds).setScale(3, RoundingMode.HALF_EVEN).toDouble()
+
     /** wanted.py's format_duration: `m:ss`, or `h:mm:ss` from an hour up, rounded to the nearest second. */
     fun formatDuration(durationMs: Long): String {
         val seconds = Math.floorDiv(durationMs + 500L, 1000L)
@@ -293,12 +310,14 @@ object JobCommands {
     }
 
     /**
-     * The kind (JobSpec.kind) of a job read back from the history, which keeps none (history.py's format 1): by its
-     * key, as jobs_routes.view tells them apart (a removal, an export, a songbook's change, a site's index read, a
-     * sync), else by its first command (`versions`, `review`); an add the phone ran itself (no command, an `add`
-     * stage) is "add"; any other a song's ("song").
+     * The kind (JobSpec.kind) of a job read back from the history, which keeps none (history.py's format 1) for a job
+     * of commands: by its key, as jobs_routes.view tells them apart (a removal, an export, a songbook's change, a
+     * site's index read, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], PhoneKinds': the
+     * render job's `render:`…), else by its first command (`versions`, `review`); an add the phone ran itself (no
+     * command, an `add` stage) is "add"; any other a song's ("song").
      */
-    fun kindOf(key: String, commands: List<List<String>>, stageNames: List<String>): String = when {
+    fun kindOf(key: String, commands: List<List<String>>, stageNames: List<String>,
+               phoneKinds: Collection<PhoneKinds.Kind> = PhoneKinds.ALL.values): String = when {
         key.startsWith(REMOVING) -> "remove"
         key.startsWith(EXPORTING) -> "export"
         key.startsWith(READING) -> "harmonica"
@@ -311,6 +330,7 @@ object JobCommands {
         key.startsWith(INDEX_MERGE) -> "index-merge"
         key.startsWith(SYNCING) -> "sync"
         key == "index" -> "index"
+        phoneKinds.any { key.startsWith(it.key) } -> phoneKinds.first { key.startsWith(it.key) }.kind
         commands.isEmpty() && "add" in stageNames -> "add"
         commands.firstOrNull()?.firstOrNull() == VERSIONS -> "versions"
         commands.firstOrNull()?.firstOrNull() == "review" -> "review"
