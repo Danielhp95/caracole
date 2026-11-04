@@ -1275,7 +1275,22 @@ Not built yet. (lookup.)
     against every fixture lyrics) and ug_sheet_versions*.jsonl (over a fixture library): `RankReplay`. They are
     a share of the `sites` area every site lane writes: a record only where it can answer otherwise than another
     (a policy by the fields that differ from `RankPolicy()`'s, which its first record gives).
-- The matcher (matcher): not built yet.
+- core.match's `Matcher`: match.py for a lookup's song (`matchAll`, `candidatesOf`; the ladder, `Ladder`; the index
+  as it reads it, `IndexView`), each answer Python's for the same index and overrides.
+  - Its scores are core.fuzz's: `ratio` and `extract`, `osaDistance` and `extractDistance` (rapidfuzz's OSA, the typo
+    route's: the nearest first, then by index), and `tokenSetRatio` (music.py's names); each rounded as
+    `round(score, 1)` (`Py.round`), each list sorted in code points, a range's bound U+10FFFF as one code point.
+  - `matchAll` writes as `_save` does, through `Versions` (`updateSong`, `markStale`, `refreshStatus`), the candidates
+    as json.dumps' text; an index not complete (no `ug:index:built_at`) records no miss and undoes nothing the ladder
+    found.
+  - `IndexView` loads the artist keys, the title keys and the catch-alls' songs whole only once a step reaches them: a
+    song steps 1 and 2 settle loads none (MatcherTest).
+  - The lookup's match stage (core/lookup/sites/Match.kt, `MatchStage`): the artist pages' backfill from the lookup's
+    cache alone, then `matchAll` over the song, get.py's words for what it came to.
+  - tests/test_conformance_match.py writes vectors/match/ (test_match.py's cases harvested, a seeded library, the
+    stage), tests/test_conformance_fuzz.py vectors/fuzz/osa*.jsonl and token_set.jsonl: `MatchReplay`.
+  - MatcherBench (`gradle bench`, 1.5 M rows on the JVM): a song its own artist's title settles in 6 ms, one that
+    reaches the title alone in about 0.9 s, what that loads 106 MiB of heap.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
