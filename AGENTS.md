@@ -1260,7 +1260,7 @@ Not built yet. (lookup.)
 
 ##### Site passes on the phone
 
-- Ultimate Guitar's pages (ug-pages) and its artist pages (ug-fetch-artist): not built yet.
+- Ultimate Guitar's pages (ug-pages): not built yet.
 - core.ug's `Rank`, `Coverage` and `SheetVersions`: rank.py, coverage.py and sheet_versions.py, Python's numbers and
   lists for the same inputs (versions.py's `complete` and `replaces_sheet` are `Rank`'s).
   - A score is Python's float arithmetic (`prior_mean` the builtin sum's, `Py.fsum`), a ranking a stable sort on
@@ -1286,14 +1286,30 @@ Not built yet. (lookup.)
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
     answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
-  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's, neutral until it lands (no request, no write; a
-    not-found song is NOT_IN_INDEX's).
+  - `ArtistPages`: the artist-page route (ug-fetch-artist's, below).
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
   beside it: …"), `_ug_ready`'s skips, and what asking came to in get.py's `asking` words (`UgStages.ended`), the song
   owed a fetch (`_owed`); the frame (lane lookup) asks LaCuerda after a sheet stage that kept none, and words it
   skipped. tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario
   records (`UgFetchReplay`, area `ug-fetch`).
+- UG's artist pages (ug-fetch-artist): a song the index can't place looked up on its artist's UG page, ug/fetch.py's
+  route, in internal/fetch/`ArtistPages` (`processSong` calls it, as `process_song` calls `_artist_page_route`):
+  - the page's address: `[artist_url]`, a tab page there read once for the page it links to (kv
+    `ug:pasted_tab:<tab>`, or what is wrong with it: `ArtistRoute.pastedPageProblem`), a learned one (kv
+    `ug:artist_url:<artist key>`), else `LEARN_TRIES` slugged tabs of the artist read for it;
+  - the chords list, then those its filter bar offers (the unfiltered page when a list answers 404, a 404 there a
+    page gone), `artistPagesPerKind` pages a kind, 30 days from the cache (a stale copy no answer: BudgetExhausted
+    once the budget is spent), every page stored for searches (`ArtistTabs.store`, `Reads.note`d for the computer);
+  - titles as `_best_title` takes them (`TITLE_MATCH` 90, `TITLE_MARGIN` 8), a `[reject]`ed song out first, the
+    match written with step `artist_page`; the lists of a song matched there, or of one whose index tabs hold no
+    chords, read as its versions; `ArtistRoute.artistIsKnown` what the UG stages ask first.
+- `versions --keep` and `--keep-more` (ug-fetch-artist): core/lookup/sites/`VersionsCommands`, versions_cmd.py's
+  `keep` and `keep_more` through a `CommandContext` and the song's `LibraryStore` (the `[block]`, gone and "the
+  sheet already" checks, `KeepRefused` its `fail`; `keepVersion`; `_stopped`'s words; `Health.recordOk` only after
+  a request; keep-more in `SheetVersions.mayKeep`'s rank order through one client, `noteUnkeepable`, "kept N of M"),
+  saying its `pdf` and `pages` stages where versions_cmd.py makes the song's pages, its last line returned.
+  tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_artist.jsonl and commands_versions.jsonl too.
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.

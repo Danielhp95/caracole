@@ -145,6 +145,50 @@ class VersionsCommandsTest {
                      VersionsCommands.keepMore(Said(db, FakeAsking(emptyMap())), library, song))
     }
 
+    /** An asking whose work came to [value], sending nothing. */
+    private class Gives(private val value: Any?) : Asking {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> =
+            Asked.Done(value as T)
+        override val requests: Map<String, Int> = emptyMap()
+    }
+
+    private fun stage(name: String, state: String, detail: String = "") =
+        """caracole-progress: {"stage":"$name","state":"$state","detail":"$detail"}"""
+
+    /** The stages after the version's: the song's pages made where versions_cmd.py makes them, which lane lookup's
+     * runner makes at their running events. */
+    private fun after(lines: List<String>): List<String> =
+        lines.dropWhile { !it.contains("\"stage\":\"version\"") || it.contains("\"running\"") }.drop(1)
+
+    @Test fun theSongsPagesAreMadeWhereVersionsCmdMakesThem() = withSong { db, library, song ->
+        val pdf = listOf(stage("pdf", "running"), stage("pdf", "done", "the version's page made"))
+        val pages = listOf(stage("pages", "running"), stage("pages", "done", "_todo.md and index.html rewritten"))
+        val kept = Said(db, Gives("kept"))
+        assertEquals("Kept tab 103 beside the sheet of Soda Stereo - Persiana Americana: " +
+                         File(library.folderOf(song), "version-103.txt").path,
+                     VersionsCommands.keep(kept, library, song, 103))
+        assertEquals(pdf + pages, after(kept.lines))
+        val gone = Said(db, Gives("gone"))
+        VersionsCommands.keep(gone, library, song, 103)
+        assertEquals(pages, after(gone.lines))
+        // a refusal past the song's stage makes none: the sheet already, a cooldown, what stopped it
+        for ((c, tab) in listOf(Said(db, Gives("kept")) to 101L, Said(db, Answers(Asked.Cooling(null))) to 103L,
+                                Said(db, Answers(Asked.Failed(ProviderError("ug", "https://x", 500)))) to 103L)) {
+            VersionsCommands.keep(c, library, song, tab)
+            assertEquals(emptyList<String>(), after(c.lines))
+        }
+        // keep-more: no version kept and none changed, its pages still made; stopped with nothing changed, none
+        val none = Said(db, Gives(Unit))
+        assertEquals("Kept no version of Soda Stereo - Persiana Americana; 1 more not kept: ask again.",
+                     VersionsCommands.keepMore(none, library, song))
+        assertTrue(none.lines.toString(), stage("version", "skipped", "kept 0 of 1") in none.lines)
+        assertEquals(pages, after(none.lines))
+        val blocked = Said(db, Answers(Asked.Blocked(ProviderBlocked("ug", "https://x", 403), ProviderState("ug"))))
+        VersionsCommands.keepMore(blocked, library, song)
+        assertEquals(emptyList<String>(), after(blocked.lines))
+    }
+
     @Test fun aKeptVersionsPathIsInTheSongsFolder() = withSong { _, library, song ->
         assertEquals(File(File(File(library.libraryDir, "Soda Stereo"), "Persiana Americana"), "version-103.txt"),
                      File(library.folderOf(song), "version-103.txt"))

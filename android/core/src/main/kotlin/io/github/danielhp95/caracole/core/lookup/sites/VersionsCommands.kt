@@ -21,7 +21,7 @@ import java.time.format.DateTimeFormatter
 
 /**
  * `caracole versions --keep` and `--keep-more` on the phone (versions_cmd.py's `keep` and `keep_more`), the song found
- * and its `song` stage begun by the runner (lane lookup's VersionsRunner), which makes its pages after:
+ * and its `song` stage begun by the runner (lane lookup's VersionsRunner), in the song's folder of [LibraryStore]:
  *
  * - [keep]: one of the song's UG chords versions kept beside its sheet now ([UgFetch.keepVersion]): one tab page at
  *   most, through the command's asking (the lookup pace and budget, a block cooling Ultimate Guitar down, an error
@@ -32,9 +32,12 @@ import java.time.format.DateTimeFormatter
  *   the very text of another kept file, noted so ([SheetVersions.noteUnkeepable]) and never read again.
  *
  * Each says versions_cmd.py's lines (`--progress`, as caracole serve queues them: get.py's `caracole-progress:` events
- * of its `song` and `version` stages, and its output lines) through [CommandContext.say], and returns its last line;
- * a good run is recorded (Health.recordOk) only after a request, as versions_cmd.py records it
- * (vectors/lookup/commands_versions.jsonl, tests/test_conformance_ug_fetch.py).
+ * of its `song`, `version`, `pdf` and `pages` stages, and its output lines) through [CommandContext.say], and returns
+ * its last line, which the runner says once it returns. The `pdf` and `pages` stages are where versions_cmd.py makes
+ * the song's pages (`render_all` once a version is kept, `write_pages` for any answer past the refusals; none for a
+ * keep-more stopped before anything changed): the runner makes them at their running events. No `Viewer:` line: the
+ * phone's viewer is a page it serves, no file to name. A good run is recorded (Health.recordOk) only after a request,
+ * as versions_cmd.py records it (vectors/lookup/commands_versions.jsonl, tests/test_conformance_ug_fetch.py).
  */
 object VersionsCommands {
     const val PROVIDER = "ug"
@@ -83,7 +86,10 @@ object VersionsCommands {
         }
         if ((c.asking.requests[PROVIDER] ?: 0) > 0) Health.recordOk(db, PROVIDER, c.now)
         val line = cameTo(c, library, song, tab.toString(), outcome)
-        return said(c, if (outcome in setOf("kept", "same", "sheet")) "done" else "skipped", line)
+        stage(c, "version", if (outcome in setOf("kept", "same", "sheet")) "done" else "skipped", line)
+        if (outcome == "kept") made(c, "pdf", "the version's page made")
+        made(c, "pages", PAGES_DONE)
+        return line
     }
 
     /** `keep_more`: the song's versions not kept yet kept in rank order, as many as one lookup may; its last line. */
@@ -98,11 +104,15 @@ object VersionsCommands {
                 "may keep is kept already, or can't be.")
         }
         var kept = 0  // kept: a file, or a kept one's text
+        var files = false  // a file written
+        var changed = false  // a count moved
         val asked = c.asking.ask(PROVIDER) { client ->
             val ctx = FetchContext(db, client, overrides, config.rank, library, c.now)
             for (v in todo) {
                 val outcome = UgFetch.keepVersion(ctx, song, v.tabId.toLong())
                 if (outcome in setOf("kept", "same")) kept += 1
+                files = files || outcome == "kept"
+                changed = changed || outcome in setOf("kept", "same", "no text", "held", "gone")
                 c.say(cameTo(c, library, song, v.tabId, outcome))
                 stage(c, "version", "running", "kept $kept of ${todo.size}")
             }
@@ -111,23 +121,32 @@ object VersionsCommands {
         val stopped = if (asked is Asked.Done) null else stopped(config, asked)
         val spent = asked is Asked.Spent
         if ((c.asking.requests[PROVIDER] ?: 0) > 0 && (stopped == null || spent)) Health.recordOk(db, PROVIDER, c.now)
-        if (stopped != null && kept == 0) {
+        val line = if (stopped != null && kept == 0) {
             val (state, why, again) = stopped
-            return said(c, state, nothingKept(why, again))
+            nothingKept(why, again).also { stage(c, "version", state, it) }
+        } else {
+            var counted = "kept $kept of ${todo.size}"
+            if (stopped != null && !spent) {  // a block or an error after some were kept: say it
+                counted += "; ${stopped.second}"
+                c.say("${stopped.second}.")
+            }
+            stage(c, "version", if (kept > 0) "done" else "skipped", counted)
+            val left = SheetVersions.mayKeep(db, song.id, SheetVersions.inLibrary(db, song.id, config.rank),
+                                             overrides.block).size
+            val again = if (stopped == null || stopped.third) ": ask again" else ""  // not after a block: it cools down
+            val versions = if (kept > 0) "$kept version" + (if (kept == 1) "" else "s") else "no version"
+            "Kept $versions of ${song.display}; " + (if (left > 0) "$left more not kept$again." else "none is left to keep.")
         }
-        var counted = "kept $kept of ${todo.size}"
-        if (stopped != null && !spent) {  // a block or an error after some were kept: say it
-            counted += "; ${stopped.second}"
-            c.say("${stopped.second}.")
-        }
-        stage(c, "version", if (kept > 0) "done" else "skipped", counted)
-        val left = SheetVersions.mayKeep(db, song.id, SheetVersions.inLibrary(db, song.id, config.rank), overrides.block).size
-        val again = if (stopped == null || stopped.third) ": ask again" else ""  // not after a block: it cools down
-        val versions = if (kept > 0) "$kept version" + (if (kept == 1) "" else "s") else "no version"
-        return "Kept $versions of ${song.display}; " + (if (left > 0) "$left more not kept$again." else "none is left to keep.")
+        if (stopped != null && !changed) return line  // nothing to write, as keep's refusals
+        if (files) made(c, "pdf", "the versions' pages made")
+        made(c, "pages", PAGES_DONE)
+        return line
     }
 
     private const val SHEET_PAGE = "sheet.html"
+
+    /** The pages stage's end, as versions_cmd.py words it once `write_pages` is done. */
+    private const val PAGES_DONE = "_todo.md and index.html rewritten"
 
     /** `_listed`: the song's version [tab], one UG still has; else why there is none ([KeepRefused]). */
     private fun listed(c: CommandContext, config: PhoneConfig, song: SongRow, tab: Long): SheetVersion {
@@ -150,6 +169,14 @@ object VersionsCommands {
     private fun said(c: CommandContext, state: String, line: String): String {
         stage(c, "version", state, line)
         return line
+    }
+
+    /** The `pdf` or `pages` stage [name] where versions_cmd.py makes the song's pages (`render_all`, `write_pages`):
+     * its running event, at which lane lookup's runner makes them (LookupJobs.CommandLines), then its end in
+     * versions_cmd.py's words [done], which the runner says in the phone's own. */
+    private fun made(c: CommandContext, name: String, done: String) {
+        stage(c, name, "running")
+        stage(c, name, "done", done)
     }
 
     private fun stage(c: CommandContext, name: String, state: String, detail: String = "") =

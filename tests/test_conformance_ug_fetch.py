@@ -38,9 +38,10 @@ sheet, so that ``sheet.json`` is UG's raw in UG's key order, its floats as ``rep
 - ``commands_versions.jsonl``: ``{fn: "caracole.versions_cmd", case, fixture, kw: {song, turns}, …}``: each turn
   (``{command: "keep", tab}`` or ``{command: "keep_more", tab: null}``) run in turn with ``progress`` on, as caracole
   serve queues them, through the record's client (each command's own count of requests, the cache, pace and events
-  shared), its pages standing still (``render_all``, ``write_pages``: the phone's runner makes them); ``out.result``
-  each turn's ``{"lines"}`` (``phone_lines``: what the phone's ``VersionsCommands`` says, the library's folder written
-  ``{library}``) or ``{"error"}``, a refusal's words (``_common.fail``).
+  shared), its pages standing still (``render_all``, ``write_pages``: the phone's runner makes them at the ``pdf`` and
+  ``pages`` stages' running events); ``out.result`` each turn's ``{"lines"}`` (``phone_lines``: what the phone's
+  ``VersionsCommands`` says, its last line last, the library's folder written ``{library}``) or ``{"error"}``, a
+  refusal's words (``_common.fail``).
 
 The overrides of a case (pins, ``[block]``, ``[lacuerda]``, ``[artist_url]``, ``[reject]``) are written to an
 overrides.toml with overrides.py's writers and read back by ``load_overrides``; the fixture carries them as the phone
@@ -1086,19 +1087,23 @@ PROGRESS = "caracole-progress: "
 
 
 def phone_lines(lines: list[str], library: Path) -> list[str]:
-    """The lines a keep prints that the phone's ``VersionsCommands`` says, in order: the runner (lane lookup's
-    VersionsRunner) says the song stage's start, makes the pages (``pdf``, ``pages``) and ends the command (``done``),
-    and the phone makes no viewer yet; the library's folder written ``{library}``."""
+    """The lines a keep prints that the phone's ``VersionsCommands`` says, in the phone's order: the runner (lane
+    lookup's VersionsRunner) says the song stage's start and ends the command (``done``), and says the command's last
+    line, which it returns, once it has returned, after the ``pdf`` and ``pages`` stages (at whose running events the
+    runner makes the pages); no ``Viewer:`` line, the phone's viewer a page it serves. The library's folder is written
+    ``{library}``."""
     out = []
     for line in lines:
         if line.startswith(PROGRESS):
             event = json.loads(line[len(PROGRESS):])
-            if "done" in event or event.get("stage") in ("pdf", "pages") or (
-                    event.get("stage") == "song" and event.get("state") == "running"):
+            if "done" in event or (event.get("stage") == "song" and event.get("state") == "running"):
                 continue
         elif line.startswith("Viewer: "):
             continue
         out.append(line.replace(str(library), "{library}"))
+    last = max((i for i, line in enumerate(out) if not line.startswith(PROGRESS)), default=None)
+    if last is not None:
+        out.append(out.pop(last))
     return out
 
 
@@ -1337,5 +1342,26 @@ def test_keep_and_keep_more_say_what_versions_cmd_says(made):
         for turn in (r.get("out") or r["after"])["result"]:
             for line in turn.get("lines", []):
                 event = json.loads(line[len(PROGRESS):]) if line.startswith(PROGRESS) else {}
-                assert event.get("stage") not in ("pdf", "pages") and "done" not in event, line
+                assert "done" not in event and (event.get("stage"), event.get("state")) != ("song", "running"), line
                 assert not line.startswith("Viewer: ")
+            assert not turn.get("lines", ["said"])[-1].startswith(PROGRESS)  # the last line, the runner's to say
+
+
+def _pages_made(turn: dict[str, Any]) -> list[str]:
+    """The stages of a turn whose running events have the phone's runner make the song's pages."""
+    events = [json.loads(line[len(PROGRESS):]) for line in turn.get("lines", []) if line.startswith(PROGRESS)]
+    return [e["stage"] for e in events if e.get("stage") in ("pdf", "pages") and e["state"] == "running"]
+
+
+def test_the_songs_pages_are_made_where_versions_cmd_makes_them(made):
+    records = {r["case"]: r for r in _records(made[VERSIONS_CMD])}
+    turns = records["keep's answers in turn: refused (gone, not listed, blocked), kept, the sheet, kept already, the "
+                    "same text, held, gone now, failed"]["out"]["result"]
+    # kept, the sheet, kept already, the same text, held, gone now, failed
+    assert [_pages_made(t) for t in turns[3:]] == [["pdf", "pages"], [], [], ["pages"], ["pages"], ["pages"], []]
+    more = records["keep-more until the lookup's budget is spent, then again with none left"]["out"]["result"]
+    assert [_pages_made(t) for t in more] == [["pdf", "pages"], []]
+    blocked = records["keep-more in rank order through one client: kept, the same text, held (noted), then a block"]
+    assert [_pages_made(t) for t in blocked["out"]["result"]] == [["pdf", "pages"]]
+    none = records["keep-more with nothing left to keep sends nothing"]["out"]["result"]
+    assert [_pages_made(t) for t in none] == [[]]
