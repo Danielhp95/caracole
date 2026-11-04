@@ -306,7 +306,8 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         val current = Songs.byId(db, song.id) ?: song
         found = current
         return try {
-            stage.run(StageContext(db, current, overrides, lookup.cfg, lookup.store, asking, now))
+            stage.run(StageContext(db, current, overrides, lookup.cfg, lookup.store, asking, now,
+                                  lookup.clients.cacheDir))
                 .let { if (nothing) it else done(it) }
         } catch (e: SharedFolder) {
             StageEnd("failed", LookupWords.sharedFolder(e))

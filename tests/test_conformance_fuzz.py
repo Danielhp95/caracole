@@ -6,19 +6,33 @@ android/core's ``core.fuzz.Fuzz`` gives exactly (FuzzTest.kt compares every doub
 - vectors/fuzz/partial_alignment.jsonl: ``rapidfuzz.fuzz.partial_ratio_alignment(a, b)``, its ``out`` an object of
   ``score``, ``src_start``, ``src_end``, ``dest_start`` and ``dest_end``;
 - vectors/fuzz/extract.jsonl: ``rapidfuzz.process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=c,
-  limit=n)``, its ``kw`` the cutoff and the limit, its ``out`` a ``[choice, score, index]`` a result.
+  limit=n)``, its ``kw`` the cutoff and the limit, its ``out`` a ``[choice, score, index]`` a result;
+- vectors/fuzz/osa.jsonl: ``rapidfuzz.distance.OSA.distance(a, b)``, and with a ``score_cutoff`` in its ``kw`` (a
+  distance past it is the cutoff plus one), which match.py's ``_typo_artists`` asks through process.extract;
+- vectors/fuzz/osa_extract.jsonl: ``rapidfuzz.process.extract(query, choices, scorer=OSA.distance, score_cutoff=d,
+  limit=None)``, a ``[choice, distance, index]`` a result, the nearest first, then by index;
+- vectors/fuzz/token_set.jsonl: ``rapidfuzz.fuzz.token_set_ratio(a, b)``, which music.py's ``Names.artist_score``
+  (the inbox's names) uses.
+
+The last three are lane matcher's (core.fuzz's ``osaDistance``, ``extractDistance`` and ``tokenSetRatio``, which
+MatchReplay checks).
 
 Each record's ``case`` says where its strings come from: ``short/<alphabet>`` and ``long/<alphabet>``, 3,000 seeded
 random pairs each (helpers/rapidfuzz_cpp.py ``random_pairs``: Latin, accented, CJK, supplementary characters, spaces
 of every kind, NBSP in strings CPython stores in one byte a character and in wider ones); ``search``, calls caracole's
 search tests made (search.py and lacuerda_index.py, recorded once and sampled); ``edge``, empty strings, block
 boundaries and the like; for extract, ``ties``, choices repeated and spelled close, at cutoffs 80 and 90, and
-``many``, more choices passing the cutoff than a limit of 20 or 3 keeps, a tie straddling the cut.
+``many``, more choices passing the cutoff than a limit of 20 or 3 keeps, a tie straddling the cut. OSA's add
+``swapped``, pairs a few adjacent letters swapped apart (the transposition OSA counts as one edit, never across
+another edit), and ``typo``, the misspelt artist names of tests/test_match.py against neighbours an edit or two away;
+token_set's ``words``, sentences of a few words drawn from one small vocabulary, shared, repeated and reordered, their
+spaces of every kind, and ``names``, artists as music.py writes them.
 """
 
 import random
 
 from rapidfuzz import fuzz, process
+from rapidfuzz.distance import OSA
 
 from helpers.corpus import VECTORS, check, jsonl
 from helpers.rapidfuzz_cpp import ALPHABETS, changed, random_pairs
@@ -336,3 +350,162 @@ def test_the_corpus_holds_what_the_kotlin_port_must_meet():
         assert any(passing(rec)[limit][1] == rec["out"][-1][1] for rec in cut), limit
     # Both kinds of string storage meet NBSP: the one-byte (no space) and the wider (a space).
     assert fuzz.token_sort_ratio("b\xa0a", "a b") != fuzz.token_sort_ratio("b\xa0aĀ", "a bĀ")
+
+
+# --- OSA and token_set_ratio (lane matcher) ---------------------------------------------------------------------
+
+OSA_PAIRS = 800  # short seeded pairs scored (and a fifth as many long ones), of the 3000 each above
+# match.py's typo route: names an edit or two from a neighbour (tests/test_match.py's), and the cases between.
+TYPOS = (
+    ("coldplya", "coldplay"), ("oaiss", "oasis"), ("metalicca", "metallica"), ("tolo", "tool"), ("tolo", "colo"),
+    ("tolo", "polo"), ("u3", "u2"), ("muse", "fuse"), ("ca", "abc"), ("abc", "ca"), ("abcd", "badc"),
+    ("abcdef", "badcfe"), ("ab", "ba"), ("abc", "acb"), ("abcdefgh", "abdcefhg"), ("redhotchilipeppers",
+    "redhotchillipeppers"), ("enanitosverde", "enanitosverdes"), ("songdongye", "sungdongye"), ("宋冬野", "冬宋野"),
+)
+TYPO_QUERIES = ("coldplya", "oaiss", "metalicca", "tolo", "beatels", "lynrd", "skynrd", "metalika", "radiohaed",
+                "abba", "a")
+TYPO_CHOICES = ("coldplay", "oasis", "metallica", "tool", "colo", "lolo", "molo", "polo", "solo", "beatles",
+                "beatle", "lynyrd", "skynyrd", "metalica", "radiohead", "abba", "baba", "abab", "a", "", "toll", "tolo")
+
+
+def swapped(rng, s, swaps):
+    chars = list(s)
+    for _ in range(swaps):
+        if len(chars) < 2:
+            break
+        at = rng.randrange(len(chars) - 1)
+        chars[at], chars[at + 1] = chars[at + 1], chars[at]
+    return "".join(chars)
+
+
+def osa_pairs():
+    """``(case, a, b)``: seeded pairs short and long (OSA's bit-parallel block from 64 characters), letters swapped,
+    the typo route's names, the edges."""
+    rng = random.Random(SEED + 3)
+    out = [(f"short/{name}", a, b) for name, a, b in random_pairs(rng, OSA_PAIRS)]
+    out += [(f"long/{name}", a, b) for name, a, b in random_pairs(rng, OSA_PAIRS // 5, long=True)]
+    names = sorted(ALPHABETS)
+    for _ in range(300):
+        alphabet = ALPHABETS[rng.choice(names)]
+        a = "".join(rng.choice(alphabet) for _ in range(rng.randint(2, 70)))
+        b = swapped(rng, a, rng.randint(1, 4))
+        if rng.random() < 0.4:
+            b = changed(rng, b, alphabet, rng.randint(1, 2))
+        out.append(("swapped", a, b))
+    out += [("typo", a, b) for a, b in TYPOS] + [("typo", b, a) for a, b in TYPOS]
+    return out + edges()
+
+
+def osa_records():
+    records = []
+    for case, a, b in osa_pairs():
+        records.append({"fn": "rapidfuzz.distance.OSA.distance", "args": [a, b], "out": OSA.distance(a, b),
+                        "case": case})
+        if case in ("typo", "edge") or (case == "swapped" and len(a) < 20) or (case.startswith("short/")
+                                                                              and len(records) % 4 == 1):
+            for cutoff in (1, 2):
+                records.append({"fn": "rapidfuzz.distance.OSA.distance", "args": [a, b],
+                                "kw": {"score_cutoff": cutoff}, "out": OSA.distance(a, b, score_cutoff=cutoff),
+                                "case": case})
+    return records
+
+
+def osa_extract_cases():
+    """``(case, query, choices)``: the typo route's names, then queries among choices an edit or few away."""
+    out = [("typo", q, list(TYPO_CHOICES)) for q in TYPO_QUERIES]
+    rng = random.Random(SEED + 4)
+    names = sorted(ALPHABETS)
+    for _ in range(120):
+        alphabet = ALPHABETS[rng.choice(names)].replace(" ", "") or "ab"
+        query = "".join(rng.choice(alphabet) for _ in range(rng.randint(3, 12)))
+        choices = []
+        for _ in range(rng.randint(0, 16)):
+            pick = rng.random()
+            if pick < 0.3:
+                choices.append(swapped(rng, query, rng.randint(1, 2)))
+            elif pick < 0.8:
+                choices.append(changed(rng, query, alphabet, rng.randint(0, 3)))
+            else:
+                choices.append("".join(rng.choice(alphabet) for _ in range(rng.randint(0, 12))))
+        choices += [rng.choice(choices) for _ in range(rng.randint(0, 3))] if choices else []  # ties
+        rng.shuffle(choices)
+        out.append(("near", query, choices))
+    return out
+
+
+def osa_extracts():
+    records = []
+    for case, query, choices in osa_extract_cases():
+        for cutoff in (1, 2):
+            got = process.extract(query, choices, scorer=OSA.distance, score_cutoff=cutoff, limit=None)
+            records.append({"fn": "rapidfuzz.process.extract", "args": [query, choices],
+                            "kw": {"limit": None, "score_cutoff": cutoff, "scorer": "rapidfuzz.distance.OSA.distance"},
+                            "out": [[choice, distance, index] for choice, distance, index in got], "case": case})
+    return records
+
+
+TOKEN_SET_PAIRS = 1200  # seeded short pairs scored, of the 3000 above
+NAMES = (
+    ("the beatles", "beatles the"), ("beatles", "the beatles"), ("simon garfunkel", "simon and garfunkel"),
+    ("soda stereo", "soda"), ("song dongye", "song dong ye"), ("crosby stills nash young", "crosby stills nash"),
+    ("bob marley the wailers", "bob marley and the wailers"), ("a b c", "a b"), ("fuzzy wuzzy was a bear",
+    "wuzzy fuzzy was a bear"), ("fuzzy was a bear", "fuzzy fuzzy was a bear"), ("x y", "z w"), ("a a a", "a"),
+    ("中国 人", "人 中国"), ("songdongye", "song dongye"),
+)
+
+
+def token_set_pairs():
+    """``(case, a, b)``: sentences of shared words, seeded short pairs, artists' names, the spaces and edges."""
+    rng = random.Random(SEED + 5)
+    out = []
+    names = sorted(ALPHABETS)
+    for _ in range(1000):
+        name = rng.choice(names)
+        alphabet = ALPHABETS[name]
+        letters = "".join(c for c in alphabet if not c.isspace()) or "ab"
+        spaces = "".join(c for c in alphabet if c.isspace()) or " "
+        vocabulary = ["".join(rng.choice(letters) for _ in range(rng.randint(1, 4))) for _ in range(rng.randint(2, 6))]
+
+        def sentence():
+            words = [rng.choice(vocabulary) for _ in range(rng.randint(0, 5))]
+            text = ""
+            for w in words:
+                text += "".join(rng.choice(spaces) for _ in range(rng.randint(1, 2))) + w
+            return text if rng.random() < 0.5 else text.lstrip()
+
+        out.append((f"words/{name}", sentence(), sentence()))
+    out += [(f"short/{name}", a, b) for name, a, b in random_pairs(rng, TOKEN_SET_PAIRS)]
+    out += [("names", a, b) for a, b in NAMES] + [("names", b, a) for a, b in NAMES]
+    out += [("edge", a, b) for a, b in SPACED]
+    return out + edges()
+
+
+def test_osa_jsonl():
+    write("osa", osa_records())
+
+
+def test_osa_extract_jsonl():
+    write("osa_extract", osa_extracts())
+
+
+def test_token_set_jsonl():
+    write("token_set", [{"fn": "rapidfuzz.fuzz.token_set_ratio", "args": [a, b], "out": fuzz.token_set_ratio(a, b),
+                          "case": case} for case, a, b in token_set_pairs()])
+
+
+def test_the_matchers_vectors_reach_every_rule_of_osa_and_token_set():
+    records = osa_records()
+    # A transposition is one edit; a swap and an edit beside it, OSA's restriction, more than Damerau's.
+    assert OSA.distance("ab", "ba") == 1 and OSA.distance("ca", "abc") == 3
+    assert any(r["case"] == "swapped" and r["out"] == 1 for r in records)
+    assert any(len(r["args"][0]) >= 64 and len(r["args"][1]) >= 64 for r in records)  # the block variant
+    cut = [r for r in records if "kw" in r]
+    assert any(r["out"] == r["kw"]["score_cutoff"] + 1 for r in cut)  # past the cutoff: the cutoff plus one
+    extracts = osa_extracts()
+    assert any(len({row[1] for row in r["out"]}) < len(r["out"]) for r in extracts)  # ties by index
+    assert any(r["out"] for r in extracts if r["kw"]["score_cutoff"] == 2)
+    pairs = token_set_pairs()
+    scores = {fuzz.token_set_ratio(a, b) for _, a, b in pairs}
+    assert {0.0, 100.0} <= scores and len(scores) > 100
+    # One sentence's words within the other's is 100; an empty one is 0.
+    assert fuzz.token_set_ratio("a b c", "a b") == 100 and fuzz.token_set_ratio("", "a") == 0
