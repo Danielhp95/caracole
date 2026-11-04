@@ -374,6 +374,7 @@ Below the table, a section for each step whose modules have more to say.
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
+| politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
@@ -933,8 +934,8 @@ It is rows.js's, shared by both pages:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
 - **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker and the form token (no wider than a page's, which any client that reaches the server reads,
-  for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
+  agreed on with the asker, the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
+  page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
@@ -1450,7 +1451,8 @@ picks one).
 - So two caracoles at one address may together send a site more than either one's limits; each keeps every rule
   here on its own, and the phone looks songs up at the lookup pace alone.
 - What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
-  user agent, the library's name: kv `phone:settings`), never its politeness.
+  user agent, the library's name: `GET /api/peer/state`'s `settings`, politeness.py `settings_document`, which the
+  phone keeps as kv `phone:settings`), never its politeness.
 
 #### Turning a provider off
 
