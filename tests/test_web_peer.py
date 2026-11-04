@@ -1,6 +1,7 @@
 """caracole serve's side of a sync (web/peer_routes.py): this library's units, a unit whole, a kept file, read alone;
 and a pull of another caracole's units, queued as ``caracole peer pull``."""
 
+import dataclasses
 import json
 
 from conftest import add_song
@@ -53,6 +54,20 @@ def test_the_state_lists_each_unit_with_this_sides_id_and_its_base_with_the_peer
     assert set(doc["units"]) == {f"song/{song.key}", "songbook/campfire"}
     assert doc["units"][f"song/{song.key}"]["label"] == "Radiohead - Creep"
     assert answer(app, "/api/peer/state?peer=phone")[1]["base"] == {f"song/{song.key}": ["d", NOW]}
+
+
+def test_the_state_gives_this_sides_settings_for_the_phone_and_a_reader_of_the_state_passes_over_them(cfg, conn):
+    """The settings a phone takes at a sync (politeness.settings_document): this caracole.toml's, a switch turned
+    off among them; a computer that syncs with this one reads the state as before (the sync's FORMAT is 2 still)."""
+    from caracole import politeness
+
+    cfg = dataclasses.replace(cfg, name="Canciones", providers={
+        **cfg.providers, "megalobiz": dataclasses.replace(cfg.provider("megalobiz"), enabled=False)})
+    status, doc = answer(an_app(cfg), "/api/peer/state")
+    assert status == 200 and doc["format"] == 2
+    assert doc["settings"] == politeness.settings_document(cfg)
+    assert doc["settings"]["name"] == "Canciones" and doc["settings"]["providers"]["megalobiz"]["enabled"] is False
+    assert sync.read_state_document(doc).name == "Canciones"
 
 
 def test_a_unit_is_answered_whole_with_the_digest_the_state_gives_it(cfg, conn):

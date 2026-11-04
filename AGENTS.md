@@ -1450,7 +1450,8 @@ picks one).
 - So two caracoles at one address may together send a site more than either one's limits; each keeps every rule
   here on its own, and the phone looks songs up at the lookup pace alone.
 - What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
-  user agent, the library's name: kv `phone:settings`), never its politeness.
+  user agent, the library's name: `GET /api/peer/state`'s `settings`, politeness.py `settings_document`, which the
+  phone keeps as kv `phone:settings`), never its politeness.
 
 #### Turning a provider off
 
