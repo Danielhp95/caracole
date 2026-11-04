@@ -1,7 +1,7 @@
 package io.github.danielhp95.caracole.core.sync
 
-import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -266,9 +266,9 @@ object Take {
     }
 
     /** The words a unit is left with: its error's message, SQLite's own for a refusal of the database's. */
-    private fun why(e: Exception): String {
+    internal fun why(e: Exception): String {
         val message = e.message ?: e::class.simpleName ?: "an error"
-        if (e is SQLiteException) return message.substringAfter("message: ", message)
+        if (e.isSqliteError()) return message.substringAfter("message: ", message)
         return message
     }
 
@@ -280,7 +280,7 @@ object Take {
      * whose low byte is the primary one); one that says none is taken for a failure.
      */
     internal fun databaseFailed(e: Exception): Boolean {
-        if (e !is SQLiteException) return false
+        if (!e.isSqliteError()) return false
         val code = RESULT_CODE.find(e.message ?: "")?.groupValues?.get(1)?.toIntOrNull() ?: return true
         return (code and 0xFF) != SQLITE_CONSTRAINT && (code and 0xFF) != SQLITE_MISMATCH
     }

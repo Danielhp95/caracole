@@ -1,9 +1,9 @@
 package io.github.danielhp95.caracole.core.index
 
-import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.Warmup
+import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import kotlinx.serialization.json.Json
@@ -66,7 +66,8 @@ object IndexTransfer {
         if (sameFile(export, mainFile(db))) throw TransferError("$export is the database itself")
         try {
             db.attach(export, Merge.THEIRS)
-        } catch (e: SQLiteException) {
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
             throw noExport(export, e)
         }
         try {
@@ -158,7 +159,8 @@ object IndexTransfer {
             db.query("SELECT key, value, typeof(value) FROM ${Merge.THEIRS}.$META") {
                 it.text(0)!! to (if (it.text(2) == "text") it.text(1) else null)
             }.toMap()
-        } catch (e: SQLiteException) {
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
             throw noExport(export, e)
         }
         if (meta["format"] != FORMAT) {
@@ -176,7 +178,7 @@ object IndexTransfer {
 
     private fun repr(value: String?): String = if (value == null) "None" else "'$value'"
 
-    private fun noExport(export: File, e: SQLiteException) =
+    private fun noExport(export: File, e: Exception) =
         TransferError("$export is no index export of caracole's (${e.message}): `caracole index export` makes one")
 
     /** _merged_sites: the sites the file holds (META's `sites`), and of them those asked for. */

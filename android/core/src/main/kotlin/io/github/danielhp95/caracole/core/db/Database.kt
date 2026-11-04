@@ -444,6 +444,21 @@ private class StatementRow(private val st: SQLiteStatement) : Row {
     override fun double(name: String): Double? = double(at(name))
 }
 
+/**
+ * Whether this is the bundled SQLite's own error, Python's `sqlite3.Error`: androidx.sqlite.SQLiteException on the
+ * JVM, which on Android is a typealias of android.database.SQLException. :core is built for the JVM, so a catch or an
+ * `is` of SQLiteException names a class the device hasn't got (the device's replays found it: the catch never matches
+ * there, and a check of it is a NoClassDefFoundError); this tells either by its class's name, its superclasses' too.
+ */
+fun Throwable.isSqliteError(): Boolean {
+    var c: Class<*>? = javaClass
+    while (c != null) {
+        if (c.name == "androidx.sqlite.SQLiteException" || c.name == "android.database.SQLException") return true
+        c = c.superclass
+    }
+    return false
+}
+
 /** What a WAL checkpoint did (PRAGMA wal_checkpoint's row): whether a reader or a writer kept it from finishing
  * ([busy]), the WAL's frames ([log]) and those copied back ([checkpointed]); -1 for no WAL. */
 data class Checkpointed(val busy: Boolean, val log: Long, val checkpointed: Long)
