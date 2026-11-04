@@ -10,9 +10,10 @@
   library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
   characters a JSON block must escape, one with no songs; each object's keys sorted, as the vector keeps them, so
   that its JSON block is the one a reader of the vector writes) and the server's controls (``controls``: the form
-  token, the badge, the Sync tab or not), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself
-  (``page``) for the smallest case. The page is ``library_page.assemble_page``'s served page with no Requests tab,
-  as the phone serves it until M4 brings the tab: ``__TABREQUESTS__`` and ``__REQUESTS__`` filled with nothing.
+  token, the badge, the Sync tab or not, and ``active``, how many requests wait or run, the data's
+  ``server.active``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself (``page``) for the
+  smallest case. The page is ``library_page.assemble_page``'s served page as it is, its Requests tab counting
+  ``active`` (data/caracole/page/requests.json, tests/test_conformance_requests.py, holds the tab and its panel).
   The vector also holds ``server``, the server's member of the page's data (``build_library_page``'s, for the phone's
   controls ``SERVER_CONTROLS``: no Guitar Pro page, no sheet from YouTube and YouTube off) that the phone's
   ``LibraryPage.withServer`` writes; and ``minimal_cards``: songs only the phone has (``song``: their rows, ``files``:
@@ -174,23 +175,21 @@ def data_objects() -> dict[str, dict[str, Any]]:
     return {"chinese": sorted_deep(chinese), "empty": sorted_deep(empty)}
 
 
-# The cases: a data object, and the controls the page is served with.
+# The cases: a data object, and the controls the page is served with (its requests counted as its data's server
+# member counts them: none in the empty one's, two in the other's).
 CASES = (
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": False}),  # the smallest: its page is in the vector whole
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": True}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": False}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": True}),
-    ("chinese", {"csrf": CSRF, "badge": None, "sync": True}),
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 0}),  # the smallest: its page is whole
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 0}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": True, "active": 2}),
 )
 
 
 def phone_page(data: dict[str, Any], controls: dict[str, Any]) -> str:
-    """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served), with no
-    Requests tab."""
-    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"])
-    with (mock.patch.object(library_page, "_requests_tab", lambda controls: ""),
-          mock.patch.object(library_page, "_requests_panel", lambda controls: "")):
-        return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
+    """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served)."""
+    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+    return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
 
 
 # Songs only the phone has (taken in a sync before the mirror came again, or added on the phone): their artist,
@@ -404,18 +403,18 @@ def test_cards_jsonl_is_library_pages_sort_keys_letters_initials_haystacks_and_f
     check(CARDS, jsonl(card_records(), corpus="web/cards", made_by=MADE_BY))
 
 
-def test_the_phones_page_is_caracole_serves_without_its_requests_tab():
-    # The one difference: the Requests tab and its panel (requests.js asks /requests.json, which the phone has not
-    # in M3). With them, the page is assemble_page's as caracole serve fills it in.
+def test_the_phones_page_has_the_requests_tab_counting_the_requests_that_wait_or_run():
+    # The Requests tab and its panel, once each, the tab's count the controls' (none for none), as the data's server
+    # member counts them.
     objects = data_objects()
     for name, controls in CASES:
-        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"])
-        computer = assemble_page(objects[name], served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
-        phone = phone_page(objects[name], controls)
+        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+        page = phone_page(objects[name], controls)
         tab, panel = library_page._requests_tab(served), library_page._requests_panel(served)
-        assert tab and panel and tab not in phone and panel not in phone
-        assert computer.count(tab) == computer.count(panel) == 1
-        assert computer.replace(tab, "", 1).replace(panel, "", 1) == phone
+        assert page.count(tab) == page.count(panel) == 1
+        assert f'Requests <span class="n">{controls["active"] or ""}</span>' in tab
+        assert objects[name]["server"]["active"] == controls["active"]
+    assert {controls["active"] for _, controls in CASES} == {0, 2}
 
 
 def test_the_vectors_data_reads_back_in_the_order_its_page_was_made_with(conn, cfg):
@@ -521,7 +520,7 @@ def test_the_phones_own_data_shapes_draw_with_no_script_error(conn, cfg, tmp_pat
     # library.js, card.js and songbooks.js read every field through listOf() and defaults; this shows it, on the
     # shapes no computer's page has.
     data = phone_shaped_data(conn, cfg)
-    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync})
+    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync, "active": 0})
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     html = html.replace(csp, csp.replace("script-src ", f"script-src {_sha(CATCH)} {_sha(PROBE)} "))
     html = html.replace("<head>", f"<head>\n<script>{CATCH}</script>", 1)
