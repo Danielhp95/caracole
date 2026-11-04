@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sync.client
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -9,6 +10,7 @@ import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.PeerClient
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.Side
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
@@ -27,6 +29,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
@@ -348,6 +351,173 @@ class SyncEngineTest {
         apply(engine.compare(computer.address.toString()))
         assertEquals(emptyList(), computer.indexAsked)
         assertEquals("skipped", ended()["index"])
+        assertEquals(SyncEngine.NOTHING_TO_INDEX, stages.last { it.first == "index" }.third)
+        assertEquals(emptyList(), computer.asked("POST", "/peer/index"), "no page read here: nothing sent")
+    }
+
+    // --- the index stage's push: the pages the phone's lookups read --------------------------------------------------
+
+    /** A harptabs.com artist page a lookup stored on the phone at [at], noted as its store notes it (Reads.note with
+     * the path harptabs_artists holds). */
+    private fun readHere(path: String, titles: List<String>, at: String) = phone.writeBlocking { db ->
+        db.execute("INSERT OR REPLACE INTO harptabs_artists (path, page_id, key, name, tabs, read_at) VALUES " +
+                       "(?, ?, ?, ?, ?, ?)", path, path.split('/')[1].toLong(), path.substringAfterLast('/'),
+                   path.substringAfterLast('/'), titles.size.toLong(), at)
+        titles.forEachIndexed { n, title ->
+            db.execute("INSERT OR REPLACE INTO harptabs_artist_tabs (artist, tab_id, path, title, song_key, place) " +
+                           "VALUES (?, ?, ?, ?, ?, ?)", path, 100L + n, "tab/${100 + n}/x", title, title.lowercase(),
+                       n.toLong())
+        }
+        Reads.note(db, "harptabs", path, at)
+    }
+
+    private fun computerTabs(): Map<String, Long> = computer.database.read { db ->
+        db.query("SELECT artist, COUNT(*) FROM harptabs_artist_tabs GROUP BY artist ORDER BY artist") {
+            it.text(0)!! to it.long(1)!!
+        }.toMap()
+    }
+
+    private fun noted(): Map<String, List<String>> = phone.read { Reads.since(it, computer.id) }
+
+    @Test fun `the pages read here are pushed though nothing is newer there, and forgotten once their merge is queued`() {
+        onComputer("Radiohead", "Creep")
+        readHere("artist/1178/billy-joel", listOf("Piano Man", "Honesty"), "2026-11-03T09:00:00Z")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        val outcome = apply(engine.compare(computer.address.toString()))
+
+        assertEquals(emptyList(), computer.indexAsked, "nothing newer there: no index fetched")
+        assertEquals(emptyList(), outcome.indexed)
+        assertEquals("done", ended()["index"])
+        val detail = stages.last { it.first == "index" }.third
+        assertTrue(detail.startsWith("sent 2 pages read here, none left to send: its request "), detail)
+        assertEquals(1, computer.indexPushes.size)
+        computer.awaitTakes()
+        assertEquals(mapOf("artist/1178/billy-joel" to 2L, "artist/50/the-beatles" to 1L), computerTabs())
+        assertEquals("done", computer.jobs().last()["state"].let { (it as JsonPrimitive).content })
+        assertEquals(emptyMap(), noted(), "forgotten once the computer queued their merge")
+        assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList(), "the export is gone")
+
+        // The next sync, with nothing read since, sends nothing; a page read since goes alone.
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("skipped", ended()["index"])
+        assertEquals(1, computer.indexPushes.size)
+        readHere("artist/7/bob-dylan", listOf("Blowin' in the Wind"), "2026-11-03T11:00:00Z")
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals(2, computer.indexPushes.size)
+        computer.awaitTakes()
+        assertEquals(mapOf("artist/1178/billy-joel" to 2L, "artist/50/the-beatles" to 1L, "artist/7/bob-dylan" to 1L),
+                     computerTabs())
+    }
+
+    @Test fun `the pages read here are pushed after a newer index there is merged`() {
+        onComputer("Radiohead", "Creep")
+        val export = tmp.newFile("export.sqlite").also { it.delete() }
+        io.github.danielhp95.caracole.core.testing.Fixtures.loadRaw(export, "index/fixtures/full-export.jsonl")
+        computer.index = { export.readBytes() }
+        computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        val outcome = apply(engine.compare(computer.address.toString()))
+
+        assertEquals(listOf("gtptabs"), outcome.indexed)
+        assertEquals("done", ended()["index"])
+        val detail = stages.last { it.first == "index" }.third
+        assertTrue(detail.startsWith("merged gtptabs; sent 1 page read here, none left to send: its request "), detail)
+        val asked = computer.requests.filter { it.startsWith("GET /api/peer/index") || it == "POST /peer/index" }
+        assertEquals(listOf("GET /api/peer/index?sites=gtptabs", "POST /peer/index"), asked,
+                     "the computer's index merged first, then the phone's pushed")
+        assertEquals(emptyMap(), noted())
+    }
+
+    @Test fun `a merge that fails there pushes the pages read here all the same`() {
+        onComputer("Radiohead", "Creep")
+        computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z")
+        computer.index = { "not an index export".toByteArray() }
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        val outcome = apply(engine.compare(computer.address.toString()))
+
+        assertEquals(emptyList(), outcome.indexed)
+        assertEquals("failed", ended()["index"], "the merge's failure is said")
+        val detail = stages.last { it.first == "index" }.third
+        assertTrue(";" in detail && "sent 1 page read here" in detail.substringAfter("; "), detail)
+        assertEquals(1, computer.indexPushes.size)
+        assertEquals(emptyMap(), noted())
+        assertEquals(1, outcome.agreed, "the agreement stays")
+    }
+
+    @Test fun `a push the computer refuses keeps the pages read here for the next sync, in its words`() {
+        onComputer("Radiohead", "Creep")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        computer.answers["POST /peer/index"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 409, FakeComputer.obj("error" to JsonPrimitive(
+                "The index export was exported at schema version 16, and this caracole's database is at 15.")))
+        }
+
+        val outcome = apply(engine.compare(computer.address.toString()))
+
+        assertEquals("failed", ended()["index"])
+        assertEquals("1 page read here kept for the next sync: The caracole at ${computer.address} answered 409: " +
+                         "The index export was exported at schema version 16, and this caracole's database is at 15.",
+                     stages.last { it.first == "index" }.third)
+        assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
+        assertEquals(1, outcome.agreed, "a push that fails stops nothing")
+        assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList())
+
+        // Taken the next time, as the two agree.
+        computer.answers.remove("POST /peer/index")
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"])
+        assertEquals(emptyMap(), noted())
+    }
+
+    @Test fun `a computer older than the push keeps the pages read here and says so`() {
+        onComputer("Radiohead", "Creep")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        computer.answers["POST /peer/index"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 404, FakeComputer.obj("error" to JsonPrimitive("Not found")))
+        }
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("1 page read here kept for the next sync: The caracole at ${computer.address} takes no index " +
+                         "pages: it may be older than the app.", stages.last { it.first == "index" }.third)
+        assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
+    }
+
+    @Test fun `pushIndex sends the export's bytes with the form token, and the computer's request is its answer`() {
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        val file = File(tmp.newFolder(), "reads.sqlite")
+        phone.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.index.IndexExport.export(db, file, Reads.since(db, "pc"), NOW)
+        }
+        val client = PeerClient(computer.address)
+
+        val job = client.pushIndex(computer.token, file)
+
+        assertTrue(job > 0)
+        assertTrue(computer.indexPushes.single().contentEquals(file.readBytes()))
+        assertEquals(listOf("POST /peer/index"), computer.asked("POST", "/peer/index"))
+
+        // A token older than the server (it restarted since): its state read again, and the push sent with its own.
+        computer.requests.clear()
+        val again = client.pushIndex("an-older-token", file)
+        assertTrue(again > job)
+        assertEquals(listOf("POST /peer/index", "GET /api/peer/state", "POST /peer/index"), computer.requests.toList())
+        assertEquals(2, computer.indexPushes.size)
+    }
+
+    @Test fun `an export past what the computer takes is never sent`() {
+        val file = File(tmp.newFolder(), "huge.sqlite")
+        RandomAccessFile(file, "rw").use { it.setLength(PeerClient.INDEX_MAX + 1) }
+        val refused = assertFailsWith<PeerError> { PeerClient(computer.address).pushIndex(computer.token, file) }
+        assertEquals("The pages read here make an index export of 65 MiB, and the computer takes 64 MiB at most: " +
+                         "they stay here.", refused.message)
+        assertEquals(emptyList(), computer.asked("POST", "/peer/index"))
     }
 
     @Test fun `the mirror is brought up to date after the give, and its failure stops nothing`() {

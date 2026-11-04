@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.pinyin
 
 import io.github.danielhp95.caracole.core.pinyin.Pinyin.Errors
+import io.github.danielhp95.caracole.core.pinyin.Pinyin.Style
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Record
 import kotlinx.serialization.json.JsonPrimitive
@@ -27,7 +28,7 @@ class PinyinTest {
     }
 
     @Test fun theVectorsAreOfThePypinyinThisPorts() {
-        for (name in listOf("pinyin/lazy.jsonl", "pinyin/heteronyms.jsonl")) {
+        for (name in listOf("pinyin/lazy.jsonl", "pinyin/tone.jsonl", "pinyin/heteronyms.jsonl")) {
             val versions = Corpus.header(name).getValue("versions").jsonObject
             // Pinyin.kt ports pypinyin 0.55.0's converter, core and seg: read the new version's before changing this.
             assertEquals(JsonPrimitive("0.55.0"), versions["pypinyin"], name)
@@ -48,6 +49,40 @@ class PinyinTest {
             val want = strings(record.out)
             if (got == want) null else "lazy_pinyin(${JsonPrimitive(text(record))}, $errors): $got, pypinyin $want"
         }
+    }
+
+    /** Style.TONE, as viewer/pinyin.py asks it: `lazy_tone(text, errors)`, errors "default" or "empty_each". */
+    @Test fun everyToneRecordReadsAsPypinyinReadsIt() {
+        val records = Corpus.records("pinyin/tone.jsonl")
+        assertTrue(records.size > 2000, "${records.size} records")
+        agree("pinyin/tone.jsonl", records) { record ->
+            assertEquals("test_conformance_pinyin.lazy_tone", record.fn)
+            val text = record.args[0].jsonPrimitive.content
+            val errors = when (val e = record.args[1].jsonPrimitive.content) {
+                "default" -> Errors.DEFAULT
+                "empty_each" -> Errors.EMPTY_EACH
+                else -> fail("errors=$e")
+            }
+            val got = Pinyin.lazyPinyin(text, errors, Style.TONE)
+            val want = strings(record.out)
+            if (got == want) null else "lazy_tone(${JsonPrimitive(text)}, $errors): $got, pypinyin $want"
+        }
+    }
+
+    @Test fun aReadingInToneStyleHasItsMarksAndNormalDropsThem() {
+        assertEquals(listOf("lǜ", "sè"), Pinyin.lazyPinyin("绿色", style = Style.TONE))
+        assertEquals(listOf("zhāo", "yáng"), Pinyin.lazyPinyin("朝阳", style = Style.TONE))
+        assertEquals(listOf("", "zhōng", ""), Pinyin.lazyPinyin("a中b", Errors.EMPTY_EACH, Style.TONE))
+        // A run of others is "" a code point (a supplementary one is one), and so is a Han character with no reading.
+        assertEquals(listOf("", "", "dōng", "yě", "", ""),
+                     Pinyin.lazyPinyin("😀 冬野 \u3402", Errors.EMPTY_EACH, Style.TONE))
+        assertEquals(listOf("", "zhong"), Pinyin.lazyPinyin("\u3402中", Errors.EMPTY_EACH))
+        assertEquals("lv", Pinyin.normal("lǜ"))
+        assertEquals("m", Pinyin.normal("m̄"))
+        assertEquals("ê", Pinyin.normal("ê̌"))
+        assertEquals("ê", Pinyin.normal("ế"))
+        assertEquals("nv", Pinyin.normal("nü"))
+        assertTrue(Pinyin.isPhrase("显著") && Pinyin.isPhrase("长城") && !Pinyin.isPhrase("长") && !Pinyin.isPhrase("著名的"))
     }
 
     /** A heteronyms record is no single call: its out is each code point's answer, as its note says. */

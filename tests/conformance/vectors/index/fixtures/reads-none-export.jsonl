@@ -1,0 +1,10 @@
+{"corpus":"index/fixtures/reads-none-export","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"sql":"CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"sql":"CREATE TABLE caracole_export (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"row":{"key":"format","value":"1"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"keys","value":"2"},"table":"caracole_export"}
+{"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
+{"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}
+{"row":{"key":"sites","value":"[]"},"table":"caracole_export"}
+{"row":{"key":"source","value":"/data/user/0/io.github.danielhp95.caracole/files/state/caracole.sqlite"},"table":"caracole_export"}

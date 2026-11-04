@@ -1254,7 +1254,18 @@ Not built yet. (job-views, requests-feed.)
     pentatonic boxes too) and winds.json (harmony's `_BASS_DEGREES` too: a chord's tones in harmony's order).
   - Every answer held by vectors/viewer/voicings, instruments, harp_* and winds (`ShapesReplay`, the `shapes` area),
     a page's objects in Python's order too (a kept answer's `sha256`).
-- Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
+- Pinyin with tones, OpenCC and hanzi (chinese):
+  - core.pinyin's data is pypinyin's in Style.TONE alone (data/caracole/pinyin/, `symbols.txt` its tone marks):
+    `Pinyin.lazyPinyin(text, errors, style)` (`DEFAULT`, `IGNORE`, `EMPTY_EACH`; `TONE`, `NORMAL`), NORMAL derived as
+    pypinyin's `to_normal` (`Pinyin.normal`), which M1's NORMAL vectors guard, vectors/pinyin/tone.jsonl the TONE.
+  - `viewer.chinese.OpenCC` is OpenCC's algorithm as hanzi.py runs `t2s`, `tw2s` and `s2tw` without tofu-risk
+    dictionaries: normalization, mmseg, the chain, groups by `short_circuit` and `union`, an IDS written whole, a
+    segment ending at a NUL. Its configs are the package's as shipped (data/caracole/hanzi/opencc.json, with
+    `opencc.__version__`, 1.4.0) and its dictionaries the package's opencc_dict dumps (`hanzi/<Name>.txt`): an OpenCC
+    bump regenerates them, and OpenCCTest names the version it ports.
+  - `Hanzi` and `ViewerPinyin` are hanzi.py's and pinyin.py's, in code points (pinyin.py's constants from
+    `viewer/pinyin.json`); hanzi.py's `chordpro` is the computer's PDFs' alone. tests/test_conformance_viewer_chinese.py
+    writes their data and vectors (viewer/opencc, hanzi, pinyin_page), each also read back from the data alone.
 - Harmony (harmony): `viewer.harmony.Harmony`, harmony.py's chord half: `numeral` (`Numeral.text`), `relation`,
   `family`, `explain` (the numeral's tooltip line), `glossary`, `chordTones`, `soloScale`, `keyScale`, `pentatonic`
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
@@ -2052,9 +2063,14 @@ picks one).
     then `INTERRUPTED`, as is one the server ends as it stops (`JobQueue.stop`): over, Try again queues it
     (test_web_history.py).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
-  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after), and a
+  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after); a
   temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
-  sent). Everything else stays a queued command's.
+  sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
+  (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
+  export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
+  `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
+  a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
+  `peer_push.sweep_indexes`). Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 
