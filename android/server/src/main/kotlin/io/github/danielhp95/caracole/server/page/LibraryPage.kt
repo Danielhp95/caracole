@@ -5,10 +5,13 @@ import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.PageIcon
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 /** library_page.WebControls on the phone: what its server adds to the page; its badge the one every page the phone
@@ -22,15 +25,15 @@ data class ServerControls(
 
 /**
  * The library page the phone serves: library_page.assemble_page's served branch, the templates of library_assets/
- * filled in, its one stylesheet and one script inlined ([LibraryAssets]), its data as its JSON block. A pure function
- * of its arguments and the assets, so the phone's page for some data is caracole serve's for the same data, byte for
- * byte (tests/conformance/vectors/web/library_page.json), less the Requests tab, which the phone has not until M4:
- * `__TABREQUESTS__` and `__REQUESTS__` are filled with nothing.
+ * filled in, its one stylesheet and one script inlined ([LibraryAssets]), its data as its JSON block, and its
+ * Requests tab and panel ([RequestsTab]), the tab counting the requests that wait or run ([ServerControls.active]). A
+ * pure function of its arguments and the assets, so the phone's page for some data is caracole serve's for the same
+ * data, byte for byte (tests/conformance/vectors/web/library_page.json).
  *
  * Each blank is replaced in assemble_page's order, every occurrence, in the text the replacements before it made, so
  * that what Python's chain of `str.replace` makes this makes too.
  */
-class LibraryPage(val assets: LibraryAssets) {
+class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = RequestsTab.load()) {
     /** The page's policy, its meta tag's: as caracole serve's page, which may ask its server how its requests go
      * (connect-src) and show a thumbnail it serves (img-src 'self'); forms post to the server alone. */
     val csp: String by lazy {
@@ -47,8 +50,10 @@ class LibraryPage(val assets: LibraryAssets) {
         return assets.template("head.html").replace("__CSP__", csp).replace("__ICON__", shown.icon())
             .replace("__STYLE__", assets.styles).replace("__TITLE__", PyText.escape(shown.title())) +
             assets.template("body.html").replace("__MARK__", PageIcon.mark).replace("__LIBRARY__", shown.markup("p"))
-                .replace("__TABSYNC__", if (sync) assets.template("sync-tab.html") else "").replace("__TABREQUESTS__", "")
-                .replace("__SYNC__", if (sync) assets.template("sync-panel.html") else "").replace("__REQUESTS__", "")
+                .replace("__TABSYNC__", if (sync) assets.template("sync-tab.html") else "")
+                .replace("__TABREQUESTS__", requests.tab(controls.active))
+                .replace("__SYNC__", if (sync) assets.template("sync-panel.html") else "")
+                .replace("__REQUESTS__", requests.panel)
                 .replace("__REQUEST__", requestForm(controls)).replace("__REQUESTED__", assets.template("requested.html")) +
             Inline.jsonBlock("songs", data) +
             "<script>${assets.scripts}</script>\n</body>\n</html>\n"
@@ -101,5 +106,31 @@ class LibraryPage(val assets: LibraryAssets) {
         /** Why the phone makes no sheet from a YouTube video, as youtube_fetch.route_reason says why a caracole makes
          * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
+    }
+}
+
+/**
+ * The Requests tab and its panel, as caracole serve's library page has them (library_page.py's `_requests_tab` and
+ * `_requests_panel`), from caracole's runtime data `caracole/page/requests.json`, which tests/test_conformance_requests.py
+ * exports from the two functions: the tab, its count left as [count]; the panel, which requests.js draws from
+ * `/requests.json`.
+ */
+class RequestsTab(val markup: String, val count: String, val panel: String) {
+    /** The masthead's last tab, counting [active] requests that wait or run (an empty count for none). */
+    fun tab(active: Int): String = markup.replace(count, if (active != 0) active.toString() else "")
+
+    companion object {
+        const val DATA = "caracole/page/requests.json"
+
+        private val loaded: RequestsTab by lazy {
+            val stream = RequestsTab::class.java.classLoader?.getResourceAsStream(DATA)
+                ?: throw IllegalStateException("$DATA isn't on the classpath")
+            val data = Json.parseToJsonElement(stream.use { it.readBytes().toString(Charsets.UTF_8) }).jsonObject
+            fun text(name: String) = data[name]?.jsonPrimitive?.content ?: throw IllegalStateException("$DATA has no $name")
+            RequestsTab(text("tab"), text("count"), text("panel"))
+        }
+
+        /** The tab and its panel on the classpath; IllegalStateException when they are missing. */
+        fun load(): RequestsTab = loaded
     }
 }
