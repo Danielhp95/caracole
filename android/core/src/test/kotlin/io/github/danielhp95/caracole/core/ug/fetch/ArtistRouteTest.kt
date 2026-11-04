@@ -20,9 +20,9 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * The artist-page route replays vectors/lookup/ug_artist.jsonl (a song the index can't place found on its artist's
- * page, learned or pasted; a pasted tab page that leads nowhere; the lists, their pages and the cache's 30 days; a
- * 404 and a page gone; titles and `[reject]`; a matched song with no chords in the index), and reads titles, keys and
- * a pasted page's problem as ug/fetch.py reads them.
+ * page, learned (LEARN_TRIES tabs at most) or pasted; a pasted tab page that leads nowhere; the lists, their pages and
+ * the cache's 30 days; a 404 and a page gone; titles and `[reject]`; a matched song with no chords in the index), and
+ * reads titles, keys and a pasted page's problem as ug/fetch.py reads them.
  */
 class ArtistRouteTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -36,8 +36,9 @@ class ArtistRouteTest {
 
     @Test fun theVectorHoldsEveryWayTheArtistsPageAnswers() {
         val cases = UgFetchReplay.records(UgFetchReplay.ARTIST).map { it.getValue("case").jsonPrimitive.content }
-        for (words in listOf("learned from another of their tabs", "pasted under [artist_url] read once",
-                             "answers 404 for", "robots.txt closes", "links no artist page", "won't parse",
+        for (words in listOf("learned from another of their tabs", "the fourth never read",
+                             "pasted under [artist_url] read once", "answers 404 for", "robots.txt closes",
+                             "links no artist page", "won't parse",
                              "straddling two pages", "cut short", "within 30 days", "past 30 days",
                              "the unfiltered page", "an artist page gone", "leading the next by 8",
                              "closer than 8", "you rejected", "doesn't list", "no chords in the index")) {

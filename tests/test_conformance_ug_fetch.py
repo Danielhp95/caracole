@@ -27,8 +27,8 @@ sheet, so that ``sheet.json`` is UG's raw in UG's key order, its floats as ``rep
 - ``ug_artist.jsonl``: ``process_song`` records as ``ug_sheet.jsonl``'s, of a song the index can't place (not found:
   "Soda Stereo - Té Para Tres", whose tabs UG lists by bare ids) looked up on its artist's page
   (``www.ultimate-guitar.com/artist/soda_stereo_2946``): the page learned from a slugged tab of another of their songs
-  or pasted under ``[artist_url]`` (a tab page read once, kv ``ug:pasted_tab:<tab>``, and what it leads to when it
-  leads nowhere), the chords list then the lists its filter bar offers, read until the title's entries end and
+  (``LEARN_TRIES`` at most) or pasted under ``[artist_url]`` (a tab page read once, kv ``ug:pasted_tab:<tab>``, and
+  what it leads to when it leads nowhere), the chords list then the lists its filter bar offers, read until the title's entries end and
   ``artist_pages_per_kind`` pages at most, 30 days from the cache (a stale copy no answer once the budget is spent),
   the unfiltered page when a list answers 404, a page gone; titles as ``_best_title`` takes them (``TITLE_MATCH``,
   ``TITLE_MARGIN``), ``[reject]``; and a matched song whose index tabs hold no chords. Each record also carries
@@ -865,10 +865,24 @@ def learned(tmp: Path) -> list[dict[str, Any]]:
             got(list_url("chords"), artist_list([BEFORE, *TEA_CHORDS, AFTER])),
             got(list_url("tabs"), artist_list([TEA_TAB])),
         ]) | tea_answers(501, 502, 601)
-        return [route(w, "a song the index can't place, found on its artist's page learned from another of their tabs",
+        made = [route(w, "a song the index can't place, found on its artist's page learned from another of their tabs",
                       [FIRST, REST], answers)]
     finally:
         w.close()
+    # Four slugged tabs of other songs of the artist: LEARN_TRIES of them read, oldest first, none teaching the page.
+    others = [(301, "cuando-pase-el-temblor", "Cuando Pase el Temblor"), (302, "de-musica-ligera", "De Música Ligera"),
+              (303, "nada-personal", "Nada Personal"), (304, "zoom", "Zoom")]
+    w = artist_world(tmp, "learn-tries", index=[(t, key, "chords") for t, key, _ in others])
+    try:
+        answers = dict([missing(slugged(301, song="cuando-pase-el-temblor"))] + [
+            got(slugged(t, song=key), bare_page(listed(t, title=title), sheet_markup(f"version {t}", LINES),
+                                                artist_url=None if t < 304 else SODA_URL))
+            for t, key, title in others[1:]])
+        made.append(route(w, "LEARN_TRIES slugged tabs at most: three teaching no artist page (one gone), the fourth "
+                             "never read; not found, checked", [REST], answers))
+    finally:
+        w.close()
+    return made
 
 
 def pasted(tmp: Path) -> list[dict[str, Any]]:
@@ -1302,6 +1316,18 @@ def test_a_song_found_on_its_artists_page_is_matched_there(made):
         assert (song["match_decision"], song["match_step"]) == ("accept", step), r["case"]
         assert r["out"]["kv"].get("ug:artist_page_checked:1") == STAMP, r["case"]
         assert r["noted"], r["case"]  # every list stored is noted for the computer
+
+
+def test_at_most_learn_tries_slugged_tabs_are_read_to_learn_the_artists_page(made):
+    from caracole.ug.fetch import LEARN_TRIES
+
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    tries = next(r for case, r in out.items() if case.startswith("LEARN_TRIES slugged tabs at most"))["out"]
+    assert len(tries["requests"]) == LEARN_TRIES == 3
+    assert not any(r.endswith("zoom-chords-304") for r in tries["requests"])
+    assert tries["kv"].get("ug:artist_page_checked:1") == STAMP
+    assert not any(k.startswith("ug:artist_url:") for k in tries["kv"])
+    assert "songs" not in tries["rows"]  # the song as it was: not found
 
 
 def test_a_pasted_tab_page_is_read_once_and_what_it_led_to_kept(made):
