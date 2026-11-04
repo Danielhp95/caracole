@@ -1,0 +1,9 @@
+{"corpus":"pace/run_id","header":true,"made_by":"tests/test_conformance_health.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["2026-11-03T12:00:00Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:2026-11-03T12:00:00Z"}
+{"args":["2026-11-03T12:00:00.999999Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:2026-11-03T12:00:00Z"}
+{"args":["2026-01-01T00:00:00Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:2026-01-01T00:00:00Z"}
+{"args":["2026-12-31T23:59:59.5Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:2026-12-31T23:59:59Z"}
+{"args":["1999-02-28T07:08:09Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:1999-02-28T07:08:09Z"}
+{"args":["9999-12-31T23:59:59.999999Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:9999-12-31T23:59:59Z"}
+{"args":["0001-01-01T00:00:00Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:0001-01-01T00:00:00Z"}
+{"args":["2028-02-29T12:34:56Z"],"fn":"caracole.commands._common.lookup_run_id","out":"lookup:2028-02-29T12:34:56Z"}
