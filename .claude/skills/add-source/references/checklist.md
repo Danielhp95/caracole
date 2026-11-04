@@ -49,7 +49,7 @@ Settle these with the owner where they change what caracole keeps or shows; sett
 
 ## 3. Settings, robots and politeness
 
-- `config.py`: `DEFAULT_PROVIDERS["<site>"] = ProviderPolicy(budget=…, delay=(10.0, 20.0))`, and `SWITCHABLE` if
+- `config.py`: `DEFAULT_PROVIDERS["<site>"] = ProviderPolicy(budget=…, delay=(2.5, 5.0))`, and `SWITCHABLE` if
   it may be turned off (every new source so far is). Comment why the budget is what it is.
 - `http.py`: the host's robots rules as caracole reads them (`_<SITE>` rules, `ROBOTS_DISALLOW` by host),
   `ROBOTS_CRAWL_DELAY` from its Crawl-delay. gametabs.net needed `$` at the end of a rule understood. The fixture

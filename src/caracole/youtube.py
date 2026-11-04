@@ -433,10 +433,10 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
 _BASE_ARGS = (
     "--ignore-config", "--no-plugin-dirs", "--no-cookies", "--no-cookies-from-browser",
     "--no-remote-components", "--no-playlist", "--no-progress", "--socket-timeout", "30",
-    "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0", "--sleep-requests", "2",
+    "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0", "--sleep-requests", "0.5",
 )
 _DOWNLOAD_ARGS = (
-    "--sleep-interval", "10", "--max-sleep-interval", "20", "-f", "bestaudio[ext=m4a]/bestaudio/best",
+    "--sleep-interval", "2.5", "--max-sleep-interval", "5", "-f", "bestaudio[ext=m4a]/bestaudio/best",
     "-x", "--audio-format", AUDIO_FORMAT, "--max-filesize", MAX_FILESIZE, "--no-mtime",
     "--print", "after_move:%(.{id,title,channel,uploader,duration,filepath})j",
 )

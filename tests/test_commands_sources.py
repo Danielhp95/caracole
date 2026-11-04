@@ -68,7 +68,7 @@ def songs(tmp_path):
 # --- caracole add -----------------------------------------------------------------------------
 
 # What add says after its line while the offline index is empty (match_lines).
-EMPTY_INDEX = ("The offline index is empty: run `caracole index build` once (about 10 minutes), and the song can "
+EMPTY_INDEX = ("The offline index is empty: run `caracole index build` once (about 4 minutes), and the song can "
                "be matched.\n")
 
 

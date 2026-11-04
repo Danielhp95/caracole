@@ -45,7 +45,7 @@ builds and photographs.
 ```sh
 nix shell github:Danielhp95/caracole     # Linux x86_64; other ways in docs/install.md
 caracole add "Oasis - Wonderwall"        # "Artist - Title", a line of ~/Tabs/wanted.txt
-caracole index build                     # once, about 10 minutes
+caracole index build                     # once, about 4 minutes
 caracole run                             # what the nightly run does, now
 caracole serve                           # your library at http://127.0.0.1:8737/
 ```
@@ -55,7 +55,7 @@ no sign-in, so share it only on a network you trust.
 
 ## Be a good guest
 
-caracole reads other people's websites gently: one request at a time, seconds apart, a small
+caracole reads other people's websites gently: one request at a time, a pause between two, a small
 budget a night, never a page a site's robots.txt closes ([how](docs/usage.md#caracole-run)).
 The exception is YouTube: the optional auto-chords add-on takes the audio of a few uncharted
 songs a night from it, against its robots.txt and terms. Turn that off with

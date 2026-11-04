@@ -1341,13 +1341,15 @@ picks one).
 - `caracole index build`: at least 100 (`BUILD_BUDGET`, commands/index.py); and `caracole harptabs --index` and
   `caracole gametabs --index` their `--budget`, `BUILD_BUDGET` by default.
 - Then `BudgetExhausted`.
-- Between any two requests to a provider, a random pause from its `delay`:
-  - 10–20 s for UG, LaCuerda, gtptabs.com, MuseScore and harptabs.com;
-  - 1–2 s for LRCLIB;
-  - 2–4 s for Megalobiz (2–3 s a lookup's: its API allows 30 a minute);
-  - 1 s for gametabs.net;
-  - none for `ytimg`: the owner's choice of 2026-10-29, a thumbnail comes right after its search, YouTube's 15–30 s
-    between yt-dlp runs and its last request never holding it back;
+- Between any two requests to a provider, a random pause from its `delay`, each a quarter of what it was before
+  2026-11-03, the owner's choice that day ("wait times divided by 4"; the budgets and limits are as they were):
+  - 2.5–5 s for UG, LaCuerda, gtptabs.com, MuseScore and harptabs.com;
+  - 0.25–0.5 s for LRCLIB;
+  - 0.5–1 s for Megalobiz (0.5–0.75 s a lookup's): its API allows 30 a minute, which caracole can now go past, by
+    the owner's choice (a 429 is a block, as at any site);
+  - 0.25 s for gametabs.net (its robots.txt's `Crawl-delay` asks 5 s: caracole waits less, by the owner's choice);
+  - none for `ytimg`: the owner's choice of 2026-10-29, a thumbnail comes right after its search, YouTube's
+    3.75–7.5 s between yt-dlp runs and its last request never holding it back;
   - none for `azlyrics`, the owner's choice of 2026-10-30, at either pace.
 - Everything else below binds both.
 
@@ -1370,7 +1372,8 @@ picks one).
     - and none of a query whose search failed within the hour, nor any once three did, kv `lacuerda:search-failed`:
       an answer caracole can't read is never asked again by every page that shows the query.
 - Its clients are `make_client(..., interactive=True)`:
-  - a random gap from `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider;
+  - a random gap from `lookup_delay` (default 0.125–0.375 s, the owner's quarter of 2026-11-03; `[0, 0]` allowed)
+    between two requests to a provider;
   - a budget of `lookup_requests` (6) requests to it for the song;
   - and at most `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`, counting
     the `events` of runs named `lookup:…`).
@@ -1387,7 +1390,9 @@ picks one).
   caracole sent (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk work's client
   paces its next one once its process let a lookup go first (`_LockedClient._after_a_lookup`).
 - The gap between two requests is the pace's alone: no robots.txt `Crawl-delay` adds to it (gametabs.net's asks 5 s;
-  the owner chose, on 2026-10-28, that caracole does not keep it).
+  the owner chose, on 2026-10-28, that caracole does not keep it), nor an API's own rate (Megalobiz's 30 a minute;
+  the owner chose, on 2026-11-03, the wait times divided by 4, quicker than that). The Sites tab says so of both
+  (sites.py `CRAWL_DELAY_ASKED`, `API_PACE_ASKED`).
 
 #### Turning a provider off
 
@@ -1476,8 +1481,9 @@ picks one).
   yt-dlp; the default package never runs it).
 - How it runs:
   - within the budget, one run at a time;
-  - a pause from `delay` (15–30 s) between two runs (`YtDlp._pause`, and `_common._pause_after_last_request` via
-    `make_youtube`), and yt-dlp's own pauses inside one (`--sleep-requests`, `--sleep-interval`);
+  - a pause from `delay` (3.75–7.5 s) between two runs (`YtDlp._pause`, and `_common._pause_after_last_request` via
+    `make_youtube`), and yt-dlp's own pauses inside one (`--sleep-requests 0.5`, `--sleep-interval 2.5` to
+    `--max-sleep-interval 5` before a download), each a quarter of what it was before 2026-11-03, the owner's choice;
   - `--retries 0`;
   - audio alone (`-x`), never a playlist, the song's name after `--`, arguments a list and never a shell;
   - no cookies, login, config files, plugins (PO-token providers among them) or remote code (`--ignore-config`,
@@ -1529,7 +1535,8 @@ picks one).
   them.
 - Its robots.txt allows tab and game pages and the sitemaps, closes `/api/`, `/tabs?*`, the pages behind a login
   (`/preparing-tab-file-download`, every attachment's download, among them) and more, and asks a `Crawl-delay` of
-  5 s, which caracole does not keep: its pace is one request a second (`config.DEFAULT_PROVIDERS`).
+  5 s, which caracole does not keep: its pace is four requests a second (`config.DEFAULT_PROVIDERS`, a quarter of a
+  second apart since the owner's choice of 2026-11-03), far quicker than it asks.
 - Provider `gametabs` (gametabs.py, gametabs_fetch.py, gametabs_index.py) keeps the text tab each tab page shows to
   anyone, never an attachment (Guitar Pro, MIDI, PDF: a login's), for the songs of wanted.txt and a lookup's song
   alone:

@@ -299,7 +299,7 @@ def fake(tmp_path):
     return FakeYtDlp(tmp_path / "bin")
 
 
-def runner(fake, tmp_path, *, budget=6, delay=(15.0, 30.0), events=None, clock=None, **kw):
+def runner(fake, tmp_path, *, budget=6, delay=(3.75, 7.5), events=None, clock=None, **kw):
     clock = clock or Clock()
     return YtDlp(fake.bin, ProviderPolicy(budget=budget, delay=delay), tmp_path / "cache",
                  on_event=events.append if events is not None else None, sleep=clock.sleep, clock=clock, **kw)
@@ -317,7 +317,7 @@ def test_a_search_runs_yt_dlp_flat_with_no_cookies_config_or_plugins(fake, tmp_p
         assert flag in argv, flag
     assert not any(a.startswith(("--cookies", "--username", "--password", "--netrc", "--extractor-args",
                                  "--proxy")) for a in argv if a != "--cookies-from-browser")
-    assert argv[argv.index("--sleep-requests") + 1] == "2"
+    assert argv[argv.index("--sleep-requests") + 1] == "0.5"
     assert argv[argv.index("--cache-dir") + 1] == str(tmp_path / "cache" / "yt-dlp")
     assert argv[argv.index("--retries") + 1] == "0"
 
@@ -342,8 +342,8 @@ def test_a_download_takes_the_audio_alone_as_m4a_into_the_folder_given(fake, tmp
     for flag in ("-x", "--no-playlist", "--no-mtime", "--ignore-config", "--no-cookies"):
         assert flag in argv, flag
     assert argv[argv.index("--audio-format") + 1] == "m4a"
-    assert argv[argv.index("--sleep-interval") + 1] == "10"
-    assert argv[argv.index("--max-sleep-interval") + 1] == "20"
+    assert argv[argv.index("--sleep-interval") + 1] == "2.5"
+    assert argv[argv.index("--max-sleep-interval") + 1] == "5"
     assert argv[argv.index("--max-filesize") + 1] == "100M"
 
 
@@ -406,13 +406,13 @@ def test_yt_dlp_gets_only_the_environment_a_program_needs(fake, tmp_path, monkey
 @pytest.mark.slow
 def test_runs_are_counted_against_the_budget_and_paced(fake, tmp_path):
     clock, events = Clock(), []
-    yt = runner(fake, tmp_path, budget=2, clock=clock, events=events, rng=FixedRng(20.0))
+    yt = runner(fake, tmp_path, budget=2, clock=clock, events=events, rng=FixedRng(5.0))
     yt.search("a")
     yt.search("b")
     with pytest.raises(BudgetExhausted):
         yt.search("c")
     assert yt.requests_made == 2 and len(fake.argvs()) == 2
-    assert clock.slept == [20.0]  # before the second run, not the first
+    assert clock.slept == [5.0]  # before the second run, not the first
     assert [e.decision for e in events] == ["ok", "ok", "budget"]
     assert events[0].provider == "youtube" and events[0].url == "ytsearch8:a"
 

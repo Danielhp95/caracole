@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
-_EMPTY_INDEX = "the offline index is empty: run `caracole index build` once (about 10 minutes)"
+_EMPTY_INDEX = "the offline index is empty: run `caracole index build` once (about 4 minutes)"
 
 
 def register(app: typer.Typer) -> None:

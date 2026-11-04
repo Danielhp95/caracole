@@ -74,7 +74,7 @@ def register(app: typer.Typer) -> None:
             help="Read sitemapN.xml[.gz] and sitemap_last.xml[.gz] from DIR instead (no requests).",
         ),
     ) -> None:
-        """Index every UG tab sitemap: about 42 requests, 10-20 s apart (about 10 minutes)."""
+        """Index every UG tab sitemap: about 42 requests, 2.5-5 s apart (about 4 minutes)."""
         _build(load_cfg(ctx, builds_index="index build"), from_dir)
 
     @index.command("refresh")

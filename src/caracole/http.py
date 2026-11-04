@@ -5,9 +5,9 @@ Rules this module enforces (plan §6, "Politeness"):
 - every raw response worth keeping (a 200 or 404 the caller accepts) is cached
   forever, and a cached URL never costs a request again;
 - a request budget, with a random pause before every network request, redirect
-  hops included. The policy sets the pace: bulk work's (10-20 s
-  between requests to UG, a run's budget) or an interactive lookup's (about a
-  second, a few requests for one song), which commands/_common.py picks;
+  hops included. The policy sets the pace: bulk work's (2.5-5 s
+  between requests to UG, a run's budget) or an interactive lookup's (a quarter
+  of a second, a few requests for one song), which commands/_common.py picks;
 - one request at a time;
 - a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested,
   nor followed to: ``RobotsClosed``, a ``ProviderError`` that is no failure of the

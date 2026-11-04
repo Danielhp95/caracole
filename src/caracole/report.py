@@ -193,7 +193,7 @@ def failure_line(failure: Failure, retry: str, songs: str) -> str:
 # --- the words for what the run itself sees --------------------------------------------------
 
 BUILD_INDEX = Action(
-    "build the index once: caracole index build (about 10 minutes)",
+    "build the index once: caracole index build (about 4 minutes)",
     "Until then, no song is matched or looked for on Ultimate Guitar.",
     rank=10,
 )

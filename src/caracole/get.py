@@ -2,7 +2,7 @@
 
 The nightly run fills the library in bulk; a lookup is the one song you want to
 play now, so it does the whole run's work for that song alone, in one process,
-sheet first, at the interactive pace (commands/_common.py): about a second
+sheet first, at the interactive pace (commands/_common.py): a quarter of a second
 between two requests to a site, a few requests per site, and an hourly budget.
 Its stages, in order, each reported as it starts and ends (``Progress``):
 

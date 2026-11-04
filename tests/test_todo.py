@@ -529,7 +529,7 @@ def test_provider_health_has_gtptabs_and_says_when_it_is_off(conn, cfg):
     from caracole.config import ProviderPolicy
 
     assert "| gtptabs | OK | never |  |  |" in todo(conn, cfg)
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     assert "| gtptabs | off ([providers.gtptabs] enabled = false) | never |  |  |" in todo(conn, off)
 
 
@@ -1185,7 +1185,7 @@ def test_musescore_turned_off_lists_nothing_and_says_so_in_provider_health(conn,
     musescore_index(conn, "song/wonderwall-680101")
     add_song(conn, "Oasis", "Wonderwall")
     assert "| musescore | OK | never |  |  |" in todo(conn, cfg)
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (2.5, 5.0), False)})
     text = todo(conn, off)
     assert SCORES not in text
     assert "| musescore | off ([providers.musescore] enabled = false) | never |  |  |" in text
@@ -1241,7 +1241,7 @@ def test_youtube_turned_off_keeps_the_buy_list_as_it_was(conn, cfg, tmp_path, mo
     from caracole.config import ProviderPolicy
 
     on, _ = route_on(cfg, tmp_path, monkeypatch)
-    off = dataclasses.replace(on, providers={**on.providers, "youtube": ProviderPolicy(6, (15.0, 30.0), False)})
+    off = dataclasses.replace(on, providers={**on.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)})
     buy_song(conn)
     text = todo(conn, off)
     assert "## Buy list (1)" in text and "YouTube only when" not in text

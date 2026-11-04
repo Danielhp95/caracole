@@ -1768,7 +1768,7 @@ def test_the_search_lists_harptabs_tabs_by_title_and_none_while_it_is_turned_off
     assert data["harptabs_artists"] == []
     [chip] = [s for s in data["looked"] if s["source"] == "harptabs"]
     assert (chip["state"], chip["label"]) == ("done", "harptabs.com ✓")  # no artist to read: its tabs, whole
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "harptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "harptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
     assert data["harptabs"] == [] and data["harptabs_artists"] == []
     [chip] = [s for s in data["looked"] if s["source"] == "harptabs"]
@@ -1962,7 +1962,7 @@ def test_an_artist_the_search_names_says_how_many_songs_gtptabs_com_lists_of_the
     assert ug["gtptabs"] == lc["gtptabs"] == 2
     assert as_json(get(app, "/api/artist?lacuerda=estopa"))["gtptabs"] == 2
     assert as_json(get(app, "/api/search?q=joaquin%20sabina"))["lacuerda_artists"][0]["gtptabs"] == 0
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     app_off = WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok")
     data = as_json(get(app_off, "/api/search?q=estopa"))
     assert data["artists"][0]["gtptabs"] == data["lacuerda_artists"][0]["gtptabs"] == 0
@@ -2018,8 +2018,8 @@ def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     assert "blocking caracole" in {s["source"]: s["why"] for s in as_json(
         get(app, "/api/search?q=creeps"))["skipped"]}["musescore"]
     off = dataclasses.replace(cfg, providers={**cfg.providers,
-                                              "gtptabs": ProviderPolicy(20, (10.0, 20.0), False),
-                                              "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+                                              "gtptabs": ProviderPolicy(20, (2.5, 5.0), False),
+                                              "musescore": ProviderPolicy(10, (2.5, 5.0), False)})
     site_pages(conn, gtptabs=["https://gtptabs.com/tabs/18/radiohead/creep.html"],
                musescore=["https://musescore.com/song/creep-1"])
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
@@ -2095,7 +2095,7 @@ def test_the_search_says_how_far_gametabs_nets_index_has_got_a_mark_of_its_own_l
     conn.commit()
     assert mark() == {"name": "gametabs.net", "state": "done", "label": "gametabs.net ✓",
                       "detail": "gametabs.net: caracole's copy of its index, searched whole."}
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (0.25, 0.25), False)})
     assert mark(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok")) == {
         "name": "gametabs.net", "state": "off", "label": "gametabs.net: off",
         "detail": "gametabs.net is turned off in caracole.toml."}
@@ -2120,7 +2120,7 @@ def test_the_search_gives_gametabs_nets_tracks_and_their_tabs_and_none_while_it_
     assert [(t["url"], t["views"]) for t in hit["tabs"]] == [(page, 692), (page + "-2", 430)]
     assert (hit["artist_key"], hit["title_key"]) == ("hollow-knight", "resting-grounds")
     assert hit["song"] == song.id  # yours: the lines merge on it
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (0.25, 0.25), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=resting+grounds"))
     assert data["gametabs"] == []
 

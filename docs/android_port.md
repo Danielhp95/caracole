@@ -145,7 +145,7 @@ What the port takes:
   HTML or JSON over HTTP, so nothing needs a browser or a native library.
 - **The politeness rules come whole, each with its tests:**
   - robots.txt honoured;
-  - the lookup pace, 0.5–1.5 s between requests;
+  - the lookup pace, 0.125–0.375 s between requests;
   - six requests to a site for one song, and 60 an hour for all lookups together;
   - one request at a time;
   - a block (403, 429, a challenge) as a cooldown with no retry;
@@ -159,10 +159,10 @@ What the port takes:
 
 What it is: caracole's local copies of each site's catalogue (sitemaps, artist listings, artist pages).
 
-Building them on the phone would work but is the wrong job for it. UG's sitemaps are about 40 requests (some ten
+Building them on the phone would work but is the wrong job for it. UG's sitemaps are about 40 requests (some four
 minutes at the bulk pace, 70 MB downloaded, about 1 GB of XML parsed). They make 1.4 million rows and a database of
-about 400 MB. The other sites take far longer: harptabs.com's 10,428 artist pages, at 10–20 s apart, are a day and a
-half of requests on their own. Building on both sides would also double what the sites see.
+about 400 MB. The other sites take far longer: harptabs.com's 10,428 artist pages, at 2.5–5 s apart, are some eleven
+hours of requests on their own. Building on both sides would also double what the sites see.
 
 So:
 

@@ -119,7 +119,7 @@ caracole runs as a NixOS service on the owner's laptop (`~/nix_config/nixos/cara
     ! sudo nixos-rebuild switch --flake ~/nix_config#lenovo
     ! sudo caracole-admin <site> --index --budget <N>
 
-Estimate the index's length (pages × the delay's mean: 1,700 pages at 15 s is about 7 hours). It holds caracole's
+Estimate the index's length (pages × the delay's mean: 1,700 pages at 3.75 s is about 1 h 45 min). It holds caracole's
 lock, so start it well before the nightly run (`systemctl list-timers caracole.timer`), or run it in steps with the
 default budget, each continuing where the last stopped. `sudo caracole-admin index stats` shows progress. Never run
 a dev `caracole serve` on 8737, which is the service's; use 8738 or higher.

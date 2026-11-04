@@ -22,10 +22,10 @@ def test_defaults(tmp_path):
     assert cfg.db_path == tmp_path / ".local/state/caracole/caracole.sqlite"
     assert cfg.user_agent == "caracole/0.1 (personal tab library)"
     assert cfg.chordpro_bin == "chordpro"
-    assert cfg.providers["ug"] == ProviderPolicy(budget=60, delay=(10.0, 20.0))
-    assert cfg.providers["lrclib"] == ProviderPolicy(budget=200, delay=(1.0, 2.0))
-    assert cfg.providers["lacuerda"] == ProviderPolicy(budget=30, delay=(10.0, 20.0))
-    assert cfg.providers["gametabs"] == ProviderPolicy(budget=20, delay=(1.0, 1.0))
+    assert cfg.providers["ug"] == ProviderPolicy(budget=60, delay=(2.5, 5.0))
+    assert cfg.providers["lrclib"] == ProviderPolicy(budget=200, delay=(0.25, 0.5))
+    assert cfg.providers["lacuerda"] == ProviderPolicy(budget=30, delay=(2.5, 5.0))
+    assert cfg.providers["gametabs"] == ProviderPolicy(budget=20, delay=(0.25, 0.25))
     assert cfg.match == MatchPolicy(accept=90, margin=8, review=75, artist_gate=90)
     assert cfg.rank == RankPolicy(
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
@@ -176,7 +176,7 @@ def test_settings_caracole_has_none_of_are_unknown_keys(tmp_path, toml, named):
 
 def test_gtptabs_downloads_are_on_by_default_with_a_small_budget(tmp_path):
     cfg = load_config(None, env={"HOME": str(tmp_path)})
-    assert cfg.provider("gtptabs") == ProviderPolicy(budget=20, delay=(10.0, 20.0), enabled=True)
+    assert cfg.provider("gtptabs") == ProviderPolicy(budget=20, delay=(2.5, 5.0), enabled=True)
 
 
 def test_gtptabs_can_be_turned_off_and_keeps_its_other_settings(tmp_path):
@@ -188,13 +188,13 @@ def test_gtptabs_can_be_turned_off_and_keeps_its_other_settings(tmp_path):
 def test_musescore_is_on_by_default_with_a_small_budget(tmp_path):
     # Its index is about 19 sitemaps: read over two nights, then refreshed monthly.
     cfg = load_config(None, env={"HOME": str(tmp_path)})
-    assert cfg.provider("musescore") == ProviderPolicy(budget=10, delay=(10.0, 20.0), enabled=True)
+    assert cfg.provider("musescore") == ProviderPolicy(budget=10, delay=(2.5, 5.0), enabled=True)
 
 
 def test_musescore_can_be_turned_off(tmp_path):
     p = write(tmp_path, "[providers.musescore]\nenabled = false\n")
     assert load_config(p, env={"HOME": str(tmp_path)}).provider("musescore") == ProviderPolicy(
-        budget=10, delay=(10.0, 20.0), enabled=False)
+        budget=10, delay=(2.5, 5.0), enabled=False)
 
 
 def test_only_gtptabs_and_musescore_can_be_turned_off(tmp_path):
@@ -215,13 +215,14 @@ def test_azlyrics_is_a_switchable_provider_with_no_pause_and_no_budget(tmp_path)
 
 
 def test_megalobiz_is_a_switchable_provider_under_its_apis_rate_limits(tmp_path):
-    # 30 requests a minute and 1,000 a day from one address: 2-4 s apart, 60 a run, and 900 a UTC day at most.
+    # 1,000 a day from one address: 900 a UTC day at most, and 60 a run. Its API asks 30 requests a minute at most,
+    # which 0.5-1 s apart (a lookup's 0.5-0.75 s) can pass: the owner's choice of 2026-11-03, wait times divided by 4.
     cfg = load_config(None, env={"HOME": str(tmp_path)})
-    assert cfg.provider("megalobiz") == ProviderPolicy(budget=60, delay=(2.0, 4.0), lookup_delay=(2.0, 3.0),
+    assert cfg.provider("megalobiz") == ProviderPolicy(budget=60, delay=(0.5, 1.0), lookup_delay=(0.5, 0.75),
                                                        per_day=900)
     p = write(tmp_path, "[providers.megalobiz]\nenabled = false\nbudget = 30\n")
     assert load_config(p, env={"HOME": str(tmp_path)}).provider("megalobiz") == ProviderPolicy(
-        budget=30, delay=(2.0, 4.0), enabled=False, lookup_delay=(2.0, 3.0), per_day=900)
+        budget=30, delay=(0.5, 1.0), enabled=False, lookup_delay=(0.5, 0.75), per_day=900)
 
 
 def test_gtptabs_enabled_must_be_true_or_false(tmp_path):
@@ -273,10 +274,10 @@ def test_youtube_is_a_switchable_provider_of_a_few_yt_dlp_runs_a_night(tmp_path)
     # A run is a search or a download: six are three songs. Its pauses are longer than a site's,
     # since each run sends several requests of its own (which yt-dlp's own pauses space out).
     cfg = load_config(None, env={"HOME": str(tmp_path)})
-    assert cfg.provider("youtube") == ProviderPolicy(budget=6, delay=(15.0, 30.0), enabled=True)
+    assert cfg.provider("youtube") == ProviderPolicy(budget=6, delay=(3.75, 7.5), enabled=True)
     p = write(tmp_path, "[providers.youtube]\nenabled = false\nbudget = 2\n")
     assert load_config(p, env={"HOME": str(tmp_path)}).provider("youtube") == ProviderPolicy(
-        budget=2, delay=(15.0, 30.0), enabled=False)
+        budget=2, delay=(3.75, 7.5), enabled=False)
 
 
 def test_ytdlp_bin_setting_and_env(tmp_path):
@@ -413,11 +414,11 @@ def test_settings_caracole_never_reads_are_unknown_keys(tmp_path, toml, named):
 
 
 def test_every_provider_has_an_interactive_pace_by_default(tmp_path):
-    # Bulk work keeps 10-20 s between requests; a lookup sends its few requests about a second apart.
+    # Bulk work keeps 2.5-5 s between requests; a lookup sends its few requests a quarter of a second apart.
     cfg = load_config(None, env={"HOME": str(tmp_path)})
     for name in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore"):
         policy = cfg.provider(name)
-        assert policy.lookup_delay == (0.5, 1.5), name
+        assert policy.lookup_delay == (0.125, 0.375), name
         assert policy.lookup_requests == 6, name
         assert policy.lookup_per_hour == 60, name
 
@@ -425,9 +426,33 @@ def test_every_provider_has_an_interactive_pace_by_default(tmp_path):
 def test_the_interactive_pace_is_set_per_provider(tmp_path):
     cfg = load(tmp_path, "[providers.ug]\nlookup_delay = [0, 0]\nlookup_requests = 10\nlookup_per_hour = 100\n")
     ug = cfg.provider("ug")
-    assert (ug.budget, ug.delay) == (60, (10.0, 20.0))  # the bulk pace is untouched
+    assert (ug.budget, ug.delay) == (60, (2.5, 5.0))  # the bulk pace is untouched
     assert (ug.lookup_delay, ug.lookup_requests, ug.lookup_per_hour) == ((0.0, 0.0), 10, 100)
     assert cfg.provider("lacuerda").lookup_requests == 6
+
+
+def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing_else_changed(tmp_path):
+    # The owner's choice of 2026-11-03, "reduce by a factor of 4 the wait times": each pause between two requests
+    # (bulk work's delay, a lookup's lookup_delay, the icons') is a quarter of what it was; the budgets, the hour's
+    # and the day's caps are as they were.
+    from caracole.commands.icons import ICON_POLICY
+    from caracole.config import NO_BUDGET
+
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    lookup, none = (0.125, 0.375), (0.0, 0.0)
+    assert {name: (p.delay, p.lookup_delay) for name, p in cfg.providers.items()} == {
+        "ug": ((2.5, 5.0), lookup), "lrclib": ((0.25, 0.5), lookup), "megalobiz": ((0.5, 1.0), (0.5, 0.75)),
+        "azlyrics": (none, none), "lacuerda": ((2.5, 5.0), lookup), "gtptabs": ((2.5, 5.0), lookup),
+        "musescore": ((2.5, 5.0), lookup), "harptabs": ((2.5, 5.0), lookup), "gametabs": ((0.25, 0.25), lookup),
+        "youtube": ((3.75, 7.5), lookup), "ytimg": (none, none),
+    }
+    assert {name: p.budget for name, p in cfg.providers.items()} == {
+        "ug": 60, "lrclib": 200, "megalobiz": 60, "azlyrics": NO_BUDGET, "lacuerda": 30, "gtptabs": 20,
+        "musescore": 10, "harptabs": 20, "gametabs": 20, "youtube": 6, "ytimg": 20,
+    }
+    assert {(p.lookup_requests, p.lookup_per_hour) for p in cfg.providers.values()} == {(6, 60)}
+    assert {name: p.per_day for name, p in cfg.providers.items() if p.per_day is not None} == {"megalobiz": 900}
+    assert (ICON_POLICY.budget, ICON_POLICY.delay) == (4, (2.5, 5.0))
 
 
 @pytest.mark.parametrize(

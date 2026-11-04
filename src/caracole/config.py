@@ -49,37 +49,40 @@ class ProviderPolicy:
     budget: int
     delay: tuple[float, float]
     enabled: bool = True  # only a provider in SWITCHABLE can be off
-    lookup_delay: tuple[float, float] = (0.5, 1.5)
+    lookup_delay: tuple[float, float] = (0.125, 0.375)
     lookup_requests: int = 6
     lookup_per_hour: int = 60
     per_day: int | None = None  # requests a UTC day, every run's and lookup's together; caracole.toml can't set it
 
 
+# The pauses are a quarter of what they were before 2026-11-03, the owner's choice that day ("reduce by a factor of 4
+# the wait times"); the budgets and limits are as they were.
 DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
-    "ug": ProviderPolicy(budget=60, delay=(10.0, 20.0)),
-    "lrclib": ProviderPolicy(budget=200, delay=(1.0, 2.0)),
+    "ug": ProviderPolicy(budget=60, delay=(2.5, 5.0)),
+    "lrclib": ProviderPolicy(budget=200, delay=(0.25, 0.5)),
     # Timed lyrics for the songs LRCLIB has none of, or none timed (megalobiz.py): a search and a record a song. Its
-    # API allows 30 requests a minute and 1,000 a day from one address: 2-4 s apart (a lookup's 2-3 s), and 900 a
-    # UTC day at most, every run's and lookup's together, which leaves its own count some slack.
-    "megalobiz": ProviderPolicy(budget=60, delay=(2.0, 4.0), lookup_delay=(2.0, 3.0), per_day=900),
+    # API allows 1,000 requests a day from one address: 900 a UTC day at most, every run's and lookup's together,
+    # which leaves its own count some slack. It allows 30 a minute too, which 0.5-1 s apart (a lookup's 0.5-0.75 s)
+    # can go past: the owner's choice of 2026-11-03 (a 429 is a block, as at any site).
+    "megalobiz": ProviderPolicy(budget=60, delay=(0.5, 1.0), lookup_delay=(0.5, 0.75), per_day=900),
     # Plain lyrics for the songs LRCLIB and Megalobiz left without (azlyrics.py): an artist's page and a song's, one
     # right after the other. No pause and no budget, the owner's choice of 2026-10-30: it is asked only about songs
     # with no lyrics, each at most once in 30 days, and a lookup keeps its own limits.
     "azlyrics": ProviderPolicy(budget=NO_BUDGET, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0)),
-    "lacuerda": ProviderPolicy(budget=30, delay=(10.0, 20.0)),
+    "lacuerda": ProviderPolicy(budget=30, delay=(2.5, 5.0)),
     # Guitar Pro files, downloaded for you: its robots.txt allows /tabs/download/ (gtptabs.py).
-    "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
+    "gtptabs": ProviderPolicy(budget=20, delay=(2.5, 5.0)),
     # Its song sitemaps, for the to-do page's links: nothing is downloaded (musescore.py).
-    "musescore": ProviderPolicy(budget=10, delay=(10.0, 20.0)),
+    "musescore": ProviderPolicy(budget=10, delay=(2.5, 5.0)),
     # Harmonica tabs, kept for your wanted songs alone (harptabs.py): its sitemap, then a song's candidate pages.
-    "harptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
+    "harptabs": ProviderPolicy(budget=20, delay=(2.5, 5.0)),
     # Text tabs of game music, kept for your wanted songs alone (gametabs.py): its sitemaps, a song's candidate pages,
-    # then its game pages, one request a second.
-    "gametabs": ProviderPolicy(budget=20, delay=(1.0, 1.0)),
+    # then its game pages, four requests a second.
+    "gametabs": ProviderPolicy(budget=20, delay=(0.25, 0.25)),
     # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
     # each a search or a download, so six are three songs a night. A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.
-    "youtube": ProviderPolicy(budget=6, delay=(15.0, 30.0)),
+    "youtube": ProviderPolicy(budget=6, delay=(3.75, 7.5)),
     # YouTube's image host, i.ytimg.com: the thumbnail of a video the library page suggests for a search, one image a
     # video, never asked twice (youtube_search.py). No pause, the owner's choice of 2026-10-29: a provider of its own,
     # so that YouTube's pause between yt-dlp runs never holds it back, and a block of either cools the other nothing.

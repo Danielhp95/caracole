@@ -138,7 +138,7 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
         (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.intOrNull?.toLong() } ?: 0L
 
     companion object {
-        const val UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes)."
+        const val UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 4 minutes)."
 
         /** `f"{n:,}"`: thousands by commas. */
         fun grouped(n: Long): String {

@@ -297,8 +297,8 @@ def test_a_lookup_waits_only_the_short_gap_between_two_requests(tmp_path, sites,
 
     look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
-    assert slept and max(slept) <= 1.5  # never the bulk 10-20 s
-    assert sum(slept) <= 1.5 * len(sites.requests)
+    assert slept and max(slept) <= 0.375  # never the bulk 2.5-5 s
+    assert sum(slept) <= 0.375 * len(sites.requests)
 
 
 # --- its own PDF -------------------------------------------------------------------------------------

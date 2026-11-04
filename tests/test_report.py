@@ -209,7 +209,7 @@ def test_the_most_pressing_action_leads_once_however_many_steps_wait_for_it():
                StepResult(title="Index refresh", actions=[BUILD_INDEX]),
                StepResult(title="Matching", actions=[BUILD_INDEX]))
     assert lines(r) == [
-        "First, build the index once: caracole index build (about 10 minutes).",
+        "First, build the index once: caracole index build (about 4 minutes).",
         "Until then, no song is matched or looked for on Ultimate Guitar.",
         "",
         "Songs: 1 in wanted.txt.",
@@ -273,7 +273,7 @@ def test_quiet_keeps_only_what_needs_you_and_the_problems():
                lyrics(Failure("lrclib", "A – B", "didn't answer (HTTP 503)"), done=["2 found"]),
                StepResult(todo=NeedsYou(3, PAGE)), requests={"lrclib": 2}, seconds=3)
     assert lines(r, quiet=True) == [
-        "First, build the index once: caracole index build (about 10 minutes).",
+        "First, build the index once: caracole index build (about 4 minutes).",
         "Until then, no song is matched or looked for on Ultimate Guitar.",
         "",
         "LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.",
@@ -299,7 +299,7 @@ def test_for_the_journal_each_line_carries_its_priority_and_blank_lines_go():
                StepResult(problems=[Problem("The match step failed: RuntimeError: boom.", logging.ERROR)]),
                requests={"lrclib": 2})
     assert summary_text(r, style=JOURNAL).splitlines() == [
-        "<4>First, build the index once: caracole index build (about 10 minutes).",
+        "<4>First, build the index once: caracole index build (about 4 minutes).",
         "<4>Until then, no song is matched or looked for on Ultimate Guitar.",
         "<6>Songs: 1 in wanted.txt.",
         "<3>The match step failed: RuntimeError: boom.",
