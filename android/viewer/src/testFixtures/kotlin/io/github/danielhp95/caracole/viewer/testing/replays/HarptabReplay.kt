@@ -167,13 +167,22 @@ object HarptabReplay : AreaReplay {
             misses.check(r.symbols().joinToString(" · ") { (t, w) -> "$t $w" } == r.said()) { "$what: said" }
         }
         for (pin in want.getValue("pins").jsonArray) {
-            val (spec, notation) = pin.jsonArray
+            val (spec, notation, wantRead) = pin.jsonArray
+            var pinned: Notation? = null
             val got = try {
-                HarpTabs.pinned(spec, body)?.let { notationRef(it, candidates) } ?: JsonNull
+                pinned = HarpTabs.pinned(spec, body)
+                pinned?.let { notationRef(it, candidates) } ?: JsonNull
             } catch (e: IllegalArgumentException) {
                 JsonObject(mapOf("message" to JsonPrimitive(e.message ?: "")))
             }
             same(misses, "$what: pinned($spec)", notation, got)
+            // the tab read as the pin says, as parse(notation=) reads it: "pinned", confident whatever its Q; whole
+            // or by its digest
+            val gotRead = pinned?.let { n ->
+                val (r, rScans) = HarpTabs.read(lines, prepared.chip, n, prepared.legends)
+                JsonArray(listOf(readingRow(r, candidates, whole = false), JsonPrimitive(short(JsonArray(rScans.map(::scanRow))))))
+            } ?: JsonNull
+            kept(misses, "$what: read as pinned($spec)", wantRead, gotRead)
         }
     }
 

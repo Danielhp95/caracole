@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.viewer.harptab
 
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyRegex
+import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import kotlinx.serialization.json.JsonElement
 
@@ -26,11 +28,21 @@ data class Notation(val name: String, val symbols: List<Symbol>, val bare: Strin
 
     internal fun key(text: String): String = if (fold) PyUnicode.casefold(text) else text
 
-    /** Notation.meaning: the symbol it reads [text] written [at] as, or null. */
+    /** Notation.meaning: the symbol it reads [text] written [at] as, or null: in either case where it [fold]s, by
+     * its key, else as its tokenizer's IGNORECASE reads it (an "ı" or an "İ" is an "i" there, which casefold keeps
+     * apart). */
     fun meaning(text: String, at: String): Symbol? {
         val key = key(text)
-        return symbols.firstOrNull { it.at == at && key(it.text) == key }
+        symbols.firstOrNull { it.at == at && key(it.text) == key }?.let { return it }
+        if (!fold) return null
+        val same = PyRegex.ignoreCase(text)
+        return symbols.firstOrNull { it.at == at && PyRegex.ignoreCase(it.text) == same }
     }
+
+    /** The symbol [text], a match of this notation's tokenizer written [at], is: [meaning]'s, which every match
+     * has. */
+    internal fun read(text: String, at: String): Symbol =
+        checkNotNull(meaning(text, at)) { "$name: its tokenizer matched ${PyStr.repr(text)} $at, which it means nothing by" }
 }
 
 /** A symbol a tab used, as written: `Scan.used`'s and [Reading.used]'s keys, `(text, means, at, count)`, a hole

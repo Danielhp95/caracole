@@ -36,7 +36,8 @@ ensure_ascii=False, separators=(",", ":"))`` (``short``). An answer that raised 
   line's scan in ``WHOLE_EVERY`` whole, the others by digest): ``LITERALS_FROM``'s one-line strings with a
   digit in them (each under every preset, and ``STAR_BENDS``), ``ODD_LINES`` drawn lines of every notation's marks,
   words, brackets, odd digits and spaces, a batch of ``BATCH``, and ``ODD_NOTATION_LINES`` of each of
-  ``ODD_NOTATIONS``' (notations made by hand, whose tokenizers sort, escape and fold what no preset has).
+  ``ODD_NOTATIONS``' (notations made by hand, whose tokenizers sort, escape and fold what no preset has), and
+  ``FOLD_LINES`` under ``FOLDED_I`` (a letter re.I reads where casefold doesn't: "ı" and "İ" an "i").
 - ``legend_of(lines)``: ``legend`` of a batch of lines: each tab's, and seeded blocks of a legend's shapes.
 - ``entry_of(items)``: ``[sym, meaning]`` → ``_entry``; ``meaning_of(texts)`` → ``_meaning``.
 - ``tab_of(body, harp)``: the whole reading of one tab: ``{"chip", "legends", "in_legend", "candidates": [[notation,
@@ -44,12 +45,14 @@ ensure_ascii=False, separators=(",", ":"))`` (``short``). An answer that raised 
   of every line, by digest], "read": the place of the candidate ``read`` keeps, "winner": its scans of the lines it
   scored (whole for ``WHOLE_TABS``, else by digest), "readings": ``readings(body, harp=)`` (the first's ``used``
   whole, the others' by digest; the first is ``read``'s), "pins": [[spec, the notation ``pinned`` reads, null, or its
-  error], …]}``. The tabs: tests/fixtures/harptabs/'s ``.txt`` tabs (``tabs/``,
+  error, and for a notation ``read(notation=)``'s ``[reading (its ``used`` by digest), its scans of every line by
+  digest]``, whole for ``WHOLE_TABS`` and ``FOLD_TABS``, else by its digest; null for none], …]}``.
+  The tabs: tests/fixtures/harptabs/'s ``.txt`` tabs (``tabs/``,
   ``legends/``, ``spellings/``, ``layout/``), the ``<pre>`` of its three tab pages as ``harptabs.parse_tab_page``
   reads it, with the page's chip, ``LITERALS_FROM``'s strings of more than one line, and ``GENERATED`` tabs drawn in
   every notation (``generated_tab``: a melody a Richter harp plays, now and then a note none does, written in the
   notation's own marks with chords, shakes, splits, holds, bars, repeats, labels, words, a legend whose marks its
-  holes carry, dots, the tabber's notes and seeded noise), some under a chip. A body names its fixture
+  holes carry, dots, the tabber's notes and seeded noise), some under a chip, and ``FOLD_TABS``. A body names its fixture
   (``{"fixture": …}``) or holds its text (``{"text": …}``).
 - ``check_spec_of(specs)``: each spec → null, or the error ``check_spec`` raises: ``SPECS`` and every ``spec_of``
   above.
@@ -321,6 +324,13 @@ ODD_NOTATIONS = (
                           Symbol("*", "bend", "after"), Symbol(" ", "mark", "after")), bare="draw"),
 )
 ODD_NOTATION_LINES = 40  # lines of each drawn for scan_of
+# A letter re.I reads as another that casefold keeps apart ("ı" and "İ" are an "i" to it, "K" a "k", "ſ" an "s"):
+# the symbol a notation that folds means by it is the one its tokenizer read.
+FOLDED_I = harptab.LETTERS.changed((Symbol("i", "wah", "after"), Symbol("k", "shake", "after"),
+                                    Symbol("İ", "trill", "after", 1)), name="folded i")
+FOLD_LINES = ("4bi 5di", "4bI 5dI", "4bı 5dı", "4bİ 5dİ", "4BK 5Dk", "4bſ", "4bİı -4", "4b i", "4bİİ", "ı4b")
+FOLD_TABS = ("I = wah\nB = blow\nD = draw\n\n4B 5D 4BI 6D\n4Bı 5D\n",
+             "4B 5D 4Bİ 6D\nla la la la\n4Bı 5D 6Dı\n\nİ = wah\nB = blow\nD = draw\n")
 # The legends' lines: what tabs write, and odd symbols a tokenizer must escape, place and read.
 _LEGEND_LINES = (
     "b = bend", "b = blow", "B= blow", "d = draw", "D= draw", "* = bend", "** = whole step bend", "(w) = Wah effect",
@@ -577,6 +587,7 @@ def tabs() -> tuple[tuple[Any, str, str | None], ...]:
         body = generated_tab(rng, style)
         chip = rng.choice(CHIPS) if style != "star bends" else rng.choice(("Diatonic", "Diatonic", None))
         out.append(({"text": body}, body, chip))
+    out += [({"text": body}, body, None) for body in FOLD_TABS if body not in literal_bodies()]
     return tuple(out)
 
 
@@ -597,7 +608,10 @@ def tokens_row(n: Notation) -> dict:
             "join": src(t.join), "together": src(t.together), "flags": "i" if n.fold else ""}
 
 
-def _pins(body: str, found: list[Reading], candidates: list[tuple[Notation, str]]) -> list:
+def _pins(body: str, found: list[Reading], candidates: list[tuple[Notation, str]], lines: list[str],
+          chip: str | None, whole: bool) -> list:
+    """Each pin of the tab: the notation it reads, and the tab read so (``read(notation=)``: "pinned", confident
+    whatever its Q, no runner), ``[reading, its scans' digest]`` whole where ``whole`` says, else by its digest."""
     specs: list[Any] = ["legend", "signs", "letters"] + [harptab.spec_of(r) for r in found]
     specs += [{"as": "signs", "*": "bend"}, {"as": "brackets", "(x)": "draw", "x": "blow"}]
     out, seen = [], []
@@ -606,8 +620,13 @@ def _pins(body: str, found: list[Reading], candidates: list[tuple[Notation, str]
             continue
         seen.append(spec)
         got = answer(harptab.pinned, spec, body)
-        out.append([spec, got if isinstance(got, dict) and "err" in got
-                    else None if got is None else notation_ref(got, candidates)])
+        if isinstance(got, Notation):
+            reading, scans = harptab.read(lines, harp_chip=chip, notation=got)
+            assert reading.source == "pinned" and reading.confident and reading.runner is None
+            read_so = [reading_row(reading, candidates, whole=False), short([scan_row(s) for s in scans])]
+            out.append([spec, notation_ref(got, candidates), read_so if whole else short(read_so)])
+        else:
+            out.append([spec, got, None])
     return out
 
 
@@ -634,7 +653,9 @@ def tab_record(ref: Any, body: str, chip: str | None, notations: dict) -> dict:
         "winner": scans_of([weighed.scanned[k][i] for i in weighed.scored],
                            whole=isinstance(ref, dict) and ref.get("fixture", "").startswith(WHOLE_TABS)),
         "readings": [reading_row(r, candidates, whole=n == 0) for n, r in enumerate(readings)],
-        "pins": _pins(body, readings, candidates),
+        "pins": _pins(body, readings, candidates, read_lines, found_chip,
+                      whole=isinstance(ref, dict) and (ref.get("fixture", "").startswith(WHOLE_TABS)
+                                                       or ref.get("text") in FOLD_TABS)),
     }
     assert reading_row(reading, candidates) == out["readings"][0]  # parse's is the first
     for spec in [harptab.spec_of(r) for r in readings]:
@@ -667,6 +688,8 @@ def records() -> tuple[dict, ...]:
     made = [n for n in list(notations)[len(PRESETS) + 1:] if n not in ODD_NOTATIONS]
     out += [scan_record(made[i:i + 8], [line for line in odd if rng.random() < 0.08])
             for i in range(0, len(made), 8)]
+    notations.setdefault(FOLDED_I, None)
+    out.append(scan_record([FOLDED_I, harptab.LETTERS], list(FOLD_LINES), every=1))
 
     blocks: list[list[str]] = [list(b) for b in (
         ["4b 5d", "", "(w) = Wah effect", "(h) = Hold", "* = bend", "D= draw", "b= blow"],

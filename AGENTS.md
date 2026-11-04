@@ -1278,13 +1278,15 @@ Not built yet. (job-views, requests-feed.)
     harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
     tokenizer (`Tokens`, `_alt`'s order and `re.escape`'s rules, through core.py.PyRegex);
   - `HarpTabs.scan` and its passes (Scanner.kt), its columns Python's code points (`Group.col`, `digit`, `end`), the
-    text UTF-16 while it runs; the legends (`legend`, `meaning`, `entry`); the candidates, `weighed` (Python's
-    builtin sum, Py.fsum), `read` and `readings`; a pin's `checkSpec` (Python's words, its reprs and its TypeError),
-    `pinned` and `specOf`; `said`, `Reading.standard`; Python's `expandtabs`, `swapcase` (a capital sigma by its
-    context) and `_fold_accents` (`HarpTabText`).
+    text UTF-16 while it runs; a notation that folds reads a symbol as its tokenizer's IGNORECASE does
+    (`Notation.meaning`: an "ı" or an "İ" is its "i", `PyRegex.ignoreCase`); the legends (`legend`, `meaning`,
+    `entry`); the candidates, `weighed` (Python's builtin sum, Py.fsum), `read` and `readings`; a pin's `checkSpec`
+    (Python's words and its reprs), `pinned` and `specOf`; `said`, `Reading.standard`; Python's `expandtabs`,
+    `swapcase` (a capital sigma by its context) and `_fold_accents` (`HarpTabText`).
   - `Scan`, `Reading`, `Prepared` and `Weighed` are the seam harptab-layout builds `parse` on.
   - `HarptabReplay` (area `harptab`) replays vectors/viewer/harptab_read.jsonl: each fixture tab, the tests' literals
-    and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins.
+    and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins, each
+    pin's tab read as it says (`read(notation=)`).
 - A harmonica tab laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.

@@ -80,7 +80,7 @@ internal object Scanner {
         }
     }
 
-    private class Piece(val start: Int, val end: Int, val text: String, val sym: Symbol?)
+    private class Piece(val start: Int, val end: Int, val text: String, val sym: Symbol)
 
     fun scan(line: String, notation: Notation): Scan {
         val expanded = HarpTabText.expand(line)
@@ -104,8 +104,7 @@ internal object Scanner {
     // --- a hole and its marks -------------------------------------------------------------------------------------
 
     /** harptab._marks: one mark added to [read]; false when it can't take it. */
-    private fun marks(text: String, sym: Symbol?, read: Read): Boolean {
-        val s = sym!!  // Python's AttributeError: a mark its notation reads as nothing
+    private fun marks(text: String, s: Symbol, read: Read): Boolean {
         when {
             s.means in B.BREATHS -> {
                 if (read.breath != null) return false
@@ -144,7 +143,7 @@ internal object Scanner {
         val preEnd = end(m, "pre")
         while (pos < preEnd) {
             val s = tokens.before!!.matchAt(text, pos)!!
-            pieces += Piece(s.range.first, s.range.last + 1, s.value, notation.meaning(s.value, "before"))
+            pieces += Piece(s.range.first, s.range.last + 1, s.value, notation.read(s.value, "before"))
             pos = s.range.last + 1
         }
         val num = m.groups["num"]!!
@@ -159,16 +158,16 @@ internal object Scanner {
         val options = arrayListOf(read.end to read.state())
         pos = read.end
         while (tokens.after != null && pos < limit) {
-            val s = matchAt(tokens.after, text, pos, limit)
-            val sym = s?.let { notation.meaning(it.value, "after") }
-            if (s != null && sym != null && sym.means in B.BREATHS && s.value in B.SIGNS) {
+            val s = matchAt(tokens.after, text, pos, limit) ?: break
+            val sym = notation.read(s.value, "after")
+            if (sym.means in B.BREATHS && s.value in B.SIGNS) {
                 val next = s.range.last + 1
                 val glued = next < text.length && at(text, next).let { cp ->
                     String(Character.toChars(cp)) in B.SIGNS || PyUnicode.isAlnum(cp)
                 }
                 if (glued || (read.start > 0 && PyUnicode.isDigit(before(text, read.start)))) break
             }
-            if (s == null || !marks(s.value, sym, read)) break
+            if (!marks(s.value, sym, read)) break
             pos = s.range.last + 1
             options += pos to read.state()
         }
@@ -241,7 +240,7 @@ internal object Scanner {
         val outer = Read(m.range.first, m.range.last + 1, 0)
         while (tokens.after != null && reads.size == 1) {
             val s = tokens.after.matchAt(text, stop)
-            if (s == null || !marks(s.value, line.notation.meaning(s.value, "after"), outer)) break
+            if (s == null || !marks(s.value, line.notation.read(s.value, "after"), outer)) break
             stop = s.range.last + 1
         }
         if (stop < text.length && PyUnicode.isAlpha(at(text, stop))) {
@@ -303,7 +302,7 @@ internal object Scanner {
             val nums = PyRe.findall(B.NUM_ALONE, body).map { it.toInt() }
             line.note(read, if (read.breath == null) breath else null)
             val sep = B.NOT_DIGITS.find(body)!!.value
-            val sym = notation.meaning(sep, "between")!!
+            val sym = notation.read(sep, "between")
             line.count(Used(sep, sym.means, "between", 1), nums.size - 1)
             line.add(G(nums.map { Hole(it, breath, read.bend, read.over, read.slide) }, "chord", a, a,
                        text.substring(a, read.end), "hold" in read.effects, others(read.effects)))
@@ -342,7 +341,7 @@ internal object Scanner {
             val a = m.range.first
             val b = m.range.last + 1
             if (line.taken(a, b)) continue
-            val sym = line.notation.meaning(m.value, "after")!!
+            val sym = line.notation.read(m.value, "after")
             line.mark(a, b)
             line.count(Used(m.value, sym.means, "after", sym.count))
             if (sym.means in B.EFFECTS) effectBefore(line.groups, a, sym.means)
@@ -359,7 +358,7 @@ internal object Scanner {
             if (line.taken(a, b) || a == 0 || b >= text.length || PyUnicode.isSpace(before(text, a)) ||
                 PyUnicode.isSpace(at(text, b)) || before(text, a) == written.codePointAt(0) ||
                 at(text, b) == written.codePointBefore(written.length)) continue
-            val sym = line.notation.meaning(written, "between")!!
+            val sym = line.notation.read(written, "between")
             line.mark(a, b)
             line.count(Used(written, sym.means, "between", 1))
             line.joins += a to sym.means

@@ -151,11 +151,39 @@ class ReadingTest {
             """{"(4)": "bend"}""" to "'(4)': a hole alone, or in brackets, can only be a blow or a draw",
             "3" to "expected a notation's name or a table of what its symbols mean, got 3",
             "[1.5, true, null]" to "expected a notation's name or a table of what its symbols mean, got [1.5, True, None]",
-            """{"as": ["signs"]}""" to "cannot use 'list' as a dict key (unhashable type: 'list')",
+            """{"as": ["signs"]}""" to "as: expected signs, brackets, letters, signs after or barrett, got ['signs']",
+            """{"as": {"signs": 1}}""" to "as: expected signs, brackets, letters, signs after or barrett, got {'signs': 1}",
         )) {
             val e = assertFailsWith<IllegalArgumentException>(text) { HarpTabs.checkSpec(spec(text)) }
             assertTrue(e.message!!.startsWith(said), "$text: ${e.message}")
         }
+    }
+
+    @Test fun aLetterInEitherCaseMeansWhatItsTokenizerReadsItAs() {
+        // IGNORECASE reads a dotless ı and a dotted İ as an i, which casefold keeps apart: the symbol meant is the i's
+        val wah = letters.changed(listOf(Symbol("i", "wah", "after")))
+        for (written in listOf("4bi", "4bI", "4bı", "4bİ")) {
+            val found = HarpTabs.scan(written, wah)
+            assertEquals(listOf("4" to listOf("wah")), found.groups.map { it.label() to it.effects.toList() }, written)
+            assertEquals(1, found.used[Used(written.takeLast(1), "wah", "after", 1)], written)
+        }
+        assertEquals(Symbol("i", "wah", "after"), wah.meaning("ı", "after"))
+        assertEquals(Symbol("i", "wah", "after"), wah.meaning("İ", "after"))
+        assertNull(signs.meaning("B", "after"))  // a notation that reads one case alone reads no other
+        val reading = HarpTabs.readings("I = wah\nB = blow\nD = draw\n\n4B 5D 4BI 6D\n4Bı 5D\n")[0]
+        assertEquals("legend", reading.source)
+        assertTrue(reading.used.any { (u, _) -> u == Used("ı", "wah", "after", 1) }, reading.used.toString())
+    }
+
+    @Test fun aPinnedReadingIsReadWhateverTheOthersScore() {
+        val body = "4 5 6 -4\nla la la la\n"
+        val prepared = HarpTabs.prepared(body, null)
+        val (reading, _) = HarpTabs.read(prepared.read, null, HarpTabs.pinned(JsonPrimitive("barrett"), body), prepared.legends)
+        assertEquals("pinned", reading.source)
+        assertTrue(reading.confident)
+        assertNull(reading.runner)
+        assertEquals(reading.score, reading.margin)
+        assertEquals(JsonPrimitive("barrett"), HarpTabs.specOf(reading))
     }
 
     @Test fun harptabsComsOwnNotationGuessedIsTheStandardReading() {

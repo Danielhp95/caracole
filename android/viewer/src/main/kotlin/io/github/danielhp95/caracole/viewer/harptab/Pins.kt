@@ -14,8 +14,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * A reading pinned, overrides.toml's `[harmonica]` (harptab.py's "A reading pinned"): `check_spec`, `pinned` and
  * `spec_of`. A spec is JSON: a notation's name, or a table, `as` a preset (signs by default) and each other entry a
  * symbol and what it means. What check_spec refuses is an IllegalArgumentException in Python's words, its values
- * written as Python's repr writes them (a string quoted, `None`, `True`, a float's shortest digits), and Python's
- * TypeError for an `as` no dict can hold (a list, a table) is one too, in its words.
+ * written as Python's repr writes them (a string quoted, `None`, `True`, a float's shortest digits, a list's or a
+ * table's members).
  */
 internal object Pins {
     private val B = HarptabData
@@ -46,10 +46,6 @@ internal object Pins {
             throw IllegalArgumentException("expected a notation's name or a table of what its symbols mean, got ${repr(spec)}")
         }
         val base = spec["as"] ?: JsonPrimitive(B.PRESETS[0].name)
-        if (base is JsonArray || base is JsonObject) {
-            val type = if (base is JsonArray) "list" else "dict"
-            throw IllegalArgumentException("cannot use '$type' as a dict key (unhashable type: '$type')")
-        }
         if (!(base is JsonPrimitive && base.isString && base.content in B.PRESET)) {
             throw IllegalArgumentException("as: expected ${names(B.PRESET.keys.toList())}, got ${repr(base)}")
         }
