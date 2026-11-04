@@ -4,38 +4,47 @@
 
 **vectors/sites/ug_rank.jsonl**, a record a call:
 
+- first ``caracole.config.RankPolicy``, ``out`` its defaults: a policy in a record is the fields that differ from
+  them, ``RankPolicy(**policy)`` (``prior_votes`` and ``line_match`` an int or a float, as caracole.toml may give
+  them);
 - ``caracole.rank.bayes`` (``args`` rating, votes, prior, m), ``prior_mean`` (``kw.cands``), ``is_complete``
-  (``kw.cand``, ``kw.policy``), ``caracole.versions.complete`` and ``replaces_sheet`` (``args``);
-- ``rank_by_rating``, ``rank_sheets`` and ``rank_guitar`` (``kw`` ``cands``, ``policy``, ``variant``), ``out`` the
-  candidates in their order, each ``[its index in cands, its score]``.
+  (``kw.cand``, ``kw.policy``), ``caracole.versions.complete`` and ``replaces_sheet`` (``args``; each threshold's
+  edges, every pair of them);
+- ``rank_by_rating`` and ``rank_sheets`` (``kw`` ``cands``, ``policy``, ``variant``), ``out`` the candidates in their
+  order, each ``[its index in cands, its score]``; ``rank_guitar``, which is ``rank_by_rating``, on the text tabs'
+  lists alone.
 
-A candidate is an object of ``rank.Candidate``'s fields but ``score`` and ``version_id``; a policy one of
-``config.RankPolicy``'s, whole (``prior_votes`` and ``line_match`` an int or a float, as caracole.toml may give them).
-``case`` says where the inputs come from: ``hand`` (tests/test_rank.py's and the rules' edges) or ``random`` (seeded:
-ratings, votes of none to many, versions and tab ids that tie on ``(version, len(tab_id), tab_id)``, partial labels,
-variants, coverage at and around the threshold).
+A candidate is an object of the ``rank.Candidate`` fields ranking reads (``tab_id``, ``rating``, ``votes``,
+``version``, ``label``, ``coverage``): its ``provider`` is ``ug`` and its ``kind`` ``chords``, which it reads neither
+of. ``case`` says where the inputs come from: ``hand`` (tests/test_rank.py's and the rules' edges) or ``random``
+(seeded: ratings, votes of none to many, versions and tab ids that tie on ``(version, len(tab_id), tab_id)``, partial
+labels, variants, coverage at and around the threshold).
 
 **vectors/sites/ug_coverage.jsonl**: ``caracole.coverage.normalize_line``, ``lyric_lines``, ``sheet_lyric_text``,
 ``_is_plain_chord_line``, ``_comparable`` and ``_match`` (``args``), and ``coverage`` (``kw`` ``sheet``, ``lyrics``
-and ``line_match``: the sheet's coverage of ``lyric_lines(lyrics)``; ``scores``, each line's ``_match`` against the
+and ``line_match``: the sheet's coverage of ``lyric_lines(lyrics)``; where it tells more than the share, a share
+strictly between none and all or a sheet against its own words, ``scores``, each line's ``_match`` against the
 sheet's lyric text, both made ``_comparable``). A text in ``args`` or ``kw`` is a string, or ``{"name": …}``, one of
 **vectors/sites/ug_coverage_texts.jsonl**'s (``{name, fixture}``, a file of tests/fixtures/ read as UTF-8, or
 ``{name, text}``, a text read out of one, as caracole reads it: a UG tab page's ``content``, a LaCuerda version's
-markup, an LRCLIB answer's plain lyrics…). Every fixture sheet is scored against every fixture lyrics; ``hand`` cases
+markup, an LRCLIB answer's plain lyrics…). Every fixture sheet is scored against every fixture lyrics, and a few
+harmonica tabs (``HARMONICA_TABS``: words over holes, never a sheet coverage.py scores) against two; ``hand`` cases
 take every regex's edges (case folded as Python folds it, Unicode's spaces, digits and line ends, Chinese as pinyin).
 
 **vectors/sites/ug_sheet_versions.jsonl**, over the fixture **ug_sheet_versions_fixture_library.jsonl** (a library
 built with caracole's writers: songs of wanted.txt lines, ``upsert_version``, ``keep_file``, ``mark_gone``,
 ``mark_stale``, ``kv_set_json``, rows of ``ug_index``; dumped with ``dump_fixture``, its files left out, as
 sheet_versions.py reads the tables alone): ``{fn, case, fixture, kw, out, after}``, ``kw`` by Python's names
-(``song_id`` a song of the fixture, ``policy`` a ``RankPolicy``'s fields), a ``SheetVersion`` an object of its fields,
+(``song_id`` a song of the fixture, ``policy`` as above), a ``SheetVersion`` an object of its fields,
 ``in_library_of``'s answer a ``[song id, versions]`` a song in its order, ``after.kv`` the kv records a writer left
-(``note_kept_by_you``, ``note_unkeepable``). ``may_keep`` and ``as_data`` are given ``in_library``'s list. Records
-without a fixture: ``version_names``, ``tab_of``, ``group_of`` (``kw.rows``: each version's ``kind``, ``tab_id`` and
-``gone``).
+(``note_kept_by_you``, ``note_unkeepable``). ``may_keep`` and ``as_data`` are given ``in_library``'s list.
+``as_data`` and ``same_pages`` add ``dumps``, ``json.dumps(out, ensure_ascii=False)``: the answer with its members in
+Python's order, which the pages embed and a record's sorted keys lose. Records without a fixture: ``version_names``,
+``tab_of``, ``group_of`` (``kw.rows``: each version's ``kind``, ``tab_id`` and ``gone``).
 
-The answers are the same on every run (``test_the_vectors_are_the_same_on_another_run``). Regenerate with
-``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
+The vectors stay small (the ``sites`` area's budget is every site lane's): a record only where it can answer
+otherwise than another. The answers are the same on every run (``test_the_vectors_are_the_same_on_another_run``).
+Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 """
 
 from __future__ import annotations
@@ -73,9 +82,12 @@ def _records(text: str) -> list[dict[str, Any]]:
 
 
 def _policy(**changes: Any) -> dict[str, Any]:
+    """A policy as the records give it: the ``RankPolicy`` fields that differ from its defaults, ``RankPolicy(**it)``
+    (``ug_rank.jsonl``'s first record gives the defaults)."""
     from caracole.config import RankPolicy
 
-    return plain(RankPolicy(**changes))
+    RankPolicy(**changes)  # a field it has, each
+    return dict(changes)
 
 
 POLICIES = (
@@ -90,15 +102,17 @@ VARIANTS = (None, None, "acoustic", "unplugged", "live", "", "intro", "Acoustic"
 
 
 def cand(tab_id: str, rating: float, votes: int, *, version: int = 1, coverage: float | None = None,
-         label: str | None = None, kind: str = "chords", provider: str = "ug") -> dict[str, Any]:
-    return {"provider": provider, "tab_id": tab_id, "kind": kind, "rating": float(rating), "votes": votes,
-            "version": version, "label": label, "coverage": coverage}
+         label: str | None = None) -> dict[str, Any]:
+    """A candidate as the records give it: the fields ranking reads, its provider and kind (which it reads neither
+    of) left out."""
+    return {"tab_id": tab_id, "rating": float(rating), "votes": votes, "version": version, "label": label,
+            "coverage": coverage}
 
 
 def _candidate(d: dict[str, Any]):
     from caracole.rank import Candidate
 
-    return Candidate(**d)
+    return Candidate(provider="ug", kind="chords", **d)
 
 
 def _rank_policy(p: dict[str, Any]):
@@ -156,6 +170,7 @@ def _random_tab(rng: random.Random, taken: set[str]) -> str:
 
 def _random_cands(rng: random.Random, policy: dict[str, Any]) -> list[dict[str, Any]]:
     n = rng.choice((0, 1, 2, 3, 3, 4, 5, 6, 8))
+    threshold = _rank_policy(policy).coverage_threshold
     taken: set[str] = set()
     out = []
     tie = rng.random() < 0.3  # ratings and votes repeated: the tiebreak decides
@@ -164,16 +179,18 @@ def _random_cands(rng: random.Random, policy: dict[str, Any]) -> list[dict[str, 
         if not tie:
             rating, votes = _random_rating(rng), _random_votes(rng)
         out.append(cand(_random_tab(rng, taken), rating, votes, version=rng.choice((1, 1, 2, 3, 4)),
-                        coverage=_random_coverage(rng, policy["coverage_threshold"]), label=rng.choice(LABELS),
-                        kind=rng.choice(("chords", "chords", "ukulele", "tabs"))))
+                        coverage=_random_coverage(rng, threshold), label=rng.choice(LABELS)))
     return out
 
 
 def rank_records() -> list[dict[str, Any]]:
     from caracole import rank, versions
 
+    from caracole.config import RankPolicy
+
     k = "caracole.rank."
-    out: list[dict[str, Any]] = []
+    out: list[dict[str, Any]] = [{"fn": "caracole.config.RankPolicy", "case": "the defaults", "args": [], "kw": {},
+                                  "out": plain(RankPolicy())}]
     p = POLICIES[0]
     # bayes: tests/test_rank.py's, and none to weigh
     for args in ((4.85, 81, 4.8, 10), (5.0, 0, 4.2, 10), (0.0, 0, 0.0, 0), (3.5, 0, 4.0, 0), (4.2, 7, 0.0, 0),
@@ -181,7 +198,7 @@ def rank_records() -> list[dict[str, Any]]:
                  (2.0, 0, 3.0, 0.0)):
         out.append({"fn": k + "bayes", "case": "hand", "args": list(args), "out": rank.bayes(*args)})
     rng = random.Random(SEED)
-    for _ in range(100):
+    for _ in range(50):
         args = (_random_rating(rng), _random_votes(rng), _random_rating(rng),
                 rng.choice((10, 10, 0, 1, 2.5, 7, 0.0)))
         out.append({"fn": k + "bayes", "case": "random", "args": list(args), "out": rank.bayes(*args)})
@@ -191,13 +208,13 @@ def rank_records() -> list[dict[str, Any]]:
                   [cand("1", 1e16, 1), cand("2", 1.0, 1), cand("3", -1e16, 1)]):
         out.append({"fn": k + "prior_mean", "case": "hand", "kw": {"cands": cands},
                     "out": rank.prior_mean([_candidate(c) for c in cands])})
-    for _ in range(30):
+    for _ in range(10):
         cands = _random_cands(rng, p)
         out.append({"fn": k + "prior_mean", "case": "random", "kw": {"cands": cands},
                     "out": rank.prior_mean([_candidate(c) for c in cands])})
     # is_complete, complete, replaces_sheet
     for coverage in (None, 0.0, 0.5, 0.79, 0.7999999999999999, 0.8, 0.95, 1.0):
-        for policy in POLICIES:
+        for policy in POLICIES[:1] + POLICIES[2:]:  # each threshold
             c = cand("1", 4.0, 1, coverage=coverage)
             out.append({"fn": k + "is_complete", "case": "hand", "kw": {"cand": c, "policy": policy},
                         "out": rank.is_complete(_candidate(c), _rank_policy(policy))})
@@ -206,7 +223,11 @@ def rank_records() -> list[dict[str, Any]]:
         for new in shares:
             out.append({"fn": "caracole.versions.complete", "case": "hand", "args": [new, threshold],
                         "out": versions.complete(new, threshold)})
-            for kept in shares:
+    # replaces_sheet at its edges: unknown, under, just under, at and over each threshold, every pair of them
+    for threshold, edges in ((0.8, (None, 0.0, 0.5, 0.79, 0.8, 1.0)), (0.5, (None, 0.3, 0.5, 0.9, 0.95)),
+                             (0.95, (None, 0.3, 0.5, 0.9, 0.95))):
+        for new in edges:
+            for kept in edges:
                 out.append({"fn": "caracole.versions.replaces_sheet", "case": "hand", "args": [new, kept, threshold],
                             "out": versions.replaces_sheet(new, kept, threshold)})
     # the rankings: tests/test_rank.py's lists, then seeded ones under every policy and variant
@@ -216,25 +237,24 @@ def rank_records() -> list[dict[str, Any]]:
         [cand("1", 4.2, 20, coverage=0.9), cand("2", 4.8, 200, coverage=0.85)],
         [cand("1", 4.0, 5, coverage=0.3), cand("2", 4.5, 50, coverage=0.6)],
         [cand("1", 4.9, 500, coverage=None), cand("2", 3.0, 2, coverage=0.81)],
-        [cand("1", 4.9, 100, label="solo", kind="tabs"), cand("2", 4.6, 100, kind="tabs"),
-         cand("3", 4.5, 100, label="acoustic", kind="tabs")],
-        [cand("4", 4.5, 100, label="unplugged", kind="tabs"), cand("5", 4.6, 100, kind="tabs")],
-        [cand("9", 0, 0, version=2, kind="tabs"), cand("10", 0, 0, version=1, kind="tabs"),
-         cand("8", 0, 0, version=1, kind="tabs")],
+        [cand("1", 4.9, 100, label="solo"), cand("2", 4.6, 100), cand("3", 4.5, 100, label="acoustic")],
+        [cand("4", 4.5, 100, label="unplugged"), cand("5", 4.6, 100)],
+        [cand("9", 0, 0, version=2), cand("10", 0, 0, version=1), cand("8", 0, 0, version=1)],
         [cand("100", 4.0, 10), cand("99", 4.0, 10), cand("1000", 4.0, 10), cand("0100", 4.0, 10), cand("2", 4.0, 10)],
         [cand("1", 4.0, 10, label="intro"), cand("2", 3.5, 10)],  # a penalty that ties the score
         [],
     ]
-    for cands in hand:
-        for fn in ("rank_by_rating", "rank_sheets", "rank_guitar"):
+    for i, cands in enumerate(hand):
+        # rank_guitar is rank_by_rating in Python: the text tabs' lists alone, to name it
+        for fn in ("rank_by_rating", "rank_sheets") + (("rank_guitar",) if i in (5, 6, 7) else ()):
             for variant in (None, "acoustic"):
                 out.append({"fn": k + fn, "case": "hand", "kw": {"cands": cands, "policy": p, "variant": variant},
                             "out": _ranked(fn, cands, p, variant)})
-    for _ in range(80):
+    for _ in range(45):
         policy = rng.choice(POLICIES)
         cands = _random_cands(rng, policy)
         variant = rng.choice(VARIANTS)
-        fn = rng.choice(("rank_by_rating", "rank_sheets", "rank_sheets", "rank_guitar"))
+        fn = rng.choice(("rank_by_rating", "rank_sheets", "rank_sheets"))
         out.append({"fn": k + fn, "case": "random", "kw": {"cands": cands, "policy": policy, "variant": variant},
                     "out": _ranked(fn, cands, policy, variant)})
     return out
@@ -276,14 +296,14 @@ B|---0---0---|[/tab]
 G D Em C   x4
 """
 # Lines at every regex's edges: Python's case folding (ſ is s, ı is i, K's Kelvin sign), Unicode's spaces, digits
-# and line ends ( , \x1c, \x85, \r\n), filler, staff lines, sections, chords in Latin and solfège.
+# and line ends (\u2028, \x1c, \x85, \r\n), filler, staff lines, sections, chords in Latin and solfège.
 EDGES_SHEET = (
     "[CH]Am[/CH] hello [Ch]G[/cH] there\r\n"
-    "[TAB][ch]Do#m7[/ch]   [ch]SOL[/ch][/TaB] "
+    "[TAB][ch]Do#m7[/ch]   [ch]SOL[/ch][/TaB]\u2028"
     "[ch]Am[/ch] x2 | -- (x3) 2x **\x1c"
     "  [Verse 2]  \x85"
-    "[Coro]　\n"
-    "[ch]A[/ch]  / \\ - – × 0 9 ( ) . : *\n"
+    "[Coro]\u3000\n"
+    "[ch]A[/ch]\xa0\u2003/ \\ - – × 0 9 ( ) . : *\n"
     "e|---3---0---|\n"
     "  C# |--0--2--|\n"
     "Bb|-\n"
@@ -306,22 +326,23 @@ EDGES_SHEET = (
     "[ch][/ch]\n"
     "[ch]G[/ch][ch]D[/ch]\n"
     "word [ch]G\n"
+    "keep the ångström\n"
 )
 EDGES_LYRICS = (
-    "Hello there\r\nHELLO THERE!\r\nHi Hi there you\x1cÜnïcödé wörds ñandú\x85斑馬斑馬你不要睡著啦\n"
-    "ſol mı\nWord with underscore don't\n\n   \n¿Dónde estás, corazón?\n"
+    "Hello there\r\nHELLO THERE!\r\nHi\u2028Hi there you\x1cÜnïcödé wörds ñandú\x85斑馬斑馬你不要睡著啦\n"
+    "ſol mı\n\u212aEEP THE \u212bNGSTRÖM\nWord with underscore don't\n\n   \n¿Dónde estás, corazón?\n"
 )
 NORMALIZE = (
     "¿Dónde estás, corazón?", "斑马，斑马，你不要睡着啦", "", "   ", "a_b", "__x__", "Ⅳ ① ¹ ½ ٣", "don't stop",
-    "ÆØÅ æøå ß ﬁ ŁĐ", "İstanbul ıi", "Straße", "ǅ ǈ ǋ", " nbsp em　ideo​zw",
-    "é combining", "Ⓐ ⓑ", "x\ty\nz", "😀 emoji 😀", "123abc", "Ω ω Σ σ ς", "한국어 가사", "日本語のうた",
-    "Привет, мир", "a-b–c—d", "word.word", "\x1c\x1d\x1e\x1f", "ſ K Å",
+    "ÆØÅ æøå ß ﬁ ŁĐ", "İstanbul ıi", "Straße", "ǅ ǈ ǋ", "\xa0nbsp\u2003em\u3000ideo\u200bzw",
+    "e\u0301 combining", "Ⓐ ⓑ", "x\ty\nz", "😀 emoji 😀", "123abc", "Ω ω Σ σ ς", "한국어 가사", "日本語のうた",
+    "Привет, мир", "a-b–c—d", "word.word", "\x1c\x1d\x1e\x1f", "ſ \u212a \u212b K Å",
 )
 CHORD_LINES = (
     "G  D/F#  Em  C", "Am7 Cadd9 Dsus4", "Am I am", "Do Re Mi Fa Sol La Si", "do#m sib", "SOL RE", "ſol", "mı",
     "Mİ", "Am٧", "(Am)", "(Am", "Am)", "G | / x4", "x2", "| |", "", "   ", "C°", "Bø", "G+", "F#m7-5", "Emaj7",
     "Amin", "Gsus2sus4", "Cadd9add11", "C/E", "C/", "H", "Hm", "B#", "Cb", "Am x", "Am xx", "Am (x3)", "Am (3)",
-    "Am 3x", "Am ***", "Am ---", "Am -", "Am — ", "A D", "A D", "Am　G", "Sol7 Mim", "LA SI",
+    "Am 3x", "Am ***", "Am ---", "Am -", "Am — ", "A\xa0D", "A\u2003D", "Am\u3000G", "Sol7 Mim", "LA SI",
     "Am7b5", "A7#9", "Dm/F", "Bb/Ab", "Eb", "e", "E|---", "x", "(x2)",
 )
 COMPARABLE = (
@@ -337,6 +358,13 @@ MATCHES = (
     ("ban ma ban ma ni bu yao shui zhao la", "ban ma ban ma ni bu yao shui zhe la"),
     ("abcd", "xxabcdxx"), ("abcd", "abce"),
 )
+
+
+# harptabs.com's tabs, one of each fixture folder's and those whose words have lyrics made of them: holes, bends and
+# words over them, never a sheet coverage.py scores, so scored against two lyrics and their own words alone.
+HARMONICA_TABS = ("harptabs/layout/12631_en-brazos-de-la-fiebre-with-lyric.txt",
+                  "harptabs/legends/693_spokey-dokey.txt", "harptabs/spellings/17941_if-i-die-young.txt",
+                  "harptabs/tabs/25_piano-man.txt", "harptabs/tabs/3489_wonderwall.txt")
 
 
 def _txt(path: str) -> str:
@@ -393,7 +421,7 @@ def coverage_texts() -> tuple[dict[str, dict[str, str]], dict[str, str], list[st
     for path in ("chordpro/ug_sheet.txt", "chordpro/zh_sheet.txt", "chordpro/ug_sheet.cho",
                  "chordpro/legend_sheet.cho"):
         named(path, fixture=path, into=sheets)
-    for path in sorted(p.relative_to(FIXTURES).as_posix() for p in (FIXTURES / "harptabs").rglob("*.txt")):
+    for path in HARMONICA_TABS:
         named(path, fixture=path, into=sheets)
     for path in ("ug/tab_chords.html", "ug/tab_ukulele.html"):
         named(path + " content", text=parse_tab_page((FIXTURES / path).read_bytes()).content, into=sheets)
@@ -448,24 +476,29 @@ def coverage_records(texts: dict[str, str], sheets: list[str], lyrics: list[str]
         out.append({"fn": k + "_comparable", "case": "hand", "args": [s], "out": coverage._comparable(s)})
     for line, text in MATCHES:
         out.append({"fn": k + "_match", "case": "hand", "args": [line, text], "out": coverage._match(line, text)})
-    for name in lyrics + list(of_sheet):
+    # (of the lyrics made of a sheet's words, those whose lines aren't another's: its words and their other spelling)
+    for name in lyrics + [n for n in of_sheet if not n.endswith((" words, half", " words, and more"))]:
         out.append({"fn": k + "lyric_lines", "case": "fixture", "args": [ref(name)],
                     "out": coverage.lyric_lines(texts[name])})
     for name in sheets:
         out.append({"fn": k + "sheet_lyric_text", "case": "fixture", "args": [ref(name)],
                     "out": coverage.sheet_lyric_text(texts[name])})
     # every fixture sheet against every fixture lyrics, and a sheet's own words against it and the edges' sheet
-    pairs = [(sheet, words) for sheet in sheets for words in lyrics]
+    pairs = [(sheet, words) for sheet in sheets for words in lyrics
+             if sheet not in HARMONICA_TABS or words in ("lyrics", "edge lyrics")]
     pairs += [(sheet, words) for words, own in of_sheet.items() for sheet in (own, "edges")]
     for sheet, words in pairs:
         text = coverage._comparable(coverage.sheet_lyric_text(texts[sheet]))
         lines = coverage.lyric_lines(texts[words])
         for line_match in (85,) if sheet != "edges" else (85, 82.5, 100):
-            out.append({"fn": k + "coverage", "case": "fixture",
-                        "kw": {"sheet": ref(sheet), "lyrics": ref(words), "line_match": line_match},
-                        "out": coverage.coverage(texts[sheet], lines, line_match=line_match),
-                        "scores": [coverage._match(coverage._comparable(line), text) for line in lines]
-                        if text else []})
+            share = coverage.coverage(texts[sheet], lines, line_match=line_match)
+            r = {"fn": k + "coverage", "case": "fixture",
+                 "kw": {"sheet": ref(sheet), "lyrics": ref(words), "line_match": line_match}, "out": share}
+            # each line's score where it tells more than the share: a share strictly between none and all, or a
+            # sheet against its own words (once: a score doesn't depend on line_match)
+            if line_match == 85 and (share is not None and 0 < share < 1 or of_sheet.get(words) == sheet):
+                r["scores"] = [coverage._match(coverage._comparable(line), text) for line in lines] if text else []
+            out.append(r)
     # tests/test_coverage.py's sheets and lyrics, as given
     for sheet, words in (
             ("[ch]Bm[/ch]   [ch]G[/ch]\nElla durmio, al calor de las masas\n[ch]D[/ch]\nY yo desperte, queriendo sonarla",
@@ -496,7 +529,7 @@ SONGS = {  # the fixture's songs, by the name its records give each
     "none": ("Nobody", "Nothing"), "zebra": ("宋冬野", "斑马，斑马"), "tabs": ("Led Zeppelin", "Stairway to Heaven"),
     "gone": ("Blur", "Song 2"), "ties": ("Queen", "Bohemian Rhapsody"),
 }
-UG = "https://tabs.ultimate-guitar.com/tab/x/y-chords-"
+UG = "https://tabs.ultimate-guitar.com/tab/"
 
 
 def _song_id(conn, name: str) -> int:
@@ -545,7 +578,7 @@ def build_library(lib) -> None:
     v10 = version(w, "10", rating=4.9, votes=500, number=4, raw={"version_description": 42})
     v7 = version(w, "7", rating=4.95, votes=900, raw={"version_description": "gone, still kept"})
     mark_gone(conn, v7)
-    version(w, "8", rating=4.1, votes=12, coverage=0.8, raw={"z": 1, "version_description": "　a b c d"})
+    version(w, "8", rating=4.1, votes=12, coverage=0.8, raw={"z": 1, "version_description": "\u3000a\xa0b\u2028c d"})
     version(w, "9", rating=3.9, votes=3, raw={"version_description": "😀" * 150 + "é" * 100})
     version(w, "20", rating=4.0, votes=10, url="https://www.ultimate-guitar.com/tab-pro/download?id=20")
     version(w, "30", rating=3.0, votes=1, raw={"version_description": math.nan})
@@ -635,10 +668,12 @@ def sheet_version_records(conn) -> list[dict[str, Any]]:
     policies = (_policy(), _policy(coverage_threshold=0.95, prior_votes=0), _policy(prior_votes=2.5, variant_bonus=2))
 
     def rec(fn: str, case: str, kw: dict[str, Any], result: Any, *, fixture: str | None = fx,
-            after: dict[str, Any] | None = None) -> None:
+            after: dict[str, Any] | None = None, dumps: Any = None) -> None:
         r = {"fn": k + fn, "case": case, "fixture": fixture, "kw": kw, "out": result}
         if after is not None:
             r["after"] = after
+        if dumps is not None:  # the answer's members in Python's order, which the sorted line loses
+            r["dumps"] = json.dumps(dumps, ensure_ascii=False)
         out.append(r)
 
     for tab in ("39144", "7", "0012", ""):
@@ -672,41 +707,45 @@ def sheet_version_records(conn) -> list[dict[str, Any]]:
 
     for name, song_id in ids.items():
         rec("library_state", name, {"song_id": song_id}, sv.library_state(conn, song_id))
-        rec("same_pages", name, {"song_id": song_id}, sv.same_pages(conn, song_id))
+        same = sv.same_pages(conn, song_id)
+        rec("same_pages", name, {"song_id": song_id}, same, dumps=same)
         rec("sheet_kind", name, {"song_id": song_id}, sv.sheet_kind(conn, song_id))
         rec("kept_by_you", name, {"song_id": song_id}, sv.kept_by_you(conn, song_id))
         rec("unkeepable", name, {"song_id": song_id}, sv.unkeepable(conn, song_id))
-        for policy in policies:
+        # another policy only where it can reorder the list: a song of versions scored, or labelled for its variant
+        for policy in {"wall": policies[:2], "nude": policies[::2]}.get(name, policies[:1]):
             listed = sv.in_library(conn, song_id, RankPolicy(**policy))
             rec("in_library", name, {"song_id": song_id, "policy": policy}, _versions(listed))
             if policy is not policies[0]:
                 continue
-            rec("as_data", name, {"song_id": song_id, "policy": policy, "total": 13}, sv.as_data(listed, 13))
-            for block in ([], [4, 8, 99]):
+            if name in ("wall", "nude", "none"):
+                data = sv.as_data(listed, 13)
+                rec("as_data", name, {"song_id": song_id, "policy": policy, "total": 13}, data, dumps=data)
+            for block in ([], [4, 8, 99]) if name in ("wall", "ties") else ([],):
                 rec("may_keep", name, {"song_id": song_id, "policy": policy, "block": block},
                     _versions(sv.may_keep(conn, song_id, listed, block)))
     every = sorted(ids.values())
     for case, song_ids in (("every song", every + [9999]), ("none", []), ("a song with none", [ids["none"]]),
-                           ("one, given twice", [ids["wall"], ids["wall"]]), ("unknown", [9999]),
-                           ("out of order", [ids["riptide"], ids["wall"], ids["soda"]])):
+                           ("one, given twice", [ids["riptide"], ids["riptide"]]), ("unknown", [9999]),
+                           ("out of order", [ids["riptide"], ids["creep"], ids["soda"]])):
         for policy in policies[:1]:
             listed = sv.in_library_of(conn, song_ids, RankPolicy(**policy))
             rec("in_library_of", case, {"song_ids": song_ids, "policy": policy},
                 [[song_id, _versions(v)] for song_id, v in listed.items()])
-    wall = ids["wall"]
-    for case, chosen, kept, same in (
-            ("none chosen or kept", None, [], None),
-            ("the one and two kept", "2", ["1", "3"], None),
-            ("a kept tab no version has", "2", ["555"], None),
-            ("those a kept one's text", "2", ["1"], {"4": "version-1.html", "5": "sheet.html"}),
-            ("chosen a gone one", "7", [], None),
-            ("chosen another site's tab", "lc", ["10"], None),
+    for case, name, chosen, kept, same in (
+            ("none chosen or kept", "wall", None, [], None),
+            ("chosen a gone one", "wall", "7", [], None),
+            ("the one and two kept", "nude", "80", ["81", "83"], None),
+            ("a kept tab no version has", "nude", "80", ["555"], None),
+            ("those a kept one's text", "nude", "80", ["81"], {"82": "version-81.html", "84": "sheet.html"}),
+            ("chosen another site's tab", "nude", "lc", ["84"], None),
     ):
-        for policy in policies[:2] if chosen is None else policies[:1]:
-            rec("song_sheet_versions", case,
-                {"song_id": wall, "policy": policy, "chosen_tab": chosen, "kept_tabs": kept, "same_as": same},
-                _versions(sv.song_sheet_versions(conn, wall, RankPolicy(**policy), chosen_tab=chosen, kept_tabs=kept,
-                                                 same_as=same)))
+        policy = policies[0]
+        rec("song_sheet_versions", case,
+            {"song_id": ids[name], "policy": policy, "chosen_tab": chosen, "kept_tabs": kept, "same_as": same},
+            _versions(sv.song_sheet_versions(conn, ids[name], RankPolicy(**policy), chosen_tab=chosen, kept_tabs=kept,
+                                             same_as=same)))
+    wall = ids["wall"]
     for name in ("riptide", "ties", "zebra"):
         rec("song_sheet_versions", name, {"song_id": ids[name], "policy": policies[0], "chosen_tab": None,
                                           "kept_tabs": [], "same_as": None},
@@ -811,7 +850,7 @@ def test_every_function_the_port_meets_is_in_the_vectors(made):
 
     assert fns(made.rank) == {f"caracole.rank.{f}" for f in ("bayes", "prior_mean", "is_complete", "rank_by_rating",
                                                             "rank_sheets", "rank_guitar")} | {
-        "caracole.versions.complete", "caracole.versions.replaces_sheet"}
+        "caracole.versions.complete", "caracole.versions.replaces_sheet", "caracole.config.RankPolicy"}
     assert fns(made.coverage) == {f"caracole.coverage.{f}" for f in (
         "normalize_line", "lyric_lines", "sheet_lyric_text", "_is_plain_chord_line", "_comparable", "_match",
         "coverage")}
@@ -824,7 +863,8 @@ def test_every_function_the_port_meets_is_in_the_vectors(made):
         for name in names:
             if name.startswith(module.__name__ + "."):
                 assert callable(getattr(module, name.rsplit(".", 1)[1]))
-    assert {f.name for f in fields(rank.Candidate)} - {"score", "version_id"} == set(cand("1", 0, 0))
+    assert {f.name for f in fields(rank.Candidate)} - {"score", "version_id", "provider", "kind"} == set(
+        cand("1", 0, 0))
 
 
 def test_the_vectors_cover_what_they_say(made):

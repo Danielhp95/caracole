@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.VersionRow
 import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.names.Known
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyRe
@@ -55,8 +56,6 @@ object SheetVersions {
     const val YOURS_KV = "sheet_versions:yours:"
     const val UNKEEPABLE_KV = "sheet_versions:unkeepable:"
 
-    /** songs.HUMAN_SHEET. */
-    private const val HUMAN_SHEET = "sheet.txt"
     private val NAME = PyRegex.compile("""version-([0-9]+)\.(?:txt|json|html)""")
 
     /** sheet_versions._ROWS: the UG versions of the sheet's kinds of the songs a JSON list names, under their match,
@@ -119,7 +118,7 @@ object SheetVersions {
     /** sheet_versions.sheet_kind: `ukulele` for a kept UG sheet of the Ukulele Chords type, else `chords`. */
     fun sheetKind(db: Db, songId: Long): String {
         for (f in Kept.keptFiles(db, songId)) {
-            if (f.name != HUMAN_SHEET) continue
+            if (f.name != Known.HUMAN_SHEET) continue
             val row = Versions.get(db, f.versionId) ?: throw NoSuchElementException("no version with id ${f.versionId}")
             return if (row.provider == PROVIDER && row.kind == "ukulele") "ukulele" else "chords"
         }
@@ -161,12 +160,17 @@ object SheetVersions {
         }
         val cannot = unkeepable(db, songId).toSet()
         val blocked = block.map(BigInteger::valueOf).toSet()
+        // in Python's order, each test only once those before it pass: int() of a tab id only for a version still in
+        // the running, as `not (…) and int(v.tab_id) not in block and …` short-circuits
         return versions.filter { v ->
-            val tab = PyInt.parse(v.tabId) ?: throw IllegalArgumentException(
-                "invalid literal for int() with base 10: ${PyStr.repr(v.tabId)}")
-            !(v.kept || v.chosen || v.gone) && tab !in blocked && v.tabId !in cannot && Robots.disallows(v.url) == null
+            !(v.kept || v.chosen || v.gone) && int(v.tabId) !in blocked && v.tabId !in cannot &&
+                Robots.disallows(v.url) == null
         }
     }
+
+    /** Python's int() of a tab id, its ValueError an IllegalArgumentException. */
+    private fun int(tabId: String): BigInteger = PyInt.parse(tabId)
+        ?: throw IllegalArgumentException("invalid literal for int() with base 10: ${PyStr.repr(tabId)}")
 
     /** sheet_versions.sheet_pins: of the song's `[pin]` tabs, those that choose its sheet: chords versions, by the
      * song's versions and the offline index, and a pin of a kind neither knows; any other (a text tab's) stays. */
@@ -266,12 +270,12 @@ object SheetVersions {
         val kept = HashMap<Long, MutableList<Pair<Long, String>>>()
         db.query("SELECT f.song_id, f.name, f.kept_rank, v.provider, v.kind, v.tab_id FROM files f " +
                      "JOIN versions v ON v.id = f.version_id WHERE f.song_id IN (SELECT value FROM json_each(?)) " +
-                     "AND (f.name = ? OR substr(f.name, 1, ?) = ?)", ids, HUMAN_SHEET, Py.len(PREFIX), PREFIX) { r ->
+                     "AND (f.name = ? OR substr(f.name, 1, ?) = ?)", ids, Known.HUMAN_SHEET, Py.len(PREFIX), PREFIX) { r ->
             val songId = r.long(0)!!
             val name = r.text(1)!!
             if (songId !in chosen) chosen[songId] = null
             val tabs = kept.getOrPut(songId) { ArrayList() }
-            if (name == HUMAN_SHEET) {
+            if (name == Known.HUMAN_SHEET) {
                 if (r.text(3) == PROVIDER && r.text(4) in KINDS) chosen[songId] = r.text(5)
             } else {
                 val tab = tabOf(name)

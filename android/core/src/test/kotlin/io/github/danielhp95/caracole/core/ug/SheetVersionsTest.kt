@@ -12,6 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -96,6 +97,19 @@ class SheetVersionsTest {
             val listed = SheetVersions.inLibrary(db, wall, policy)
             assertEquals(listOf("3", "4", "30", "9"), SheetVersions.mayKeep(db, wall, listed, emptySet()).map { it.tabId })
             assertEquals(listOf("3", "30", "9"), SheetVersions.mayKeep(db, wall, listed, setOf(4L)).map { it.tabId })
+        }
+    }
+
+    @Test fun mayKeepReadsATabIdAsANumberOnlyForAVersionStillInTheRunning() {
+        library { db ->
+            val wall = id(db, "oasis/wonderwall")
+            val listed = SheetVersions.inLibrary(db, wall, policy)
+            // Python's `not (kept or chosen or gone) and int(tab_id) not in block …` never calls int() on these
+            val out = listed.map { if (it.kept || it.chosen || it.gone) it.copy(tabId = "no number") else it }
+            assertEquals(listOf("3", "4", "30", "9"), SheetVersions.mayKeep(db, wall, out, setOf(99L)).map { it.tabId })
+            // but on one still in the running it does, and its ValueError is Kotlin's IllegalArgumentException
+            val running = listed.map { if (it.tabId == "4") it.copy(tabId = "four") else it }
+            assertFailsWith<IllegalArgumentException> { SheetVersions.mayKeep(db, wall, running, emptySet()) }
         }
     }
 

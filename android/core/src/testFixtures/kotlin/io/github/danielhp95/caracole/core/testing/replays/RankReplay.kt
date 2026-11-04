@@ -32,12 +32,15 @@ import java.nio.file.Files
  * Ranking, coverage and sheet versions (tests/test_conformance_rank.py), each record answered as Python answered it,
  * every float as Python's repr:
  * - [rank]: vectors/sites/ug_rank.jsonl, rank.py's and versions.py's `complete` and `replaces_sheet`, a ranking's
- *   answer each candidate's index and score in its order;
+ *   answer each candidate's index and score in its order; its first record RankPolicy's defaults, which [policy]
+ *   builds every record's policy on (the fields a record names, the rest RankPolicy()'s, so Kotlin's defaults are
+ *   checked once, there);
  * - [coverage]: vectors/sites/ug_coverage.jsonl over ug_coverage_texts.jsonl's texts (a fixture file's bytes as
- *   UTF-8, or a text read out of one), a coverage's `scores` each lyric line's match too;
+ *   UTF-8, or a text read out of one), a coverage's `scores`, where the record has them, each lyric line's match too;
  * - [sheetVersions]: vectors/sites/ug_sheet_versions.jsonl over its fixture library
  *   (ug_sheet_versions_fixture_library.jsonl), loaded once for the readers and afresh for each writer, whose kv
- *   records after it must be Python's text.
+ *   records after it must be Python's text; a record's `dumps` (as_data's, same_pages') the answer's json.dumps
+ *   text, its members in Python's order, which [PyJson.dumps] of Kotlin's must be byte for byte.
  */
 object RankReplay : AreaReplay {
     override val area = "rank"
@@ -62,6 +65,7 @@ object RankReplay : AreaReplay {
                 val kw = record.kw
                 val a = record.args
                 when (val fn = record.fn.removePrefix("caracole.")) {
+                    "config.RankPolicy" -> defaults(record.out!!.jsonObject)
                     "rank.bayes" -> PyJson.float(Rank.bayes(double(a[0])!!, a[1].jsonPrimitive.int, double(a[2])!!,
                                                             double(a[3])!!))
                     "rank.prior_mean" -> PyJson.float(Rank.priorMean(candidates(kw)))
@@ -114,7 +118,7 @@ object RankReplay : AreaReplay {
                     } catch (e: Exception) {
                         JsonPrimitive("threw $e")
                     }
-                    val want = record.extra.getValue("scores")
+                    val want = record.extra["scores"] ?: continue
                     misses.check(dumps(scores) == dumps(want)) { "${case(record)}: scored ${dumps(scores)}, Python ${dumps(want)}" }
                 }
                 else -> answer(misses, record) {
@@ -143,6 +147,7 @@ object RankReplay : AreaReplay {
                     Fixtures.load(db, FIXTURE)
                     for (record in records.filter { "after" !in it.extra }) {
                         answer(misses, record) { sheetVersionsCall(db, record) }
+                        inPythonsOrder(misses, record) { sheetVersionsCall(db, record) }
                     }
                 }
             }
@@ -228,6 +233,33 @@ object RankReplay : AreaReplay {
 
     // --- shared -------------------------------------------------------------------------------------------------
 
+    /** A record's `dumps`, json.dumps of Python's answer, against [PyJson.dumps] of [got]'s: the members in
+     * Python's order, which [answer]'s sorted comparison can't see. */
+    private fun inPythonsOrder(misses: Misses, record: Record, got: () -> JsonElement) {
+        val want = record.extra["dumps"]?.jsonPrimitive?.content ?: return
+        val have = try {
+            PyJson.dumps(got())
+        } catch (e: Exception) {
+            "threw $e"
+        }
+        misses.check(have == want) { "${case(record)}: dumps ${have.take(600)}, Python ${want.take(600)}" }
+    }
+
+    /** RankPolicy() against the defaults Python's record gives, each field compared as the number it is. */
+    private fun defaults(python: JsonObject): JsonElement {
+        val kotlin = RankPolicy()
+        val fields = mapOf<String, Double>(
+            "coverage_threshold" to kotlin.coverageThreshold, "line_match" to kotlin.lineMatch,
+            "prior_votes" to kotlin.priorVotes, "scored_sheets" to kotlin.scoredSheets.toDouble(),
+            "label_penalty" to kotlin.labelPenalty, "variant_bonus" to kotlin.variantBonus,
+        )
+        if (fields.keys != python.keys) throw AssertionError("RankPolicy's fields ${python.keys}, Kotlin's ${fields.keys}")
+        // Python's own numbers where Kotlin's are equal, so the comparison names the field that differs
+        return JsonObject(python.mapValues { (name, value) ->
+            if (double(value) == fields.getValue(name)) value else PyJson.float(fields.getValue(name))
+        })
+    }
+
     /** [got]'s answer against the record's, compared as Python's JSON text with sorted keys; a throw is a miss. */
     private fun answer(misses: Misses, record: Record, got: () -> JsonElement) {
         val answer = try {
@@ -248,19 +280,27 @@ object RankReplay : AreaReplay {
 
     private fun dumps(e: JsonElement): String = PyJson.dumps(e, sortKeys = true)
 
+    /** A record's policy, `RankPolicy(**policy)`: the fields it names, the rest RankPolicy()'s defaults. */
     fun policy(kw: JsonObject): RankPolicy = kw.getValue("policy").jsonObject.let { p ->
-        RankPolicy(coverageThreshold = double(p.getValue("coverage_threshold"))!!,
-                   lineMatch = double(p.getValue("line_match"))!!, priorVotes = double(p.getValue("prior_votes"))!!,
-                   scoredSheets = p.getValue("scored_sheets").jsonPrimitive.int,
-                   labelPenalty = double(p.getValue("label_penalty"))!!,
-                   variantBonus = double(p.getValue("variant_bonus"))!!)
+        val d = RankPolicy()
+        val known = setOf("coverage_threshold", "line_match", "prior_votes", "scored_sheets", "label_penalty",
+                          "variant_bonus")
+        (p.keys - known).firstOrNull()?.let { throw AssertionError("RankPolicy has no field $it") }
+        RankPolicy(coverageThreshold = double(p["coverage_threshold"]) ?: d.coverageThreshold,
+                   lineMatch = double(p["line_match"]) ?: d.lineMatch,
+                   priorVotes = double(p["prior_votes"]) ?: d.priorVotes,
+                   scoredSheets = p["scored_sheets"]?.jsonPrimitive?.int ?: d.scoredSheets,
+                   labelPenalty = double(p["label_penalty"]) ?: d.labelPenalty,
+                   variantBonus = double(p["variant_bonus"]) ?: d.variantBonus)
     }
 
     private fun candidates(kw: JsonObject): List<Candidate> = kw.getValue("cands").jsonArray.map { candidate(it.jsonObject) }
 
+    /** A record's candidate: the fields ranking reads, its provider `ug` and its kind `chords`, as the generator's
+     * `_candidate` makes it. */
     fun candidate(c: JsonObject): Candidate = Candidate(
-        provider = c.getValue("provider").jsonPrimitive.content, tabId = c.getValue("tab_id").jsonPrimitive.content,
-        kind = c.getValue("kind").jsonPrimitive.content, rating = double(c.getValue("rating"))!!,
+        provider = "ug", tabId = c.getValue("tab_id").jsonPrimitive.content, kind = "chords",
+        rating = double(c.getValue("rating"))!!,
         votes = c.getValue("votes").jsonPrimitive.int, version = c.getValue("version").jsonPrimitive.int,
         label = text(c["label"]), coverage = double(c["coverage"]),
     )
