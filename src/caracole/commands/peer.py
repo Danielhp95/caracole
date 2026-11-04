@@ -315,6 +315,9 @@ def register(app: typer.Typer) -> None:
         given = Path(source)
         options = {"said": said, "parts": asked, "choices": choices, "prefer": prefer, "compared": compared,
                    "yes": yes}
+        if not given.exists():
+            said.stage("check", "failed", f"no file at {source}")
+            fail(f"No file at {source}: name a .caracole file, or an index export.", 2)
         if not given.is_dir():
             _import(cfg, given, name=None, **options)
             return

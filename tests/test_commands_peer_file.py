@@ -220,7 +220,7 @@ def test_something_that_isnt_a_file_caracole_exported_is_refused(libraries, tmp_
     out = run(studio, "peer", "import", "--yes", str(tmp_path / "notes.txt"))
     assert out.exit_code == 2 and "isn't a file caracole exported" in out.output
     gone = run(studio, "peer", "import", "--yes", str(tmp_path / "nothing.caracole"))
-    assert gone.exit_code == 2
+    assert gone.exit_code == 2 and "No file at" in gone.output
 
 
 def test_a_file_cut_short_is_refused_whole_before_anything_is_taken(libraries, tmp_path):
