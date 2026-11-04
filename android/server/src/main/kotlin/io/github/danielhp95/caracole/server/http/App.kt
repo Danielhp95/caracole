@@ -11,11 +11,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-/** The launch's secrets and who the server answers to. */
+/** The launch's secrets, who the server answers to, and [libraryName], the library's name its pages give now, read
+ * for each page (the computer's, as the last sync gave it: PhoneConfig.libraryName; empty before the first), which
+ * every page names with the phone's badge (LibraryName.phone). */
 data class AppConfig(val csrf: String, val secret: String, val allowed: Set<String> = setOf("127.0.0.1", "localhost"),
-                     val libraryName: String = PHONE) {
+                     val libraryName: () -> String = { "" }) {
     companion object {
-        /** The library's name on the phone's pages, until the phone has one of its own. */
+        /** What the phone calls its own library where it names itself to a computer (the Sync tab's GET /api/sync). */
         const val PHONE = "Phone"
     }
 }
@@ -65,10 +67,11 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
 
     private val routes = Table(modules.flatMap { it.routes }, "by the modules")
     private val stubbed = Table(stubs.routes, "by the stubs")
-    private val name = LibraryName(config.libraryName, MessagePage.PHONE_BADGE)
+    /** The library as the pages name it now. */
+    private fun name(): LibraryName = LibraryName.phone(config.libraryName())
 
     init {
-        files.name = name  // the files' message pages name the library as the App's do
+        files.name = ::name  // the files' message pages name the library as the App's do
     }
 
     /** The route that answers [method] at [path]: a module's, else a stub's. */
@@ -125,7 +128,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
 
     /** The message page, naming the phone's library. */
     fun message(status: Int, title: String, message: String, link: Pair<String, String>? = null): Response =
-        MessagePage.page(status, title, message, link, name)
+        MessagePage.page(status, title, message, link, name())
 
     // --- routing --------------------------------------------------------------------------------------------------
 

@@ -39,8 +39,8 @@ class LibraryPage(val assets: LibraryAssets) {
     }
 
     /** The page for [data] (the page's data, which its script reads: [PageData]'s, with the server's part), served
-     * with [controls], for the library [libraryName] (AppConfig's: "Phone"), named as every page the phone writes
-     * names it (library_name.py's LibraryName, server.http's). */
+     * with [controls], for the library [libraryName] (AppConfig's: the computer's, else none), named as every page
+     * the phone writes names it (library_name.py's LibraryName, server.http's). */
     fun served(data: JsonObject, controls: ServerControls, libraryName: String): String {
         val shown = LibraryName(libraryName, controls.badge)
         val sync = controls.sync
