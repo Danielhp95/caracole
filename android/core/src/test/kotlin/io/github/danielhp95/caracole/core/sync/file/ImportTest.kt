@@ -24,7 +24,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
-import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -88,7 +87,6 @@ class ImportTest {
     private fun ended(): Map<String, String> = stages.associate { (name, state, _) -> name to state }
 
     @Test fun everyImportRecordOfFileJsonlGivesTheSameDifferencesTakesAndBasesAsPythons() {
-        Assume.assumeTrue("waiting on sync-file: vectors/sync/file.jsonl", SyncReplay.fileVectors())
         val misses = Misses("${SyncReplay.FILE} import")
         SyncReplay.file(misses, only = "import")
         misses.assertNone()

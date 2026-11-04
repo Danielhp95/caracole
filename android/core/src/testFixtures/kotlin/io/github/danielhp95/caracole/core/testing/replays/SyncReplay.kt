@@ -526,13 +526,9 @@ object SyncReplay : AreaReplay {
     const val FILE = "sync/file.jsonl"
     const val TAKEN = "2026-11-04T09:00:00Z"  // test_conformance_sync_file.py's: when an import's take is made
 
-    /** Whether the file's vectors are there (waiting on sync-file, whose corpus writes them). */
-    fun fileVectors(): Boolean = Corpus.open(FILE)?.use { true } ?: false
-
-    /** Every record of file.jsonl, once it is there: export, file_name, read, unit, check_whole, check_importable and
-     * import; those of [only] alone when given. */
+    /** Every record of file.jsonl: export, file_name, read, unit, check_whole, check_importable and import; those of
+     * [only] alone when given. */
     fun file(misses: Misses, only: String? = null) {
-        if (!fileVectors()) return  // waiting on sync-file
         val records = Corpus.records(FILE)
         val fns = setOf("export", "file_name", "read", "unit", "check_whole", "check_importable", "import")
         misses.check(records.map { it.fn }.toSet() == fns) { "$FILE's functions: ${records.map { it.fn }.toSet()}" }

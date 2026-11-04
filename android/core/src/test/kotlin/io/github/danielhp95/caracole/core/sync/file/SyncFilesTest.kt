@@ -13,7 +13,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
-import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -78,7 +77,6 @@ class SyncFilesTest {
     }
 
     @Test fun everyRecordOfFileJsonlReplays() {
-        Assume.assumeTrue("waiting on sync-file: vectors/sync/file.jsonl", SyncReplay.fileVectors())
         Misses(SyncReplay.FILE).also(SyncReplay::file).assertNone()
     }
 
