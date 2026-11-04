@@ -34,8 +34,8 @@ import kotlinx.coroutines.withContext
 /**
  * The settings: caracole serve's address, Test (the list fetched and counted, nothing downloaded), Sync now,
  * the last sync's time and outcome, the storage the copy takes, the sync on Wi-Fi by itself, the computer's indexes
- * imported (from caracole serve, or from a file: [IndexImports]) with the last import's outcome, and the text size a
- * pinch left, with Reset.
+ * imported (from caracole serve, or from a file: [IndexImports]) with the last import's outcome, the text size a
+ * pinch left, with Reset, and the phone's backups ([BackupsActivity]).
  */
 class SettingsActivity : Activity() {
     private lateinit var settings: Settings
@@ -99,6 +99,8 @@ class SettingsActivity : Activity() {
             settings.textZoom = TextZoom.DEFAULT
             showTextSize()
         }
+
+        findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
     }
 
     override fun onResume() {

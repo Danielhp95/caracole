@@ -379,5 +379,5 @@ object PyUnicode {
     }
 
     /** unicodedata.east_asian_width: "F", "H", "W", "Na", "A" or "N", from data/caracole/unicode/east_asian_width.txt. */
-    fun eastAsianWidth(cp: Int): String = TODO("lane py-format")
+    fun eastAsianWidth(cp: Int): String = EastAsianWidth.of(cp)
 }

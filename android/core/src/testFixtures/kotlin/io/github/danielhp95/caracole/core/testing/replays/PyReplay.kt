@@ -26,8 +26,10 @@ import java.security.MessageDigest
 /**
  * core.py's site records (vectors/py/sites_*.jsonl, tests/test_conformance_py.py) answered by :core as Python
  * answered them: html.unescape, json.loads and json.dumps with an indent, float() and int(), str.capitalize, and
- * urljoin, urlunsplit and urlencode. The JVM's tests (PyHtmlTest, PyJsonLoadsTest, PyNumbersTest, PyCapitalizeTest,
- * PyUrlTest) call each part; CorpusOnDeviceTest runs them all under ART. Lane py-format adds its format records.
+ * urljoin, urlunsplit and urlencode; then its format records (vectors/py/format_*.jsonl, [PyFormatRecords]): the `f`
+ * and `%` specs, round(), difflib.SequenceMatcher and east_asian_width. The JVM's tests (PyHtmlTest,
+ * PyJsonLoadsTest, PyNumbersTest, PyCapitalizeTest, PyUrlTest, PyFormatTest, PySequenceTest) call each part;
+ * CorpusOnDeviceTest runs them all under ART.
  */
 object PyReplay : AreaReplay {
     override val area = "py"
@@ -38,6 +40,15 @@ object PyReplay : AreaReplay {
         numbers()
         capitalize()
         urls()
+        formats(misses)
+    }
+
+    /** The format records ([PyFormatRecords]), told to the area's [misses]: every code point's width and more. */
+    private fun formats(misses: Misses) {
+        val before = misses.checked
+        PyFormatRecords.replay(misses)
+        val checked = misses.checked - before
+        assertTrue("format records checked: $checked", checked > 0x110000 + 10_000)
     }
 
     // --- html.unescape ------------------------------------------------------------------------------------------

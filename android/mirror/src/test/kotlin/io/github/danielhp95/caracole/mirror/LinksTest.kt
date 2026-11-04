@@ -42,6 +42,18 @@ class LinksTest {
     }
 
     @Test
+    fun `the viewer's Export PDF is printed, a navigation or a download alike`() {
+        val export = "$origin/export.pdf?sheet=Estopa%2FTu%20calorro%2Fsheet.html&t=2&capo=0"
+        assertEquals(Route.Print(export), links.route(export))
+        assertEquals(Route.Print(export), links.route(export, download = true))
+        assertEquals(Route.Print("$origin/export.pdf"), links.route("$origin/export.pdf"))
+        // Another origin's is the browser's, and any other path the server's.
+        val computer = "http://127.0.0.1:8737/export.pdf?sheet=x"
+        assertEquals(Route.Browser(computer), links.route(computer))
+        assertEquals(Route.Page, links.route("$origin/export?sheet=x"))
+    }
+
+    @Test
     fun `any other origin is the browser's, every loopback port and the old asset loader's included`() {
         for (url in listOf("http://127.0.0.1:8737/", "http://127.0.0.1:8737/index.html", "http://127.0.0.1:8739/",
             "http://127.0.0.1/", "http://127.0.0.1:80/", "https://127.0.0.1:8738/", "http://localhost:8738/",
