@@ -55,7 +55,7 @@ class JobViewsTest {
     @Test fun everyRecordOfTheVectorsIsThisViewOfTheSameJob() {
         val records = Corpus.records("web/job_views.jsonl")
         val kinds = records.map { it.extra.getValue("job").jsonObject.getValue("kind").jsonPrimitive.content }.toSet()
-        assertEquals(setOf("sync", "peer-push", "add", "remove"), kinds)
+        assertEquals(setOf("sync", "peer-push", "index-merge", "add", "remove"), kinds)
         for (record in records) {
             val held = record.extra.getValue("job").jsonObject
             val job = jobOf(held)

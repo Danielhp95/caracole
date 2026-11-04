@@ -25,6 +25,13 @@ val copyLibraryAssets by tasks.registering(Sync::class) {
     }
     into(generatedAssets.map { it.dir("caracole/library_assets") })
 }
+// The Guitar Pro page's script and stylesheet (web/guitar_page.py's), as caracole serve inlines them.
+val copyGuitarAssets by tasks.registering(Sync::class) {
+    from("../../src/caracole/web") {
+        include("guitar.js", "guitar.css")
+    }
+    into(generatedAssets.map { it.dir("caracole/web") })
+}
 
 sourceSets {
     main {
@@ -32,10 +39,11 @@ sourceSets {
     }
 }
 
-tasks.processResources { dependsOn(copyLibraryAssets) }
+tasks.processResources { dependsOn(copyLibraryAssets, copyGuitarAssets) }
 
 dependencies {
     api(project(":core"))
+    api(project(":viewer"))
     implementation("io.ktor:ktor-server-cio:3.3.3")
 
     testImplementation(testFixtures(project(":core")))
@@ -43,6 +51,7 @@ dependencies {
     testImplementation(kotlin("test-junit"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     testFixturesApi(testFixtures(project(":core")))
+    testFixturesApi(testFixtures(project(":viewer")))
     testFixturesImplementation("junit:junit:4.13.2")
 }
 

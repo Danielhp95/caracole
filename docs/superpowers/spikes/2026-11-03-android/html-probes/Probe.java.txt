@@ -1,0 +1,17 @@
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.*;
+public class Probe {
+  static String rep(String s){ return s==null?"null":s.replace("\n","\\n").replace("\r","\\r"); }
+  static void show(String h, String sel){ Document d=Jsoup.parse(h); Element e=d.selectFirst(sel);
+    System.out.println(rep(h.length()>50?h.substring(0,50):h)+" -> text:"+(e==null?"null":rep(e.text()))+" whole:"+(e==null?"null":rep(e.wholeText()))+" quirks:"+d.quirksMode()); }
+  public static void main(String[] a){
+    show("<div id=t_body><pre>\nA\r\nB\rC</pre></div>", "pre");
+    show("<pre><script>var x='<b>';</script>T<br>U<!--c-->V</pre>", "pre");
+    show("<p>&amp頭 &ampx &notit; &#x80; &#0; a&nbsp;b</p>", "p");
+    Document d=Jsoup.parse("<a title='&ampx &amp=y &amp頭'>x</a>"); System.out.println("attr:"+d.selectFirst("a").attr("title"));
+    d=Jsoup.parse("<ul id=B_MAIN><li>one<li>two</ul>"); System.out.println("quirks id: "+d.select("ul#b_main > li").size()+" "+d.select("ul#B_MAIN > li").size()+" "+d.quirksMode());
+    d=Jsoup.parse("<!doctype html><ul id=B_MAIN class=Foo><li>one<li>two</ul>"); System.out.println("std: "+d.select("ul#b_main > li").size()+" "+d.select("ul.foo > li").size());
+    d=Jsoup.parse("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><p>x"); System.out.println("html401 no sysid: "+d.quirksMode());
+    d=Jsoup.parse("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\"><p>x"); System.out.println("html401 sysid: "+d.quirksMode());
+  }
+}

@@ -263,12 +263,12 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching, "line": shown.as_json(),
             "details": SYNC_TAB if kind == "sync" else details_href(job.id)}
-    if peer in ("sync", "peer-push"):  # its stages, each a step named as the Requests tab names it, and once over
-        # what it took, gave and left
+    if peer in ("sync", "peer-push", "index-merge"):  # its stages, each a step named as the
+        # Requests tab names it, and once over what it took, gave and left (none for a job of no unit)
         seen["steps"] = [{"name": s.name, "label": PEER_STEPS.get(s.name, s.label), "state": s.state,
                           "detail": s.detail} for s in job.stages]
         seen["count"] = None
-        seen["outcome"] = peer_outcome(job)
+        seen["outcome"] = peer_outcome(job) if peer in ("sync", "peer-push") else None
     if shown is not line and line.link is not None:
         seen["sheet"] = line.link[1]
     if kind == "song":

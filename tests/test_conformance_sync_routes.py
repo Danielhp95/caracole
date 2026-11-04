@@ -18,10 +18,11 @@ SyncRoutes (lane phone-sync-routes) and JobViews (lane jobs) answer to.
 
   A refusal's words are the routes'; the phone's routes say the same.
 - ``vectors/web/job_views.jsonl``: ``caracole.web.jobs_routes.view`` over jobs of a sync (``caracole peer sync``),
-  a push taken (``caracole peer take``: peer-push), an add and a removal, in every state (queued, ahead of others or
+  a push taken (``caracole peer take``: peer-push), another caracole's index pages merged (``caracole index merge
+  --progress``: index-merge), an add and a removal, in every state (queued, ahead of others or
   not; running; done; failed, with an ``error:`` line, without, in a stage's words, or a stage the queue ended failed;
   cancelled; interrupted). ``job`` is the job as the phone would hold it: ``kind`` (its JobSpec's: sync, peer-push,
-  add, remove), ``id``, ``title``, ``display``, ``key``, ``state``, ``stages`` (``{name, label, state, detail,
+  index-merge, add, remove), ``id``, ``title``, ``display``, ``key``, ``state``, ``stages`` (``{name, label, state, detail,
   running_detail}``: a staged job's stages, else its commands as ``Job.as_json`` lists them as steps), ``output``
   (what it printed, its ``error:`` line among them), ``song_id`` (the song the view names, or null), ``ahead`` (the
   jobs waiting or running before it) and ``outcome`` (what it took, gave and left: ``jobs_routes.peer_outcome``, which
@@ -307,6 +308,26 @@ def view_records() -> list[dict[str, Any]]:
                                                            second, "interrupted"), kind),
             view_record("interrupted before it ran", job("interrupted"), kind),
         ]
+    for kind, stage, said in (("index-merge", "merge", "merged 12 pages: ug, lacuerda"),):
+        def job(state, stages=None, **kw):
+            return peer_job(kind, state, stages, **kw)
+
+        records += [
+            view_record("queued, next", job("queued"), kind),
+            view_record("queued behind two", job("queued"), kind, ahead=2),
+            view_record("running", job("running", {stage: ("running", "")}), kind),
+            view_record("done", job("done", {stage: ("done", said)}), kind),
+            view_record("done, its stage silent", job("done", {stage: ("done", "")}), kind),
+            view_record("failed in its stage's words", job("failed", {stage: ("failed", "The file is not a "
+                                                                                       "caracole's.")},
+                                                         output=["error: The file is not a caracole's."]), kind),
+            view_record("failed with an error line, its stage ended by the queue", _ended(job(
+                "failed", {stage: ("running", "")}, output=["Taking…", "error: database is locked"]), stage), kind),
+            view_record("cancelled", _cancelled(job("cancelled")), kind),
+            view_record("interrupted while it ran", _ended(job("interrupted", {stage: ("running", "")}), stage,
+                                                           "interrupted"), kind),
+            view_record("interrupted before it ran", job("interrupted"), kind),
+        ]
     nothing_taken = "Nothing taken: no backup of the database first, not enough room."
     records.append(view_record("done, its take failed with no backup first", peer_job(
         "peer-push", "done", {"check": ("done", "1 change from Phone"), "take": ("failed", nothing_taken),
@@ -366,7 +387,7 @@ def test_sync_routes_jsonl_is_what_the_tabs_routes_answer(corpus, monkeypatch):
 def test_job_views_jsonl_is_what_the_views_say_of_each_kind_in_every_state():
     records = view_records()
     states = {(r["job"]["kind"], r["job"]["state"]) for r in records}
-    for kind in ("sync", "peer-push", "add", "remove"):
+    for kind in ("sync", "peer-push", "index-merge", "add", "remove"):
         assert {state for k, state in states if k == kind} == {"queued", "running", "done", "failed", "cancelled",
                                                                "interrupted"}, kind
     check(WEB / "job_views.jsonl", jsonl(records, corpus="web/job_views", made_by=MADE_BY))

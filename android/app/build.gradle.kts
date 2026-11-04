@@ -18,7 +18,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Sends no site a request: caracole.network=loopback and a refusing Caracole.sitesForTests, before the app starts.
+        testInstrumentationRunner = "io.github.danielhp95.caracole.CaracoleTestRunner"
         // The bundled SQLite's native library, for phones and for the emulator.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
@@ -60,9 +61,11 @@ android {
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
 }
 
-val copyConformanceVectors by tasks.registering(Copy::class) {
-    from("../../tests/conformance/vectors")
-    into(layout.buildDirectory.dir("generated/conformanceAssets/conformance"))
+val copyConformanceVectors by tasks.registering(Sync::class) {
+    // The vectors, and the fixtures a record names (Corpus.fixture: `fixtures/`).
+    into(layout.buildDirectory.dir("generated/conformanceAssets"))
+    from("../../tests/conformance/vectors") { into("conformance") }
+    from("../../tests/fixtures") { into("fixtures") }
 }
 tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyConformanceVectors) }
 
@@ -83,8 +86,13 @@ dependencies {
     testImplementation(kotlin("test-junit"))
 
     androidTestImplementation(testFixtures(project(":core")))
+    androidTestImplementation(testFixtures(project(":viewer")))
+    androidTestImplementation(testFixtures(project(":server")))
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-intents:3.7.0")
 }
+
+// alphaTab's bundle as the APK's assets, for the Guitar Pro page (lane guitar-alphatab's).
+apply(from = "alphatab.gradle.kts")

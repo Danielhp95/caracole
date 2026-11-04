@@ -50,6 +50,8 @@ the job and what the library knows of its song:
   Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Synced or Taken, what it took
   and gave in a sentence, how many changes it left, and for a sync, the next step Compare again (the Sync tab), never
   Try again: a sync is made of the choices of one comparison, and a push is the other caracole's to send again.
+  Another caracole's index pages merged (``caracole index merge --progress``, Merge): Merged, and what its stage
+  said it did.
 
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
 says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
@@ -130,7 +132,10 @@ _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's inde
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
 PEER_STEPS = {"compare": "Compare", "check": "Check", "take": "Take", "give": "Give", "render": "Render",
-              "mirror": "Pages", "agree": "Agree", "index": "Indexes"}
+              "mirror": "Pages", "agree": "Agree", "index": "Indexes",
+              "merge": "Merge"}  # jobs.INDEX_MERGE_STAGES
+# The kinds of no unit: another caracole's index pages merged.
+_NO_UNITS = ("index-merge",)
 
 
 @dataclass(frozen=True)
@@ -342,6 +347,9 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
         return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, action)
     if line.tone == "failed":
         return Outcome("failed", "Failed", _sentence(line.text), action)
+    if kind in _NO_UNITS:  # what its one stage said it did
+        said = next((s.detail for s in job.stages if s.state == "done" and s.detail), "")
+        return Outcome(line.tone, line.text, _sentence(said) if said else "")
     taken = sum(1 for _, said, _ in job.units if said == "taken")
     given = sum(1 for _, said, _ in job.units if said == "given")
     left = sum(1 for _, said, _ in job.units if said == "left")

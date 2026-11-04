@@ -34,6 +34,10 @@
         abiVersions = [ "x86_64" ];
       });
 
+      # alphaTab's three files (../nix/alphatab.nix, the computer's own fixed-output fetch), for the Guitar Pro
+      # page's assets and the tests that read them (lane guitar-alphatab).
+      alphatab = pkgs.callPackage ../nix/alphatab.nix { };
+
       # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
       # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
       jdk = pkgs.jdk17_headless;
@@ -47,6 +51,7 @@
         in pkgs.mkShell {
           packages = [ jdk gradle sdk ];
           JAVA_HOME = jdk.home;
+          CARACOLE_ALPHATAB_DIR = "${alphatab}";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;
           # The Android Gradle plugin fetches aapt2 from Maven, a binary NixOS can't run:

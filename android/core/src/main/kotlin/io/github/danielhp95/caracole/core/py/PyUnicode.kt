@@ -340,4 +340,12 @@ object PyUnicode {
         val table = CodePointTable.ofPoints(classes.flatMap { m -> m.map { it to m[0] } }.toMap())
         val byKey: Map<Int, IntArray> = classes.associateBy { it[0] }
     }
+
+    // --- milestone 4's additions -----------------------------------------------------------------------------------
+
+    /** str.capitalize: the first character titlecased (its full mapping), the rest lowered, as Python 3.14. */
+    fun capitalize(s: String): String = TODO("lane py-sites")
+
+    /** unicodedata.east_asian_width: "F", "H", "W", "Na", "A" or "N", from data/caracole/unicode/east_asian_width.txt. */
+    fun eastAsianWidth(cp: Int): String = TODO("lane py-format")
 }

@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -7,7 +8,6 @@ import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.PostAnswer
-import io.github.danielhp95.caracole.server.http.PyText
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Request
 import io.github.danielhp95.caracole.server.http.Response

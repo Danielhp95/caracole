@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -8,8 +10,6 @@ import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PostAnswer
-import io.github.danielhp95.caracole.server.http.PyText
-import io.github.danielhp95.caracole.server.http.PyUrl
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route

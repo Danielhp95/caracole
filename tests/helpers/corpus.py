@@ -12,6 +12,9 @@
 - ``dump_fixture(conn, library_dir=None)`` and ``replay_fixture(conn, records, library_dir=None)``: a database's rows,
   kv and library files as fixture records, and those records into a freshly migrated database, as Kotlin's
   ``Fixtures.load`` replays them.
+- ``fixture_ref(path)``: a record's reference to a file of tests/fixtures/ in place of its bytes,
+  ``{"fixture": "lacuerda/artist.html"}``, which Kotlin's ``Corpus.fixture(path)`` reads (the corpus spec's "Fixture
+  references"); ``fixture_bytes(ref)`` reads one back.
 
 A generator test builds its file in memory and calls ``check``:
 
@@ -34,6 +37,7 @@ from typing import Any, Iterable
 import pytest
 
 CONFORMANCE = Path(__file__).resolve().parents[1] / "conformance"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 VECTORS = CONFORMANCE / "vectors"
 DATA = CONFORMANCE / "data" / "caracole"
 PHONE_SQL = DATA / "schema" / "phone.sql"
@@ -150,6 +154,25 @@ def check(path: Path | str, content: str | bytes) -> None:
     old_lines, new_lines = old.split(b"\n"), data.split(b"\n")
     n = next((i for i, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b), min(len(old_lines), len(new_lines)))
     pytest.fail(f"{shown} is stale from line {n + 1} on: regenerate it with {REGENERATE}", pytrace=False)
+
+
+def fixture_ref(path: str | Path) -> dict[str, str]:
+    """A record's reference to the file at ``path`` under tests/fixtures/ (relative to it, or absolute within it), in
+    place of its bytes: ``{"fixture": "<path relative to tests/fixtures, with />"}``. The file must exist: a vector
+    names only what the Kotlin side can read, and a fixture edited changes every vector that names it."""
+    p = Path(path)
+    full = p if p.is_absolute() else FIXTURES / p
+    full = full.resolve()
+    if not full.is_relative_to(FIXTURES.resolve()):
+        raise ValueError(f"{path} is not under tests/fixtures/")
+    if not full.is_file():
+        raise FileNotFoundError(f"tests/fixtures/{p} is no file")
+    return {"fixture": full.relative_to(FIXTURES.resolve()).as_posix()}
+
+
+def fixture_bytes(ref: dict[str, str]) -> bytes:
+    """The bytes a ``fixture_ref`` names."""
+    return (FIXTURES / ref["fixture"]).read_bytes()
 
 
 # --- fixtures ------------------------------------------------------------------------------------------------

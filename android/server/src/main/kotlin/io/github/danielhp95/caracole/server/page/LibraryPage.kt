@@ -1,10 +1,10 @@
 package io.github.danielhp95.caracole.server.page
 
-import io.github.danielhp95.caracole.server.http.Inline
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.PageIcon
-import io.github.danielhp95.caracole.server.http.PyText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -17,6 +17,7 @@ data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
     val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
+    val guitar: Boolean = false,
 )
 
 /**
@@ -67,7 +68,7 @@ class LibraryPage(val assets: LibraryAssets) {
             put("active", JsonPrimitive(controls.active))
             put("removing", JsonArray(controls.removing.sorted().map { JsonPrimitive(it) }))
             put("jobs", JsonArray(controls.jobs))
-            put("guitar", JsonPrimitive(false))
+            put("guitar", JsonPrimitive(controls.guitar))
             put("youtube", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
                                             "off" to JsonPrimitive(true))))
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }

@@ -242,6 +242,13 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         read { db -> vacuumInto(db.raw, target) }
     }
 
+    /** A WAL checkpoint after a big write (an index import, a sync's merge), TRUNCATE by default (lane prep-db).
+     * A no-op until it lands. */
+    fun checkpoint(truncate: Boolean = true) {}
+
+    /** The first search's pages read ahead, on the app's start (lane prep-db). A no-op until it lands. */
+    fun warmUp() {}
+
     override fun close() {
         all.forEach { runCatching { it.close() } }
         all.clear()

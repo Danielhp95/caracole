@@ -57,6 +57,23 @@ object Corpus {
         )
     }
 
+    /** Opens a file of tests/fixtures/ by its path there; by default from the folder in the system property
+     * `caracole.fixtures`, which Gradle sets for every test task. An androidTest sets it from the instrumentation's
+     * AssetManager (`fixtures/`, which app/build.gradle.kts copies). */
+    @JvmStatic
+    var openFixture: (String) -> InputStream? = { name ->
+        System.getProperty("caracole.fixtures")?.let { File(it, name) }?.takeIf { it.isFile }?.inputStream()
+    }
+
+    /** The bytes of the file of tests/fixtures/ a record names (`{"fixture": "lacuerda/artist.html"}`, Python's
+     * helpers.corpus.fixture_ref). A missing one fails the test. */
+    fun fixture(path: String): ByteArray {
+        val stream = openFixture(path) ?: throw AssertionError(
+            "the fixture tests/fixtures/$path is missing (caracole.fixtures=${System.getProperty("caracole.fixtures")})",
+        )
+        return stream.use { it.readBytes() }
+    }
+
     /** A `.json` vector: one object, its `header` among its members. */
     fun json(name: String): JsonObject = Json.parseToJsonElement(text(name)).jsonObject
 

@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.Refused
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -27,10 +28,30 @@ import java.time.format.DateTimeFormatter
  *
  * An add's and a removal's stages are the one command caracole serve's job runs, as `/api/jobs/N` lists it: ("add",
  * "Adding to the library") and ("remove", "Removing from caracole"), which its line says while it runs.
+ *
+ * A job of caracole serve's is its [commands]: Python's command lines as data, spelled exactly as web/jobs.py spells
+ * them, each run by the queue's runner of its first word ([Commands]); [run], when given, is what it runs instead (an
+ * add, a removal, a sync, an index import). [fetching]: whether it sends requests to a site (a lookup's), [note]
+ * what Job.as_json's `note` says.
  */
 data class JobSpec(val title: String, val key: String, val kind: String, val stages: List<Pair<String, String>>,
                    val display: String = "", val songId: Long? = null, val join: Boolean = true,
-                   val doneLine: String? = null, val run: suspend (JobContext) -> Unit)
+                   val doneLine: String? = null, val commands: List<Command> = emptyList(),
+                   val fetching: Boolean = false, val note: String = "",
+                   val run: (suspend (JobContext) -> Unit)? = null)
+
+/** One of a job's commands: its step's [label] and its command line after `caracole` ([args]), as web/jobs.py's Step. */
+data class Command(val label: String, val args: List<String>)
+
+/** What runs a command line on the phone, in-process: it throws when the step failed. */
+fun interface CommandRunner {
+    suspend fun run(args: List<String>, context: JobContext)
+}
+
+/** The phone's runners, by a command line's first word (`get`, `versions`, `lacuerda`, `harptabs`…). */
+class Commands(val runners: Map<String, CommandRunner>) {
+    fun runnerFor(args: List<String>): CommandRunner? = args.firstOrNull()?.let { runners[it] }
+}
 
 /** What a running job tells its view: a stage's state and what it says now, a line of its output (an `error: …`
  * line is what its line says should it fail), its outcome (the view's `outcome`), and the song it turned out to be
@@ -41,6 +62,13 @@ interface JobContext {
     fun outcome(value: JsonObject)
     val isCancelled: Boolean
     fun song(id: Long, display: String) {}
+
+    /** The files a reader can open already, and how long they took (get.py's `readable` event). */
+    fun readable(files: Map<String, String>, seconds: Double) {}
+
+    /** Runs the lookups queued since, in this worker, between two songs of a long job of the phone's own (the render
+     * job): no write held while they run (lane jobs-queue). */
+    fun yieldToQueued() {}
 }
 
 /** A stage of a job: its state (waiting, running, done, skipped, failed, interrupted), what it says now, and what it
@@ -170,7 +198,8 @@ class JobStarted(val id: Int, val state: String) : Exception("request $id is $st
  *   service listens); told under the queue's lock, so in order: it must not block.
  */
 class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val keep: Int = KEEP,
-               private val clock: () -> Instant = { Instant.now() }) {
+               private val clock: () -> Instant = { Instant.now() }, val commands: Commands = Commands(emptyMap()),
+               val history: JobHistory? = null) {
     private val lock = Any()
     private val jobs = ArrayList<Job>()  // oldest first, as queued
     private var nextId = 1
@@ -180,6 +209,16 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
 
     /** Told true as the queue gets busy and false as it goes idle (the app's foreground service listens). */
     var onBusy: (Boolean) -> Unit = {}
+
+    /** Told each job once it is over, cancelled ones too, outside the queue's lock, as a copy: the phone's afterJob
+     * (the search invalidated, Alerts.failed for a failed job). */
+    var onEnd: (Job) -> Unit = {}
+
+    /** Several jobs queued together or none (JobQueue.submit_all, `together`), each with whether it is new. */
+    fun submitAll(specs: List<JobSpec>): List<Pair<Job, Boolean>> = TODO("lane jobs-queue")
+
+    /** A job over queued again with its commands (Try again). */
+    fun again(id: Int): Job = TODO("lane jobs-queue")
 
     /** The job, and whether it is new (false: a waiting job of the same key that joins). */
     fun submit(spec: JobSpec): Pair<Job, Boolean> {
@@ -223,17 +262,23 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
      * A job that hasn't started taken out of the queue, over and never run, and given back as a copy; null for one
      * never queued, cancelled already or forgotten. [JobStarted] for one that runs or is over.
      */
-    fun cancel(id: Int): Job? = synchronized(lock) {
-        val job = jobs.firstOrNull { it.id == id } ?: return null
-        if (job.state == Job.CANCELLED) return null
-        if (job.state != Job.QUEUED) throw JobStarted(id, job.state)
-        job.state = Job.CANCELLED
-        job.finishedAt = clock()
-        for (stage in job.stages) stage.state = Job.SKIPPED
-        job.ended.complete(Unit)
-        forget()
-        idle()
-        job.copy()
+    fun cancel(id: Int): Job? {
+        lateinit var held: Job
+        val cancelled = synchronized(lock) {
+            val job = jobs.firstOrNull { it.id == id } ?: return null
+            if (job.state == Job.CANCELLED) return null
+            if (job.state != Job.QUEUED) throw JobStarted(id, job.state)
+            job.state = Job.CANCELLED
+            job.finishedAt = clock()
+            for (stage in job.stages) stage.state = Job.SKIPPED
+            held = job
+            forget()
+            idle()
+            job.copy()
+        }
+        runCatching { onEnd(cancelled) }
+        held.ended.complete(Unit)
+        return cancelled
     }
 
     /** The job once it is over, as a copy; [NoSuchElementException] for one the queue doesn't remember. */
@@ -268,7 +313,8 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         val running = currentCoroutineContext()[kotlinx.coroutines.Job]
         val context = Context(job) { running?.isCancelled == true }
         try {
-            job.spec.run(context)
+            val run = job.spec.run
+            if (run != null) run(context) else runCommands(job.spec.commands, context)
             end(job, Job.DONE)
         } catch (e: Throwable) {
             // The worker's own end (its scope's): the job is interrupted, and the worker stops. Any other throw, a
@@ -283,7 +329,23 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         }
     }
 
-    private fun end(job: Job, state: String, failure: String? = null) = synchronized(lock) {
+    /** A job's commands, one at a time, each by its runner; one with none fails the job. */
+    private suspend fun runCommands(commands: List<Command>, context: JobContext) {
+        for (command in commands) {
+            val runner = this@JobQueue.commands.runnerFor(command.args)
+                ?: throw IllegalStateException("caracole ${command.args.firstOrNull().orEmpty()} isn't on the phone")
+            runner.run(command.args, context)
+        }
+    }
+
+    /** The job over; [onEnd] told before anyone awaiting it hears it ended. */
+    private fun end(job: Job, state: String, failure: String? = null) {
+        val over = endLocked(job, state, failure)
+        runCatching { onEnd(over) }
+        job.ended.complete(Unit)
+    }
+
+    private fun endLocked(job: Job, state: String, failure: String? = null): Job = synchronized(lock) {
         job.state = state
         job.finishedAt = clock()
         if (failure != null) {  // its stage that ran, else the first that waited, says why
@@ -295,14 +357,14 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
             if (stage.state == Job.RUNNING) stage.state = if (state == Job.DONE) Job.DONE else state
             else if (stage.state == Job.WAITING) stage.state = Job.SKIPPED
         }
-        job.ended.complete(Unit)
         forget()
         idle()
+        job.copy()
     }
 
     /** A message's first line with something on it, trimmed; null for none. */
     private fun firstLine(message: String?): String? =
-        message?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() }
+        message?.lineSequence()?.map { Py.strip(it) }?.firstOrNull { it.isNotEmpty() }
 
     /** Keep the last [keep] jobs over. */
     private fun forget() {

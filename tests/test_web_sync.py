@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 import pytest
 
 from caracole import db
 from caracole import peer_sync as sync
-from caracole.web import sync_routes
+from caracole.web import jobs, sync_routes
 from caracole.web.app import Request, WebApp, route_for
 from caracole.web.jobs import PEER_SYNC_STAGES, PEER_TAKE_STAGES, Job, Stage, Step
 from caracole.web.jobs_routes import view
@@ -321,11 +322,15 @@ def test_the_kinds_the_tab_groups_are_peer_syncs():
 
 def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = None, *, units=(), output=(),
              job_id: int = 41, name: str = "Desk", address: str = "http://192.168.1.20:8737") -> Job:
-    """A sync's (``kind`` "sync") or a take's ("peer-push") job of caracole serve's as its queue would hold it in
-    ``state``: its stages as ``stages`` says (name: (state, detail); waiting else; a running one's detail its
-    running detail too), its ``units`` as its command said them, ``output`` its step's last lines."""
+    """A sync's (``kind`` "sync"), a take's ("peer-push") or an index export's merge ("index-merge") job of caracole serve's as its queue would hold it in ``state``: its stages as
+    ``stages`` says (name: (state, detail); waiting else; a running one's detail its running detail too), its
+    ``units`` as its command said them, ``output`` its step's last lines."""
     when = datetime(2026, 11, 3, 9, 30, tzinfo=UTC)
-    if kind == "sync":
+    if kind == "index-merge":
+        names = jobs.INDEX_MERGE_STAGES
+        made = jobs.index_merge_job(Path("/state/peer/index-0123456789abcdef.sqlite"))
+        title, key, (label, args) = made["title"], made["song_key"], made["steps"][0]
+    elif kind == "sync":
         title = f"Sync with {name}"
         args = ("peer", "sync", "--push", "--yes", "--progress", "--compared=" + "0" * 64, "--", address)
         key, names, label = sync_routes.SYNCING + address, PEER_SYNC_STAGES, title
@@ -373,3 +378,19 @@ def test_a_syncs_view_while_it_runs_is_its_running_stage_and_once_over_what_it_d
     assert view(nothing, [nothing], None, None)["line"] == {
         "tone": "waiting", "text": "Nothing taken: no backup of the database first, not enough room.", "link": None,
         "details": "#tab=requests&job=41"}
+
+
+def test_another_caracoles_index_pages_are_a_job_of_no_song_with_one_stage():
+    # skeleton-m4's job kind: caracole index merge --delete --progress -- FILE, whose command and route lane
+    # index-push writes.
+    queue = jobs.JobQueue(lambda args, say: 0)
+    path = Path("/state/peer/index-0123456789abcdef.sqlite")
+    made, new = queue.submit(**jobs.index_merge_job(path))
+    assert new and made.song_id is None and [(s.name, s.state) for s in made.stages] == [("merge", "waiting")]
+    assert made.steps[0].args == ("index", "merge", "--delete", "--progress", "--", str(path))
+    running = peer_job("index-merge", "running", {"merge": ("running", "")})
+    seen = view(running, [running], None, None)
+    assert seen["kind"] == "index-merge" and seen["line"]["text"] == "Merging the other caracole's index pages…"
+    assert seen["steps"] == [{"name": "merge", "label": "Merge", "state": "running", "detail": ""}]
+    done = peer_job("index-merge", "done", {"merge": ("done", "merged 12 pages: ug, lacuerda")})
+    assert view(done, [done], None, None)["line"]["text"] == "Merged"

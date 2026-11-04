@@ -1,10 +1,11 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.py.PyUnicode
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PostAnswer
-import io.github.danielhp95.caracole.server.http.PyText
-import io.github.danielhp95.caracole.server.http.PyUrl
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
@@ -13,13 +14,18 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
+/** What a route not on the phone yet answers: the message page, 409, "… isn't on the phone yet." (a neutral route
+ * module's until its lane lands, and every stub's). */
+fun notYet(what: String): Nothing = throw Refused(409, "Not on the phone yet", "$what isn't on the phone yet.")
+
 /**
- * The routes of caracole serve out of this round (the plan's §5.3), each answering "… isn't on the phone yet." where
- * no module answers it (App: a stub's route answers only there). Their pages (the picker, a sheet's versions, a
- * harmonica tab's readings, the Guitar Pro page, the lookup page, Export PDF) are the message page, 409; their forms
- * are refused, 409, once the form's own checks pass, which the library page says on the line; `/request`, `/lookup`
- * and `/remove` among them until lane phone-sync-routes answers them. `GET /api/youtube/video` answers as caracole
- * serve does where YouTube is off: the video's id and address, "off", and no guess.
+ * The routes of caracole serve no module of the phone answers yet (the plan's §5.3), each answering "… isn't on the
+ * phone yet." where no module answers it (App: a stub's route answers only there). Their pages (the picker, a sheet's
+ * versions, a harmonica tab's readings, the Guitar Pro page, the lookup page, Export PDF) are the message page, 409;
+ * their forms are refused, 409, once the form's own checks pass, which the library page says on the line. A route a
+ * lane will answer moves to its module, neutral until then (LookupRoutes, RequestsRoutes; skeleton-m5m6 moves M6's).
+ * `GET /api/youtube/video` answers as caracole serve does where YouTube is off: the video's id and address, "off",
+ * and no guess; YouTube's routes and `GET /lookup` stay here for good.
  */
 class Stubs : RouteModule {
     override val routes: List<Route> = buildList {
@@ -33,7 +39,6 @@ class Stubs : RouteModule {
                   get = GetAnswer { request -> youtubeOff(request.target) }))
     }
 
-    private fun notYet(what: String): Nothing = throw Refused(409, "Not on the phone yet", "$what isn't on the phone yet.")
 
     /** youtube_routes.pasted_video's answer with YouTube off: the video's id (`id`, else read from `url`), its
      * plain address, its gate "off", no video and no guess; 400 for anything that names no video. */
@@ -64,7 +69,7 @@ class Stubs : RouteModule {
             return null
         }
         if (parts.scheme != "http" && parts.scheme != "https") return null
-        val host = parts.netloc.lowercase()
+        val host = PyUnicode.lower(parts.netloc)
         val found = when {
             host == "youtu.be" -> parts.path.trim('/')
             HOSTS.matches(host) -> {
@@ -86,7 +91,7 @@ class Stubs : RouteModule {
         val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
         val HOSTS = Regex("(?:(?:www|m|music)\\.)?youtube\\.com")
         val PATH_ID = Regex("/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})")
-        val SCHEME = Regex("^[a-z][a-z0-9+.-]*://", RegexOption.IGNORE_CASE)
+        val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 
         /** The pages caracole serve writes itself that the phone hasn't yet. */
         val PAGES = listOf(
@@ -100,12 +105,10 @@ class Stubs : RouteModule {
 
         /** The forms caracole serve reads that the phone doesn't yet, and the page each comes from (its refusals'). */
         val FORMS = listOf(
-            Triple("/fetch", "Fetching a song now", "the library"),
             Triple("/review", "Picking a song's match", "the library"),
             Triple("/versions/choose", "Choosing a sheet's version", "the version's page"),
             Triple("/versions/keep", "Keeping a sheet's version", "the version's page"),
             Triple("/versions/clear", "Going back to caracole's version", "the version's page"),
-            Triple("/versions/keep-more", "Keeping more versions", "the library"),
             Triple("/harmonica/pin", "Choosing how a harmonica tab is read", "the tab's page of readings"),
             Triple("/harmonica/clear", "Choosing how a harmonica tab is read", "the tab's page of readings"),
             Triple("/songbook/make", "Making a songbook", "the library"),
@@ -117,16 +120,9 @@ class Stubs : RouteModule {
             Triple("/songbook/set", "Setting a song's key in a songbook", "the library"),
             Triple("/songbook/rename", "Renaming a songbook", "the library"),
             Triple("/songbook/delete", "Deleting a songbook", "the library"),
-            Triple("/lacuerda/artist", "Reading a LaCuerda artist's page", "the page"),
-            Triple("/lacuerda/search", "LaCuerda's own search", "the page"),
-            Triple("/harptabs/artist", "Reading a harptabs.com artist's page", "the page"),
             Triple("/youtube", "A sheet from a YouTube video", "the library"),
             Triple("/youtube/search", "YouTube's search", "the library"),
             Triple("/youtube/video", "Reading a YouTube video", "the library"),
-            Triple("/jobs/again", "Trying a request again", "the library"),
-            Triple("/request", "Adding a song", "the library"),
-            Triple("/lookup", "Looking a song up", "the page"),
-            Triple("/remove", "Removing a song", "the library"),
         )
     }
 }

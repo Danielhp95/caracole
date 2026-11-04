@@ -1,0 +1,194 @@
+{
+ "providers": {
+  "ug": {
+   "budget": 60,
+   "delay": [
+    2.5,
+    5.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "lrclib": {
+   "budget": 200,
+   "delay": [
+    0.25,
+    0.5
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "megalobiz": {
+   "budget": 60,
+   "delay": [
+    0.5,
+    1.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.5,
+    0.75
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": 900
+  },
+  "azlyrics": {
+   "budget": 9223372036854775807,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.0,
+    0.0
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "lacuerda": {
+   "budget": 30,
+   "delay": [
+    2.5,
+    5.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "gtptabs": {
+   "budget": 20,
+   "delay": [
+    2.5,
+    5.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "musescore": {
+   "budget": 10,
+   "delay": [
+    2.5,
+    5.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "harptabs": {
+   "budget": 20,
+   "delay": [
+    2.5,
+    5.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "gametabs": {
+   "budget": 20,
+   "delay": [
+    0.25,
+    0.25
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "youtube": {
+   "budget": 6,
+   "delay": [
+    3.75,
+    7.5
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "ytimg": {
+   "budget": 20,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.0,
+    0.0
+   ],
+   "lookup_requests": 6,
+   "lookup_per_hour": 60,
+   "per_day": null
+  }
+ },
+ "switchable": [
+  "azlyrics",
+  "gametabs",
+  "gtptabs",
+  "harptabs",
+  "megalobiz",
+  "musescore",
+  "youtube",
+  "ytimg"
+ ],
+ "user_agent": "caracole/0.1 (personal tab library)",
+ "match": {
+  "accept": 90,
+  "margin": 8,
+  "review": 75,
+  "artist_gate": 90
+ },
+ "rank": {
+  "coverage_threshold": 0.8,
+  "line_match": 85,
+  "prior_votes": 10,
+  "scored_sheets": 3,
+  "label_penalty": 0.5,
+  "variant_bonus": 0.25
+ }
+}

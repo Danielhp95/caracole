@@ -105,7 +105,8 @@ generator twice in subprocesses, with `PYTHONHASHSEED=1` and `=2`, and asserts t
 
 ## Size and speed
 
-Each generator runs in under 3 s, or it is marked `slow`. Vectors stay under 20 MB in total.
+Each generator runs in under 3 s, or it is marked `slow`. Vectors stay within `tests/conformance/budget.json`
+(milestones 4–6, below: each area's budget, 70 MB in total), which `tests/test_corpus_budget.py` enforces.
 
 ## The Kotlin reader
 
@@ -122,8 +123,9 @@ Each generator runs in under 3 s, or it is marked `slow`. Vectors stay under 20 
 
 ## On the device
 
-`CorpusOnDeviceTest` (the integration step) runs the `unicode`, `keys`, `pinyin`, `fuzz` and `canonical` vectors
-under Android's runtime and its ICU-backed regex.
+`CorpusOnDeviceTest` runs every area's replay (`core.testing.Replays`, `server.testing.ServerReplays`, and
+`viewer.testing.ViewerReplays` from milestone 5) under Android's runtime and its ICU-backed regex, one test per area
+(below, "On the device").
 
 ## The drift protocol
 
@@ -143,3 +145,19 @@ A corpus is a contract between a Python owner and Kotlin readers who may already
 - After this round, the same holds for all work (AGENTS.md, "The phone agrees with the computer to the byte"): a
   change to normalize, search, peer_sync, the schema, library_assets, status.py or outcome.py regenerates the corpus
   in the same commit, and `nix develop ./android -c gradle -p android test` passes before it merges.
+
+## Milestones 4–6 (amended 2026-11-03)
+
+What the second round adds (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §3). The new areas: `py`,
+`html`, `http`, `health`, `pace`, `lookup`, `sites`, `match`, `library`, `viewer`, `songbook`, `inbox` (and `sync`'s
+`settings*`, `index`'s `export*`).
+
+**Budgets.** `tests/conformance/budget.json` = `{"vectors_total": 70000000, "data_total": 12000000, "areas":
+{"<area>": <bytes>, ...}}`, in bytes (an area's size is the sum of its `vectors/<area>/` files' sizes; decimal MB below,
+1 MB = 1,000,000 bytes), and `tests/test_corpus_budget.py` (not slow) fails when an area, the vectors' total or the
+runtime data's (`data/`, what the APK ships) is over. Each area's budget is its size today plus an allowance for each
+lane that writes it; a lane writes its new records into its own area (lookup-routes' gate vectors go to `web/`,
+never `search/`):
+
+| Area | MB | Today | Written by | Area | MB | Written by |
+|

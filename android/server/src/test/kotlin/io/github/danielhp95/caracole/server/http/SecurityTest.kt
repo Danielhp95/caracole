@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Record
 import kotlinx.serialization.json.JsonElement

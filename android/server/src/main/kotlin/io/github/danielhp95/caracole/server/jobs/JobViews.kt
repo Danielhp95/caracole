@@ -1,6 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
-import io.github.danielhp95.caracole.server.http.PyText
+import io.github.danielhp95.caracole.core.py.PyText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -50,7 +50,7 @@ object JobViews {
     private val KINDS = mapOf("add" to "song")
 
     /** The kinds whose view carries its stages, its count and its outcome (§5.3's shape). */
-    private val STAGED = setOf("sync", "peer-push", "index")
+    private val STAGED = setOf("sync", "peer-push", "index", INDEX_MERGE)
 
     /** The kinds whose outcome is what they took, gave and left (jobs_routes.peer_outcome). */
     private val SYNCS = setOf("sync", "peer-push")
@@ -75,7 +75,13 @@ object JobViews {
     )
 
     /** How a sync and a take say they are done (status.py's _PEER_DONE). */
-    private val DONE_WORDS = mapOf("sync" to "Synced", "peer-push" to "Taken")
+    private val DONE_WORDS = mapOf("sync" to "Synced", "peer-push" to "Taken", INDEX_MERGE to "Merged")
+
+    /** The computer's kind of `caracole index merge --delete --progress` (web/jobs.py's index_merge_job): another
+     * caracole's index pages merged, one stage, "merge", worded apart from the phone's own index import's. */
+    private const val INDEX_MERGE = "index-merge"
+    private const val INDEX_MERGE_LINE = "Merging the other caracole's index pages"
+    private const val INDEX_MERGE_STEP = "Merge"
 
     /** The job's output in the library page's Requests tab, open (status.py's details_href). */
     fun detailsHref(id: Int): String = "$REQUESTS&job=$id"
@@ -109,7 +115,7 @@ object JobViews {
         if (kind in STAGED) {
             seen["steps"] = JsonArray(job.stages.map { stage ->
                 JsonObject(linkedMapOf("name" to JsonPrimitive(stage.name),
-                                       "label" to JsonPrimitive(STEP_NAMES[stage.name] ?: stage.label),
+                                       "label" to JsonPrimitive(stepName(kind, stage)),
                                        "state" to JsonPrimitive(stage.state), "detail" to JsonPrimitive(stage.detail)))
             })
             seen["count"] = JsonNull
@@ -140,7 +146,7 @@ object JobViews {
         val staged = kindOf(job) in STAGED
         return when (job.state) {
             Job.QUEUED -> Line("queued", if (ahead > 0) "Queued behind ${plural(ahead, "request")}…" else "Queued…")
-            Job.RUNNING -> Line("running", if (staged) stageLine(job.stages) else commandLine(job.stages))
+            Job.RUNNING -> Line("running", if (staged) stageLine(job.stages, kindOf(job)) else commandLine(job.stages))
             Job.CANCELLED -> Line("cancelled", "Cancelled")
             Job.INTERRUPTED -> Line("waiting", "Interrupted", details = details)
             Job.FAILED -> Line("failed", if (staged) stageFailure(job.stages) ?: failure(job.spec.title, job.output)
@@ -149,6 +155,10 @@ object JobViews {
             else -> done(job, details)
         }
     }
+
+    /** A staged job's step's name, as outcome.py's PEER_STEPS names it. */
+    private fun stepName(kind: String, stage: Stage): String =
+        if (kind == INDEX_MERGE && stage.name == "merge") INDEX_MERGE_STEP else STEP_NAMES[stage.name] ?: stage.label
 
     /** What a job that is done did, by its kind. */
     private fun done(job: Job, details: String): Line {
@@ -174,9 +184,10 @@ object JobViews {
 
     /** A running staged job's line: its running stage's, else the next one's, as between two stages (status.py's
      * _stage_line). */
-    private fun stageLine(stages: List<Stage>): String {
+    private fun stageLine(stages: List<Stage>, kind: String): String {
         val stage = stages.firstOrNull { it.state == Job.RUNNING } ?: stages.firstOrNull { it.state == Job.WAITING }
             ?: return "Running…"
+        if (kind == INDEX_MERGE && stage.name == "merge") return "$INDEX_MERGE_LINE…"
         return "${STAGE_LINES[stage.name] ?: stage.label}…"
     }
 

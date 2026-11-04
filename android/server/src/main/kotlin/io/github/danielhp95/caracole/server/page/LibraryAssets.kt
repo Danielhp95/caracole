@@ -1,6 +1,6 @@
 package io.github.danielhp95.caracole.server.page
 
-import io.github.danielhp95.caracole.server.http.Inline
+import io.github.danielhp95.caracole.core.web.Inline
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject

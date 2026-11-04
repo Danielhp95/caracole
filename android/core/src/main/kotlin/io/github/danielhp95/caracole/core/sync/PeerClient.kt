@@ -19,7 +19,7 @@ import java.io.InputStream
 /** /api/peer/state, as the phone reads it. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
-                     val indexes: Map<String, String> = emptyMap())
+                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null)
 
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
@@ -117,6 +117,10 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         }
         return job
     }
+
+    /** POST /peer/index: the index export at [file] (the pages the phone's lookups stored), staged by the computer and
+     * merged by a queued `caracole index merge --delete --progress`; the computer's job id. */
+    fun pushIndex(token: String, file: File): Int = TODO("lane index-push")
 
     /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], [INDEX_TIMEOUT_MS] at
      * most between two reads. */

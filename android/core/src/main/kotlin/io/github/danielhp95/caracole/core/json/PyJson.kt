@@ -144,4 +144,16 @@ object PyJson {
             }
         }
     }
+
+    // --- milestone 4's additions (lane py-sites) ---------------------------------------------------------------------
+
+    /**
+     * json.loads: order kept, a duplicate key at its first place with its last value, NaN and Infinity, big ints,
+     * lone surrogates as UTF-16 units; numbers as literals in Python's int or float form ([float]).
+     */
+    fun loads(text: String): JsonElement = TODO("lane py-sites")
+
+    /** json.dumps(v, indent=, ensure_ascii=, sort_keys=), Python's separators for an indent (",", ": "). */
+    fun dumps(value: JsonElement, indent: Int?, ensureAscii: Boolean = false, sortKeys: Boolean = false): String =
+        TODO("lane py-sites")
 }

@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.server.files
 
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Songs
@@ -13,8 +16,6 @@ import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
-import io.github.danielhp95.caracole.server.http.PyText
-import io.github.danielhp95.caracole.server.http.PyUrl
 import io.github.danielhp95.caracole.server.http.Response
 import java.io.File
 import java.io.IOException

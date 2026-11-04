@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.http.CachedAnswers
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
 
@@ -113,4 +114,12 @@ object ArtistTabs {
         db.query("SELECT page, tab_id, artist_key, song_key FROM ug_artist_tabs") {
             (it.text(0)!! to it.long(1)!!) to (it.text(2)!! to it.text(3)!!)
         }.toMap()
+
+    // --- milestone 4's additions (lane ug-pages): an artist page's tabs stored as a lookup reads them -----------
+
+    fun store(db: Db, page: String, name: String, tabs: List<UgVersion>, readAt: String): List<Long> =
+        TODO("lane ug-pages")
+    fun keepOnly(db: Db, page: String, kind: String, ids: Collection<Long>, readAt: String): Int = TODO("lane ug-pages")
+    fun forget(db: Db, page: String): Unit = TODO("lane ug-pages")
+    fun backfill(db: Db, cached: CachedAnswers): Int = TODO("lane ug-pages")
 }
