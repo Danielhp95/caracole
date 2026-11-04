@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.index
 import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.db.Warmup
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import kotlinx.serialization.json.Json
@@ -37,8 +38,10 @@ import java.io.File
  *   the file's was, the listing of UG's sitemaps the later refresh's.
  *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
- * the first change. Each site is one savepoint: its actions, its kv records, then its keys made current
- * (ensure_current_keys, whole where the file's keys record differs from the database's, which is let go first). A
+ * the first change; once UG's rows changed, UG's full-text indexes are made one segment each as the merge ends
+ * (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
+ * keys made current (ensure_current_keys, whole where the file's keys record differs from the database's, which is let
+ * go first). A
  * record rewritten whole is written as Python's `json.dumps` of `json.loads`'s reading writes it (Merge.pyLoaded).
  *
  * Runs on the writer, inside Database.write, in no transaction (ATTACH and DETACH run in none).
@@ -77,6 +80,7 @@ object IndexTransfer {
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
             for (plan in plans) taken[plan.site] = Merge.apply(db, plan)
+            if (taken["ug"].orEmpty().isNotEmpty()) Warmup.optimize(db)  // one segment each (prep-db)
             return Merged(taken, true)
         } finally {
             db.detach(Merge.THEIRS)

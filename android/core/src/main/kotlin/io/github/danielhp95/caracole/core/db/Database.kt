@@ -34,9 +34,15 @@ import kotlin.concurrent.withLock
  * of [readers] connections, each lent to one block at a time ([read]); the bundled SQLite is THREADSAFE=2 (one
  * connection, one thread at a time), so a connection is never used by two threads at once. A read sees the last
  * commit (WAL): never a write's open transaction, its own thread's included. Every connection sets [BUSY_TIMEOUT_MS]
- * first, then db.py's foreign_keys, WAL and synchronous=NORMAL. [write] is not reentrant: a write asked for inside a
- * write's block, on its thread, is refused rather than waiting for itself. A connection goes back in no transaction:
- * one a block began with a bare BEGIN and left open is rolled back (and refused, for a write that returned).
+ * first, then db.py's foreign_keys, WAL and synchronous=NORMAL, and [journalSizeLimit]. [write] is not reentrant: a
+ * write asked for inside a write's block, on its thread, is refused rather than waiting for itself. A connection goes
+ * back in no transaction: one a block began with a bare BEGIN and left open is rolled back (and refused, for a write
+ * that returned).
+ *
+ * The WAL (the plan's prep-db): a big write (an index import, a sync's merge) grows it past [journalSizeLimit] while
+ * it runs, and SQLite's own checkpoints copy it back but keep the file; [checkpoint] gives it back whole, as the
+ * import and the sync's index stage ask after their merge, and so does opening a database whose WAL a phone killed
+ * with it open left over the limit. [warmUp] reads ahead what the first search reads (Warmup).
  *
  * Opening migrates once per path (every [Database] of this process on one file waits for the one opening it), from
  * caracole/schema/migrations.json, as db.py's `_migrate_locked`: the version read under the lock; a database at
@@ -45,11 +51,16 @@ import kotlin.concurrent.withLock
  * time (the bundled driver runs the first statement of a text and drops the rest), a failure rolling it back whole; a
  * newer database is [DatabaseTooNew], left as it is. Then [PhoneSchema], under the same lock.
  */
-class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), readers: Int = 4) : AutoCloseable {
+class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), readers: Int = 4,
+               val journalSizeLimit: Long = JOURNAL_SIZE_LIMIT) : AutoCloseable {
     companion object {
         const val SCHEMA_VERSION = 15
         const val SQLITE_SOURCE_ID = "2025-06-06 14:52:32 b77dc5e0f596d2140d9ac682b2893ff65d3a4140aa86067a3efebe29dc914c95"
         const val BUSY_TIMEOUT_MS = 10_000
+
+        /** The most a WAL file keeps on disk once a checkpoint has copied it back (PRAGMA journal_size_limit, every
+         * connection's): 16 MiB. A big write grows it past that while it runs; its checkpoint gives the rest back. */
+        const val JOURNAL_SIZE_LIMIT: Long = 16L * 1024 * 1024
 
         private val migrating = ConcurrentHashMap<String, ReentrantLock>()
         private val random = SecureRandom()
@@ -111,8 +122,10 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
 
     private val writer: SQLiteConnection
     private val pool: ArrayBlockingQueue<SQLiteConnection>
+    private val readerCount = readers
     private val all = ArrayList<SQLiteConnection>()
     private val writing = ThreadLocal.withInitial { false }
+    private val reading = ThreadLocal.withInitial { 0 }
 
     init {
         require(readers >= 1) { "a database needs a reader at least" }
@@ -125,6 +138,8 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
                 open(driver).also { connection ->
                     migrate(connection)
                     PhoneSchema.migrate(Db(connection))
+                    // What a phone killed with the database open left of a big write: given back before any read.
+                    if (File(path.path + "-wal").length() > journalSizeLimit) checkpointOn(connection, truncate = true)
                 }
             }
             pool = ArrayBlockingQueue(readers)
@@ -145,6 +160,7 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         connection.prepare("PRAGMA journal_mode = WAL").use { it.step() }
         // No fsync on each commit, as db.py: a crash may lose the last commits, never the database (WAL).
         connection.execSQL("PRAGMA synchronous = NORMAL")
+        connection.prepare("PRAGMA journal_size_limit = $journalSizeLimit").use { it.step() }
         return connection
     }
 
@@ -184,9 +200,11 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
      * snapshot for the next block. */
     fun <T> read(block: (Db) -> T): T {
         val connection = pool.take()
+        reading.set(reading.get() + 1)
         try {
             return block(Db(connection))
         } finally {
+            reading.set(reading.get() - 1)
             try {
                 if (connection.inTransaction()) connection.execSQL("ROLLBACK")
             } finally {
@@ -242,12 +260,41 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         read { db -> vacuumInto(db.raw, target) }
     }
 
-    /** A WAL checkpoint after a big write (an index import, a sync's merge), TRUNCATE by default (lane prep-db).
-     * A no-op until it lands. */
-    fun checkpoint(truncate: Boolean = true) {}
+    /**
+     * A WAL checkpoint after a big write (an index import, a sync's merge): every frame copied back into the
+     * database, then the WAL file truncated to nothing ([truncate], `PRAGMA wal_checkpoint(TRUNCATE)`), or left for
+     * the next write to restart and cut to [journalSizeLimit] (PASSIVE). It runs on the writer, under [writes], with
+     * every reader of the pool taken first, so that none holds a snapshot that would keep the WAL (a read that runs
+     * ends first: Database.read rolls each block back, so the pool holds none between reads). Reads wait for it; a
+     * checkpoint asked for inside a read's or a write's block, which would wait for itself, is an
+     * IllegalStateException.
+     */
+    fun checkpoint(truncate: Boolean = true): Checkpointed {
+        check(!writing.get()) { "a checkpoint inside a write's block would wait for itself" }
+        check(reading.get() == 0) { "a checkpoint inside a read's block would wait for its own reader" }
+        return runBlocking {
+            writes.withLock {
+                val taken = ArrayList<SQLiteConnection>(readerCount)
+                try {
+                    repeat(readerCount) { taken.add(pool.take()) }
+                    Timings.time("checkpoint") { checkpointOn(writer, truncate) }
+                } finally {
+                    taken.forEach { pool.put(it) }
+                }
+            }
+        }
+    }
 
-    /** The first search's pages read ahead, on the app's start (lane prep-db). A no-op until it lands. */
-    fun warmUp() {}
+    private fun checkpointOn(connection: SQLiteConnection, truncate: Boolean): Checkpointed =
+        connection.prepare("PRAGMA wal_checkpoint(${if (truncate) "TRUNCATE" else "PASSIVE"})").use {
+            it.step()
+            Checkpointed(busy = it.getLong(0) != 0L, log = it.getLong(1), checkpointed = it.getLong(2))
+        }
+
+    /** What the first search after a start reads, read ahead through the reader pool ([Warmup]: the app's start
+     * launches it on Dispatchers.IO, and it never holds the search's lock); a search that comes meanwhile runs beside
+     * it. A database that can't be read is no warm-up's to report: the search says so. */
+    fun warmUp() = Warmup.run(this)
 
     override fun close() {
         all.forEach { runCatching { it.close() } }
@@ -396,6 +443,10 @@ private class StatementRow(private val st: SQLiteStatement) : Row {
     override fun long(name: String): Long? = long(at(name))
     override fun double(name: String): Double? = double(at(name))
 }
+
+/** What a WAL checkpoint did (PRAGMA wal_checkpoint's row): whether a reader or a writer kept it from finishing
+ * ([busy]), the WAL's frames ([log]) and those copied back ([checkpointed]); -1 for no WAL. */
+data class Checkpointed(val busy: Boolean, val log: Long, val checkpointed: Long)
 
 /** db.DatabaseTooNew: the database was migrated by a newer caracole than this one. */
 class DatabaseTooNew(message: String) : Exception(message)
