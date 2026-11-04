@@ -16,7 +16,12 @@ import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.Scope
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Take
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.UnitError
+import io.github.danielhp95.caracole.core.sync.file.FileError
+import io.github.danielhp95.caracole.core.sync.file.FileSource
+import io.github.danielhp95.caracole.core.sync.file.PageSource
+import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.sync.internal.units.Documents
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -35,8 +40,11 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.file.Files
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.Base64
 
 /**
@@ -54,7 +62,10 @@ import java.util.Base64
  * - [nameKey], songbook.name_key;
  * - the sync redesign's rules (tests/test_conformance_sync_kept.py): the remembered answer ([kept]: merged_kept,
  *   compare with kept answers, record_kept and record_agreement to the kv's byte, kept_of, a state's kept) and a
- *   sync's parts ([scope]: in_scope, listed_songs, change_of, names_of).
+ *   sync's parts ([scope]: in_scope, listed_songs, change_of, names_of);
+ * - the `.caracole` file (tests/test_conformance_sync_file.py, [file]): each fixture exported by the phone as Python
+ *   exported it, as data; Python's files read back alike, their units, their refusals and their checks; and each
+ *   import's differences, takes and bases.
  *
  * A value compares by its canonical text, the digest's own; a document as json.dumps(sort_keys=True) writes it. Each
  * phone is a database of its own in a temporary folder.
@@ -93,6 +104,7 @@ object SyncReplay : AreaReplay {
         nameKey(misses)
         kept(misses)
         scope(misses)
+        file(misses)
     }
 
     // --- the comparison -------------------------------------------------------------------------------------------
@@ -512,6 +524,217 @@ object SyncReplay : AreaReplay {
             val got = Scope.listedSongs(given.getValue("books").jsonObject, given.getValue("units").jsonArray.map(::text))
             val want = r.out!!.jsonObject.mapValues { (_, b) -> b.jsonArray.map(::text) }
             differs(r, want, got) ?: differs(r, want.keys.toList(), got.keys.toList())
+        }
+    }
+
+    // --- the .caracole file (vectors/sync/file.jsonl and its files) -------------------------------------------
+
+    const val FILE = "sync/file.jsonl"
+    const val TAKEN = "2026-11-04T09:00:00Z"  // test_conformance_sync_file.py's: when an import's take is made
+
+    /** Whether the file's vectors are there (waiting on sync-file, whose corpus writes them). */
+    fun fileVectors(): Boolean = Corpus.open(FILE)?.use { true } ?: false
+
+    /** Every record of file.jsonl, once it is there: export, file_name, read, unit, check_whole, check_importable and
+     * import. */
+    fun file(misses: Misses) {
+        if (!fileVectors()) return  // waiting on sync-file
+        val records = Corpus.records(FILE)
+        val fns = setOf("export", "file_name", "read", "unit", "check_whole", "check_importable", "import")
+        misses.check(records.map { it.fn }.toSet() == fns) { "$FILE's functions: ${records.map { it.fn }.toSet()}" }
+        each(records, misses) { r ->
+            when (r.fn) {
+                "export" -> fileExport(r)
+                "file_name" -> {
+                    val given = r.extra.getValue("in").jsonObject
+                    val at = OffsetDateTime.parse(text(given.getValue("when")))
+                    differs(r, text(r.out!!), SyncFiles.fileName(textOrNull(given["name"]), at.toInstant(), at.offset))
+                }
+                "read" -> inFolder { dir ->
+                    val (path, name) = materialized(r, dir)
+                    differs(r, canonical(r.out), canonical(readOut(path, name)))
+                }
+                "unit" -> inFolder { dir ->
+                    val (path, name) = materialized(r, dir)
+                    val id = text(r.extra.getValue("id"))
+                    val got = FileSource(SyncFiles.read(path, name), null, dir).use { source ->
+                        try {
+                            val doc = source.unit(id)
+                            JsonObject(mapOf("unit" to JsonPrimitive(doc?.let { Canonical.digest(Units.valueOfDocument(id, it)!!) })))
+                        } catch (e: PeerError) {
+                            JsonObject(mapOf("error" to JsonPrimitive(e.message)))
+                        }
+                    }
+                    differs(r, canonical(r.out), canonical(got))
+                }
+                "check_whole" -> inFolder { dir ->
+                    val (path, name) = materialized(r, dir)
+                    val error = try {
+                        SyncFiles.checkWhole(SyncFiles.read(path, name))
+                        null
+                    } catch (e: FileError) {
+                        e.message
+                    }
+                    differs(r, canonical(r.out), canonical(JsonObject(mapOf("error" to JsonPrimitive(error)))))
+                }
+                "check_importable" -> inFolder { dir ->
+                    val (path, name) = materialized(r, dir)
+                    val error = withDatabase { database ->
+                        database.writeBlocking { db ->
+                            for ((key, value) in r.extra.getValue("kv").jsonObject) db.kvSet(key, text(value))
+                        }
+                        try {
+                            database.read { db ->
+                                SyncFiles.checkImportable(SyncFiles.read(path, name), db, textOrNull(r.extra["own"]), ZoneOffset.UTC)
+                            }
+                            null
+                        } catch (e: FileError) {
+                            e.message
+                        }
+                    }
+                    differs(r, canonical(r.out), canonical(JsonObject(mapOf("error" to JsonPrimitive(error)))))
+                }
+                "import" -> fileImport(r)
+                else -> "an unknown function ${r.fn}"
+            }
+        }
+    }
+
+    /** An export record: the fixture loaded as Python's was (its id, kv and files changed), exported by the phone, and
+     * the file's members compared with Python's as data. */
+    private fun fileExport(r: Record): String? = phone("sync/fixtures/${text(r.extra.getValue("fixture"))}.jsonl") { p ->
+        val id = text(r.extra.getValue("id"))
+        p.write { db ->
+            db.kvSet("sync:id", id)
+            for ((key, value) in r.extra.getValue("kv").jsonObject) db.kvSet(key, text(value))
+        }
+        for ((unit, files) in r.extra.getValue("changed").jsonObject) {
+            for ((name, data) in files.jsonObject) {
+                val path = p.database.read { db ->
+                    db.one("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id WHERE songs.key = ? " +
+                               "AND files.name = ?", unit.substringAfter('/'), name) { it.text(0) }
+                }!!
+                File(p.library, path).writeBytes(Base64.getDecoder().decode(text(data)))
+            }
+        }
+        val pages = nullable(r.extra["pages"])?.jsonObject?.let(::pagesOf)
+        val out = File(p.library.parentFile, "export.caracole")
+        val made = p.database.writeBlocking { db ->
+            SyncFiles.export(db, p.library, pages, out, r.extra.getValue("parts").jsonArray.map(::text),
+                             text(r.extra.getValue("now")), id, text(r.extra.getValue("name")), text(r.extra.getValue("version")))
+        }
+        val members = java.util.zip.ZipFile(out).use { z -> z.entries().toList().map { it.name to z.getInputStream(it).readBytes() } }
+        val got = members.toMap()
+        fun json(name: String): JsonElement? = got[name]?.let { Canonical.parse(it.toString(Charsets.UTF_8)) }
+        val want = r.out!!.jsonObject
+        val mine = JsonObject(linkedMapOf(
+            "members" to JsonArray(members.map { JsonPrimitive(it.first) }),
+            "manifest" to json(SyncFiles.MANIFEST)!!, "state" to json(SyncFiles.STATE)!!, "bases" to json(SyncFiles.BASES)!!,
+            "units" to JsonArray(got.getValue(SyncFiles.UNITS).toString(Charsets.UTF_8).split('\n').filter { it.isNotEmpty() }
+                                     .map { Canonical.parse(it) }),
+            "files" to JsonArray(members.map { it.first }.filter { it.startsWith(SyncFiles.FILES) }.map { JsonPrimitive(it.substringAfter('/')) }),
+            "pages" to (json(SyncFiles.PAGES) ?: JsonNull),
+            "page_blobs" to JsonArray(members.map { it.first }.filter { it.startsWith(SyncFiles.PAGE_BLOBS) }.map { JsonPrimitive(it.substringAfter('/')) }),
+            "left" to JsonArray(made.left.map { (u, why) -> JsonArray(listOf(JsonPrimitive(u), JsonPrimitive(why))) }),
+        ))
+        want.keys.firstNotNullOfOrNull { key -> differs(r, key, canonical(want[key]), canonical(mine[key])) }
+    }
+
+    /** A record's pages (`{"manifest", "bytes": {path: base64}}`) as the export's PageSource: each page by its bytes'
+     * SHA-256. */
+    private fun pagesOf(given: JsonObject): PageSource {
+        val bytes = given.getValue("bytes").jsonObject.values.map { Base64.getDecoder().decode(text(it)) }
+            .associateBy { Canonical.sha256Hex(it) }
+        val manifest = given.getValue("manifest").jsonObject
+        return object : PageSource {
+            override fun manifest(units: Map<String, String>): JsonObject = manifest
+            override fun open(sha256: String) = bytes[sha256]?.let(::ByteArrayInputStream)
+        }
+    }
+
+    /** An import record: this side as Python's was (its fixture, id and kv), the file compared, decided as chosen,
+     * taken from (at [TAKEN]) and its agreement recorded, compared with Python's after. */
+    private fun fileImport(r: Record): String? = phone("sync/fixtures/${text(r.extra.getValue("here"))}.jsonl") { p ->
+        val id = text(r.extra.getValue("id"))
+        p.write { db ->
+            db.kvSet("sync:id", id)
+            for ((key, value) in r.extra.getValue("kv").jsonObject) db.kvSet(key, text(value))
+        }
+        val (path, name) = materialized(r, p.library.parentFile)
+        val sf = SyncFiles.read(path, name)
+        val choices = r.extra.getValue("choices").jsonObject.mapValues { text(it.value) }
+        val prefer = textOrNull(r.extra["prefer"])?.let { mapOf("here" to Compare.MINE, "there" to Compare.THEIRS)[it] }
+        val parts = r.extra.getValue("parts").jsonArray.map(::text)
+        FileSource(sf, p.database, p.library).use { source ->
+            val compared = p.database.read { db -> SyncFiles.compareFile(db, sf, source, id) }
+            val scoped = SyncFiles.inParts(compared, parts)
+            val sides = mapOf("here" to Compare.MINE, "there" to Compare.THEIRS)
+            val asChosen = scoped.filter { choices[it.id] != "skip" }
+                .map { d -> choices[d.id]?.let { d.copy(proposal = sides.getValue(it)) } ?: d }
+            val (take, keep) = Compare.decide(asChosen, prefer)
+            val done = p.write { db ->
+                Take.applyUnits(db, p.store, source, take.map { it.id to it.theirs?.digest },
+                                take.associate { it.id to it.mine?.digest }, TAKEN)
+            }
+            p.write { db -> SyncFiles.recordImport(db, sf, Units.libraryState(db), SyncFiles.keptAnswers(scoped, keep)) }
+            val after = p.database.read { db -> Units.libraryState(db) }
+            val (baseAfter, keptAfter) = p.database.read { db ->
+                db.kvGet("sync:base:${sf.id ?: "a1b2c3d4e5f60718"}") to Compare.keptOf(db, sf.id ?: "a1b2c3d4e5f60718")
+            }
+            val mine = JsonObject(linkedMapOf(
+                "differences" to JsonArray(compared.found.map { d -> JsonArray(listOf(d.id, d.proposal, d.why).map(::JsonPrimitive)) }),
+                "scoped" to JsonArray(scoped.map { JsonPrimitive(it.id) }),
+                "taken" to JsonArray(done.taken.map(::JsonPrimitive)),
+                "left" to JsonArray(done.left.map { (u, why) -> JsonArray(listOf(JsonPrimitive(u), JsonPrimitive(why))) }),
+                "after" to JsonObject(after.mapValues { JsonPrimitive(it.value.digest) }),
+                "base_after" to JsonPrimitive(baseAfter),
+                "kept_after" to JsonObject(keptAfter.mapValues { (_, e) ->
+                    JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))
+                }),
+            ))
+            val want = r.out!!.jsonObject
+            want.keys.firstNotNullOfOrNull { key -> differs(r, key, canonical(want[key]), canonical(mine[key])) }
+        }
+    }
+
+    /** read_file's answer as the vectors write it: the file's id, name, made, holds, whether an index export, its
+     * units' digests and its documents' ids, or `{"error"}`. */
+    private fun readOut(path: File, name: String?): JsonObject {
+        val f = try {
+            SyncFiles.read(path, name)
+        } catch (e: FileError) {
+            return JsonObject(mapOf("error" to JsonPrimitive(e.message)))
+        }
+        val documents = FileSource(f, null, path.parentFile).use { it.documents().keys.sortedWith(Canonical.KEY_ORDER) }
+        return JsonObject(linkedMapOf(
+            "id" to JsonPrimitive(f.id), "name" to JsonPrimitive(f.name), "made" to JsonPrimitive(f.made),
+            "holds" to JsonArray(f.holds.map(::JsonPrimitive)), "index_only" to JsonPrimitive(f.indexOnly),
+            "units" to JsonObject((f.state?.units ?: emptyMap()).mapValues { JsonPrimitive(it.value.digest) }),
+            "documents" to JsonArray(documents.map(::JsonPrimitive)),
+        ))
+    }
+
+    /** The file a record names, written into [dir]: one of the corpus's (`file`, less its last `cut` bytes, or its
+     * `member`), or its `bytes`; and the name it is read by (`name`, for an index export). */
+    private fun materialized(r: Record, dir: File): Pair<File, String?> {
+        var data = textOrNull(r.extra["bytes"])?.let { Base64.getDecoder().decode(it) }
+            ?: Corpus.open("sync/" + text(r.extra.getValue("file")))!!.use { it.readBytes() }
+        textOrNull(r.extra["member"])?.let { member ->
+            data = java.util.zip.ZipInputStream(ByteArrayInputStream(data)).use { zip ->
+                generateSequence { zip.nextEntry }.first { it.name == member }.let { zip.readBytes() }
+            }
+        }
+        textOrNull(r.extra["cut"])?.let { data = data.copyOf(data.size - it.toInt()) }
+        val path = File(dir, "file-${System.nanoTime()}.caracole").apply { writeBytes(data) }
+        return path to (textOrNull(r.extra["name"]) ?: textOrNull(r.extra["member"]))
+    }
+
+    private fun <T> inFolder(block: (File) -> T): T {
+        val dir = Files.createTempDirectory("caracole-file").toFile()
+        try {
+            return block(dir)
+        } finally {
+            dir.deleteRecursively()
         }
     }
 

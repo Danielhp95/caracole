@@ -279,7 +279,7 @@ object Compare {
 
     /** peer_sync._write_base: `{"format": FORMAT, "units": …}` and, when there are any, `"kept": …`, each by unit id
      * in code-point order. */
-    private fun writeBase(db: Db, peer: String, base: Map<String, Pair<String?, String>>, kept: Kept) {
+    internal fun writeBase(db: Db, peer: String, base: Map<String, Pair<String?, String>>, kept: Kept) {
         val units = LinkedHashMap<String, JsonElement>()
         for (id in base.keys.sortedWith(Canonical.KEY_ORDER)) {
             val (digest, stamp) = base.getValue(id)

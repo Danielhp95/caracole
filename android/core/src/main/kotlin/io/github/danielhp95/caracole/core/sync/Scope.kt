@@ -58,6 +58,19 @@ object Scope {
         }
     }
 
+    /** The songs songbooks list on either side ([sides], each side's songbook values by unit, read alone and the
+     * two joined), as commands/peer.py's `_compare` and peer_file.compare_file join them. */
+    fun listedOn(sides: List<Map<String, JsonElement?>>, units: Collection<String>): Map<String, List<String>> {
+        val found = HashMap<String, MutableSet<String>>()
+        for (books in sides) {
+            if (books.isEmpty()) continue
+            for ((song, by) in listedSongs(books, units)) found.getOrPut(song) { HashSet() }.addAll(by)
+        }
+        return found.keys.sortedWith(Canonical.KEY_ORDER).associateWithTo(LinkedHashMap()) { song ->
+            found.getValue(song).sortedWith(Canonical.KEY_ORDER)
+        }
+    }
+
     /**
      * The differences of [found] (in its order) a sync of [parts] is about: a unit of a part asked for, or a song a
      * songbook lists ([listed], [listedSongs]'s) while the songbooks are, which comes along to the side that lacks
