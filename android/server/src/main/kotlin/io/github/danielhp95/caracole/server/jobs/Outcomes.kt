@@ -80,10 +80,10 @@ object Outcomes {
     private const val GTPTABS_KEPT = "Guitar Pro file downloaded"  // get.py's
 
     /** A running sheet stage's site, by its words (get.py's SHEET_FROM, icons.tag). */
-    private val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from Ultimate Guitar" to "UG")
+    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from Ultimate Guitar" to "UG")
 
     /** What a stage leaves for tonight's run when it ends in a wait or an error: its name, and its verb. */
-    private val WHAT = mapOf(
+    internal val WHAT = mapOf(
         "sheet" to ("the sheet" to "waits"), "lyrics" to ("the lyrics" to "wait"),
         "ug" to ("its other versions and its tab" to "wait"), "lacuerda" to ("LaCuerda's sheet" to "waits"),
         "gtptabs" to ("the Guitar Pro file" to "waits"), "harptabs" to ("the harmonica tab" to "waits"),
@@ -105,7 +105,7 @@ object Outcomes {
     const val CANCELLED = "Taken out of the queue before it ran."
     const val INTERRUPTED_RAN = "caracole serve stopped while it ran: run it again to finish it."
     const val INTERRUPTED_WAITED = "caracole serve stopped before it ran: Try again runs it."
-    private val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
+    internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs.com's index lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
     val COMPARE_AGAIN = Action("Compare again", href = "/#tab=sync")

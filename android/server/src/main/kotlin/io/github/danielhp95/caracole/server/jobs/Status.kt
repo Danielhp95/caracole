@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.jobs
 
 import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import kotlinx.serialization.json.JsonArray
@@ -130,7 +131,7 @@ object Status {
     )
 
     /** A sync's or a take's command (its first step's `caracole peer` subcommand), as the page names its kind. */
-    private val PEER_KINDS = mapOf("sync" to "sync", "take" to "peer-push", "pull" to "peer-pull")
+    internal val PEER_KINDS = mapOf("sync" to "sync", "take" to "peer-push", "pull" to "peer-pull")
     const val INDEX_MERGE_KIND = "index-merge"
 
     /** How each says it is done (status.py's _PEER_DONE). */
@@ -139,11 +140,11 @@ object Status {
     private const val WAITING = "waiting for another caracole"  // get.py's song stage while the lock is held
 
     /** get.py's SHEET_FROM's words, a running sheet stage's line by its site. */
-    private val SHEET_LINES = listOf("from LaCuerda", "from Ultimate Guitar").associateWith { "Fetching $it" }
+    internal val SHEET_LINES = listOf("from LaCuerda", "from Ultimate Guitar").associateWith { "Fetching $it" }
 
     /** How `caracole lacuerda --artist` and `--search` (and `harptabs --artist`, `youtube --search`) end, by what
      * the site answered, and the line's tone. */
-    private val READ_TONES = linkedMapOf(
+    internal val READ_TONES = linkedMapOf(
         "Read: " to "added", "Not found: " to "missing", "Not read: " to "waiting",
         "Searched: " to "added", "Found already: " to "added", "Nothing found: " to "missing",
         "Not searched: " to "waiting",
@@ -152,9 +153,9 @@ object Status {
     // web/songbooks.py: a songbook job's key, and what its line says once done, by its action.
     private const val SONGBOOK_KEY = JobCommands.SONGBOOK
     private const val SEP = "\u001f"
-    private val DONE = mapOf("make" to "Made", "add" to "Added", "move" to "Moved", "remove" to "Taken out",
+    internal val DONE = mapOf("make" to "Made", "add" to "Added", "move" to "Moved", "remove" to "Taken out",
                              "set" to "Changed", "rename" to "Renamed", "delete" to "Deleted", "render" to "Made")
-    private val OPENS = setOf("make", "add", "render")
+    internal val OPENS = setOf("make", "add", "render")
 
     /** A songbook's change a job's key names (songbooks.songbook_of): its action, its name, and its name once done
      * (the new one for a rename, null for a deletion). */
@@ -262,14 +263,12 @@ object Status {
         return listOf(artist, folder, page).joinToString("/") { PyUrl.quote(it) }
     }
 
-    /** inbox.harmonica_page: "harmonica-1.txt" → "harmonica-1.html"; null for a name no kept tab has (`harmonica-(\d+)
-     * \.txt`, Python's digits). */
-    private fun harmonicaPageOf(name: String): String? {
-        if (!name.startsWith("harmonica-") || !name.endsWith(".txt")) return null
-        val digits = name.substring("harmonica-".length, name.length - ".txt".length)
-        if (!PyText.allDigits(digits)) return null
-        return "harmonica-$digits.html"
-    }
+    /** inbox.harmonica_page: "harmonica-1.txt" → "harmonica-1.html"; null for a name no kept tab has (inbox.py's
+     * HARMONICA_FILE, fullmatch). */
+    private fun harmonicaPageOf(name: String): String? =
+        HARMONICA_FILE.matchEntire(name)?.let { "harmonica-${it.groupValues[1]}.html" }
+
+    private val HARMONICA_FILE = PyRegex.compile("""harmonica-(\d+)\.txt""")
 
     /** A site's index read over: the sentence its command ends with, up to its first "; " or bracket (status.py's
      * _artist_read). */
@@ -329,19 +328,11 @@ object Status {
         return short(firstSentence(said))
     }
 
-    /** What an `error:` line says (status.py's `^(?:<\d>)?error: (.+)$`, a journal priority before it); null for
+    /** What an `error:` line says (status.py's _ERROR, re.match: a journal priority may come before it); null for
      * any other line. */
-    private fun errorOf(line: String): String? {
-        var rest = line.removeSuffix("\n")
-        if (rest.startsWith("<") && rest.length > 1) {
-            val digit = rest.codePointAt(1)
-            val after = 1 + Character.charCount(digit)
-            if (PyText.isDigit(digit) && rest.startsWith(">error: ", after)) rest = rest.substring(after + 1)
-        }
-        if (!rest.startsWith("error: ")) return null
-        val said = rest.substring("error: ".length)
-        return said.takeIf { it.isNotEmpty() && '\n' !in it }
-    }
+    private fun errorOf(line: String): String? = ERROR.find(line)?.groupValues?.get(1)
+
+    private val ERROR = PyRegex.compile("""^(?:<\d>)?error: (.+)$""")
 
     /** The text up to its first sentence's end: `(?<=[.!?])\s`, Python's whitespace. */
     private fun firstSentence(text: String): String {

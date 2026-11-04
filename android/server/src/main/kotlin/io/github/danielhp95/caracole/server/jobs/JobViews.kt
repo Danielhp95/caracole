@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.py.PyInt
+import io.github.danielhp95.caracole.core.py.PyRegex
+import io.github.danielhp95.caracole.core.py.PyText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -46,7 +49,7 @@ object JobViews {
     private const val INDEX_LINE = "Merging the computer's index"
 
     /** `caracole peer sync`'s and `take`'s agree stage, done: how many units the two agree on. */
-    private val AGREED = Regex("^([0-9]+) units? the two agree on$")
+    private val AGREED = PyRegex.compile("""^(\d+) units? the two agree on$""")
 
     /** The job's output in the library page's Requests tab, open (status.py's details_href). */
     fun detailsHref(id: Int): String = Status.detailsHref(id)
@@ -131,14 +134,14 @@ object JobViews {
     private fun peerOutcome(job: Shape): JsonElement {
         if (job.job.active) return JsonNull
         val agree = job.stages.firstOrNull { it.name == "agree" && it.state == Job.DONE }
-        val count = agree?.let { AGREED.find(io.github.danielhp95.caracole.core.py.PyText.strip(it.detail)) }
+        val count = agree?.let { AGREED.find(PyText.strip(it.detail)) }
         fun ids(said: String) = JsonArray(job.units.filter { it.outcome == said }.map { JsonPrimitive(it.id) })
         return JsonObject(linkedMapOf(
             "taken" to ids("taken"), "given" to ids("given"),
             "left" to JsonArray(job.units.filter { it.outcome == "left" }.map {
                 JsonArray(listOf(JsonPrimitive(it.id), JsonPrimitive(it.why)))
             }),
-            "agreed" to (count?.groupValues?.get(1)?.toBigInteger()?.let(::JsonPrimitive) ?: JsonNull),
+            "agreed" to (count?.let { PyInt.parse(it.groupValues[1]) }?.let(::JsonPrimitive) ?: JsonNull),
             "indexed" to JsonArray(emptyList()),
         ))
     }

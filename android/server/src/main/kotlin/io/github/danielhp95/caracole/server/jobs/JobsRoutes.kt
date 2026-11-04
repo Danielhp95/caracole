@@ -36,7 +36,8 @@ import java.time.Instant
  * Each job names its song as the library has it now, with what its line needs to know of it (SongFacts.songOf,
  * jobs_routes.song_of): an add's, a lookup's and a removal's by its key, a removal done by the song it removed, Make
  * this my version's by its id and as none of the song's requests. A job that is over doesn't change, so its answer is
- * worked out once and kept while the queue remembers the job (jobs_routes' `_ended`). A songbook's change that is
+ * worked out once and kept while the queue remembers the job (jobs_routes' `_ended`: SongFacts.ended, the queue's,
+ * which the Requests tab's feed reads too). A songbook's change that is
  * done links its songbook's page while the phone has written one ([songbookPage]: kv `songbook:<folder>`'s
  * songbook.html, songbooks.songbook_page). A job over that the page asks about by its id gets the Songbooks tab's
  * data as it is now ([songbooks], when one is given; never for a site's index read) and its song's card as the page
@@ -55,8 +56,9 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
               post = PostAnswer { _, form -> cancel(form) }),
     )
 
-    /** What each job over came to (its song's id and facts), worked out once: a job over doesn't change. */
-    private val ended = HashMap<Int, Pair<Long?, SongFacts?>>()
+    /** What each job over came to (its song's id and facts), worked out once: the queue's, which the Requests tab's
+     * feed shares (SongFacts.ended). */
+    private val ended = SongFacts.ended(queue)
 
     /** The requests for the page's script: every one, or those [asked] names, each over with its song's card. */
     private fun jobsJson(asked: String?): Response {
@@ -64,7 +66,7 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
         val jobs = queue.snapshot()
         val only = if (ids == null) jobs else jobs.filter { it.id in ids }
         val shown = database.read { db ->
-            forgetEnded(jobs)
+            ended.forget(jobs)
             var section: JsonObject? = null  // read once, for every job that asks
             only.map { job ->
                 val (songId, facts) = songOf(db, job)
@@ -85,18 +87,7 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
     }
 
     /** The job's song and what the library knows of it now (SongFacts.songOf), kept once the job is over. */
-    private fun songOf(db: Db, job: Job): Pair<Long?, SongFacts?> {
-        if (!job.active) synchronized(ended) { ended[job.id] }?.let { return it }
-        val answer = SongFacts.songOf(db, job, cards, clock())
-        if (!job.active) synchronized(ended) { ended[job.id] = answer }
-        return answer
-    }
-
-    /** Let go of the jobs the queue no longer remembers. */
-    private fun forgetEnded(jobs: List<Job>) {
-        val kept = jobs.mapTo(HashSet()) { it.id }
-        synchronized(ended) { ended.keys.retainAll(kept) }
-    }
+    private fun songOf(db: Db, job: Job): Pair<Long?, SongFacts?> = ended.songOf(db, job, cards, clock())
 
     /** The song's card as the page draws it now, with `fetchable` as the page's own cards have it. */
     private fun cardOf(db: Db, song: SongRow): JsonObject? = cards.cards(db, listOf(song))[song.id]?.let { card ->

@@ -309,6 +309,28 @@ class JobsRoutesTest {
         }
     }
 
+    @Test fun whatAJobOverCameToIsTheQueuesOneAnswerForEveryRouteThatAsks() = runTest {
+        val (test, queue) = served(lookups { context -> context.stage("pdf", "skipped", "no PDF on the phone") })
+        test.use {
+            song(test.database, "Radiohead", "Creep", "radiohead/creep")
+            val job = queue.submit(lookup()).first
+            runCurrent()
+            assertEquals("Not fetched yet", line(view(test, job.id))[1])
+            // A later fetch checks the song: what the job came to stays what it was, for the Requests tab's feed too,
+            // which asks the queue's answers (SongFacts.ended), never a second cache of its own.
+            test.database.writeBlocking { db -> db.execute("UPDATE songs SET ug_checked_at = '2999-01-01T00:00:00Z'") }
+            val over = queue.job(job.id)!!
+            val now = java.time.Instant.now()
+            val shared = SongFacts.ended(queue)
+            assertTrue(shared === SongFacts.ended(queue))
+            assertEquals(false, test.database.read { db -> shared.songOf(db, over, Filed, now) }.second!!.checkedNow)
+            assertEquals(true, test.database.read { db -> SongFacts.songOf(db, over, Filed, now) }.second!!.checkedNow)
+            assertEquals("Not fetched yet", line(view(test, job.id))[1])
+            shared.forget(emptyList())  // a job the queue no longer remembers is worked out again, were it asked
+            assertEquals(true, test.database.read { db -> shared.songOf(db, over, Filed, now) }.second!!.checkedNow)
+        }
+    }
+
     @Test fun aSongInReviewWithCandidatesLinksItsPickerAndAnIgnoredOneSaysSo() = runTest {
         val (test, queue) = served(lookups())
         test.use {

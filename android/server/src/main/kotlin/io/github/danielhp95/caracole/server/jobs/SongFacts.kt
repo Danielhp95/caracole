@@ -2,12 +2,14 @@ package io.github.danielhp95.caracole.server.jobs
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.server.page.SongCards
 import kotlinx.serialization.json.Json
@@ -17,7 +19,11 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import java.time.DateTimeException
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.util.WeakHashMap
 
 /**
  * status.py's SongFacts: what the library knows of a job's song now. [sheet] is the link to its sheet (its card's
@@ -32,7 +38,38 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
                      val checkedNow: Boolean = false, val ignored: Boolean = false, val picker: String? = null,
                      val lacuerda: Boolean = false, val elsewhere: Pair<String, String>? = null,
                      val askedUg: Boolean = false, val sheetFrom: String = "") {
+    /**
+     * jobs_routes' `app._ended` on the phone: what each job over came to ([songOf]'s answer, its song's id and
+     * facts), worked out once, since a job over doesn't change, and kept while the queue remembers the job
+     * ([forget]). One a queue ([ended]), shared by every route that says a job's line: /jobs.json's views
+     * (JobsRoutes) and the Requests tab's feed, so a finished request never ends "Not fetched yet" on the song's line
+     * and "Not found" in the tab once a later fetch checked its song, as Python's one cache keeps them alike.
+     */
+    class Ended internal constructor() {
+        private val kept = HashMap<Int, Pair<Long?, SongFacts?>>()
+
+        /** [SongFacts.songOf], from what was kept for a job over, else worked out (and kept, the job over). */
+        fun songOf(db: Db, job: Job, cards: SongCards, now: Instant): Pair<Long?, SongFacts?> {
+            val over = !job.active
+            if (over) synchronized(kept) { kept[job.id] }?.let { return it }
+            val answer = SongFacts.songOf(db, job, cards, now)
+            if (over) return synchronized(kept) { kept.getOrPut(job.id) { answer } }
+            return answer
+        }
+
+        /** Let go of the jobs the queue no longer remembers ([jobs], its whole snapshot). */
+        fun forget(jobs: List<Job>) {
+            val ids = jobs.mapTo(HashSet()) { it.id }
+            synchronized(kept) { kept.keys.retainAll(ids) }
+        }
+    }
+
     companion object {
+        private val ENDED = WeakHashMap<JobQueue, Ended>()
+
+        /** The [Ended] answers of [queue]'s jobs, the same for every route that asks. */
+        fun ended(queue: JobQueue): Ended = synchronized(ENDED) { ENDED.getOrPut(queue) { Ended() } }
+
         /** Facts as the vectors write them (status.SongFacts's fields as data), or null. */
         fun of(data: JsonElement?): SongFacts? {
             val o = data as? JsonObject ?: return null
@@ -117,28 +154,42 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
 
         // --- what the fetch did: ug/fetch.py's reads ----------------------------------------------------------
 
-        /** ug.fetch.checked_since: whether a fetch settled the song at [since] or after (its `ug_checked_at`, else,
-         * for a song with no match yet, its artist's UG page read for it: kv `ug:artist_page_checked:<id>`), both
-         * written to the second. */
+        /** ug.fetch.checked_since: whether a fetch settled the song at [since] or after (its `ug_checked_at`, an
+         * unreadable one passed over, else, for a song with no match yet, its artist's UG page read for it: kv
+         * `ug:artist_page_checked:<id>`, which, unreadable, is Python's ValueError, an [IllegalArgumentException]),
+         * both written to the second. */
         private fun checkedSince(db: Db, song: SongRow, since: Instant): Boolean {
             val cutoff = since.epochSecond
-            song.ugCheckedAt?.let(::seconds)?.let { if (it >= cutoff) return true }
+            song.ugCheckedAt?.takeIf { it.isNotEmpty() }?.let(::strptime)?.let { if (it.epochSecond >= cutoff) return true }
             if (song.matchDecision == "accept" || song.matchDecision == "pinned") return false
-            val checked = db.kvGet("ug:artist_page_checked:${song.id}")?.let(::seconds)
-            return checked != null && checked >= cutoff
+            val value = db.kvGet("ug:artist_page_checked:${song.id}") ?: return false
+            val checked = strptime(value)
+                ?: throw IllegalArgumentException("time data ${value} does not match format '%Y-%m-%dT%H:%M:%SZ'")
+            return checked.epochSecond >= cutoff
         }
 
-        /** `datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")` in UTC seconds; null for any other text. */
-        private fun seconds(value: String): Long? {
-            if (!STAMP.matches(value)) return null
+        /**
+         * `datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")` made UTC (ug.fetch._parse_iso), null where Python raises
+         * ValueError: _strptime's own pattern for that format (IGNORECASE, Python's `\d`, one digit where it allows
+         * one, a space before a day or an hour), re.match then the whole text read, each field read by int(), and a
+         * date and time datetime takes (year 1 on, the month's days, no second 60 or 61).
+         */
+        internal fun strptime(value: String): Instant? {
+            val m = STRPTIME.toPattern().matcher(value)
+            if (!m.lookingAt() || m.end() != value.length) return null
+            val f = (1..6).map { PyInt.parse(m.group(it))!!.toInt() }
+            if (f[0] < 1) return null
             return try {
-                Instant.parse(value).epochSecond
-            } catch (e: java.time.format.DateTimeParseException) {
+                LocalDateTime.of(f[0], f[1], f[2], f[3], f[4], f[5]).toInstant(ZoneOffset.UTC)
+            } catch (e: DateTimeException) {
                 null
             }
         }
 
-        private val STAMP = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+        private val STRPTIME = PyRegex.compile(
+            """(?i)(\d\d\d\d)-(1[0-2]|0[1-9]|[1-9])-(3[0-1]|[1-2]\d|0[1-9]|[1-9]| [1-9])""" +
+                """T(2[0-3]|[0-1]\d|\d| \d):([0-5]\d|\d):(6[0-1]|[0-5]\d|\d)Z""",
+        )
 
         /** jobs_routes._nothing_to_ask: the offline index doesn't have the song, and its artist's UG page isn't
          * known (ug.fetch.artist_is_known). */
@@ -241,7 +292,7 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
                 val stage = byName[provider]
                 if (stage != null && (stage.state == Job.DONE || stage.detail.startsWith("asked already") ||
                         (stage.state == Job.SKIPPED && Outcomes.waited(stage.detail)))) return false
-                return !cooling(db, provider, now)
+                return !Health.isCooling(db, provider, now)
             }
             if (mayAsk("lacuerda") && !askedLately(song.lacuerdaCheckedAt, now)) {
                 laCuerdaSheet(db, song.artists.ifEmpty { listOf(song.artist) }, song.title)?.let { return "lacuerda" to it }
@@ -253,24 +304,6 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
         }
 
         private const val MONTH_US = 30L * 86_400_000_000L  // RECHECK_AFTER, 30 days
-
-        /** health.is_cooling: the provider's cooldown (kv `provider:<name>`'s `cooldown_until`) not over at [now]. */
-        private fun cooling(db: Db, provider: String, now: Instant): Boolean {
-            val state = db.kvGet("provider:$provider")?.let {
-                try {
-                    Json.parseToJsonElement(it)
-                } catch (e: IllegalArgumentException) {
-                    null
-                }
-            } as? JsonObject ?: return false
-            val until = (state["cooldown_until"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-            val at = try {
-                Stamps.parse(until)
-            } catch (e: ArithmeticException) {
-                null
-            } ?: return false
-            return micros(now) < at
-        }
 
         private fun micros(now: Instant): Long = Stamps.parse("1970-01-01T00:00:00Z")!! +
             now.epochSecond * 1_000_000L + now.nano / 1_000
