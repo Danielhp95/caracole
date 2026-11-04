@@ -1126,8 +1126,8 @@ Not built yet. (http-client: core.http; health-pace: core.health, core.config, `
   value for an attribute written with none, an empty doctype identifier a missing one in `CompatMode.of`), driven by
   the tree builder (`switchTo`, `contentFor`, `foreignContent`); docs/superpowers/specs/2026-11-03-html-parsing.md.
 - Held by vectors/html/tokens*.jsonl (tests/test_conformance_html.py: what selectolax's tree shows lexbor's tokenizer
-  decided of every fixture page, every page the fake sites build and an edge set), which `HtmlReplay` reads through
-  `TokensTree`, a small tree builder of its own.
+  decided of every fixture page, every page the fake sites build, an edge set and seeded tag soup), which
+  `HtmlReplay` reads through `TokensTree`, a small tree builder of its own.
 - The tree, nodes and selectors (html-tree): not built yet.
 
 ##### Lookups on the phone

@@ -9,7 +9,9 @@ package io.github.danielhp95.caracole.core.html.internal.token
  *   `_`; `xml` and `xml-stylesheet` in any case, a target cut by any other character, or a `<?` followed by neither a
  *   letter nor `_`, a bogus comment that starts with `?`; one cut short by the end of the input dropped whole);
  * - an attribute written with no value (`<a href>`, or `<a href=>`) has a null one, where the spec's is "";
- * - a part of `<![CDATA[` the input ends in (`<![CD`) is an empty comment, where the spec's keeps what was written.
+ * - a part of `<![CDATA[` the input ends in (`<![CD`) is an empty comment, where the spec's keeps what was written;
+ * - `<!` the input ends in is a comment of the text since the token before it (`a<!` the text `a`, then the comment
+ *   `a`), where the spec's is empty: lexbor's buffer, not emptied at the end of the input.
  *
  * The tree builder drives it: it reads each token with [next] and, after a start tag, says what follows with
  * [switchTo] (RCDATA after `<title>`, as [contentFor] says), and [foreignContent] answers whether the adjusted current
@@ -719,6 +721,7 @@ class Tokenizer(input: String, preprocessed: Boolean = false) {
         if (rest in 1..6 && s[p] == '[' && asciiStartsIgnoringCase("[CDATA[", s.substring(p))) {
             p = n // lexbor: the part of <![CDATA[ the input ends in is no comment's data
         }
+        if (rest == 0) comment.append(text) // lexbor: `<!` the input ends in holds the text before it, again
         state = State.BOGUS_COMMENT
     }
 
@@ -970,7 +973,7 @@ class Tokenizer(input: String, preprocessed: Boolean = false) {
     private fun cdataEnd() {
         when (if (p < n) s[p] else null) {
             ']' -> { p++; text.append(']') }
-            '>' -> { p++; state = State.DATA }
+            '>' -> { p++; flushText(); state = State.DATA } // its text a token of its own, as lexbor's
             else -> { text.append("]]"); state = State.CDATA }
         }
     }

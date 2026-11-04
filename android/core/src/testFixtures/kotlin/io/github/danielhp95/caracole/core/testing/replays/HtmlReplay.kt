@@ -32,7 +32,7 @@ import org.junit.Assert.assertEquals
 object HtmlReplay : AreaReplay {
     override val area = "html"
 
-    val TOKENS = listOf("html/tokens.jsonl", "html/tokens_edges.jsonl")
+    val TOKENS = listOf("html/tokens.jsonl", "html/tokens_edges.jsonl", "html/tokens_soup.jsonl")
 
     override fun replay(misses: Misses) {
         for (name in TOKENS) {
@@ -127,6 +127,24 @@ class TokensTree private constructor(page: String) {
             "ruby", "s", "small", "span", "strong", "strike", "sub", "sup", "table", "tt", "u", "ul", "var",
         )
         private val MATH_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
+        private val HEADINGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
+        private val BLOCKS = setOf(
+            "address", "article", "aside", "blockquote", "button", "center", "details", "dialog", "dir", "div", "dl",
+            "fieldset", "figcaption", "figure", "footer", "header", "hgroup", "listing", "main", "menu", "nav", "ol",
+            "pre", "search", "section", "summary", "ul", "applet", "marquee", "object", "dd", "dt",
+        )
+        private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike",
+                                       "strong", "tt", "u")
+        private val SCOPE = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template")
+        private val SPECIAL = setOf(
+            "address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br",
+            "button", "caption", "center", "col", "colgroup", "dd", "details", "dir", "div", "dl", "dt", "embed",
+            "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5",
+            "h6", "head", "header", "hgroup", "hr", "html", "iframe", "img", "input", "keygen", "li", "link", "listing",
+            "main", "marquee", "menu", "meta", "nav", "noembed", "noframes", "noscript", "object", "ol", "p", "param",
+            "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table",
+            "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "title", "tr", "track", "ul", "wbr", "xmp",
+        )
     }
 
     private enum class Ns { HTML, SVG, MATH }
@@ -434,10 +452,60 @@ class TokensTree private constructor(page: String) {
     private fun inBodyEnd(token: Token.EndTag) {
         val name = token.name
         when {
-            name == "body" -> if (stack.any { it.name == "body" }) mode = Mode.AFTER_BODY
-            name == "html" -> if (stack.any { it.name == "body" }) { mode = Mode.AFTER_BODY; process(token) }
-            name == "form" -> { form = null; popUntil("form") }
-            else -> popUntil(name)
+            name == "body" -> if (inScope("body")) mode = Mode.AFTER_BODY
+            name == "html" -> if (inScope("body")) { mode = Mode.AFTER_BODY; process(token) }
+            name == "form" -> {
+                val node = form
+                form = null
+                if (node != null && inScope("form")) stack.remove(node)
+            }
+            name == "p" -> if (inScope("p", setOf("button"))) popUntilHtml(setOf("p")) // else an empty p: no attribute
+            name == "li" -> if (inScope("li", setOf("ol", "ul"))) popUntilHtml(setOf("li"))
+            name in HEADINGS -> if (HEADINGS.any { inScope(it) }) popUntilHtml(HEADINGS)
+            name in BLOCKS -> if (inScope(name)) popUntilHtml(setOf(name))
+            name == "br" -> {} // a br element: no attribute
+            // the adoption agency moves nodes, never out of document order: closing the element is near enough
+            name in FORMATTING -> if (inScope(name)) popUntilHtml(setOf(name))
+            else -> anyOtherEndTag(name)
+        }
+    }
+
+    /** Whether an HTML element [name] is in scope (§13.2.4.2), [more] HTML elements bounding it too. */
+    private fun inScope(name: String, more: Set<String> = emptySet()): Boolean {
+        for (i in stack.indices.reversed()) {
+            val node = stack[i]
+            if (node.ns == Ns.HTML && node.name == name) return true
+            if (isScopeBoundary(node) || (node.ns == Ns.HTML && node.name in more)) return false
+        }
+        return false
+    }
+
+    private fun isScopeBoundary(node: Node): Boolean = when (node.ns) {
+        Ns.HTML -> node.name in SCOPE
+        Ns.MATH -> node.name in MATH_TEXT || node.name == "annotation-xml"
+        Ns.SVG -> node.name in setOf("foreignobject", "desc", "title")
+    }
+
+    private fun isSpecial(node: Node): Boolean = when (node.ns) {
+        Ns.HTML -> node.name in SPECIAL
+        else -> isScopeBoundary(node)
+    }
+
+    private fun popUntilHtml(names: Set<String>) {
+        val i = stack.indexOfLast { it.ns == Ns.HTML && it.name in names }
+        if (i >= 0) while (stack.size > i) stack.removeAt(stack.lastIndex)
+    }
+
+    /** §13.2.6.4.7's "any other end tag": the nearest HTML element of that name closed, unless a special one comes
+     * first. */
+    private fun anyOtherEndTag(name: String) {
+        for (i in stack.indices.reversed()) {
+            val node = stack[i]
+            if (node.ns == Ns.HTML && node.name == name) {
+                while (stack.size > i) stack.removeAt(stack.lastIndex)
+                return
+            }
+            if (isSpecial(node)) return
         }
     }
 

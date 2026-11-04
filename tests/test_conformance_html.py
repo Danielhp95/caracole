@@ -9,7 +9,8 @@ lexbor shows no token stream, so the tokenizer's half is what its tree holds tha
 - ``tokens_edges.jsonl``: the edge set, small documents where tokenizers part ways (character references in text
   and in attributes, CR and CRLF, NUL in each state, script data and its escapes, RCDATA, RAWTEXT, PLAINTEXT,
   comments and bogus comments, processing instructions, CDATA, a doctype of each quirks list, the input cut short in
-  each state).
+  each state);
+- ``tokens_soup.jsonl``: seeded tag soup, 600 pages of those pieces cut anywhere (:data:`SOUP`).
 
 Each record's ``args[0]`` is the page (a ``{"fixture": …}`` reference or its text: the bytes decoded as UTF-8 with
 replacement, as the parsers hand selectolax text), and its ``out`` (:func:`reads`):
@@ -33,6 +34,7 @@ own (the real one is lane html-tree's): tag and attribute names compared ASCII-l
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
 from helpers import azlyrics_site, gametabs_site, gtptabs_site, harptabs_site, lacuerda_site, ug_pages
@@ -311,6 +313,10 @@ def markup_edges() -> list[tuple[str, str]]:
         "comments cut 8": "<!--<!--",
         "comments cut 9": "<!-",
         "comments cut 10": "<!",
+        "comments cut 11": "<p>a&amp;b\x00c<!",
+        "comments cut 12": "<svg><![CDATA[x]]>y<!",
+        "comments cut 13": "a</>b<!",
+        "comments cut 14": "<p>a</p>\n<!",
         "bogus comments": "<!x><!-x><!x-y><![x]><!DOCTYPEx><!doc>y</ x y>z",
         "bogus comments cut": "<!x",
         "comments in places": "<!--0--><html><!--1--><head><!--2--></head><!--3--><body><!--4--></body><!--5--></html><!--6-->",
@@ -348,6 +354,12 @@ def markup_edges() -> list[tuple[str, str]]:
                          "<script><!--<script>--></script>a</script>",
         "script less-than": "<script><a></script><script><</script><script></</script><script></scriptx</script>",
         "script end tags": "<script>a</SCRIPT>b<script>c</script d=e>f<script>g</script/>h",
+        "script escaped end tags": "<script><!--a</script>b<script><!--a-</script>c<script><!--a--<</script>d"
+                                   "<script><!--a</scriptx>e</SCRIPT >f",
+        "script double escaped ends": "<script><!--<script>a-<</script>b--></script>c"
+                                      "<script><!--<script>a--<</script>--></script>d<script><!--<script>-<x--></script>e",
+        "references at a value's end": "<a b=\"x&\" c=\"&amp\" d=&amp e='&#65x' f=&lt g=\"&lt;&\">x</a>",
+        "references in rcdata": "<title>&</title><textarea>&#x41;&amp&notit;</textarea><title>a</TiTlE >",
         "script cut 1": "<script>a",
         "script cut 2": "<script><!--a",
         "script cut 3": "<script><!--<script>a",
@@ -389,6 +401,26 @@ def edge_pages() -> list[tuple[str, str]]:
     return doctype_edges() + reference_edges() + markup_edges()
 
 
+# The pieces of the tag soup: markup a tokenizer meets cut anywhere, and the tags that switch it.
+SOUP = [
+    "<", ">", "/", "!", "-", "--", "?", "&", "#", "x", "X", ";", "amp", "lt", "not", "notin", "nbsp", "a", "b", "p",
+    "div", "script", "title", "textarea", "style", "xmp", "plaintext", "svg", "math", "pre", "=", "'", '"', " ", "\n",
+    "\r", "\r\n", "\t", "\x00", "[CDATA[", "]]", "DOCTYPE", "html", "PUBLIC", "SYSTEM", "x=y", "é", "宋", "&#",
+    "<!--", "-->", "<?", "?>", "</", "<script>", "</script>", "<!--<script>", "<title>", "</title>", "<svg>", "</svg>",
+    "<p>", "</p>", "<a href=", "<b>", "</b>", "<br/>", "1", "9", "F", "&#x", "&amp;", "<!", "<!DOCTYPE html>",
+    "<textarea>", "</textarea>", "<style>", "</style>", "<math><mi>", "<foreignObject>", "<desc>", "<i>", "<p id=Q>",
+    "xml", "<html a=1>", "<body b=2>", "<head>", "</head>", "</body>", "</html>", "<!-- x -->", "<![CDATA[x]]>",
+    "&notit;", "&ampx", "&#128;", "&#0;", "<noscript>", "<iframe>", "</iframe>", '<a b="&amp=">', "<a b=&ampx>",
+    "<x y z=w>", "<FOO Bar=Baz>", "</FOO>", "<?x y?>", "<?xml?>", "<!--->", "--!>", "<!-->",
+]
+
+
+def soup_pages(count: int = 600, seed: int = 20261104) -> list[tuple[str, str]]:
+    """Seeded tag soup: each page 3 to 40 of the pieces above, at random."""
+    rng = random.Random(seed)
+    return [(f"soup {i}", "".join(rng.choice(SOUP) for _ in range(rng.randint(3, 40)))) for i in range(count)]
+
+
 # --- the vectors --------------------------------------------------------------------------------------------
 
 
@@ -400,6 +432,10 @@ def test_tokens_jsonl_is_what_lexbor_reads_of_every_page():
 
 def test_tokens_edges_jsonl_is_what_lexbor_reads_of_the_edge_set():
     write("tokens_edges", [record(name, text) for name, text in edge_pages()])
+
+
+def test_tokens_soup_jsonl_is_what_lexbor_reads_of_seeded_tag_soup():
+    write("tokens_soup", [record(name, text) for name, text in soup_pages()])
 
 
 def test_the_edge_set_and_the_pages_are_named_once():

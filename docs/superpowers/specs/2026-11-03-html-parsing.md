@@ -79,7 +79,8 @@ data is a tag only when it is the last start tag's.
   the comment `?xml version='1.0'?`). A processing instruction the input ends in is dropped whole, `<?` too. The tree
   builder places one as it places a comment.
 - At the end of the input, lexbor drops what of `<![CDATA[` was written (`<![CD` is an empty comment); `<!DOCT` is
-  the comment `DOCT`, as the spec has it.
+  the comment `DOCT`, as the spec has it; and `<!` alone is a comment of the text since the token before it, again
+  (`<p>a<!` has the text `a` and the comment `a`), its buffer never emptied there.
 
 ### Character references
 
@@ -109,9 +110,9 @@ From the doctype by the spec's lists (lexbor's, `CompatMode.of`), or by a missin
 ### The vectors
 
 `vectors/html/tokens.jsonl` (every HTML page of the sites' fixtures, by reference, and every page the fake sites
-build) and `tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data
+build), `tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data
 and its escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA, each doctype list's entries,
-the input cut short in each state). lexbor shows no token stream, so each record holds what its tree shows the
+the input cut short in each state) and `tokens_soup.jsonl` (seeded tag soup: 600 pages of markup cut anywhere). lexbor shows no token stream, so each record holds what its tree shows the
 tokenizer decided: the document's mode (by a probe element's id), the doctype's name, each element with an attribute
 once (its tag and attributes; the tree's clones are the same pair), every text node's data in document order joined,
 every comment's and processing instruction's. `core.testing.replays.HtmlReplay` reads them through `TokensTree`, a
