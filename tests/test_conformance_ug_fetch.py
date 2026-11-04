@@ -17,6 +17,12 @@ sheet, so that ``sheet.json`` is UG's raw in UG's key order, its floats as ``rep
   ``process_song(FetchContext(…), song, guitar=…)`` in turn, through one client, as a lookup's sheet stage then its
   ug stage ask (get.py ``_fetch_context``: the first pass ``max_pages_per_group`` 1, ``scored_sheets`` 1,
   ``versions`` False); ``out.result`` each pass's ``SongFetchOutcome``.
+- ``ug_sheet_stages.jsonl``: get.py's words for the two UG stages: ``{fn: "caracole.get._Lookup._sheet_from_ug"`` or
+  ``"….ug", kw: {outcome}, out}``, what the sheet stage (``[state, detail]``) and the ug stage (its detail) say a pass
+  that came to ``outcome`` (``{sheet, tab, kept_versions}``) did; and ``{fn: "caracole.get._Lookup._ug_ready", kw:
+  {song, index, kv, overrides}, out}``, why Ultimate Guitar has nothing to fetch for a song (None: it has), its
+  artist known as ``artist_is_known`` knows it (``song``'s artists, the offline index's artist keys, kv, and
+  overrides.toml's ``alias`` and ``artist_url``).
 - ``ug_keep.jsonl``: ``{fn: "caracole.ug.fetch.keep_version", case, fixture, kw: {song, tabs, pass}, …}``:
   ``keep_version`` of each of ``tabs`` in turn (a context of its own each, ``pass`` as above), over a library the
   lookup filled, through one client: each of its answers (kept, same, held, sheet, gone, unreadable, closed, no text,
@@ -57,6 +63,7 @@ from helpers.ug_pages import make_tab_page_html, version_dict
 MADE_BY = "tests/test_conformance_ug_fetch.py"
 LOOKUP = VECTORS / "lookup"
 SHEET = LOOKUP / "ug_sheet.jsonl"
+STAGES = LOOKUP / "ug_sheet_stages.jsonl"
 KEEP = LOOKUP / "ug_keep.jsonl"
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
@@ -673,9 +680,208 @@ def ukulele(tmp: Path) -> list[dict[str, Any]]:
         w.close()
 
 
+def variant(tmp: Path) -> list[dict[str, Any]]:
+    """A song whose title names a variant ("(Acústico)", ``title_variant``): the versions UG labels so (an acoustic
+    recording, ``is_acoustic``) rank before the rest, in the sheet's scoring, the versions kept beside it and the tab
+    slot alike, though rated lower."""
+    versions = {k: VERSIONS[k] for k in (101, 102, 201, 202)} | {
+        104: dataclasses.replace(VERSIONS[104], extra={"is_acoustic": True}),
+        201: dataclasses.replace(VERSIONS[201], extra={"is_acoustic": True}),
+    }
+    w = World(tmp, "variant", title=f"{TITLE} (Acústico)", index=[
+        (101, SONG_KEY, "chords"), (102, SONG_KEY, "chords"), (104, SONG_KEY, "chords"), (201, SONG_KEY, "tabs"),
+        (202, SONG_KEY, "tabs")])
+    try:
+        assert w.song.variant == "acoustic"
+        return [w.process("a variant in the title: the versions of that label rank first, in each slot",
+                          [FIRST, REST], answers_of(101, 102, 104, 201, 202, versions=versions))]
+    finally:
+        w.close()
+
+
+def links_elsewhere(tmp: Path) -> list[dict[str, Any]]:
+    """A page whose versions all link off UG's tab pages (``_check_links``): UG's links changed shape, an error that
+    raises, never "no versions"."""
+    elsewhere = "https://www.ultimate-guitar.com/contribution/correct/"
+    versions = {t: dataclasses.replace(VERSIONS[t], url=f"{elsewhere}{t}") for t in (101, 102)}
+    w = World(tmp, "links-elsewhere", index=[(101, SONG_KEY, "chords")])
+    try:
+        return [w.process("no version on the page links to a tab page: a parse error, never no versions", [REST],
+                          {f"GET {slugged(101)}": ok(page_of(101, versions=versions))})]
+    finally:
+        w.close()
+
+
+# A title longer than a folder's name holds (library.MAX_NAME_BYTES): two songs of it make one folder.
+LONG = ("Concierto de Aranjuez para guitarra y orquesta, segundo movimiento, adagio, en la versión que tocaba la "
+        "banda en sus conciertos de mil novecientos ochenta y siete")
+
+
+def shared_folder(tmp: Path) -> list[dict[str, Any]]:
+    """Two songs whose titles agree up to a folder name's length: the sheet the fetch would keep goes where the
+    other song keeps its own (``SharedFolder``), so nothing is written over it and the pass raises."""
+    from caracole.library import keep_file, song_dir
+    from caracole.normalize import identity_key
+    from caracole.songs import get_song, upsert_song
+    from caracole.versions import upsert_version
+
+    w = World(tmp, "shared-folder", title=f"{LONG}, part two", index=[(101, SONG_KEY, "chords")])
+    try:
+        with clock():
+            other_id, _ = upsert_song(w.conn, artists=[ARTIST], title=f"{LONG}, part one", album=None,
+                                      duration_ms=None, isrc=None, source="wanted",
+                                      source_id=identity_key(ARTIST, f"{LONG}, part one"), added_at=ADDED)
+            other = get_song(w.conn, other_id)
+            assert song_dir(w.library, other) == song_dir(w.library, w.song)
+            mine = upsert_version(w.conn, provider="inbox", tab_id="part-one", song_id=other_id, slot="sheet",
+                                  kind="chords", rating=0, votes=0, version=1, label=None, url="file:///part-one",
+                                  raw={}, now=ADDED)
+            keep_file(w.conn, w.library, song=other, version_id=mine, name="sheet.txt", data=b"[Am]part one\n",
+                      rank=1)
+        w.settle()
+        return [w.process("a sheet that would go where another song keeps its own: SharedFolder, nothing written "
+                          "over it", [REST], answers_of(101, versions={101: VERSIONS[101]}))]
+    finally:
+        w.close()
+
+
+def closed_pin(tmp: Path) -> list[dict[str, Any]]:
+    """A pin you pasted at its slugged address, which robots.txt closes (UG files the band Track's tabs under
+    /tab/track/): the tab is nowhere caracole may read it, so it pins nothing and nothing is asked of it; the sheet
+    is the unpinned one."""
+    from caracole.overrides import add_pin
+
+    w = World(tmp, "closed-pin", index=[(101, SONG_KEY, "chords"), (102, SONG_KEY, "chords")])
+    try:
+        w.write_overrides(lambda path: add_pin(path, DISPLAY, [f"{TAB}track/{SONG_KEY}-chords-102"]))
+        versions = {k: VERSIONS[k] for k in (101, 102)}
+        return [w.process("a pin at a slugged address robots.txt closes pins nothing, and nothing is asked of it",
+                          [REST], answers_of(101, 102, versions=versions))]
+    finally:
+        w.close()
+
+
 def sheet_records(tmp: Path) -> list[dict[str, Any]]:
     return [*two_passes(tmp), *pins(tmp), *rating(tmp), *yours(tmp), *unreadable(tmp), *closed(tmp), *gone(tmp),
-            *stopped(tmp), *other_site(tmp), *left_over(tmp), *ukulele(tmp)]
+            *stopped(tmp), *other_site(tmp), *left_over(tmp), *ukulele(tmp), *variant(tmp), *links_elsewhere(tmp),
+            *shared_folder(tmp), *closed_pin(tmp)]
+
+
+# --- the two stages' words --------------------------------------------------------------------------------------
+
+
+def _lookup(conn, song, overrides):
+    """get.py's ``_Lookup`` of ``song`` over ``conn``, as its stages find them."""
+    from caracole import config, get
+
+    lk = get._Lookup(config.Config.__new__(config.Config), get.LookupRequest(song.artist, song.title), get.Progress(),
+                     runner=None, now=NOW, clock=lambda: 0.0)
+    lk.conn, lk.song, lk.overrides = conn, song, overrides
+    return lk
+
+
+# The outcomes a pass may come to, as the two stages word them.
+OUTCOMES = [
+    {"sheet": 102, "tab": None, "kept_versions": []},
+    {"sheet": None, "tab": None, "kept_versions": []},
+    {"sheet": 103, "tab": 202, "kept_versions": [104, 102]},
+    {"sheet": 103, "tab": None, "kept_versions": [104]},
+    {"sheet": None, "tab": 202, "kept_versions": []},
+    {"sheet": None, "tab": None, "kept_versions": [102]},
+]
+
+# ``_ug_ready``'s cases: the song (its decision, candidates and artists), the offline index's artist keys, kv and
+# overrides.toml's [alias] and [artist_url], which artist_is_known reads with the artists.
+READY = [
+    ("matched", {"match_decision": "accept"}, [], {}, {}),
+    ("pinned", {"match_decision": "pinned"}, [], {}, {}),
+    ("a review of UG songs", {"match_decision": "review",
+                              "match_candidates": [{"artist_key": ARTIST_KEY, "song_key": SONG_KEY, "step": "exact"}]},
+     [ARTIST_KEY], {}, {}),
+    ("a review of the steps that never accept, its artist unknown",
+     {"match_decision": "review", "match_candidates": [{"step": "title_only"}, {"step": "catch_all"}]}, [], {}, {}),
+    ("a review of the steps that never accept, its artist in the index",
+     {"match_decision": "review", "match_candidates": [{"step": "title_only"}]}, [ARTIST_KEY], {}, {}),
+    ("not found, nothing known of its artist", {"match_decision": "not_found"}, ["los-prisioneros"], {}, {}),
+    ("not found, its artist in the index", {"match_decision": "not_found"}, [ARTIST_KEY], {}, {}),
+    ("not found, its artist's page learned", {"match_decision": "not_found"}, [],
+     {f"ug:artist_url:{ARTIST_KEY}": SODA_URL}, {}),
+    ("not found, an empty page learned is none", {"match_decision": "not_found"}, [],
+     {f"ug:artist_url:{ARTIST_KEY}": ""}, {}),
+    ("not found, its artist under an alias in the index", {"match_decision": "not_found"}, ["soda"], {},
+     {"alias": {ARTIST_KEY: ["soda"]}}),
+    ("not found, its artist's page pasted", {"match_decision": "not_found"}, [], {},
+     {"artist_url": {ARTIST_KEY: SODA_URL}}),
+    ("not found, a tab page pasted not read yet", {"match_decision": "not_found"}, [], {},
+     {"artist_url": {ARTIST_KEY: f"{TAB}101"}}),
+    ("not found, a tab page pasted that leads to no artist page", {"match_decision": "not_found"}, [],
+     {"ug:pasted_tab:101": json.dumps({"problem": "it doesn't link to its artist's page"})},
+     {"artist_url": {ARTIST_KEY: f"{TAB}101"}}),
+    ("not found, a tab page pasted that leads to its page", {"match_decision": "not_found"}, [],
+     {"ug:pasted_tab:101": json.dumps({"artist_url": SODA_URL})}, {"artist_url": {ARTIST_KEY: f"{TAB}101"}}),
+    ("not found, its second artist in the index",
+     {"match_decision": "not_found", "artists": [ARTIST, "Gustavo Cerati"]}, ["gustavo-cerati"], {}, {}),
+    ("not found, a name in Chinese, its pinyin in the index",
+     {"match_decision": "not_found", "artists": ["宋冬野"]}, ["song-dong-ye"], {}, {}),
+    ("not found, a name in two scripts, one of its forms in the index",
+     {"match_decision": "not_found", "artists": ["Song Dongye (宋冬野)"]}, ["宋冬野"], {}, {}),
+]
+
+
+def stage_records(tmp: Path) -> list[dict[str, Any]]:
+    """get.py's words for the two UG stages: what the sheet stage (``_sheet_from_ug``'s UG pass) and the ug stage
+    say a pass came to, and ``_ug_ready``'s answer for a song (why Ultimate Guitar has nothing to fetch for it, or
+    None), its artist known as ``artist_is_known`` knows it."""
+    from caracole import db
+    from caracole.normalize import identity_key
+    from caracole.overrides import Overrides
+    from caracole.songs import get_song, update_song, upsert_song
+    from caracole.ug.fetch import SongFetchOutcome
+
+    records: list[dict[str, Any]] = []
+    for outcome in OUTCOMES:
+        done = SongFetchOutcome(1, outcome["sheet"], outcome["tab"], 3, settled=True,
+                                kept_versions=outcome["kept_versions"])
+        lk = _lookup(None, mock.Mock(id=1), Overrides())
+        lk._ug_ready = lambda: None
+        lk._kept_sheet = lambda: object()  # a sheet kept: the stage says what UG gave, LaCuerda not asked
+        lk.asking = lk.after_the_sheet = lambda provider, work: work(None)
+        lk._fetch_context = lambda client, *, first: None
+        with mock.patch("caracole.ug.fetch.process_song", lambda ctx, song, guitar=True: done), \
+                mock.patch("caracole.songs.get_song", lambda conn, song_id: mock.Mock(id=song_id)):
+            sheet = lk._sheet_from_ug()
+            rest = lk.ug()
+        records.append({"fn": "caracole.get._Lookup._sheet_from_ug", "case": f"the sheet pass came to {outcome}",
+                        "kw": {"outcome": outcome}, "out": list(sheet)})
+        records.append({"fn": "caracole.get._Lookup.ug", "case": f"the ug pass came to {outcome}",
+                        "kw": {"outcome": outcome}, "out": rest})
+    for i, (case, song_fields, index, kv, written) in enumerate(READY):
+        conn = db.connect(tmp / f"ready-{i}.sqlite")
+        try:
+            phone_schema(conn)
+            for n, artist_key in enumerate(index):
+                conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                             "VALUES (?, ?, 'a-song', 'chords', 'last', ?, '')", (7 + n, artist_key, ADDED))
+            for k, v in kv.items():
+                conn.execute("INSERT INTO kv (key, value) VALUES (?, ?)", (k, v))
+            artists = song_fields.get("artists", [ARTIST])
+            with clock():
+                song_id, _ = upsert_song(conn, artists=artists, title=TITLE, album=None, duration_ms=None, isrc=None,
+                                         source="wanted", source_id=identity_key(artists[0], TITLE), added_at=ADDED)
+                update_song(conn, song_id, match_decision=song_fields["match_decision"],
+                            match_candidates=song_fields.get("match_candidates", []))
+            song = get_song(conn, song_id)
+            overrides = Overrides(alias={k: tuple(v) for k, v in written.get("alias", {}).items()},
+                                  artist_url=written.get("artist_url", {}))
+            said = _lookup(conn, song, overrides)._ug_ready()
+        finally:
+            conn.close()
+        records.append({"fn": "caracole.get._Lookup._ug_ready", "case": case,
+                        "kw": {"song": {"artist": song.artist, "artists": list(song.artists),
+                                        "match_decision": song.match_decision,
+                                        "match_candidates": song.match_candidates},
+                               "index": index, "kv": kv, "overrides": written}, "out": said})
+    return records
 
 
 # --- keep_version's answers -------------------------------------------------------------------------------------
@@ -714,7 +920,9 @@ def keep_records(tmp: Path) -> list[dict[str, Any]]:
 
 
 def every_file(tmp: Path) -> dict[Path, str]:
+    (tmp / "stages").mkdir(parents=True)
     return {SHEET: jsonl(sheet_records(tmp / "sheet"), corpus="lookup/ug_sheet", made_by=MADE_BY),
+            STAGES: jsonl(stage_records(tmp / "stages"), corpus="lookup/ug_sheet_stages", made_by=MADE_BY),
             KEEP: jsonl(keep_records(tmp / "keep"), corpus="lookup/ug_keep", made_by=MADE_BY)}
 
 
@@ -723,7 +931,7 @@ def made(tmp_path_factory) -> dict[Path, str]:
     return every_file(tmp_path_factory.mktemp("ug-fetch"))
 
 
-@pytest.mark.parametrize("path", [SHEET, KEEP], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [SHEET, STAGES, KEEP], ids=lambda p: p.name)
 def test_the_vector_is_what_ug_fetch_does(made, path):
     check(path, made[path])
 
@@ -769,13 +977,37 @@ def test_the_unreadable_notes_double_to_ninety_days(made):
     assert (song["ug_dirty"], song["ug_checked_at"]) == (1, None)
 
 
-def test_a_block_and_a_spent_budget_raise_as_the_phone_must(made):
+def test_a_block_a_spent_budget_a_parse_error_and_a_shared_folder_raise_as_the_phone_must(made):
     raised = {r["case"]: r["raises"]["type"] for r in _records(made[SHEET]) if "raises" in r}
-    assert sorted(raised.values()) == ["BudgetExhausted", "ProviderBlocked"]
+    assert sorted(raised.values()) == ["BudgetExhausted", "PageParseError", "ProviderBlocked", "SharedFolder"]
 
 
 def test_every_body_is_a_text_or_a_fixture_reference(made):
-    for text in made.values():
+    for text in (made[SHEET], made[KEEP]):
         for r in _records(text):
             for entry in [*r["answers"].values(), *r["cache"].get("ug", {}).values()]:
                 assert set(entry["body"]) <= {"text", "fixture"}
+
+
+def test_the_new_cases_come_to_what_they_say(made):
+    out = {r["case"]: r for r in _records(made[SHEET])}
+    acoustic = out["a variant in the title: the versions of that label rank first, in each slot"]["out"]["result"]
+    assert (acoustic[1]["sheet"], acoustic[1]["tab"]) == (104, 201)
+    links = out["no version on the page links to a tab page: a parse error, never no versions"]["raises"]
+    assert links["type"] == "PageParseError" and "links to a tab page" in links["message"]
+    shared = out["a sheet that would go where another song keeps its own: SharedFolder, nothing written over it"]
+    assert shared["raises"]["type"] == "SharedFolder" and not shared["after"]["library"]
+    pin = out["a pin at a slugged address robots.txt closes pins nothing, and nothing is asked of it"]
+    assert not any("/track/" in r for r in pin["out"]["requests"]) and pin["out"]["result"][0]["sheet"] is not None
+
+
+def test_the_stages_words_cover_every_answer_of_ug_ready(made):
+    said = {r["case"]: r["out"] for r in _records(made[STAGES]) if r["fn"] == "caracole.get._Lookup._ug_ready"}
+    from caracole.get import NOT_IN_INDEX
+
+    assert said["matched"] is None and said["not found, nothing known of its artist"] == NOT_IN_INDEX
+    assert said["not found, a tab page pasted that leads to no artist page"] == NOT_IN_INDEX
+    assert said["not found, an empty page learned is none"] == NOT_IN_INDEX
+    assert said["a review of UG songs"].startswith("caracole isn't sure")
+    known = [c for c, s in said.items() if c.startswith("not found") and s is None]
+    assert len(known) == 9, known

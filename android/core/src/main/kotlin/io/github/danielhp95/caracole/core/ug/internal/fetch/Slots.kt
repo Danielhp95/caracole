@@ -48,10 +48,10 @@ internal object Slots {
         while (kinds.sumOf { run.fetched[it] ?: 0 } < pages) {
             val seen = seenIds(run)
             val todo = tabs.filter { it.tabId !in seen && it.tabId !in tried }
-                .sortedWith(compareBy<IndexTab>({ Ports.label(it) != null }, { it.tabId }))
+                .sortedWith(compareBy<IndexTab>({ it.label != null }, { it.tabId }))
             if (todo.isEmpty()) return
             tried += todo[0].tabId
-            Pages.page(run, todo[0].tabId, Ports.url(todo[0]), todo[0].type)
+            Pages.page(run, todo[0].tabId, todo[0].url, todo[0].type)
         }
     }
 
@@ -84,7 +84,7 @@ internal object Slots {
             val kind = row?.kind ?: known?.type
             val page = Pages.page(run, tabId, url, kind)
             if (page == null || !Pages.wanted(run, page.tab)) continue
-            groups.getOrPut(Pages.groupOf(Ports.kind(page.tab))!!) { ArrayList() } += page.tab.tabId
+            groups.getOrPut(Pages.groupOf(page.tab.kind)!!) { ArrayList() } += page.tab.tabId
         }
         return groups
     }
@@ -239,7 +239,7 @@ internal object Slots {
         val kept = keptVersion(run.db, run.song.id, UgFetch.SHEET_FILES[0])
         val chosen = run.ctx.overrides.lacuerda[run.song.key]
         if (kept != null && kept.provider != UgFetch.PROVIDER && pinned == null &&
-            ((chosen != null && kept.provider == "lacuerda" && Ports.holds(chosen, kept.tabId)) ||
+            ((chosen != null && kept.provider == "lacuerda" && chosen.holds(kept.tabId)) ||
                 !Rank.replacesSheet(c.coverage, kept.coverage, policy.coverageThreshold))) {
             Versions.setPicks(run.db, run.song.id, kinds, emptyList())  // the other site's sheet stays the pick
             keepBeside(null)
@@ -257,7 +257,7 @@ internal object Slots {
     fun tabSlot(run: SongRun, pinned: List<Long>?): Long? {
         val rows = rows(run, UgFetch.TAB_KINDS)
         val ranked = if (pinned != null) inOrder(rows, pinned).map(::candidate)
-                     else Ports.rankGuitar(rows.map(::candidate), run.ctx.rank, run.song.variant)
+                     else Rank.rankGuitar(rows.map(::candidate), run.ctx.rank, run.song.variant)
         val best = firstWithText(run, ranked.asSequence(), rows, emptyMap())
         if (best == null) {
             Versions.setPicks(run.db, run.song.id, UgFetch.TAB_KINDS, emptyList())

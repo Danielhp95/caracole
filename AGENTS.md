@@ -1374,14 +1374,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
     answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
-  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's, neutral until it lands (no request, no write; a
-    not-found song is NOT_IN_INDEX's).
+  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's (it replaces the skeleton's `ArtistRoute.find`,
+    which nothing calls), `artist_is_known` whole; until it lands its route and lists answer as Python's list cut short
+    does: no request, the song marked dirty and left unchecked, never clean.
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
-  beside it: …"), `_ug_ready`'s skips, and what asking came to in get.py's `asking` words (`UgStages.ended`), the song
-  owed a fetch (`_owed`); the frame (lane lookup) asks LaCuerda after a sheet stage that kept none, and words it
-  skipped. tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario
-  records (`UgFetchReplay`, area `ug-fetch`).
+  beside it: …"), `_ug_ready`'s skips ("not on the phone yet" where Python reads the artist's page), and what asking
+  came to in `LookupWords.end`'s words; the envelope (InteractiveAsk) marks the song owed a fetch (`_owed`), and the
+  frame (LookupRun) asks the ug stage within `after_the_sheet`, and LaCuerda after a sheet stage that kept none.
+- tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario records, and
+  ug_sheet_stages.jsonl, get.py's words for the two stages and `_ug_ready`'s answers (`UgFetchReplay`, area
+  `ug-fetch`).
 - UG's artist pages (ug-fetch-artist): not built yet.
 - The matcher (matcher): not built yet.
 - core.lyrics' `Lrclib`, `Megalobiz` and `AzLyrics`: lyrics.py, megalobiz*.py and azlyrics*.py for a lookup's song,

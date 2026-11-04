@@ -21,6 +21,7 @@ import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.ug.FetchContext
 import io.github.danielhp95.caracole.core.ug.UgFetch
 import io.github.danielhp95.caracole.core.ug.UgLookup
+import io.github.danielhp95.caracole.core.ug.UgArtist
 import io.github.danielhp95.caracole.core.ug.UgPage
 import io.github.danielhp95.caracole.core.ug.UgTabPage
 import io.github.danielhp95.caracole.core.ug.UgVersion
@@ -65,7 +66,7 @@ internal class SongRun(val ctx: FetchContext, var song: SongRow) {
  * that can't be read, is gone or is closed to caracole leaves. */
 internal object Pages {
     private val PAGE_ACCEPT = setOf(200, 404)
-    private val TAB_HOST = PyUrl.urlsplit(Ports.TAB_BASE_URL).netloc
+    private val TAB_HOST = PyUrl.urlsplit(UgPage.TAB_BASE_URL).netloc
     private val ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
     /** `_slot`. */
@@ -120,9 +121,9 @@ internal object Pages {
     fun tabPage(html: ByteArray, url: String): UgTabPage = UgPage.parseTabPage(html, url)
 
     private fun upsert(run: SongRun, v: UgVersion): Long {
-        val kind = Ports.kind(v)!!
+        val kind = v.kind!!
         return Versions.upsert(run.db, UgFetch.PROVIDER, v.tabId.toString(), run.song.id, slot(kind), kind, v.rating,
-                               v.votes, v.version, Ports.label(v), v.url, v.raw, run.stamp)
+                               v.votes, v.version, v.label, v.url, v.raw, run.stamp)
     }
 
     /** `_closed`: whether robots.txt closes [url]: caracole never asks for it, and a tab there is no candidate. */
@@ -145,7 +146,7 @@ internal object Pages {
 
     /** `_wanted`: a kind caracole uses (never Official), public and not blocked. */
     fun wanted(run: SongRun, v: UgVersion): Boolean =
-        Ports.kind(v) != null && v.access == "public" && v.tabId !in run.ctx.overrides.block
+        v.kind != null && v.access == "public" && v.tabId !in run.ctx.overrides.block
 
     /** `_usable`: a version caracole wants, at a tab page it may read. */
     fun usable(run: SongRun, v: UgVersion): Boolean = wanted(run, v) && tabPageUrl(v.url)
@@ -183,8 +184,8 @@ internal object Pages {
     /** `_record_page`: the page's own tab (at [url], should its own link go elsewhere) and the versions it lists of
      * the same kind group. */
     private fun recordPage(run: SongRun, page: UgTabPage, url: String, fresh: Boolean) {
-        val group = groupOf(Ports.kind(page.tab)) ?: return
-        val inGroup = (listOf(page.tab) + page.versions).filter { Ports.kind(it) in group }
+        val group = groupOf(page.tab.kind) ?: return
+        val inGroup = (listOf(page.tab) + page.versions).filter { it.kind in group }
         val tab = inGroup.first()
         checkLinks(run, inGroup, url)
         val own = if (tabPageUrl(tab.url)) tab else tab.copy(url = url)
@@ -213,7 +214,7 @@ internal object Pages {
     fun artistPageBase(url: String?): String? {
         if (url.isNullOrEmpty()) return null
         return try {
-            OverrideUrls.artistPageAddress(PyUrl.urljoin(Ports.WWW + "/", Py.strip(url)))
+            OverrideUrls.artistPageAddress(PyUrl.urljoin(UgArtist.WWW + "/", Py.strip(url)))
         } catch (e: PyUrl.Invalid) {
             null
         }
@@ -312,7 +313,7 @@ internal object Pages {
         }
         run.db.kvDelete(unreadableKey(tabId))
         run.pages[tabId] = page
-        if (fresh) run.count(page?.let { Ports.kind(it.tab) } ?: kind ?: "?")
+        if (fresh) run.count(page?.let { it.tab.kind } ?: kind ?: "?")
         if (page == null) {
             markGone(run, tabId, url, kind)
             return null
