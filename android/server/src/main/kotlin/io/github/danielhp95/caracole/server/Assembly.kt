@@ -115,7 +115,8 @@ class Phone(private val deps: PhoneDeps) {
 
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(
-        PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls),
+        PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls,
+                   libraryName = { config().libraryName.orEmpty() }),
         search,
         JobsRoutes(queue, cards, deps.database),
         RequestsRoutes(parts),
@@ -128,7 +129,7 @@ class Phone(private val deps: PhoneDeps) {
     )
 
     val app: App = App(
-        AppConfig(csrf = deps.csrf, secret = deps.secret),
+        AppConfig(csrf = deps.csrf, secret = deps.secret, libraryName = { config().libraryName.orEmpty() }),
         modules = modules,
         stubs = Stubs(),
         files = LibraryFiles(deps.libraryDir, deps.mirror, PhoneGate(deps.database), deps.database),

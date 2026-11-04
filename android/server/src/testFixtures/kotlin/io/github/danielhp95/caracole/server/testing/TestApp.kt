@@ -37,12 +37,12 @@ class TestApp(
     val csrf: String = CSRF,
     val secret: String = SECRET,
     allowed: Set<String> = AppConfig(CSRF, SECRET).allowed,
-    libraryName: String = AppConfig(CSRF, SECRET).libraryName,
+    libraryName: String = AppConfig(CSRF, SECRET).libraryName(),
 ) : AutoCloseable {
     val database: Database = TestDb.fresh(dir)
     val libraryDir: File = File(dir, "library").apply { mkdirs() }
     val files: LibraryFiles = LibraryFiles(libraryDir, mirror, gate?.invoke(database) ?: PhoneGate(database), database)
-    val app: App = App(AppConfig(csrf, secret, allowed, libraryName), modules(database), stubs, files)
+    val app: App = App(AppConfig(csrf, secret, allowed, { libraryName }), modules(database), stubs, files)
 
     fun handle(request: Request): Response = app.handle(request)
 

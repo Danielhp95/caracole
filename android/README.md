@@ -32,9 +32,19 @@ settings, a file read from the phone's server for another app, an index fetched 
 
 ## Install
 
-- With USB debugging on: `adb install android/app/build/outputs/apk/debug/app-debug.apk`.
-- Or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
-  once.
+1. **Install the debug APK**, which [Build](#build) made:
+   - with USB or wireless debugging on: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r`
+     keeps the app's data when it is already there);
+   - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
+     once.
+2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
+   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty; its
+   pages say caracole, with a Phone badge beside it.
+3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
+   indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
+   with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
+   say). It runs in the background and Settings says how it ended ([Search with the computer
+   off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`). An update must be signed
 with the same key.
@@ -231,6 +241,15 @@ serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
 
 `ANDROID_AVD_HOME` is where avdmanager made the AVD (the emulator looks in `~/.android/avd` otherwise);
 `QT_QPA_PLATFORM=xcb` runs its window through XWayland on a Wayland desktop.
+
+To try the app by hand there, install it as on a phone
+(`adb install -r android/app/build/outputs/apk/debug/app-debug.apk`), start it
+(`adb shell am start -n io.github.danielhp95.caracole/.MainActivity`, or from the emulator's launcher), and point it
+at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT` builds a
+library of 20 songs in DIR with no request and serves it, which the emulator reaches at `http://10.0.2.2:PORT`. Its
+Settings then imports that computer's indexes (From the computer), or a file pushed to the emulator's Download
+folder (`adb push indexes.sqlite /sdcard/Download/`, then From a file). `adb shell pm clear
+io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
