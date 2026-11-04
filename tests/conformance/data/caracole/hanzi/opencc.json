@@ -1,0 +1,169 @@
+{
+ "opencc": "1.4.0",
+ "package": "1.4.1",
+ "configs": {
+  "t2s": {
+   "name": "Traditional Chinese (OpenCC Standard) to Simplified Chinese",
+   "normalization": [
+    {
+     "dict": {
+      "type": "ocd2",
+      "file": "CJK_Compatibility_Ideographs.ocd2"
+     }
+    }
+   ],
+   "conversion_chain": [
+    {
+     "dict": {
+      "type": "group",
+      "match_policy": "short_circuit",
+      "dicts": [
+       {
+        "type": "ocd2",
+        "file": "TSPhrases.ocd2"
+       },
+       {
+        "type": "ocd2",
+        "file": "TSCharactersExt.ocd2",
+        "may_output_tofu": true
+       },
+       {
+        "type": "ocd2",
+        "file": "TSCharacters.ocd2"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "tw2s": {
+   "name": "Traditional Chinese (Taiwan Standard) to Simplified Chinese",
+   "normalization": [
+    {
+     "dict": {
+      "type": "ocd2",
+      "file": "CJK_Compatibility_Ideographs.ocd2"
+     }
+    }
+   ],
+   "segmentation": {
+    "type": "mmseg",
+    "dict": {
+     "type": "ocd2",
+     "file": "TSPhrases.ocd2"
+    }
+   },
+   "conversion_chain": [
+    {
+     "dict": {
+      "type": "group",
+      "match_policy": "short_circuit",
+      "dicts": [
+       {
+        "type": "ocd2",
+        "file": "TWVariantsRevPhrases.ocd2"
+       },
+       {
+        "type": "ocd2",
+        "file": "TWVariantsRev.ocd2"
+       }
+      ]
+     }
+    },
+    {
+     "dict": {
+      "type": "group",
+      "match_policy": "short_circuit",
+      "dicts": [
+       {
+        "type": "ocd2",
+        "file": "TSPhrases.ocd2"
+       },
+       {
+        "type": "ocd2",
+        "file": "TSCharactersExt.ocd2",
+        "may_output_tofu": true
+       },
+       {
+        "type": "ocd2",
+        "file": "TSCharacters.ocd2"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "s2tw": {
+   "name": "Simplified Chinese to Traditional Chinese (Taiwan Standard)",
+   "normalization": [
+    {
+     "dict": {
+      "type": "ocd2",
+      "file": "CJK_Compatibility_Ideographs.ocd2"
+     }
+    }
+   ],
+   "segmentation": {
+    "type": "mmseg",
+    "dict": {
+     "type": "group",
+     "match_policy": "union",
+     "dicts": [
+      {
+       "type": "ocd2",
+       "file": "STPhrases.ocd2"
+      },
+      {
+       "type": "ocd2",
+       "file": "STPhrases_GeneratedFromRegionalPhrases.ocd2"
+      }
+     ]
+    }
+   },
+   "conversion_chain": [
+    {
+     "dict": {
+      "type": "group",
+      "match_policy": "short_circuit",
+      "dicts": [
+       {
+        "type": "group",
+        "match_policy": "union",
+        "dicts": [
+         {
+          "type": "ocd2",
+          "file": "STPhrases.ocd2"
+         },
+         {
+          "type": "ocd2",
+          "file": "STPhrases_GeneratedFromRegionalPhrases.ocd2"
+         }
+        ]
+       },
+       {
+        "type": "ocd2",
+        "file": "STCharacters.ocd2"
+       }
+      ]
+     }
+    },
+    {
+     "dict": {
+      "type": "group",
+      "match_policy": "short_circuit",
+      "dicts": [
+       {
+        "type": "ocd2",
+        "file": "TWVariantsPhrases.ocd2"
+       },
+       {
+        "type": "ocd2",
+        "file": "TWVariants.ocd2"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

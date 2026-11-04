@@ -1217,7 +1217,18 @@ Not built yet. (crossing-phone.)
     regenerates the corpus.
 - A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): not built yet.
-- Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
+- Pinyin with tones, OpenCC and hanzi (chinese):
+  - core.pinyin's data is pypinyin's in Style.TONE alone (data/caracole/pinyin/, `symbols.txt` its tone marks):
+    `Pinyin.lazyPinyin(text, errors, style)` (`DEFAULT`, `IGNORE`, `EMPTY_EACH`; `TONE`, `NORMAL`), NORMAL derived as
+    pypinyin's `to_normal` (`Pinyin.normal`), which M1's NORMAL vectors guard, vectors/pinyin/tone.jsonl the TONE.
+  - `viewer.chinese.OpenCC` is OpenCC's algorithm as hanzi.py runs `t2s`, `tw2s` and `s2tw` without tofu-risk
+    dictionaries: normalization, mmseg, the chain, groups by `short_circuit` and `union`, an IDS written whole, a
+    segment ending at a NUL. Its configs are the package's as shipped (data/caracole/hanzi/opencc.json, with
+    `opencc.__version__`, 1.4.0) and its dictionaries the package's opencc_dict dumps (`hanzi/<Name>.txt`): an OpenCC
+    bump regenerates them, and OpenCCTest names the version it ports.
+  - `Hanzi` and `ViewerPinyin` are hanzi.py's and pinyin.py's, in code points (pinyin.py's constants from
+    `viewer/pinyin.json`); hanzi.py's `chordpro` is the computer's PDFs' alone. tests/test_conformance_viewer_chinese.py
+    writes their data and vectors (viewer/opencc, hanzi, pinyin_page), each also read back from the data alone.
 - Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
