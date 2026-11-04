@@ -8,6 +8,6 @@ class AlertsTest {
     @Test fun noneTellsNoOne() {
         Alerts.NONE.blocked("ug", null, "403")
         Alerts.NONE.failed("Look it up", "Failed")
-        assertEquals(0, ProviderState("ug").strikes)
+        assertEquals(java.math.BigInteger.ZERO, ProviderState("ug").strikes)
     }
 }
