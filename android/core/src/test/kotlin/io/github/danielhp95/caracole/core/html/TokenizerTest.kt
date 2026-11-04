@@ -120,6 +120,45 @@ class TokenizerTest {
         assertEquals(listOf("#x", "EOF"), tokens("<![CDATA[x", foreign = true))
     }
 
+    /** lexbor hands the text over at `<!`: in `<svg><foreignObject><p><b>a</p>y<![CDATA[z]]>` the tree inserts `y`,
+     * reconstructing `<b>` (an HTML element) at the integration point, before the tokenizer asks where `<![CDATA[`
+     * stands, so selectolax reads the text `ay` and the comment `[CDATA[z]]`. */
+    @Test fun theTextBeforeAMarkupDeclarationComesOutBeforeForeignContentIsAsked() {
+        val seen = ArrayList<String>()
+        val tokenizer = Tokenizer("<svg><foreignObject><p><b>a</p>y<![CDATA[z]]>")
+        tokenizer.foreignContent = { seen += "asked"; false }
+        while (true) {
+            when (val token = tokenizer.next()) {
+                is Token.Characters -> seen += "#" + token.data
+                is Token.StartTag -> seen += "<" + token.name + ">"
+                is Token.EndTag -> seen += "</" + token.name + ">"
+                is Token.Comment -> seen += "!" + token.data
+                else -> { seen += "EOF"; break }
+            }
+        }
+        assertEquals(listOf("<svg>", "<foreignobject>", "<p>", "<b>", "#a", "</p>", "#y", "asked", "![CDATA[z]]", "EOF"),
+                     seen)
+        // in foreign content the section's text is a token of its own, after the text before it
+        assertEquals(listOf("#y", "asked", "#z", "EOF"), Tokenizer("y<![CDATA[z]]>").let { t ->
+            val out = ArrayList<String>()
+            t.foreignContent = { out += "asked"; true }
+            while (true) {
+                val token = t.next()
+                if (token is Token.Characters) out += "#" + token.data else { out += "EOF"; break }
+            }
+            out
+        })
+        // and before a processing instruction, as lexbor's tag open state hands it over at `<?` too
+        assertEquals(listOf("#a", "?x|y", "EOF"), tokens("a<?x y?>"))
+    }
+
+    @Test fun aMarkupDeclarationTheInputEndsInHoldsTheTextBeforeIt() {
+        assertEquals(listOf("#a", "!a", "EOF"), tokens("a<!"))
+        assertEquals(listOf("<p>", "#a&b", "!a&b", "EOF"), tokens("<p>a&amp;b<!"))
+        assertEquals(listOf("<p>", "!", "EOF"), tokens("<p><!"))
+        assertEquals(listOf("!x", "#b", "!b", "EOF"), tokens("<!--x-->b<!"))
+    }
+
     @Test fun rcdataRawtextScriptAndPlaintext() {
         assertEquals(listOf("<title>", "#a&b<i>c</i>", "</title>", "<p>", "EOF"), tokens("<title>a&amp;b<i>c</i></title><p>"))
         assertEquals(listOf("<title>", "#a</titlex>b", "</title>", "EOF"), tokens("<title>a</titlex>b</TITLE y=z>"))

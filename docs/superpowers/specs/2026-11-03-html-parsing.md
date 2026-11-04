@@ -59,6 +59,11 @@ off), and `foreignContent()` answers whether the adjusted current node is outsid
 `<![CDATA[` opens a CDATA section (elsewhere a bogus comment, `[CDATA[x]]`). An end tag in RCDATA, RAWTEXT or script
 data is a tag only when it is the last start tag's.
 
+The text before a `<!` or a `<?` comes out of `next()` before what follows is read, as lexbor's tag open state emits it
+there, so `foreignContent()` is asked with that text inserted: text at an HTML integration point may reconstruct a
+formatting element, an HTML one, and `<svg><foreignObject><p><b>a</p>y<![CDATA[z]]>` reads the text `ay` and the
+comment `[CDATA[z]]` (with the text still pending, the tree would answer from `foreignObject` and read `ayz`).
+
 ### Attributes
 
 - In source order, names ASCII-lowercased, the first of duplicates kept (`<a HREF=X Href=y>` has `href` X).
@@ -111,15 +116,20 @@ From the doctype by the spec's lists (lexbor's, `CompatMode.of`), or by a missin
 
 `vectors/html/tokens.jsonl` (every HTML page of the sites' fixtures, by reference, and every page the fake sites
 build), `tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data
-and its escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA, each doctype list's entries,
-the input cut short in each state) and `tokens_soup.jsonl` (seeded tag soup: 600 pages of markup cut anywhere). lexbor shows no token stream, so each record holds what its tree shows the
+and its escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA (after text at each integration
+point), templates, formatting elements reconstructed, each doctype list's entries, the input cut short in each state) and `tokens_soup.jsonl` (seeded tag soup: 600 pages of markup cut anywhere). lexbor shows no token stream, so each record holds what its tree shows the
 tokenizer decided: the document's mode (by a probe element's id), the doctype's name, each element with an attribute
 once (its tag and attributes; the tree's clones are the same pair), every text node's data in document order joined,
-every comment's and processing instruction's. `core.testing.replays.HtmlReplay` reads them through `TokensTree`, a
-tree builder of the replay's own: where each node goes in document order (the head before what follows it, a comment
-after `</body>` in the html element, text a table can't hold fostered before it), the start tags it drops or merges,
-the text it drops, what it switches the tokenizer to, and foreign content; tag and attribute names compared
-ASCII-lowercased (their SVG and MathML case is the tree's).
+every comment's and processing instruction's. A `<template>`'s contents are in none of them: selectolax's tree never
+reaches them (its `first_child` is None, `css` finds nothing there; only its serialization shows them).
+`core.testing.replays.HtmlReplay` reads them through `TokensTree`, a tree builder of the replay's own: where each node
+goes in document order (the head before what follows it, a comment after `</body>` in the html element, text a table
+can't hold fostered before it, or into a template opened in the table), the start tags it drops or merges, the text it
+drops, what it switches the tokenizer to, foreign content, the active formatting elements reconstructed (the current
+node `<![CDATA[` is read in), of the adoption agency the furthest block left open, a table part's context, and a
+template's contents in body's rules, never walked. lexbor's tag and attribute names are ASCII-lowercased (its tree
+gives the SVG and MathML ones their case) and the tokenizer's compared as it gives them, so a name it left upper-case
+differs.
 
 ## Text
 

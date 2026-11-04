@@ -15,7 +15,8 @@ package io.github.danielhp95.caracole.core.html.internal.token
  *
  * The tree builder drives it: it reads each token with [next] and, after a start tag, says what follows with
  * [switchTo] (RCDATA after `<title>`, as [contentFor] says), and [foreignContent] answers whether the adjusted current
- * node is outside the HTML namespace, where `<![CDATA[` opens a CDATA section (elsewhere it is a bogus comment).
+ * node is outside the HTML namespace, where `<![CDATA[` opens a CDATA section (elsewhere it is a bogus comment): it
+ * is asked only once the text before the `<!` came out of [next], so the tree builder answers with that text inserted.
  * The input is preprocessed first ([Preprocess.text]); a caller that did it passes `preprocessed = true`.
  */
 class Tokenizer(input: String, preprocessed: Boolean = false) {
@@ -42,6 +43,8 @@ class Tokenizer(input: String, preprocessed: Boolean = false) {
     private val buffer = StringBuilder()
 
     private val comment = StringBuilder()
+    /** The text handed over at the last `<!`, which a `<!` the input ends in holds again (lexbor's buffer). */
+    private var bangText = ""
     private var doctypeName: StringBuilder? = null
     private var doctypePublic: StringBuilder? = null
     private var doctypeSystem: StringBuilder? = null
@@ -493,14 +496,22 @@ class Tokenizer(input: String, preprocessed: Boolean = false) {
 
     // --- tags --------------------------------------------------------------------------------------------------
 
+    /** The data state's `<`. At `<!` and `<?` the text so far is handed over first, as lexbor's tag open state
+     * emits it there: the tree builder inserts it (an HTML integration point's text may reconstruct a formatting
+     * element, an HTML one) before [markupDeclaration] asks [foreignContent] where `<![CDATA[` stands. */
     private fun tagOpen() {
         if (p >= n) { text.append('<'); eof(); return }
         val c = s[p]
         when {
             isAsciiAlpha(c) -> { startTag(end = false); state = State.TAG_NAME }
             c == '/' -> { p++; state = State.END_TAG_OPEN }
-            c == '!' -> { p++; state = State.MARKUP_DECLARATION }
-            c == '?' -> { p++; state = State.PI_OPEN }
+            c == '!' -> {
+                p++
+                bangText = text.toString()
+                flushText()
+                state = State.MARKUP_DECLARATION
+            }
+            c == '?' -> { p++; flushText(); state = State.PI_OPEN }
             else -> { text.append('<'); state = State.DATA }
         }
     }
@@ -721,7 +732,7 @@ class Tokenizer(input: String, preprocessed: Boolean = false) {
         if (rest in 1..6 && s[p] == '[' && asciiStartsIgnoringCase("[CDATA[", s.substring(p))) {
             p = n // lexbor: the part of <![CDATA[ the input ends in is no comment's data
         }
-        if (rest == 0) comment.append(text) // lexbor: `<!` the input ends in holds the text before it, again
+        if (rest == 0) comment.append(bangText) // lexbor: `<!` the input ends in holds the text before it, again
         state = State.BOGUS_COMMENT
     }
 

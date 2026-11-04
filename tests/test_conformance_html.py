@@ -8,8 +8,8 @@ lexbor shows no token stream, so the tokenizer's half is what its tree holds tha
   reference), and every page the tests' fake sites build (tests/helpers/*_site.py, ug_pages.py), as text;
 - ``tokens_edges.jsonl``: the edge set, small documents where tokenizers part ways (character references in text
   and in attributes, CR and CRLF, NUL in each state, script data and its escapes, RCDATA, RAWTEXT, PLAINTEXT,
-  comments and bogus comments, processing instructions, CDATA, a doctype of each quirks list, the input cut short in
-  each state);
+  comments and bogus comments, processing instructions, CDATA (after text at each integration point), templates,
+  formatting elements reconstructed, a doctype of each quirks list, the input cut short in each state);
 - ``tokens_soup.jsonl``: seeded tag soup, 600 pages of those pieces cut anywhere (:data:`SOUP`).
 
 Each record's ``args[0]`` is the page (a ``{"fixture": …}`` reference or its text: the bytes decoded as UTF-8 with
@@ -27,9 +27,12 @@ replacement, as the parsers hand selectolax text), and its ``out`` (:func:`reads
 - ``pis``: every processing instruction (lexbor reads ``<?target data?>`` as one, but ``<?xml …?>`` as a bogus
   comment) as ``[target, data]``, in document order.
 
+A ``<template>``'s contents are in none of them: selectolax's tree never reaches them (its ``first_child`` is None,
+``css`` finds nothing there), only its serialization shows them.
+
 Kotlin's ``core.testing.replays.HtmlReplay`` reads them with core.html's tokenizer through a small tree builder of its
-own (the real one is lane html-tree's): tag and attribute names compared ASCII-lowercased, as the tokenizer gives them
-(the SVG and MathML names' case is the tree's).
+own (the real one is lane html-tree's): lexbor's tag and attribute names ASCII-lowercased (its tree gives the SVG and
+MathML ones their case), the tokenizer's compared as it gives them.
 """
 
 from __future__ import annotations
@@ -334,6 +337,10 @@ def markup_edges() -> list[tuple[str, str]]:
         "cdata in svg": "<svg><![CDATA[x<y]]>a<![CDATA[]]]]><![CDATA[a]b]]c]]]></svg>",
         "cdata in math": "<math><![CDATA[1<2]]><mi><![CDATA[q]]></mi></math>",
         "cdata in foreignobject": "<svg><foreignObject><![CDATA[a]]><div><![CDATA[b]]></div></foreignObject></svg>",
+        "cdata after text at an integration point": "<svg><foreignObject><p><b>a</p>y<![CDATA[z]]>",
+        "cdata after text at a math text point": "<math><mi><p><b>a</p>y<![CDATA[z]]></mi></math>",
+        "cdata after text in desc": "<svg><desc><i>a<p>b</i>c<![CDATA[d]]></desc></svg>",
+        "cdata after text, nothing to reconstruct": "<svg><foreignObject>y<![CDATA[z]]></foreignObject></svg>",
         "cdata cut": "<svg><![CDATA[x",
         "cdata cut short": "<svg><![CDA",
         "rcdata": "<title>a&amp;b<i>c</i></title><textarea>\nx&lt;y</textarea><textarea>\n\nz</textarea>",
@@ -378,6 +385,24 @@ def markup_edges() -> list[tuple[str, str]]:
         "tags cut 10": "<p>a<b/",
         "tags cut 11": "<p>a</b",
         "tags cut 12": "<p>a<b c=\"d",
+        "template": "<p>a<template b=c><i id=y>t</i><!--c--><?x y?></template>z",
+        "template in head": "<head><template id=h><p id=x>a</template></head><body>y",
+        "template after head": "<head></head><template a=1><b>x</b></template><p id=q>y",
+        "template html and body": "<body b=1><template><html a=1><body b=2></template><p>y",
+        "template unclosed": "<p>a<template><div id=d>x",
+        "template in a table": "<table><template t=1><tr><td>x</template>y</table>",
+        "templates nested": "<template><template id=i>a</template>b</template>c",
+        "template in svg": "<svg><template id=t>a</template></svg>",
+        "template and cdata": "<template><svg><![CDATA[x]]></template>q",
+        "template and forms": "<form id=a><template><form id=b>x</form></template></form>",
+        "template and formatting": "<b>a<template><i>b</template>c</b>",
+        "template end tags": "<template><div></div></p></body></html></td>x</template>y",
+        "reconstructed formatting": "<p><b id=1><i>a</p>b<p>c</b>d</i>e",
+        "formatting in a table": "<table><b>x<tr><td>y</td></tr>z</table>w",
+        "formatting and markers": "<b>a<object><i>b</object>c</b>d<marquee><s>e</marquee>f",
+        "an a in an a": "<a href=1>x<p><a href=2>y</a>z",
+        "a nobr in a nobr": "<nobr>x<nobr>y</nobr>z",
+        "noah's ark": "<p><b c=1><b c=1><b c=1><b c=1>x</p>y",
         "pre and listing": "<pre>\n\nx</pre><listing>\ny</listing><pre>z</pre><pre>\r\nw</pre><pre>&#10;v</pre>",
         "whitespace in places": " \n\t<html> \n<head> \n</head> \n<body> \n</body> \n</html> \n",
         "text in places": "a<html>b<head>c</head>d<body>e</body>f</html>g",
@@ -411,7 +436,8 @@ SOUP = [
     "<textarea>", "</textarea>", "<style>", "</style>", "<math><mi>", "<foreignObject>", "<desc>", "<i>", "<p id=Q>",
     "xml", "<html a=1>", "<body b=2>", "<head>", "</head>", "</body>", "</html>", "<!-- x -->", "<![CDATA[x]]>",
     "&notit;", "&ampx", "&#128;", "&#0;", "<noscript>", "<iframe>", "</iframe>", '<a b="&amp=">', "<a b=&ampx>",
-    "<x y z=w>", "<FOO Bar=Baz>", "</FOO>", "<?x y?>", "<?xml?>", "<!--->", "--!>", "<!-->",
+    "<x y z=w>", "<FOO Bar=Baz>", "</FOO>", "<?x y?>", "<?xml?>", "<!--->", "--!>", "<!-->", "<template>",
+    "</template>", "<template t=1>",
 ]
 
 

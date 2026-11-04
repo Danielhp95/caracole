@@ -27,7 +27,9 @@ import org.junit.Assert.assertEquals
  * the edge set, what lexbor's tokenizer decided as selectolax's tree shows it (the document's mode, the doctype's
  * name, each element's attributes, the text, the comments and processing instructions in document order), read by
  * core.html's tokenizer through [TokensTree], a small tree builder of the replay's own (lane html-tree's is the real
- * one). Tag and attribute names are compared ASCII-lowercased: their SVG and MathML case is the tree's.
+ * one). lexbor's tag and attribute names are ASCII-lowercased before they are compared with the tokenizer's, as it gave
+ * them: their SVG and MathML case is the tree's. A `<template>`'s contents are left out, as selectolax's walk never
+ * reaches them.
  */
 object HtmlReplay : AreaReplay {
     override val area = "html"
@@ -68,8 +70,8 @@ object HtmlReplay : AreaReplay {
                 val (name, value) = a.jsonArray
                 Attribute(text(name), if (value is JsonNull) null else text(value))
             }
-        })
-        val mine = normalized(got.attrs)
+        }, lower = true)
+        val mine = normalized(got.attrs, lower = false)
         misses.check(attrs == mine) {
             val missing = attrs - mine.toSet()
             val extra = mine - attrs.toSet()
@@ -83,13 +85,18 @@ object HtmlReplay : AreaReplay {
         misses.check(pis == got.pis) { "$case: processing instructions ${got.pis}, lexbor's $pis" }
     }
 
-    /** Names ASCII-lowercased, each pair once, in one order. */
-    private fun normalized(pairs: List<Pair<String, List<Attribute>>>): List<String> =
-        pairs.map { (tag, list) ->
-            JsonArray(listOf(JsonPrimitive(Py.asciiLower(tag)), JsonArray(list.map {
-                JsonArray(listOf(JsonPrimitive(Py.asciiLower(it.name)), it.value?.let(::JsonPrimitive) ?: JsonNull))
+    /** Each pair once, in one order; lexbor's names ASCII-lowercased ([lower]), the tokenizer's as it gave them.
+     * lexbor's tokenizer lowercases every name, and its tree alone gives an SVG or MathML one its case back
+     * (`foreignObject`, `viewBox`): lowercasing its side undoes that, so a name the tokenizer left upper-case
+     * still differs. */
+    private fun normalized(pairs: List<Pair<String, List<Attribute>>>, lower: Boolean): List<String> {
+        fun name(s: String) = if (lower) Py.asciiLower(s) else s
+        return pairs.map { (tag, list) ->
+            JsonArray(listOf(JsonPrimitive(name(tag)), JsonArray(list.map {
+                JsonArray(listOf(JsonPrimitive(name(it.name)), it.value?.let(::JsonPrimitive) ?: JsonNull))
             }))).toString()
         }.distinct().sorted()
+    }
 
     private fun firstDifference(want: String, got: String): String {
         val i = want.indices.firstOrNull { it >= got.length || want[it] != got[it] } ?: got.length
@@ -104,8 +111,11 @@ object HtmlReplay : AreaReplay {
  * `</html>` in the document, the text a table can't hold fostered before it), which start tags it drops or merges
  * (a second `<head>`, `<html>` and `<body>` adding their attributes), the text it drops (whitespace before the head,
  * a NUL in HTML content, the newline after `<pre>`), what it switches the tokenizer to, foreign content and its
- * integration points, and the document's mode. It keeps no exact nesting: no implied end tags, scopes, adoption
- * agency or active formatting elements, none of which moves a node in document order or changes an attribute.
+ * integration points, the active formatting elements reconstructed (a clone is the same pair, but it is the current
+ * node: text at an integration point makes one, an HTML element, before `<![CDATA[` is read), a `<template>`'s
+ * contents (never walked, as selectolax's walk never reaches them) and the document's mode. It keeps no exact
+ * nesting: no implied end tags, no table modes, and of the adoption agency only that it closes the formatting element
+ * and takes it off the list, none of which moves text in document order or changes an attribute.
  */
 class TokensTree private constructor(page: String) {
     /** What [read] found: the summary each record of tokens*.jsonl holds. */
@@ -135,6 +145,9 @@ class TokensTree private constructor(page: String) {
         )
         private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike",
                                        "strong", "tt", "u")
+        /** The start tags in body inserts without reconstructing the active formatting elements first. */
+        private val NO_RECONSTRUCTION = BLOCKS - setOf("button", "applet", "marquee", "object") + HEADINGS +
+            setOf("p", "rb", "rtc", "rp", "rt", "li", "table")
         private val SCOPE = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template")
         private val SPECIAL = setOf(
             "address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br",
@@ -170,6 +183,8 @@ class TokensTree private constructor(page: String) {
     private var form: Node? = null
     private var skipNewline = false
     private val pendingTableText = ArrayList<Token.Characters>()
+    /** The list of active formatting elements (§13.2.4.3), a null its marker. */
+    private val active = ArrayList<Node?>()
     private val tokenizer = Tokenizer(page)
 
     init {
@@ -327,15 +342,21 @@ class TokensTree private constructor(page: String) {
             token is Token.StartTag && token.name in HEAD_TAGS -> headElement(token)
             token is Token.StartTag && token.name == "head" -> {}
             token is Token.EndTag && token.name == "head" -> { popUntil("head"); mode = Mode.AFTER_HEAD }
-            token is Token.EndTag && token.name == "template" -> popUntil("template")
+            token is Token.EndTag && token.name == "template" -> endTemplate()
             token is Token.EndTag && token.name !in setOf("body", "html", "br") -> {}
             else -> { popUntil("head"); mode = Mode.AFTER_HEAD; process(token) }
         }
     }
 
-    /** title, style, script, noframes and template, by the in head rules: their text in them. */
+    /** title, style, script, noframes and template, by the in head rules: their text in them; a template's contents
+     * by the in body rules (its own mode's, near enough: they are never walked). */
     private fun headElement(token: Token.StartTag) {
         insertElement(token.name, Ns.HTML, token.attributes)
+        if (token.name == "template") {
+            active += null
+            mode = Mode.IN_BODY
+            return
+        }
         val content = Tokenizer.contentFor(token.name)
         if (content != null) {
             tokenizer.switchTo(content)
@@ -387,7 +408,7 @@ class TokensTree private constructor(page: String) {
             is Token.Characters -> when {
                 token.kind == CharKind.NULL -> {}
                 inTableContext() -> pendingTableText += token
-                else -> insertText(token.data, foster = false)
+                else -> { reconstruct(foster = false); insertText(token.data, foster = false) }
             }
             is Token.Comment -> insertComment(token.data, current()!!)
             is Token.ProcessingInstruction -> insertPi(token, current()!!)
@@ -400,16 +421,20 @@ class TokensTree private constructor(page: String) {
     private fun inBodyStart(token: Token.StartTag) {
         val name = token.name
         when {
-            name == "html" -> merge(stack[0], token.attributes)
-            name == "body" -> if (stack.size >= 2 && stack[1].name == "body") merge(stack[1], token.attributes)
+            name == "html" -> if (!inTemplate()) merge(stack[0], token.attributes)
+            name == "body" -> if (!inTemplate() && stack.size >= 2 && stack[1].name == "body") merge(stack[1], token.attributes)
             name in setOf("base", "basefont", "bgsound", "link", "meta") -> insertVoid(name, token.attributes)
             name in HEAD_TAGS -> headElement(token)
             name == "head" || name == "frameset" || name == "frame" -> {}
-            name in TABLE_PARTS && stack.none { it.name == "table" && it.ns == Ns.HTML } -> {}
-            name == "form" -> if (form == null) {
-                val inTable = inTableContext()
-                form = insertElement("form", Ns.HTML, token.attributes)
-                if (inTable) stack.removeAt(stack.lastIndex)
+            name in TABLE_PARTS && !inTableScope("table") -> {} // in body, or in a template opened in the table
+            name == "form" -> {
+                val inTemplate = inTemplate()
+                if (inTableContext()) {
+                    if (!inTemplate && form == null) { form = insertElement("form", Ns.HTML, token.attributes); pop() }
+                } else if (form == null || inTemplate) {
+                    val node = insertElement("form", Ns.HTML, token.attributes)
+                    if (!inTemplate) form = node
+                }
             }
             name == "pre" || name == "listing" -> { insertElement(name, Ns.HTML, token.attributes); skipNewline = true }
             name == "textarea" -> {
@@ -419,7 +444,14 @@ class TokensTree private constructor(page: String) {
                 original = mode
                 mode = Mode.TEXT
             }
-            name in setOf("xmp", "iframe", "noembed") -> {
+            name in setOf("iframe", "noembed") -> {
+                insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
+                tokenizer.switchTo(Content.RAWTEXT)
+                original = mode
+                mode = Mode.TEXT
+            }
+            name == "xmp" -> {
+                reconstruct(fosters(name, token))
                 insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
                 tokenizer.switchTo(Content.RAWTEXT)
                 original = mode
@@ -430,31 +462,88 @@ class TokensTree private constructor(page: String) {
                 tokenizer.switchTo(Content.PLAINTEXT)
             }
             name == "math" || name == "svg" -> {
+                reconstruct(fosters(name, token))
                 insertElement(name, if (name == "math") Ns.MATH else Ns.SVG, token.attributes,
                               foster = fosters(name, token))
-                if (token.selfClosing) stack.removeAt(stack.lastIndex)
+                if (token.selfClosing) pop()
             }
-            name in VOID -> insertVoid(if (name == "image") "img" else name, token.attributes, fosters(name, token))
-            else -> insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
+            name in setOf("param", "source", "track", "hr") -> insertVoid(name, token.attributes, fosters(name, token))
+            name == "col" -> {
+                toTableContext(name)
+                insertVoid(name, token.attributes)
+            }
+            name == "input" && inTableContext() && isHidden(token) -> insertVoid(name, token.attributes)
+            name in VOID -> {
+                reconstruct(fosters(name, token))
+                insertVoid(if (name == "image") "img" else name, token.attributes, fosters(name, token))
+            }
+            name == "a" -> {
+                formattingEntry("a")?.let { open -> // the one still listed closed, then out of the list and the stack
+                    adoption("a")
+                    stack.remove(open)
+                    active.remove(open)
+                }
+                formatting(token)
+            }
+            name == "nobr" -> {
+                if (inScope("nobr")) adoption("nobr")
+                formatting(token)
+            }
+            name in FORMATTING -> formatting(token)
+            name in setOf("applet", "marquee", "object") -> {
+                reconstruct(fosters(name, token))
+                insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
+                active += null
+            }
+            name in NO_RECONSTRUCTION -> insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
+            name in setOf("td", "th", "caption") -> {
+                toTableContext(name)
+                insertElement(name, Ns.HTML, token.attributes)
+                active += null
+            }
+            name in TABLE_PARTS -> { toTableContext(name); insertElement(name, Ns.HTML, token.attributes) }
+            else -> { // button, select, option, span and any other: the active formatting elements first
+                reconstruct(fosters(name, token))
+                insertElement(name, Ns.HTML, token.attributes, foster = fosters(name, token))
+            }
         }
     }
+
+    /** A formatting element's start tag: the list reconstructed, the element inserted and listed (Noah's Ark: three
+     * alike since the last marker are enough). */
+    private fun formatting(token: Token.StartTag) {
+        reconstruct(fosters(token.name, token))
+        val node = insertElement(token.name, Ns.HTML, token.attributes, foster = fosters(token.name, token))
+        var alike = 0
+        var earliest = -1
+        for (i in active.indices.reversed()) {
+            val entry = active[i] ?: break
+            if (entry.name == node.name && entry.attrs.toSet() == node.attrs.toSet()) { alike++; earliest = i }
+        }
+        if (alike >= 3) active.removeAt(earliest)
+        active += node
+    }
+
+    private fun isHidden(token: Token.StartTag) =
+        token.attributes.any { it.name == "type" && Py.asciiLower(it.value.orEmpty()) == "hidden" }
 
     /** Whether a start tag goes before the table it meets (§13.2.6.4.9, "anything else"). */
     private fun fosters(name: String, token: Token.StartTag): Boolean {
         if (!inTableContext()) return false
         if (name in TABLE_PARTS || name in setOf("table", "style", "script", "template", "form")) return false
-        if (name == "input" && token.attributes.any { it.name == "type" && Py.asciiLower(it.value.orEmpty()) == "hidden" }) {
-            return false
-        }
+        if (name == "input" && isHidden(token)) return false
         return true
     }
 
     private fun inBodyEnd(token: Token.EndTag) {
         val name = token.name
         when {
+            name == "template" -> endTemplate()
             name == "body" -> if (inScope("body")) mode = Mode.AFTER_BODY
             name == "html" -> if (inScope("body")) { mode = Mode.AFTER_BODY; process(token) }
-            name == "form" -> {
+            name == "form" -> if (inTemplate()) {
+                if (inScope("form")) popUntilHtml(setOf("form"))
+            } else {
                 val node = form
                 form = null
                 if (node != null && inScope("form")) stack.remove(node)
@@ -462,12 +551,99 @@ class TokensTree private constructor(page: String) {
             name == "p" -> if (inScope("p", setOf("button"))) popUntilHtml(setOf("p")) // else an empty p: no attribute
             name == "li" -> if (inScope("li", setOf("ol", "ul"))) popUntilHtml(setOf("li"))
             name in HEADINGS -> if (HEADINGS.any { inScope(it) }) popUntilHtml(HEADINGS)
+            name in setOf("applet", "marquee", "object") -> if (inScope(name)) { popUntilHtml(setOf(name)); clearToMarker() }
             name in BLOCKS -> if (inScope(name)) popUntilHtml(setOf(name))
-            name == "br" -> {} // a br element: no attribute
-            // the adoption agency moves nodes, never out of document order: closing the element is near enough
-            name in FORMATTING -> if (inScope(name)) popUntilHtml(setOf(name))
+            name == "br" -> { reconstruct(foster = false); insertVoid("br", emptyList()) }
+            name in FORMATTING -> adoption(name)
+            name in setOf("td", "th", "caption") -> if (inTableScope(name)) {
+                popUntilHtml(setOf(name))
+                clearToMarker()
+            }
+            name in setOf("table", "tbody", "tfoot", "thead", "tr") -> if (inTableScope(name)) {
+                closeThrough(stack.last { it.ns == Ns.HTML && it.name == name })
+            }
             else -> anyOtherEndTag(name)
         }
+    }
+
+    /** The adoption agency (§13.2.6.4.7), as far as the stack and the list go: the formatting element closed and
+     * taken off the list; of what was open in it, each special element (a furthest block, which stays open) and the
+     * listed elements before the last of them, which it clones (the same element here: a clone is the same pair).
+     * The tree's moves keep text in document order, so this builder leaves the nodes where they are. */
+    private fun adoption(name: String) {
+        val node = current()
+        if (node != null && node.ns == Ns.HTML && node.name == name && node !in active) { pop(); return }
+        val element = formattingEntry(name) ?: return anyOtherEndTag(name)
+        if (element !in stack) { active.remove(element); return }
+        if (!inScopeNode(element)) return
+        active.remove(element)
+        val at = stack.indexOf(element)
+        val inside = stack.subList(at + 1, stack.size).toList()
+        while (stack.size > at) pop()
+        val last = inside.indexOfLast(::isSpecial)
+        for (i in 0..last) if (isSpecial(inside[i]) || inside[i] in active) stack += inside[i]
+    }
+
+    /** The last formatting element named [name] since the last marker. */
+    private fun formattingEntry(name: String): Node? {
+        for (i in active.indices.reversed()) {
+            val entry = active[i] ?: return null
+            if (entry.name == name) return entry
+        }
+        return null
+    }
+
+    /** Reconstructing the active formatting elements (§13.2.4.3): a clone of each one closed since the last marker
+     * or the last still open, in order, the first fostered when [foster] and the current node is a table's. */
+    private fun reconstruct(foster: Boolean) {
+        if (active.isEmpty()) return
+        val last = active.last()
+        if (last == null || last in stack) return
+        var i = active.lastIndex
+        while (i > 0) {
+            val before = active[i - 1]
+            if (before == null || before in stack) break
+            i--
+        }
+        for (j in i..active.lastIndex) {
+            val entry = active[j]!!
+            active[j] = insertElement(entry.name, Ns.HTML, entry.attrs, foster = foster && inTableContext())
+        }
+    }
+
+    private fun clearToMarker() {
+        while (active.isNotEmpty()) if (active.removeAt(active.lastIndex) == null) return
+    }
+
+    private fun inTemplate() = stack.any { it.ns == Ns.HTML && it.name == "template" }
+
+    /** `</template>` (§13.2.6.4.4): the template and all it holds closed, the list cleared to its marker, and the mode
+     * the stack says. */
+    private fun endTemplate() {
+        val template = stack.lastOrNull { it.ns == Ns.HTML && it.name == "template" } ?: return
+        popThrough(template)
+        clearToMarker()
+        resetMode()
+    }
+
+    /** Resetting the insertion mode appropriately (§13.2.4.1), with this builder's modes: a table's and a select's
+     * are in body's. */
+    private fun resetMode() {
+        for (node in stack.asReversed()) {
+            if (node.ns != Ns.HTML) continue
+            when (node.name) {
+                "template", "body" -> { mode = Mode.IN_BODY; return }
+                "head" -> if (node !== stack[0]) { mode = Mode.IN_HEAD; return }
+                "html" -> { mode = if (head == null) Mode.BEFORE_HEAD else Mode.AFTER_HEAD; return }
+            }
+        }
+        mode = Mode.IN_BODY
+    }
+
+    private fun pop() { stack.removeAt(stack.lastIndex) }
+
+    private fun popThrough(node: Node) {
+        while (stack.isNotEmpty()) if (stack.removeAt(stack.lastIndex) === node) return
     }
 
     /** Whether an HTML element [name] is in scope (§13.2.4.2), [more] HTML elements bounding it too. */
@@ -476,6 +652,53 @@ class TokensTree private constructor(page: String) {
             val node = stack[i]
             if (node.ns == Ns.HTML && node.name == name) return true
             if (isScopeBoundary(node) || (node.ns == Ns.HTML && node.name in more)) return false
+        }
+        return false
+    }
+
+    /** A table part's start tag in a table (§13.2.6.4.9, in table body, in row, in cell, in caption): an open cell
+     * or caption closed, then the stack cleared back to the part's context (no implied `tbody` or `tr`: they hold
+     * nothing the vectors record). */
+    private fun toTableContext(name: String) {
+        for (cell in listOf("td", "th", "caption")) {
+            if (inTableScope(cell)) closeThrough(stack.last { it.ns == Ns.HTML && it.name == cell })
+        }
+        val context = when (name) {
+            "td", "th" -> setOf("tr", "tbody", "tfoot", "thead", "table", "template", "html")
+            "tr" -> setOf("tbody", "tfoot", "thead", "table", "template", "html")
+            else -> setOf("table", "template", "html")
+        }
+        while (true) {
+            val node = current() ?: return
+            if (node.ns == Ns.HTML && node.name in context) return
+            pop()
+        }
+    }
+
+    /** The stack popped through [node], the list cleared to its marker for each cell and caption closed. */
+    private fun closeThrough(node: Node) {
+        while (stack.isNotEmpty()) {
+            val popped = stack.removeAt(stack.lastIndex)
+            if (popped.ns == Ns.HTML && popped.name in setOf("td", "th", "caption")) clearToMarker()
+            if (popped === node) return
+        }
+    }
+
+    /** Whether an HTML element [name] is in table scope. */
+    private fun inTableScope(name: String): Boolean {
+        for (node in stack.asReversed()) {
+            if (node.ns == Ns.HTML && node.name == name) return true
+            if (node.ns == Ns.HTML && node.name in setOf("html", "table", "template")) return false
+        }
+        return false
+    }
+
+    /** Whether [element] itself is in scope. */
+    private fun inScopeNode(element: Node): Boolean {
+        for (i in stack.indices.reversed()) {
+            val node = stack[i]
+            if (node === element) return true
+            if (isScopeBoundary(node)) return false
         }
         return false
     }
@@ -550,13 +773,16 @@ class TokensTree private constructor(page: String) {
     private fun flushTableText() {
         if (pendingTableText.isEmpty()) return
         val foster = pendingTableText.any { it.kind == CharKind.OTHER }
-        for (token in pendingTableText) if (token.kind != CharKind.NULL) insertText(token.data, foster)
+        if (foster) reconstruct(foster = true)
+        for (token in pendingTableText) if (token.kind != CharKind.NULL) insertText(token.data, foster && inTableContext())
         pendingTableText.clear()
     }
 
     /** Where a fostered node goes: before the last table of the stack, in its parent. */
     private fun fosterPlace(): Pair<Node, Int> {
         val table = stack.last { it.name == "table" && it.ns == Ns.HTML }
+        val template = stack.lastOrNull { it.name == "template" && it.ns == Ns.HTML }
+        if (template != null && stack.indexOf(template) > stack.indexOf(table)) return template to template.children.size
         val parent = table.parent ?: stack[stack.indexOf(table) - 1]
         val index = parent.children.indexOf(table).let { if (it < 0) parent.children.size else it }
         return parent to index
@@ -640,7 +866,7 @@ class TokensTree private constructor(page: String) {
                     Node.Kind.PI -> pis += listOf(child.target, child.data.toString())
                     Node.Kind.DOCUMENT -> {}
                 }
-                walk(child)
+                if (!(child.ns == Ns.HTML && child.name == "template")) walk(child)
             }
         }
         walk(document)
