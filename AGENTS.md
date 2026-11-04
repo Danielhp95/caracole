@@ -1112,7 +1112,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - each route a module of its own, answering "… isn't on the phone yet." (409) until its lane lands;
     `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, for good;
   - a declaration not built yet is `TODO("lane <id>")` in a file its lane owns, or, for a seam the phone already
-    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer.
+    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer;
+  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, `SongPages.NONE` and
+    `SongbookPages.NONE` until their lanes make it the real one, so it calls no milestone's code before it lands.
+- Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
+  the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
@@ -1158,7 +1162,8 @@ Not built yet. (crossing-phone.)
 - Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
-- The sheet page (pages) and a harmonica tab's page (harmonica-page): not built yet.
+- The sheet page (pages): not built yet.
+- A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 
 ##### The phone's written pages
@@ -1167,7 +1172,9 @@ Not built yet. (written-pages.)
 
 ##### Songbooks, versions and printing on the phone
 
-Not built yet. (songbook-writers, songbook-entries, songbook-routes; versions-harmonica; export-print.)
+- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- Export PDF and Make this my version (export-print): not built yet.
 
 ##### Guitar Pro on the phone
 

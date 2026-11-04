@@ -109,6 +109,8 @@ object Caracole {
             phone.queue.onBusy = working::busy
             phone.server.start(PORT)
             this.working = working
+            // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
+            phone.start()
             return phone
         } catch (e: Throwable) {
             database.close()
