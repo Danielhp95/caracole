@@ -1252,7 +1252,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### core.html
 
-Not built yet. (html-tokenizer, html-tree.)
+- The tokenizer (html-tokenizer), `core.html.internal.token`: `Preprocess` (UTF-8 with replacement, CRLF and CR to LF)
+  and `Tokenizer`, the WHATWG tokenizer as lexbor 3.1.0 tokenizes for selectolax (its processing instructions, a null
+  value for an attribute written with none, an empty doctype identifier a missing one in `CompatMode.of`), driven by
+  the tree builder (`switchTo`, `contentFor`, `foreignContent`, asked only once the text before a `<!` came out of
+  `next()`); docs/superpowers/specs/2026-11-03-html-parsing.md.
+- Held by vectors/html/tokens*.jsonl (tests/test_conformance_html.py: what selectolax's tree shows lexbor's tokenizer
+  decided of every fixture page, every page the fake sites build, an edge set and seeded tag soup; never a
+  `<template>`'s contents, which selectolax's tree doesn't reach), which `HtmlReplay` reads through `TokensTree`, a
+  small tree builder of its own (the active formatting elements reconstructed, the tokenizer's names compared as it
+  gives them).
+- The tree, nodes and selectors (html-tree): not built yet.
 
 ##### Lookups on the phone
 
