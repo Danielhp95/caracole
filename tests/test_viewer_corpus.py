@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from caracole.render import _chordpro_text
-from caracole.viewer import harmony, theory
+from caracole.viewer import harmony, page, theory
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import MODES, QUALITIES, Key, parse_chord
 from conftest import subprocess_pythonpath
@@ -75,7 +75,7 @@ def test_the_sheets_hold_every_kind_of_line_the_viewer_reads():
     for s in sheets:
         parsed = parse_sheet(s.cho)
         assert parsed.title == s.title or s.markup is None, s.name
-        assert s.played == tuple(n for n in s.played) and all(n in parsed.chords for n in s.played), s.name
+        assert s.played == tuple(parsed.chords[i] for i in page._played(parsed)), s.name
         if "define" in s.tags:
             assert parsed.defines, s.name
         if "capo" in s.tags:
