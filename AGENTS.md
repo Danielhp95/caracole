@@ -1201,8 +1201,28 @@ Not built yet. (lookup.)
 
 ##### Site passes on the phone
 
-- Ultimate Guitar's pages (ug-pages), ranking and coverage (rank-coverage), its sheet (ug-fetch-sheet) and its artist
-  pages (ug-fetch-artist): not built yet.
+- Ultimate Guitar's pages (ug-pages), ranking and coverage (rank-coverage) and its artist pages (ug-fetch-artist): not
+  built yet.
+- UG's lookup path for a matched song (ug-fetch-sheet): core.ug's `UgFetch` (`processSong`, `keepVersion`,
+  `checkedSince`, `needsArtistPage`), ug/fetch.py's for one song, never its bulk work (no fetch_songs,
+  rescore_kept_sheets or handoffs), in internal/fetch/:
+  - `Pages`: `_read_page` and its one more fetch past the cache, kv `ug:unreadable:<tab>` (7 days, doubling, 90 at
+    most), RobotsClosed neither gone nor unreadable, a 404 a version gone, each page's versions recorded
+    (`_check_links`), its artist's page learned (kv `ug:artist_url:`);
+  - `Slots`: the groups rated from the lowest unrated id (a slug naming no part first), the pins and the pinned URL,
+    the sheet slot (another site's sheet replaced only as `replaces_sheet` says, LaCuerda's you picked never but by a
+    pin, a complete one retiring the auto sheet) and the tab slot; `Beside`: the versions kept beside the sheet, beside
+    a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
+  - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
+    answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
+  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's, neutral until it lands (no request, no write; a
+    not-found song is NOT_IN_INDEX's).
+- The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
+  scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
+  beside it: …"), `_ug_ready`'s skips, and what asking came to in get.py's `asking` words (`UgStages.ended`), the song
+  owed a fetch (`_owed`); the frame (lane lookup) asks LaCuerda after a sheet stage that kept none, and words it
+  skipped. tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario
+  records (`UgFetchReplay`, area `ug-fetch`).
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
