@@ -1362,12 +1362,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
   - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
     `harptabs`, the page's path);
-  - the lookup's harptabs stage (`HarpTabsStage`) and `caracole harptabs --artist` (`HarpTabsCommands.artist`, its
-    one line), through StageContext's and CommandContext's asking; until lane lookup's `LookupWords` is on main the
-    stage words what asking came to itself (`HarpTabsEnvelope`, get.py's words);
+  - the lookup's harptabs stage (`HarpTabsStage`, the rest of what asking came to `LookupWords.end`'s) and
+    `caracole harptabs --artist` (`HarpTabsCommands.artist`, its one line, commands/lyrics.py's words), through
+    StageContext's and CommandContext's asking;
   - tests/test_conformance_harptabs.py writes vectors/sites/harptabs.jsonl, vectors/lookup/harptabs.jsonl,
-    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (each request with caracole's own user agent,
-    the pages noted beside Python's rows).
+    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (asking through `InteractiveAsk` over each
+    record's client, each request with caracole's own user agent, the pages noted beside Python's rows).
 - gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone

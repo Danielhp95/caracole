@@ -1,23 +1,18 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
-import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.EventLog
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.html.Html
-import io.github.danielhp95.caracole.core.http.BudgetExhausted
-import io.github.danielhp95.caracole.core.http.Client
-import io.github.danielhp95.caracole.core.http.ProviderBlocked
-import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
-import io.github.danielhp95.caracole.core.lookup.Asked
-import io.github.danielhp95.caracole.core.lookup.Asking
+import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.sites.HarpTabsCommands
 import io.github.danielhp95.caracole.core.lookup.sites.HarpTabsStage
@@ -29,6 +24,7 @@ import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -51,9 +47,9 @@ import java.time.Instant
  * core.sites' HarpTabsPages and HarpTabsFetch, the stage and HarpTabsCommands as Python answered it. HarpTabsTest and
  * HarpTabsCommandsTest call each part on the JVM; CorpusOnDeviceTest runs them all under ART.
  *
- * A scenario's asking is [Envelope]: what lane lookup's InteractiveAsk does with a provider cooling down, a block
- * (Health.recordBlock), a spent budget and an error (Health.recordError), so that each record's kv is Python's, with
- * get.py's words for a site that is off. Every request a scenario sends carries the record's `agent`, caracole's own
+ * A scenario's asking is lane lookup's InteractiveAsk ([asking]) over the record's client: a provider cooling down,
+ * a block (Health.recordBlock), a spent budget and an error (Health.recordError) as a lookup meets them, so that each
+ * record's kv is Python's. Every request a scenario sends carries the record's `agent`, caracole's own
  * user agent. The phone notes each artist page it stores for the next push to the computer (kv
  * `phone:read:harptabs:<path>`, the store's stamp), which Python doesn't: checked against the record's `reads`, then
  * left out of the kv compared.
@@ -66,30 +62,11 @@ object HarpTabsReplay : AreaReplay {
     const val ARTIST = "lookup/harptabs_artist.jsonl"
     const val COMMANDS = "lookup/commands_harptabs.jsonl"
 
-    /** Phase A guard: core.html is lane html-tree's, and until it merges no page can be parsed; a record that parses
-     * one waits on it (waiting on html-tree), counted in [waiting]. */
-    val htmlReady: Boolean by lazy { runCatching { Html.parse("<p>") }.isSuccess }
-
-    /** The records the last replay left, waiting on html-tree (none once it has merged). */
-    var waiting = 0
-        private set
-
     override fun replay(misses: Misses) {
-        waiting = 0
         pages(misses)
         lookups(misses)
         artists(misses)
         commands(misses)
-    }
-
-    /** [block], unless it parses a page before core.html is there: then counted in [waiting]. */
-    private fun guarded(block: () -> Unit) {
-        try {
-            block()
-        } catch (e: NotImplementedError) {
-            if (htmlReady) throw e
-            waiting++
-        }
     }
 
     // --- the pages ----------------------------------------------------------------------------------------------------
@@ -98,7 +75,7 @@ object HarpTabsReplay : AreaReplay {
         for (r in records(SITES)) {
             val fn = text(r.getValue("fn")).removePrefix("caracole.harptabs.")
             if (fn == "parse_tab_page" || fn == "parse_artist_page") {
-                guarded { parsed(misses, fn, r) }
+                parsed(misses, fn, r)
                 continue
             }
             val arg = r.getValue("args").jsonArray[0]
@@ -133,8 +110,6 @@ object HarpTabsReplay : AreaReplay {
             } else {
                 page(if (asText != null) HarpTabsPages.parseArtistPage(asText, url) else HarpTabsPages.parseArtistPage(Scenarios.body(html), url))
             }
-        } catch (e: NotImplementedError) {
-            throw e
         } catch (e: Exception) {
             raised(e)
         }
@@ -189,17 +164,13 @@ object HarpTabsReplay : AreaReplay {
 
     /** A scenario record replayed, [pass] its call in the record's world; every request's user agent the record's
      * `agent`, and the pages noted for the next push its `reads`, checked then forgotten. */
-    private fun scenario(misses: Misses, r: JsonObject, pass: (ScenarioWorld) -> Any?) = guarded {
+    private fun scenario(misses: Misses, r: JsonObject, pass: (ScenarioWorld) -> Any?) {
         val now = Instant.parse(text(r.getValue("now")))
         Scenarios.replay(r, misses, eventLog = { db, run -> EventLog(db, run) { now } }) { world ->
-            var parsedNothing = false
             try {
                 pass(world)
-            } catch (e: NotImplementedError) {  // core.html not there yet: the record waits, nothing compared
-                parsedNothing = true
-                throw e
             } finally {
-                if (!parsedNothing) checked(misses, r, world)
+                checked(misses, r, world)
             }
         }
     }
@@ -235,7 +206,7 @@ object HarpTabsReplay : AreaReplay {
                 "caracole.get._Lookup.harptabs" -> scenario(misses, r) { w ->
                     val song = Songs.byId(w.db, only(r).single())!!
                     val ctx = StageContext(w.db, song, Overrides.read(w.db), PhoneConfig.read(w.db), LibraryStore(w.library),
-                                           Envelope(w.db, w.clients, w.now), w.now)
+                                           asking(w), w.now)
                     HarpTabsStage.run(ctx).let { JsonArray(listOf(JsonPrimitive(it.state), JsonPrimitive(it.detail))) }
                 }
                 else -> throw AssertionError("no harptabs lookup record of ${r["fn"]}")
@@ -280,7 +251,7 @@ object HarpTabsReplay : AreaReplay {
                 val lines = ArrayList<String>()
                 val c = object : CommandContext {
                     override val db = w.db
-                    override val asking = Envelope(w.db, w.clients, w.now)
+                    override val asking = asking(w)
                     override val now = w.now
                     override fun say(line: String) {
                         lines += line
@@ -292,35 +263,13 @@ object HarpTabsReplay : AreaReplay {
         }
     }
 
-    /**
-     * A lookup's asking in a scenario, as lane lookup's InteractiveAsk asks: a provider turned off ([Asked.Off], in
-     * get.py's words) or cooling down after a block ([Asked.Cooling]) is sent nothing; a block cools it down
-     * (Health.recordBlock, [Asked.Blocked]); a spent budget is [Asked.Spent], the hour's when the client's budget was
-     * below `lookup_requests`; any other provider error is recorded (Health.recordError) and [Asked.Failed].
-     */
-    class Envelope(private val db: Db, private val clients: Map<String, Client>, private val now: Instant) : Asking {
-        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
-            val config = PhoneConfig.read(db).provider(provider)
-            if (!config.enabled) return Asked.Off("${NAMES[provider] ?: provider} is off in caracole.toml")
-            if (Health.isCooling(db, provider, now)) return Asked.Cooling(Health.state(db, provider).cooldownUntil)
-            val client = clients[provider] ?: throw AssertionError("the record has no client of $provider")
-            if (policy != null) client.policy = policy
-            return try {
-                Asked.Done(work(client))
-            } catch (e: ProviderBlocked) {
-                Asked.Blocked(e, Health.recordBlock(db, e.provider, now, e.message ?: ""))
-            } catch (_: BudgetExhausted) {
-                Asked.Spent(hour = client.policy.budget < config.lookupRequests, keptForSheets = false)
-            } catch (e: ProviderError) {
-                Health.recordError(db, e.provider, now, e.message ?: "")
-                Asked.Failed(e)
-            }
-        }
-
-        override val requests: Map<String, Int> get() = clients.mapValues { it.value.requestsMade }
-
-        private companion object {
-            val NAMES = mapOf("harptabs" to "harptabs.com")
-        }
+    /** A lookup's envelope in a scenario: lane lookup's InteractiveAsk, at the lookup's run and the phone's settings
+     * now, its clients the record's own (its `make`), so that nothing but the record's answers is sent. */
+    fun asking(w: ScenarioWorld): InteractiveAsk {
+        val config = PhoneConfig.read(w.db)
+        val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { w.now.epochSecond.toDouble() },
+                            monotonic = { 0.0 }, clock = { w.now })
+        return InteractiveAsk(Clients(config, w.cacheDir, { RefusingTransport }, pacing), w.db, Pace.lookupRunId(w.now),
+                              w.now, config = config, make = { provider, _ -> w.clients.getValue(provider) })
     }
 }

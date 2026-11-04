@@ -17,7 +17,6 @@ import io.github.danielhp95.caracole.core.testing.FakeTransport
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.HarpTabsReplay
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -41,7 +40,6 @@ class HarpTabsTest {
         HarpTabsReplay.lookups(misses)
         HarpTabsReplay.artists(misses)
         misses.assertNone()
-        assumeTrue("waiting on html-tree: ${HarpTabsReplay.waiting} records parse a page", HarpTabsReplay.htmlReady)
         assertTrue(misses.checked > 900, "answers checked: ${misses.checked}")
     }
 

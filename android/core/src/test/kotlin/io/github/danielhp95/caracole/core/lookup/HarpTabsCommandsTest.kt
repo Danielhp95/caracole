@@ -14,7 +14,6 @@ import io.github.danielhp95.caracole.core.testing.FakeTransport
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.HarpTabsReplay
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -30,13 +29,12 @@ class HarpTabsCommandsTest {
     @get:Rule val tmp = TemporaryFolder()
 
     private val now: Instant = Instant.parse("2026-11-03T12:00:00Z")
-    private val beatles = "${HarpTabsPages.pageUrl("artist/50/the-beatles")}"
+    private val beatles = HarpTabsPages.pageUrl("artist/50/the-beatles")
 
     @Test fun everyRecordIsAnsweredAsPythonAnsweredIt() {
         val misses = Misses("lookup/commands_harptabs.jsonl")
         HarpTabsReplay.commands(misses)
         misses.assertNone()
-        assumeTrue("waiting on html-tree: ${HarpTabsReplay.waiting} records parse a page", HarpTabsReplay.htmlReady)
         assertTrue(misses.checked > 60, "answers checked: ${misses.checked}")
     }
 
@@ -63,7 +61,12 @@ class HarpTabsCommandsTest {
                                   PhoneConfig.DEFAULTS.userAgent, transport, sleep = {}, draws = { low, _ -> low },
                                   onEvent = EventLog(db, Pace.lookupRunId(now)) { now }, monotonic = { 0.0 },
                                   wallClock = { now })
-        val c = Said(db, HarpTabsReplay.Envelope(db, mapOf("harptabs" to client), now), now)
+        val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { 0.0 }, monotonic = { 0.0 },
+                            clock = { now })
+        val config = PhoneConfig.read(db)
+        val ask = InteractiveAsk(Clients(config, tmp.newFolder(), { transport }, pacing), db, Pace.lookupRunId(now), now,
+                                 config = config, make = { _, _ -> client })
+        val c = Said(db, ask, now)
         val last = HarpTabsCommands.artist(c, artist)
         assertEquals(emptyList(), c.lines)  // its one line is its last
         return last to transport
