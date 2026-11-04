@@ -19,7 +19,7 @@ class HtmlNode {
     fun attr(name: String): String?     // attributes[name]
     val attributes: Map<String, String?>   // as selectolax's dict: null where no value was written
     fun text(deep: Boolean = true): String
-    fun children(includeText: Boolean = true): List<HtmlNode>   // selectolax's iter(include_text=)
+    fun children(includeText: Boolean = true): List<HtmlNode>   // iter(include_text=), its default the other way
     val textContent: String?            // a text node's text; null for anything else
     val next: HtmlNode?                 // the next sibling, of any kind
     val isText: Boolean
@@ -157,7 +157,8 @@ the SVG and MathML ones their case) and the tokenizer's compared as it gives the
 - `children(includeText = true)` lists every child, text nodes as `-text` with their `textContent` (`[('a', None),
   ('-text', '  x '), ('b', None)]`); with `includeText = false` it leaves the text nodes out but keeps comments and
   processing instructions, as selectolax's `iter()` does. Whitespace-only text nodes are kept where the tree builder
-  keeps them.
+  keeps them. The defaults differ: selectolax's `iter()` is `children(includeText = false)`, its
+  `iter(include_text=True)` is `children()`.
 - `attributes` is selectolax's dict: in order, a value null where none was written. The tokenizer kept the first of
   duplicates; of two attributes the tree builder keeps under one shown name (a foreign attribute, adjusted), the dict's
   last value at the first's place.
@@ -169,7 +170,9 @@ the SVG and MathML ones their case) and the tokenizer's compared as it gives the
 `core.html.internal.tree` (lane html-tree): `TreeBuilder`, a port of lexbor 3.1.0's tree builder (lexbor/html/tree.c
 and tree/insertion_mode/, Apache-2.0), insertion mode by insertion mode, with lexbor's tables of each tag's categories
 in each namespace, of SVG's element and attribute names in their own case and of the foreign attributes
-(`Tags`); `Dom.kt`, lexbor's nodes linked to their parent and siblings.
+(`Tags`); `Dom.kt`, lexbor's nodes linked to their parent and siblings. `TreeBuilder`, `Tags` and `Selectors` carry
+lexbor's copyright and say they were ported and changed; `core/html/internal/LICENSE-lexbor` holds the Apache License
+2.0 and lexbor's NOTICE.
 
 - Every insertion mode: initial, before html, before head, in head, in head noscript (scripting is off, as selectolax
   parses), after head, in body (the adoption agency, the active formatting elements and their Noah's Ark clause, the
@@ -180,7 +183,8 @@ in each namespace, of SVG's element and attribute names in their own case and of
 - A `<template>`'s contents are a fragment of their own, as lexbor builds them: selectolax shows a template with no
   children, its text "", and no selector finds what it holds (`<template><p>a</p></template>`: `css("p")` finds
   nothing).
-- A processing instruction is a node, placed as a comment is (in a table, fostered as an element is).
+- A processing instruction is a node, placed as a comment is: in a table, the table's child, never fostered
+  (`<table><?x y?><tr>`, tree_edges.jsonl's "a processing instruction in a table").
 - A document with no doctype is in quirks mode; a doctype sets it as The tokenizer, "Quirks mode", says.
 
 Where lexbor reads the standard its own way, core.html does too:
@@ -244,12 +248,27 @@ world]`, `#`, `a >`) is an `IllegalArgumentException`, as selectolax raises for 
   (`canonical.digest`, `core.json.Canonical`) and length.
 - The token vectors are read through core.html's tree too (`HtmlTreeReplay.tokensRead`).
 
-All match on the JVM and on the device: 400 of 400 mutations. A local differential run of about 80,000 more seeded
-pages (tag soup of up to 300 pieces, 6,000 more fixture mutations, the token vectors' pages), compared node for node
-with selectolax, found none that differ.
+All match on the JVM and on the device: 400 of 400 mutations. A local differential run of about 140,000 more seeded
+pages (tag soup of up to 300 pieces, 12,000 more fixture mutations, every token vector's page, frameset text cases),
+compared node for node with selectolax, found none that differ once its one finding was fixed (text after a
+frameset's `</html>`, read whole: The tree).
 
 ## Divergences
 
 - `<input type=text type=hidden>` in a table: lexbor reads every `type` the tag was written with, its duplicates too,
   and keeps the input in the table when any says `hidden`; core.html's tokenizer keeps the first of duplicates alone,
   so the input (`type=text`, as both show it) is fostered before the table. (`TreeTest` pins it.)
+
+## For the site parsers
+
+What a lane porting a site's parser (ug-pages, lacuerda-pages, harptabs, gametabs, tab-files) keeps in mind:
+
+- **A processing instruction's `tag`** is `"-pi"` in core.html and None in selectolax. Python that calls a str method
+  on every child's `.tag` raises on a page that holds one: lacuerda.py's `_ug_markup` (`tag.startswith("-")`) raises
+  `AttributeError` for `lacuerda.parse_version_page("<div id=t_body><pre>Am <?php echo 1?>\nla</pre></div>")`, where a
+  straight port would skip the node and read a sheet. Such a parser is fixed in Python first, test first (`tag =
+  child.tag or "-"`), and then ported; core.html keeps `"-pi"`.
+- **`iter()`** is `children(includeText = false)`, **`iter(include_text=True)`** `children()` (The API).
+- **harptabs.py's `_pre_text`** is in the replay as a copy of its own (`HtmlTreeReplay.preText`), for `tree.jsonl`'s
+  `pre` reads. Lane harptabs ports it into main code; the replay's `pre` comparison then calls that port, and the copy
+  goes.

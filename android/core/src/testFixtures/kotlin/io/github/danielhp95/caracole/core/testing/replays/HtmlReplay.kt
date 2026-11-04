@@ -29,7 +29,8 @@ import org.junit.Assert.assertEquals
  * core.html's tokenizer through [TokensTree], a small tree builder of the replay's own, and through core.html's own
  * tree ([HtmlTreeReplay.tokensRead]). lexbor's tag and attribute names are ASCII-lowercased before they are compared
  * with the tokenizer's, as it gave them: their SVG and MathML case is the tree's. A `<template>`'s contents are left
- * out, as selectolax's walk never reaches them. Then the tree's vectors, [HtmlTreeReplay].
+ * out, as selectolax's walk never reaches them. Then the tree's vectors, [HtmlTreeReplay]: [replay] is both, as
+ * CorpusOnDeviceTest and HtmlVectorsTest run them, [tokens] the first alone, TokenizerTest's.
  */
 object HtmlReplay : AreaReplay {
     override val area = "html"
@@ -37,6 +38,12 @@ object HtmlReplay : AreaReplay {
     val TOKENS = listOf("html/tokens.jsonl", "html/tokens_edges.jsonl", "html/tokens_soup.jsonl")
 
     override fun replay(misses: Misses) {
+        tokens(misses)
+        HtmlTreeReplay.replay()
+    }
+
+    /** The token vectors alone, read through [TokensTree] and through core.html's tree. */
+    fun tokens(misses: Misses) {
         for (name in TOKENS) {
             val vector = Misses(name)
             var records = 0
@@ -53,7 +60,6 @@ object HtmlReplay : AreaReplay {
             check(records > 0) { "$name has no record" }
             vector.assertNone()
         }
-        HtmlTreeReplay.replay()
     }
 
     /** A record's page: its text, or the fixture it names, decoded as caracole's parsers decode bytes. */

@@ -1,3 +1,8 @@
+/*
+ * Ported to Kotlin from lexbor 3.1.0's lexbor/html/tree.c and lexbor/html/tree/ and changed for caracole.
+ * Copyright (C) 2018-2026 Alexander Borisov. Licensed under the Apache License, Version 2.0:
+ * ../LICENSE-lexbor, with lexbor's NOTICE.
+ */
 package io.github.danielhp95.caracole.core.html.internal.tree
 
 import io.github.danielhp95.caracole.core.html.internal.token.Attribute

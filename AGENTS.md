@@ -1272,7 +1272,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a node's search finding itself and its combinators reading the whole tree, the HTML attributes whose values match
     without case;
   - `HtmlDoc` and `HtmlNode` as selectolax's tree and nodes (`text`, `children`, `attributes`, `replaceWith`,
-    `insertAfter`).
+    `insertAfter`; a processing instruction's tag `-pi`, selectolax's None, and `iter()` `children(includeText =
+    false)`: the spec's "For the site parsers");
+  - `TreeBuilder`, `Tags` and `Selectors` ported from lexbor's C, with its copyright, under the vendored
+    `core/html/internal/LICENSE-lexbor` (the Apache License 2.0 and lexbor's NOTICE).
 - Held by vectors/html/tree*.jsonl and mutations.jsonl (tests/test_conformance_html.py's tree half: every page's
   shape, texts, the parsers' selectors and harptabs.py's `<pre>` read; the tree's edge set; selectors alone; 400 seeded
   tag-soup edits of the fixtures, by digest), which `HtmlTreeReplay` reads, the token vectors through core.html's tree

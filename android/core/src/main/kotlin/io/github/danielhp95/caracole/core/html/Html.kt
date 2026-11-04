@@ -48,7 +48,8 @@ class HtmlDoc internal constructor(internal val document: Document) {
  * as selectolax shows them. Two of the same node are equal. */
 class HtmlNode internal constructor(internal val node: Node, private val document: Document) {
     /** An element's name (lowercase, an SVG element's in its own case: `clipPath`), or "-text", "-comment", "-pi",
-     * "-doctype". */
+     * "-doctype". A processing instruction's is "-pi" where selectolax's is None: Python that calls a str method on
+     * every child's `.tag` raises there (the spec's "For the site parsers"). */
     val tag: String
         get() = when (node) {
             is Element -> node.name
@@ -104,7 +105,8 @@ class HtmlNode internal constructor(internal val node: Node, private val documen
     }
 
     /** The node's children, its text nodes too unless [includeText] is false (its comments always, as selectolax's
-     * `iter`). */
+     * `iter`). The defaults differ: selectolax's `iter()` is `children(includeText = false)`, and its
+     * `iter(include_text=True)` is `children()`. */
     fun children(includeText: Boolean = true): List<HtmlNode> {
         val list = ArrayList<HtmlNode>()
         var child = node.firstChild

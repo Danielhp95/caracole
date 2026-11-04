@@ -1,3 +1,8 @@
+/*
+ * Ported to Kotlin from lexbor 3.1.0's lexbor/selectors/selectors.c and changed for caracole.
+ * Copyright (C) 2021-2025 Alexander Borisov. Licensed under the Apache License, Version 2.0:
+ * ../LICENSE-lexbor, with lexbor's NOTICE.
+ */
 package io.github.danielhp95.caracole.core.html.internal.select
 
 import io.github.danielhp95.caracole.core.html.internal.tree.Element

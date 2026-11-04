@@ -198,7 +198,8 @@ object HtmlTreeReplay {
         return hexBytes(sha)
     }
 
-    /** harptabs.py's `_pre_text`, as lane harptabs ports it. */
+    /** harptabs.py's `_pre_text`, a copy of the replay's own until lane harptabs ports it into core.sites' main
+     * code: then the `pre` comparison above calls that port, and this copy goes. */
     fun preText(pre: HtmlNode): String {
         for (node in pre.css("br")) node.replaceWith("\n")
         for (node in pre.css("p, div")) {
@@ -257,7 +258,6 @@ object HtmlTreeReplay {
 
     private fun mutations() {
         val misses = Misses("html/mutations.jsonl")
-        var matched = 0
         var records = 0
         for (record in Corpus.records("html/mutations.jsonl")) {
             assertEquals("test_conformance_html.mutation", record.fn)
@@ -271,7 +271,6 @@ object HtmlTreeReplay {
             val same = digest == text(want.getValue("shape")) &&
                 shape.rows.size == want.getValue("nodes").jsonPrimitive.int &&
                 doc.quirks == want.getValue("quirks").jsonPrimitive.boolean
-            if (same) matched++
             misses.check(same) { "$case: ${shape.rows.size} nodes, another shape than lexbor's ${want["nodes"]}" }
         }
         check(records > 0) { "mutations.jsonl has no record" }
