@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -348,3 +349,27 @@ def test_a_twice_escaped_entity_is_decoded():
 
     html_ = make_tab_page_html(version_dict(1), [], content="watch?v=x&amp;amp;feature=related [ch]G[/ch]")
     assert parse_tab_page(html_).content == "watch?v=x&feature=related [ch]G[/ch]"
+
+
+def test_a_lone_surrogate_in_the_json_is_read_as_the_replacement_character():
+    # UG's JSON may escape half of a surrogate pair alone ("\udc00"): no character, which json.loads keeps as
+    # it is, so sheet.txt and sheet.json couldn't be written in UTF-8, nor the versions' rows. Every string the
+    # page's data holds, keys too, has U+FFFD in its place; a whole pair stays the character it escapes.
+    tab = version_dict(1, song="Zebra LONE")
+    html = make_tab_page_html(tab, [version_dict(2, song="LONE")], content="[ch]C[/ch] la LONE la PAIR",
+                              meta={"LONE": "x"}).replace("LONE", "\\udc00").replace("PAIR", "\\ud83d\\ude00")
+    page = parse_tab_page(html)
+    assert page.content == "[ch]C[/ch] la � la \U0001f600"
+    assert (page.tab.song_name, page.versions[0].song_name) == ("Zebra �", "�")
+    assert page.raw["tab"]["song_name"] == "Zebra �" and page.meta == {"�": "x"}
+    json.dumps(page.raw, ensure_ascii=False).encode("utf-8")  # as a kept version's sheet.json is written
+
+
+def test_a_lone_surrogate_on_an_artist_page_is_read_as_the_replacement_character_too():
+    from helpers.ug_pages import make_artist_page_html
+
+    from caracole.ug.artist import parse_artist_page
+
+    html = make_artist_page_html(7, "Ban LONE", [version_dict(3, song="LONE")]).replace("LONE", "\\ud83d")
+    page = parse_artist_page(html)
+    assert (page.name, page.tabs[0].song_name) == ("Ban �", "�")
