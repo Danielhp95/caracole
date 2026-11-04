@@ -286,4 +286,45 @@ Not built yet.
 
 ## Performance notes
 
-Not built yet.
+**The WAL after an import.** An import (Settings' Import indexes, or a sync's newer indexes) merges the computer's
+indexes in a few big transactions, and SQLite's WAL grows with them: on the owner's phone it was left at 387 MB, and
+the first search after the import, or after a start, took more than 30 s while every search waited behind it. A WAL
+SQLite has copied back stays on disk at its largest unless told otherwise, every read before the next checkpoint
+goes through its index, and a start after Android stopped the app reads the whole file again to rebuild that index.
+Now:
+
+- every connection keeps `PRAGMA journal_size_limit` at 16 MiB (`Database.JOURNAL_SIZE_LIMIT`), so a WAL SQLite
+  restarts is cut down to that;
+- the import and the sync's index stage end with `Database.checkpoint()`, `PRAGMA wal_checkpoint(TRUNCATE)` on the
+  writer with every reader taken first, which leaves no WAL at all;
+- opening a database whose WAL is over the limit (a phone killed before its checkpoint) checkpoints it first;
+- a merge that took UG's rows makes each of UG's three full-text indexes one segment (`'optimize'`, a fraction of a
+  second for 300,000 rows);
+- the app's start runs one search in the background (`Database.warmUp`), so that the code, the data it loads lazily
+  and the pages a search reads are ready before the owner's first search; a search that comes meanwhile runs beside
+  it;
+- the words of UG's keys a search kept are read again, whole, after an import added more than 1,000 of them
+  (`Vocabulary.REREAD`), rather than added one at a time to lists of tens of thousands.
+
+**Measured** (`ColdSearch`: a synthetic index of 300,000 ug_index rows, 70,687 words of their keys, imported, the
+phone killed with it open, started again, its warm-up, then a misspelt query that looks for close spellings too):
+
+| | Before | After |
+|---|---|---|
+| Emulator (Android 36, x86_64): the WAL the import left | 66.5 MiB | 0 |
+| Emulator: the import (merge, then checkpoint) | 8.0 s | 11.9 s, the checkpoint 14 ms |
+| Emulator: the first /api/search after a start, and a warm one | 35 ms, 27 ms | 51 ms after a 54 ms warm-up, 30 ms |
+| Emulator: the first search after an import while the app runs, and a warm one | | 14 ms, 10 ms |
+| JVM (`gradle bench`): the WAL the import left | 66.5 MiB | 0 (the merge alone, of 200,000 rows: 16 MiB, the limit) |
+
+The "before" index had fewer words (a first version of the generator), so its search times aren't the "after"'s to
+compare; the WAL is. Neither the emulator nor the JVM shows the phone's 30 s: over an index in the page cache the
+first search's own steps take about 0.2 s cold on the emulator (`ColdSearch.Result.steps`: your songs 73 ms, MuseScore
+105 ms, the close spellings 80 ms, the names 19 ms; UG's index, LaCuerda and the other sites under 10 ms each), which
+the warm-up now pays. What was cold on the phone is what a big WAL costs on its storage: the rebuild of the WAL's
+index from a 387 MB file at a start, and reads through it until a checkpoint. The owner's phone's numbers are the M4
+check's to take.
+
+Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, MergeSpeedBench)
+and `android/scripts/device-test.sh ColdSearchTest`; `Timings` (core.db, behind `-Dcaracole.timings=1`, never in a
+page) times each step.
