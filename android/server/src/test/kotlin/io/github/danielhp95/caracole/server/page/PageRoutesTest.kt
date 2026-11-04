@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.bytes
@@ -35,11 +34,11 @@ class PageRoutesTest {
 
     /** The App with the page's routes alone, over a mirror of the computer's page of two songs. */
     private fun app(controls: ServerControls = ServerControls(TestApp.CSRF, sync = true),
-                    libraryName: String = AppConfig.PHONE): TestApp {
+                    libraryName: String = ""): TestApp {
         val mirror = mirrorOf(tmp.newFolder(), libraryPage(mirroredData(listOf(
             mirroredCard(10, "estopa/tu-calorro", "Estopa", "Tu Calorro"), mirroredCard(11, "oasis/wonderwall", "Oasis", "Wonderwall")))))
         return TestApp(tmp.newFolder(), modules = { database ->
-            listOf(PageRoutes(database, page, MirrorPageData(mirror), { controls }, libraryName))
+            listOf(PageRoutes(database, page, MirrorPageData(mirror), { controls }, { libraryName }))
         }).also { opened.add(it) }
     }
 
@@ -67,10 +66,10 @@ class PageRoutesTest {
             val data = MirrorPageData.dataBlock(html.toByteArray())!!
             assertEquals(listOf(calorro, -1L), data.getValue("songs").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.long })
             assertEquals(TestApp.CSRF, data.getValue("server").jsonObject.getValue("csrf").jsonPrimitive.content)
-            assertTrue("<title>Phone · caracole · Phone</title>" in html, "the badge, caracole, the library's name")
+            assertTrue("<title>Phone · caracole</title>" in html, "the badge and caracole: no name before a sync gives one")
             assertTrue(page.assets.template("sync-tab.html") in html)
             // The page is the page of the data it carries, for these controls: nothing of the route's own in it.
-            assertEquals(page.served(data, ServerControls(TestApp.CSRF, sync = true), AppConfig.PHONE), html)
+            assertEquals(page.served(data, ServerControls(TestApp.CSRF, sync = true), ""), html)
         }
     }
 

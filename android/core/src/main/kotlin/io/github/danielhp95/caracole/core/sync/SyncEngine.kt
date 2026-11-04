@@ -7,12 +7,13 @@ import io.github.danielhp95.caracole.core.index.IndexExport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.internal.client.Address
 import io.github.danielhp95.caracole.core.sync.internal.client.Give
 import io.github.danielhp95.caracole.core.sync.internal.client.Kept
-import io.github.danielhp95.caracole.core.sync.internal.client.Stamps
+import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -330,10 +331,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     private suspend fun index(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, computer: String,
                               indexes: Map<String, String>, token: String) {
         val (had, noted) = database.read { db ->
-            Stamps.sites(db.kvGetJson(INDEX_KEY + computer)) to sendable(Reads.since(db, computer))
+            IndexStamps.sites(db.kvGetJson(INDEX_KEY + computer)) to sendable(Reads.since(db, computer))
         }
         val newer = indexes.filter { (site, stamp) ->
-            Sites.named(site) != null && (had[site]?.let { Stamps.newer(stamp, it) } ?: true)
+            Sites.named(site) != null && (had[site]?.let { IndexStamps.newer(stamp, it) } ?: true)
         }.keys.sortedBy { site -> Sites.ALL.indexOfFirst { it.name == site } }
         if (newer.isEmpty() && noted.isEmpty()) {
             stage(INDEX, SKIPPED_STATE, NOTHING_TO_INDEX)
@@ -376,7 +377,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             io {
                 database.write { db ->
                     IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
-                    db.kvSetJson(INDEX_KEY + computer, Stamps.json(had + newer.associateWith { indexes.getValue(it) }))
+                    db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                 }
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
             }

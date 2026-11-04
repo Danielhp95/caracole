@@ -20,9 +20,9 @@ import java.io.File
 import java.net.URLEncoder
 
 /**
- * The phone's App as every :server test builds it: over a fresh database in [dir] (TestDb), the library folder
- * `dir/library`, the [modules] a test chooses (given the database), the out-of-round [stubs] last, and the library's
- * files behind them ([mirror], checked by [gate], PhoneGate by default).
+ * The phone's App as every :server test builds it: over a fresh database in [dir] (TestDb, or the one [open] opens
+ * there), the library folder `dir/library`, the [modules] a test chooses (given the database), the out-of-round [stubs]
+ * last, and the library's files behind them ([mirror], checked by [gate], PhoneGate by default).
  *
  * Its requests come as the WebView sends them: the launch's cookie, the Host, and for a form the urlencoded body with
  * its token, from the page's own origin; [script] reads as the page's script does, JSON with the token in its header.
@@ -37,12 +37,13 @@ class TestApp(
     val csrf: String = CSRF,
     val secret: String = SECRET,
     allowed: Set<String> = AppConfig(CSRF, SECRET).allowed,
-    libraryName: String = AppConfig(CSRF, SECRET).libraryName,
+    libraryName: String = AppConfig(CSRF, SECRET).libraryName(),
+    open: (File) -> Database = TestDb::fresh,
 ) : AutoCloseable {
-    val database: Database = TestDb.fresh(dir)
+    val database: Database = open(dir)
     val libraryDir: File = File(dir, "library").apply { mkdirs() }
     val files: LibraryFiles = LibraryFiles(libraryDir, mirror, gate?.invoke(database) ?: PhoneGate(database), database)
-    val app: App = App(AppConfig(csrf, secret, allowed, libraryName), modules(database), stubs, files)
+    val app: App = App(AppConfig(csrf, secret, allowed, { libraryName }), modules(database), stubs, files)
 
     fun handle(request: Request): Response = app.handle(request)
 

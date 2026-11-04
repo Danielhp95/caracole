@@ -1,114 +1,35 @@
 package io.github.danielhp95.caracole.core.sync
 
-import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.core.testing.Record
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.test.fail
 
 /**
  * peer_sync's comparison on the phone against vectors/sync (tests/test_conformance_sync.py): compare over every row
  * of the design's three-way table (compare.jsonl), merged_base, record_agreement (the base's kv text byte for byte),
- * decide and compared_hash, each record Python's answer to the same call.
+ * decide and compared_hash, each record Python's answer to the same call (SyncReplay's, which the device runs too).
  */
 class CompareTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private fun text(e: JsonElement): String = e.jsonPrimitive.content
-    private fun textOrNull(e: JsonElement?): String? = e?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+    private fun replayed(vector: String, replay: (Misses) -> Unit) = Misses(vector).also(replay).assertNone()
 
-    private fun unit(e: JsonElement?): SyncUnit? = e?.takeUnless { it is JsonNull }?.jsonObject?.let {
-        SyncUnit(text(it.getValue("id")), text(it.getValue("label")), text(it.getValue("digest")))
-    }
+    @Test fun compareProposesWhatPythonProposes() = replayed("sync/compare.jsonl", SyncReplay::compare)
 
-    private fun units(e: JsonElement): Map<String, SyncUnit> =
-        e.jsonObject.mapValues { (_, u) -> unit(u)!! }
+    @Test fun theMergedBaseIsPythons() = replayed("sync/merged_base.jsonl", SyncReplay::mergedBase)
 
-    private fun base(e: JsonElement?): Base? = e?.takeUnless { it is JsonNull }?.jsonObject?.mapValues { (_, entry) ->
-        val pair = entry.jsonArray
-        textOrNull(pair[0]) to text(pair[1])
-    }
+    @Test fun anAgreementIsKeptAsPythonWritesItToTheByte() =
+        replayed("sync/record_agreement.jsonl", SyncReplay::recordAgreement)
 
-    private fun merged(e: JsonElement?): Map<String, String?>? =
-        e?.takeUnless { it is JsonNull }?.jsonObject?.mapValues { (_, d) -> textOrNull(d) }
+    @Test fun decideTakesWhatPythonTakes() = replayed("sync/decide.jsonl", SyncReplay::decide)
 
-    private fun difference(e: JsonElement): Difference = e.jsonObject.let {
-        Difference(text(it.getValue("id")), text(it.getValue("label")), unit(it["mine"]), unit(it["theirs"]),
-                   text(it.getValue("proposal")), text(it.getValue("why")))
-    }
-
-    private fun records(name: String, fn: String): List<Record> = Corpus.records(name).also { all ->
-        assertEquals(setOf(fn), all.map { it.fn }.toSet(), "$name's functions")
-        assertTrue(all.isNotEmpty(), "$name has no records")
-    }
-
-    private fun check(records: List<Record>, compare: (Record) -> String?) {
-        val wrong = records.mapNotNull { record ->
-            assertEquals(null, record.err, "Python raised on $record")
-            try {
-                compare(record)
-            } catch (e: Throwable) {
-                "${record.extra["case"] ?: record.args}: ${e::class.simpleName}: ${e.message}"
-            }
-        }
-        if (wrong.isNotEmpty()) fail("${wrong.size} of ${records.size} records differ:\n" + wrong.joinToString("\n"))
-    }
-
-    private fun differs(record: Record, expected: Any?, actual: Any?): String? =
-        if (expected == actual) null else "${record.extra["case"] ?: record.args}:\n  Python $expected\n  Kotlin $actual"
-
-    @Test fun compareProposesWhatPythonProposes() = check(records("sync/compare.jsonl", "caracole.peer_sync.compare")) { r ->
-        val found = Compare.compare(units(r.args[0]), units(r.args[1]), merged(r.args[2]))
-        differs(r, r.out!!.jsonArray.map(::difference), found)
-    }
-
-    @Test fun theMergedBaseIsPythons() = check(records("sync/merged_base.jsonl", "caracole.peer_sync.merged_base")) { r ->
-        val got = Compare.mergedBase(base(r.args[0]), base(r.args[1]))
-        differs(r, merged(r.out), got)
-            ?: differs(r, merged(r.out)?.keys?.toList(), got?.keys?.toList())
-    }
-
-    @Test fun anAgreementIsKeptAsPythonWritesItToTheByte() {
-        val records = records("sync/record_agreement.jsonl", "caracole.peer_sync.record_agreement")
-        TestDb.fresh(tmp.root).use { database ->
-            check(records) { r ->
-                val peer = text(r.args[0])
-                val key = "sync:base:$peer"
-                val out = r.out!!.jsonObject
-                database.writeBlocking { db ->
-                    db.kvDelete(key)
-                    textOrNull(r.extra["before"])?.let { db.kvSet(key, it) }
-                    val agreed = Compare.recordAgreement(db, peer, units(r.args[1]), units(r.args[2]), text(r.args[3]))
-                    differs(r, text(out.getValue("after")), db.kvGet(key))
-                        ?: differs(r, out.getValue("agreed").jsonPrimitive.content.toInt(), agreed)
-                }
-            }
-        }
-    }
-
-    @Test fun decideTakesWhatPythonTakes() = check(records("sync/decide.jsonl", "caracole.peer_sync.decide")) { r ->
-        val found = r.args[0].jsonArray.map(::difference)
-        val chosen = r.kw.getValue("choose").jsonObject.mapValues { (_, side) -> text(side) }
-        val (here, there) = Compare.decide(found, textOrNull(r.args.getOrNull(1))) { chosen[it.id] }
-        val out = r.out!!.jsonObject
-        differs(r, out.getValue("here").jsonArray.map(::text), here.map { it.id })
-            ?: differs(r, out.getValue("there").jsonArray.map(::text), there.map { it.id })
-    }
-
-    @Test fun theComparedHashIsPythons() = check(records("sync/compared_hash.jsonl", "caracole.peer_sync.compared_hash")) { r ->
-        differs(r, text(r.out!!), Compare.comparedHash(r.args[0].jsonArray.map(::difference)))
-    }
+    @Test fun theComparedHashIsPythons() = replayed("sync/compared_hash.jsonl", SyncReplay::comparedHash)
 
     @Test fun theOrderIsKindThenLabelInAnyCaseThenId() {
         fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only there")
