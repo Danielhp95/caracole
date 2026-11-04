@@ -16,7 +16,7 @@ class HtmlDoc(val quirks: Boolean) { fun css(sel: String): List<HtmlNode>; fun c
 class HtmlNode {
     val tag: String                     // lowercase; "-text", "-comment" as selectolax names them
     fun attr(name: String): String?
-    val attributes: Map<String, String?>   // the first of duplicates wins; a bare attribute's value is ""
+    val attributes: Map<String, String?>   // the first of duplicates wins; null where no value was written
     fun text(deep: Boolean = true): String
     fun children(includeText: Boolean = true): List<HtmlNode>
     val textContent: String?            // a text node's text; null for an element
@@ -29,21 +29,96 @@ class HtmlNode {
 
 ## Input
 
-- CRLF and a lone CR become LF before tokenizing (`<pre>\nA\r\nB\rC</pre>` reads `A\nB\nC`).
-- The LF right after a `<pre>` (and `<listing>`, `<textarea>`) start tag is dropped, as the spec's tree builder does.
-- NUL as the spec says for each state (U+FFFD where it replaces one).
-- Bytes are decoded as UTF-8 with replacement (`bytes.decode("utf-8", "replace")`, `PyCodec.utf8Replace`), never by a
-  `<meta charset>`: caracole's parsers hand selectolax text.
+- The page's bytes are decoded as UTF-8 with replacement (`bytes.decode("utf-8", "replace")`, `PyCodec.utf8Replace`),
+  never by a `<meta charset>`: caracole's parsers hand selectolax text (`Preprocess.bytes`).
+- CRLF and a lone CR become LF before tokenizing (`<pre>\nA\r\nB\rC</pre>` reads `A\nB\nC`; `Preprocess.text`).
+  lexbor does it state by state, to the same text; a CR a reference writes (`&#13;`) stays one.
+- Nothing else changes: a byte-order mark stays a character (text in the body), a noncharacter or a control is a parse
+  error alone, and a U+0000 is each state's: kept in the data state and a CDATA section for the tree builder (dropped
+  in HTML content, U+FFFD in foreign content), kept raw in a processing instruction's data, U+FFFD everywhere else.
+- The LF right after a `<pre>` (and `<listing>`, `<textarea>`) start tag is dropped, as the spec's tree builder does
+  (one a reference writes, `<pre>&#10;x`, too).
 
-## Character references
+## The tokenizer
+
+`core.html.internal.token` (lane html-tokenizer): `Tokenizer(text)` gives the WHATWG tokenizer's tokens (HTML
+§13.2.5) as lexbor 3.1.0 (2026-09-28, selectolax 1.0.0's) makes them, one at a time (`next()`):
+
+- `Doctype(name, publicId, systemId, forceQuirks)`: the name ASCII-lowercased, null when none was written; an
+  identifier null when missing; `mode`, the document's mode it sets.
+- `StartTag(name, attributes, selfClosing)` and `EndTag(name)`: names ASCII-lowercased (`<ÄB>` is no tag: `Ä` is no
+  ASCII letter); an end tag's attributes dropped.
+- `Comment(data)`, `ProcessingInstruction(target, data)`, `Characters(data, kind)`, `EndOfFile`.
+- The characters between two other tokens come cut where they change between ASCII whitespace (tab, LF, FF, CR,
+  space), U+0000 and anything else (`kind`), so that each insertion mode's rule applies to a whole token.
+
+The tree builder drives it: after a start tag it says what follows (`switchTo(Content)`: `Tokenizer.contentFor(tag)`
+gives lexbor's choice, RCDATA for `title` and `textarea`, RAWTEXT for `style`, `xmp`, `iframe`, `noembed`,
+`noframes`, script data for `script`, PLAINTEXT for `plaintext`; `noscript` none, as selectolax parses with scripting
+off), and `foreignContent()` answers whether the adjusted current node is outside the HTML namespace, where
+`<![CDATA[` opens a CDATA section (elsewhere a bogus comment, `[CDATA[x]]`). An end tag in RCDATA, RAWTEXT or script
+data is a tag only when it is the last start tag's.
+
+### Attributes
+
+- In source order, names ASCII-lowercased, the first of duplicates kept (`<a HREF=X Href=y>` has `href` X).
+- A value null where none was written: `<a href>` and `<a href=>` (whose `=` meets `>`), as selectolax answers `None`;
+  `<a href="">`'s is "". (The spec's is "" for all three.)
+- `<a b= c>`: `b`'s value is `c` (whitespace before a value is skipped); `<a "x"=1 =w>` has attributes `"x"` and `=w`.
+
+### Comments and processing instructions
+
+- Comments as the spec reads them: `<!-->` and `<!--->` empty, `--!>` ends one, `<!--a--!->` holds `a--!->`, a nested
+  `<!--` kept (`<!--<!--x-->` holds `<!--x`), one the input ends in emitted.
+- Bogus comments: `<!x>`, `</ x>` (its data ` x`), `<![CDATA[…` outside foreign content. selectolax's `comment_content`
+  strips the data; the tokenizer's, and the vectors', is as written (a comment node's serialization).
+- lexbor reads `<?target data?>` as a processing instruction (its §13.2.5.72–76): the target ASCII alphanumerics, `-`
+  and `_`, starting with a letter or `_`; the data after the whitespace that follows it, to `?>` or `>` (`<?x y? z?>`
+  holds `y? z`, `<?x?>` none). A target `xml` or `xml-stylesheet` in any case, a target cut by any other character, or
+  `<?` followed by neither a letter nor `_`, makes a bogus comment that starts with `?` (`<?xml version='1.0'?>` is
+  the comment `?xml version='1.0'?`). A processing instruction the input ends in is dropped whole, `<?` too. The tree
+  builder places one as it places a comment.
+- At the end of the input, lexbor drops what of `<![CDATA[` was written (`<![CD` is an empty comment); `<!DOCT` is
+  the comment `DOCT`, as the spec has it.
+
+### Character references
 
 - The HTML5 table is Python's `html.entities.html5`, as data: `data/caracole/html/entities.json` (in its order; the
-  legacy names listed bare beside their `;` form).
-- **In text**, by the tokenizer's rules: the longest name in the table, with or without its `;`
-  (`&amp頭` is `&頭`, `&ampx` is `&x`, `&notit;` is `¬it;`); numeric references by the spec's table (`&#x80;` is `€`,
-  `&#0;` is U+FFFD).
-- **In an attribute value**, the attribute rule: a legacy reference without its `;` followed by `=` or an ASCII
-  alphanumeric stays as written (`&ampx` and `&amp=y` kept), otherwise decoded (`&amp頭` is `&頭`).
+  legacy names listed bare beside their `;` form), read as lexbor reads its own: the longest name the input starts
+  with, case-sensitive.
+- **In text** (and RCDATA): the longest name in the table, with or without its `;` (`&amp頭` is `&頭`, `&ampx` is `&x`,
+  `&notit;` is `¬it;`, `&notin` is `¬in`); a name the table lacks as written (`&hellip` without its `;`).
+- **In an attribute value**, the attribute rule: a reference without its `;` followed by `=` or an ASCII alphanumeric
+  stays as written (`&ampx`, `&amp=y`, `&para4`, `?a=1&copy=2`), otherwise decoded (`&amp頭` is `&頭`).
+- Numeric references by the spec's rules: U+FFFD for 0, a surrogate or past U+10FFFF (the digits stop counting there),
+  the spec's table for 0x80–0x9F (`&#x80;` is `€`, `&#x81;` stays U+0081), a noncharacter or a control kept;
+  `&#x41` without its `;` decoded; `&#`, `&#x` and `&#;` as written.
+
+### Quirks mode
+
+From the doctype by the spec's lists (lexbor's, `CompatMode.of`), or by a missing doctype:
+
+- quirks: force-quirks, a name other than `html`, a public identifier equal to one of three or starting with one of
+  55, the IBM system identifier, or a public identifier starting with HTML 4.01 Frameset's or Transitional's and no
+  system identifier; limited quirks: those two with a system identifier, or XHTML 1.0 Frameset's or Transitional's;
+  ASCII case-insensitive throughout.
+- As lexbor reads them, an empty identifier is a missing one: `PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" ""` is
+  quirks mode (the spec's limited quirks).
+- selectolax shows quirks mode alone (`#id` and `.class` without case), never limited quirks.
+
+### The vectors
+
+`vectors/html/tokens.jsonl` (every HTML page of the sites' fixtures, by reference, and every page the fake sites
+build) and `tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data
+and its escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA, each doctype list's entries,
+the input cut short in each state). lexbor shows no token stream, so each record holds what its tree shows the
+tokenizer decided: the document's mode (by a probe element's id), the doctype's name, each element with an attribute
+once (its tag and attributes; the tree's clones are the same pair), every text node's data in document order joined,
+every comment's and processing instruction's. `core.testing.replays.HtmlReplay` reads them through `TokensTree`, a
+tree builder of the replay's own: where each node goes in document order (the head before what follows it, a comment
+after `</body>` in the html element, text a table can't hold fostered before it), the start tags it drops or merges,
+the text it drops, what it switches the tokenizer to, and foreign content; tag and attribute names compared
+ASCII-lowercased (their SVG and MathML case is the tree's).
 
 ## Text
 
@@ -63,8 +138,8 @@ class HtmlNode {
 
 ## Quirks mode
 
-- Set from the doctype by the spec's lists (public id prefixes, the HTML 4.01 transitional and frameset ids without a
-  system id), or by a missing doctype; `HtmlDoc.quirks` says which.
+- Set from the doctype in the initial insertion mode (The tokenizer, "Quirks mode": `Token.Doctype.mode`), or by a
+  missing doctype; `HtmlDoc.quirks` says which.
 - In quirks mode, `#id` and `.class` match without ASCII case (`ul#b_main` finds `<ul id=B_MAIN>`); in standards mode
   they match as written.
 
