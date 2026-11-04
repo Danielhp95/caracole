@@ -23,7 +23,10 @@ policy of its own, and one song at a time, as a lookup does.
   set sorted, a pair an array, a pick its fields), ``policy`` ``MatchPolicy``'s fields, ``out`` the ``MatchResult``'s
   fields (its candidates' too). Each is the same over a fresh ``IndexView`` as over the test's (asserted).
 - ``view.jsonl``: ``{fn: "caracole.match.IndexView", case, fixture, calls: [{method, args, out}]}``: one view's
-  calls in order, a method's answer as JSON (an ``IndexTitle`` its fields, a tuple an array, a dict an object).
+  calls in order, a method's answer as JSON (an ``IndexTitle`` its fields, a tuple an array, a dict an object);
+  test_match.py's, then a few over keys its index never holds (``EDGES``: a letter past U+FFFF, U+20000, after a
+  compact key's first three or as its third, beside BMP letters past the surrogates, so that ``compact_artists``'
+  bound U+10FFFF and every list's code-point order, never UTF-16's, show in the answers).
 - ``match_all.jsonl`` and ``seeded.jsonl``: ``{fn: "caracole.match.match_all", case, fixture, before, overrides,
   policy, kw, now, out}``: ``fixture`` inline, or a fixture's name (``match/fixtures/seeded.jsonl``); ``before`` what
   is done to it first (``drop_kv``: kv keys deleted, ``clear_index``: every ``ug_index`` row deleted); ``kw``
@@ -652,6 +655,56 @@ def stage_records(workdir: Path) -> list[dict[str, Any]]:
     return records
 
 
+# --- the index view's edges -------------------------------------------------------------------------------------
+
+# A letter past U+FFFF (one code point, two UTF-16 units) and two BMP letters past the surrogates: by code point
+# "x\ue000" < "x\uff21" < "x\U00020000", by UTF-16 unit "x\U00020000" first, so an order or a range bound that
+# reads UTF-16 answers otherwise.
+WIDE = "\U00020000"
+EDGES = (
+    ("artists past U+FFFF, before and after the keys load", (
+        (f"abc{WIDE}d", "one"), (f"a-bc{WIDE}d", "two"), (f"ab-c{WIDE}", "three"), ("abc\ue000", "four"),
+        ("abc\uff21", "five"), ("abcz", "six"), (f"ab{WIDE}c", "seven"), (f"a-b{WIDE}c", "eight"),
+        (f"ab{WIDE}-c", "nine")),
+     [("compact_artists", f"abc{WIDE}d"), ("compact_artists", f"ab{WIDE}c"), ("compact_artists", "abcz"),
+      ("compact_artists", "abc\uff21"), ("has_artist", f"abc{WIDE}d"), ("has_artist", f"abc{WIDE}"),
+      ("artist_keys",), ("compact_artists", f"abc{WIDE}d"), ("compact_artists", f"ab{WIDE}c"),
+      ("compact_artist_keys",), ("has_artist", f"a-bc{WIDE}d")]),
+    ("titles past U+FFFF", (
+        ("tones", f"x{WIDE}"), ("tones", "x\ue000"), ("tones", "x\uff21"), ("tones", "xz"),
+        ("tones", f"x{WIDE}-acoustic"), ("tones", "x\ue000-live"), ("other", f"y{WIDE}z"), ("other", f"x{WIDE}")),
+     [("titles_for_artist", "tones"), ("title_keys",), ("compact_title_keys",), ("titles_reading", f"x{WIDE}"),
+      ("artists_for_title", f"x{WIDE}")]),
+    ("catch-alls past U+FFFF", (
+        ("misc-musicals", "show-z"), ("misc-musicals", "show-\ue000"), ("misc-musicals", "show-\uff21"),
+        ("misc-musicals", f"show-{WIDE}"), ("misc-musicals", f"show-{WIDE}{WIDE}-tail"),
+        ("misc-musicals", f"show-{WIDE}-acoustic"), ("misc-musicals", "zeta"), ("misc-originals", f"ray-{WIDE}"),
+        ("misc-originals", "ray-z"), ("misc-cartoons", f"{WIDE}-toon")),
+     [("catch_all_holding", ["-tail-", "zeta-\n", f"{WIDE}-", "-ray-z-\n"]), ("catch_all_songs",),
+      ("catch_all_holding", [f"-{WIDE}", "ray-\n"])]),
+)
+
+
+def edge_views(workdir: Path) -> list[dict[str, Any]]:
+    """One view a case of ``EDGES``: its index's rows, then its calls in order, as the harvest records them."""
+    from caracole.match import IndexView
+
+    records = []
+    for n, (case, keys, calls) in enumerate(EDGES):
+        with database(workdir / f"edge{n}") as conn:
+            conn.executemany(
+                "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                "VALUES (?, ?, ?, 'chords', '1', 'x', ?)",
+                [(t, a, s, f"{a}/{s}-chords-{t}") for t, (a, s) in enumerate(keys, start=1)])
+            record = {"fn": "caracole.match.IndexView", "case": f"edges: {case}", "fixture": dump_fixture(conn),
+                      "calls": []}
+            view = IndexView(conn)
+            for method, *args in calls:
+                record["calls"].append({"method": method, "args": args, "out": plain(getattr(view, method)(*args))})
+            records.append(record)
+    return records
+
+
 # --- the files --------------------------------------------------------------------------------------------------
 
 
@@ -660,7 +713,7 @@ def every_file(workdir: Path) -> dict[Path, str]:
     text, seeded = seeded_records(workdir / "seeded")
     return {
         MATCH / "ladder.jsonl": jsonl(h.ladder, corpus="match/ladder", made_by=MADE_BY),
-        MATCH / "view.jsonl": jsonl(h.views, corpus="match/view", made_by=MADE_BY),
+        MATCH / "view.jsonl": jsonl(h.views + edge_views(workdir / "edges"), corpus="match/view", made_by=MADE_BY),
         MATCH / "match_all.jsonl": jsonl(h.matched, corpus="match/match_all", made_by=MADE_BY),
         SEEDED_FIXTURE: text,
         MATCH / "seeded.jsonl": jsonl(seeded, corpus="match/seeded", made_by=MADE_BY),
