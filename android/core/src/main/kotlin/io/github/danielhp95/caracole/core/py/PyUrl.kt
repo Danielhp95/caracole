@@ -4,7 +4,8 @@ package io.github.danielhp95.caracole.core.py
 /**
  * urllib.parse as Python 3.14 has it, for what caracole serve reads with it: `urlsplit` (an address's parts, or
  * [Invalid] where Python raises ValueError), `unquote` (each ASCII run's escapes decoded as UTF-8, strictly or
- * replaced; a `%` that escapes nothing stays), `unquote_plus`, `parse_qs` and `quote`.
+ * replaced; a `%` that escapes nothing stays), `unquote_plus`, `parse_qs` and `quote`; and for the site parsers
+ * `urljoin`, `urlunsplit` and `urlencode` (vectors/py/sites_url.jsonl).
  */
 object PyUrl {
     /** Python's ValueError from urlsplit or parse_qsl, or a strict unquote's UnicodeDecodeError. */
@@ -17,13 +18,22 @@ object PyUrl {
     private const val SCHEME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
     private val FUTURE = Regex("[vV][a-fA-F0-9]+\\..+", RegexOption.DOT_MATCHES_ALL)  // \n is gone already
 
-    fun urlsplit(given: String): Split {
+    fun urlsplit(given: String): Split = parts(given).let {
+        Split(it.scheme ?: "", it.netloc ?: "", it.path, it.query ?: "", it.fragment ?: "")
+    }
+
+    /** _urlsplit(url, None): an address's parts, each one it doesn't have null (urljoin tells an empty query from
+     * none); [Invalid] where Python raises ValueError. */
+    internal class Parts(val scheme: String?, val netloc: String?, val path: String, val query: String?,
+                         val fragment: String?)
+
+    internal fun parts(given: String): Parts {
         var url = given.trimStart { it in C0_OR_SPACE }
         for (unsafe in "\t\r\n") url = url.replace(unsafe.toString(), "")
-        var scheme = ""
-        var netloc = ""
-        var query = ""
-        var fragment = ""
+        var scheme: String? = null
+        var netloc: String? = null
+        var query: String? = null
+        var fragment: String? = null
         val i = url.indexOf(':')
         if (i > 0 && (url[0] in 'a'..'z' || url[0] in 'A'..'Z') && url.substring(0, i).all { it in SCHEME_CHARS }) {
             scheme = Py.asciiLower(url.substring(0, i))
@@ -31,10 +41,11 @@ object PyUrl {
         }
         if (url.startsWith("//")) {
             val end = "/?#".map { url.indexOf(it, 2) }.filter { it >= 0 }.minOrNull() ?: url.length
-            netloc = url.substring(2, end)
+            val found = url.substring(2, end)
+            netloc = found
             url = url.substring(end)
-            if (('[' in netloc) != (']' in netloc)) throw Invalid("Invalid IPv6 URL")
-            if ('[' in netloc) checkBracketedNetloc(netloc)
+            if (('[' in found) != (']' in found)) throw Invalid("Invalid IPv6 URL")
+            if ('[' in found) checkBracketedNetloc(found)
         }
         if ('#' in url) {
             fragment = url.substringAfter('#')
@@ -44,8 +55,8 @@ object PyUrl {
             query = url.substringAfter('?')
             url = url.substringBefore('?')
         }
-        checkNetloc(netloc)
-        return Split(scheme, netloc, url, query, fragment)
+        checkNetloc(netloc ?: "")
+        return Parts(scheme, netloc, url, query, fragment)
     }
 
     private fun checkBracketedNetloc(netloc: String) {
@@ -65,7 +76,7 @@ object PyUrl {
             if (!FUTURE.matches(hostname)) throw Invalid("IPvFuture address is invalid")
         } else {
             when (IpAddress.version(hostname)) {
-                null -> throw Invalid("does not appear to be an IPv4 or IPv6 address")
+                null -> throw Invalid("${PyStr.repr(hostname)} does not appear to be an IPv4 or IPv6 address")
                 4 -> throw Invalid("An IPv4 address cannot be in brackets")
             }
         }
@@ -161,12 +172,123 @@ object PyUrl {
 
     // --- milestone 4's additions (lane py-sites) ---------------------------------------------------------------------
 
-    /** urllib.parse.urljoin(base, url), Python 3.14's. */
-    fun urljoin(base: String, url: String): String = TODO("lane py-sites")
+    private val USES_RELATIVE = setOf("", "ftp", "http", "gopher", "nntp", "imap", "wais", "file", "https", "shttp",
+        "mms", "prospero", "rtsp", "rtsps", "rtspu", "sftp", "svn", "svn+ssh", "ws", "wss")
+    private val USES_NETLOC = setOf("", "ftp", "http", "gopher", "nntp", "telnet", "imap", "wais", "file", "mms",
+        "https", "shttp", "snews", "prospero", "rtsp", "rtsps", "rtspu", "rsync", "svn", "svn+ssh", "sftp", "nfs", "git",
+        "git+ssh", "ws", "wss", "itms-services")
 
-    /** urllib.parse.urlencode of pairs, as httpx and caracole's site modules call it (quote_plus, `doseq`). */
-    fun urlencode(pairs: List<Pair<String, String>>, doseq: Boolean = false): String = TODO("lane py-sites")
+    /**
+     * urllib.parse.urljoin(base, url), Python 3.14's: [url] as it is when its scheme isn't [base]'s or isn't one of
+     * `uses_relative`, or when it has a host of its own; else its path resolved against the base's (RFC 3986's
+     * dot segments, a `..` above the root dropped, the empty segments between kept out), the base's query and
+     * fragment taken only when it has neither path nor query (nor fragment). [Invalid] where urlsplit raises.
+     */
+    fun urljoin(base: String, url: String): String {
+        if (base.isEmpty()) return url
+        if (url.isEmpty()) return base
+        val b = parts(base)
+        val u = parts(url)
+        val scheme = u.scheme ?: b.scheme
+        if (scheme != b.scheme || (!scheme.isNullOrEmpty() && scheme !in USES_RELATIVE)) return url
+        var netloc = u.netloc
+        if (scheme.isNullOrEmpty() || scheme in USES_NETLOC) {
+            if (!netloc.isNullOrEmpty()) return unsplit(scheme, netloc, u.path, u.query, u.fragment)
+            netloc = b.netloc
+        }
+        if (u.path.isEmpty()) {
+            val query = u.query ?: b.query
+            val fragment = if (u.query == null && u.fragment == null) b.fragment else u.fragment
+            return unsplit(scheme, netloc, b.path, query, fragment)
+        }
+        val baseParts = b.path.split('/').toMutableList()
+        if (baseParts.last() != "") baseParts.removeAt(baseParts.size - 1)
+        val segments: List<String> = if (u.path.startsWith("/")) {
+            u.path.split('/')
+        } else {
+            val all = baseParts + u.path.split('/')
+            if (all.size < 2) all else listOf(all.first()) + all.subList(1, all.size - 1).filter { it.isNotEmpty() } + all.last()
+        }
+        val resolved = ArrayList<String>()
+        for (segment in segments) {
+            when (segment) {
+                ".." -> if (resolved.isNotEmpty()) resolved.removeAt(resolved.size - 1)
+                "." -> {}
+                else -> resolved.add(segment)
+            }
+        }
+        if (segments.last() == "." || segments.last() == "..") resolved.add("")
+        return unsplit(scheme, netloc, resolved.joinToString("/").ifEmpty { "/" }, u.query, u.fragment)
+    }
 
-    /** urllib.parse.urlunsplit. */
-    fun urlunsplit(parts: Split): String = TODO("lane py-sites")
+    /** urllib.parse._urlunsplit: each part null where the address has none. */
+    private fun unsplit(scheme: String?, netloc: String?, path: String, query: String?, fragment: String?): String {
+        var url = path
+        if (netloc != null) {
+            if (url.isNotEmpty() && !url.startsWith("/")) url = "/$url"
+            url = "//$netloc$url"
+        } else if (url.startsWith("//")) {
+            url = "//$url"
+        }
+        if (!scheme.isNullOrEmpty()) url = "$scheme:$url"
+        if (query != null) url = "$url?$query"
+        if (fragment != null) url = "$url#$fragment"
+        return url
+    }
+
+    /** urllib.parse.urlunsplit: an empty part is none, but an empty host is kept for a scheme of `uses_netloc` whose
+     * path is empty or starts with `/` (`http:///x`). */
+    fun urlunsplit(parts: Split): String {
+        val netloc = parts.netloc.ifEmpty {
+            if (parts.scheme.isNotEmpty() && parts.scheme in USES_NETLOC &&
+                (parts.path.isEmpty() || parts.path.startsWith("/"))) "" else null
+        }
+        return unsplit(parts.scheme.ifEmpty { null }, netloc, parts.path, parts.query.ifEmpty { null },
+                       parts.fragment.ifEmpty { null })
+    }
+
+    /**
+     * urllib.parse.urlencode of pairs of strings, as httpx and caracole's site modules call it: each name and value
+     * quote_plus'd (UTF-8, `safe=''`: every byte but the letters, digits and `_.-~` as %XX, a space as `+`), `=`
+     * between, `&` between pairs. [doseq] changes nothing for a string value, as in Python; [urlencodeDoseq] takes
+     * lists. A lone surrogate is Python's UnicodeEncodeError ([IllegalArgumentException]).
+     */
+    fun urlencode(pairs: List<Pair<String, String>>, doseq: Boolean = false): String =
+        pairs.joinToString("&") { (k, v) -> quotePlus(k) + "=" + quotePlus(v) }
+
+    /** urlencode(pairs, doseq=True) where each value is a sequence: a pair for each of its items, in order (none for
+     * an empty one); a string value is the list of itself. */
+    fun urlencodeDoseq(pairs: List<Pair<String, List<String>>>): String =
+        pairs.flatMap { (k, values) -> values.map { quotePlus(k) + "=" + quotePlus(it) } }.joinToString("&")
+
+    /** quote_plus(s, safe=''). */
+    fun quotePlus(s: String): String = buildString(s.length) {
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            i += Character.charCount(cp)
+            when {
+                cp == ' '.code -> append('+')
+                cp < 0x80 && cp.toChar() in ALWAYS_SAFE -> append(cp.toChar())
+                cp < 0x80 -> escape(this, cp)
+                cp < 0x800 -> { escape(this, 0xC0 or (cp shr 6)); escape(this, 0x80 or (cp and 0x3F)) }
+                cp in 0xD800..0xDFFF -> throw IllegalArgumentException(
+                    "'utf-8' codec can't encode character at $i: surrogates not allowed")
+                cp < 0x10000 -> {
+                    escape(this, 0xE0 or (cp shr 12)); escape(this, 0x80 or ((cp shr 6) and 0x3F))
+                    escape(this, 0x80 or (cp and 0x3F))
+                }
+                else -> {
+                    escape(this, 0xF0 or (cp shr 18)); escape(this, 0x80 or ((cp shr 12) and 0x3F))
+                    escape(this, 0x80 or ((cp shr 6) and 0x3F)); escape(this, 0x80 or (cp and 0x3F))
+                }
+            }
+        }
+    }
+
+    private const val HEX_UPPER = "0123456789ABCDEF"
+
+    private fun escape(out: StringBuilder, byte: Int) {
+        out.append('%').append(HEX_UPPER[byte shr 4]).append(HEX_UPPER[byte and 0xF])
+    }
 }
