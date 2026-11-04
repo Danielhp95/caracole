@@ -5961,7 +5961,33 @@ is off on the phone too after the next sync.
 
 ### The phone's reads go to the computer (POST /peer/index)
 
-Not built yet.
+The pages the phone's lookups read are the computer's too: an artist's Ultimate Guitar pages, LaCuerda's artist
+pages and what its search answered, harptabs.com's artist pages. The phone notes each one as it stores it, and sends
+the computer those noted since its last push to that computer, whatever the sync merged from the computer's indexes
+(never a time window: LaCuerda's pages carry no time, and UG's move with the computer's nightly refresh). Its
+caracole exports them as `caracole index export` would, only those pages' rows in each site's tables, with the
+records of how they are keyed, never a sitemap's or a listing's record nor how far an index has got, and posts the
+file:
+
+    POST /peer/index        an index export, its bytes (64 MiB at most), with the form token in its header
+
+caracole serve checks the token and that the bytes are a SQLite file's, keeps the file as
+`state_dir/peer/index-<16 hex>.sqlite` (only its owner reads it), and queues its merge, answering `202 {"job": N}`
+(the phone then forgets the pages it sent):
+
+    caracole index merge --delete --progress -- FILE
+
+It merges as `caracole index merge` always does (see [caracole index export and
+merge](#caracole-index-export-and-merge)): backed up first, a page the file read later taken, a LaCuerda page or
+search answer the computer has already kept as it is, and no progress record moved. **`--progress`** reports its
+one stage, merge, as a JSON line, which the Requests tab reads ("Index pages from another caracole": Merged, and what
+each site took), and waits for the nightly run as a lookup does, which lets it go first at its next pause.
+**`--delete`** deletes FILE once it is merged, or refused (it can never be merged here); one that found no room for
+the backup first stays, for Try again. At most two such files wait at once (409 for another: the phone sends its
+pages at the next sync), and one an hour old that no waiting request names is deleted as the next one comes.
+
+The phone's side of it, the export and the post at a sync, is still to come: until then the computer takes the route
+and the merge, and the phone sends nothing, so the computer reads those pages itself when it needs them.
 
 ### What the offline copy lists
 

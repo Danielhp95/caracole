@@ -226,6 +226,127 @@ def test_an_unknown_site_is_refused(home, tmp_path):
         transfer.export(home, tmp_path / "x.sqlite", ["spotify"], now=NOW)
 
 
+# --- export(pages=): what the phone's lookups read, for the computer -------------------------------------------------
+
+SONG_DONGYE = "https://www.ultimate-guitar.com/artist/634073"
+SODA = "https://www.ultimate-guitar.com/artist/soda-stereo_1186"
+
+
+def reads(conn) -> None:
+    """A phone's indexes: what its import brought (``full``), and the pages its lookups read since."""
+    full(conn)
+    artist_tab(conn, SODA, 3001, "De Música Ligera", LATE)
+    artist_tab(conn, SODA, 3002, "Persiana Americana", LATE)
+    artist_songs(conn, "soda_stereo", "Soda Stereo", ["De Música Ligera"])
+    lacuerda_index.store_search(conn, SearchAnswer(songs=(SearchSong("bunbury", "Enrique Bunbury", LCSong(
+        "maldito_duende", "Maldito Duende", "R", (1,))),)))
+    harp_page(conn, "artist/50/the-beatles", ["Yesterday"], LATE)
+
+
+def exported_rows(path: Path) -> dict[str, list[tuple]]:
+    out = sqlite3.connect(path)
+    try:
+        tables = [r[0] for r in out.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
+        return {t: [tuple(r) for r in out.execute(f"SELECT * FROM {t} ORDER BY rowid")] for t in tables}
+    finally:
+        out.close()
+
+
+def test_an_export_of_pages_holds_those_pages_rows_alone_and_how_they_are_keyed(home, tmp_path):
+    reads(home)
+    pages = {"harptabs": ["artist/50/the-beatles"], "ug": [SODA], "lacuerda": ["soda_stereo/", "busca.php"]}
+
+    exported = transfer.export(home, tmp_path / "reads.sqlite", now=NOW, pages=pages)
+
+    assert exported.sites == ("ug", "lacuerda", "harptabs")  # in caracole's order
+    got = exported_rows(tmp_path / "reads.sqlite")
+    assert list(got) == ["ug_index", "ug_artist_tabs", "lacuerda_index", "harptabs_index", "harptabs_artists",
+                         "harptabs_artist_tabs", "kv", transfer.META]
+    assert got["ug_index"] == [] and got["harptabs_index"] == []  # no sitemap's rows
+    assert [r[1] for r in got["ug_artist_tabs"]] == [3001, 3002]
+    assert {r[10] for r in got["lacuerda_index"]} == {"soda_stereo/", lacuerda_index.SEARCH_PAGE}
+    assert sorted(r[0] for r in got["lacuerda_index"]) == ["bunbury/", "bunbury/lady_blue", "bunbury/maldito_duende",
+                                                           "soda_stereo/de_musica_ligera"]
+    assert [r[0] for r in got["harptabs_artists"]] == ["artist/50/the-beatles"]
+    assert [r[3] for r in got["harptabs_artist_tabs"]] == ["Yesterday"]
+    # How the rows are keyed, and nothing of the sitemaps, the listings or how far an index has got.
+    assert [r[0] for r in got["kv"]] == ["harptabs:artists:keys", "lacuerda:index:keys", "ug:artist_tabs:keys"]
+    assert all(value == str(normalize.KEY_VERSION) for _, value in got["kv"])
+    meta = dict(got[transfer.META])
+    assert json.loads(meta["sites"]) == ["ug", "lacuerda", "harptabs"] and meta["exported_at"] == "2026-10-29T18:00:00Z"
+    assert exported.rows == {"ug_index": 0, "ug_artist_tabs": 2, "lacuerda_index": 4, "harptabs_index": 0,
+                             "harptabs_artists": 1, "harptabs_artist_tabs": 1}
+
+
+def test_an_export_of_pages_names_no_site_beside_them_and_no_site_without_pages(home, tmp_path):
+    with pytest.raises(transfer.TransferError, match="gtptabs.com's index has no pages a lookup reads"):
+        transfer.export(home, tmp_path / "x.sqlite", now=NOW, pages={"gtptabs": ["sitemap-tabs-1.xml"]})
+    with pytest.raises(transfer.TransferError, match="no site 'spotify'"):
+        transfer.export(home, tmp_path / "x.sqlite", now=NOW, pages={"spotify": ["x"]})
+    with pytest.raises(transfer.TransferError, match="name no site beside them"):
+        transfer.export(home, tmp_path / "x.sqlite", ["ug"], now=NOW, pages={"ug": [SODA]})
+    assert not (tmp_path / "x.sqlite").exists()
+
+
+def test_an_export_of_a_game_page(home, tmp_path):
+    reads(home)
+    transfer.export(home, tmp_path / "game.sqlite", now=NOW, pages={"gametabs": ["tabs/actraiser"]})
+    got = exported_rows(tmp_path / "game.sqlite")
+    assert got["gametabs_index"] == [] and [r[0] for r in got["gametabs_games"]] == ["tabs/actraiser"]
+    assert sorted(r[3] for r in got["gametabs_game_tabs"]) == ["Bloodpool", "Fillmore"]
+    assert [r[0] for r in got["kv"]] == ["gametabs:games:keys"]
+
+
+def test_an_export_of_no_page_is_of_no_site_and_merges_nothing(home, conn, tmp_path):
+    reads(home)
+    exported = transfer.export(home, tmp_path / "none.sqlite", now=NOW, pages={})
+    assert exported.sites == () and exported.rows == {}
+    assert list(exported_rows(tmp_path / "none.sqlite")) == ["kv", transfer.META]
+
+    merged = merge(conn, tmp_path / "none.sqlite", state=tmp_path / "state")
+
+    assert not merged.changed and merged.backup is None and merged.sites == []
+
+
+def test_the_phones_reads_merge_as_its_rules_take_them_and_move_no_record_of_the_computers(home, conn, tmp_path):
+    # The computer (conn): its own indexes, some of the same pages read earlier, some later, some it never read.
+    full(conn)
+    artist_tab(conn, SODA, 3001, "De Musica Ligera (old)", EARLY)
+    artist_tab(conn, SODA, 3002, "Persiana Americana (newer here)", NOW)
+    artist_songs(conn, "estopa", "Estopa", ["Como Camarón"])  # LaCuerda: a page it has stays its own
+    harp_page(conn, "artist/1178/billy-joel", ["Piano Man"], EARLY)
+    # The phone (home): its import, then its lookups' reads; its records of sitemaps and listings newer than the
+    # computer's (another computer's import), which a file of pages carries none of.
+    reads(home)
+    artist_songs(home, "estopa", "Estopa", ["Vino Tinto", "Me Falta el Aliento"])
+    harp_page(home, "artist/1178/billy-joel", ["Piano Man", "Honesty", "Vienna"], LATE)
+    ug_sitemap(home, "1", ["radiohead/creep-chords-4169"], LATE)
+    ug_listed(home, ["1"], LATE)
+    listing(home, "tabs/e/index0.html", [("estopa", "Estopa")], LATE)
+    sitemap(home, harptabs_fetch.SITE, site_index.ONE, ["https://www.harptabs.com/artist/1178/billy-joel"], LATE)
+    db.kv_set(home, harptabs_fetch.SITE.complete_key, "2026-10-28T03:30:00Z")
+    records = [k for name in SITES for k in transfer.SITES[name].kv]
+    before = {k: kv(conn, k) for k in records}
+    sitemaps = {t: rows(conn, t) for t in ("ug_index", "harptabs_index", "gtptabs_index")}
+    path = transfer.export(home, tmp_path / "reads.sqlite", now=NOW, pages={
+        "ug": [SODA], "lacuerda": ["estopa/", "soda_stereo/", lacuerda_index.SEARCH_PAGE],
+        "harptabs": ["artist/1178/billy-joel", "artist/50/the-beatles"]}).path
+
+    merged = merge(conn, path, state=tmp_path / "state")
+
+    assert merged.changed and merged.backup is not None  # backed up first, as any merge
+    assert dict(conn.execute("SELECT tab_id, title FROM ug_artist_tabs WHERE page = ?", (SODA,))) == {
+        3001: "De Música Ligera", 3002: "Persiana Americana (newer here)"}
+    lacuerda = {p for (p,) in conn.execute("SELECT path FROM lacuerda_index WHERE page NOT LIKE 'tabs/%'")}
+    assert "estopa/como_camaron" in lacuerda and "estopa/vino_tinto" not in lacuerda  # the computer's page stays
+    assert {"soda_stereo/de_musica_ligera", "bunbury/maldito_duende", "bunbury/lady_blue"} <= lacuerda
+    harp = dict(conn.execute("SELECT artist, count(*) FROM harptabs_artist_tabs GROUP BY artist"))
+    assert harp == {"artist/1178/billy-joel": 3, "artist/50/the-beatles": 1}
+    assert {k: kv(conn, k) for k in records} == before  # no progress record moved, either way
+    assert {t: rows(conn, t) for t in sitemaps} == sitemaps
+    assert merge(conn, path, state=tmp_path / "state").changed is False  # a second merge takes nothing
+
+
 # --- merge: round trips --------------------------------------------------------------------------------------------
 
 TABLES = {
