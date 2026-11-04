@@ -19,7 +19,7 @@ class HarmonyTest {
 
     @Test fun everyRecordIsHarmonyPys() {
         val misses = Misses("harmony")
-        HarmonyReplay.replay(misses)
+        HarmonyReplay.chords(misses)
         misses.assertNone()
     }
 
