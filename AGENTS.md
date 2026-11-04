@@ -1260,8 +1260,21 @@ Not built yet. (lookup.)
 
 ##### Site passes on the phone
 
-- Ultimate Guitar's pages (ug-pages), ranking and coverage (rank-coverage), its sheet (ug-fetch-sheet) and its artist
-  pages (ug-fetch-artist): not built yet.
+- Ultimate Guitar's pages (ug-pages), its sheet (ug-fetch-sheet) and its artist pages (ug-fetch-artist): not built
+  yet.
+- core.ug's `Rank`, `Coverage` and `SheetVersions`: rank.py, coverage.py and sheet_versions.py, Python's numbers and
+  lists for the same inputs (versions.py's `complete` and `replaces_sheet` are `Rank`'s).
+  - A score is Python's float arithmetic (`prior_mean` the builtin sum's, `Py.fsum`), a ranking a stable sort on
+    Python's keys: a float as `==` and `<` compare it, ties on `(version, len(tab_id), tab_id)` in code points.
+  - Coverage: its regexes through PyRegex, `str.splitlines` and `split()`, lengths in code points, `partial_ratio`
+    as `Fuzz.partialRatioAlignment`, Chinese as pinyin.
+  - `SheetVersions` reads the tables with sheet_versions.py's own SQL (`inLibraryOf` in four queries), a kv list's
+    items as Python's `str()` makes them, `asData` in Python's member order (a record's `dumps`, json.dumps'
+    text, checks it byte for byte).
+  - tests/test_conformance_rank.py writes vectors/sites/ug_rank.jsonl, ug_coverage*.jsonl (every fixture sheet
+    against every fixture lyrics) and ug_sheet_versions*.jsonl (over a fixture library): `RankReplay`. They are
+    a share of the `sites` area every site lane writes: a record only where it can answer otherwise than another
+    (a policy by the fields that differ from `RankPolicy()`'s, which its first record gives).
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
