@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.viewer.winds
 
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.viewer.ViewerData
+import io.github.danielhp95.caracole.viewer.shapes.Kept
 import io.github.danielhp95.caracole.viewer.theory.Chord
 import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
@@ -15,7 +16,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 
 /** winds.Wind: a wind instrument: the lowest and highest notes it reads, how far above them it sounds, the notes it
  * reads at ease (lowest, highest), its keys (or holes) as a fingering's states name them, and its fingering systems,
@@ -138,7 +138,7 @@ object Winds {
 
     // --- the octave a melody is played in ------------------------------------------------------------------------
 
-    private val fits = ConcurrentHashMap<Pair<List<Int>, Wind>, Fit>()
+    private val fits = Kept<Pair<List<Int>, Wind>, Fit>(1024)
 
     /** The octave a melody (its notes as they sound, or its lowest and highest) is played in on [wind]: as few of the
      * notes it then reads as can be outside its range, then outside its easy range, then moved as little as can be
@@ -175,7 +175,7 @@ object Winds {
         return Theory.SCALES.getValue(key.mode).map { tonic + it } + (tonic + 12)
     }
 
-    private val steps = ConcurrentHashMap<Pair<Set<Int>, Int?>, List<Int>>()
+    private val steps = Kept<Pair<Set<Int>, Int?>, List<Int>>(1024)
 
     /** The chord's tones as semitones above its root, in harmony.chord_tones' order, each above the one before, an
      * 11th or a 13th an octave lower: C9 is [0, 4, 7, 10, 14], C11 [0, 4, 7, 10, 14, 5]. */

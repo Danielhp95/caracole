@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer.harp
 
 import io.github.danielhp95.caracole.viewer.ViewerData
+import io.github.danielhp95.caracole.viewer.shapes.Kept
 import io.github.danielhp95.caracole.viewer.theory.Chord
 import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
@@ -165,7 +166,7 @@ object Harp {
 
     private class OnC(val kind: String, val breath: String?, val holes: Pair<Int, Int>?, val quality: String?)
 
-    private val onC = ConcurrentHashMap<Triple<Int, Set<Int>, Int?>, OnC>()
+    private val onC = Kept<Triple<Int, Set<Int>, Int?>, OnC>(4096)
 
     /** How a C harp plays the chord: (kind, breath, holes, the quality played: null for the chord itself). */
     private fun onC(root: Int, intervals: Set<Int>, bass: Int?): OnC = onC.getOrPut(Triple(root, intervals, bass)) {
@@ -251,7 +252,7 @@ object Harp {
         a.size.compareTo(b.size)
     }
 
-    private val chosen = ConcurrentHashMap<Pair<Key, List<Chord>>, List<HarpChoice>>()
+    private val chosen = Kept<Pair<Key, List<Chord>>, List<HarpChoice>>(1024)
 
     /** The harps for a song in [key] whose chords (as they sound) are [chords], best first, at most three. A chord
      * caracole can't read (null) counts for nothing; a chord played again, once. */

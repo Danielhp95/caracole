@@ -118,6 +118,21 @@ class VoicingsTest {
         assertEquals("021034", Voicings.fingers(shapes.getValue("0,add9,").jsonObject.getValue("list").jsonArray[0].jsonArray))
     }
 
+    @Test fun answersAreKeptAsPythonsCacheKeepsThemNoMore() {
+        val kept = Kept<Int, String>(2)
+        var made = 0
+        fun ask(n: Int) = kept.getOrPut(n) { made++; "answer $n" }
+        assertEquals("answer 1", ask(1))
+        ask(2)
+        ask(1)  // the least recently used is now 2
+        ask(3)
+        assertEquals(3, made)
+        ask(1)
+        assertEquals(3, made)  // kept
+        ask(2)
+        assertEquals(4, made)  // let go for 3, made again
+    }
+
     @Test fun thePageGetsTheFingeringsFiledUnderItsKeysInOrder() {
         val page = Voicings.pageVoicings(setOf("m7", "", "nope", "/4"))
         assertEquals(listOf("", "/4", "m7"), page.keys.toList())

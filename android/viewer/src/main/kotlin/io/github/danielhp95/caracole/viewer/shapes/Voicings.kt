@@ -222,7 +222,7 @@ object Voicings {
         }
     }
 
-    private val keys = ConcurrentHashMap<Chord, Triple<String, Boolean, String?>>()
+    private val keys = Kept<Chord, Triple<String, Boolean, String?>>(4096)
 
     /**
      * Where a chord's fingerings are filed: (quality, whether it is only the nearest one, slash key). A quality

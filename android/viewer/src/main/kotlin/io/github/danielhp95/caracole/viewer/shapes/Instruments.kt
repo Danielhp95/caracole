@@ -173,7 +173,7 @@ object Instruments {
         if (chord.bass == null) chord.copy(root = root)
         else chord.copy(root = root, bass = Math.floorMod(chord.bass - chord.root + root, 12))
 
-    private val pianoTables = ConcurrentHashMap<Chord, List<List<List<Int>>>>()
+    private val pianoTables = Kept<Chord, List<List<List<Int>>>>(4096)
 
     /** The piano's positions of [chord]'s kind on every root (C first): a copy of the answer kept. */
     fun pianoTable(chord: Chord): List<List<List<Int>>> =
