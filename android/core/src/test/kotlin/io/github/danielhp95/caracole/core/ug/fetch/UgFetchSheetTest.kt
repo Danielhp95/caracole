@@ -44,7 +44,7 @@ import java.time.Instant
 class UgFetchSheetTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private fun waiting() = assumeTrue("waiting on ug-pages, rank-coverage, overrides-model and html-tree",
+    private fun waiting() = assumeTrue("waiting on ug-pages, rank-coverage and html-tree",
                                        UgFetchReplay.ready)
 
     @Test fun everyRecordOfProcessSongReplays() {

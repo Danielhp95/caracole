@@ -23,7 +23,7 @@ class KeepVersionTest {
     }
 
     @Test fun everyRecordOfKeepVersionReplays() {
-        assumeTrue("waiting on ug-pages, rank-coverage, overrides-model and html-tree", UgFetchReplay.ready)
+        assumeTrue("waiting on ug-pages, rank-coverage and html-tree", UgFetchReplay.ready)
         val misses = Misses(UgFetchReplay.KEEP)
         UgFetchReplay.keep(misses)
         misses.assertNone()

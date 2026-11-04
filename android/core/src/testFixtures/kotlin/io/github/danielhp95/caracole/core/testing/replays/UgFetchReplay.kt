@@ -3,7 +3,6 @@ package io.github.danielhp95.caracole.core.testing.replays
 import io.github.danielhp95.caracole.core.config.RankPolicy
 import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.library.LibraryStore
-import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -38,20 +37,19 @@ object UgFetchReplay : AreaReplay {
     const val SHEET = "lookup/ug_sheet.jsonl"
     const val KEEP = "lookup/ug_keep.jsonl"
 
-    /** Phase A guard: a page is read by lane ug-pages' UgPage over lane html-tree's core.html, ranked by lane
-     * rank-coverage's Rank and Coverage, and the overrides read by lane overrides-model's Overrides; until each has
-     * merged, the records wait (waiting on ug-pages, rank-coverage, overrides-model and html-tree). */
+    /** Phase A guard: a page is read by lane ug-pages' UgPage over lane html-tree's core.html, and ranked by lane
+     * rank-coverage's Rank and Coverage; until each has merged, the records wait (waiting on ug-pages, rank-coverage
+     * and html-tree). */
     val ready: Boolean by lazy {
         runCatching {
             Html.parse("<p>")
             UgPage.kindOf("Chords")
             Rank.priorMean(emptyList())
-            OverrideUrls.overrideKey("Artist - Title")
         }.isSuccess
     }
 
     override fun replay(misses: Misses) {
-        if (!ready) return  // waiting on ug-pages, rank-coverage, overrides-model and html-tree
+        if (!ready) return  // waiting on ug-pages, rank-coverage and html-tree
         sheet(misses)
         keep(misses)
     }

@@ -23,8 +23,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *
  * Phase A: the skeleton declares none of these, so each is read here as Python writes it, a stand-in until its lane
  * merges (waiting on ug-pages: TAB_BASE_URL, WWW, UGVersion's kind and label, IndexTab's url and label; on
- * rank-coverage: rank_guitar and sheet_versions' PREFIX, SHEET_PAGE, tab_of, same_key, library_state and same_pages;
- * on overrides-model: LaCuerdaPick.holds). Phase B makes each the lane's own.
+ * rank-coverage: rank_guitar and sheet_versions' PREFIX, SHEET_PAGE, tab_of, same_key, library_state and same_pages).
+ * Phase B makes each the lane's own.
  */
 internal object Ports {
     /** ug/page.py's TAB_BASE_URL (waiting on ug-pages). */
@@ -98,14 +98,6 @@ internal object Ports {
         return out
     }
 
-    /** overrides.LaCuerdaPick.holds: whether a LaCuerda version, by its tab id (`artist/song-N`), is the one picked:
-     * that version, or for a song, any of its versions (waiting on overrides-model). */
-    fun holds(pick: LaCuerdaPick, tabId: String): Boolean {
-        val artist = tabId.substringBefore('/')
-        val rest = tabId.substringAfter('/', "")
-        val dash = rest.lastIndexOf('-')
-        if (dash < 0) return false
-        return artist == pick.artist && rest.substring(0, dash) == pick.song &&
-            (pick.version == null || rest.substring(dash + 1) == pick.version.toString())
-    }
+    /** overrides.LaCuerdaPick.holds. */
+    fun holds(pick: LaCuerdaPick, tabId: String): Boolean = pick.holds(tabId)
 }
