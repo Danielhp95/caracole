@@ -1252,11 +1252,86 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### core.html
 
-Not built yet. (html-tokenizer, html-tree.)
+- The tokenizer (html-tokenizer), `core.html.internal.token`: `Preprocess` (UTF-8 with replacement, CRLF and CR to LF)
+  and `Tokenizer`, the WHATWG tokenizer as lexbor 3.1.0 tokenizes for selectolax (its processing instructions, a null
+  value for an attribute written with none, an empty doctype identifier a missing one in `CompatMode.of`), driven by
+  the tree builder (`switchTo`, `contentFor`, `foreignContent`, asked only once the text before a `<!` came out of
+  `next()`); docs/superpowers/specs/2026-11-03-html-parsing.md.
+- Held by vectors/html/tokens*.jsonl (tests/test_conformance_html.py: what selectolax's tree shows lexbor's tokenizer
+  decided of every fixture page, every page the fake sites build, an edge set and seeded tag soup; never a
+  `<template>`'s contents, which selectolax's tree doesn't reach), which `HtmlReplay` reads through `TokensTree`, a
+  small tree builder of its own (the active formatting elements reconstructed, the tokenizer's names compared as it
+  gives them).
+- The tree, nodes and selectors (html-tree), `core.html.internal.tree` and `.select`:
+  - `TreeBuilder`, lexbor 3.1.0's tree builder ported insertion mode by insertion mode, with its tables of each tag's
+    categories (`Tags`), and lexbor's own readings: `<select>` a scope with no "in select" mode, a token "in table"
+    hands to "in body" never processed again, the implied end tags by name in any namespace, `sup` no breakout tag,
+    text after a frameset's `</html>` read whole;
+  - `Dom.kt`, lexbor's linked nodes, a template's contents a fragment no walk reaches;
+  - `Selectors`, lexbor's matching of caracole's selectors: an element once for each selector of a list it matches,
+    a node's search finding itself and its combinators reading the whole tree, the HTML attributes whose values match
+    without case;
+  - `HtmlDoc` and `HtmlNode` as selectolax's tree and nodes (`text`, `children`, `attributes`, `replaceWith`,
+    `insertAfter`; a processing instruction's tag `-pi`, selectolax's None, and `iter()` `children(includeText =
+    false)`: the spec's "For the site parsers");
+  - `TreeBuilder`, `Tags` and `Selectors` ported from lexbor's C, with its copyright, under the vendored
+    `core/html/internal/LICENSE-lexbor` (the Apache License 2.0 and lexbor's NOTICE).
+- Held by vectors/html/tree*.jsonl and mutations.jsonl (tests/test_conformance_html.py's tree half: every page's
+  shape, texts, the parsers' selectors and harptabs.py's `<pre>` read; the tree's edge set; selectors alone; 400 seeded
+  tag-soup edits of the fixtures, by digest), which `HtmlTreeReplay` reads, the token vectors through core.html's tree
+  too; the spec's one divergence, an input's duplicate `type` in a table, pinned in `TreeTest`.
 
 ##### Lookups on the phone
 
-Not built yet. (lookup.)
+- core.lookup's `Lookup` is get.py's `_Lookup` (`internal/LookupRun.kt`), held to it by vectors/lookup/words, asking
+  and after_the_sheet (tests/test_conformance_lookup.py, `LookupReplay`):
+  - its stages in get.py's order and labels (`LookupWords.STAGES`), each reported as it starts and ends;
+  - the song found, or added (`LibraryStore.add`, the phone's wanted.txt line), the pages picked recorded through
+    `OverrideWriters`; a refusal (ignored, a tab of a kind caracole doesn't use, a pick that can't be recorded) the song
+    stage failed and the rest skipped;
+  - the sheet's order (a LaCuerda pick first, Ultimate Guitar's first pass, LaCuerda when no sheet is kept, asked once
+    a lookup), its running detail `SHEET_FROM`; the lyrics put together as `_then` does; what follows the sheet within
+    `SHEETS_SHARE`; `_owed`; the sheet readable as `_check_readable` says it; the closing `record_ok` and kv
+    `lookup:songs`.
+- Each site's stage is its lane's file of core/lookup/sites/, called with a `StageContext` whose `asking` is the
+  envelope or `InteractiveAsk.afterTheSheet`. A stage words its site's answer as get.py's work does and every other
+  `Asked` through `LookupWords.end`; `LookupWords.NOTHING_TO_ASK` is get.py's None: in the lyrics, Megalobiz's or
+  AZLyrics' nothing to ask (`_then` says what the sites before said), anywhere else `done` with no words. A
+  `SharedFolder` fails the stage in get.py's words; anything else is a bug, said in its stage and `LookupResult.bug`.
+- `InteractiveAsk` is get.py's `_ask`: `_usable`'s words, a block recorded, an error counted, a spent budget worded
+  the lookup's, the hour's or kept for sheets; one client a provider a lookup (`Clients.interactive`, at the lookup's
+  run or a command's own, `lookup:lacuerda-search:`). A block alerts once (`Alerts.blocked`): on the phone a lookup
+  alerts, where the computer's sends none, since the phone has no nightly run to tell.
+- What a caracole with no ChordPro, no wanted.txt and no index.html says is get.py's too, recorded in the corpus and
+  used by nothing on the computer: `ADDED` (the song stage), `NO_PDFS` (the pdf stage, skipped while `SongPages` is
+  `NONE`), `PAGES_MADE` (once the phone makes the song's pages), `LIBRARY_PAGE` (the pages stage). The songbooks stage
+  says "not on the phone yet" while `SongbookPages` is `NONE`.
+- `Lookup.run` blocks: a runner calls it inside one `Database.writeBlocking` on the queue's worker, in autocommit, so
+  each event, block and kv record commits as it happens; a write inside it throws; a queue that stops stops it at its
+  next stage.
+- server/lookups' runners: `GetRunner` (`caracole get`, its options checked as commands/get.py checks them,
+  `LookupLines` and `LookupWords.totals` its output; a refusal or a bug exits 1), `VersionsRunner` (`--keep` and
+  `--keep-more` to `VersionsCommands`; `--choose` as get `--tab` at the version's address; `--clear` as `removePin`,
+  then get), `LaCuerdaRunner` (`--artist`, `--search` to `LaCuerdaCommands`) and `HarpTabsRunner` (`--artist`).
+  - A refused lookup's step ends with `error: Nothing looked up: ….` and a bug's with `error: a bug in caracole: …`
+    (the queue writes an `error:` line for every step that fails), where the computer's says the first plainly and
+    logs the second; the stage the library page's line reads says the same on both.
+- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`) runs in
+  `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
+  - it says its Python's `--progress` events as `LookupWords.progressLine`s (`stageLine`, `songLine`; the queue's
+    `JobCommands.progressLine` to the byte, a test checks), its job's events when it reports them
+    (`JobCommands.reports`, as web/jobs.py's emit reads them), and its other lines; its last line is the one it
+    returns;
+  - it asks through `c.asking`, which records a block (and alerts once) and an error: a command never records
+    either itself;
+  - it records its own good run where its Python does: `Health.recordOk` after `Health.answeredAny` of its run
+    (`LookupWords.lookupRunOf(c.now)`, `searchRunId` for LaCuerda's search), or after any request where versions_cmd.py
+    counts them;
+  - `versions --keep` and `--keep-more`: the runner begins the song stage and finds the song, the command says from
+    `{"song": …}` on, and at its `pdf` and `pages` running events (versions_cmd.py's: a version kept, pdf then pages;
+    any other outcome past its refusals, pages alone) the runner makes the song's pages and ends both stages in the
+    phone's words (`NO_PDFS` while `SongPages` is `NONE`, `LIBRARY_PAGE`), the command's own ends of them unsaid
+    (`LookupJobs.CommandLines`).
 
 ##### Site passes on the phone
 
