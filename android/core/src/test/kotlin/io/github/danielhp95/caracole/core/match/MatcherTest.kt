@@ -49,9 +49,6 @@ class MatcherTest {
     private val policy = MatchPolicy()
     private val now = "2026-11-04T09:30:00Z"
 
-    /** artist_tabs.BACKFILL_KEY, which lane ug-pages' backfill writes once it has read the cache. */
-    private val backfillKey = "ug:artist_tabs:backfill"
-
     private fun replayed(name: String, part: (Misses, Db) -> Unit) {
         val misses = Misses("match: $name")
         MatchReplay.withDatabase { db -> part(misses, db) }
@@ -161,7 +158,7 @@ class MatcherTest {
         assertEquals(now, Songs.byId(db, s.id)!!.matchedAt)
         // backfill's first step, as Python's for a client that reads no cache; no cache read, so no kv record of one.
         assertEquals(Normalize.KEY_VERSION.toString(), db.kvGet(ArtistTabs.KEYS_KEY))
-        assertNull(db.kvGet(backfillKey))
+        assertNull(db.kvGet(ArtistTabs.BACKFILL_KEY))
     }
 
     @Test fun aLookupsMatchStageBackfillsFromItsCacheWhateverAskingTheFrameWrapsTheEnvelopeIn() {
@@ -191,7 +188,9 @@ class MatcherTest {
                 val ctx = seen.single()
                 assertFalse(ctx.asking is InteractiveAsk)
                 assertEquals(cache, ctx.cacheDir)
+                // The backfill ran whole: its keys made current, then the cache read (nothing in it), recorded once.
                 assertEquals(Normalize.KEY_VERSION.toString(), db.kvGet(ArtistTabs.KEYS_KEY))
+                assertEquals("{\"pages\": 0, \"tabs\": 0}", db.kvGet(ArtistTabs.BACKFILL_KEY))
                 assertEquals("accept", Songs.byId(db, result.songId!!)!!.matchDecision)
                 assertEquals(0, db.one("SELECT COUNT(*) FROM events") { it.long(0)!!.toInt() })
             }
