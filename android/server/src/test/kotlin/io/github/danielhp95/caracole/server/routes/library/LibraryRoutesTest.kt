@@ -12,6 +12,13 @@ import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.server.page.SongCards
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
+import io.github.danielhp95.caracole.server.routes.LookupRoutes
+import io.github.danielhp95.caracole.server.http.RouteModule
+import io.github.danielhp95.caracole.server.jobs.CommandRunner
+import io.github.danielhp95.caracole.server.jobs.Commands
+import io.github.danielhp95.caracole.server.lookups.GetRunner
+import io.github.danielhp95.caracole.server.testing.TestParts
+import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
@@ -37,7 +44,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** A song added and removed from the library page on the phone, through TestApp. */
+/** A song added, looked up and removed from the library page on the phone, through TestApp: LibraryRoutes beside
+ * LookupRoutes (Get it, Fetch now), each lookup run by the phone's `get` runner with every site refused. */
 class LibraryRoutesTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -49,12 +57,19 @@ class LibraryRoutesTest {
         override fun cards(db: Db, songs: List<SongRow>): Map<Long, JsonObject> = emptyMap()
     }
 
+    /** LibraryRoutes and LookupRoutes over [queue], whose `get` is the phone's runner (Assembly's wiring). */
+    private fun modules(dir: java.io.File, queue: JobQueue, commands: MutableMap<String, CommandRunner>,
+                        cards: SongCards = NoCards, database: Database): List<RouteModule> {
+        val parts = TestParts.of(database, dir, scope, queue)
+        commands["get"] = GetRunner(parts)
+        return listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, cards, database), LookupRoutes(parts))
+    }
+
     @Before fun up() {
-        queue = JobQueue(scope)
+        val commands = HashMap<String, CommandRunner>()
+        queue = JobQueue(scope, commands = Commands(commands))
         val dir = tmp.newFolder("phone")
-        app = TestApp(dir, modules = { database ->
-            listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, NoCards, database))
-        })
+        app = TestApp(dir, modules = { database -> modules(dir, queue, commands, database = database) })
     }
 
     @After fun down() {
@@ -146,13 +161,12 @@ class LibraryRoutesTest {
         assertNotNull(page.header("Location"))
     }
 
-    @Test fun `Fetch now adds the song too, its line saying the computer's next run fetches it`() {
+    @Test fun `Fetch now is a lookup, which adds the song`() {
         val answer = app.postScript("/request", listOf("artist" to "Radiohead", "title" to "Creep", "fetch" to "1"))
         val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
-        assertEquals("done", job.state)
+        assertEquals("song", job.spec.kind)
+        assertEquals(listOf(listOf("get", "--progress", "--", "Radiohead", "Creep")), job.steps.map { it.args })
         assertNotNull(song("Radiohead", "Creep"))
-        val line = JobViews.view(job, queue).getValue("line").jsonObject.getValue("text").jsonPrimitive.content
-        assertEquals(LibraryRoutes.FETCH_LATER, line)
     }
 
     @Test fun `one text is read as song_names reads it, and one that names no artist is refused`() {
@@ -228,7 +242,7 @@ class LibraryRoutesTest {
 
     private fun unitOf(song: SongRow) = app.database.read { Units.libraryState(it) }.getValue("song/${song.key}")
 
-    @Test fun `a song the library has is never written to, whichever form asks for it again`() {
+    @Test fun `a song the library has is never written to by the form, whichever form asks for it again`() {
         added(listOf("artist" to "Radiohead", "title" to "Creep", "album" to "Pablo Honey", "duration" to "3:58"))
         val creep = assertNotNull(song("Radiohead", "Creep"))
         val before = unitOf(creep)
@@ -242,10 +256,12 @@ class LibraryRoutesTest {
         )
         for ((path, fields) in asked) {
             val job = added(fields, path)
-            assertEquals("done", job.state, "$path $fields")
+            assertTrue(job.state == "done" || job.state == "failed", "$path $fields: ${job.state}")
             assertEquals(creep.key, job.spec.key)
             assertEquals(creep.id, job.songId)
-            assertEquals(before, unitOf(creep), "$path $fields: its unit as it was")
+            // An add writes nothing; a lookup looks the song up (what it found, or failed on), never the form's names,
+            // album or length.
+            if (job.spec.kind == "add") assertEquals(before, unitOf(creep), "$path $fields: its unit as it was")
         }
         val after = assertNotNull(song("Radiohead", "Creep"))
         assertEquals("Pablo Honey", after.album)
@@ -273,13 +289,12 @@ class LibraryRoutesTest {
     }
 
     @Test fun `a full queue is refused, 503, and nothing is added`() {
-        val full = JobQueue(scope, limit = 0)
+        val commands = HashMap<String, CommandRunner>()
+        val full = JobQueue(scope, limit = 0, commands = Commands(commands))
         val dir = tmp.newFolder("full")
-        TestApp(dir, modules = { database ->
-            listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), full, NoCards, database))
-        }).use { small ->
-            for (path in listOf("/request", "/lookup")) {
-                val answer = small.postScript(path, listOf("artist" to "Oasis", "title" to "Wonderwall"))
+        TestApp(dir, modules = { database -> modules(dir, full, commands, database = database) }).use { small ->
+            for ((path, fetch) in listOf("/request" to "0", "/request" to "1", "/lookup" to "0")) {
+                val answer = small.postScript(path, listOf("artist" to "Oasis", "title" to "Wonderwall", "fetch" to fetch))
                 assertEquals(503, answer.status, path)
                 assertEquals(LibraryRoutes.FULL, error(answer))
             }
@@ -296,15 +311,15 @@ class LibraryRoutesTest {
         TestApp(dir, modules = { database ->
             listOf(JobsRoutes(queue, cards, database), LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, cards, database))
         }).use { paged ->
-            val view = paged.postScript("/lookup", listOf("artist" to "Blur", "title" to "Song 2")).json.jsonObject
-                .getValue("view").jsonObject
+            val view = paged.postScript("/request", listOf("artist" to "Blur", "title" to "Song 2")).json.jsonObject
+                .getValue("job").jsonObject
             val job = waitFor(view)
             val song = assertNotNull(paged.database.read { Songs.byKey(it, Normalize.identityKey("Blur", "Song 2")) })
             assertEquals(song.id, job.songId)
             val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single().jsonObject
             assertEquals(JsonPrimitive(song.id), shown["songId"])
             assertEquals(JsonPrimitive("Blur - Song 2"), shown.getValue("card").jsonObject["display"])
-            assertEquals(LibraryRoutes.FETCH_LATER, shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+            assertEquals("Added: the nightly run looks for it", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
         }
     }
 

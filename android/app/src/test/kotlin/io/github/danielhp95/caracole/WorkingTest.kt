@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole
 
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
+import io.github.danielhp95.caracole.server.jobs.JobViews
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,39 @@ class WorkingTest {
         add.complete(Unit)
         waitFor("the queue to empty") { queue.activeCount() == 0 }
         assertNull(Working.lineOf(queue.snapshot()), "nothing waits or runs")
+    }
+
+    @Test
+    fun `a lookup is named by its song and the line the library page shows for it, and by its title while it waits`() {
+        val lookup = CompletableDeferred<Unit>()
+        val song = queue.submit(JobSpec(
+            title = "Fetch Estopa - Tu calorro", key = "estopa/tu-calorro", kind = "song", display = "Estopa - Tu calorro",
+            stages = listOf("song" to "Find the song", "lyrics" to "Lyrics from LRCLIB"),
+            run = { context -> context.stage("lyrics", "running"); lookup.await() },
+        )).first
+        waitFor("the lookup's stage") { queue.job(song.id)?.stages?.any { it.state == "running" } == true }
+        val line = JobViews.line(queue.job(song.id)!!).text
+        assertEquals("Estopa - Tu calorro: $line", Working.lineOf(queue.snapshot()))
+        val read = CompletableDeferred<Unit>()
+        submit("lacuerda-artist", "Estopa on LaCuerda", read)
+        val waiting = queue.submit(JobSpec(
+            title = "Search LaCuerda for “corazones rotos”", key = "lacuerda-search:corazones-rotos",
+            kind = "lacuerda-search", display = "“corazones rotos” on LaCuerda", stages = emptyList(), run = { },
+        )).first
+        assertEquals("Estopa - Tu calorro: $line (2 more waiting)", Working.lineOf(queue.snapshot()))
+        lookup.complete(Unit)
+        waitFor("the read to run") { queue.snapshot().any { it.spec.kind == "lacuerda-artist" && it.state == "running" } }
+        read.complete(Unit)
+        waitFor("the search to end") { queue.job(waiting.id)?.active == false }
+        assertNull(Working.lineOf(queue.snapshot()))
+        // waiting its turn behind an import, a lookup is named by its request's title
+        val merge = CompletableDeferred<Unit>()
+        running(submit("index", "The computer's index", merge).id)
+        val asked = CompletableDeferred<Unit>()
+        submit("song", "Fetch Estopa - Fuego", asked)
+        assertEquals("Fetch Estopa - Fuego: waiting its turn", Working.lineOf(queue.snapshot()))
+        merge.complete(Unit)
+        asked.complete(Unit)
     }
 
     @Test

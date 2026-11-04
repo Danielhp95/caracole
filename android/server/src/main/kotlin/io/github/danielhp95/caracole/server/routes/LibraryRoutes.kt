@@ -2,14 +2,12 @@ package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.PostAnswer
 import io.github.danielhp95.caracole.server.http.Refused
-import io.github.danielhp95.caracole.server.http.Request
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
@@ -22,41 +20,37 @@ import io.github.danielhp95.caracole.server.routes.library.Answers
 import io.github.danielhp95.caracole.server.routes.library.NamedSong
 import io.github.danielhp95.caracole.server.routes.library.RemovalQuestion
 import io.github.danielhp95.caracole.server.routes.library.SongForm
+import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * A song added to the phone's library, and one removed, from the library page's forms (library_routes.py's
- * `/request`, search_routes.py's `/lookup`, remove_routes.py's `/remove`, on the phone):
+ * `/request`, remove_routes.py's `/remove`, on the phone):
  *
  *     POST /request   a song for the library, its `artist` and `title` (or one text, `q`, read as song_names.py
  *                     reads it), with its album and length: added (LibraryStore.add) as an `add` job under its
- *                     identity key; with `fetch` (Fetch now) the same, its line once done saying the computer's next
- *                     run fetches it (a lookup on the sites is not on the phone yet); with `youtube`, refused (not on
- *                     the phone yet)
- *     POST /lookup    Get it on a search's line: the song as the library has it (`song`, its id, or the one of its
- *                     names) or a new one, added the same way; to the page's script, a lookup's answer, 202 {job,
- *                     url: /api/jobs/N, view}
+ *                     identity key; with `fetch` (Fetch now), looked up now instead, `caracole get --progress`, which
+ *                     adds it (LookupForms.fetchNow: with the LaCuerda song or version it picked); with `youtube`,
+ *                     refused (not on the phone yet)
  *     POST /remove    what removing a song takes ({removal: {song, key, display, brief, goes, stays, notes}}, its
  *                     data; the message page to a browser without the script); with `confirm` and the song's `key`,
  *                     the removal queued under `remove:<key>` (LibraryStore.remove: a tombstone, so the song stays
  *                     removed until asked for again), then back to the library at its card
  *
- * A song the library has already is never written to: its record stays as it is, as `caracole add` leaves a song whose
- * wanted.txt line is there already and a lookup of your song (search_routes._library_song) adds no source to it; its
- * job is still an add's, the song named as the library names it. A new song's names are those wanted.txt's line would
- * hold (wanted._clean). Every write runs in its job, inside Database.write; the job names the song it added once
- * added (JobContext.song), so /jobs.json gives a job over its song's card ([cards]: JobsRoutes draws it; an answer
- * here is the job just queued, which has none, as app.job_view gives none). The site picks a form may carry (ug, tab,
- * lacuerda, harptabs, gametabs) are checked for length and go no further: the computer's run looks the song up on
- * every site. A full queue is refused, 503, nothing written.
+ * Get it on a search's line (`/lookup`) is LookupRoutes'. A song the library has already is never written to: its
+ * record stays as it is, as `caracole add` leaves a song whose wanted.txt line is there already; its job is still an
+ * add's, the song named as the library names it. A new song's names are those wanted.txt's line would hold
+ * (wanted._clean). Every write runs in its job, inside Database.write; the job names the song it added once added
+ * (JobContext.song), so /jobs.json gives a job over its song's card ([cards]: JobsRoutes draws it; an answer here is
+ * the job just queued, which has none, as app.job_view gives none). Of the site picks a form may carry, a request
+ * reads the LaCuerda song or version alone (library_routes.lacuerda_field), which Fetch now's lookup asks for and an
+ * add keeps no further; the others it never reads. A full queue is refused, 503, nothing written.
  */
 class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: SongCards, val database: Database) :
     RouteModule {
     override val routes: List<Route> = listOf(
         Route("POST", "/request", "a song for the library", post = PostAnswer { _, form -> request(form) }),
-        Route("POST", "/lookup", "a song looked up: added, for the computer's next run", page = "the page",
-              post = PostAnswer { request, form -> lookup(request, form) }),
         Route("POST", "/remove", "a song removed", post = PostAnswer { _, form -> remove(form) }),
     )
 
@@ -65,38 +59,15 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         if (PyText.strip(named["youtube"].orEmpty()).isNotEmpty()) {
             throw Refused(409, "Not on the phone yet", "A sheet from a YouTube video isn't on the phone yet.")
         }
-        val song = SongForm.song(named)
-        val fetch = named["fetch"] in FETCH
+        val lacuerda = LookupForms.lacuerdaField(named)
+        val song = SongForm.song(named, picks = false)
+        if (named["fetch"] in FETCH) {  // `caracole get` adds the song itself
+            val ask = LookupForms.fetchNow(song, lacuerda)
+            return Answers.queued(view(queue.submitOrRefuse(ask.spec, ask.full).first))
+        }
         val found = database.read { Songs.byKey(it, song.key) }
         val display = found?.let { "${it.artist} - ${it.title}" } ?: song.display
-        val job = add(song, found, if (fetch) "Fetch $display" else "Add $display", display, if (fetch) FETCH_LATER else null)
-        return Answers.queued(view(job))
-    }
-
-    private fun lookup(request: Request, form: Map<String, String>): Response {
-        val asked = PyText.strip(form["song"].orEmpty())
-        SongForm.checkPicks(form)
-        val (song, found) = if (asked.isNotEmpty()) {
-            val id = asked.toLongOrNull() ?: throw Refused(400, "Not a song", "Which song? The form names none.")
-            val found = database.read { Songs.byId(it, id) } ?: throw Refused(404, "No such song", NO_SUCH_SONG)
-            NamedSong(found.artist, found.title, null, null) to found
-        } else {
-            val named = SongForm.named(database, form)
-            val artist = PyText.strip(named["artist"].orEmpty())
-            val title = PyText.strip(named["title"].orEmpty())
-            val found = if (artist.isNotEmpty() && title.isNotEmpty()) {
-                database.read { Songs.byKey(it, Normalize.identityKey(artist, title)) }
-            } else null
-            // The song as the library has it: no second song, and nothing of the form written to it.
-            (if (found != null) NamedSong(found.artist, found.title, null, null) else SongForm.song(named)) to found
-        }
-        val display = found?.display ?: song.display
-        val job = add(song, found, "Fetch ${song.artist} - ${song.title}", display, FETCH_LATER)
-        val view = view(job)
-        if ("application/json" !in PyText.lower(request.headers["accept"].orEmpty())) return Answers.queued(view)
-        return Answers.json(JsonObject(linkedMapOf(
-            "job" to JsonPrimitive(job.id), "url" to JsonPrimitive("/api/jobs/${job.id}"), "view" to view,
-        )), 202)
+        return Answers.queued(view(add(song, found, "Add $display", display)))
     }
 
     /** The view of a job just queued, its song the one the library has of its key (jobs_routes.song_of). */
@@ -108,14 +79,14 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
 
     /**
      * [song] added as an `add` job under its key: [found], the song the library has of it (nothing written to it),
-     * else a new one; [line], what its line says once it is done. Inside the job's write the library is looked at
-     * again, so a song another job added meanwhile is never written to either.
+     * else a new one. Inside the job's write the library is looked at again, so a song another job added meanwhile is
+     * never written to either.
      */
-    private fun add(song: NamedSong, found: SongRow?, title: String, display: String, line: String?): Job {
+    private fun add(song: NamedSong, found: SongRow?, title: String, display: String): Job {
         val key = found?.key ?: song.key
         return queue.submitOrRefuse(JobSpec(
             title = title, key = key, kind = "add", stages = listOf(ADD to "Adding to the library"),
-            display = display, songId = found?.id, doneLine = line,
+            display = display, songId = found?.id,
             run = { context ->
                 context.stage(ADD, "running")
                 val (added, new) = database.write { db ->
@@ -172,9 +143,6 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         const val REMOVING = "remove:"
         const val ADD = "add"
         const val REMOVE = "remove"
-
-        /** What Fetch now and Get it say once the song is added: a lookup on the sites is the computer's. */
-        const val FETCH_LATER = "Added: the computer's next run fetches it."
 
         /** A full queue's words: nothing was added (app.py's QUEUE_FULL, for a request that wrote nothing yet). */
         const val FULL = "The queue is full, so nothing was added: ask for the song again once the queue empties."

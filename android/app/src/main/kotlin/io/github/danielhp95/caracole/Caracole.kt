@@ -27,8 +27,11 @@ import java.util.Locale
  * the mirror's sync stands ([status]).
  *
  * The app's files (the plan's §5.4): `caracole.sqlite` (caracole's schema and the phone's tables: the indexes
- * imported, the songs taken or added), `library/` (the phone's kept files), `state/` (`backups/`, and `cache/`, the
- * index files fetched or picked until they are merged), and the mirror's `blobs/` and `manifest.json`.
+ * imported, the songs taken or added), `library/` (the phone's kept files), `state/` (`backups/`, and `cache/`: the
+ * index files fetched or picked until they are merged, and `cache/http/<provider>/`, the sites' answers a lookup keeps
+ * for ever, as http.py keeps them: under the files folder, never Android's cacheDir, which the system may clear), and
+ * the mirror's `blobs/` and `manifest.json`. A lookup reaches the sites through [transport], [RealTransport] in the
+ * app, read on every request.
  */
 object Caracole {
     /** The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. */

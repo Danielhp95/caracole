@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobViews
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,8 +10,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * What keeps the phone's caracole working while its job queue has a job to do (a sync, an add, a removal): the
- * line its foreground service ([SyncService]) says ([line]), and that service started ([start]) as the line comes.
+ * What keeps the phone's caracole working while its job queue has a job to do (a sync, an add, a removal, a lookup):
+ * the line its foreground service ([SyncService]) says ([line]), and that service started ([start]) as the line comes.
  *
  * [busy] is the queue's `onBusy`, told under the queue's lock: it only sets a flag. While the queue is busy, the jobs
  * ([jobs], the queue's snapshot) are read again every [tickMs], so a job asked for while another runs (a sync while
@@ -64,10 +65,15 @@ internal class Working(
         /** The kind of job whose worker shows its own notification. */
         private const val INDEX = "index"
 
+        /** The lookups' kinds (JobCommands.isLookup's jobs): a song's (Get it, Fetch now), its versions kept, and a
+         * site's index read (an artist's page, LaCuerda's own search). */
+        val LOOKUPS = setOf("song", "versions", "lacuerda-artist", "lacuerda-search", "harptabs-artist")
+
         /**
          * The line of [jobs] (a queue's snapshot): the job that runs, else the first to run, of those the service
-         * keeps going (every kind but an index import), a sync named as syncing with its computer, and how many more
-         * wait after it; null when none waits or runs.
+         * keeps going (every kind but an index import), a sync named as syncing with its computer, a lookup by its
+         * song (or the page it reads) and the line the library page shows for it ("Estopa - Tu calorro: Looking up
+         * the lyrics…", JobViews.line), and how many more wait after it; null when none waits or runs.
          */
         fun lineOf(jobs: List<Job>): String? {
             val kept = jobs.filter { it.active && it.spec.kind != INDEX }.sortedBy { it.id }
@@ -77,16 +83,19 @@ internal class Working(
                 "sync" -> "Syncing with ${job.display.removePrefix("Sync with ")}…"
                 "add" -> "Adding ${job.display}…"
                 "remove" -> "Removing ${job.display}…"
+                in LOOKUPS -> "${job.display}: ${JobViews.line(job).text}"
                 else -> "${job.display}…"
             }
             val more = kept.size - 1
             return if (more > 0) "$doing ($more more waiting)" else doing
         }
 
-        /** A job named as a request: "Sync with Daniel's library", "Add Estopa - Tu calorro". */
+        /** A job named as a request: "Sync with Daniel's library", "Add Estopa - Tu calorro", a lookup by its title
+         * ("Fetch Estopa - Tu calorro", "Search LaCuerda for “corazón”"). */
         private fun what(job: Job): String = when (job.spec.kind) {
             "add" -> "Add ${job.display}"
             "remove" -> "Remove ${job.display}"
+            in LOOKUPS -> job.spec.title
             else -> job.display
         }
     }

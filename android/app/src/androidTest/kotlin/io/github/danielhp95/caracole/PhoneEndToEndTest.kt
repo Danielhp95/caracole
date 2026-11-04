@@ -17,6 +17,7 @@ import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobViews
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -53,8 +54,10 @@ import kotlin.concurrent.thread
  * - Sec-Fetch-Site reaches the server from the WebView: the library page's own read of /api/sync is answered, and the
  *   same read from a sandboxed viewer (an opaque origin, so `cross-site`) is refused as another site's;
  * - a query typed into the library page's box shows /api/search's rows: a song of the computer's index the library
- *   hasn't got;
- * - its row's Get it adds it: the phone's job is done and the reloaded page has its card;
+ *   hasn't got; the page sends LaCuerda no search by itself (CaracoleTestRunner's `searchesLacuerda` false);
+ * - its row's Get it looks it up, `caracole get` under the runner's transport, which refuses every site: the job is
+ *   done, its song added, its sites' stages failed or skipped (a lane's port still neutral), never a miss, its line
+ *   status.py's, and the reloaded page has its card;
  * - a song removed with its line's Remove is gone from the reloaded page's cards;
  * - a sandboxed viewer's link back to the library (its artist line, index.html#by=…) loads the library page, so the
  *   navigation carried the cookie.
@@ -214,13 +217,29 @@ class PhoneEndToEndTest {
                 return JSON.stringify({label: b.getAttribute('aria-label'), line: line.textContent.slice(0, 200),
                     hit: line.dataset ? line.dataset.hit || '' : ''}); })()""") as String
             record("row", JSONObject(row))
+            // The runner's searchesLacuerda false: the query settled, the page has sent LaCuerda no search by itself.
+            assertFalse(Caracole.searchesLacuerdaForTests)
+            Thread.sleep(SETTLE_MS)
+            assertTrue("no LaCuerda search queued by the page",
+                       Caracole.started()!!.queue.snapshot().none { it.spec.kind == "lacuerda-search" })
 
             // Its Get it: the song added on the phone.
             val before = Caracole.started()!!.queue.snapshot().map { it.id }.toSet()
             tap(main, getIt)
             val added = waitForJob("the Get it's job", before)
-            record("get it", JSONObject().put("kind", added.spec.kind).put("title", added.spec.title).put("state", added.state))
+            val stages = added.stages.associate { it.name to it.state }
+            record("get it", JSONObject().put("kind", added.spec.kind).put("title", added.spec.title).put("state", added.state)
+                .put("stages", JSONObject(stages)).put("line", JobViews.line(added).text))
             assertEquals("the Get it's job: ${added.spec.title}", Job.DONE, added.state)
+            // A lookup, every site refused: its song added, its sites failed or skipped, never a miss.
+            assertEquals("song", added.spec.kind)
+            assertEquals("get", added.steps.single().args.first())
+            assertEquals("done", stages["song"])
+            assertEquals("failed", stages["lyrics"])
+            for (site in listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")) {
+                assertTrue("$site: $stages", stages[site] in setOf("failed", "skipped"))
+            }
+            assertEquals("Added: the nightly run looks for it", JobViews.line(added).text)
             reload(main, library)
             val withIt = cardTitles(cards(main))
             assertTrue("the added song's card: $withIt", withIt.any { WANTED.containsMatchIn(it) })
@@ -361,6 +380,9 @@ class PhoneEndToEndTest {
         const val QUERY = "jeanie light brown"
         const val TITLE_WORD = "Jeanie"
         val WANTED = Regex("jeanie", RegexOption.IGNORE_CASE)
+
+        /** library.js's wait before a settled query's own searches (LaCuerda's, YouTube's), and a little more. */
+        const val SETTLE_MS = 2_500L
 
         /** A computer song the phone removes (e2e_library.py REMOVED's R). */
         val REMOVED = "Traditional" to "Barbara Allen"
