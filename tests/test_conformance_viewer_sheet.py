@@ -110,7 +110,7 @@ from caracole.ug import page as ug_page
 from caracole.versions import upsert_version
 from caracole.viewer import page, sheet
 from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Section, Tab, Text, parse_sheet
-from caracole.viewer.theory import Chord, Key, parse_chord
+from caracole.viewer.theory import parse_chord
 from helpers import viewer_corpus
 from helpers.corpus import check, dump_fixture, jsonl
 from test_conformance_viewer_theory import chord_row, key_row
@@ -315,15 +315,11 @@ def _texts(names: tuple[str, ...]) -> list[str]:
     return list(dict.fromkeys([*literals(names), *EDGE_TEXTS]))
 
 
-def item_row(item):
-    return item  # an index, a mark's text or None, as JSON tells them
-
-
 def line_row(line) -> list:
     if isinstance(line, Lyrics):
-        return ["L", [[item_row(c), text] for c, text in line.parts]]
+        return ["L", [[c, text] for c, text in line.parts]]  # an index, a mark's text or None, as JSON tells them
     if isinstance(line, ChordRow):
-        return ["C", [item_row(i) for i in line.items]]
+        return ["C", list(line.items)]
     if isinstance(line, Text):
         return ["T", line.text]
     if isinstance(line, Tab):
@@ -693,4 +689,3 @@ def test_the_sheets_reach_every_kind_of_line_and_every_way_to_a_key():
 def test_the_capos_reach_every_answer():
     found = {keys.sheet_capo(meta) for meta in METAS}
     assert {None, 2, 3, 10, 4, 12} <= found
-    assert Chord(0, "") and Key(0, "ionian")  # the rows are theory's

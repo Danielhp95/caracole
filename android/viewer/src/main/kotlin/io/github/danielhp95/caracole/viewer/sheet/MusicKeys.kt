@@ -82,7 +82,8 @@ object MusicKeys {
     fun parseKey(text: String): String? = named(text)?.first
 
     /** _named: [parseKey]'s key, and whether [text] named it by its letter alone, with no mode ("A", "La"). */
-    internal fun named(text: String): Pair<String, Boolean>? = PyRe.fullmatch(KEY_HEAD, Py.strip(text))?.let(::canonical)
+    internal fun named(text: String): Pair<String, Boolean>? =
+        PyRe.fullmatch(KEY_HEAD, Py.strip(text))?.let(::canonical)
 
     /** key_name: the key with its mode spelled out, for people: "C major", "A minor". */
     fun keyName(key: String): String = if (key.endsWith(" minor")) key else "$key major"
@@ -159,7 +160,8 @@ object MusicKeys {
             val profile = if (minor) MINOR_PROFILE else MAJOR_PROFILE
             for (tonic in 0 until 12) {
                 val fit = correlation(hist, (0 until 12).map { profile[Math.floorMod(it - tonic, 12)] })
-                val share = Py.fsum(weights.map { (rt, w) -> w * tonicChord(rt.first, rt.second, tonic, minor) }) / total
+                val tonics = weights.map { (rt, w) -> w * tonicChord(rt.first, rt.second, tonic, minor) }
+                val share = Py.fsum(tonics) / total
                 val starts = tonicChord(first.root, first.triad, tonic, minor)
                 val ends = tonicChord(last.root, last.triad, tonic, minor)
                 val score = fit + TONIC_SHARE * share + EDGE * (starts + ends)
@@ -259,7 +261,8 @@ object MusicKeys {
         val read = if (pitch != null) Theory.bareKey(Key(pitch.first, "ionian"), capo ?: 0, played) else null
         if (read == null || read.mode != "aeolian") return key
         if (read.tonic == pitch!!.first) return "$key minor"
-        val spelled = Py.mostCommonFirst(names.mapNotNull { name -> chord(name)?.takeIf { it.root == read.tonic }?.spelling })
+        val spellings = names.mapNotNull { name -> chord(name)?.takeIf { it.root == read.tonic }?.spelling }
+        val spelled = Py.mostCommonFirst(spellings)
         return "${spelled ?: MINOR_NAMES[read.tonic]} minor"
     }
 

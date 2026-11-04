@@ -299,7 +299,9 @@ object ChordPro {
         val text = plain.toString()
         for (m in PyRe.finditer(MARK, text)) {
             val at = m.range.first
-            if (spans.none { it.start <= at && at < it.end }) spans += Span(at, m.range.last + 1, "[*${Py.strip(m.value)}]")
+            if (spans.none { it.start <= at && at < it.end }) {
+                spans += Span(at, m.range.last + 1, "[*${Py.strip(m.value)}]")
+            }
         }
         val columns = columnsByOffset(text)
         return spans.sortedWith(SPAN_ORDER).filter { it.token.isNotEmpty() }.map { columns[it.start] to it.token }
@@ -339,7 +341,8 @@ object ChordPro {
         return cols
     }
 
-    private fun advance(col: Int, cp: Int): Int = if (cp == '\t'.code) (col / TAB_STOP + 1) * TAB_STOP else col + width(cp)
+    private fun advance(col: Int, cp: Int): Int =
+        if (cp == '\t'.code) (col / TAB_STOP + 1) * TAB_STOP else col + width(cp)
 
     private fun width(cp: Int): Int {
         if (PyUnicode.combining(cp) != 0) return 0

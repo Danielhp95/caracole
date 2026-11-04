@@ -35,10 +35,10 @@ internal object SheetData {
             Collections.unmodifiableList(of.getValue(name).jsonArray.map { it.jsonPrimitive.content })
         fun doubles(name: String): List<Double> =
             Collections.unmodifiableList(of.getValue(name).jsonArray.map { it.jsonPrimitive.double })
-        fun strings(name: String): Map<String, String> =
-            Collections.unmodifiableMap(LinkedHashMap(of.getValue(name).jsonObject.mapValues { it.value.jsonPrimitive.content }))
-        fun ints(name: String): Map<String, Int> =
-            Collections.unmodifiableMap(LinkedHashMap(of.getValue(name).jsonObject.mapValues { it.value.jsonPrimitive.int }))
+        fun strings(name: String): Map<String, String> = Collections.unmodifiableMap(
+            LinkedHashMap(of.getValue(name).jsonObject.mapValues { it.value.jsonPrimitive.content }))
+        fun ints(name: String): Map<String, Int> = Collections.unmodifiableMap(
+            LinkedHashMap(of.getValue(name).jsonObject.mapValues { it.value.jsonPrimitive.int }))
         fun obj(name: String): JsonObject = of.getValue(name).jsonObject
 
         /** `[[first, last], …]`, inclusive. */

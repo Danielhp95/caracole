@@ -7,14 +7,12 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
 internal object Str {
     fun rstrip(s: String): String {
         var end = s.length
-        while (end > 0 && PyUnicode.isSpace(s.codePointBefore(end))) end -= Character.charCount(s.codePointBefore(end))
+        while (end > 0) {
+            val cp = s.codePointBefore(end)
+            if (!PyUnicode.isSpace(cp)) break
+            end -= Character.charCount(cp)
+        }
         return s.substring(0, end)
-    }
-
-    fun lstrip(s: String): String {
-        var start = 0
-        while (start < s.length && PyUnicode.isSpace(s.codePointAt(start))) start += Character.charCount(s.codePointAt(start))
-        return s.substring(start)
     }
 
     /** Whether `s.strip()` is empty: [s] all whitespace, or nothing. */
