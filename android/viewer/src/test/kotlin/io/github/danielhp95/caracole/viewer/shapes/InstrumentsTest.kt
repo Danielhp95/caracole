@@ -109,6 +109,12 @@ class InstrumentsTest {
         assertEquals(Instruments.pianoPositions(ch("Db")), Instruments.pianoTable(ch("C"))[1])
     }
 
+    @Test fun theEasyKeysCantBeChanged() {
+        val (majors, minors) = Instruments.EASY.values.first()
+        assertFailsWith<UnsupportedOperationException> { (majors as MutableList<Int>).add(1) }
+        assertFailsWith<UnsupportedOperationException> { (minors as MutableList<Int>).clear() }
+    }
+
     @Test fun theUkulelesEasyKeysAndTheBaritones() {
         fun keys(table: String, mode: String) = Instruments.easyKeys(table).getValue(mode).jsonArray.map {
             it.jsonArray[0].jsonPrimitive.int to it.jsonArray[1].jsonPrimitive.content

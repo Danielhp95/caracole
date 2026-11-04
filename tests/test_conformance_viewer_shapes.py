@@ -42,7 +42,8 @@ tests (``LITERALS_FROM``), and inputs drawn from ``SEED``, some sheets or instru
   frets_from_nut]``; ``plays_of(items)``: ``[position, chord, tuning]`` → ``plays``; ``sheet_shapes_of(given, names,
   shift)``: ``{"shapes": sheet_shapes(given), kept, "guitar": [chord_shapes(GUITAR, chord, shift, given=shapes) for
   each name's loose chord]}`` for every corpus sheet that gives shapes (page.py's ``_given_shapes``; the names its
-  given chords' and a few others) and seeded lists; ``page_voicings_of(keys)``: ``{"keys": …, "sha256": …}``.
+  given chords' and a few others) and seeded lists; ``page_voicings_of(keys)``: ``{"keys": …, "sha256": …}``; last,
+  the same records of ``{define}``s whose base fret no 32-bit int holds (``big_base_records``), kept whole.
 - ``instruments.jsonl``: ``instrument_of(names)``; ``easy_keys(table)``, kept; ``is_easy_of(table, keys)``;
   ``ukulele_quality_of(fingerings)``; ``chord_of(name, shift)``: ``{"chord", "stacked", "piano", "piano_key",
   "on_root", "shapes": {id: chord_shapes(inst, chord, shift)}}`` for each of ``kinds()``, its shapes on a
@@ -66,7 +67,7 @@ tests (``LITERALS_FROM``), and inputs drawn from ``SEED``, some sheets or instru
   each harp), ``hole_notes_of(harp)`` (``hole_note`` of every hole 0 to 11, breath, bend −1 to 4 and over, in that
   order), ``entry_text_of(items)``.
 - ``winds.jsonl``: ``fingerings_of(wind, system)``: each note of ``NOTES`` → ``[[chart, text], …]``, each system and
-  none and one the wind hasn't; ``fit_of(notes, wind)`` → ``[shift, written, outside]``; ``scale_notes`` of every
+  none, an empty name and one the wind hasn't; ``fit_of(notes, wind)`` → ``[shift, written, outside]``; ``scale_notes`` of every
   key; ``steps_of(chords)`` → ``[chord_steps, chord_notes]``; ``interval_steps_of(items)``: ``[intervals, bass]`` →
   ``chord_steps`` of a chord on C of those intervals, for every set of intervals with its root (and drawn basses);
   ``solfege_of(names)``; ``fingering_data``, kept; ``tables_of(names, key)``: winds.py's ``tables``, kept, its
@@ -90,7 +91,6 @@ from pathlib import Path
 from typing import Any
 
 from caracole.viewer import harmony, harp, instruments, page, voicings, winds
-from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import MODES, QUALITIES, Chord, Key, alternatives, map_chord, parse_chord, spelling
 from helpers import viewer_corpus
 from helpers.corpus import check, jsonl
@@ -487,6 +487,44 @@ def voicings_records() -> list[dict]:
         found = voicings.page_voicings(set(keys_asked))
         out.append({"fn": HELPER + "page_voicings_of", "args": [keys_asked],
                     "out": {"keys": list(found), "sha256": sha256(found)}})
+    return out + big_base_records()
+
+
+# Base frets no 32-bit int holds, which parse_define keeps whole as int() reads them (4300 digits at most), and
+# plays and sheet_shapes read whole: 10**20 + 9 is a base fret of 1 a multiple of 12 up, the shape's open strings now
+# its lowest notes (C's x32010 then plays C/G, G's 320003 G/D), and 2**31 - 1 one of 7, 2**64 + 1 one of 5.
+BIG_BASES = (2**31 - 1, 2**31, 10**20 + 9, 2**64 + 1)
+BIG_CHORDS = ("C", "C/G", "C/E", "G", "G/B", "G/D", "Am", "Em")
+
+
+def big_base_records() -> list[dict]:
+    """``{define}``s whose base fret no 32-bit int holds: ``defines_of`` them, ``plays_of`` their positions as
+    ``BIG_CHORDS``, and ``sheet_shapes_of`` the C ones with C's own (``x32010`` from the nut) at two shifts."""
+    values = [f"C base-fret {b} frets x 3 2 0 1 0" for b in BIG_BASES]
+    values += [f"G base-fret {b} frets 3 2 0 0 0 3 fingers 2 1 0 0 0 3" for b in BIG_BASES]
+    values += ["C base-fret ２１４７４８３６４８ frets x 3 2 0 1 0",  # fullwidth digits, 2**31
+               "C base-fret " + "9" * 4300 + " frets x 3 2 0 1 0",
+               "C base-fret " + "9" * 4301 + " frets x 3 2 0 1 0",  # past int()'s limit: a ValueError
+               "C base-fret " + "0" * 4300 + "5 frets x 3 2 0 1 0"]  # its zeros count too
+
+    def define(value: str) -> Any:
+        found = answer(voicings.parse_define, value)
+        return found if found is None or isinstance(found, dict) else [chord_row(found[0]), found[1]]
+
+    out = [{"fn": HELPER + "defines_of", "args": [values], "out": [define(v) for v in values]}]
+    found = [voicings.parse_define(v) for v in values[:9]]
+    items = [[p, chord_row(parse_chord(n)), list(voicings.TUNING)] for _, p in found for n in BIG_CHORDS]
+    out.append({"fn": HELPER + "plays_of", "args": [items],
+                "out": [voicings.plays(p, parse_chord(n)) for _, p in found for n in BIG_CHORDS]})
+    in_c = [d for d in found if d[0].root == 0]
+    lowest = in_c[2]  # 10**20 + 9
+    given = [*in_c, voicings.parse_define("C frets x 3 2 0 1 0"), lowest, (parse_chord("C/G"), lowest[1])]
+    shapes = voicings.sheet_shapes(given)
+    sheet_names = ["C", "C/G", "G", "D/A"]
+    for shift in (0, 5):
+        guitar = [instruments.chord_shapes(instruments.GUITAR, parse_chord(n), shift, shapes) for n in sheet_names]
+        out.append({"fn": HELPER + "sheet_shapes_of", "args": [_given(given), sheet_names, shift],
+                    "out": {"shapes": kept(shapes), "guitar": guitar}})
     return out
 
 
@@ -715,7 +753,7 @@ def winds_records() -> list[dict]:
     rng = random.Random(SEED + 4)
     out = []
     for wind in winds.WINDS.values():
-        for system in (None, *wind.systems, "boehm" if wind.name == "recorder" else "german"):
+        for system in (None, *wind.systems, "boehm" if wind.name == "recorder" else "german", ""):  # "": the first
             try:
                 found = [[[f.chart, f.text] for f in winds.fingerings(wind, n, system=system)] for n in NOTES]
             except ValueError:

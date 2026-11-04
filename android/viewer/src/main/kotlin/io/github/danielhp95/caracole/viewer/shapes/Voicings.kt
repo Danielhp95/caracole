@@ -17,6 +17,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.math.BigInteger
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -33,6 +34,11 @@ typealias Position = JsonArray
  * read by code point, as Python reads a str, and a digit is any Unicode decimal digit (`\d` and `int()`'s), so
  * "x３２０３３" is the shape "x32033" is. The patterns are voicings.py's own, as Python writes them
  * (caracole/viewer/instruments.json's `voicings`), read by core.py.PyRegex as Python reads them.
+ *
+ * A position's base fret is Python's int, whole: a `{define}` may give one no Int holds, which [parseDefine] keeps,
+ * [plays] and [sheetShapes] read and a page's data carries as Python's do (vectors/viewer/voicings.jsonl's last
+ * records, `big_base_records`). Only [base], [notesOf] and [fretsFromNut] answer Ints, the skeleton's types: past an
+ * Int they are an [ArithmeticException] where Python answers the larger number.
  *
  * The answers are kept, as Python's caches keep them; positions and the objects handed out are JSON, which nothing
  * can change, and a list handed out is a copy.
@@ -59,12 +65,20 @@ object Voicings {
 
     /** A position, `[frets, fingers, base fret, barres]`. */
     fun position(frets: String, fingers: String, base: Int, barres: List<Int> = emptyList()): Position =
+        position(frets, fingers, BigInteger.valueOf(base.toLong()), barres)
+
+    private fun position(frets: String, fingers: String, base: BigInteger, barres: List<Int> = emptyList()): Position =
         JsonArray(listOf(JsonPrimitive(frets), JsonPrimitive(fingers), JsonPrimitive(base),
                          JsonArray(barres.map(::JsonPrimitive))))
 
     fun frets(position: Position): String = position[0].jsonPrimitive.content
     fun fingers(position: Position): String = position[1].jsonPrimitive.content
-    fun base(position: Position): Int = position[2].jsonPrimitive.int
+
+    /** The base fret, an [ArithmeticException] for one past an Int (see the object's notes). */
+    fun base(position: Position): Int = wholeBase(position).intValueExact()
+
+    /** The base fret whole, as Python's int. */
+    private fun wholeBase(position: Position): BigInteger = BigInteger(position[2].jsonPrimitive.content)
 
     /** The fingerings of an instrument's table, "guitar" (voicings.json) or "ukulele" (voicings-ukulele.json):
      * `data[quality][root]`, a root's positions, pitch class 0 (C) first. */
@@ -92,26 +106,30 @@ object Voicings {
 
     /** The MIDI notes [position] sounds on [tuning] (the guitar's unless given), string by string in the position's
      * order; an [IllegalArgumentException] when the position has another number of strings, as zip(strict=True). */
-    fun notesOf(position: Position, tuning: List<Int> = TUNING): List<Int> {
+    fun notesOf(position: Position, tuning: List<Int> = TUNING): List<Int> = wholeNotes(position, tuning).map { it.intValueExact() }
+
+    private fun wholeNotes(position: Position, tuning: List<Int>): List<BigInteger> {
         val frets = Py.codePoints(frets(position))
-        val base = base(position)
-        val notes = ArrayList<Int>()
+        val base = wholeBase(position)
+        val notes = ArrayList<BigInteger>()
         for ((i, string) in tuning.withIndex()) {
             require(i < frets.size) { "zip() argument 2 is shorter than argument 1" }
             if (frets[i] == 'x'.code) continue
             val n = digit(frets[i])
-            notes += string + if (n != 0) n + base - 1 else 0
+            notes += if (n != 0) base + BigInteger.valueOf(string.toLong() + n - 1) else BigInteger.valueOf(string.toLong())
         }
         require(frets.size == tuning.size) { "zip() argument 2 is longer than argument 1" }
         return notes
     }
 
+    private val TWELVE = BigInteger.valueOf(12)
+
     /** Whether [position] sounds [chord] on [tuning]: no other note, the root, and a slash chord's bass lowest. */
     fun plays(position: Position, chord: Chord, tuning: List<Int> = TUNING): Boolean {
-        val notes = notesOf(position, tuning)
-        val pcs = notes.map { Math.floorMod(it, 12) }.toSet()
+        val notes = wholeNotes(position, tuning)
+        val pcs = notes.map { it.mod(TWELVE).toInt() }.toSet()
         if (notes.isEmpty() || !chord.pitchClasses.containsAll(pcs) || chord.root !in pcs) return false
-        return chord.bass == null || Math.floorMod(notes.min(), 12) == chord.bass
+        return chord.bass == null || notes.min().mod(TWELVE).toInt() == chord.bass
     }
 
     /**
@@ -156,7 +174,7 @@ object Voicings {
     /**
      * The chord a ChordPro `{define}` (or `{chord}`) names, and its position: "Cadd9 base-fret 1 frets x 3 2 0 3 3
      * fingers 0 2 1 0 3 4". Null when it names no chord caracole reads, or gives no guitar fingering that fits a
-     * diagram. A base fret past what an Int holds is no fingering here (Python would keep it).
+     * diagram. Its base fret is kept whole, as int() reads it (more than 4300 digits an error, as Python's).
      */
     fun parseDefine(value: String): Pair<Chord, Position>? {
         val (name, rest) = splitOnce(value)
@@ -168,7 +186,7 @@ object Voicings {
         val fingersFound = defineFingers.find(rest)
         val fingers = fingersFound?.let { Py.split(it.groupValues[1]) } ?: List(TUNING.size) { "0" }
         val baseFound = defineBase.find(rest)
-        val base = if (baseFound != null) maxOf(1, number(baseFound.groupValues[1]) ?: return null) else 1
+        val base = if (baseFound != null) bigNumber(baseFound.groupValues[1]).max(BigInteger.ONE) else BigInteger.ONE
         val shown = fingers.map { if (Py.len(it) == 1 && "123456789".contains(it)) it else "0" }
         return chord to position(frets.joinToString(""), shown.joinToString(""), base)
     }
@@ -194,8 +212,8 @@ object Voicings {
                 val filed = listOfNotNull(slash, fingering).filter { it in data && data.getValue(it)[chord.root].isNotEmpty() }
                 Entry(0, filed.firstOrNull()?.let { ArrayList(data.getValue(it)[chord.root]) } ?: ArrayList())
             }
-            val frets = fretsFromNut(position)
-            val same = entry.list.indexOfFirst { fretsFromNut(it) == frets }.takeIf { it >= 0 }
+            val frets = wholeFrets(position)
+            val same = entry.list.indexOfFirst { wholeFrets(it) == frets }.takeIf { it >= 0 }
             if (same != null && same < entry.mine) continue  // the sheet gave it already
             if (same != null) {
                 val known = entry.list.removeAt(same)
@@ -215,10 +233,12 @@ object Voicings {
 
     /** The frets [position] holds, counted from the nut (null for a muted string): the same shape written from
      * another base fret is the same. */
-    fun fretsFromNut(position: Position): List<Int?> {
-        val base = base(position)
+    fun fretsFromNut(position: Position): List<Int?> = wholeFrets(position).map { it?.intValueExact() }
+
+    private fun wholeFrets(position: Position): List<BigInteger?> {
+        val base = wholeBase(position)
         return Py.codePoints(frets(position)).map { f ->
-            if (f == 'x'.code) null else digit(f).let { if (it != 0) it + base - 1 else 0 }
+            if (f == 'x'.code) null else digit(f).let { if (it != 0) base + BigInteger.valueOf(it - 1L) else BigInteger.ZERO }
         }
     }
 
@@ -300,12 +320,12 @@ object Voicings {
     /** int() of a run of decimal digits, or null past what an Int holds. */
     internal fun number(text: String): Int? = bigNumber(text).takeIf { it <= Int.MAX_VALUE.toBigInteger() }?.toInt()
 
-    private fun bigNumber(text: String): java.math.BigInteger {
+    private fun bigNumber(text: String): BigInteger {
         val cps = Py.codePoints(text)
         require(cps.isNotEmpty()) { "invalid literal for int() with base 10: ''" }
         require(cps.size <= 4300) { "Exceeds the limit (4300 digits) for integer string conversion" }
         val digits = StringBuilder(cps.size)
         for (cp in cps) digits.append('0' + digit(cp))
-        return java.math.BigInteger(digits.toString())
+        return BigInteger(digits.toString())
     }
 }

@@ -100,7 +100,7 @@ object Winds {
         for (d in fingers) if (d != '-') pressed += "L$d"
         for (d in rightParts[0]) if (d != '-') pressed += "R$d"
         for (k in leftParts.drop(2) + rightParts.drop(1)) pressed += fluteExtras.getValue(k)
-        return Fingering(chart, FLUTE_KEYS.map { if (it in pressed) "x" else "o" })
+        return Fingering(chart, Collections.unmodifiableList(FLUTE_KEYS.map { if (it in pressed) "x" else "o" }))
     }
 
     private fun recorder(chart: String): Fingering {
@@ -128,10 +128,11 @@ object Winds {
         )
     }
 
-    /** The fingerings of [note] (as the instrument reads it) on [wind] in [system] (its first by default), the
-     * standard one first; none for a note outside its range. An unknown system is an [IllegalArgumentException]. */
+    /** The fingerings of [note] (as the instrument reads it) on [wind] in [system] (its first by default, an empty
+     * name too, as Python's `system or …`), the standard one first; none for a note outside its range. An unknown
+     * system is an [IllegalArgumentException]. */
     fun fingerings(wind: Wind, note: Int, system: String? = null): List<Fingering> {
-        val chosen = system ?: wind.systems[0]
+        val chosen = system?.takeIf { it.isNotEmpty() } ?: wind.systems[0]
         require(chosen in wind.systems) { "the ${wind.name} has no $chosen fingering" }
         return ArrayList(fingeringsBy.getValue(wind.name to chosen)[note] ?: emptyList())
     }
@@ -194,7 +195,9 @@ object Winds {
         }
     }
 
-    /** harmony._tone_names: an interval of the chord by its name, "R", "♭3", "5", "♭7", "9"… */
+    /** harmony._tone_names: an interval of the chord by its name, "R", "♭3", "5", "♭7", "9"…. A copy of harmony.py's,
+     * until lane harmony's viewer.harmony.Harmony ports `_tone_names` (and `_number`, below): then this reads that
+     * one. vectors/viewer/winds.jsonl's `interval_steps_of` replays every set of intervals, so the two can't drift. */
     private fun toneName(i: Int, iv: Set<Int>): String {
         val seventh = 10 in iv || 11 in iv
         val third = 3 in iv || 4 in iv

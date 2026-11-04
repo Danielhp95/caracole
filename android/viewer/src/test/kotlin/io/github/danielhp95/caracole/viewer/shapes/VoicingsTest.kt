@@ -98,6 +98,21 @@ class VoicingsTest {
         }
     }
 
+    @Test fun aDefinesBaseFretIsKeptWholeAsPythonsInt() {
+        // 10**20 + 9: a base fret of 1 an octave's multiple up, so its open G is the lowest note and C plays C/G
+        val (c, big) = Voicings.parseDefine("C base-fret 100000000000000000009 frets x 3 2 0 1 0")!!
+        assertEquals(ch("C"), c)
+        assertEquals("100000000000000000009", big[2].jsonPrimitive.content)
+        assertTrue(Voicings.plays(big, ch("C")))
+        assertTrue(Voicings.plays(big, ch("C/G")))
+        assertFalse(Voicings.plays(p("x32010"), ch("C/G")))
+        assertFailsWith<ArithmeticException> { Voicings.notesOf(big) }  // the skeleton's Ints
+        val shapes = Voicings.sheetShapes(listOf(ch("C") to big, ch("C") to p("x32010"), ch("C") to big))
+        assertEquals(2, shapes.getValue("0,,").jsonObject.getValue("mine").jsonPrimitive.int)
+        assertEquals(big, shapes.getValue("0,,").jsonObject.getValue("list").jsonArray[0])
+        assertFailsWith<IllegalArgumentException> { Voicings.parseDefine("C base-fret ${"9".repeat(4301)} frets x 3 2 0 1 0") }
+    }
+
     @Test fun aFingeringPlaysAChordWhenItSoundsItsNotesAlone() {
         assertTrue(Voicings.plays(Voicings.parseFingering("x32033")!!, ch("Cadd9")))
         assertTrue(Voicings.plays(Voicings.parseFingering("2x0233")!!, ch("Dsus4/F#")))

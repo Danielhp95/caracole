@@ -72,7 +72,9 @@ object Instruments {
     val EASY: Map<String, Pair<List<Int>, List<Int>>> by lazy {
         val out = LinkedHashMap<String, Pair<List<Int>, List<Int>>>()
         for ((table, keys) in json.getValue("EASY").jsonObject) {
-            val (majors, minors) = keys.jsonArray.map { side -> side.jsonArray.map { it.jsonPrimitive.int } }
+            val (majors, minors) = keys.jsonArray.map { side ->
+                Collections.unmodifiableList(side.jsonArray.map { it.jsonPrimitive.int })
+            }
             out[table] = majors to minors
         }
         Collections.unmodifiableMap(out)

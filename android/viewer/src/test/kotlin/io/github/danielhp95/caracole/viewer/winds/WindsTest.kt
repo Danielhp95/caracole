@@ -50,6 +50,14 @@ class WindsTest {
         assertEquals(emptyList(), Winds.fingerings(recorder, midi("D#6")))
         assertFailsWith<IllegalArgumentException> { Winds.fingerings(recorder, midi("C5"), "boehm") }
         assertFailsWith<IllegalArgumentException> { Winds.fingerings(Winds.FLUTE, midi("C5"), "german") }
+        assertEquals(Winds.fingerings(recorder, midi("F4")), Winds.fingerings(recorder, midi("F4"), ""))  // `or`: the first
+    }
+
+    @Test fun aFingeringHandedOutCantChangeTheOnesKept() {
+        val states = Winds.fingerings(Winds.FLUTE, midi("C5"))[0].states
+        assertFailsWith<UnsupportedOperationException> { (states as MutableList<String>)[0] = "?" }
+        val recorder = Winds.fingerings(Winds.RECORDER, midi("C5"))[0].states
+        assertFailsWith<UnsupportedOperationException> { (recorder as MutableList<String>)[0] = "?" }
     }
 
     @Test fun theOctaveAMelodyIsPlayedIn() {
