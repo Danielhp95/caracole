@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
+import io.github.danielhp95.caracole.core.lacuerda.SearchGate
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.search.IndexFound
@@ -107,7 +108,7 @@ internal class Found(
                                                  kept.lcArtists + kept.lacuerda)
             ?.let { (name, letter) -> obj("name" to name, "letter" to letter) }
         check()
-        val gate = if (searchesLacuerda) lacuerdaSearchGate(q) else null
+        val gate = if (searchesLacuerda) lacuerdaSearchGate(q, kept, mine) else null
         check()
         return obj(
             "query" to q, "library" to library, "index" to hits, "artists" to artists, "lead" to lead,
@@ -123,9 +124,12 @@ internal class Found(
     }
 
     /** search_routes._lacuerda_search_gate: what sending LaCuerda's search for [q] would be, with no request: null,
-     * or its `state`, the `query` and its `key`, and, `failed`, why the page doesn't send it by itself (`why`). */
-    private fun lacuerdaSearchGate(q: String): JsonObject? {
-        val said = LaCuerdaSearch.gate(config, db, q, now) ?: return null
+     * or its `state`, the `query` and its `key`, and, `failed`, why the page doesn't send it by itself (`why`). None
+     * when the answer's own hits answer it well already (LaCuerdaSearch.answersWell: LaCuerda's index's, [kept], and
+     * your library's, [mine]). */
+    private fun lacuerdaSearchGate(q: String, kept: IndexAnswers, mine: List<LibraryHit>): JsonObject? {
+        val strong = LaCuerdaSearch.answersWell(kept.lcArtists, kept.lacuerda, mine)
+        val said = SearchGate.of(q, LaCuerdaSearch.gate(config, db, q, strong, now)) ?: return null
         return obj("state" to said.state, "query" to said.query, "key" to said.key) with
             (said.why?.let { obj("why" to it) } ?: obj())
     }

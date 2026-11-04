@@ -3,7 +3,6 @@ package io.github.danielhp95.caracole.server.testing.replays
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
-import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
@@ -59,10 +58,7 @@ import java.time.Instant
  * - vectors/web/api_search_gate.jsonl: `/api/search`'s `lacuerda_search` and `lacuerda_unlisted` for each query over a
  *   search fixture with the record's rows, LaCuerda's search on, its gate at the record's time (search_routes'
  *   `_found_for`'s: a query too short to look for, answered `short`, has neither, null both).
- *
- * Phase A, waiting on lacuerda-pages: LaCuerdaSearch is that lane's, so until it lands ([gateLanded]) the records that
- * read its gate (POST /lacuerda/search, /api/search's `lacuerda_search`) are left; `lacuerda_unlisted` is read with
- * LaCuerda's search off, as it is then.
+
  */
 object LookupRoutesReplay : AreaReplay {
     override val area = "lookup-routes"
@@ -71,16 +67,6 @@ object LookupRoutesReplay : AreaReplay {
 
     /** A scope that runs nothing: a job queued in it waits for ever, as the generator's queue was never started. */
     private val NOWHERE = CoroutineScope(Job().apply { cancel() })
-
-    /** Whether lane lacuerda-pages's LaCuerdaSearch has landed (Phase A: waiting on lacuerda-pages). */
-    val gateLanded: Boolean by lazy {
-        try {
-            LaCuerdaSearch.queryKey("palabra")
-            true
-        } catch (e: NotImplementedError) {
-            false
-        }
-    }
 
     override fun replay(misses: Misses) {
         routes(misses)
@@ -101,7 +87,6 @@ object LookupRoutesReplay : AreaReplay {
                 for (r in lines) {
                     val fn = r["fn"]?.jsonPrimitive?.content ?: continue
                     if (fn == "fixture") continue
-                    if (fn == "POST /lacuerda/search" && !gateLanded) continue  // waiting on lacuerda-pages
                     database.writeBlocking { db ->
                         db.execute("DELETE FROM events")
                         db.execute("DELETE FROM kv")
@@ -205,7 +190,7 @@ object LookupRoutesReplay : AreaReplay {
                     }
                     for (r in asked) {
                         val now = Instant.parse(r.extra.getValue("now").jsonPrimitive.content)
-                        val search = SearchRoutes(database, PageCards, searchesLacuerda = gateLanded, clock = { now })
+                        val search = SearchRoutes(database, PageCards, searchesLacuerda = true, clock = { now })
                         val q = r.extra.getValue("q").jsonPrimitive.content
                         val target = "/api/search?q=" + URLEncoder.encode(q, Charsets.UTF_8) + "&box=corpus"
                         val route = search.routes.first { it.method == "GET" && it.path == "/api/search" }
@@ -213,10 +198,9 @@ object LookupRoutesReplay : AreaReplay {
                                                                         TestApp.SECRET))
                         val said = Json.parseToJsonElement(answer.bytes.toString(Charsets.UTF_8)).jsonObject
                         val out = r.out!!.jsonObject
-                        val names = if (gateLanded) listOf("lacuerda_search", "lacuerda_unlisted") else listOf("lacuerda_unlisted")
                         // a query too short to look for is answered short, with neither: the page offers neither
                         val short = said["short"] == JsonPrimitive(true)
-                        for (name in names) {
+                        for (name in listOf("lacuerda_search", "lacuerda_unlisted")) {
                             val got: JsonElement = said[name] ?: if (short) JsonNull else JsonPrimitive("missing")
                             WebJson.difference(out.getValue(name), got)?.let {
                                 misses.check(false) { "${fixture.jsonPrimitive.content}, ${case.jsonPrimitive.content}, “$q”: $name at $it" }

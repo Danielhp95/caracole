@@ -63,10 +63,6 @@ internal object LookupForms {
     /** review.SHOWN: the candidates a review lists. */
     private const val SHOWN = 9
 
-    /** lacuerda_search.SEARCHES_PER_HOUR: the searches of LaCuerda the pages send by themselves in an hour (Phase A:
-     * LaCuerdaSearch.SEARCHES_PER_HOUR once lane lacuerda-pages declares it, waiting on lacuerda-pages). */
-    private const val SEARCHES_PER_HOUR = 20
-
     /** search_routes.QUERY_LIMIT: characters of a search. */
     const val QUERY_LIMIT = 200
 
@@ -321,7 +317,7 @@ internal object LookupForms {
         if (q.isEmpty() || Py.len(q) > QUERY_LIMIT) {
             throw Refused(400, "Not a query", "Which query? A search is 1 to $QUERY_LIMIT characters.")
         }
-        if (LaCuerdaSearch.queryKey(q).isNullOrEmpty()) {
+        if (LaCuerdaSearch.queryKey(q).isEmpty()) {
             throw Refused(400, "Not a query", "LaCuerda's search reads only words of 4 letters or more: “$q” has none.")
         }
         val said = if (searchesLacuerda) database.read { db -> LaCuerdaSearch.gate(config, db, q, now) } else null
@@ -338,7 +334,7 @@ internal object LookupForms {
                                                                "${said.why.orEmpty().removeSuffix(".")}: press Ask " +
                                                                    "LaCuerda to ask anyway.")
             said.state == "button" && !byHand -> throw Refused(429, "Not by itself",
-                                                               "This hour's $SEARCHES_PER_HOUR searches " +
+                                                               "This hour's ${LaCuerdaSearch.SEARCHES_PER_HOUR} searches " +
                                                                    "the page sends by itself are spent: press Ask " +
                                                                    "LaCuerda to ask anyway.")
         }

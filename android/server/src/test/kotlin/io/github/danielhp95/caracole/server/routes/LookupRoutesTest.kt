@@ -30,7 +30,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
-import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -152,7 +151,6 @@ class LookupRoutesTest {
     }
 
     @Test fun `with searchesLacuerda false LaCuerda's search route says the query is answered`() {
-        Assume.assumeTrue("waiting on lacuerda-pages (LaCuerdaSearch)", LookupRoutesReplay.gateLanded)
         val refused = post("/lacuerda/search", "q" to "corazones rotos")
         assertEquals(409, refused.status, refused.json.toString())
         assertEquals(0, phone.queue.snapshot().size)
