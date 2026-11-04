@@ -49,6 +49,10 @@ The app starts from the library page: without it as caracole wrote it (changed o
 before caracole recorded it: ``caracole todo`` writes it again), the manifest is refused (503), and the app keeps
 the copy it has. It is a read, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another
 site's page can't read it (``security.own_page_read``); the app, which is no browser, can.
+
+``manifest_of`` is the manifest as data, and ``library_pages`` the pages an export of the library holds
+(peer_file.py): the manifest and each listed file's bytes as a GET of its ``url`` answers them, read by a ``WebApp``
+of its own, made for reading alone (``caracole peer export`` runs no server).
 """
 
 from __future__ import annotations
@@ -58,7 +62,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 from caracole.web.app import Response, Route, WebApp, json_response, route_for
@@ -86,28 +90,61 @@ def start_page(app: WebApp) -> Response:
 
 def manifest(app: WebApp) -> Response:
     """``GET /api/offline``: the files the app copies (see the module's docstring), or why there are none, as JSON."""
+    try:
+        return json_response(200, manifest_of(app))
+    except Refused as e:  # no library page as written, or the database or the units can't be read
+        return json_response(e.status, {"error": e.message})
+
+
+def manifest_of(app: WebApp) -> dict[str, Any]:
+    """What ``GET /api/offline`` answers (see the module's docstring), as data; Refused (503) as it refuses: no
+    library page as caracole wrote it, or a database, overrides.toml or songbooks.toml that can't be read."""
     from caracole.library_page import PAGE_NAME, linked_files
 
+    start = start_page(app)
+    if start.status != 200:
+        raise Refused(503, "Nothing to copy", NO_START)
+    files = [_entry(PAGE_NAME, START, start)]
+    units = _Units.now(app)
+    left_out = _left_out(app)
+    for path in sorted(set(linked_files(start.body)) - {PAGE_NAME}):
+        parts = tuple(path.split("/"))
+        if "\\" in path or any(parts[:len(folder)] == folder for folder in left_out):
+            continue
+        if route_for("GET", f"/{path}") is not None:  # its address is another route's
+            continue
+        response = app._file(f"/{path}")
+        if response.status == 200:
+            url = "/" + "/".join(quote(part, safe="") for part in parts)
+            files.append(_entry(path, url, response) | units.of(parts))
+    return {"format": FORMAT, "start": PAGE_NAME, "files": files}
+
+
+def library_pages(cfg) -> tuple[dict[str, Any], Callable[[str], bytes]] | None:
+    """The pages a ``.caracole`` file of this library holds (peer_file.py's ``Pages``): the manifest as ``GET
+    /api/offline`` answers it now, and a listed file's bytes by its path, as a GET of its ``url`` answers them; None
+    while there is no copy to make (the library page isn't as caracole wrote it, or the library can't be read). Read
+    as caracole serve reads it, by a ``WebApp`` made for reading alone: its queue never started, nothing written."""
+    from caracole.web.jobs import JobQueue
+
+    app = WebApp(cfg, JobQueue(_runs_nothing), allowed=frozenset())
     try:
-        start = start_page(app)
-        if start.status != 200:
-            return json_response(503, {"error": NO_START})
-        files = [_entry(PAGE_NAME, START, start)]
-        units = _Units.now(app)
-        left_out = _left_out(app)
-        for path in sorted(set(linked_files(start.body)) - {PAGE_NAME}):
-            parts = tuple(path.split("/"))
-            if "\\" in path or any(parts[:len(folder)] == folder for folder in left_out):
-                continue
-            if route_for("GET", f"/{path}") is not None:  # its address is another route's
-                continue
-            response = app._file(f"/{path}")
-            if response.status == 200:
-                url = "/" + "/".join(quote(part, safe="") for part in parts)
-                files.append(_entry(path, url, response) | units.of(parts))
-    except Refused as e:  # the database can't be read
-        return json_response(e.status, {"error": e.message})
-    return json_response(200, {"format": FORMAT, "start": PAGE_NAME, "files": files})
+        listed = manifest_of(app)
+    except Refused:
+        return None
+    urls = {entry["path"]: entry["url"] for entry in listed["files"]}
+
+    def fetch(path: str) -> bytes:
+        response = WebApp.finish(start_page(app) if urls.get(path) == START else app._file(f"/{path}"))
+        if response.status != 200:
+            raise OSError(f"{path} isn't sent now")
+        return response.body
+
+    return listed, fetch
+
+
+def _runs_nothing(args, emit) -> int:  # noqa: ARG001 - library_pages' queue is never started
+    raise AssertionError("library_pages runs no job")
 
 
 def _entry(path: str, url: str, response: Response) -> dict[str, Any]:
