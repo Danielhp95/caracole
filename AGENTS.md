@@ -1262,7 +1262,24 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `<template>`'s contents, which selectolax's tree doesn't reach), which `HtmlReplay` reads through `TokensTree`, a
   small tree builder of its own (the active formatting elements reconstructed, the tokenizer's names compared as it
   gives them).
-- The tree, nodes and selectors (html-tree): not built yet.
+- The tree, nodes and selectors (html-tree), `core.html.internal.tree` and `.select`:
+  - `TreeBuilder`, lexbor 3.1.0's tree builder ported insertion mode by insertion mode, with its tables of each tag's
+    categories (`Tags`), and lexbor's own readings: `<select>` a scope with no "in select" mode, a token "in table"
+    hands to "in body" never processed again, the implied end tags by name in any namespace, `sup` no breakout tag,
+    text after a frameset's `</html>` read whole;
+  - `Dom.kt`, lexbor's linked nodes, a template's contents a fragment no walk reaches;
+  - `Selectors`, lexbor's matching of caracole's selectors: an element once for each selector of a list it matches,
+    a node's search finding itself and its combinators reading the whole tree, the HTML attributes whose values match
+    without case;
+  - `HtmlDoc` and `HtmlNode` as selectolax's tree and nodes (`text`, `children`, `attributes`, `replaceWith`,
+    `insertAfter`; a processing instruction's tag `-pi`, selectolax's None, and `iter()` `children(includeText =
+    false)`: the spec's "For the site parsers");
+  - `TreeBuilder`, `Tags` and `Selectors` ported from lexbor's C, with its copyright, under the vendored
+    `core/html/internal/LICENSE-lexbor` (the Apache License 2.0 and lexbor's NOTICE).
+- Held by vectors/html/tree*.jsonl and mutations.jsonl (tests/test_conformance_html.py's tree half: every page's
+  shape, texts, the parsers' selectors and harptabs.py's `<pre>` read; the tree's edge set; selectors alone; 400 seeded
+  tag-soup edits of the fixtures, by digest), which `HtmlTreeReplay` reads, the token vectors through core.html's tree
+  too; the spec's one divergence, an input's duplicate `type` in a table, pinned in `TreeTest`.
 
 ##### Lookups on the phone
 

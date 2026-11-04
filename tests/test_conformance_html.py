@@ -31,18 +31,25 @@ A ``<template>``'s contents are in none of them: selectolax's tree never reaches
 ``css`` finds nothing there), only its serialization shows them.
 
 Kotlin's ``core.testing.replays.HtmlReplay`` reads them with core.html's tokenizer through a small tree builder of its
-own (the real one is lane html-tree's): lexbor's tag and attribute names ASCII-lowercased (its tree gives the SVG and
+own, and through core.html's tree: lexbor's tag and attribute names ASCII-lowercased (its tree gives the SVG and
 MathML ones their case), the tokenizer's compared as it gives them.
+
+The tree's half, below ("the tree's half"), is what lexbor's tree builder made of each page and what selectolax's
+nodes and selectors answer of it: ``tree.jsonl``, ``tree_edges.jsonl``, ``tree_selectors.jsonl`` and
+``mutations.jsonl``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import random
 from typing import Any
 
 from helpers import azlyrics_site, gametabs_site, gtptabs_site, harptabs_site, lacuerda_site, ug_pages
 from helpers.corpus import FIXTURES, VECTORS, check, fixture_bytes, fixture_ref, jsonl
 from selectolax.lexbor import LexborHTMLParser
+
+from caracole import canonical, harptabs
 
 MADE_BY = "tests/test_conformance_html.py"
 SITES = ("ug", "lacuerda", "gtptabs", "harptabs", "gametabs", "azlyrics", "megalobiz", "musescore")
@@ -489,3 +496,470 @@ def test_a_page_is_read_by_reference_as_the_parsers_decode_it():
     path = fixture_pages()[0]
     assert record("x", fixture_ref(path))["out"] == reads((FIXTURES / path).read_bytes().decode("utf-8", "replace"))
 
+
+
+# === the tree's half (lane html-tree) =======================================================================
+#
+# What lexbor's tree builder made of each page, and what selectolax's nodes answer of it:
+#
+# - ``tree.jsonl``: every page of ``tokens.jsonl`` again (:func:`tree_record`): its ``shape``, every node in document
+#   order (:func:`shape`), ``texts``, the SHA-256 of every element's ``text(deep=True)`` and ``text(deep=False)``,
+#   ``queries``, the nodes (their places in ``shape``) each selector of :data:`SELECTORS` finds from the document,
+#   ``scoped``, those each pair of :data:`SCOPED` finds from each node its first selector finds, and ``pre``, what
+#   harptabs.py's ``_pre_text`` (``replace_with``, ``insert_after``, ``next``) reads of each ``<pre>``;
+# - ``tree_edges.jsonl``: the same of the tree's edge set (:func:`tree_edges`);
+# - ``tree_selectors.jsonl``: selectors alone, each over a page in quirks mode and in standards mode, from the
+#   document and from each node a scope finds (:func:`selector_record`);
+# - ``mutations.jsonl``: seeded tag-soup edits of the fixtures (:func:`mutations`): each a fixture, a cut of it in
+#   code points and the edits made to it, and the shape's canonical digest (``canonical.digest``) and length.
+#
+# Kotlin's ``core.testing.replays.HtmlReplay`` builds each page with core.html and compares.
+
+# Every selector caracole's site parsers write (src/caracole/{ug/page,lacuerda,gtptabs,harptabs,gametabs}.py), the
+# f-strings' values filled in.
+SELECTORS = [
+    "div.js-store",
+    "ul#b_main", "ul#b_main > li[lcd]", "ul#b_main > li", "div.bTit > h1", "ul#i_main", "div.multipag", "li.last",
+    "div.s_res", "table#s_main", "table#s_main tr", "div#t_body > pre", "li[onclick]", "li", "a[href]", "span",
+    "div.autorInfo h1", "div.autorSongs", "div.autorSongs div.autorSong",
+    'script[type="application/ld+json"]', 'a[href^="/search?key="]', 'a[href^="/search?harp="]',
+    'a[href^="/search?difficulty="]', "li > span", "header h1 + p",
+    '[role="region"][aria-label="Harmonica tab notation"] pre',
+    "pre", 'header a[href^="/artist/"]', "header h1", "main header h1", "main div.group", "main header p", "svg",
+    "pre#tab-text-view-text", "#tab-page-wrapper", "h1#tab-page-tab-name", ".tab-page-grid-details p",
+    "[data-prepopulated-instruments]", "#game-page-wrapper", "h1", "p",
+]
+
+# The parsers' searches from a node, as (where they start, what they look for).
+SCOPED = [
+    ("ul#b_main > li[lcd]", "a[href]"), ("ul#b_main > li", "a[href]"), ("div.multipag", "li[onclick]"),
+    ("div.multipag", "li.last"), ("div.multipag", "li"), ("ul#i_main", "li"), ("ul#i_main li", "a[href]"),
+    ("ul#i_main li", "span"), ("table#s_main tr", "ul.b_main > li"), ("table#s_main tr", "td a[href]"),
+    ("div.autorSongs div.autorSong", "div.title > a[href]"),
+    ("div.autorSongs div.autorSong", "div.ratingSmall[data-item]"), ("div.autorSongs div.autorSong", "div.songInfo"),
+    ("div.autorSongs div.autorSong", "div.instrumentsSmall div.labelSmall"),
+    ("div.ratingSmall[data-item]", "a.active"), ("li > span", "svg"), ("pre", "br"), ("pre", "p, div"),
+    ("main div.group", "span"), ("main div.group span", "svg"), ("main div.group", 'h3 a[href^="/tab/"]'),
+    ("main div.group", "h3 + p"), ("main div.group h3 + p", "span"), ("main div.group", 'span[class*="text-diff-"]'),
+    ("#tab-page-wrapper", '[itemprop="recordingOf"]'), ("#tab-page-wrapper", '[itemprop="inAlbum"]'),
+    ('[itemprop="recordingOf"]', 'meta[itemprop="name"]'), ('[itemprop="inAlbum"]', 'meta[itemprop="name"]'),
+    ('[itemprop="inAlbum"]', 'link[itemprop="url"]'), ('[itemprop="recordingOf"]', '[itemprop="composer"]'),
+    ('[itemprop="composer"]', 'meta[itemprop="name"]'), ("#game-page-wrapper", "h1"),
+    ("#game-page-wrapper", "#game-page-games-list .results-list > a"),
+    ("#game-page-games-list .results-list > a", ".split-row-left"),
+    ("#game-page-games-list .results-list > a", ".split-row-right"), (".split-row-right", "span"),
+    (".split-row-right", '[title$="average fun rating"]'), ("#game-page-wrapper", "p"),
+    ("#game-page-wrapper", ".page-selector-wrapper a"),
+]
+
+
+def _nodes(tree) -> list[tuple[Any, int]]:
+    """Every node under the document, with its depth (0 for the document's own), in document order; a template's
+    contents are none of them (selectolax walks none)."""
+    out = []
+    stack = [(tree.root.parent, -1)]
+    while stack:
+        node, depth = stack.pop()
+        if depth >= 0:
+            out.append((node, depth))
+        children = []
+        child = node.first_child
+        while child is not None:
+            children.append(child)
+            child = child.next
+        stack += [(child, depth + 1) for child in reversed(children)]
+    return out
+
+
+def _node(node, depth: int) -> list:
+    if node.is_element_node:
+        return [depth, node.tag, [list(pair) for pair in node.attributes.items()]]
+    if node.is_text_node:
+        return [depth, "#", node.text_content]
+    html = node.html
+    if node.is_comment_node:
+        return [depth, "!", html[4:-3]]
+    if node.tag == "-doctype":
+        return [depth, "-doctype", html[len("<!DOCTYPE "):-1]]
+    assert node.tag is None and html.startswith("<?") and html.endswith("?>"), html  # a processing instruction
+    target, _, data = html[2:-2].partition(" ")
+    return [depth, "?", target, data]
+
+
+def shape(tree) -> list[list]:
+    """Every node of ``tree`` in document order: ``[depth, tag, [[name, value], …]]`` an element (its attributes as
+    selectolax shows them, a value null where none was written), ``[depth, "#", data]`` a text, ``[depth, "!", data]``
+    a comment, ``[depth, "?", target, data]`` a processing instruction, ``[depth, "-doctype", name]`` the doctype."""
+    return [_node(node, depth) for node, depth in _nodes(tree)]
+
+
+def _texts(nodes) -> str:
+    """The SHA-256 of every element's ``text(deep=True)`` and ``text(deep=False)``, in document order, NUL-joined."""
+    parts = []
+    for node, _ in nodes:
+        if node.is_element_node:
+            parts += [node.text(deep=True), node.text(deep=False)]
+    return hashlib.sha256("\x00".join(parts).encode()).hexdigest()
+
+
+def _found(index: dict, nodes) -> list[int]:
+    return [index[node.mem_id] for node in nodes]
+
+
+def tree_reads(text: str) -> dict[str, Any]:
+    """What lexbor's tree of ``text`` is, and what caracole's selectors and harptabs.py's ``<pre>`` read find in it."""
+    tree = LexborHTMLParser(text)
+    nodes = _nodes(tree)
+    index = {node.mem_id: i for i, (node, _) in enumerate(nodes)}
+    queries = {sel: found for sel in SELECTORS if (found := _found(index, tree.css(sel)))}
+    scoped = {}
+    for scope, sel in SCOPED:
+        rows = [[index[node.mem_id], _found(index, node.css(sel))] for node in tree.css(scope)]
+        if rows:
+            scoped[f"{scope}\t{sel}"] = rows
+    pre = []
+    for k, node in enumerate(tree.css("pre")):
+        fresh = LexborHTMLParser(text).css("pre")[k]
+        pre.append([index[node.mem_id], harptabs._pre_text(fresh)])
+    return {"quirks": quirks(text), "shape": [_node(node, depth) for node, depth in nodes], "texts": _texts(nodes),
+            "queries": queries, "scoped": scoped, "pre": pre}
+
+
+def tree_record(case: str, page: str | dict[str, str]) -> dict[str, Any]:
+    text = fixture_bytes(page).decode("utf-8", "replace") if isinstance(page, dict) else page
+    return {"fn": "test_conformance_html.tree", "case": case, "args": [page], "out": tree_reads(text)}
+
+
+# --- the tree's edge set ------------------------------------------------------------------------------------
+
+TREE_EDGES = {
+    # <pre>'s, <listing>'s and <textarea>'s first newline
+    "pre's first newline": "<pre>\nx</pre><pre>\n\ny</pre><pre>z\n</pre><pre><b>\nw</b></pre><pre>\r\nv</pre>",
+    "listing's and textarea's first newline":
+        "<listing>\nx</listing><textarea>\ny</textarea><textarea>\n\nz</textarea>",
+    "a pre's newline after a comment": "<pre><!--c-->\nx</pre><pre>&#10;\ny</pre>",
+    # formatting and the adoption agency
+    "nested a": "<a href=1>x<a href=2>y</a>z</a>",
+    "a in a block in an a": "<a><div><a>x</a></div></a>",
+    "an a closed by a p": "<a><p>x</a>y",
+    "b closed across a p": "<b>1<p>2</b>3</p>",
+    "misnested b and i": "<b><i>x</b>y</i>",
+    "formatting across a paragraph": "<p><b><i><u>x</p>y",
+    "the adoption agency's furthest block": "<b><div><i><p>x</b>y</p></i></div>",
+    "the adoption agency's inner loop": "<a><b><i><s><u><em>x<div>y</a>z",
+    "the adoption agency's outer loop": "<b><b><b><b><b><b><b><b><b><div>x</b>y",
+    "noah's ark": "<b class=x><b class=x><b class=x><b class=x><p>y",
+    "noah's ark, other attributes": "<b class=x><b class=y><b class=x><b class=x><b class=x><p>y",
+    "nobr": "<nobr>a<nobr>b</nobr>c",
+    "formatting reconstructed in a cell": "<b><table><td>x</td></table>y",
+    "formatting reconstructed after a marker": "<b><applet>x</b>y</applet>z",
+    "a font closed": "<font color=red>a<p>b</font>c",
+    # paragraphs and lists
+    "unclosed p": "<p>a<p>b<div>c<p>d</div>e",
+    "an end p alone": "</p>x<p>y</p></p>",
+    "p in a button": "<button><p>x</button>y",
+    "li": "<ul><li>a<li>b<ul><li>c</ul><li>d</ul>",
+    "li across a div": "<li><div><li>x",
+    "li across an address": "<li><address><li>x",
+    "dd and dt": "<dl><dt>a<dd>b<dt>c<dd><div>d<dt>e</dl>",
+    "headings": "<h1>a<h2>b</h1>c<h3>d</h4>e",
+    "a heading in a p": "<p><h1>x</h1>y",
+    "a form in a form": "<form id=a><form id=b><input></form>x",
+    "a form closed in a div": "<form><div></form>x</div>y",
+    "end tags of blocks": "<div><span>a</div>b</span>c",
+    "an unknown end tag": "<div><x-y>a</div>b</x-y>",
+    # tables
+    "td": "<table><tr><td>a<td>b<tr><td>c</table>",
+    "td alone": "<td>x</td><th>y",
+    "a table's implied tbody": "<table><td>x</td></table>",
+    "a caption": "<table><caption>c<td>x</table>",
+    "colgroups and cols": "<table><colgroup><col><col></colgroup><col span=2><tr><td>x</table>",
+    "text in a table": "<table>a<tr>b<td>c</td>d</tr>e</table>",
+    "whitespace in a table": "<table> \n<tr> <td> </td> </tr> \n</table>",
+    "elements fostered": "<table><b>x</b><tr><td>y</td></tr><div>z</div></table>",
+    "a hidden input in a table": "<table><input type=hidden><input type=HIDDEN><input type=text><input></table>",
+    "a form in a table": "<table><form><tr><td><input></td></tr></form></table>",
+    "a table in a table": "<table><tr><td><table><tr><td>x</table></td></tr></table>",
+    "a table started in a table": "<table><table>x",
+    "stray table end tags": "<table></td></tr></tbody><tr><td>x</caption></colgroup></table>",
+    "a table closes a p in standards mode": "<!DOCTYPE html><p>a<table><tr><td>b</table>",
+    "a table keeps a p in quirks mode": "<p>a<table><tr><td>b</table>",
+    "a select in a table": "<table><tr><td><select><option>a<td>b</table>",
+    "a select fostered": "<table><select><option>a</select><tr><td>b</table>",
+    "an image in a table": "<table><image src=x><td>a</table>",
+    "an end html in a table": "<table></html><p>x",
+    "a style and a script in a table": "<table><style>s</style><script>x</script><tr><td>y</table>",
+    "a processing instruction in a table": "<table><?x y?><tr><?z?><td>q</table>",
+    "a comment in a table": "<table><!--a--><tr><!--b--><td>c</table>",
+    "a table cut short": "<table><tr><td>x",
+    # select
+    "select": "<select><option>a<option>b</select>c",
+    "a div in a select": "<select><div>x</div><option>a</select>",
+    "an input closes a select": "<select><input><option>a</select>",
+    "a select in a select": "<select><select>a",
+    "a button in a select in a button": "<button><select><button>x",
+    "an hr in a select": "<select><optgroup><option>a<optgroup>b<hr>c",
+    "a textarea in a select": "<select><textarea>t</textarea></select>",
+    "options outside a select": "<option>a<option>b<optgroup>c<option>d",
+    # svg and math
+    "svg with self-closing children": "<svg><path/><path/><circle/><g/></svg><p>x",
+    "svg left open": "<svg><path><path>",
+    "svg's breakout tags": "<svg><g><p>x</p><b>y</b></g></svg>z",
+    "svg's font with and without attributes": "<svg><font>a</font><font color=red>b</font></svg>",
+    "sup in svg": "<svg><sup>x</sup><sub>y</sub></svg>",
+    "svg's names":
+        "<svg viewbox='0 0 1 1' preserveaspectratio=x><clippath><lineargradient/></clippath><foreignobject/></svg>",
+    "svg's foreign attributes": "<svg xlink:href=a xml:lang=b xmlns:xlink=c xmlns=d href=e><use xlink:title=t/></svg>",
+    "svg's integration points": "<svg><foreignObject><p>x</p><svg><rect/></svg></foreignObject><desc><b>d</b></desc>"
+                                "<title><i>t</i></title></svg>",
+    "svg's script": "<svg><script>a<b>c</b></script><script/>x</svg>",
+    "an end p in svg": "<svg></p>x</svg>",
+    "an end br in svg": "<svg></br>x</svg>",
+    "an end tag in svg closing html": "<div><svg><g></div>x",
+    "math": "<math><mi><b>x</b></mi><mo>y</mo><ms><p>z</p></ms></math>",
+    "math's mglyph": "<math><mi><mglyph/><malignmark/></mi></math>",
+    "math's annotation-xml": "<math><annotation-xml encoding=text/html><p>x</p></annotation-xml>"
+                             "<annotation-xml><svg><p>y</p></svg></annotation-xml></math>",
+    "math's annotation-xml as xhtml":
+        "<math><annotation-xml encoding='Application/XHTML+XML'><b>x</b></annotation-xml></math>",
+    "math's attributes": "<math definitionurl=x DefinitionURL=y xlink:href=z><mi>x</mi></math>",
+    "svg in a table": "<table><svg><path/></svg><tr><td><svg><g></table>",
+    "cdata in svg and html": "<svg><![CDATA[a<b]]></svg><p><![CDATA[c]]>",
+    "nul in svg": "<svg>a\x00b<g>\x00</g></svg>",
+    # templates
+    "template": "<template><p>a</p></template><p>b",
+    "a template in a table": "<table><template><tr><td>x</template></table>",
+    "a template's cell": "<template><td>x</td></template>",
+    "a template in the body": "<body><template>t<b>u</b></template>x",
+    "a template's column": "<template><col><col></template>",
+    "a template cut short": "<template><div>",
+    "a template's end without one": "</template>x",
+    # head, body, frameset
+    "head's elements": "<title>t</title><meta charset=x><link rel=a><base href=b><p>",
+    "a p in the head": "<head><p>x",
+    "text before the head": "x<head>",
+    "a second title": "<html><head><title>a</title></head><title>b</title><p>c",
+    "noscript in the head": "<head><noscript><link><p>x</p></noscript>",
+    "noscript in the body": "<noscript><b>x</b></noscript>",
+    "frameset": "<frameset><frame><frameset><frame></frameset></frameset><noframes>x</noframes>",
+    "frameset after text": "<p>x<frameset><frame>",
+    "frameset after whitespace": " \n<frameset><frame></frameset> x ",
+    "text after a frameset's html": "<strong><frameset></frameset></html> x <b>y</b>\n",
+    "whitespace after a frameset's html": "<strong><frameset></frameset></html> \n<!--c--> x",
+    "text after the body": "</body>x",
+    "text after the html": "</html>x<p>y",
+    "a comment after the html": "</html><!--c-->",
+    "whitespace after the body": "<body></body> \n",
+    "html's and body's attributes": "<html a=1><body b=2><html a=3 c=4><body b=5 d=6><p>x</p>",
+    # raw and escapable text
+    "script and style": "<script>a<b</script><style>c<d</style><p>x",
+    "script and style in the head": "<head><style>s</style><script>y</script></head><body>z",
+    "a script in the body": "<body><script>a</script>b",
+    "xmp, iframe, noembed": "<p><xmp><b></xmp><iframe><b></iframe><noembed><i></noembed>",
+    "plaintext": "<p><plaintext><b>x</b>",
+    "title in the body": "<body><title>a<b></title>c",
+    # odd tags
+    "image": "<image src=x><p><image>",
+    "an end br": "</br><p>x</br>",
+    "isindex and keygen": "<isindex><keygen><p>",
+    "ruby": "<ruby>a<rb>b<rt>c<rp>d<rtc>e<rt>f</ruby>",
+    "applet, marquee, object": "<applet><b>x</applet>y<marquee><p>z</marquee><object><i>w</object>",
+    "custom elements": "<my-el a=b><x-y>c</x-y></my-el>",
+    "void elements with children": "<br>x</br><hr>y<img>z<input>w",
+    "a button in a button": "<button>a<button>b",
+    # harptabs' <pre>
+    "a pre with breaks and blocks": "<pre>a<br>b<p>c</p>d<div>e</div></pre>",
+    "a pre with blocks and newlines": "<pre><p>a</p>\n<p>b</p><div>c</div>\n<div>d</div></pre>",
+    # cut short
+    "a page cut short": "<html><body><div><p>a",
+    "a page cut in a tag": "<div><p><a href='x",
+    "a page cut in a comment": "<div><!--",
+    "a page cut in svg": "<svg><g",
+    "a page cut in a select": "<select><option>",
+    # whole pages
+    "quirks mode": "<p class=A id=B>x",
+    "standards mode": "<!DOCTYPE html><p class=A id=B>x",
+    "limited quirks mode": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "x"><p><table>',
+}
+
+
+def tree_edges() -> list[tuple[str, str]]:
+    return list(TREE_EDGES.items())
+
+
+# --- selectors alone ----------------------------------------------------------------------------------------
+
+SELECTOR_PAGE = (
+    "<div id=X class='A b' lang=EN><a href=Q type=TeXt title='Hello World' rel=NoFollow data-x=AbC>x</a>"
+    "<svg viewBox='0 0 1 1' class=K id=S><clipPath id=c></clipPath><title>t</title></svg><a href>y</a><p id>z</p>"
+    "<p class>w</p><ul><li>1<li>2<li>3</ul><span class='x-y  z\tq'>s</span><input type=Hidden></div>"
+    "<custom-el foo=bar></custom-el><p id=dup class=dup>d</p><div id=1><div id=2><p id=3><span id=4></span></p>"
+    "<p id=5></p></div></div><p id=6><span id=7></span></p>"
+)
+
+SELECTOR_TESTS = [
+    "DIV", "Div", "[HREF]", "[Href]", "a[href=q]", "a[href=Q]", "a[type=text]", "a[type=TEXT]", "a[rel=nofollow]",
+    "a[data-x=abc]", "a[data-x=abc i]", "a[data-x=AbC]", "a[type=text s]", "a[data-x='abc' I]",
+    "a[title='hello world']",
+    "a[title='Hello World']", "a[title=\"Hello World\"]", "[title^=Hello]", "[title^=hello]", "[title$=World]",
+    "[title$=world]", "[title*='o W']", "[title*='o w']", "a[href='']", "a[href]", "a[href=\"\"]", "#x", "#X", ".a",
+    ".A", ".b", ".B", "svg", "SVG", "clippath", "clipPath", "[viewbox]", "[viewBox]", "title", "#s", "#S", ".k", ".K",
+    "p[id]", "p[id='']", "p[class]", "p[class='']", "custom-el", "[foo=bar]", "[foo=BAR]", "a[href*='']",
+    "a[href^='']", "a[href$='']", "div a", "div>a", "div > a + svg", "a ~ a", "a ~ p", "a+a", "svg title",
+    "html > body > div", "* > a", "a[title~=World]", "a[title~=world]", "[lang|=en]", "[lang|=EN]", "[lang=en]",
+    "[lang=EN]", "li + li", "li ~ li", "ul > li", "ul li, li", "p, p", "p, #dup", ".dup, #dup, p", "span[class~=z]",
+    "span[class~=q]", "span[class|=x]", ".x-y", "span.x-y.z", ".z.x-y", "div p", "body *", "*", "html", "head",
+    "body > *", "div div p", "div span", "p span", "div > p", "p + p", "p ~ p", "div p, p", "div span, p span",
+    "div *", "* span", "div, div", "div p span", "#1 p, #2 p", "input[type=hidden]", "[type]", "[TYPE=hidden]",
+    "div#X.A", "div.b#X", "a[href][title]", "a[href=Q][title]", "#X a", "#X > svg > title", "p#3 > span#4",
+    "  p  ,  span  ", "p,span",
+]
+
+SELECTOR_SCOPES = [
+    ("#X", "a"), ("#X", "div a"), ("#X", "body a"), ("#X", "div"), ("#X", "*"), ("#2", "div p"), ("#2", "div"),
+    ("#2", "body div p"), ("#2", "#1 > div"), ("#2", "div > div"), ("#3", "span"), ("#3", "p"), ("#3", "p span"),
+    ("ul", "li"), ("li", "li"), ("svg", "title"), ("svg", "svg title"), ("a", "*"), ("p", "p, p"), ("#1", "p, div"),
+]
+
+SELECTOR_ERRORS = ["a[title=hello world]", "#", "a[", "a]", "a >", "a,", ",a", "a[href=]", "[]", "a..b", "a##b"]
+
+
+SELECTOR_PAGES = {"quirks": SELECTOR_PAGE, "standards": "<!DOCTYPE html>" + SELECTOR_PAGE}
+
+
+def selector_reads(text: str, scope: str | None, sel: str) -> Any:
+    tree = LexborHTMLParser(text)
+    index = {node.mem_id: i for i, (node, _) in enumerate(_nodes(tree))}
+    try:
+        if scope is None:
+            return _found(index, tree.css(sel))
+        return [[index[node.mem_id], _found(index, node.css(sel))] for node in tree.css(scope)]
+    except Exception as e:  # selectolax's SelectolaxError
+        return {"err": type(e).__name__}
+
+
+def selector_records() -> list[dict[str, Any]]:
+    """A record of the two pages (:data:`SELECTOR_PAGES`), then one a selector a page (``args``: the page's name,
+    the scope's selector or null, the selector)."""
+    records: list[dict[str, Any]] = [{"fn": "test_conformance_html.SELECTOR_PAGES", "out": SELECTOR_PAGES}]
+    for mode in SELECTOR_PAGES:
+        for sel in SELECTOR_TESTS + SELECTOR_ERRORS:
+            records.append(selector_record(f"{mode} {sel}", mode, None, sel))
+        for scope, sel in SELECTOR_SCOPES:
+            records.append(selector_record(f"{mode} {scope} then {sel}", mode, scope, sel))
+    return records
+
+
+def selector_record(case: str, mode: str, scope: str | None, sel: str) -> dict[str, Any]:
+    out = selector_reads(SELECTOR_PAGES[mode], scope, sel)
+    record = {"fn": "test_conformance_html.select", "case": case, "args": [mode, scope, sel]}
+    if isinstance(out, dict):
+        record["err"] = out["err"]
+    else:
+        record["out"] = out
+    return record
+
+
+# --- the seeded mutations -----------------------------------------------------------------------------------
+
+# What a mutation inserts: the tags that move lexbor's tree builder, and text.
+MUTATION_PIECES = [
+    "<table>", "</table>", "<tr>", "</tr>", "<td>", "</td>", "<th>", "<tbody>", "</tbody>", "<caption>", "<col>",
+    "<colgroup>", "<p>", "</p>", "<div>", "</div>", "<li>", "</li>", "<ul>", "</ul>", "<dd>", "<dt>", "<h1>", "</h2>",
+    "<a href=x>", "</a>", "<b>", "</b>", "<i>", "</i>", "<nobr>", "<font color=red>", "</font>", "<em>", "</em>",
+    "<form>", "</form>", "<button>", "</button>", "<select>", "<option>", "<optgroup>", "</select>", "<input>",
+    "<input type=hidden>", "<svg>", "</svg>", "<path/>", "<g>", "<foreignObject>", "</foreignObject>", "<math>",
+    "<mi>", "<annotation-xml encoding=text/html>", "<template>", "</template>", "<script>", "</script>", "<style>",
+    "</style>", "<title>", "</title>", "<textarea>", "</textarea>", "<xmp>", "<pre>", "<listing>", "<plaintext>",
+    "<noscript>", "<iframe>", "</iframe>", "<frameset>", "<frame>", "<image>", "<br>", "</br>", "<hr>", "<applet>",
+    "<marquee>", "<object>", "</object>", "<ruby>", "<rt>", "<rp>", "<head>", "</head>", "<body>", "</body>", "<html>",
+    "</html>", "<!--x-->", "<?x y?>", "<![CDATA[z]]>", "<sup>", "<span>", "</span>", " ", "\n", "x", "\x00", "&amp;",
+    "<", ">", "'", '"', "<!DOCTYPE html>",
+]
+
+
+def mutations(count: int = 400, seed: int = 20261105) -> list[tuple[str, dict[str, Any]]]:
+    """Seeded tag soup over the fixtures: each a fixture, a cut of 200 to 3000 of its code points, and 1 to 12 edits
+    (``[at, deleted, inserted]``, in code points of the text as the edits before it left it), each inserting one of
+    :data:`MUTATION_PIECES` or a piece of the page itself."""
+    rng = random.Random(seed)
+    pages = fixture_pages()
+    out = []
+    for i in range(count):
+        path = pages[i % len(pages)]
+        text = (FIXTURES / path).read_bytes().decode("utf-8", "replace")
+        size = rng.randint(200, 3000)
+        start = rng.randrange(max(1, len(text) - size))
+        cut = [start, min(len(text), start + size)]
+        page = text[cut[0]:cut[1]]
+        edits = []
+        for _ in range(rng.randint(1, 12)):
+            at = rng.randint(0, len(page))
+            deleted = rng.choice([0, 0, 0, 1, 3, 10, 40])
+            deleted = min(deleted, len(page) - at)
+            if rng.random() < 0.8:
+                inserted = rng.choice(MUTATION_PIECES)
+            else:
+                k = rng.randrange(max(1, len(page)))
+                inserted = page[k:k + rng.randint(1, 30)]
+            page = page[:at] + inserted + page[at + deleted:]
+            edits.append([at, deleted, inserted])
+        out.append((f"mutation {i} of {path}", {"fixture": fixture_ref(path)["fixture"], "cut": cut, "edits": edits}))
+    return out
+
+
+def mutated(spec: dict[str, Any]) -> str:
+    """A mutation's page: the fixture's text, cut, then edited."""
+    text = (FIXTURES / spec["fixture"]).read_bytes().decode("utf-8", "replace")
+    page = text[spec["cut"][0]:spec["cut"][1]]
+    for at, deleted, inserted in spec["edits"]:
+        page = page[:at] + inserted + page[at + deleted:]
+    return page
+
+
+def mutation_record(case: str, spec: dict[str, Any]) -> dict[str, Any]:
+    text = mutated(spec)
+    found = shape(LexborHTMLParser(text))
+    return {"fn": "test_conformance_html.mutation", "case": case, "args": [spec],
+            "out": {"quirks": quirks(text), "nodes": len(found), "shape": canonical.digest(found)}}
+
+
+# --- the tree's vectors -------------------------------------------------------------------------------------
+
+
+def test_tree_jsonl_is_lexbors_tree_of_every_page():
+    records = [{"fn": "test_conformance_html.SELECTORS", "out": SELECTORS},
+               {"fn": "test_conformance_html.SCOPED", "out": [list(pair) for pair in SCOPED]}]
+    records += [tree_record(f"fixture {path}", fixture_ref(path)) for path in fixture_pages()]
+    records += [tree_record(f"helper {name}", text) for name, text in helper_pages()]
+    write("tree", records)
+
+
+def test_tree_edges_jsonl_is_lexbors_tree_of_the_edge_set():
+    write("tree_edges", [tree_record(name, text) for name, text in tree_edges()])
+
+
+def test_tree_selectors_jsonl_is_what_lexbors_selectors_find():
+    write("tree_selectors", selector_records())
+
+
+def test_mutations_jsonl_is_lexbors_tree_of_seeded_tag_soup():
+    write("mutations", [mutation_record(name, spec) for name, spec in mutations()])
+
+
+def test_the_tree_s_cases_are_named_once():
+    names = [name for name, _ in tree_edges()] + [name for name, _ in mutations()]
+    assert len(names) == len(set(names))
+    cases = [r["case"] for r in selector_records() if "case" in r]
+    assert len(cases) == len(set(cases))
+
+
+def test_what_the_spec_says_of_lexbor_s_tree_holds():
+    tree = LexborHTMLParser("<template><p>a</p></template><p>b")
+    assert tree.css_first("template").child is None and tree.css("template p") == []
+    assert [n.attributes["id"] for n in LexborHTMLParser("<p id=1><p id=2>").css("p, #2")] == ["1", "2", "2"]
+    div = LexborHTMLParser("<div><p>x</p></div>").css_first("div")
+    assert [n.tag for n in div.css("body p")] == ["p"] and [n.tag for n in div.css("div")] == ["div"]
+    assert [n.tag for n in LexborHTMLParser("<button><select><button>").css("button button")] == ["button"]
+    assert LexborHTMLParser("<table><image src=x><td>a</table>").css("img") == []
+    assert [n.tag for n in LexborHTMLParser("<svg><sup>x</sup></svg>").css("svg sup")] == ["sup"]
