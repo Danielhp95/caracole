@@ -46,13 +46,13 @@ internal object SearchPage {
             if (PyRe.search(SONG_TABLE, html) == null) {
                 throw LaCuerdaParseError("the results table isn't closed: the page was cut short", url = url)
             }
-            found = LaCuerdaSearchAnswer(songs = songs(tree, html, url), stated = stated.longValueExact())
+            found = LaCuerdaSearchAnswer(songs = songs(tree, html, url), stated = stated)
             rows = found.songs.size
         } else if (main != null) {
             if (PyRe.search(ARTIST_LIST, html) == null) {
                 throw LaCuerdaParseError("the list of artists isn't closed: the page was cut short", url = url)
             }
-            found = LaCuerdaSearchAnswer(artists = LaCuerdaPages.listedArtists(main, url), stated = stated.longValueExact())
+            found = LaCuerdaSearchAnswer(artists = LaCuerdaPages.listedArtists(main, url), stated = stated)
             rows = found.artists.size
         } else {
             throw LaCuerdaParseError("neither songs (table#s_main) nor artists (ul#i_main) for the $stated results " +

@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.math.BigInteger
 import java.time.Duration
 import java.time.Instant
 
@@ -57,9 +58,9 @@ data class LaCuerdaSearchSong(val artistSlug: String, val artist: String, val so
 }
 
 /** lacuerda.SearchAnswer: what a page of LaCuerda's search answered, its songs or the artists in their place, in page
- * order, and how many results it counts ([stated]). */
+ * order, and how many results it counts ([stated], Python's int, of any size: the search keeps it in its kv). */
 data class LaCuerdaSearchAnswer(val songs: List<LaCuerdaSearchSong> = emptyList(),
-                                val artists: List<LaCuerdaArtist> = emptyList(), val stated: Long = 0)
+                                val artists: List<LaCuerdaArtist> = emptyList(), val stated: BigInteger = BigInteger.ZERO)
 
 /**
  * lacuerda_search.py on the phone: LaCuerda's own search, one query, one request at the lookup pace, and its gate.
@@ -195,8 +196,16 @@ object LaCuerdaSearch {
         return Gate("auto", key)
     }
 
-    /** /api/search's `lacuerda_search` for [q]: the [gate], strong as [answered] reads it, shaped as
-     * search_routes._lacuerda_search_gate shapes it ([SearchGate.of]). */
+    /**
+     * The [gate] of [q], strong as [answered] reads it (LaCuerda's index and your library searched afresh, five hits
+     * each), in the shape search_routes._lacuerda_search_gate gives it ([SearchGate.of]): what `POST /lacuerda/search`
+     * reads, whose SITE_HITS and LIBRARY_HITS are those five.
+     *
+     * Not `/api/search`'s `lacuerda_search`: that one weighs the hits the route kept for its answer, so the route
+     * calls `SearchGate.of(q, gate(cfg, db, q, strong = answersWell(its LaCuerda artists, its LaCuerda songs, its
+     * library hits), now))` itself, and answers null without asking when the server searches no LaCuerda
+     * (`searches_lacuerda`), as this overload never does.
+     */
     fun gate(cfg: PhoneConfig, db: Db, q: String, now: Instant): SearchGate? =
         SearchGate.of(q, gate(cfg, db, q, answered(db, q), now))
 

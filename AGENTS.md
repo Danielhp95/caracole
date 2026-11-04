@@ -1363,7 +1363,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the store's `at`), which index-push sends;
   - `LaCuerdaSearch`, lacuerda_search.py: `queryKey`, `asked`, `answersWell`, `answered`, the failures
     (`recordFailure`, `forgetFailure`, `failed`, `Failure.said`), `searchesUsed`, `gate` (and its /api/search shape,
-    `SearchGate.of`) and `search`: its one request, the answer stored and its kv in one savepoint;
+    `SearchGate.of`, of `answersWell` over the route's own kept hits) and `search`: its one request, the answer
+    stored and its kv in one savepoint, the count it states Python's int of any size;
   - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
     vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
 - LaCuerda's sheets (lacuerda-sheets): not built yet.
