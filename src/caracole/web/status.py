@@ -56,6 +56,7 @@ ran. So a job of other commands reads the same way:
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Synced: 2 changes left as
   they were", a wait; and a stage that failed though the command ended (a take with no backup first), in that stage's
   words, a wait too. While one runs, its running stage's line (``STAGE_LINES``: "Taking what changed there…").
+  Another caracole's index pages merged (``caracole index merge --progress``) say "Merged".
 
 A line that ends in a failure or a wait also links to the job's output in
 the library page's Requests tab (``Line.details``, ``#tab=requests&job=N``). Every link is relative to the
@@ -74,6 +75,7 @@ from caracole.get import SHEET_FROM
 from caracole.logs import plural
 from caracole.web.jobs import (
     EXPORTING,
+    INDEX_MERGE_COMMAND,
     INDEX_READS,
     INTERRUPTED,
     PEER,
@@ -120,11 +122,13 @@ STAGE_LINES = {
     "index": "Bringing the indexes up to date",  # the phone's alone
     "check": "Checking what changed since the comparison",  # caracole peer take --progress's (jobs.PEER_TAKE_STAGES)
     "render": "Rendering what was taken",
+    "merge": "Merging the other caracole's index pages",  # caracole index merge --progress's (jobs.INDEX_MERGE_STAGES)
 }
 # What a sync's or a take's command is (its first step's ``caracole peer`` subcommand), as the page names its kind.
 PEER_KINDS = {"sync": "sync", "take": "peer-push", "pull": "peer-pull"}
+INDEX_MERGE_KIND = "index-merge"  # ``caracole index merge --progress``: another caracole's index pages merged
 # How each says it is done.
-_PEER_DONE = {"sync": "Synced", "peer-push": "Taken", "peer-pull": "Taken"}
+_PEER_DONE = {"sync": "Synced", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
@@ -206,8 +210,11 @@ class Line:
 def peer_kind(job: Job) -> str | None:
     """What a job of ``caracole peer`` is, as the page names it: "sync" (``peer sync``, the Sync tab's), "peer-push"
     (``peer take``, a push another caracole sent) or "peer-pull" (``peer pull``, units another caracole asked this one
-    to take); None for any other job."""
+    to take); "index-merge" for ``caracole index merge --progress`` (another caracole's index pages, ``POST
+    /peer/index``); None for any other job."""
     args = job.steps[0].args if job.steps else ()
+    if tuple(args[:2]) == INDEX_MERGE_COMMAND and "--progress" in args:
+        return INDEX_MERGE_KIND
     return PEER_KINDS.get(args[1]) if len(args) > 1 and args[0] == PEER else None
 
 

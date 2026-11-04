@@ -36,7 +36,9 @@ a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS`
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
 ``YOUTUBE_SEARCH`` and ``video:<id>``). A push another caracole sent is taken by ``caracole peer take --progress``
 (peer_routes.py), and a sync with another caracole is ``caracole peer sync --progress``: their JSON lines are their
-stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``) and each unit taken, given or left (``Job.units``). Each command
+stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``) and each unit taken, given or left (``Job.units``). The index
+pages another caracole's lookups read, posted to ``/peer/index``, are merged by ``caracole index merge --delete
+--progress -- FILE`` (``index_merge_job``): a job of no song's, one stage (``INDEX_MERGE_STAGES``). Each command
 takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
@@ -319,9 +321,10 @@ def _fetches(steps: Sequence[Step]) -> bool:
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress``, or ``caracole
-    peer take --progress`` and ``peer sync --progress``."""
+    peer take --progress``, ``peer sync --progress`` or ``index merge --progress``."""
     return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), (PEER,))
-                                     and "--progress" in _options(args))
+                                     and "--progress" in _options(args)) or (
+        args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args))
 
 
 PEER = "peer"  # the command of a sync with another caracole: ``caracole peer take`` a push, ``peer sync``
@@ -341,10 +344,27 @@ PEER_SYNC_STAGES = (
 )
 
 
+# ``caracole index merge --delete --progress -- FILE``'s: the index pages another caracole's lookups read, merged
+INDEX_MERGE_COMMAND = ("index", "merge")
+INDEX_MERGE_STAGES = (("merge", "Merging the other caracole's index pages"),)
+INDEX_MERGE = "index-merge:"  # an index export's merge: its job's key, the staged file's name after it
+
+
 def _peer_stages(args: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    if args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args):
+        return INDEX_MERGE_STAGES
     if args[:1] != (PEER,) or "--progress" not in _options(args):
         return ()
     return {"take": PEER_TAKE_STAGES, "sync": PEER_SYNC_STAGES}.get(args[1] if len(args) > 1 else "", ())
+
+
+def index_merge_job(path: Path) -> dict[str, Any]:
+    """The job that merges the index export staged at ``path`` (``POST /peer/index``, peer_routes.py) and deletes it
+    after, as ``JobQueue.submit``'s arguments: ``caracole index merge --delete --progress -- FILE``, a job of no
+    song's."""
+    return {"title": "Index pages from another caracole", "song_key": INDEX_MERGE + path.name,
+            "steps": [(INDEX_MERGE_STAGES[0][1], (*INDEX_MERGE_COMMAND, "--delete", "--progress", "--", str(path)))],
+            "display": "Index pages from another caracole", "join": False}
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -445,7 +465,7 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
     (youtube_sheet.py's ``STAGES``), and a sync's with another caracole (``PEER_TAKE_STAGES``,
-    ``PEER_SYNC_STAGES``); none for other commands."""
+    ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``); none for other commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}

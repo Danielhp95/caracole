@@ -1,0 +1,29 @@
+{
+ "vectors_total": 70000000,
+ "data_total": 12000000,
+ "areas": {
+  "canonical": 1000000,
+  "corpus": 100000,
+  "fuzz": 6500000,
+  "health": 300000,
+  "html": 3000000,
+  "http": 1500000,
+  "inbox": 300000,
+  "index": 1500000,
+  "keys": 4500000,
+  "library": 2500000,
+  "lookup": 3500000,
+  "match": 1500000,
+  "pace": 300000,
+  "pinyin": 6000000,
+  "py": 2000000,
+  "schema": 300000,
+  "search": 6000000,
+  "sites": 2000000,
+  "songbook": 1000000,
+  "sync": 2000000,
+  "unicode": 4000000,
+  "viewer": 8000000,
+  "web": 9000000
+ }
+}
