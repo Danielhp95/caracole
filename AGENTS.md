@@ -1252,6 +1252,39 @@ Not built yet. (lookup.)
   read as config.py holds it) and settings_take.jsonl (the take rule by rule), each take through `PeerState.read` and
   `SyncEngine.takeSettings`.
 
+##### Syncing on the phone
+
+- **The rules** are peer_sync.py's, replayed (`SyncReplay`, area `sync`): `Compare`'s kept answers (`keptOf`,
+  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` dropping each agreed unit's, the base written with a
+  `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
+  `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
+  scope.jsonl.
+- **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
+  `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
+  either side's songbooks `listed` (each songbook difference's document asked of the computer once,
+  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
+  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents and
+  `tested` what the computer holds (its state read once, nothing changed).
+- **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
+  (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
+  songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
+  is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
+  `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
+  peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
+  `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
+  format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
+  whole: each member's CRC-32 and size checked as java.util.zip checks neither), compared within the parts it holds
+  (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
+  `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
+  "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
+- **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
+  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
+  its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
+  after its merge job, none from a computer that doesn't count them.
+- A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
+  `caracole index export` writes them; its pages through a `PageSource`, none until one is wired).
+
 ##### :viewer
 
 - Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory):

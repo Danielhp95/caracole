@@ -7,8 +7,13 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
+import io.github.danielhp95.caracole.core.sync.Conflicts
+import io.github.danielhp95.caracole.core.sync.IndexWaiting
+import io.github.danielhp95.caracole.core.sync.KeptPair
+import io.github.danielhp95.caracole.core.sync.Scope
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.Side
@@ -17,12 +22,15 @@ import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -84,8 +92,9 @@ class SyncEngineTest {
     private val phoneId: String get() = phone.read { Compare.ownId(it) }
 
     private fun apply(c: Comparison, choices: Map<String, Side> = emptyMap(), prefer: Side? = null,
-                      on: SyncEngine = engine): SyncOutcome = runBlocking {
-        on.apply(c, choices, prefer) { name, state, detail -> stages.add(Triple(name, state, detail)) }
+                      on: SyncEngine = engine, parts: List<String> = Scope.PARTS,
+                      conflicts: Conflicts = Conflicts.ASK): SyncOutcome = runBlocking {
+        on.apply(c, choices, prefer, parts, conflicts) { name, state, detail -> stages.add(Triple(name, state, detail)) }
     }
 
     /** Each stage's last state. */
@@ -559,7 +568,7 @@ class SyncEngineTest {
     @Test fun `with nothing to take or give, the settings are taken all the same`() {
         computer.settings = FakeComputer.SETTINGS
         val outcome = apply(engine.compare(computer.address.toString()))
-        assertEquals(SyncOutcome(emptyList(), emptyList(), emptyList(), 0, emptyList()), outcome)
+        assertEquals(SyncOutcome(emptyList(), emptyList(), emptyList(), 0, emptyList()), outcome.copy(report = null))
         assertEquals(mapOf("compare" to "done", "take" to "skipped", "give" to "skipped", "mirror" to "skipped",
                            "agree" to "done", "index" to "skipped"), ended())
         assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
@@ -739,6 +748,167 @@ class SyncEngineTest {
         apply(engine.compare(computer.address.toString()))
         assertEquals(emptyList(), computer.indexAsked)
         assertEquals("skipped", ended()["index"])
+    }
+
+    // --- a sync's parts, the comparison's new members, the unattended sync (the sync redesign's Task 12) -------------
+
+    @Test fun `songbooks alone take the songbook and the songs it lists and nothing else`() {
+        Assume.assumeTrue("waiting on songbook-writers: Songbooks.entryKeys", SyncReplay.listing())
+        computer.load(RICH)
+        val c = engine.compare(computer.address.toString())
+        assertEquals(listOf("song/radiohead/creep", "song/radiohead/karma-police"),
+                     c.listed.keys.toList(), "the songs Campfire lists")
+        val outcome = apply(c, parts = listOf(Scope.SONGBOOKS))
+        assertEquals(setOf("song/radiohead/creep", "song/radiohead/karma-police", "songbook/campfire"),
+                     outcome.taken.toSet())
+        assertEquals(setOf("song/radiohead/creep", "song/radiohead/karma-police", "songbook/campfire"),
+                     phoneState().keys, "no other song, tombstone, alias, artist's page or blocked tab")
+        assertEquals(emptyList(), outcome.left, "a part left out is never said")
+        assertEquals(mapOf("mirror" to "skipped", "index" to "skipped"),
+                     ended().filterKeys { it == "mirror" || it == "index" })
+    }
+
+    @Test fun `the unattended sync takes and gives every one-sided change and leaves each conflict, never refusing`() {
+        val hysteria = onPhone("Muse", "Hysteria")
+        val wonderwall = onPhone("Oasis", "Wonderwall", album = "Morning Glory")
+        val creep = onComputer("Radiohead", "Creep")
+        onComputer("Oasis", "Wonderwall", album = "(What's the Story) Morning Glory?")
+        val c = engine.compare(computer.address.toString())
+        val before = computer.state().getValue(unitOf(wonderwall)) to phoneState().getValue(unitOf(wonderwall))
+
+        val outcome = apply(c, conflicts = Conflicts.LEAVE)
+
+        assertEquals(listOf(unitOf(creep)), outcome.taken)
+        assertEquals(listOf(unitOf(hysteria)), outcome.given)
+        assertEquals(listOf(unitOf(wonderwall) to SyncEngine.UNSETTLED), outcome.left)
+        assertEquals(before, computer.state().getValue(unitOf(wonderwall)) to phoneState().getValue(unitOf(wonderwall)),
+                     "the conflict as it was on both sides")
+        assertEquals("done", ended()["agree"])
+        // Asked of the owner, the same comparison is refused before any change.
+        assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+    }
+
+    @Test fun `a unit kept at an import is given at the next sync without asking`() {
+        val here = onPhone("Oasis", "Wonderwall", album = "Morning Glory")
+        onComputer("Oasis", "Wonderwall", album = "(What's the Story) Morning Glory?")
+        val unit = unitOf(here)
+        val (mine, theirs) = phoneState().getValue(unit).digest to computer.state().getValue(unit).digest
+        // An import of the computer's file answered "keep mine" for it.
+        phone.writeBlocking { db -> Compare.recordKept(db, computer.id, mapOf(unit to (mine to theirs)), "2026-11-02T09:00:00Z") }
+
+        val c = engine.compare(computer.address.toString())
+        assertEquals(mapOf(unit to KeptPair(mine, theirs, Compare.MINE)), c.kept)
+        assertEquals(listOf(Triple(unit, Compare.MINE, Compare.KEPT_HERE)), c.differences.map { Triple(it.id, it.proposal, it.why) })
+        val outcome = apply(c)
+        assertEquals(listOf(unit), outcome.given)
+        assertEquals(mine, computer.state().getValue(unit).digest, "the computer took the phone's version")
+        assertEquals(emptyMap(), phone.read { Compare.keptOf(it, computer.id) }, "the kept answer dropped once agreed")
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
+    @Test fun `the comparison carries each difference's names, change, part and songbooks, and the indexes waiting`() {
+        computer.load(RICH)
+        val gone = onPhone("Oasis", "Wonderwall")
+        computer.indexes = mapOf("ug" to "2026-11-03T10:00:00Z")
+        val c = engine.compare(computer.address.toString())
+        assertEquals(SyncEngine.COMPUTER, c.kind)
+        assertEquals(Scope.PARTS, c.holds)
+        assertNull(c.base, "never synced")
+        val creep = c.differences.single { it.id == "song/radiohead/creep" }
+        assertEquals("Radiohead" to "Creep", Scope.namesOf(creep.id, creep.label))
+        assertEquals(null to "new", Scope.changeOf(creep, c.base, c.kept))
+        assertEquals("new" to null, Scope.changeOf(c.differences.single { it.id == unitOf(gone) }, c.base, c.kept))
+        assertEquals(listOf("library", "songbooks"), c.differences.map { Scope.partOf(it.id) }.distinct())
+        assertEquals(setOf("songbook/campfire"), c.songbooks.keys)
+        val (onPhone, onComputer) = c.songbooks.getValue("songbook/campfire")
+        assertNull(onPhone)
+        assertEquals(JsonPrimitive("Campfire"), onComputer!!["name"])
+        assertEquals(listOf(IndexWaiting("ug", "Ultimate Guitar", null, "2026-11-03T10:00:00Z", "there")), c.indexes)
+        if (SyncReplay.listing()) {
+            assertEquals(mapOf("song/radiohead/creep" to listOf("songbook/campfire"),
+                               "song/radiohead/karma-police" to listOf("songbook/campfire")), c.listed)
+        }
+    }
+
+    @Test fun `library unticked skips the mirror, and indexes unticked skips the index stage`() {
+        onComputer("Radiohead", "Creep")
+        computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z")
+        var refreshed = 0
+        val mirrored = engine { refreshed++ }
+        val outcome = apply(engine.compare(computer.address.toString()), on = mirrored, parts = listOf(Scope.SONGBOOKS))
+        assertEquals(emptyList(), outcome.taken, "a song comes with the songbooks only when one lists it")
+        assertEquals(0, refreshed)
+        assertEquals(Triple("mirror", "skipped", SyncEngine.LIBRARY_LEFT_OUT), stages.last { it.first == "mirror" })
+        assertEquals(Triple("index", "skipped", SyncEngine.INDEXES_LEFT_OUT), stages.last { it.first == "index" })
+        assertEquals(emptyList(), computer.indexAsked, "no index asked for")
+        assertEquals(listOf("songbooks"), (outcome.report!!["parts"] as JsonArray).map { (it as JsonPrimitive).content })
+        assertFailsWith<IllegalArgumentException> { apply(engine.compare(computer.address.toString()), parts = listOf("pages")) }
+    }
+
+    @Test fun `tested says the computer's songs, songbooks, newest index and the last sync, and changes nothing`() {
+        computer.load(RICH)
+        computer.indexes = mapOf("ug" to "2026-11-03T10:00:00Z", "lacuerda" to "2026-11-03T11:00:00Z")
+        val before = phone.read { db -> db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0) to it.text(1) } }
+        val tested = engine.tested(computer.address.toString())
+        assertEquals(4, tested.songs)
+        assertEquals(1, tested.songbooks)
+        assertEquals("2026-11-03T11:00:00Z", tested.indexes)
+        assertNull(tested.syncedAt)
+        assertEquals("Desk", tested.peer.name)
+        assertEquals(before, phone.read { db -> db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0) to it.text(1) } })
+        assertEquals(emptyList(), computer.requests.filter { !it.startsWith("GET /api/peer/state") })
+        apply(engine.compare(computer.address.toString()))
+        assertEquals(computer.now, engine.tested(computer.address.toString()).syncedAt)
+    }
+
+    // --- the report (Task 14) -----------------------------------------------------------------------------------------
+
+    @Test fun `a sync's report counts each index taken before and after its merge`() {
+        onComputer("Radiohead", "Creep")
+        val export = tmp.newFile("export.sqlite").also { it.delete() }
+        io.github.danielhp95.caracole.core.testing.Fixtures.loadRaw(export, "index/fixtures/full-export.jsonl")
+        computer.index = { export.readBytes() }
+        computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z")
+        val outcome = apply(engine.compare(computer.address.toString()))
+        val report = outcome.report!!
+        assertEquals(JsonObject(mapOf("name" to JsonPrimitive("Desk"), "kind" to JsonPrimitive("computer"),
+                                      "address" to JsonPrimitive(computer.address.toString()))), report["with"])
+        assertEquals(JsonPrimitive(computer.now), report["at"])
+        assertEquals(Scope.PARTS.map(::JsonPrimitive), (report["parts"] as JsonArray).toList())
+        val gtptabs = phone.read { db -> db.one("SELECT COUNT(*) FROM gtptabs_index") { it.long(0)!! } }!!
+        assertTrue(gtptabs > 0)
+        assertEquals(listOf(JsonObject(linkedMapOf(
+            "site" to JsonPrimitive("gtptabs"), "title" to JsonPrimitive("gtptabs.com"), "direction" to JsonPrimitive("taken"),
+            "before" to JsonPrimitive(0L), "after" to JsonPrimitive(gtptabs), "read" to JsonPrimitive("2026-11-03T10:00:00Z"),
+        ))), (report["indexes"] as JsonArray).toList())
+    }
+
+    @Test fun `an index given is counted on the computer before the push and after its merge job`() {
+        computer.database.writeBlocking { IndexTransfer.seedFresh(it) }
+        phone.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.testing.Fixtures.load(db, "index/fixtures/reads-before.jsonl")
+            db.execute("DELETE FROM kv WHERE key LIKE 'phone:read%'")
+            Reads.note(db, "lacuerda", "estopa/", "2026-11-03T09:00:00Z")
+        }
+        val before = computer.database.read { db -> db.one("SELECT COUNT(*) FROM lacuerda_index") { it.long(0)!! } }!!
+        val outcome = apply(engine.compare(computer.address.toString()))
+        computer.awaitTakes()
+        val after = computer.database.read { db -> db.one("SELECT COUNT(*) FROM lacuerda_index") { it.long(0)!! } }!!
+        assertTrue(after > before, "the computer merged the page")
+        val given = (outcome.report!!["indexes"] as JsonArray).map { it as JsonObject }.single()
+        assertEquals(linkedMapOf("site" to JsonPrimitive("lacuerda"), "title" to JsonPrimitive("LaCuerda"),
+                                 "direction" to JsonPrimitive("given"), "before" to JsonPrimitive(before),
+                                 "after" to JsonPrimitive(after), "read" to JsonPrimitive("2026-11-03T09:00:00Z")),
+                     given.toMap())
+        assertTrue(computer.requests.count { it == "GET /api/sync/indexes" } == 2, "${computer.requests}")
+
+        // A computer older than the route: the pages go all the same, and the report counts none.
+        stages.clear()
+        computer.countsIndexes = false
+        phone.writeBlocking { db -> Reads.note(db, "lacuerda", "busca.php", "2026-11-03T09:30:00Z") }
+        val older = apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"])
+        assertEquals(JsonArray(emptyList()), older.report!!["indexes"])
     }
 
     private companion object {
