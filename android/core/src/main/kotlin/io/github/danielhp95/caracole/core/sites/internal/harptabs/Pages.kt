@@ -140,6 +140,9 @@ object HarpTabsPages {
         return JsonObject(emptyMap())
     }
 
+    /** json.loads' NaN and infinities, as PyJson.loads writes them: truthy, as Python's floats are. */
+    private val NOT_FINITE = setOf("NaN", "Infinity", "-Infinity")
+
     private fun isText(e: JsonElement?, s: String) = e is JsonPrimitive && e.isString && e.content == s
 
     /** `str(value or "")` of a value json.loads made: Python's truth, then its str(). */
@@ -153,7 +156,8 @@ object HarpTabsPages {
             e.isString -> e.content.isNotEmpty()
             e.content == "true" -> true
             e.content == "false" -> false
-            else -> e.content.toBigDecimalOrNull()?.signum() != 0  // a number: nonzero (NaN and the infinities too)
+            e.content in NOT_FINITE -> true
+            else -> BigDecimal(e.content).signum() != 0  // a number: nonzero
         }
     }
 

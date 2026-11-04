@@ -1278,7 +1278,22 @@ Not built yet. (lookup.)
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
+  lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
+  sitemap and makes no artist pass):
+  - its pages read as selectolax reads them (core.html), their JSON-LD by `PyJson.loads` (a value's `str()` as
+    Python's), their counts by `PyFloat` and `PyInt`;
+  - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
+    `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
+  - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
+    `harptabs`, the page's path);
+  - the lookup's harptabs stage (`HarpTabsStage`) and `caracole harptabs --artist` (`HarpTabsCommands.artist`, its
+    one line), through StageContext's and CommandContext's asking; until lane lookup's `LookupWords` is on main the
+    stage words what asking came to itself (`HarpTabsEnvelope`, get.py's words);
+  - tests/test_conformance_harptabs.py writes vectors/sites/harptabs.jsonl, vectors/lookup/harptabs.jsonl,
+    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (each request with caracole's own user agent,
+    the pages noted beside Python's rows).
+- gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
 
