@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.routes.search
 
+import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.sites.SiteKeys
@@ -151,6 +152,6 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
             return (if (n < 0) "-" else "") + out
         }
 
-        private fun upperFirst(s: String): String = if (s.isEmpty()) s else s.substring(0, 1).uppercase() + s.substring(1)
+        private fun upperFirst(s: String): String = if (s.isEmpty()) s else PyUnicode.upper(s.substring(0, 1)) + s.substring(1)
     }
 }

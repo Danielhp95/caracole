@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.server.files.LibraryFiles
 import kotlinx.serialization.json.JsonElement
@@ -101,8 +104,8 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         if (response.headers.none { it.first == "Content-Security-Policy" }) {
             response.headers.add("Content-Security-Policy" to FRAMES)
         }
-        val own = response.headers.map { it.first.lowercase() }.toSet()
-        for ((name, value) in COMMON_HEADERS) if (name.lowercase() !in own) response.headers.add(name to value)
+        val own = response.headers.map { Py.asciiLower(it.first) }.toSet()
+        for ((name, value) in COMMON_HEADERS) if (Py.asciiLower(name) !in own) response.headers.add(name to value)
         return response
     }
 

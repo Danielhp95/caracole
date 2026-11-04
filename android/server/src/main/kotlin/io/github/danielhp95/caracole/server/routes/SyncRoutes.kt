@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -21,7 +22,6 @@ import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.routes.library.Answers
-import io.github.danielhp95.caracole.server.routes.library.PyStr
 import io.github.danielhp95.caracole.server.routes.library.SyncJson
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject

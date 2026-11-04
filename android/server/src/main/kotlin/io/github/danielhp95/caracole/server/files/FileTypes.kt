@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.server.files
 
+import io.github.danielhp95.caracole.core.py.PyPath
+
 /**
  * web/files.py's kinds of file the library serves (vectors/web/downloads.jsonl): PDFs, text (sheets, ChordPro,
  * lyrics), JSON, and Guitar Pro, Power Tab and MuseScore's files as downloads. Never HTML, SVG or anything a browser
@@ -23,11 +25,6 @@ object FileTypes {
         for (ext in DOWNLOADS.sorted()) put(ext, "application/octet-stream")
     }
 
-    /** PurePosixPath(name).suffix, Python 3.14's: from the last dot of the name, its leading dots left out. */
-    fun suffix(name: String): String {
-        val last = name.split('/').lastOrNull { it.isNotEmpty() && it != "." } ?: return ""
-        val bare = last.trimStart('.')
-        val dot = bare.lastIndexOf('.')
-        return if (dot >= 0) bare.substring(dot) else ""
-    }
+    /** PurePosixPath(name).suffix, Python 3.14's ([PyPath.suffix]). */
+    fun suffix(name: String): String = PyPath.suffix(name)
 }

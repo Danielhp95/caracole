@@ -2,6 +2,9 @@ package io.github.danielhp95.caracole
 
 import android.content.Context
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.health.Alerts
+import io.github.danielhp95.caracole.core.http.RealTransport
+import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
@@ -43,6 +46,22 @@ object Caracole {
     /** The served pages' form token, made at each launch as caracole serve makes its own. */
     private val csrf: String = hex(32)
 
+    /**
+     * The transport a site's request goes through, read on every request: [RealTransport], unless an instrumentation
+     * runner set [sitesForTests] (CaracoleTestRunner: a transport that refuses every site, or a test's
+     * RoutedTransport to the fake sites server).
+     */
+    fun transport(): Transport = sitesForTests ?: RealTransport
+
+    /** A test's sites: set by CaracoleTestRunner before Application.onCreate, so the app under test reaches none. */
+    @Volatile var sitesForTests: Transport? = null
+
+    /** False under CaracoleTestRunner: `/api/search`'s `lacuerda_search` null, so no page sends LaCuerda a search. */
+    @Volatile var searchesLacuerdaForTests: Boolean = true
+
+    /** The phone's alerts (lane alerts-backups' Android notifications; none until then). */
+    var alerts: Alerts = Alerts.NONE
+
     /** The process's own work: the phone's job queue, and what a screen starts that must outlive it. */
     val background = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -79,6 +98,8 @@ object Caracole {
             val phone = Phone(PhoneDeps(
                 database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = background,
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
+                transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
+                searchesLacuerda = searchesLacuerdaForTests,
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal) keeps the process going in the
             // foreground until none waits or runs: the queue tells, the service follows.

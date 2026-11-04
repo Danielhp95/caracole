@@ -1,6 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
-import io.github.danielhp95.caracole.server.http.PyText
+import io.github.danielhp95.caracole.core.py.PyText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull

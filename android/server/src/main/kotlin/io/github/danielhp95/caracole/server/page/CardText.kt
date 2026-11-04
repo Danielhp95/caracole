@@ -1,11 +1,11 @@
 package io.github.danielhp95.caracole.server.page
 
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyUnicode
-import io.github.danielhp95.caracole.server.http.PyUrl
 import java.math.BigInteger
 
 /**
@@ -23,7 +23,7 @@ internal object CardText {
     /** _letter: the A–Z strip's letter for a sort key, "#" for a digit or anything else. */
     fun letter(sortKey: String): String {
         val first = sortKey.firstOrNull()
-        return if (first != null && first in 'a'..'z') first.uppercase() else "#"
+        return if (first != null && first in 'a'..'z') (first - ('a' - 'A')).toString() else "#"
     }
 
     /** _initials: "wywh" for Wish You Were Here (斑马斑马's by pinyin, "bmbm"); "" for a title of one word. */

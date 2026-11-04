@@ -1,5 +1,12 @@
 package io.github.danielhp95.caracole.server.http
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
+import io.github.danielhp95.caracole.server.testing.TestParts
+import io.github.danielhp95.caracole.server.routes.RequestsRoutes
+import io.github.danielhp95.caracole.server.routes.LookupRoutes
+import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.server.routes.Stubs
@@ -226,11 +233,10 @@ class RoutingTest {
                 assertTrue(said.endsWith(" on the phone yet."), said)
             }
             val posts = Stubs().routes.filter { it.method == "POST" }.map { it.path }
-            for (path in listOf("/fetch", "/review", "/versions/choose", "/versions/keep", "/versions/clear",
-                                "/versions/keep-more", "/songbook/make", "/songbook/add", "/songbook/add-song",
-                                "/songbook/set", "/songbook/delete", "/lacuerda/search", "/lacuerda/artist",
-                                "/harptabs/artist", "/youtube", "/youtube/search", "/youtube/video", "/jobs/again",
-                                "/harmonica/pin", "/harmonica/clear", "/request", "/lookup", "/remove")) {
+            for (path in listOf("/review", "/versions/choose", "/versions/keep", "/versions/clear",
+                                "/songbook/make", "/songbook/add", "/songbook/add-song", "/songbook/set",
+                                "/songbook/delete", "/youtube", "/youtube/search", "/youtube/video",
+                                "/harmonica/pin", "/harmonica/clear")) {
                 assertTrue(path in posts, path)
                 val refused = test.postScript(path, listOf("song" to "1"))
                 assertEquals(409, refused.status, path)
@@ -239,6 +245,29 @@ class RoutingTest {
             }
             assertEquals(404, test.post("/peer/push").status, "no stub for a route the phone never answers")
             assertTrue(Stubs().routes.all { it.doc.isNotBlank() })
+        }
+    }
+
+    @Test fun theNeutralModulesSayWhatIsntOnThePhoneYetAsTheStubsDid() {
+        val scope = CoroutineScope(SupervisorJob())
+        try {
+            TestApp(tmp.root, modules = { db ->
+                val parts = TestParts.of(db, tmp.root, scope)
+                listOf(LookupRoutes(parts), RequestsRoutes(parts))
+            }).use { test ->
+                val stubbed = Stubs().routes.map { it.path }.toSet()
+                for (path in listOf("/fetch", "/versions/keep-more", "/lacuerda/search", "/lacuerda/artist",
+                                    "/harptabs/artist", "/jobs/again")) {
+                    assertTrue(path !in stubbed, "$path is its module's now")
+                    val refused = test.postScript(path, listOf("song" to "1"))
+                    assertEquals(409, refused.status, path)
+                    assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
+                    assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
+                }
+                assertEquals(409, test.script("/requests.json").status)
+            }
+        } finally {
+            scope.cancel()
         }
     }
 

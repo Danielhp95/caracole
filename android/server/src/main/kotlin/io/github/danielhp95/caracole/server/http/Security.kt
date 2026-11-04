@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.py.IpAddress
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
 import java.security.MessageDigest
 
 /**

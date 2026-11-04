@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.ktor
 
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.App
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.Request
@@ -80,7 +81,7 @@ class LocalServer(val app: App) : AutoCloseable {
                 val target = call.request.uri
                 val headers = LinkedHashMap<String, String>()
                 for ((name, values) in call.request.headers.entries()) {
-                    val key = name.lowercase()
+                    val key = Py.asciiLower(name)
                     headers[key] = if (key == "cookie") values.joinToString("; ") else values.last()
                 }
                 val response = try {
@@ -130,8 +131,8 @@ class LocalServer(val app: App) : AutoCloseable {
         var type: ContentType? = null
         for ((name, value) in response.headers) {
             when {
-                name.equals("Content-Type", ignoreCase = true) -> type = ContentType.parse(value)
-                name.equals("Content-Length", ignoreCase = true) -> Unit
+                Py.asciiLower(name) == "content-type" -> type = ContentType.parse(value)
+                Py.asciiLower(name) == "content-length" -> Unit
                 else -> into.append(name, value, safeOnly = false)
             }
         }

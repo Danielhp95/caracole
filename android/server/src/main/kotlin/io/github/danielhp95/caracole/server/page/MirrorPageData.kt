@@ -1,11 +1,11 @@
 package io.github.danielhp95.caracole.server.page
 
+import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.mirror.Mirror
-import io.github.danielhp95.caracole.server.files.DownloadNames
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

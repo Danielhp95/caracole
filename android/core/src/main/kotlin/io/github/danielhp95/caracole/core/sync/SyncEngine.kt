@@ -330,6 +330,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                     IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
                     db.kvSetJson(INDEX_KEY + computer, Stamps.json(had + newer.associateWith { indexes.getValue(it) }))
                 }
+                database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
             }
             done.indexed.addAll(newer)
             stage(INDEX, DONE, "merged ${newer.joinToString(", ")}")

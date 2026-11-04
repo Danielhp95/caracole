@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.e2e
 
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -51,8 +52,9 @@ class ScenarioPhone(val home: File, val server: String) : AutoCloseable {
         override fun remember(address: String) = file.writeText(address)
     }
 
+    /** Every site refuses: the scenario's lookups (still neutral) send nothing to one. */
     val phone: Phone = Phone(PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET,
-                                       TestApp.CSRF))
+                                       TestApp.CSRF, transport = { RefusingTransport }))
 
     /** A GET as the WebView makes it: a page's link, or its address typed. */
     fun get(target: String): Response = handle("GET", target, mapOf("sec-fetch-site" to "same-origin"))

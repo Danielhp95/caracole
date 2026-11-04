@@ -1,10 +1,10 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.DatabaseTooNew
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.GetAnswer
-import io.github.danielhp95.caracole.server.http.PyUrl
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
@@ -124,7 +124,7 @@ class SearchRoutes(val database: Database, val cards: SongCards,
         val BOX = Regex("[A-Za-z0-9_-]{1,64}")
 
         /** The bundled driver's words before SQLite's own: "Error code: 1, message: no such table: songs". */
-        val DRIVER_PREFIX = Regex("^Error code: -?\\d+, message: ")
+        val DRIVER_PREFIX = Regex("^Error code: -?[0-9]+, message: ")
 
         /** An error as Python's `str(e)` says it: SQLite's own message ("no such table: songs"), the driver's prefix
          * left out. */
