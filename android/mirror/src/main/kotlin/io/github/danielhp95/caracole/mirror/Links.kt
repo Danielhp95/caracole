@@ -18,6 +18,13 @@ sealed interface Route {
     /** Any other address on the web (Ultimate Guitar, caracole serve on the computer…): the phone's browser opens it. */
     data class Browser(val url: String) : Route
 
+    /**
+     * The viewer's Export PDF, caracole serve's `/export.pdf?…` at the phone's server, by its whole [url]: the app
+     * prints the viewer shown (Android's print framework; the server names the version and its file), never a file
+     * downloaded.
+     */
+    data class Print(val url: String) : Route
+
     /** Anything else (another scheme, no address): nothing opens it. */
     data object Ignored : Route
 }
@@ -32,7 +39,8 @@ sealed interface Route {
  *
  * [isFile] says whether a path of the library ("Estopa/Tu calorro/sheet.pdf") is a file another app opens rather than a
  * page: a link to one is [Route.File]. A page that takes itself for served links caracole serve's Guitar Pro page,
- * `/guitar?file=<its path>`, for each Guitar Pro file: the file opens as any other.
+ * `/guitar?file=<its path>`, for each Guitar Pro file: the file opens as any other. Its Export PDF,
+ * `/export.pdf?<the version>`, is printed ([Route.Print]), a navigation or a download alike.
  */
 class Links(origin: URI, private val isFile: (String) -> Boolean) {
     private val scheme = origin.scheme.lowercase()
@@ -47,6 +55,7 @@ class Links(origin: URI, private val isFile: (String) -> Boolean) {
         if (scheme != "http" && scheme != "https") return Route.Ignored
         if (!own(uri)) return Route.Browser(url)
         val path = (uri.path ?: "").removePrefix("/")
+        if (path == EXPORT) return Route.Print(url)
         if (path == GUITAR_PAGE) {
             val file = query(uri.rawQuery)["file"]
             if (file != null && (download || isFile(file))) return Route.File(file)
@@ -100,6 +109,9 @@ class Links(origin: URI, private val isFile: (String) -> Boolean) {
     companion object {
         /** caracole serve's Guitar Pro page, which a served viewer links each Guitar Pro file to. */
         private const val GUITAR_PAGE = "guitar"
+
+        /** caracole serve's Export PDF, which a served viewer's settings link (viewer.js). */
+        private const val EXPORT = "export.pdf"
 
         /** [path] of the library as a target on the server ("/Estopa/Tu%20calorro/sheet.pdf"): each part percent-encoded. */
         fun target(path: String): String = "/" + path.split('/').joinToString("/") { encodePart(it) }
