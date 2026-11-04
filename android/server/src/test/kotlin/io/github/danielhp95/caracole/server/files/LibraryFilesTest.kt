@@ -239,16 +239,16 @@ class LibraryFilesTest {
                 Route("GET", "/api/jobs/", "a job", under = true, get = GetAnswer { Response(200, Body.Bytes("a job".toByteArray())) }),
             )
         }
-        val mirror = mirror(Triple("api/jobs/1.json", "{}", null), Triple("review.pdf", "%PDF", null),
-                            Triple("review", "%PDF", null))
+        val mirror = mirror(Triple("api/jobs/1.json", "{}", null), Triple("lookup.pdf", "%PDF", null),
+                            Triple("lookup", "%PDF", null))
         TestApp(tmp.root, { listOf(routes) }, mirror = mirror).use { test ->
             val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
             keep(test, id, "api/jobs/2.json", "{}")
             assertEquals("the route", test.get("/index.html").text)
             assertEquals("a job", test.script("/api/jobs/1.json").text)
             assertEquals("a job", test.script("/api/jobs/2.json").text)
-            assertEquals(409, test.get("/review").status, "the stub's, never the mirror's file of that path")
-            assertEquals("%PDF", test.get("/review.pdf").text)
+            assertEquals(409, test.get("/lookup").status, "the stub's, never the mirror's file of that path")
+            assertEquals("%PDF", test.get("/lookup.pdf").text)
             assertTrue(test.files.serve("/index.html") != null, "the file is there, and the route answers first")
         }
     }

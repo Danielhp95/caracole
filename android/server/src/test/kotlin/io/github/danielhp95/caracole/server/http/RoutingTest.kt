@@ -10,6 +10,12 @@ import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.server.routes.Stubs
+import io.github.danielhp95.caracole.server.routes.GuitarRoutes
+import io.github.danielhp95.caracole.server.routes.ExportRoutes
+import io.github.danielhp95.caracole.server.routes.ReviewRoutes
+import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
+import io.github.danielhp95.caracole.server.routes.VersionsRoutes
+import io.github.danielhp95.caracole.server.routes.SongbookRoutes
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
@@ -223,27 +229,23 @@ class RoutingTest {
 
     @Test fun theStubsSayWhatIsntOnThePhoneYet() {
         TestApp(tmp.root).use { test ->
-            for (path in listOf("/review", "/versions", "/harmonica", "/guitar", "/lookup", "/export.pdf")) {
-                val page = test.get("$path?song=1")
-                assertEquals(409, page.status, path)
-                assertEquals("text/html; charset=utf-8", page.header("Content-Type"))
-                assertTrue("isn&#x27;t on the phone yet." in page.text || "aren&#x27;t on the phone yet." in page.text,
-                           page.text.substringAfter("<p class=\"message\">").substringBefore("</p>"))
-                val said = test.script("$path?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
-                assertTrue(said.endsWith(" on the phone yet."), said)
-            }
+            val page = test.get("/lookup?song=1")
+            assertEquals(409, page.status)
+            assertEquals("text/html; charset=utf-8", page.header("Content-Type"))
+            assertTrue("isn&#x27;t on the phone yet." in page.text,
+                       page.text.substringAfter("<p class=\"message\">").substringBefore("</p>"))
+            val said = test.script("/lookup?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
+            assertTrue(said.endsWith(" on the phone yet."), said)
             val posts = Stubs().routes.filter { it.method == "POST" }.map { it.path }
-            for (path in listOf("/review", "/versions/choose", "/versions/keep", "/versions/clear",
-                                "/songbook/make", "/songbook/add", "/songbook/add-song", "/songbook/set",
-                                "/songbook/delete", "/youtube", "/youtube/search", "/youtube/video",
-                                "/harmonica/pin", "/harmonica/clear")) {
-                assertTrue(path in posts, path)
+            assertEquals(listOf("/youtube", "/youtube/search", "/youtube/video"), posts)
+            for (path in posts) {
                 val refused = test.postScript(path, listOf("song" to "1"))
                 assertEquals(409, refused.status, path)
                 assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                 assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
             }
             assertEquals(404, test.post("/peer/push").status, "no stub for a route the phone never answers")
+            assertEquals(404, test.get("/review").status, "a route a module answers has no stub")
             assertTrue(Stubs().routes.all { it.doc.isNotBlank() })
         }
     }
@@ -253,16 +255,31 @@ class RoutingTest {
         try {
             TestApp(tmp.root, modules = { db ->
                 val parts = TestParts.of(db, tmp.root, scope)
-                listOf(LookupRoutes(parts), RequestsRoutes(parts))
+                listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts), VersionsRoutes(parts),
+                       HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
                 for (path in listOf("/fetch", "/versions/keep-more", "/lacuerda/search", "/lacuerda/artist",
-                                    "/harptabs/artist", "/jobs/again")) {
+                                    "/harptabs/artist", "/jobs/again", "/review", "/versions/choose", "/versions/keep",
+                                    "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
+                                    "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
+                                    "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val refused = test.postScript(path, listOf("song" to "1"))
                     assertEquals(409, refused.status, path)
                     assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
+                }
+                for (path in listOf("/review", "/versions", "/harmonica", "/guitar", "/export.pdf",
+                                    "/assets/alphatab/alphaTab.min.js")) {
+                    assertTrue(path !in stubbed, "$path is its module's now")
+                    val page = test.get("$path?song=1")
+                    assertEquals(409, page.status, path)
+                    assertEquals("text/html; charset=utf-8", page.header("Content-Type"))
+                    assertTrue("isn&#x27;t on the phone yet." in page.text,
+                               page.text.substringAfter("<p class=\"message\">").substringBefore("</p>"))
+                    val said = test.script("$path?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
+                    assertTrue(said.endsWith(" on the phone yet."), said)
                 }
                 assertEquals(409, test.script("/requests.json").status)
             }

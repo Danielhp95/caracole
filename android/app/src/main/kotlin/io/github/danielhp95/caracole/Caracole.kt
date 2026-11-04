@@ -59,7 +59,8 @@ object Caracole {
     /** False under CaracoleTestRunner: `/api/search`'s `lacuerda_search` null, so no page sends LaCuerda a search. */
     @Volatile var searchesLacuerdaForTests: Boolean = true
 
-    /** The phone's alerts (lane alerts-backups' Android notifications; none until then). */
+    /** The phone's alerts: [AndroidAlerts] from the start, unless something set others before (lane alerts-backups'
+     * Android notifications; they tell no one until it lands). */
     var alerts: Alerts = Alerts.NONE
 
     /** The process's own work: the phone's job queue, and what a screen starts that must outlive it. */
@@ -95,6 +96,7 @@ object Caracole {
             val library = File(files, "library").apply { mkdirs() }
             val state = File(files, "state").apply { mkdirs() }
             cacheDir(context).mkdirs()
+            if (alerts === Alerts.NONE) alerts = AndroidAlerts(context)
             val phone = Phone(PhoneDeps(
                 database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = background,
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
