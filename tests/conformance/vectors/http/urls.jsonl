@@ -1,0 +1,221 @@
+{"corpus":"http/urls","header":true,"made_by":"tests/test_conformance_http.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["https://musescore.com/api/jmuse?id=6159957&index=0&type=img"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/api/jmuse?id=6159957&index=0&type=img","scheme":"https","site":"musescore.com","str":"https://musescore.com/api/jmuse?id=6159957&index=0&type=img"}}
+{"args":["https://musescore.com/score/6159957/download/pdf"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/score/6159957/download/pdf","scheme":"https","site":"musescore.com","str":"https://musescore.com/score/6159957/download/pdf"}}
+{"args":["https://musescore.com/sheetmusic?text=wonderwall"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/sheetmusic?text=wonderwall","scheme":"https","site":"musescore.com","str":"https://musescore.com/sheetmusic?text=wonderwall"}}
+{"args":["https://musescore.com/search/wonderwall"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/search/wonderwall","scheme":"https","site":"musescore.com","str":"https://musescore.com/search/wonderwall"}}
+{"args":["https://musescore.com/oembed/endpoint?url=https%3A%2F%2Fmusescore.com%2Fsong%2Fwonderwall-1"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/oembed/endpoint?url=https%3A%2F%2Fmusescore.com%2Fsong%2Fwonderwall-1","scheme":"https","site":"musescore.com","str":"https://musescore.com/oembed/endpoint?url=https%3A%2F%2Fmusescore.com%2Fsong%2Fwonderwall-1"}}
+{"args":["https://musescore.com/user/login?destination=/song/wonderwall-1"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/user/login?destination=/song/wonderwall-1","scheme":"https","site":"musescore.com","str":"https://musescore.com/user/login?destination=/song/wonderwall-1"}}
+{"args":["https://musescore.com/redirect?to=https%3A%2F%2Fexample.com"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/redirect?to=https%3A%2F%2Fexample.com","scheme":"https","site":"musescore.com","str":"https://musescore.com/redirect?to=https%3A%2F%2Fexample.com"}}
+{"args":["https://musescore.com/user/27/s/abcdef"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/user/27/s/abcdef","scheme":"https","site":"musescore.com","str":"https://musescore.com/user/27/s/abcdef"}}
+{"args":["https://gtptabs.com/storage/archive/blur.zip"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/storage/archive/blur.zip","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/storage/archive/blur.zip"}}
+{"args":["https://gtptabs.com/tabs/upload.html?artistId=1593"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/tabs/upload.html?artistId=1593","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/tabs/upload.html?artistId=1593"}}
+{"args":["https://gtptabs.com/ru/tabs/2/blur/country-house.html"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/ru/tabs/2/blur/country-house.html","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/ru/tabs/2/blur/country-house.html"}}
+{"args":["https://gtptabs.com/search/go.html?q=blur"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/search/go.html?q=blur","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/search/go.html?q=blur"}}
+{"args":["http://gtptabs.com/advertisement.html"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/advertisement.html","scheme":"http","site":"gtptabs.com","str":"http://gtptabs.com/advertisement.html"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/print?id=1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/print?id=1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/print?id=1"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/download?id=1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/download?id=1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/download?id=1"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/download-kids-worship/shine-your-light-chords-4818770"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/download-kids-worship/shine-your-light-chords-4818770","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/download-kids-worship/shine-your-light-chords-4818770"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/track/se-que-es-tarde-chords-1126580"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/track/se-que-es-tarde-chords-1126580","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/track/se-que-es-tarde-chords-1126580"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/applicature/transpose?id=1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/applicature/transpose?id=1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/applicature/transpose?id=1"}}
+{"args":["https://tabs.ultimate-guitar.com/download/public/1234"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/download/public/1234","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/download/public/1234"}}
+{"args":["https://www.ultimate-guitar.com/search.php?search_type=title&value=x"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/search.php?search_type=title&value=x","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/search.php?search_type=title&value=x"}}
+{"args":["https://www.ultimate-guitar.com/tab-pro/download?id=1"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/tab-pro/download?id=1","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/tab-pro/download?id=1"}}
+{"args":["https://www.ultimate-guitar.com/artist/soda_stereo_2946?no_takeover"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/artist/soda_stereo_2946?no_takeover","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/artist/soda_stereo_2946?no_takeover"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/soda-stereo/persiana-americana-tabs-1081462","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/85053"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/85053","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/85053"}}
+{"args":["https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords&page=2"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/artist/soda_stereo_2946?filter=chords&page=2","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords&page=2"}}
+{"args":["https://www.ultimate-guitar.com/sitemap_last.xml"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/sitemap_last.xml","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/sitemap_last.xml"}}
+{"args":["https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x"],"fn":"url","out":{"absolute":true,"host":"lrclib.net","netloc":"lrclib.net","port":null,"raw_path":"/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x","scheme":"https","site":"lrclib.net","str":"https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x"}}
+{"args":["https://acordes.lacuerda.net/soda_stereo/"],"fn":"url","out":{"absolute":true,"host":"acordes.lacuerda.net","netloc":"acordes.lacuerda.net","port":null,"raw_path":"/soda_stereo/","scheme":"https","site":"lacuerda.net","str":"https://acordes.lacuerda.net/soda_stereo/"}}
+{"args":["https://gtptabs.com/sitemapGoogle.xml"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/sitemapGoogle.xml","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/sitemapGoogle.xml"}}
+{"args":["https://gtptabs.com/tabs/2/blur.html"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/tabs/2/blur.html","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/tabs/2/blur.html"}}
+{"args":["https://gtptabs.com/tabs/download/58155.html"],"fn":"url","out":{"absolute":true,"host":"gtptabs.com","netloc":"gtptabs.com","port":null,"raw_path":"/tabs/download/58155.html","scheme":"https","site":"gtptabs.com","str":"https://gtptabs.com/tabs/download/58155.html"}}
+{"args":["https://musescore.com/sitemaps/song-index.xml"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/sitemaps/song-index.xml","scheme":"https","site":"musescore.com","str":"https://musescore.com/sitemaps/song-index.xml"}}
+{"args":["https://musescore.com/sitemaps/song-index/sitemap_songs1.xml"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/sitemaps/song-index/sitemap_songs1.xml","scheme":"https","site":"musescore.com","str":"https://musescore.com/sitemaps/song-index/sitemap_songs1.xml"}}
+{"args":["https://musescore.com/song/wonderwall-1524"],"fn":"url","out":{"absolute":true,"host":"musescore.com","netloc":"musescore.com","port":null,"raw_path":"/song/wonderwall-1524","scheme":"https","site":"musescore.com","str":"https://musescore.com/song/wonderwall-1524"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/b\u0000-chords-1"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\x00' at position 40."}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/b\n-chords-1"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\n' at position 40."}}
+{"args":[{"parts":["https://tabs.ultimate-guitar.com/tab/a/",{"repeat":"x","times":70000},"-chords-1"]}],"fn":"url","out":{"err":"InvalidURL: URL too long"}}
+{"args":[{"parts":["https://tabs.ultimate-guitar.com/tab/a/b",{"utf16":[55296]},"-chords-1"]}],"fn":"url","out":{"err":"UnicodeEncodeError: 'utf-8' codec can't encode character '\\ud800' in position 0: surrogates not allowed"}}
+{"args":["https://[::zz]/tab/1"],"fn":"url","out":{"err":"InvalidURL: Invalid IPv6 address: '[::zz]'"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/a/old-chords-1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/a/old-chords-1"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/new-chords-1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/a/new-chords-1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/a/new-chords-1"}}
+{"args":["https://lrclib.net/api/search?track_name=x"],"fn":"url","out":{"absolute":true,"host":"lrclib.net","netloc":"lrclib.net","port":null,"raw_path":"/api/search?track_name=x","scheme":"https","site":"lrclib.net","str":"https://lrclib.net/api/search?track_name=x"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/1"}}
+{"args":["https://x.test/1"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/1","scheme":"https","site":"x.test","str":"https://x.test/1"}}
+{"args":["https://lrclib.net/api/get"],"fn":"url","out":{"absolute":true,"host":"lrclib.net","netloc":"lrclib.net","port":null,"raw_path":"/api/get","scheme":"https","site":"lrclib.net","str":"https://lrclib.net/api/get"}}
+{"args":["https://www.ultimate-guitar.com/sitemap40.xml"],"fn":"url","out":{"absolute":true,"host":"www.ultimate-guitar.com","netloc":"www.ultimate-guitar.com","port":null,"raw_path":"/sitemap40.xml","scheme":"https","site":"ultimate-guitar.com","str":"https://www.ultimate-guitar.com/sitemap40.xml"}}
+{"args":["https://acordes.lacuerda.net/artist_1/"],"fn":"url","out":{"absolute":true,"host":"acordes.lacuerda.net","netloc":"acordes.lacuerda.net","port":null,"raw_path":"/artist_1/","scheme":"https","site":"lacuerda.net","str":"https://acordes.lacuerda.net/artist_1/"}}
+{"args":["https://gametabs.net/tabs/actraiser/fillmore"],"fn":"url","out":{"absolute":true,"host":"gametabs.net","netloc":"gametabs.net","port":null,"raw_path":"/tabs/actraiser/fillmore","scheme":"https","site":"gametabs.net","str":"https://gametabs.net/tabs/actraiser/fillmore"}}
+{"args":["HTTPS://Tabs.Ultimate-Guitar.COM/Tab/1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/Tab/1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/Tab/1"}}
+{"args":["https://tabs.ultimate-guitar.com:443/tab/1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/1","scheme":"https","site":"ultimate-guitar.com","str":"https://tabs.ultimate-guitar.com/tab/1"}}
+{"args":["http://tabs.ultimate-guitar.com:80/tab/1"],"fn":"url","out":{"absolute":true,"host":"tabs.ultimate-guitar.com","netloc":"tabs.ultimate-guitar.com","port":null,"raw_path":"/tab/1","scheme":"http","site":"ultimate-guitar.com","str":"http://tabs.ultimate-guitar.com/tab/1"}}
+{"args":["http://x.test:8080/a"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test:8080","port":8080,"raw_path":"/a","scheme":"http","site":"x.test","str":"http://x.test:8080/a"}}
+{"args":["https://x.test:8443/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test:8443","port":8443,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test:8443/"}}
+{"args":["http://x.test:/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"http","site":"x.test","str":"http://x.test/"}}
+{"args":["http://x.test:abc/"],"fn":"url","out":{"err":"InvalidURL: Invalid port: 'abc'"}}
+{"args":["http://x.test:99999/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test:99999","port":99999,"raw_path":"/","scheme":"http","site":"x.test","str":"http://x.test:99999/"}}
+{"args":["ws://x.test:80/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"ws","site":"x.test","str":"ws://x.test/"}}
+{"args":["wss://x.test:443/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"wss","site":"x.test","str":"wss://x.test/"}}
+{"args":["ftp://x.test:21/f"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/f","scheme":"ftp","site":"x.test","str":"ftp://x.test/f"}}
+{"args":["http://x.test:0443/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test:443","port":443,"raw_path":"/","scheme":"http","site":"x.test","str":"http://x.test:443/"}}
+{"args":["https://x.test:+443/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test/"}}
+{"args":["https://x.test/a b"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a%20b","scheme":"https","site":"x.test","str":"https://x.test/a%20b"}}
+{"args":["https://x.test/café?q=niño#frag ment"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/caf%C3%A9?q=ni%C3%B1o","scheme":"https","site":"x.test","str":"https://x.test/caf%C3%A9?q=ni%C3%B1o#frag%20ment"}}
+{"args":["https://x.test/a/./b/../c"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a/c","scheme":"https","site":"x.test","str":"https://x.test/a/c"}}
+{"args":["https://x.test/a/b/.."],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a","scheme":"https","site":"x.test","str":"https://x.test/a"}}
+{"args":["https://x.test/../a"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a","scheme":"https","site":"x.test","str":"https://x.test/a"}}
+{"args":["https://x.test/./"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test/"}}
+{"args":["https://x.test/a/%2e%2e/b"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a/%2e%2e/b","scheme":"https","site":"x.test","str":"https://x.test/a/%2e%2e/b"}}
+{"args":["https://x.test/%7euser/%zz/%E6%96%91/%e6"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/%7euser/%zz/%E6%96%91/%e6","scheme":"https","site":"x.test","str":"https://x.test/%7euser/%zz/%E6%96%91/%e6"}}
+{"args":["https://x.test/a%2Fb"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a%2Fb","scheme":"https","site":"x.test","str":"https://x.test/a%2Fb"}}
+{"args":["https://x.test/?a=1&b=2#"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/?a=1&b=2","scheme":"https","site":"x.test","str":"https://x.test/?a=1&b=2#"}}
+{"args":["https://x.test/?"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/?","scheme":"https","site":"x.test","str":"https://x.test/?"}}
+{"args":["https://x.test#"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test#"}}
+{"args":["https://x.test"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test"}}
+{"args":["https://x.test?q"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/?q","scheme":"https","site":"x.test","str":"https://x.test?q"}}
+{"args":["https://x.test/p?q=\"<>`{}|\\^'"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/p?q=%22%3C%3E`{}|\\^'","scheme":"https","site":"x.test","str":"https://x.test/p?q=%22%3C%3E`{}|\\^'"}}
+{"args":["https://x.test/p\"<>`{}|\\^'"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/p%22%3C%3E%60%7B%7D|\\^'","scheme":"https","site":"x.test","str":"https://x.test/p%22%3C%3E%60%7B%7D|\\^'"}}
+{"args":["https://x.test/#a b\"<>`{}#"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test/#a%20b%22%3C%3E%60{}#"}}
+{"args":["https://x.test/p;params?q;r"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/p;params?q;r","scheme":"https","site":"x.test","str":"https://x.test/p;params?q;r"}}
+{"args":["https://x.test/😀?😀#😀"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/%F0%9F%98%80?%F0%9F%98%80","scheme":"https","site":"x.test","str":"https://x.test/%F0%9F%98%80?%F0%9F%98%80#%F0%9F%98%80"}}
+{"args":["https://x.test/a b"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a%E2%80%A8b","scheme":"https","site":"x.test","str":"https://x.test/a%E2%80%A8b"}}
+{"args":["https://x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/%C2%85","scheme":"https","site":"x.test","str":"https://x.test/%C2%85"}}
+{"args":["https://x.test/%"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/%","scheme":"https","site":"x.test","str":"https://x.test/%"}}
+{"args":["https://x.test/%%41"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/%%41","scheme":"https","site":"x.test","str":"https://x.test/%%41"}}
+{"args":["https://x.test/~-._!$&'()*+,;=:@"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/~-._!$&'()*+,;=:@","scheme":"https","site":"x.test","str":"https://x.test/~-._!$&'()*+,;=:@"}}
+{"args":["https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC&artist_name=x y+z"],"fn":"url","out":{"absolute":true,"host":"lrclib.net","netloc":"lrclib.net","port":null,"raw_path":"/api/search?track_name=%E6%96%91%E9%A9%AC&artist_name=x%20y+z","scheme":"https","site":"lrclib.net","str":"https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC&artist_name=x%20y+z"}}
+{"args":["https://[::1]:8080/a"],"fn":"url","out":{"absolute":true,"host":"::1","netloc":"[::1]:8080","port":8080,"raw_path":"/a","scheme":"https","site":"::1","str":"https://[::1]:8080/a"}}
+{"args":["https://[::ffff:192.168.0.1]/"],"fn":"url","out":{"absolute":true,"host":"::ffff:192.168.0.1","netloc":"[::ffff:192.168.0.1]","port":null,"raw_path":"/","scheme":"https","site":"0.1","str":"https://[::ffff:192.168.0.1]/"}}
+{"args":["https://[::zz]/"],"fn":"url","out":{"err":"InvalidURL: Invalid IPv6 address: '[::zz]'"}}
+{"args":["https://[::1/"],"fn":"url","out":{"err":"InvalidURL: Invalid port: ':1'"}}
+{"args":["https://999.1.1.1/"],"fn":"url","out":{"err":"InvalidURL: Invalid IPv4 address: '999.1.1.1'"}}
+{"args":["https://1.2.3.4/"],"fn":"url","out":{"absolute":true,"host":"1.2.3.4","netloc":"1.2.3.4","port":null,"raw_path":"/","scheme":"https","site":"3.4","str":"https://1.2.3.4/"}}
+{"args":["https://01.2.3.4/"],"fn":"url","out":{"err":"InvalidURL: Invalid IPv4 address: '01.2.3.4'"}}
+{"args":["https://1.2.3/"],"fn":"url","out":{"absolute":true,"host":"1.2.3","netloc":"1.2.3","port":null,"raw_path":"/","scheme":"https","site":"2.3","str":"https://1.2.3/"}}
+{"args":["https://ex ample.com/"],"fn":"url","out":{"absolute":true,"host":"ex%20ample.com","netloc":"ex%20ample.com","port":null,"raw_path":"/","scheme":"https","site":"ex%20ample.com","str":"https://ex%20ample.com/"}}
+{"args":["https://a_b.com/"],"fn":"url","out":{"absolute":true,"host":"a_b.com","netloc":"a_b.com","port":null,"raw_path":"/","scheme":"https","site":"a_b.com","str":"https://a_b.com/"}}
+{"args":["https://a%41.com/"],"fn":"url","out":{"absolute":true,"host":"a%41.com","netloc":"a%41.com","port":null,"raw_path":"/","scheme":"https","site":"a%41.com","str":"https://a%41.com/"}}
+{"args":["https://x.test."],"fn":"url","out":{"absolute":true,"host":"x.test.","netloc":"x.test.","port":null,"raw_path":"/","scheme":"https","site":"test.","str":"https://x.test."}}
+{"args":["https://Ä.example/"],"fn":"url","out":{"absolute":true,"host":"ä.example","netloc":"xn--4ca.example","port":null,"raw_path":"/","scheme":"https","site":"ä.example","str":"https://xn--4ca.example/"}}
+{"args":["https://müller.de/"],"fn":"url","out":{"absolute":true,"host":"müller.de","netloc":"xn--mller-kva.de","port":null,"raw_path":"/","scheme":"https","site":"müller.de","str":"https://xn--mller-kva.de/"}}
+{"args":["https://中国.icom.museum/"],"fn":"url","out":{"absolute":true,"host":"中国.icom.museum","netloc":"xn--fiqs8s.icom.museum","port":null,"raw_path":"/","scheme":"https","site":"icom.museum","str":"https://xn--fiqs8s.icom.museum/"}}
+{"args":["https://xn--mller-kva.de/"],"fn":"url","out":{"absolute":true,"host":"müller.de","netloc":"xn--mller-kva.de","port":null,"raw_path":"/","scheme":"https","site":"müller.de","str":"https://xn--mller-kva.de/"}}
+{"args":["https://xn--zz.com/"],"fn":"url","out":{"absolute":true,"host":{"err":"IDNAError: Invalid A-label"},"netloc":"xn--zz.com","port":null,"raw_path":"/","scheme":"https","site":{"err":"IDNAError: Invalid A-label"},"str":"https://xn--zz.com/"}}
+{"args":["https://Bücher.example/"],"fn":"url","out":{"absolute":true,"host":"bücher.example","netloc":"xn--bcher-kva.example","port":null,"raw_path":"/","scheme":"https","site":"bücher.example","str":"https://xn--bcher-kva.example/"}}
+{"args":["https://xn--fiqs8s.icom.museum/x"],"fn":"url","out":{"absolute":true,"host":"中国.icom.museum","netloc":"xn--fiqs8s.icom.museum","port":null,"raw_path":"/x","scheme":"https","site":"icom.museum","str":"https://xn--fiqs8s.icom.museum/x"}}
+{"args":["https://-badé.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: '-badé.com'"}}
+{"args":["https://badé-.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'badé-.com'"}}
+{"args":["https://ab--é.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'ab--é.com'"}}
+{"args":["https://́é.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: '́é.com'"}}
+{"args":["https://é.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'é.com'"}}
+{"args":["https://אב.com/"],"fn":"url","out":{"absolute":true,"host":"אב.com","netloc":"xn--4dbc.com","port":null,"raw_path":"/","scheme":"https","site":"אב.com","str":"https://xn--4dbc.com/"}}
+{"args":["https://אa.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'אa.com'"}}
+{"args":["https://a‌b.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'a\\u200cb.com'"}}
+{"args":["https://क्‌b.com/"],"fn":"url","out":{"absolute":true,"host":"क्‌b.com","netloc":"xn--b-tud2ow90g.com","port":null,"raw_path":"/","scheme":"https","site":"क्‌b.com","str":"https://xn--b-tud2ow90g.com/"}}
+{"args":["https://xn--ab-m1t.com/"],"fn":"url","out":{"absolute":true,"host":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200D at position 2 in 'a\\u200db'"},"netloc":"xn--ab-m1t.com","port":null,"raw_path":"/","scheme":"https","site":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200D at position 2 in 'a\\u200db'"},"str":"https://xn--ab-m1t.com/"}}
+{"args":["https://xn--ab-j1t.com/"],"fn":"url","out":{"absolute":true,"host":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200C at position 2 in 'a\\u200cb'"},"netloc":"xn--ab-j1t.com","port":null,"raw_path":"/","scheme":"https","site":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200C at position 2 in 'a\\u200cb'"},"str":"https://xn--ab-j1t.com/"}}
+{"args":["https://xn--11b2ezcs70k.com/"],"fn":"url","out":{"absolute":true,"host":"क्‌ष.com","netloc":"xn--11b2ezcs70k.com","port":null,"raw_path":"/","scheme":"https","site":"क्‌ष.com","str":"https://xn--11b2ezcs70k.com/"}}
+{"args":["https://xn--11b2ezcw70k.com/"],"fn":"url","out":{"absolute":true,"host":"क्‍ष.com","netloc":"xn--11b2ezcw70k.com","port":null,"raw_path":"/","scheme":"https","site":"क्‍ष.com","str":"https://xn--11b2ezcw70k.com/"}}
+{"args":["https://l·l.com/"],"fn":"url","out":{"absolute":true,"host":"l·l.com","netloc":"xn--ll-0ea.com","port":null,"raw_path":"/","scheme":"https","site":"l·l.com","str":"https://xn--ll-0ea.com/"}}
+{"args":["https://a·.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'a·.com'"}}
+{"args":["https://・ア.jp/"],"fn":"url","out":{"absolute":true,"host":"・ア.jp","netloc":"xn--cckyj.jp","port":null,"raw_path":"/","scheme":"https","site":"・ア.jp","str":"https://xn--cckyj.jp/"}}
+{"args":["https://・x.jp/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: '・x.jp'"}}
+{"args":["https://١۱.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: '١۱.com'"}}
+{"args":["https://éaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'éaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com'"}}
+{"args":["https://é.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'é.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.com'"}}
+{"args":["https://é。com/"],"fn":"url","out":{"absolute":true,"host":"é.com","netloc":"xn--9ca.com","port":null,"raw_path":"/","scheme":"https","site":"é.com","str":"https://xn--9ca.com/"}}
+{"args":["https://é．com/"],"fn":"url","out":{"absolute":true,"host":"é.com","netloc":"xn--9ca.com","port":null,"raw_path":"/","scheme":"https","site":"é.com","str":"https://xn--9ca.com/"}}
+{"args":["https://é..com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'é..com'"}}
+{"args":["https://.é.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: '.é.com'"}}
+{"args":["https://É.com/"],"fn":"url","out":{"absolute":true,"host":"é.com","netloc":"xn--9ca.com","port":null,"raw_path":"/","scheme":"https","site":"é.com","str":"https://xn--9ca.com/"}}
+{"args":["https://Ⅳ.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'Ⅳ.com'"}}
+{"args":["https://ﬁ.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'ﬁ.com'"}}
+{"args":["https://user@é.com/"],"fn":"url","out":{"absolute":true,"host":"é.com","netloc":"xn--9ca.com","port":null,"raw_path":"/","scheme":"https","site":"é.com","str":"https://user@xn--9ca.com/"}}
+{"args":["https://u:p@x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://u:p@x.test/"}}
+{"args":["https://us er:päss@x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://us%20er:p%C3%A4ss@x.test/"}}
+{"args":["https://@x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://x.test/"}}
+{"args":["https://a@b@x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"https","site":"x.test","str":"https://a%40b@x.test/"}}
+{"args":["//x.test/a"],"fn":"url","out":{"absolute":false,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/a","scheme":"","site":"x.test","str":"//x.test/a"}}
+{"args":["/relative/path"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"/relative/path","scheme":"","site":"","str":"/relative/path"}}
+{"args":["relative"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"relative","scheme":"","site":"","str":"relative"}}
+{"args":["rel:ative"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"ative","scheme":"rel","site":"","str":"rel:ative"}}
+{"args":[":bad"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"bad","scheme":"","site":"","str":"bad"}}
+{"args":["//"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"/","scheme":"","site":"","str":""}}
+{"args":[""],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"/","scheme":"","site":"","str":""}}
+{"args":["mailto:x@y.test"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"x@y.test","scheme":"mailto","site":"","str":"mailto:x@y.test"}}
+{"args":["https:/x.test"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"/x.test","scheme":"https","site":"","str":"https:/x.test"}}
+{"args":["https:x.test"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"x.test","scheme":"https","site":"","str":"https:x.test"}}
+{"args":["https:///path"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"/path","scheme":"https","site":"","str":"https:/path"}}
+{"args":["https://x.test/"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\x7f' at position 15."}}
+{"args":["https://x.test/\t"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\t' at position 15."}}
+{"args":["https://x.test/\u0000"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\x00' at position 15."}}
+{"args":[{"parts":["https://x.test/",{"repeat":"a","times":65536}]}],"fn":"url","out":{"err":"InvalidURL: URL too long"}}
+{"args":[{"parts":["https://x.test/",{"repeat":"a","times":65520}]}],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":{"parts":["/",{"repeat":"a","times":65520}]},"scheme":"https","site":"x.test","str":{"parts":["https://x.test/",{"repeat":"a","times":65520}]}}}
+{"args":["https://\u0001x.test/"],"fn":"url","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\x01' at position 8."}}
+{"args":["1http://x.test/"],"fn":"url","out":{"absolute":false,"host":"","netloc":"","port":null,"raw_path":"1http://x.test/","scheme":"","site":"","str":"1http://x.test/"}}
+{"args":["h-t+t.p://x.test/"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/","scheme":"h-t+t.p","site":"x.test","str":"h-t+t.p://x.test/"}}
+{"args":["HTTP://X.TEST/A"],"fn":"url","out":{"absolute":true,"host":"x.test","netloc":"x.test","port":null,"raw_path":"/A","scheme":"http","site":"x.test","str":"http://x.test/A"}}
+{"args":["https://lrclib.net/api/get",[["track_name","斑马斑马"],["duration","253"]]],"fn":"with_params","out":"https://lrclib.net/api/get?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&duration=253"}
+{"args":["https://lrclib.net/api/get",[["track_name","Other"]]],"fn":"with_params","out":"https://lrclib.net/api/get?track_name=Other"}
+{"args":["https://lrclib.net/api/search",[["track_name","x y"],["artist_name","a+b&c=d"]]],"fn":"with_params","out":"https://lrclib.net/api/search?track_name=x+y&artist_name=a%2Bb%26c%3Dd"}
+{"args":["https://lrclib.net/api/search?old=1",[["q","new"]]],"fn":"with_params","out":"https://lrclib.net/api/search?q=new"}
+{"args":["https://x.test/p?old=1#frag",[["q","#?/%~-._*'()!"]]],"fn":"with_params","out":"https://x.test/p?q=%23%3F%2F%25~-._%2A%27%28%29%21#frag"}
+{"args":["https://x.test/p",[["a",""],["","b"],["a","2"]]],"fn":"with_params","out":"https://x.test/p?a=&a=2&=b"}
+{"args":["https://x.test/p",[["k","😀 é "]]],"fn":"with_params","out":"https://x.test/p?k=%F0%9F%98%80+%C3%A9%C2%A0"}
+{"args":["https://x.test/p",[]],"fn":"with_params","out":"https://x.test/p"}
+{"args":["https://x.test/p?old=1",[]],"fn":"with_params","out":"https://x.test/p"}
+{"args":["https://tabs.ultimate-guitar.com/tab/busy",[["q","x y"]]],"fn":"with_params","out":"https://tabs.ultimate-guitar.com/tab/busy?q=x+y"}
+{"args":["https://x.test/p",[["k","a\u0000b"]]],"fn":"with_params","out":"https://x.test/p?k=a%00b"}
+{"args":["https://x.test/p",[["k",{"parts":["a",{"utf16":[55296]},"b"]}]]],"fn":"with_params","out":{"err":"UnicodeEncodeError: 'utf-8' codec can't encode character '\\ud800' in position 1: surrogates not allowed"}}
+{"args":["https://x.test/a\nb",[["k","v"]]],"fn":"with_params","out":{"err":"InvalidURL: Invalid non-printable ASCII character in URL, '\\n' at position 16."}}
+{"args":["https://acordes.lacuerda.net/busca.php",[["exp","soda stereo"],["met","1"]]],"fn":"with_params","out":"https://acordes.lacuerda.net/busca.php?exp=soda+stereo&met=1"}
+{"args":["https://api.megalobiz.com/search",[["qry","Hotel California Eagles"],["type","lrc"]]],"fn":"with_params","out":"https://api.megalobiz.com/search?qry=Hotel+California+Eagles&type=lrc"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/tab/a/new-chords-1"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/new-chords-1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","new-chords-1"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/new-chords-1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","../x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","./"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","."],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1",".."],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","?q=1"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/old-chords-1?q=1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","#f"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/old-chords-1#f"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1",""],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/old-chords-1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","//www.ultimate-guitar.com/artist/a_1"],"fn":"resolve","out":"https://www.ultimate-guitar.com/artist/a_1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","https://www.ultimate-guitar.com/artist/a_1"],"fn":"resolve","out":"https://www.ultimate-guitar.com/artist/a_1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","https://accounts.example.com/login?next=/tab/a"],"fn":"resolve","out":"https://accounts.example.com/login?next=/tab/a"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","https:///path"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/path"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","https:path"],"fn":"resolve","out":{"err":"InvalidURL: For absolute URLs, path must be empty or begin with '/'"}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","http:/x"],"fn":"resolve","out":"http://tabs.ultimate-guitar.com/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","HTTPS://TABS.ULTIMATE-GUITAR.COM/x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/a b"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/a%20b"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/café"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/caf%C3%A9"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1#top","/x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/x#top"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1#top","/x#here"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/x#here"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/a\nb"],"fn":"resolve","out":{"err":"RemoteProtocolError: Invalid URL in location header: Invalid non-printable ASCII character in URL, '\\n' at position 2.."}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","https://[::zz]/"],"fn":"resolve","out":{"err":"RemoteProtocolError: Invalid URL in location header: Invalid IPv6 address: '[::zz]'."}}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","  /x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/%20%20/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/tab/print?id=1"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/print?id=1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","http://tabs.ultimate-guitar.com/x"],"fn":"resolve","out":"http://tabs.ultimate-guitar.com/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","/a/./b/../../c"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/c"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","../../../../x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/x"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","a//b"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/a/b"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","//"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/tab/a/old-chords-1"}
+{"args":["https://tabs.ultimate-guitar.com/tab/a/old-chords-1","///x"],"fn":"resolve","out":"https://tabs.ultimate-guitar.com/x"}
+{"args":["https://acordes.lacuerda.net/artist_1/","https://acordes.lacuerda.net/artist_1/"],"fn":"resolve","out":"https://acordes.lacuerda.net/artist_1/"}
+{"args":["https://x.test/a/b?q=1","?"],"fn":"resolve","out":"https://x.test/a/b?"}
+{"args":["https://x.test/a/b?q=1","c;p?x"],"fn":"resolve","out":"https://x.test/a/c;p?x"}
+{"args":["https://x.test/a;p/b","c"],"fn":"resolve","out":"https://x.test/a;p/c"}
+{"args":["https://x.test:8443/a/b","/c"],"fn":"resolve","out":"https://x.test:8443/c"}
+{"args":["https://x.test/a/b","mailto:x@y.test"],"fn":"resolve","out":{"err":"InvalidURL: For absolute URLs, path must be empty or begin with '/'"}}
+{"args":["https://x.test/a/b","//y.test"],"fn":"resolve","out":"https://y.test"}
+{"args":["https://x.test/a/b","//y.test:80/z"],"fn":"resolve","out":"https://y.test:80/z"}
+{"args":["http://x.test/a","https://x.test/b"],"fn":"resolve","out":"https://x.test/b"}
+{"args":["https://x.test/","é"],"fn":"resolve","out":"https://x.test/%C3%A9"}
+{"args":["https://x.test/a/b","c/./d/../e"],"fn":"resolve","out":"https://x.test/a/c/e"}
+{"args":["https://x.test/a/b","c/.."],"fn":"resolve","out":"https://x.test/a/"}
+{"args":["https://x.test/a/b/","../.."],"fn":"resolve","out":"https://x.test/"}
+{"args":["https://x.test","c"],"fn":"resolve","out":"https://x.test/c"}
+{"args":["https://x.test?q=1","#f"],"fn":"resolve","out":"https://x.test?q=1#f"}
+{"args":["https://x.test/a","//müller.de/x"],"fn":"resolve","out":"https://xn--mller-kva.de/x"}
+{"args":["https://x.test/a","https://user:pw@x.test/b"],"fn":"resolve","out":"https://user:pw@x.test/b"}
+{"args":["https://x.test/a","/%zz"],"fn":"resolve","out":"https://x.test/%zz"}

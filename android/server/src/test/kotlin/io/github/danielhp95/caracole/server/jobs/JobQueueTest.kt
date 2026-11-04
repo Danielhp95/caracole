@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -13,6 +14,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -62,7 +64,8 @@ class JobQueueTest {
             "state":"done","active":false,"note":"","queued_at":"2026-11-03T12:00:00Z",
             "started_at":"2026-11-03T12:00:01Z","finished_at":"2026-11-03T12:00:02Z",
             "steps":[{"name":"add","label":"Adding to the library","state":"done","detail":"added"}],"commands":[],
-            "song":{"id":7,"display":"Radiohead - Creep"},"files":{},"seconds_to_sheet":null}"""), over.asJson())
+            "song":{"id":7,"display":"Radiohead - Creep"},"files":{},"seconds_to_sheet":null,"units":[]}"""),
+            over.asJson())
         // A stage it names that its spec didn't is one more, named by itself.
         val more = queue.submit(spec("muse/hysteria") { it.stage("pages", "done") }).first
         assertEquals(listOf("add" to "skipped", "pages" to "done"), queue.await(more.id).stages.map { it.name to it.state })
@@ -95,15 +98,17 @@ class JobQueueTest {
         val (same, new) = queue.submit(spec("oasis/wonderwall"))  // a second Remove from another device, say
         assertFalse(new)  // as caracole serve's queue answers a request that fetches nothing: the one that runs
         assertEquals(running.id, same.id)
-        val (own, apart) = queue.submit(spec("oasis/wonderwall", join = false))  // one that must come after
-        assertTrue(apart && own.id != running.id)
+        // One that mustn't join: the song's job is its answer, left as it is (web/jobs.py's join=False).
+        val (own, apart) = queue.submit(spec("oasis/wonderwall", join = false))
+        assertFalse(apart)
+        assertEquals(running.id, own.id)
         val (joined, again) = queue.submit(spec("oasis/wonderwall"))
         assertFalse(again)
         assertEquals(running.id, joined.id)  // the oldest of the key's
         assertTrue(queue.submit(spec("blur/song 2")).second)  // another key: a job of its own
         gate.complete(Unit)
         runCurrent()
-        assertEquals(3, queue.snapshot().size)
+        assertEquals(2, queue.snapshot().size)
         assertTrue(queue.submit(spec("oasis/wonderwall")).second)  // over: the next is a job of its own
     }
 
@@ -313,4 +318,308 @@ class JobQueueTest {
         assertEquals(0, queue.activeCount())
         scope.cancel()
     }
+
+    // --- jobs of commands -------------------------------------------------------------------------------------
+
+    private fun lookup(artist: String, title: String, songbooks: Boolean = true) = JobSpec(
+        title = "Get $artist - $title", key = "${artist.lowercase()}/${title.lowercase()}", kind = "song",
+        stages = emptyList(), commands = JobCommands.lookupSteps(artist, title, songbooks = songbooks), fetching = true)
+
+    private fun search(query: String, auto: Boolean) = JobSpec(
+        title = "LaCuerda's search for $query", key = JobCommands.LACUERDA_SEARCH + query, kind = "lacuerda-search",
+        stages = emptyList(), commands = JobCommands.lacuerdaSearchSteps(query, auto))
+
+    private fun TestScope.queue(commands: Map<String, CommandRunner>, history: JobHistory? = null) =
+        JobQueue(backgroundScope, clock = clock, commands = Commands(commands), history = history)
+
+    @Test fun aJobsCommandsRunOneAfterAnotherEachByItsRunnerTheirStatesAsCaracoleServes() = runTest {
+        val ran = mutableListOf<List<String>>()
+        val queue = queue(mapOf(
+            "get" to CommandRunner { args, context ->
+                ran += args
+                context.stage("song", "running")
+                context.say("get: Radiohead - Creep is in the library")
+                context.stage("song", "done", "in the library")
+                context.readable(mapOf("sheet" to "Radiohead/Creep/sheet.txt"), 2.5)
+            },
+            "versions" to CommandRunner { args, _ -> ran += args; throw CommandExit(2, "No such version.") },
+        ))
+        val job = queue.submit(lookup("Radiohead", "Creep")).first
+        assertEquals(JobCommands.GET_STAGES.map { it.first }, job.stages.map { it.name })  // its commands' stages
+        val over = queue.await(job.id)
+        assertEquals(Job.DONE, over.state)
+        assertEquals(listOf(Job.DONE to 0), over.steps.map { it.state to it.code })
+        assertEquals(listOf("get: Radiohead - Creep is in the library"), over.steps[0].output)
+        assertEquals(listOf("done", "skipped"), over.stages.take(2).map { it.state })
+        assertEquals(mapOf("sheet" to "Radiohead/Creep/sheet.txt") to 2.5, over.files to over.secondsToSheet)
+        // A command that fails: its error line said, its exit status kept, the rest skipped.
+        val two = JobSpec("Keep it, then look it up", "a/t", "versions", emptyList(), fetching = true,
+                          commands = JobCommands.versionSteps("A", "T", keep = "3") + JobCommands.lookupSteps("A", "T"))
+        val failed = queue.await(queue.submit(two).first.id)
+        assertEquals(Job.FAILED, failed.state)
+        assertEquals(listOf(Job.FAILED to 2, Job.SKIPPED to null), failed.steps.map { it.state to it.code })
+        assertEquals(listOf("error: No such version."), failed.steps[0].output)
+        assertEquals(listOf("error: No such version."), failed.output)
+        // A command the phone has no runner for fails its step, as one that couldn't start.
+        val none = queue.await(queue.submit(JobSpec("Match", "m", "song", emptyList(),
+                                                    commands = listOf(Command("Looking it up", listOf("match"))))).first.id)
+        assertEquals(listOf(Job.FAILED to null), none.steps.map { it.state to it.code })
+        assertEquals(listOf("error: caracole match isn't on the phone"), none.output)
+        assertEquals(2, ran.size)
+    }
+
+    @Test fun aLookupTakesThePlaceOfThePhonesOwnAddThatWaitsAndAKeepItComesAfterIt() = runTest {
+        val log = mutableListOf<String>()
+        val queue = queue(mapOf("get" to CommandRunner { _, _ -> log += "get" },
+                                "versions" to CommandRunner { _, _ -> log += "versions" }))
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("hold") { gate.await() })
+        val add = queue.submit(spec("radiohead/creep") { log += "add Creep" }).first
+        val (joined, new) = queue.submit(lookup("Radiohead", "Creep"))
+        assertFalse(new)
+        assertEquals(add.id, joined.id)
+        assertEquals(null, joined.spec.run)  // `caracole get` adds the song itself
+        assertEquals("song" to "Get Radiohead - Creep", joined.spec.kind to joined.title)
+        assertTrue(joined.fetching)
+        assertEquals(listOf("get"), joined.steps.map { it.args[0] })
+        assertEquals(JobCommands.GET_STAGES.map { it.first }, joined.stages.map { it.name })
+        val other = queue.submit(spec("muse/hysteria") { log += "add Hysteria" }).first
+        val keep = JobSpec("Keep it", "muse/hysteria", "versions", emptyList(), fetching = true,
+                           commands = JobCommands.versionSteps("Muse", "Hysteria", keep = "9"))
+        assertEquals(other.id to false, queue.submit(keep).let { it.first.id to it.second })
+        assertEquals(listOf("add", "song", "version", "pdf", "pages"), queue.job(other.id)!!.stages.map { it.name })
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("get", "add Hysteria", "versions"), log)  // the add's run, then the command joined
+        assertEquals(Job.DONE, queue.job(other.id)!!.state)
+    }
+
+    @Test fun tryAgainQueuesAJobOverWithItsCommandsAsTheyWereByHandAndWithItsSongbooks() = runTest {
+        var fails = true
+        val ran = mutableListOf<List<String>>()
+        val queue = queue(mapOf(
+            "get" to CommandRunner { args, _ -> ran += args; if (fails) throw CommandExit(1, "UG answered 500.") },
+            "lacuerda" to CommandRunner { args, _ -> ran += args },
+        ))
+        val first = queue.submit(lookup("Radiohead", "Creep", songbooks = false).copy(note = "from Campfire", songId = 7))
+            .first
+        val searched = queue.submit(search("tu calorro", auto = true)).first
+        assertFailsWith<JobNotOver> { queue.again(first.id) }  // still waiting
+        assertFailsWith<NoSuchElementException> { queue.again(99) }
+        runCurrent()
+        assertEquals(Job.FAILED, queue.job(first.id)!!.state)
+        fails = false
+        val again = queue.again(first.id)
+        assertTrue(again.id > searched.id)
+        assertEquals(listOf("get", "--progress", "--", "Radiohead", "Creep"), again.steps.single().args)
+        assertEquals(listOf("Get Radiohead - Creep", "from Campfire"), listOf(again.title, again.note))
+        assertEquals(7L, again.songId)
+        assertEquals(again.id, queue.again(first.id).id)  // the song's lookup that waits is its answer
+        assertEquals(listOf("lacuerda", "--search=tu calorro", "--progress"), queue.again(searched.id).steps.single().args)
+        runCurrent()
+        assertEquals(listOf(listOf("get", "--progress", "--no-songbooks", "--", "Radiohead", "Creep"),
+                            listOf("lacuerda", "--search=tu calorro", "--progress", "--auto"),
+                            listOf("get", "--progress", "--", "Radiohead", "Creep"),
+                            listOf("lacuerda", "--search=tu calorro", "--progress")), ran)
+        // A job of the phone's own runs its run again.
+        var runs = 0
+        val own = queue.submit(spec("blur/song 2") { runs++ }).first
+        runCurrent()
+        queue.await(queue.again(own.id).id)
+        assertEquals(2, runs)
+    }
+
+    @Test fun onEndIsToldOnceAJobIsOverCancelledOnesTooEachOfThoseQueuedTogether() = runTest {
+        val queue = queue(mapOf("get" to CommandRunner { _, _ -> }))
+        val told = mutableListOf<Pair<Int, String>>()
+        queue.onEnd = { told += it.id to it.state }
+        val gate = CompletableDeferred<Unit>()
+        val held = queue.submit(spec("hold") { gate.await() }).first
+        val together = queue.submitAll(listOf(lookup("A", "1"), lookup("B", "1"), lookup("C", "1")))
+        assertEquals(listOf(true, true, true), together.map { it.second })
+        assertEquals(together.map { it.first.id }, queue.job(together[1].first.id)!!.together)
+        val failing = queue.submit(spec("failing") { throw IllegalStateException("no") }).first
+        runCurrent()
+        queue.cancel(together[1].first.id)
+        assertEquals(together.map { it.first.id to Job.CANCELLED }, told)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(together.map { it.first.id to Job.CANCELLED } + listOf(held.id to Job.DONE, failing.id to Job.FAILED),
+                     told)
+    }
+
+    @Test fun submitAllQueuesAllOrNoneAndAJobItJoinedIsAsItWas() = runTest {
+        val queue = JobQueue(backgroundScope, limit = 3, clock = clock)
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("hold") { gate.await() })
+        val add = queue.submit(spec("a/1") {}).first
+        assertFailsWith<QueueFull> { queue.submitAll(listOf(lookup("A", "1"), lookup("B", "1"), lookup("C", "1"))) }
+        assertEquals(listOf(1, 2), queue.snapshot().map { it.id }.reversed())
+        val restored = queue.job(add.id)!!
+        assertEquals("add" to 0, restored.spec.kind to restored.steps.size)  // as it was
+        assertTrue(restored.spec.run != null)
+        assertEquals(3, queue.submit(lookup("B", "1")).first.id)  // ids as they were
+    }
+
+    // --- a long job yields --------------------------------------------------------------------------------------
+
+    @Test fun aLongJobLetsTheLookupsQueuedMeanwhileGoFirstThenGoesOn() = runTest {
+        val log = mutableListOf<String>()
+        lateinit var queue: JobQueue
+        var render = 0
+        val waiting = mutableListOf<Int>()
+        queue = queue(mapOf(
+            "get" to CommandRunner { args, context ->
+                waiting += queue.job(render)!!.waitingFor
+                log += "get ${args.last()}"
+                if (args.last() == "1") queue.submit(lookup("D", "4"))  // queued meanwhile: it runs too
+                context.yieldToQueued()  // a lookup's own: nothing
+            },
+            "lacuerda" to CommandRunner { _, _ -> log += "search" },
+        ))
+        val songs = CompletableDeferred<Unit>()
+        render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Making the pages")) {
+            context ->
+            context.stage("render", "running", "1 of 2")
+            log += "song 1"
+            songs.await()
+            twoSongs(between = { context.yieldToQueued() }) { log += "song 2" }  // a plain callback, as PhoneRender's
+            context.stage("render", "done")
+        }).first.id
+        runCurrent()
+        val add = queue.submit(spec("muse/hysteria") { log += "add" }).first  // no lookup: it waits its turn
+        queue.submit(lookup("A", "1"))
+        queue.submit(search("q", auto = true))
+        assertEquals(0, queue.job(render)!!.waitingFor)
+        songs.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("song 1", "get 1", "search", "get 4", "song 2", "add"), log)
+        assertEquals(listOf(2, 1), waiting)  // the render waited for 2 requests, then 1
+        assertEquals(Job.DONE, queue.job(render)!!.state)
+        assertEquals(0, queue.job(render)!!.waitingFor)
+        assertEquals(Job.DONE, queue.job(add.id)!!.state)
+        assertEquals(listOf(true), queue.snapshot().map { it.state == Job.DONE }.distinct())
+    }
+
+    /** A song's pages made, [between] two of them called first, as PhoneRender.renderStale calls its callback. */
+    private fun twoSongs(between: () -> Unit, song: () -> Unit) {
+        between()
+        song()
+    }
+
+    // On real threads: the yield blocks its caller's thread while the lookups run.
+    @Test fun aYieldWithNoLookupQueuedReturnsAtOnceAndAStoppedYieldInterruptsBoth() = runBlocking {
+        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val looking = CompletableDeferred<Unit>()
+        val queue = JobQueue(scope, clock = clock, commands = Commands(mapOf("get" to CommandRunner { _, _ ->
+            looking.complete(Unit)
+            awaitCancellation()
+        })))
+        val yielded = AtomicInteger()
+        val first = CompletableDeferred<Unit>()
+        val songs = CompletableDeferred<Unit>()
+        val render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Pages")) {
+            it.yieldToQueued()  // none queued
+            yielded.incrementAndGet()
+            first.complete(Unit)
+            songs.await()
+            it.yieldToQueued()
+            yielded.incrementAndGet()
+        }).first
+        withTimeout(10_000) { first.await() }
+        assertEquals(1, yielded.get())
+        val lookup = queue.submit(lookup("A", "1")).first
+        songs.complete(Unit)
+        withTimeout(10_000) { looking.await() }
+        assertEquals(Job.RUNNING to Job.RUNNING, queue.job(render.id)!!.state to queue.job(lookup.id)!!.state)
+        assertEquals(1, queue.job(render.id)!!.waitingFor)
+        scope.cancel()
+        withTimeout(10_000) {
+            queue.await(lookup.id)
+            queue.await(render.id)
+        }
+        assertEquals(Job.INTERRUPTED to Job.INTERRUPTED, queue.job(render.id)!!.state to queue.job(lookup.id)!!.state)
+        assertEquals(listOf(Job.INTERRUPTED), queue.job(lookup.id)!!.steps.map { it.state })
+        assertEquals(0, queue.job(render.id)!!.waitingFor)
+        assertEquals(1, yielded.get())
+    }
+
+    @Test fun aLookupThatFailsWhileALongJobYieldsFailsAloneAndTheLongJobGoesOn() = runTest {
+        val queue = queue(mapOf("get" to CommandRunner { _, _ -> throw IllegalStateException("UG answered 500.") }))
+        val songs = CompletableDeferred<Unit>()
+        var after = false
+        val render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Pages")) {
+            songs.await()
+            it.yieldToQueued()
+            after = true
+        }).first
+        runCurrent()
+        val lookup = queue.submit(lookup("A", "1")).first
+        songs.complete(Unit)
+        runCurrent()
+        assertEquals(Job.FAILED to listOf("error: UG answered 500."), queue.job(lookup.id)!!.let { it.state to it.output })
+        assertEquals(Job.DONE, queue.job(render.id)!!.state)
+        assertTrue(after)
+        // The worker goes on.
+        assertEquals(Job.FAILED, queue.await(queue.submit(lookup("B", "2")).first.id).state)
+    }
+
+    // --- what caracole serve's queue does that milestone 3's didn't -------------------------------------------
+
+    @Test fun aProgressEventOfACommandThatWritesNoneIsALineOfItsOutput() = runTest {
+        val queue = queue(mapOf("lacuerda" to CommandRunner { _, context ->
+            context.stage("artist", "running", "reading")
+            context.song(7, "Café Tacvba - Eres")
+            context.readable(mapOf("sheet" to "a/b/sheet.txt"), 1.23456)
+            context.say("Read 12 songs.")
+        }))
+        val artist = JobSpec("Read LaCuerda's page for Café Tacvba", JobCommands.LACUERDA_ARTIST + "cafe_tacvba",
+                             "lacuerda-artist", emptyList(),
+                             commands = JobCommands.lacuerdaArtistSteps("cafe_tacvba", "Café Tacvba"))
+        val over = queue.await(queue.submit(artist).first.id)
+        assertEquals(Job.DONE, over.state)
+        assertEquals(emptyList(), over.stages)  // `lacuerda --artist` writes no progress lines: no stage of its own
+        assertEquals(null to emptyMap<String, String>(), over.songId to over.files)
+        assertEquals(listOf("caracole-progress: {\"stage\":\"artist\",\"state\":\"running\",\"detail\":\"reading\"}",
+                            "caracole-progress: {\"song\":{\"id\":7,\"display\":\"Café Tacvba - Eres\"}}",
+                            "caracole-progress: {\"files\":{\"sheet\":\"a/b/sheet.txt\"},\"seconds\":1.235}",
+                            "Read 12 songs."), over.steps.single().output)
+        // The same events of a command that writes them are the job's.
+        val search = queue.submit(JobSpec("Search", JobCommands.LACUERDA_SEARCH + "eres", "lacuerda-search", emptyList(),
+                                          commands = JobCommands.lacuerdaSearchSteps("eres", auto = false))).first
+        val searched = queue.await(search.id)
+        assertEquals(Job.DONE to "reading", searched.stages.first { it.name == "artist" }.let { it.state to it.detail })
+        assertEquals(7L to mapOf("sheet" to "a/b/sheet.txt"), searched.songId to searched.files)
+        assertEquals(listOf("Read 12 songs."), searched.steps.single().output)
+    }
+
+    @Test fun aStopAsACommandEndsSkipsTheRestAndInterruptsTheJobWhatItThrewNoFailure() = runTest {
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val ran = mutableListOf<String>()
+        val queue = JobQueue(scope, clock = clock, commands = Commands(mapOf(
+            "lacuerda" to CommandRunner { args, _ -> ran += args[1]; scope.cancel() },  // blocking: it ends all the same
+            "harptabs" to CommandRunner { args, _ -> ran += args[1] },
+        )))
+        val two = JobSpec("Read two pages", JobCommands.LACUERDA_ARTIST + "x", "lacuerda-artist", emptyList(),
+                          commands = JobCommands.lacuerdaArtistSteps("x", "X") + JobCommands.harptabsArtistSteps("/y", "Y"))
+        val job = queue.submit(two).first
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(listOf("--artist=x"), ran)
+        assertEquals(Job.INTERRUPTED, over.state)
+        assertEquals(listOf(Job.DONE to 0, Job.SKIPPED to null), over.steps.map { it.state to it.code })
+        // One the stop made throw is interrupted too, never failed.
+        val other = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue2 = JobQueue(other, clock = clock, commands = Commands(mapOf("lacuerda" to CommandRunner { _, _ ->
+            other.cancel()
+            throw IllegalStateException("killed")
+        })))
+        val killed = queue2.submit(two).first
+        runCurrent()
+        val ended = queue2.job(killed.id)!!
+        assertEquals(Job.INTERRUPTED, ended.state)
+        assertEquals(listOf(Job.INTERRUPTED, Job.SKIPPED), ended.steps.map { it.state })
+        assertEquals(emptyList(), ended.output)
+    }
 }
+
