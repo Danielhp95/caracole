@@ -105,8 +105,11 @@ class TheoryTest {
         val cMinor = Key(0, "aeolian")
         assertEquals("Am", named(Theory.mapChord(Theory.parseChord("Ab")!!, cMinor, "ionian")))
         assertEquals("Bm7b5", named(Theory.mapChord(Theory.parseChord("Bb7")!!, cMinor, "ionian")))
+        // G moves nothing in C minor to C major: the chord it was, equal (maybe the cached one, as Python's
+        // lru_cache answers: never the same object by contract, since another class may have mapped a G first).
         val g = Theory.parseChord("G")!!
-        assertSame(g, Theory.mapChord(g, cMinor, "ionian"))
+        assertEquals(g, Theory.mapChord(g, cMinor, "ionian"))
+        // The key's own mode is the chord as it is, before any cache.
         val am = Theory.parseChord("Am7")!!
         assertSame(am, Theory.mapChord(am, Key(0, "ionian"), "ionian"))
     }
@@ -155,8 +158,11 @@ class TheoryTest {
     }
 
     /** Python's errors: MODES.index's ValueError an IllegalArgumentException, a dict's KeyError a
-     * NoSuchElementException. */
+     * NoSuchElementException, a tuple's IndexError an IndexOutOfBoundsException (key_name of a tonic past B; one
+     * below C indexes from the end, as the edge_of records hold). */
     @Test fun aModeNoKeyHasIsPythonsError() {
+        assertFailsWith<IndexOutOfBoundsException> { Theory.keyName(Key(13, "dorian")) }
+        assertEquals("B", Theory.keyName(Key(-1, "ionian")))
         assertFailsWith<IllegalArgumentException> { Theory.spelling(Key(0, "minor")) }
         assertFailsWith<NoSuchElementException> { Theory.scale(Key(0, "major")) }
         assertFailsWith<NoSuchElementException> { Chord(0, "nope").intervals }

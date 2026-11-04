@@ -47,6 +47,9 @@ object Songbooks {
      * Versions.settingProblem, which :core can't see). */
     fun set(db: Db, name: String, entry: String, setting: Setting?, problem: (Setting) -> String?): Unit =
         TODO("lane songbook-entries")
+    /** songbook.songbooks_listing: the songbooks of [books] whose entries name [song], each found as
+     * [findEntrySong] finds it, never by a search (get.py's songbooks stage; SongbookEntries' songs_to_get). */
+    fun listing(db: Db, books: List<Songbook>, song: SongRow): List<Songbook> = TODO("lane songbook-entries")
     fun rename(db: Db, name: String, new: String): Songbook = TODO("lane songbook-writers")
     fun delete(db: Db, name: String): Songbook = TODO("lane songbook-writers")
 }

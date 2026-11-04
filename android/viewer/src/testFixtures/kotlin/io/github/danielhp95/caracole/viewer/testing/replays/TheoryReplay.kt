@@ -67,6 +67,10 @@ object TheoryReplay : AreaReplay {
                     val k = key(record.args)!!
                     misses.check(keyOf(k) == out) { "key_of($k): ${keyOf(k)}, Python's $out" }
                 }
+                HELPER + "edge_of" -> {
+                    val k = key(record.args)!!
+                    misses.check(edgeOf(k) == out) { "edge_of($k): ${edgeOf(k)}, Python's $out" }
+                }
                 "caracole.viewer.theory.spelling" -> misses.expect(record) { Theory.spelling(null) }
                 HELPER + "parsed_keys" -> {
                     for ((i, text) in record.args[0].jsonArray.withIndex()) {
@@ -90,7 +94,7 @@ object TheoryReplay : AreaReplay {
                 else -> fail("an unknown record: ${record.fn}")
             }
         }
-        assertTrue("records of every kind: $counts", counts.size == 6 && counts.getValue(HELPER + "chord_in") > 300)
+        assertTrue("records of every kind: $counts", counts.size == 7 && counts.getValue(HELPER + "chord_in") > 300)
         misses.assertNone()
     }
 
@@ -121,13 +125,38 @@ object TheoryReplay : AreaReplay {
             "spelling" to JsonArray(Theory.spelling(k).map(::JsonPrimitive)),
             "name" to JsonPrimitive(Theory.keyName(k)),
             "scale" to ints(Theory.scale(k)),
-            "capo_hints" to JsonArray(hints.map { (capo, limit, found) ->
-                JsonArray(listOf(JsonPrimitive(capo), JsonPrimitive(limit),
-                    JsonArray(found.map { (fret, shapes) -> JsonArray(listOf(JsonPrimitive(fret), key(shapes))) })))
-            }),
+            "capo_hints" to hintRows(hints),
             "sounding" to JsonArray(SOUNDING.map { JsonArray(listOf(JsonPrimitive(it), key(Theory.sounding(k, it)))) }),
         ))
     }
+
+    private val EDGE_LIMITS = listOf(-1, -2, -13)
+    private val EDGE_CAPOS = listOf(-1, -2, -12, -14)
+
+    /** Python's negative indexes, slices and modulo: key_of a tonic below 0, and a negative limit or capo. */
+    private fun edgeOf(k: Key): JsonObject {
+        val hints = (listOf(0) + EDGE_CAPOS).flatMap { capo ->
+            (listOf(2) + EDGE_LIMITS).map { limit -> Triple(capo, limit, Theory.capoHints(k, limit, capo)) }
+        }
+        val shapes = EDGE_CAPOS.map { capo ->
+            val lowered = Key(Math.floorMod(k.tonic - capo, 12), k.mode)
+            val played = listOf(Chord(lowered.tonic, Theory.diatonicQuality(lowered.tonic, lowered, 3)))
+            JsonArray(listOf(JsonPrimitive(capo), key(Theory.shapesKey(k, capo, played)),
+                key(Theory.bareKey(Key(k.tonic, "ionian"), capo, played))))
+        }
+        return JsonObject(mapOf(
+            "key_of" to keyOf(k),
+            "hints" to hintRows(hints),
+            "sounding" to JsonArray(EDGE_CAPOS.map { JsonArray(listOf(JsonPrimitive(it), key(Theory.sounding(k, it)))) }),
+            "shapes" to JsonArray(shapes),
+        ))
+    }
+
+    private fun hintRows(hints: List<Triple<Int, Int, List<Pair<Int, Key>>>>): JsonArray =
+        JsonArray(hints.map { (capo, limit, found) ->
+            JsonArray(listOf(JsonPrimitive(capo), JsonPrimitive(limit),
+                JsonArray(found.map { (fret, shapes) -> JsonArray(listOf(JsonPrimitive(fret), key(shapes))) })))
+        })
 
     private fun playedOf(names: List<String>, capos: List<Int>, texts: List<String>): JsonObject {
         val played = names.mapNotNull { Theory.parseChord(it, strict = false) }

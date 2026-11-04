@@ -436,6 +436,23 @@ Below the table, a section for each step whose modules have more to say.
     (`merged_base`).
   - A unit changed on one side is that side's; on both, differently, a `CONFLICT` (`decide`: as chosen, else
     `--prefer`, else left).
+- **The remembered answer**: an import's "keep mine", kept beside the base (`record_kept`, `kept_of`: its `"kept"`,
+  `{unit: [digest here, digest there, when]}`, at the file's `made`), since a file can't take this side's version.
+  - `state_document(kept=)` carries those kept for the asker (`"kept"`, no member unless given; `PeerState.kept`),
+    which `GET /api/peer/state` serves from sync-exchange on; `merged_kept` takes, a unit at a time, the latest of
+    each side's agreement and kept answer, an agreement on a tie, the other's swapped.
+  - `compare(..., kept=)`: a unit changed on neither side since is the chooser's (`KEPT_HERE`, `KEPT_THERE`), never
+    a conflict asked again; a change after it is compared as usual.
+  - An agreement (`record_agreement`, given each side's whole state) drops the answer of each unit it agrees on,
+    both sides' alike or both lacking it, and a base with none is written as before.
+- **Parts** (`PARTS`: library, songbooks, indexes; `part_of`, by a unit's kind; no unit is of the indexes):
+  - `in_scope` keeps a unit of a part asked for, or a song a songbook lists while the songbooks are (`listed_songs`:
+    by any cut of an entry's "Artist - Title", `songbook.entry_keys`), which comes along to a side that lacks it and
+    is never removed (a removal given, taken or asked, the library's, is left out);
+  - with a file's `holds`, a unit the file lacks of a part it doesn't hold is never read as removed;
+  - `change_of`: what each side did since the base (new, changed, gone); `names_of`: a song's names from its label.
+- Both are written for the phone, `vectors/sync/kept.jsonl` and `scope.jsonl` (tests/test_conformance_sync_kept.py),
+  which sync-core ports.
 - **Ids**: each side's id is kv `sync:id`, made by schema 15 for every database, so caracole serve answers one
   without writing; `new_id` gives a copied database another.
 - `Peer` is the other's caracole serve over HTTP, never a site.
@@ -1112,7 +1129,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - each route a module of its own, answering "… isn't on the phone yet." (409) until its lane lands;
     `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, for good;
   - a declaration not built yet is `TODO("lane <id>")` in a file its lane owns, or, for a seam the phone already
-    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer.
+    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer;
+  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, `SongPages.NONE` and
+    `SongbookPages.NONE` until their lanes make it the real one, so it calls no milestone's code before it lands.
+- Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
+  the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
@@ -1122,7 +1143,38 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### core.http, core.health, core.config
 
-Not built yet. (http-client: core.http; health-pace: core.health, core.config, `Pace`, `Clients`.)
+- `core.http` is http.py on the phone, held to Python by `vectors/http/` (tests/test_conformance_http.py), with what
+  it reads as data in `data/caracole/http/` (`robots.json`, `ROBOTS_DISALLOW`; `http.json`, http.py's other
+  constants; `idna.json`, the idna package's tables and each code point's bidi class):
+  - `Urls`: httpx 0.28's URL (`HttpxUrl`: its normalizing and percent-encoding, `withParams` in place of the query, a
+    host not ASCII through `Idna`, the idna package's encode and decode), `resolve` its next request's URL (urljoin as
+    3.14 has it); a string httpx refuses an `UrlError` named as Python's exception;
+  - `Robots.disallows`; `HttpRules` (`stale`, `retryAfter` with email.utils's dates, `isChallenge`, `readOnceMore`);
+  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache` under `cacheRoot`, http.py's
+    `cache_root`), httpx's request headers (a URL's user and password its basic auth, carried on a redirect as httpx
+    carries it), the budget, the pause for given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of
+    tests/test_http.py a session of `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does
+    (`PyJson.loads(ByteArray)`: a byte that isn't the text's encoding an error, never `text`'s U+FFFD);
+  - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, a URL httpx won't send refused with
+    its UnsupportedProtocol before any socket (ws and wss asked as http and https), gzip and deflate decoded as
+    httpx's decoders decode them (zlib's gzip mode: `rules.jsonl`'s `decode`), errors named as httpx's, every host but
+    loopback and 10.0.2.2 refused under `caracole.network=loopback` (the host as urlsplit, OkHttp and java.net.URL
+    each read it); `RoutedTransport`, a test's sites through the fake sites server (`GET {base}/fetch?url=…`).
+  - What the platform does otherwise than httpx, each the owner's to decide (RealTransportChecks pins the second):
+    - a connection that fails as the answer is read: the JDK's HttpURLConnection sends the GET once more by itself,
+      and Android's OkHttp may on another route, so a site can see two requests for one PoliteClient counted, paced
+      and budgeted;
+    - Android's OkHttp writes a path's `|` and `^` percent-encoded and its `\` as `/` (httpx sends all three as they
+      are; the query is left alone);
+    - Android's OkHttp ungzips a body of `Content-Encoding: gzip` itself, a body it can't read failing in its own
+      words (DecodingError still);
+    - http.py's httpx client keeps the cookies a site sets for the client's life (a run's, a lookup's) and sends them
+      back; the phone keeps none.
+- core.testing's `Scenarios.replay` replays a scenario record (§3 of the M4-6 plan: the fixture, the cache, the
+  answers; the result or what it raised, the requests, the rows, kv, files, events and pauses compared), and
+  `RealTransportChecks` the transport against a ServerSocket on loopback (RealTransportTest on the JVM,
+  RealTransportOnDeviceTest on the device).
+- core.health, core.config's `read`, `Pace` and `Clients` (health-pace): not built yet.
 
 ##### core.html
 
@@ -1151,7 +1203,18 @@ Not built yet. (crossing-phone.)
 
 ##### :viewer
 
-- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory): not built yet.
+- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory):
+  - `viewer.theory` is viewer/theory.py (`Chord`, `Key`, `Theory`, Python's parameter names), its tables and
+    patterns read from `data/caracole/viewer/theory.json`, which tests/test_conformance_viewer_theory.py writes from
+    the module, never retyped; `Chord` a class with a data class's members, so that its `tones` are a frozen copy as
+    Python's frozenset is, and every list handed out a copy (TheoryTest mutates them).
+  - `ViewerAssets` reads viewer/'s files as page.py does (strict UTF-8) and names each page kind's (`Page`, held by
+    vectors/viewer/theory_assets.jsonl); `ViewerData.table(module)` reads `data/caracole/viewer/<module>.json`
+    (viewer_corpus.py `data_json`'s format), which shares its classpath folder with viewer/'s assets: no module's
+    data is named `voicings*.json`.
+  - tests/helpers/viewer_corpus.py is the seeded inputs every M5 generator reads (its docstring), the same in every
+    process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
+    regenerates the corpus.
 - A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): `viewer.shapes`' `Voicings` (chords-db's
   fingerings from viewer/'s own voicings.json and voicings-ukulele.json, a legend's and a `{define}`'s shapes,
@@ -1167,7 +1230,8 @@ Not built yet. (crossing-phone.)
 - Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
-- The sheet page (pages) and a harmonica tab's page (harmonica-page): not built yet.
+- The sheet page (pages): not built yet.
+- A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 
 ##### The phone's written pages
@@ -1176,7 +1240,9 @@ Not built yet. (written-pages.)
 
 ##### Songbooks, versions and printing on the phone
 
-Not built yet. (songbook-writers, songbook-entries, songbook-routes; versions-harmonica; export-print.)
+- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- Export PDF and Make this my version (export-print): not built yet.
 
 ##### Guitar Pro on the phone
 

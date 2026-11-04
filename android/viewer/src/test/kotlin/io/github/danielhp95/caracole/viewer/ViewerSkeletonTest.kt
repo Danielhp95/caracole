@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer
 
 import io.github.danielhp95.caracole.core.lookup.RenderStats
+import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.testing.Replays
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.viewer.chinese.OpenCC
@@ -35,6 +36,7 @@ import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** :viewer's declarations (milestone 5, skeleton-m5m6's): each package's types are values, the neutral seams answer
@@ -90,10 +92,12 @@ class ViewerSkeletonTest {
 
     @Test fun thePhonesRenderIsNeutralUntilItsLaneLands() {
         TestDb.fresh(tmp.root).use { database ->
-            val render = PhoneRender(database, File(tmp.root, "library"), null)
+            val render = PhoneRender(database, File(tmp.root, "library"), null, "0.1.0")
             assertEquals(RenderStats(), database.read { db -> render.render(db, listOf(1L, 2L), null) })
+            // The lookup's pdf stage is NONE while the render is neutral, so it says get.py's no-PDF words.
+            assertSame(SongPages.NONE, render.seam)
             assertFalse(render.stale())
-            render.afterSync()
+            assertFalse(render.afterSync(), "a take owes no page while the render is neutral")
         }
         assertEquals("x", Written("x", 1, "d").sha256)
     }

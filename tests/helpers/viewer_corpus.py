@@ -48,7 +48,8 @@ the Kotlin side never runs this module. So an edit here changes every generator'
 The runtime data a viewer module states (``tests/conformance/data/caracole/viewer/<module>.json``, read by Kotlin's
 ``viewer.ViewerData.table(module)``) is written by ``data_json``: one object, its members the module's constants
 under their own names, in the order the generator gives them (no sorting, so a dict's order is Python's), an indent
-of one, a final newline.
+of one, a final newline. It shares caracole/viewer/ on the phone's classpath with viewer/'s copied assets, so no
+module's data is named ``voicings*.json`` (voicings.py's is the asset itself): ``ViewerData.table`` refuses one.
 """
 
 from __future__ import annotations
@@ -572,7 +573,9 @@ def sheet(name: str) -> CorpusSheet:
 
 
 def data_json(constants: dict[str, Any]) -> str:
-    """A ``data/caracole/viewer/<module>.json``'s text: ``constants`` in their order, an indent of one, a newline."""
+    """A ``data/caracole/viewer/<module>.json``'s text: ``constants`` in their order, an indent of one, a newline.
+
+    Never for a ``voicings*`` module: its name is an asset's of viewer/ on the phone's classpath."""
     return json.dumps(constants, ensure_ascii=False, indent=1) + "\n"
 
 

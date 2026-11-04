@@ -24,6 +24,7 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
+import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
@@ -89,18 +90,22 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
- * phone's own pages ([render]: the lookup's pdf stage, what follows a sync's take, and the render job queued at start
- * when its build changed), its songbooks' (SongbookPagesImpl: the songbooks stage); and the local server. Its page has
- * the Sync tab (ServerControls.sync). The skeletons write it; a lane that must change it is named in its brief.
+ * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
+ * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
+ * the local server. Its page has the Sync tab (ServerControls.sync). Building it queues nothing: the app calls
+ * [start] once it has wired the queue's listeners. [render] null: the phone's own PhoneRender (a test gives another).
+ * The skeletons write it; a lane that must change it is named in its brief.
  */
-class Phone(private val deps: PhoneDeps) {
+class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
     private val store = LibraryStore(deps.libraryDir)
     private val cards = PhonePageData(MirrorPageData(deps.mirror), store, ::config)
 
     /** The pages the phone makes itself (milestone 5). */
-    val render = PhoneRender(deps.database, deps.libraryDir, deps.mirror)
-    private val songbookPages = SongbookPagesImpl(deps.database, store)
+    val render: PhoneRender = render ?: PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version)
+
+    /** The songbooks' pages the phone makes itself (milestone 6). */
+    val songbookPages = SongbookPagesImpl(deps.database, store)
 
     /** The phone's settings now: config.py's defaults with what the computer gave at the last sync. */
     private fun config(): PhoneConfig = deps.database.read { db -> PhoneConfig.read(db) }
@@ -115,8 +120,10 @@ class Phone(private val deps: PhoneDeps) {
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands))
-        parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, render,
-                           songbookPages, deps.alerts, deps.pacing, deps.searchesLacuerda)
+        // Each seam is NONE until its lane makes it the real one (PhoneRender's, SongbookPagesImpl's), so the lookup
+        // never calls a milestone's code before it lands.
+        parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
+                           songbookPages.seam, deps.alerts, deps.pacing, deps.searchesLacuerda)
         commands["get"] = GetRunner(parts)
         commands["versions"] = VersionsRunner(parts)
         commands["lacuerda"] = LaCuerdaRunner(parts)
@@ -151,11 +158,7 @@ class Phone(private val deps: PhoneDeps) {
         search,
         JobsRoutes(queue, cards, deps.database, songbooks = { db -> SongbookSection.data(db, store) }),
         RequestsRoutes(parts),
-        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = {
-            deps.mirror?.reload()
-            render.afterSync()
-            search.invalidate()
-        }),
+        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync),
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         SongbookRoutes(parts),
@@ -178,7 +181,31 @@ class Phone(private val deps: PhoneDeps) {
     init {
         queue.onEnd = ::afterJob
         deps.scope.launch(Dispatchers.IO) { runCatching { deps.database.warmUp() } }
+    }
+
+    /**
+     * What the phone queues at its start, called by the app once it has wired the queue's listeners (Caracole.start:
+     * `queue.onBusy`, so the foreground service hears every job, this one too): the render job when the phone owes
+     * pages ([PhoneRender.stale]: a new build's, say). Nothing while the render is neutral.
+     */
+    fun start() {
         if (render.stale()) renderAgain()
+    }
+
+    /** After a sync's take, inside the sync's job (SyncRoutes' `afterSync`, its stages over): the copy reloaded, the
+     * phone's pages of what the take moved forgotten, the search's answers forgotten, and the pages owed then made by
+     * the render job, queued after the sync, never inside it. A full queue leaves them owed, for the next start's or
+     * take's render job. */
+    internal fun afterSync() {
+        deps.mirror?.reload()
+        val owed = render.afterSync()
+        search.invalidate()
+        if (owed) {
+            try {
+                renderAgain()
+            } catch (_: QueueFull) {
+            }
+        }
     }
 
     /** After each job: the search's answers forgotten (a lookup, a sync or an import may have changed what it
@@ -193,17 +220,17 @@ class Phone(private val deps: PhoneDeps) {
     }
 
     /**
-     * The render job (PhoneKinds' render kind, keyed by the phone's build): every song's pages made again by this
-     * build, the lookups queued meanwhile run first between two songs (JobContext.yieldToQueued), its stage saying how
-     * far; a song whose pages couldn't be made fails the job, with why.
+     * The render job (PhoneKinds' render kind, keyed by the phone's build, its words PhoneKinds'): the pages the phone
+     * owes made by this build, the lookups queued meanwhile run first between two songs (JobContext.yieldToQueued), its
+     * stage saying how far; a song whose pages couldn't be made fails the job, with why. One waiting already is joined.
      */
     fun renderAgain(): Job {
         val kind = PhoneKinds.RENDER
         val stage = kind.stage.first
         return queue.submit(
             JobSpec(
-                title = "Make the pages again", key = kind.key + render.build(), kind = kind.kind,
-                display = "The phone's pages", stages = listOf(kind.stage),
+                title = kind.title, key = kind.key + render.build(), kind = kind.kind,
+                display = kind.display, stages = listOf(kind.stage),
                 run = { job ->
                     job.stage(stage, "running")
                     val made = render.renderStale(between = { job.yieldToQueued() }) { done, total ->

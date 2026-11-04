@@ -343,9 +343,41 @@ object PyUnicode {
 
     // --- milestone 4's additions -----------------------------------------------------------------------------------
 
-    /** str.capitalize: the first character titlecased (its full mapping), the rest lowered, as Python 3.14. */
-    fun capitalize(s: String): String = TODO("lane py-sites")
+    /**
+     * str.capitalize, as Python 3.14's do_capitalize: the first code point's full title case (title.txt's where it
+     * isn't its upper case, else case.txt's upper), then each other one's full lower case, Σ by the Final_Sigma rule
+     * read in the whole string (the first code point as written).
+     */
+    fun capitalize(s: String): String {
+        if (s.isEmpty()) return s
+        val cps = Py.codePoints(s)
+        val out = StringBuilder(s.length)
+        val title = Title.table[cps[0]]
+        if (title == 0) append(out, cps[0], Case.upper) else for (x in Title.sequences[title - 1]) out.appendCodePoint(x)
+        for (i in 1 until cps.size) {
+            val cp = cps[i]
+            if (cp == CAPITAL_SIGMA) out.append(if (finalSigma(cps, i)) 'ς' else 'σ')
+            else append(out, cp, Case.lower)
+        }
+        return out.toString()
+    }
+
+    /** title.txt: each code point's full title case where it isn't its full upper case. */
+    private object Title {
+        val sequences = ArrayList<IntArray>()
+        val table: CodePointTable
+
+        init {
+            val points = HashMap<Int, Int>()
+            for (line in UnicodeTables.read("title.txt")) {
+                val cp = UnicodeTables.hex(line[0])
+                sequences += if (line[1] == "=") intArrayOf(cp) else UnicodeTables.sequence(line[1])
+                points[cp] = sequences.size
+            }
+            table = CodePointTable.ofPoints(points)
+        }
+    }
 
     /** unicodedata.east_asian_width: "F", "H", "W", "Na", "A" or "N", from data/caracole/unicode/east_asian_width.txt. */
-    fun eastAsianWidth(cp: Int): String = TODO("lane py-format")
+    fun eastAsianWidth(cp: Int): String = EastAsianWidth.of(cp)
 }
