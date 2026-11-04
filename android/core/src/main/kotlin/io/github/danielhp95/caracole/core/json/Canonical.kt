@@ -108,8 +108,10 @@ object Canonical {
         } catch (e: CanonicalError) {
             return ownBytes(text) // not JSON
         }
-        if (reader.lone) return ownBytes(text)
-        val value = if (without.isNotEmpty() && read is JsonObject) JsonObject(read.filterKeys { it !in without }) else read
+        val taken = without.isNotEmpty() && read is JsonObject
+        // A lone surrogate is no canonical text, unless it was read in a member taken out.
+        if (reader.lone && !(taken && reader.loneKeys.all { it in without })) return ownBytes(text)
+        val value = if (taken) JsonObject((read as JsonObject).filterKeys { it !in without }) else read
         val canonical = try {
             write(value)
         } catch (e: CanonicalError) {

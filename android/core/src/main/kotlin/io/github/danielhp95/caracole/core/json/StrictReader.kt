@@ -31,8 +31,15 @@ internal class StrictReader(private val text: String) {
     private val n = text.length
 
     /** Whether a string read holds a lone surrogate, as Python reads it: such a text is not canonicalizable. */
-    var lone = false
-        private set
+    val lone: Boolean get() = lones > 0
+
+    /** The members of a text's top-level object a lone surrogate was read in (its key or its value), as the member
+     * a repeated key keeps: one taken out of the object (Canonical.hashStoredJson's `without`) takes it away. */
+    val loneKeys: Set<String> get() = loneMembers
+
+    private var lones = 0
+    private var memberStart = 0
+    private val loneMembers = LinkedHashSet<String>()
 
     private class Open(val members: LinkedHashMap<String, JsonElement>?) {
         val items = ArrayList<JsonElement>()
@@ -64,6 +71,7 @@ internal class StrictReader(private val text: String) {
                         value = JsonObject(emptyMap())
                     } else {
                         val open = Open(LinkedHashMap())
+                        if (stack.isEmpty()) memberStart = lones
                         open.key = key()
                         stack.add(open)
                         continue@values
@@ -85,8 +93,16 @@ internal class StrictReader(private val text: String) {
                     }
                 } else {
                     members[open.key] = value
+                    if (stack.size == 1) {
+                        if (lones > memberStart) loneMembers.add(open.key) else loneMembers.remove(open.key)
+                    }
                     when (next()) {
-                        ',' -> { skipSpace(); open.key = key(); continue@values }
+                        ',' -> {
+                            skipSpace()
+                            if (stack.size == 1) memberStart = lones
+                            open.key = key()
+                            continue@values
+                        }
                         '}' -> { value = JsonObject(members); stack.removeAt(stack.size - 1) }
                         else -> fail("Expecting ',' delimiter")
                     }
@@ -206,7 +222,7 @@ internal class StrictReader(private val text: String) {
                     i += 2
                 }
                 else -> {
-                    if (Character.isSurrogate(c)) lone = true
+                    if (Character.isSurrogate(c)) lones++
                     out.append(c)
                     i++
                 }
@@ -237,7 +253,7 @@ internal class StrictReader(private val text: String) {
                         return
                     }
                 }
-                if (unit in 0xD800..0xDFFF) lone = true
+                if (unit in 0xD800..0xDFFF) lones++
                 out.append(unit.toChar())
             }
             else -> fail("Invalid \\escape")
