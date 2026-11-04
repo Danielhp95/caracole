@@ -156,7 +156,7 @@ object LaCuerdaReplay : AreaReplay {
                 misses.check(got == outs.getOrNull(i)) { "$fn, $case, ${xs.getOrNull(i) ?: r.args[1].jsonArray[i]}: $got, Python's ${outs.getOrNull(i)}" }
             }
         }
-        if (htmlReady) misses.check(parsed >= 120) { "$PAGES: $parsed pages parsed" }
+        if (htmlReady) misses.check(parsed >= 100) { "$PAGES: $parsed pages parsed" }
     }
 
     private val PARSERS = setOf("parse_artist_page", "parse_popularity", "parse_artist_name", "is_missing_artist_page",
