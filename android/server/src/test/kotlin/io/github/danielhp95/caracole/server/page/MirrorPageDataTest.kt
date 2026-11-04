@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -159,8 +160,9 @@ class MirrorPageDataTest {
         assertEquals(4, songs.size)
         val card = songs.last()
         assertEquals(mine, card.getValue("id").jsonPrimitive.long)
-        assertEquals(listOf("id", "artist", "artists", "title", "display", "status", "review", "added", "key", "files", "source",
-                            "identity", "sortArtist", "sortTitle", "artistLetter", "titleLetter", "search", "sites"), card.keys.toList())
+        assertEquals(listOf("id", "artist", "artists", "title", "display", "status", "review", "added", "key", "lyricsFrom",
+                            "files", "source", "identity", "sortArtist", "sortTitle", "artistLetter", "titleLetter", "search",
+                            "sites"), card.keys.toList())
         assertEquals("Hoppípolla", card.getValue("title").jsonPrimitive.content)
         assertEquals("sigur-ros/hoppipolla", card.getValue("identity").jsonPrimitive.content)
         assertEquals(JsonNull, card.getValue("key"))
@@ -187,6 +189,11 @@ class MirrorPageDataTest {
                              review = song.getValue("review").jsonPrimitive.boolean, added = text("added_at"),
                              artists = song.getValue("artists").jsonArray.map { it.jsonPrimitive.content })
             ids.add(id)
+            // where its lyrics came from: the Lyrics tile's link back (lyricsFrom)
+            database.writeBlocking { db ->
+                db.execute("UPDATE songs SET lyrics_status = ?, lyrics_json = ? WHERE id = ?", text("lyrics_status"),
+                           song.getValue("lyrics_json").jsonPrimitive.contentOrNull, id)
+            }
             for (file in case.getValue("files").jsonArray) {
                 val (name, path) = file.jsonArray.map { it.jsonPrimitive.content }
                 keepAt(id, name, path)
