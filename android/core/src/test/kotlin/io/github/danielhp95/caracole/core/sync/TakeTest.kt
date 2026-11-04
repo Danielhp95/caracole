@@ -117,6 +117,19 @@ class TakeTest {
         assertEquals(listOf("block/4242"), done.taken)
     }
 
+    /** A `now` whose UTC is before year 1: Python's take raises on it only once a song unit reads it (`_when`); the
+     * re-keying before any unit stamps its records with the clock, as for a `now` that names no time. */
+    @Test fun aNowOutsideTheYearsADatetimeHoldsStopsNoUnitButASongs() {
+        val phone = phone()
+        val (source, wanted) = documents("alias/soda" to json("""{"slugs": ["soda-stereo"]}"""),
+                                         "block/4242" to json("""{"tab": 4242}"""))
+        for (now in listOf("0001-01-01T00:00:00+01:00", "soon")) {
+            val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), now) }
+            assertEquals(listOf("alias/soda", "block/4242"), done.taken.sorted(), now)
+            assertEquals(emptyList(), done.left, now)
+        }
+    }
+
     @Test fun theDatabasesOwnFailureStopsTheTakeWhereAUnitsRefusalLeavesThatUnit() {
         val phone = phone()
         phone.write { db ->

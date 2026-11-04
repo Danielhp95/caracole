@@ -40,6 +40,15 @@ object Take {
     /** The order units are taken in: songs first, then tombstones, songbooks and the rest (peer_sync._KINDS). */
     private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
 
+    /** The time a re-keying before the take writes its records at: [now] as caracole stores a time, else the clock,
+     * for a `now` that names no time and for one whose UTC falls outside years 1 to 9999 too, which Python's take
+     * raises on only once a song unit's `_when` reads it (SongTake), never before any unit is tried. */
+    private fun rekeyedAt(now: String): String = try {
+        Stamps.parse(now)?.let(Stamps::stamp)
+    } catch (_: ArithmeticException) {
+        null
+    } ?: Stamps.now()
+
     /**
      * Take each of [wanted] (a unit's id, and the digest the source had of it when compared, null for a unit it hadn't
      * got) from [source]: songs first, then tombstones, songbooks and the rest, each by id. A unit is left, saying
@@ -65,7 +74,7 @@ object Take {
         val songs = sortedSetOf<Long>()
         val respelled = mutableListOf<String>()
         var songbooks = false
-        Rekey.ensure(db, Stamps.parse(now)?.let(Stamps::stamp) ?: Stamps.now())
+        Rekey.ensure(db, rekeyedAt(now))
         // Each unit's digest here now, before the take changes any; or why this library can't be read.
         var unreadable: String? = null
         val here = if (expectedHere.isEmpty()) emptyMap() else try {
