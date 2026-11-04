@@ -6,7 +6,7 @@ import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.PhoneSchema
-import io.github.danielhp95.caracole.core.library.internal.Stamps
+import io.github.danielhp95.caracole.core.index.Stamps
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption

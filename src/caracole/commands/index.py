@@ -19,7 +19,11 @@ refresh says less: a line per changed sitemap, then one line for it all.
 file (index_transfer.py): an export reads in one transaction and takes no lock,
 so it may run beside the nightly run; a merge takes caracole's lock, backs the
 database up first, and says what each site took. A refused merge (another
-schema, other columns, no export) exits 2 and changes nothing.
+schema, other columns, no export) exits 2 and changes nothing. caracole serve
+queues ``merge --delete --progress -- FILE`` for the index pages a phone posted
+(``POST /peer/index``): its stage as JSON lines, the lock waited for as a lookup
+waits, and FILE deleted once it is merged, or refused as it was staged (never a
+file named by hand: ``--delete`` deletes a refused one only from serve's staging).
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, Callable, NoReturn, TypeVar
 
 import typer
 
@@ -105,9 +109,16 @@ def register(app: typer.Typer) -> None:
         file: Path = typer.Argument(..., metavar="FILE", help="A file `caracole index export` wrote."),
         site: list[str] = typer.Option([], "--site", metavar="SITE",
                                        help=f"Only this site's index: {sites}; repeat for more."),
+        delete: bool = typer.Option(False, "--delete", help="Delete FILE once it is merged; refused, only an "
+                                                            "export caracole serve staged (state_dir/peer/index-…"
+                                                            ".sqlite), which can never merge here. One that found "
+                                                            "no room for the backup first stays."),
+        progress: bool = typer.Option(False, "--progress", help="Report its stage as a JSON line, for caracole "
+                                                                "serve; it waits for the nightly run as a lookup "
+                                                                "does."),
     ) -> None:
         """Take into this database what an export read more recently, page by page; backed up first."""
-        _merge(load_cfg(ctx), file, site)
+        _merge(load_cfg(ctx), file, site, delete=delete, progress=progress)
 
 
 # --- caracole index build ------------------------------------------------------------------------
@@ -224,23 +235,63 @@ def _export(cfg: Config, file: Path, sites: list[str]) -> None:
                                for n, table in enumerate(transfer.SITES[name].tables)) + ".")
 
 
-def _merge(cfg: Config, file: Path, sites: list[str]) -> None:
+def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:
+    """``caracole index merge``. With ``progress`` (caracole serve's, the pages a phone posted: web/jobs.py
+    ``index_merge_job``), its one stage, ``merge``, as get.py's JSON lines, ending ``failed`` however the command
+    ends short of a merge (the lock or the database not to be had too), and the lock waited for as a lookup waits
+    (the nightly run lets it go first at its next pause). With ``delete``, FILE deleted once it is merged; refused,
+    only when it is an export caracole serve staged (``peer_push.staged_indexes``), which can never merge here, never
+    a file named by hand (the database itself, a backup, a typo); and kept when only the backup first failed, or
+    the lock or the database wasn't to be had, for Try again."""
     from caracole import backup
     from caracole import index_transfer as transfer
 
-    with exclusive(cfg, "index merge"), closing(open_db(cfg)) as conn:
-        try:
-            merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow())
-        except transfer.TransferError as e:
-            fail(f"index merge: {e}", 2)
-        except backup.BackupError as e:
-            fail(f"index merge: no backup, so no merge: {e}. Nothing changed.")
+    ended = False
+
+    def stage(state: str, detail: str = "") -> None:
+        nonlocal ended
+        ended = state in ("done", "failed")
+        if progress:
+            from caracole.get import progress_line
+
+            typer.echo(progress_line({"stage": "merge", "state": state, "detail": detail}))
+
+    def refused(said: str, code: int, *, done_with: bool) -> NoReturn:
+        stage("failed", said)
+        if delete and done_with and _staged_here(cfg, file):
+            file.unlink(missing_ok=True)
+        fail(f"index merge: {said}", code)
+
+    stage("running")
+    try:
+        with exclusive(cfg, "index merge", interactive=progress), closing(open_db(cfg)) as conn:
+            try:
+                merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow())
+            except transfer.NoBackup as e:
+                refused(str(e), 2, done_with=False)
+            except transfer.TransferError as e:
+                refused(str(e), 2, done_with=True)
+            except backup.BackupError as e:
+                refused(f"no backup, so no merge: {e}. Nothing changed.", 1, done_with=False)
+    except typer.Exit:
+        if not ended:  # caracole's lock or its database not to be had: their words are the log's
+            stage("failed", "Not merged: caracole's lock or its database couldn't be had (its log says why). "
+                            "Nothing changed.")
+        raise
+    except Exception as e:
+        if not ended:
+            stage("failed", f"Not merged: {type(e).__name__}: {e}")
+        raise
+    if delete:
+        file.unlink(missing_ok=True)
     if not merged.changed:
         typer.echo(f"Nothing to merge: {cfg.db_path} holds everything {file} does, read as recently.")
+        stage("done", "Nothing read more recently")
         return
     if merged.backup is not None:
         typer.echo(f"Backed up the database to {merged.backup} first.")
     typer.echo(f"Merged {file} into {cfg.db_path}:")
+    took = []
     for done in merged.sites:
         title = transfer.SITES[done.site].title
         if not done.changed:
@@ -249,12 +300,25 @@ def _merge(cfg: Config, file: Path, sites: list[str]) -> None:
         what = [transfer.counted(n, noun) for noun, n in done.taken]
         if done.records:
             what.append("its progress (" + ", ".join(done.records) + ")")
+        took.append(f"{title}: {', '.join(what)}")
         rows = []
         for n, (table, (before, after)) in enumerate(done.rows.items()):
             unit = " rows" if n == 0 else ""
             rows.append(f"{table} {after:,}{unit} (unchanged)" if before == after else
                         f"{table} {before:,} → {after:,}{unit}")
         typer.echo(f"  {title}: {', '.join(what)}; {', '.join(rows)}.")
+    stage("done", "; ".join(took))
+
+
+def _staged_here(cfg: Config, file: Path) -> bool:
+    """Whether ``file`` is an index export caracole serve staged (``POST /peer/index``), by its path."""
+    from caracole import peer_push
+
+    try:
+        target = file.resolve()
+        return any(path.resolve() == target for path in peer_push.staged_indexes(cfg.state_dir))
+    except OSError:
+        return False
 
 
 # --- shared ------------------------------------------------------------------------------------

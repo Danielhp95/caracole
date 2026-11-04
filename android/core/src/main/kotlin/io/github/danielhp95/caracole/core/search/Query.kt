@@ -61,7 +61,7 @@ class Query(val text: String, val runs: List<String> = emptyList()) {
         var byTitle = maxOf(Fuzz.ratio(text, title), Fuzz.ratio(compactText, t))
         var byBoth = maxOf(Fuzz.tokenSortRatio(text, full), Fuzz.ratio(compactText, a + t))
         var byArtist = maxOf(Fuzz.ratio(text, artist), Fuzz.ratio(compactText, a))
-        val scale = if (runs.isNotEmpty()) QueryRules.PINYIN_PARTIAL_SCALE else SearchLimits.PARTIAL_SCALE
+        val scale = if (runs.isNotEmpty()) Normalize.PINYIN_PARTIAL_SCALE else SearchLimits.PARTIAL_SCALE
         // Spaced, the title starts after the artist and a space; compact, right after the artist.
         val spacedEdge = Py.len(artist)
         val compactEdge = Py.len(a)

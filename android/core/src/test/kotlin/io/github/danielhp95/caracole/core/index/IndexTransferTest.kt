@@ -2,13 +2,14 @@ package io.github.danielhp95.caracole.core.index
 
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.replays.IndexReplay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Rule
@@ -19,7 +20,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/** IndexTransfer's seed, newest and refusals, beside IndexMergeTest's merges (tests/conformance/vectors/index/). */
+/** IndexTransfer's seed, newest and refusals, beside IndexMergeTest's merges (tests/conformance/vectors/index/; the
+ * records' loops are IndexReplay's, which the device runs too). */
 class IndexTransferTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -37,12 +39,10 @@ class IndexTransferTest {
     }
 
     @Test fun seedFreshGivesANewPhoneWhatANewPythonDatabaseHolds() {
+        Misses("fresh-before").also { IndexReplay.seedFresh(it) }.assertNone()
         TestDb.fresh(tmp.newFolder()).use { database ->
-            database.writeBlocking { IndexTransfer.seedFresh(it) }
-            // Python's fixture was dumped before the phone's tables were made in it: no kv phone:schema.
-            val seeded = database.read { Dumps.lines(it) }.filter { !it.startsWith("{\"kv\":\"phone:schema\"") }
-            assertEquals(Dumps.fixture("fresh-before"), seeded)
             // A record the phone holds already stays, and seeding again changes nothing.
+            database.writeBlocking { IndexTransfer.seedFresh(it) }
             database.writeBlocking { it.kvSet("lacuerda:index:keys", "1"); IndexTransfer.seedFresh(it) }
             assertEquals("1", database.read { it.kvGet("lacuerda:index:keys") })
         }
@@ -57,7 +57,7 @@ class IndexTransferTest {
             val merged = database.writeBlocking { IndexTransfer.merge(it, export, now) }
             assertTrue(merged.changed)
             val after = database.read { Dumps.lines(it) }
-            assertEquals(Dumps.fixture("fresh-after"), after)
+            Misses("fresh-after").also { IndexReplay.freshMerge(it) }.assertNone()
             // The keys records as seeded, and every row whose keys no reading of its names gives kept as the export
             // holds it: nothing was keyed again.
             val kv = database.read { db ->
@@ -127,37 +127,9 @@ class IndexTransferTest {
         }
     }
 
-    @Test fun newestIsWhatIndexTransferNewestSays() {
-        val records = Corpus.records("index/newest.jsonl")
-        assertTrue(records.size >= 10)
-        for (record in records) {
-            val fixture = record.extra.getValue("fixture").jsonPrimitive.content
-            TestDb.fresh(tmp.newFolder()).use { database ->
-                database.writeBlocking { Fixtures.load(it, "index/fixtures/$fixture.jsonl") }
-                if (record.err != null) {
-                    assertEquals("OverflowError", record.err, fixture)
-                    assertFailsWith<ArithmeticException>(fixture) { database.read { IndexTransfer.newest(it) } }
-                } else {
-                    val expected = record.out!!.jsonObject.mapValues { it.value.jsonPrimitive.content }
-                    val newest = database.read { IndexTransfer.newest(it) }
-                    assertEquals(expected, newest, fixture)
-                    assertEquals(Sites.ALL.map { it.name }.filter { it in newest }, newest.keys.toList(), fixture)
-                }
-            }
-        }
-    }
+    @Test fun newestIsWhatIndexTransferNewestSays() = Misses(IndexReplay.NEWEST).also { IndexReplay.newest(it) }.assertNone()
 
-    @Test fun theSitesAreIndexTransfersSites() {
-        val records = Corpus.records("index/sites.jsonl")
-        assertEquals(records.map { it.args[0].jsonPrimitive.content }, Sites.ALL.map { it.name })
-        for ((record, site) in records.zip(Sites.ALL)) {
-            val out = record.out!!.jsonObject
-            fun strings(key: String) = out.getValue(key).jsonArray.map { it.jsonPrimitive.content }
-            assertEquals(out.getValue("title").jsonPrimitive.content, site.title)
-            assertEquals(strings("tables"), site.tables)
-            assertEquals(strings("kv"), site.kv)
-        }
-    }
+    @Test fun theSitesAreIndexTransfersSites() = Misses(IndexReplay.SITES).also { IndexReplay.sites(it) }.assertNone()
 
     @Test fun aRecordIsWrittenBackAsJsonDumpsWritesJsonLoadsReading() {
         val text = "{\"a\": 1.50, \"b\": -0, \"c\": 1E2, \"d\": 1e400, \"e\": \"\\u00e9\", \"a\": 2, " +

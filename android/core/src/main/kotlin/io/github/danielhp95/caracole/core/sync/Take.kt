@@ -1,7 +1,8 @@
 package io.github.danielhp95.caracole.core.sync
 
-import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.db.isSqliteError
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -10,7 +11,6 @@ import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.PyRepr
 import io.github.danielhp95.caracole.core.library.internal.Rekey
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.Upsert
 import io.github.danielhp95.caracole.core.sync.internal.take.Backups
 import io.github.danielhp95.caracole.core.sync.internal.take.SongTake
@@ -40,6 +40,15 @@ object Take {
     /** The order units are taken in: songs first, then tombstones, songbooks and the rest (peer_sync._KINDS). */
     private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
 
+    /** The time a re-keying before the take writes its records at: [now] as caracole stores a time, else the clock,
+     * for a `now` that names no time and for one whose UTC falls outside years 1 to 9999 too, which Python's take
+     * raises on only once a song unit's `_when` reads it (SongTake), never before any unit is tried. */
+    private fun rekeyedAt(now: String): String = try {
+        Stamps.parse(now)?.let(Stamps::stamp)
+    } catch (_: ArithmeticException) {
+        null
+    } ?: Stamps.now()
+
     /**
      * Take each of [wanted] (a unit's id, and the digest the source had of it when compared, null for a unit it hadn't
      * got) from [source]: songs first, then tombstones, songbooks and the rest, each by id. A unit is left, saying
@@ -65,7 +74,7 @@ object Take {
         val songs = sortedSetOf<Long>()
         val respelled = mutableListOf<String>()
         var songbooks = false
-        Rekey.ensure(db, Stamps.parse(now)?.stamp ?: Stamps.now())
+        Rekey.ensure(db, rekeyedAt(now))
         // Each unit's digest here now, before the take changes any; or why this library can't be read.
         var unreadable: String? = null
         val here = if (expectedHere.isEmpty()) emptyMap() else try {
@@ -266,9 +275,9 @@ object Take {
     }
 
     /** The words a unit is left with: its error's message, SQLite's own for a refusal of the database's. */
-    private fun why(e: Exception): String {
+    internal fun why(e: Exception): String {
         val message = e.message ?: e::class.simpleName ?: "an error"
-        if (e is SQLiteException) return message.substringAfter("message: ", message)
+        if (e.isSqliteError()) return message.substringAfter("message: ", message)
         return message
     }
 
@@ -280,7 +289,7 @@ object Take {
      * whose low byte is the primary one); one that says none is taken for a failure.
      */
     internal fun databaseFailed(e: Exception): Boolean {
-        if (e !is SQLiteException) return false
+        if (!e.isSqliteError()) return false
         val code = RESULT_CODE.find(e.message ?: "")?.groupValues?.get(1)?.toIntOrNull() ?: return true
         return (code and 0xFF) != SQLITE_CONSTRAINT && (code and 0xFF) != SQLITE_MISMATCH
     }

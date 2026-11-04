@@ -5,7 +5,7 @@ import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
-import io.github.danielhp95.caracole.core.search.SearchLimits
+import io.github.danielhp95.caracole.core.search.internal.ug.UgHits
 
 /**
  * song_names._Known: the artists and titles known to the library, the channels given and the local indexes, each name
@@ -106,8 +106,8 @@ internal class Known(private val db: Db?, private val songs: List<SongRow>, priv
         /** songs.HUMAN_SHEET: a song's sheet from a site, never auto-chords'. */
         const val HUMAN_SHEET = "sheet.txt"
 
-        /** search.py `no_ones`: an artist key that is no one's name, every `misc-…` of UG's. */
-        fun noOnes(artistKey: String): Boolean = artistKey.startsWith(SearchLimits.CATCH_ALL_PREFIX)
+        /** search.py `no_ones`: an artist key that is no one's name, every `misc-…` of UG's (UgHits.noOnes). */
+        fun noOnes(artistKey: String): Boolean = UgHits.noOnes(artistKey)
 
         /** song_names._forms: a name's forms, each written together, none empty. */
         fun forms(name: String): Set<String> = Normalize.nameForms(name).map { Normalize.compact(it) }.filter { it.isNotEmpty() }.toSet()

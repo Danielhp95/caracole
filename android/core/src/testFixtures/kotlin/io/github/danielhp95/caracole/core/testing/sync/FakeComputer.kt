@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.testing.sync
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -44,7 +45,8 @@ import java.util.concurrent.TimeUnit
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
  * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks, and the form token ([token]).
+ *   it agreed on with the phone that asks, its [settings] (politeness.settings_document: none while null, as a
+ *   caracole older than them answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
@@ -59,6 +61,11 @@ import java.util.concurrent.TimeUnit
  * - `GET /api/jobs/<id>`: the request as Job.as_json gives it; it answers "running" to [runningPolls] polls first,
  *   then (without [holdTakes]) as it is once over.
  * - `GET /api/peer/index?sites=`: [index]'s bytes for the sites asked, recorded in [indexAsked].
+ * - `POST /peer/index`: the phone's index pages, as peer_routes.push_index takes them: the token in its header (403
+ *   with `reload` else), `application/octet-stream` (415), at most [INDEX_MAX] bytes (413), a SQLite file's (400),
+ *   at most [INDEX_OPEN] waiting (409); each kept in [indexPushes], then `caracole index merge --delete --progress`
+ *   queued, `202 {"job": N}`, whose one stage, merge, IndexTransfer.merge takes the file into [database] with (the
+ *   port of the merge the computer runs), the request "failed" with the stage's words when it refuses it.
  *
  * [answers] replaces what a route answers ("GET /api/peer/state" → a handler); [requests] records each request as
  * "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is answered (a test changes the library
@@ -68,10 +75,12 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val database: Database = Database(File(dir, "caracole.sqlite"))
     val libraryDir: File = File(dir, "library").apply { mkdirs() }
     val store = LibraryStore(libraryDir)
+    private val staging: File = File(dir, "peer").apply { mkdirs() }  // POST /peer/index's files, until merged
 
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
     @Volatile var indexes: Map<String, String> = emptyMap()
+    @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
     @Volatile var takeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
@@ -85,6 +94,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val pushes = CopyOnWriteArrayList<JsonObject>()
     val taken = CopyOnWriteArrayList<Applied>()
     val indexAsked = CopyOnWriteArrayList<List<String>?>()
+    val indexPushes = CopyOnWriteArrayList<ByteArray>()
 
     private val random = SecureRandom()
     private val lock = Any()
@@ -102,13 +112,15 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         @Volatile var sent: JsonObject? = null
     }
 
-    /** A request of caracole serve's queue: a push's take. */
-    private inner class Job(val id: Int, val key: String, val title: String, val count: Int) {
+    /** A request of caracole serve's queue: a push's take, or ([merging]: the file's name) an index merge. */
+    private inner class Job(val id: Int, val key: String, val title: String, val count: Int,
+                            val merging: String? = null) {
         @Volatile var state = "queued"
-        val stages = linkedMapOf("check" to Stage("What changed since the comparison"),
-                                 "take" to Stage("Taking what changed there"),
-                                 "render" to Stage("Rendering what was taken"),
-                                 "agree" to Stage("What the two agree on"))
+        val stages = if (merging != null) linkedMapOf("merge" to Stage("Merging the other caracole's index pages"))
+                     else linkedMapOf("check" to Stage("What changed since the comparison"),
+                                      "take" to Stage("Taking what changed there"),
+                                      "render" to Stage("Rendering what was taken"),
+                                      "agree" to Stage("What the two agree on"))
         val units = CopyOnWriteArrayList<Triple<String, String, String>>()
         val over = CountDownLatch(1)
         @Volatile var polls = 0
@@ -127,8 +139,10 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     "state" to JsonPrimitive(stage.state), "detail" to JsonPrimitive(stage.detail))
             }),
             "commands" to JsonArray(listOf(obj(
-                "label" to JsonPrimitive("Taking $count ${if (count == 1) "change" else "changes"}"),
-                "args" to JsonArray(listOf("peer", "take", "--progress", "--", "push").map(::JsonPrimitive)),
+                "label" to JsonPrimitive(if (merging != null) "Merging the other caracole's index pages"
+                                         else "Taking $count ${if (count == 1) "change" else "changes"}"),
+                "args" to JsonArray((if (merging != null) listOf("index", "merge", "--delete", "--progress", "--", merging)
+                                     else listOf("peer", "take", "--progress", "--", "push")).map(::JsonPrimitive)),
                 "state" to JsonPrimitive(shownState), "code" to JsonNull,
             ))),
             "song" to JsonNull, "files" to JsonObject(emptyMap()), "seconds_to_sheet" to JsonNull,
@@ -217,12 +231,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push/new" -> if (tokenOk(exchange)) pushNew(exchange)
             "POST /peer/push/file" -> if (tokenOk(exchange)) pushFile(exchange, query["push"].orEmpty(), query["sha256"].orEmpty())
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
+            "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
             else -> if (method == "GET" && path.startsWith("/api/jobs/")) job(exchange, path.removePrefix("/api/jobs/"))
                     else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
         }
     }
 
-    /** peer_sync.state_document, with the form token. */
+    /** peer_sync.state_document, with the settings and the form token (web/peer_routes.state). */
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         return JsonObject(linkedMapOf(
@@ -240,8 +255,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-            "token" to JsonPrimitive(token),
-        ))
+        ).also { doc -> settings?.let { doc["settings"] = it } } + ("token" to JsonPrimitive(token)))
     }
 
     private fun unit(exchange: HttpExchange, unitId: String) {
@@ -403,6 +417,51 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         }
     }
 
+    /** peer_routes.push_index: the phone's index pages staged, and their merge queued. */
+    private fun pushIndex(exchange: HttpExchange) {
+        val type = exchange.requestHeaders.getFirst("Content-Type").orEmpty().substringBefore(';').trim()
+        if (type != "application/octet-stream") throw Refusal(415, "caracole reads only application/octet-stream here.")
+        val length = exchange.requestHeaders.getFirst("Content-Length")?.toLongOrNull() ?: -1
+        if (length > INDEX_MAX) throw Refusal(413, "That is too long.")
+        val bytes = exchange.requestBody.readBytes()
+        if (bytes.size < SQLITE_HEADER.size || !bytes.copyOf(SQLITE_HEADER.size).contentEquals(SQLITE_HEADER)) {
+            throw Refusal(400, "That isn't an index export: caracole's are SQLite files (index_transfer.export).")
+        }
+        val (job, file) = synchronized(lock) {
+            if (jobs.values.count { it.active && it.merging != null } >= INDEX_OPEN) {
+                throw Refusal(409, "Two index exports wait to be merged here already: send it again once they are.")
+            }
+            val name = "index-${hex(8)}.sqlite"
+            val file = File(staging, name).apply { writeBytes(bytes) }
+            indexPushes.add(bytes)
+            Job(nextJob++, "index-merge:$name", "Index pages from another caracole", 1, merging = file.path)
+                .also { jobs[it.id] = it } to file
+        }
+        worker.execute { merge(job, file) }
+        json(exchange, 202, obj("job" to JsonPrimitive(job.id)))
+    }
+
+    /** `caracole index merge --delete --progress -- FILE`: the file merged into [database], then deleted. */
+    private fun merge(job: Job, file: File) {
+        val stage = job.stages.getValue("merge")
+        try {
+            holdTakes?.await()
+            job.state = "running"
+            stage.state = "running"
+            val merged = database.writeBlocking { db -> IndexTransfer.merge(db, file, now) }
+            stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing read more recently"
+            stage.state = "done"
+            job.state = "done"
+        } catch (e: Throwable) {
+            stage.state = "failed"
+            stage.detail = "${e.message}"
+            job.state = "failed"
+        } finally {
+            file.delete()
+            job.over.countDown()
+        }
+    }
+
     private fun job(exchange: HttpExchange, number: String) {
         val job = number.toIntOrNull()?.let { synchronized(lock) { jobs[it] } }
             ?: return json(exchange, 404, obj("error" to JsonPrimitive("No such request: it may be older than the " +
@@ -556,6 +615,11 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         /** peer_routes.PEER_PUSH: a take's job key, the pushing caracole's id after it. */
         const val PEER_PUSH = "peer-push:"
 
+        /** peer_push.INDEX_MAX and INDEX_OPEN: POST /peer/index's export at most, and how many wait at once. */
+        const val INDEX_MAX = 64L * 1024 * 1024
+        const val INDEX_OPEN = 2
+        private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+
         private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
         private val ID = Regex("[0-9a-f]{16}")
         private val SHA256 = Regex("[0-9a-f]{64}")
@@ -563,6 +627,22 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC)
 
         fun obj(vararg members: Pair<String, JsonElement>) = JsonObject(linkedMapOf(*members))
+
+        /** A settings document made by hand, partial as an older computer's might be (one settings_document writes
+         * names every provider of config.py's, in order; vectors/sync/settings.jsonl holds such documents): a library
+         * named, its own user agent, Megalobiz off, UG's lookups slowed, its own match and rank, and three providers
+         * alone, each with its switch and a lookup's settings, so that a test sees a provider it doesn't name keep
+         * the phone's. */
+        val SETTINGS: JsonObject = Canonical.parse("""{"name": "Canciones de Dani · 歌", "user_agent": "caracole/0.1 (Dani's tabs)",
+            "providers": {"ug": {"enabled": true, "lookup_delay": [0.5, 1.5], "lookup_requests": 3,
+                                 "lookup_per_hour": 30, "per_day": null},
+                          "megalobiz": {"enabled": false, "lookup_delay": [0.5, 0.75], "lookup_requests": 6,
+                                        "lookup_per_hour": 60, "per_day": 900},
+                          "lacuerda": {"enabled": true, "lookup_delay": [0.125, 0.375], "lookup_requests": 6,
+                                       "lookup_per_hour": 60, "per_day": null}},
+            "match": {"accept": 85.5, "margin": 8, "review": 70, "artist_gate": 90},
+            "rank": {"coverage_threshold": 0.75, "line_match": 80, "prior_votes": 12, "scored_sheets": 4,
+                     "label_penalty": 0.5, "variant_bonus": 0.25}}""") as JsonObject
 
         fun text(e: JsonElement?): String? = (e as? JsonPrimitive)?.takeIf { it.isString }?.content
 
