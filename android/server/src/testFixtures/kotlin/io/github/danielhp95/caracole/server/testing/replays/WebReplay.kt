@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.server.testing.replays
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -62,7 +63,8 @@ import kotlin.concurrent.thread
 /**
  * M1–3's web vectors (vectors/web/, tests/test_conformance_web.py, test_conformance_search.py and
  * test_conformance_sync_routes.py), every record answered by :server as caracole serve answered it, on the JVM
- * (ApiSearchTest's records, OwnersTest, RoutingTest, SyncRoutesVectorsTest and FileTypesTest's call these) and on the
+ * (ApiSearchTest's records, OwnersTest, RoutingTest, SyncRoutesVectorsTest, SecurityTest and FileTypesTest's call
+ * these) and on the
  * device (CorpusOnDeviceTest):
  *
  * - [apiSearch]: api_search.jsonl, /api/search and /api/artist over each search fixture, through the phone's App, the
@@ -72,7 +74,9 @@ import kotlin.concurrent.thread
  *   [jsonAnswers], what every JSON answer and data block is written as;
  * - [syncRoutes]: sync_routes.jsonl, the Sync tab's routes over a fixture of the sync corpus and a computer answering
  *   its state as the record gives it (a server on 127.0.0.1 of the replay's own, so that the device runs it too);
- * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names.
+ * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names;
+ * - [security]: security.jsonl, security.py's host, origin, own-page and token checks, and Python's `str.isdigit` and
+ *   `str.isspace` over every code point (SecurityTest's).
  *
  * Each phone is a database of its own in a temporary folder. (job_views.jsonl and library_page.json are lanes
  * job-views' and requests-feed's.)
@@ -87,6 +91,7 @@ object WebReplay : AreaReplay {
         jsonAnswers(misses)
         syncRoutes(misses)
         downloads(misses)
+        security(misses)
     }
 
     // --- api_search.jsonl -------------------------------------------------------------------------------------------
@@ -365,6 +370,12 @@ object WebReplay : AreaReplay {
             "sync_routes.jsonl's routes: ${records.map { it.fn }.toSet()}"
         }
         misses.check(records.size >= 15) { "sync_routes.jsonl holds ${records.size} records" }
+        misses.check(records.any { (it.out as? JsonObject)?.get("job") is JsonObject }) {
+            "sync_routes.jsonl holds no Sync queued"
+        }
+        misses.check(records.any { (it.out as? JsonObject)?.get("synced_before").let { at -> at is JsonPrimitive && at !is JsonNull } }) {
+            "sync_routes.jsonl holds no record synced before"
+        }
         for (record in records) syncRoute(record, misses)
     }
 
@@ -523,6 +534,52 @@ object WebReplay : AreaReplay {
             }.getOrElse { it.toString() }
             misses.check(got == r.out!!.jsonPrimitive.content) { "${r.fn}$args → $got, Python ${r.out}" }
         }
+    }
+
+    // --- security.jsonl ---------------------------------------------------------------------------------------------
+
+    /** security.jsonl: each of security.py's checks answered as Python answered it (more than a thousand: the host
+     * names, the origins and the fetch metadata a request may carry), none raising; and `str.isdigit` and `str.isspace`,
+     * the code points of which the vector holds as ranges, for every code point there is. */
+    fun security(misses: Misses) {
+        val records = Corpus.records("web/security.jsonl")
+        val calls = records.filter { it.fn.startsWith("caracole.web.security.") }
+        misses.check(calls.size > 1000) { "security.jsonl's matrix holds ${calls.size} calls" }
+        misses.check(records.none { it.err != null }) { "security.py raises for none of them" }
+        fun text(e: JsonElement): String? = if (e is JsonNull) null else e.jsonPrimitive.content
+        fun headers(e: JsonElement): Map<String, String> = e.jsonObject.mapValues { it.value.jsonPrimitive.content }
+        for (r in calls) {
+            val got = runCatching<JsonElement> {
+                when (r.fn.substringAfterLast('.')) {
+                    "host_name" -> Security.hostName(text(r.args[0]))?.let(::JsonPrimitive) ?: JsonNull
+                    "answers_to" -> JsonPrimitive(Security.answersTo(text(r.args[0]),
+                                                                     r.args[1].jsonArray.map { it.jsonPrimitive.content }.toSet()))
+                    "cross_origin_ok" -> JsonPrimitive(Security.crossOriginOk(r.args[0].jsonPrimitive.content,
+                                                                              headers(r.args[1]), text(r.args[2])))
+                    "own_page_read" -> JsonPrimitive(Security.ownPageRead(headers(r.args[0])))
+                    "same_token" -> JsonPrimitive(Security.sameToken(text(r.args[0]), r.args[1].jsonPrimitive.content))
+                    else -> throw IllegalStateException("no Kotlin for ${r.fn}")
+                }
+            }.getOrElse { JsonPrimitive("${it::class.simpleName}: ${it.message}") }
+            misses.check(got == r.out) { "${r.fn}${r.args} → $got, Python ${r.out}" }
+        }
+        fun ranges(fn: String): List<IntRange> = records.single { it.fn == fn }.out!!.jsonArray.map {
+            val (first, last) = it.jsonArray.map { n -> n.jsonPrimitive.int }
+            first..last
+        }
+        val digits = ranges("str.isdigit")
+        val spaces = ranges("str.isspace")
+        var wrong = 0
+        var first: String? = null
+        for (cp in 0..0x10FFFF) {
+            val digit = digits.any { cp in it } == PyText.isDigit(cp)
+            val space = spaces.any { cp in it } == PyText.isSpace(cp)
+            if (!digit || !space) {
+                wrong++
+                if (first == null) first = "U+%04X: isdigit %s, isspace %s".format(cp, PyText.isDigit(cp), PyText.isSpace(cp))
+            }
+        }
+        misses.check(wrong == 0) { "$wrong code points' isdigit or isspace differ from Python's, the first $first" }
     }
 
     private fun <T> inFolder(prefix: String, block: (File) -> T): T {
