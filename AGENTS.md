@@ -1399,7 +1399,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the link back's, is milestone 5's.
   - tests/test_conformance_lyrics.py writes vectors/sites/{lrclib,megalobiz,azlyrics}.jsonl (the parsers and pickers
     over tests/fixtures/) and vectors/lookup/ the same (each pass of one song as a scenario record): `LyricsReplay`.
-- LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
+- LaCuerda's pages and search (lacuerda-pages), core.lacuerda:
+  - `LaCuerdaPages`, lacuerda.py's pages read as the computer reads them (core.html's tree, PyRegex for its regexes
+    over the raw page, Python's str and int on code points): an artist page's songs, their popularity and the
+    artist's name, the "aqui llega:" body, a version's sheet in UG markup, an answer of its search (every page cut
+    short a `LaCuerdaParseError`), `parseLcd`, `bestAcordesVersion`, `matchTitle`, `looksSpanish`, `searchWords` and
+    `searchUrl`; the listings' pages are the nightly run's alone, never read on the phone;
+  - `LaCuerda`'s store writers, lacuerda_index.py's `store_songs`, `store_artist_page`, `store_search` and
+    `_replace`, each noting the page it wrote (`Reads.note`: "<slug>/", or `busca.php` for an answer with rows, at
+    the store's `at`), which index-push sends;
+  - `LaCuerdaSearch`, lacuerda_search.py: `queryKey`, `asked`, `answersWell`, `answered`, the failures
+    (`recordFailure`, `forgetFailure`, `failed`, `Failure.said`), `searchesUsed`, `gate` (and its /api/search shape,
+    `SearchGate.of`, of `answersWell` over the route's own kept hits) and `search`: its one request, the answer
+    stored and its kv in one savepoint, the count it states Python's int of any size;
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
+    vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
+- LaCuerda's sheets (lacuerda-sheets): not built yet.
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
