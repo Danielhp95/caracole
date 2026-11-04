@@ -306,7 +306,448 @@
    10
   ]
  },
+ "CATALOGUE": [
+  [
+   "the pop progression",
+   [
+    "I",
+    "V",
+    "vi",
+    "IV"
+   ],
+   "Wikipedia, \"I–V–vi–IV progression\" (the Axis progression; vi–IV–I–V, its turn, Marc Hirsh's \"sensitive female chord progression\"); Open Music Theory 2e, 7.9 Four-Chord Schemas (\"singer/songwriter\")"
+  ],
+  [
+   "the '50s progression",
+   [
+    "I",
+    "vi",
+    "IV",
+    "V"
+   ],
+   "Wikipedia, \"'50s progression\" (the doo-wop progression, the \"Heart and Soul\" chords, the \"Stand by Me\" changes); Open Music Theory 2e, 7.9 Four-Chord Schemas (\"doo-wop\")"
+  ],
+  [
+   "the circle of fifths",
+   [
+    "vi",
+    "ii",
+    "V",
+    "I"
+   ],
+   "Wikipedia, \"Circle progression\" (vi–ii–V–I)"
+  ],
+  [
+   "the circle of fifths",
+   [
+    "I",
+    "IV",
+    "vii°",
+    "iii",
+    "vi",
+    "ii",
+    "V",
+    "I"
+   ],
+   "Wikipedia, \"Circle progression\" (I–IV–vii°–iii–vi–ii–V–I, every chord of the key)"
+  ],
+  [
+   "the circle of fifths",
+   [
+    "i",
+    "iv",
+    "♭VII",
+    "♭III",
+    "♭VI",
+    "ii°",
+    "V",
+    "i"
+   ],
+   "Wikipedia, \"Circle progression\" (\"in a minor key, the progression is i–iv–VII–III–VI–ii°–V–i\")"
+  ],
+  [
+   "Pachelbel's Canon",
+   [
+    "I",
+    "V",
+    "vi",
+    "iii",
+    "IV",
+    "I",
+    "IV",
+    "V"
+   ],
+   "Wikipedia, \"Pachelbel's Canon\" (I–V–vi–iii–IV–I–IV–V, in many pop songs)"
+  ],
+  [
+   "the royal road",
+   [
+    "IV",
+    "V",
+    "iii",
+    "vi"
+   ],
+   "Wikipedia, \"Royal road progression\" (ōdō shinkō, IVM7–V7–iii7–vi; in a minor key VIM7–VII7–v7–i)"
+  ],
+  [
+   "the double-plagal progression",
+   [
+    "♭VII",
+    "IV",
+    "I"
+   ],
+   "Open Music Theory 2e, 7.8 Blues-Based Schemas and 7.12 Modal Schemas (Walter Everett's \"double-plagal\", ♭VII–IV–I: the coda of \"Hey Jude\"; looped, I–♭VII–IV)"
+  ],
+  [
+   "the Creep progression",
+   [
+    "I",
+    "V/vi",
+    "IV",
+    "iv"
+   ],
+   "Wikipedia, \"Creep (Radiohead song)\" (G–B–C–Cm, I–V7/vi–IV–iv, as in \"The Air That I Breathe\"); Open Music Theory 2e, 7.11 Puff Schemas"
+  ],
+  [
+   "the Aeolian shuttle",
+   [
+    "i",
+    "♭VII",
+    "♭VI",
+    "♭VII"
+   ],
+   "Open Music Theory 2e, 7.12 Modal Schemas (\"Aeolian shuttle i–♭VII–♭VI–♭VII\", circling on its minor tonic: the chorus of \"Somebody That I Used to Know\"); Wikipedia, \"List of chord progressions\" (I–♭VII–♭VI–♭VII, minor)"
+  ],
+  [
+   "ii–V–I",
+   [
+    "ii",
+    "V",
+    "I"
+   ],
+   "Wikipedia, \"ii–V–I progression\""
+  ],
+  [
+   "the minor ii–V–i",
+   [
+    "ii",
+    "V",
+    "i"
+   ],
+   "Wikipedia, \"ii–V–I progression\" (in C minor, Dm7♭5–G7–Cm)"
+  ],
+  [
+   "I–IV–V",
+   [
+    "I",
+    "IV",
+    "V"
+   ],
+   "Wikipedia, \"Three-chord song\" (scale degrees I, IV and V)"
+  ],
+  [
+   "the 12-bar blues",
+   [
+    "I",
+    "IV",
+    "I",
+    "V",
+    "IV",
+    "I"
+   ],
+   "Wikipedia, \"Twelve-bar blues\" (I–I–I–I–IV–IV–I–I–V–IV–I–I)"
+  ],
+  [
+   "the 12-bar blues",
+   [
+    "I",
+    "IV",
+    "I",
+    "V",
+    "IV",
+    "I",
+    "V"
+   ],
+   "Wikipedia, \"Twelve-bar blues\" (with the turnaround's V)"
+  ],
+  [
+   "the 12-bar blues",
+   [
+    "I",
+    "IV",
+    "I",
+    "IV",
+    "I",
+    "V",
+    "IV",
+    "I"
+   ],
+   "Wikipedia, \"Twelve-bar blues\" (the quick change: IV in the second bar)"
+  ],
+  [
+   "the 12-bar blues",
+   [
+    "I",
+    "IV",
+    "I",
+    "IV",
+    "I",
+    "V",
+    "IV",
+    "I",
+    "V"
+   ],
+   "Wikipedia, \"Twelve-bar blues\" (the quick change, with the turnaround's V)"
+  ],
+  [
+   "the 8-bar blues",
+   [
+    "I",
+    "V",
+    "IV",
+    "I",
+    "V",
+    "I",
+    "V"
+   ],
+   "Wikipedia, \"Eight-bar blues\" (I7–V7–IV7–IV7–I7–V7–I7–V7, \"Key to the Highway\"); Wikipedia, \"List of chord progressions\" (I–V–IV–IV–I–V–I–V)"
+  ],
+  [
+   "the Andalusian cadence",
+   [
+    "i",
+    "♭VII",
+    "♭VI",
+    "V"
+   ],
+   "Wikipedia, \"Andalusian cadence\" (i–♭VII–♭VI–V, \"the minor descending tetrachord\"); Open Music Theory 2e, 7.10 Classical Schemas (the lament bass on a minor tonic, \"most typically ... harmonized by I–♭VII–♭VI–V\")"
+  ],
+  [
+   "the lament",
+   [
+    "i",
+    "♭VII",
+    "♭VI",
+    "v"
+   ],
+   "Open Music Theory 2e, 7.12 Modal Schemas (an Aeolian schema, \"Lament i–♭VII–♭VI–v\": with a minor v, where the Andalusian cadence has V; Eva Simons's \"I Don't Like You\")"
+  ],
+  [
+   "the ragtime progression",
+   [
+    "V/vi",
+    "V/ii",
+    "V/V",
+    "V"
+   ],
+   "Wikipedia, \"Ragtime progression\" (III7–VI7–II7–V7–I: each chord the V7 of the next)"
+  ],
+  [
+   "the ragtime progression",
+   [
+    "V/vi",
+    "V/ii",
+    "V/V",
+    "V",
+    "I"
+   ],
+   "Wikipedia, \"Ragtime progression\""
+  ],
+  [
+   "the ragtime progression",
+   [
+    "I",
+    "V/vi",
+    "V/ii",
+    "V/V",
+    "V"
+   ],
+   "Wikipedia, \"Ragtime progression\" (from its I)"
+  ],
+  [
+   "the extended plagal progression",
+   [
+    "♭VI",
+    "♭III",
+    "♭VII",
+    "IV",
+    "I"
+   ],
+   "Open Music Theory 2e, 7.8 Blues-Based Schemas (\"extended plagal, ♭VI–♭III–♭VII–IV–I\": the verse of Jimi Hendrix's \"Hey Joe\")"
+  ],
+  [
+   "the backdoor progression",
+   [
+    "iv",
+    "♭VII",
+    "I"
+   ],
+   "Wikipedia, \"Backdoor progression\" (iv7–♭VII7–I, \"the backdoor ii–V\")"
+  ],
+  [
+   "the Aeolian cadence",
+   [
+    "♭VI",
+    "♭VII",
+    "i"
+   ],
+   "Open Music Theory 2e, 7.12 Modal Schemas (♭VI–♭VII–i, or I)"
+  ],
+  [
+   "the Aeolian cadence",
+   [
+    "♭VI",
+    "♭VII",
+    "I"
+   ],
+   "Open Music Theory 2e, 7.12 Modal Schemas; Wikipedia, \"List of chord progressions\" (♭VI–♭VII–I)"
+  ],
+  [
+   "the minor plagal cadence",
+   [
+    "IV",
+    "iv",
+    "I"
+   ],
+   "Wikipedia, \"Plagal cadence\" (the minor plagal cadence, iv–I, \"often follows a major IV chord, creating an IV–iv–I progression\"); Open Music Theory 2e, 7.8 Blues-Based Schemas (the \"plagal sigh\")"
+  ],
+  [
+   "the puff progression",
+   [
+    "I",
+    "iii",
+    "IV"
+   ],
+   "Open Music Theory 2e, 7.11 Puff Schemas (I–iii–IV, after \"Puff, the Magic Dragon\")"
+  ],
+  [
+   "the puff progression",
+   [
+    "I",
+    "V/vi",
+    "IV"
+   ],
+   "Open Music Theory 2e, 7.11 Puff Schemas (its I–III♯–IV)"
+  ],
+  [
+   "the Montgomery-Ward bridge",
+   [
+    "I",
+    "IV",
+    "ii",
+    "V"
+   ],
+   "Wikipedia, \"Montgomery-Ward bridge\" (I7–IV7–ii7–V7, \"Riepel's Monte\")"
+  ]
+ ],
+ "_LOOPS": [
+  [
+   "I",
+   "IV",
+   "vii°",
+   "iii",
+   "vi",
+   "ii",
+   "V",
+   "I"
+  ],
+  [
+   "I",
+   "V",
+   "vi",
+   "IV"
+  ],
+  [
+   "I",
+   "V",
+   "vi",
+   "iii",
+   "IV",
+   "I",
+   "IV",
+   "V"
+  ],
+  [
+   "I",
+   "V/vi",
+   "IV",
+   "iv"
+  ],
+  [
+   "I",
+   "vi",
+   "IV",
+   "V"
+  ],
+  [
+   "i",
+   "iv",
+   "♭VII",
+   "♭III",
+   "♭VI",
+   "ii°",
+   "V",
+   "i"
+  ],
+  [
+   "i",
+   "♭VII",
+   "♭VI",
+   "♭VII"
+  ],
+  [
+   "♭VII",
+   "IV",
+   "I"
+  ]
+ ],
+ "_ON_ITS_TONIC": [
+  "I–IV–V",
+  "ii–V–I",
+  "the 12-bar blues",
+  "the 8-bar blues",
+  "the Aeolian cadence",
+  "the minor ii–V–i"
+ ],
+ "_TURNS_ON_ITS_TONIC": [
+  "the Aeolian shuttle"
+ ],
+ "_ON_THE_TONIC": {
+  "V/IV": "I",
+  "V/iv": "I"
+ },
+ "_STEPS": {
+  "I": 0,
+  "II": 2,
+  "III": 4,
+  "IV": 5,
+  "V": 7,
+  "VI": 9,
+  "VII": 11
+ },
+ "_ACCIDENTALS": {
+  "": 0,
+  "♭": -1,
+  "b": -1,
+  "♯": 1,
+  "#": 1
+ },
+ "_NATURAL_MINOR": [
+  "III",
+  "VI",
+  "VII"
+ ],
+ "_LONGEST_CYCLE": 16,
  "patterns": {
-  "_TOKENS": "maj\\d+|add\\d+|sus\\d|69|[♭♯]\\d+|no\\d|\\d+|."
+  "_TOKENS": "maj\\d+|add\\d+|sus\\d|69|[♭♯]\\d+|no\\d|\\d+|.",
+  "_NUMERAL": "([♭♯b#]?)(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)([^/]*)((?:/[^/]+)*)$",
+  "_ROMAN_ONLY": "([♭♯b#]?)(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)[°ø+]?$",
+  "_SEPARATORS": "[\\s,–—-]+"
+ },
+ "harmony_tables": {
+  "patterns": {
+   "_NOTE": "(?<![A-Za-z])([A-G])([#b♯♭]?)",
+   "_AFTER_NOTE": "(?![a-z])|m|sus|add|aug|dim"
+  }
  }
 }

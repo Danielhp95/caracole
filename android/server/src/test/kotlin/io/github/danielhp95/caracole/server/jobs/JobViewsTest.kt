@@ -16,6 +16,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.server.testing.replays.JobViewsReplay
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -32,38 +34,16 @@ class JobViewsTest {
 
     private fun TestScope.queue() = JobQueue(backgroundScope)
 
-    /** A record's job as the phone holds it (test_conformance_sync_routes.py's docstring says what each field is). */
-    private fun jobOf(held: JsonObject): Job {
-        fun text(name: String) = held.getValue(name).jsonPrimitive.content
-        val stages = held.getValue("stages").jsonArray.map { it.jsonObject }
-        val spec = JobSpec(text("title"), text("key"), text("kind"), stages.map {
-            it.getValue("name").jsonPrimitive.content to it.getValue("label").jsonPrimitive.content
-        }, display = text("display")) {}
-        return Job(held.getValue("id").jsonPrimitive.int, spec).also { job ->
-            job.state = text("state")
-            job.stages.zip(stages).forEach { (stage, said) ->
-                stage.state = said.getValue("state").jsonPrimitive.content
-                stage.detail = said.getValue("detail").jsonPrimitive.content
-                stage.runningDetail = said.getValue("running_detail").jsonPrimitive.content
-            }
-            job.output = held.getValue("output").jsonArray.map { it.jsonPrimitive.content }
-            job.songId = held.getValue("song_id").jsonPrimitive.longOrNull
-            job.outcome = held["outcome"] as? JsonObject
-        }
-    }
-
-    @Test fun everyRecordOfTheVectorsIsThisViewOfTheSameJob() {
-        val records = Corpus.records("web/job_views.jsonl")
-        val kinds = records.map { it.extra.getValue("job").jsonObject.getValue("kind").jsonPrimitive.content }.toSet()
-        assertEquals(setOf("sync", "peer-push", "index-merge", "add", "remove"), kinds)
-        for (record in records) {
-            val held = record.extra.getValue("job").jsonObject
-            val job = jobOf(held)
-            val seen = JobViews.view(job, held.getValue("ahead").jsonPrimitive.int,
-                                     held.getValue("song_id").jsonPrimitive.longOrNull)
-            assertEquals(record.out, seen, "${held["kind"]}, ${record.extra["note"]}")
-        }
-        assertTrue(records.size >= 40)
+    @Test fun everyRecordOfTheVectorsIsThisViewLineAndOutcomeOfTheSameJob() {
+        val misses = Misses("job views")
+        JobViewsReplay.replay(misses)
+        misses.assertNone()
+        val kinds = (Corpus.records("web/job_views.jsonl") + Corpus.records("web/job_views_kinds.jsonl"))
+            .map { it.extra.getValue("job").jsonObject.getValue("kind").jsonPrimitive.content }.toSet()
+        assertTrue(kinds.containsAll(setOf("sync", "peer-push", "index-merge", "add", "remove", "song", "versions",
+                                           "lacuerda-artist", "lacuerda-search", "harptabs-artist", "songbook",
+                                           "review", "harmonica", "export")), "$kinds")
+        assertTrue(misses.checked >= 300, "${misses.checked} records")
     }
 
     private fun line(view: JsonObject) = view["line"]!!.jsonObject.let {
@@ -236,5 +216,115 @@ class JobViewsTest {
         assertEquals(JsonPrimitive("remove"), removing["kind"])
         assertEquals(JsonPrimitive(9), removing["songId"])
         assertEquals(JsonPrimitive("radiohead/creep"), removing["identity"])
+    }
+
+    /** A job of PhoneKinds' [kind], run by [block]. */
+    private fun TestScope.phoneJob(queue: JobQueue, kind: PhoneKinds.Kind, key: String,
+                                   block: suspend (JobContext) -> Unit): Job =
+        queue.submit(JobSpec(kind.title, kind.key + key, kind.kind, listOf(kind.stage), display = kind.display,
+                             run = block)).first
+
+    @Test fun thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn() = runTest {
+        val queue = queue()
+        val step = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val render = PhoneKinds.RENDER
+        val job = phoneJob(queue, render, "build-1") { context ->
+            context.stage("render", "running")
+            step.await()
+            context.stage("render", "running", PhoneKinds.fill(render.running, "done" to 3, "total" to 10))
+            gate.await()
+            context.stage("render", "done", PhoneKinds.fill(render.done, "n" to 10))
+        }
+        runCurrent()
+        assertEquals(Line("running", "Making the pages…"), JobViews.line(queue.job(job.id)!!))  // nothing filled yet
+        step.complete(Unit)
+        runCurrent()
+        assertEquals(Line("running", "Making the pages again: 3 of 10"), JobViews.line(queue.job(job.id)!!))
+        gate.complete(Unit)
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(Line("ready", "Pages made again for 10 songs"), JobViews.line(over))
+        val view = JobViews.view(over, queue)
+        assertEquals(JsonPrimitive("render"), view["kind"])
+        assertEquals(null, view["steps"])  // a line of its own, never a song's or a sync's
+        assertEquals(listOf(Chip("Making the pages", "done")), Outcomes.steps(over))
+        assertEquals(Outcome("ready", "Pages made again for 10 songs"),
+                     Outcomes.outcome(over, JobViews.line(over), null, null))
+        val failed = phoneJob(queue, render, "build-2") { context ->
+            context.stage("render", "failed", PhoneKinds.fill(render.failed, "why" to "the disk is full"))
+            throw IllegalStateException("Pages not made: the disk is full")
+        }
+        runCurrent()
+        assertEquals(Line("failed", "Pages not made: the disk is full.", details = "#tab=requests&job=${failed.id}"),
+                     JobViews.line(queue.job(failed.id)!!))
+        // A file shared to the app: filed, or waiting for a song that fits, a wait the Requests tab says so.
+        val inbox = PhoneKinds.INBOX
+        val filed = phoneJob(queue, inbox, "song.gp5") { context ->
+            context.stage("file", "done", PhoneKinds.fill(inbox.done, "name" to "guitar-1.gp5", "song" to "Radiohead - Creep"))
+        }
+        val waits = phoneJob(queue, inbox, "other.gp5") { context ->
+            context.stage("file", "done", PhoneKinds.fill(inbox.otherwise!!, "name" to "other.gp5"))
+        }
+        runCurrent()
+        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Radiohead - Creep"), JobViews.line(queue.job(filed.id)!!))
+        assertEquals(Line("waiting", "Waiting for a song that fits: other.gp5", details = "#tab=requests&job=${waits.id}"),
+                     JobViews.line(queue.job(waits.id)!!))
+        val backing = phoneJob(queue, PhoneKinds.BACKUP, "by-hand") { context ->
+            context.stage("backup", "running")
+            CompletableDeferred<Unit>().await()
+        }
+        runCurrent()
+        assertEquals(Line("running", "Backing up the library…"), JobViews.line(queue.job(backing.id)!!))
+    }
+
+    @Test fun thePhonesIndexImportSaysTheComputersIndexNotAnotherCaracolesPages() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        val job = queue.submit(JobSpec("Import the index", "index", "index", listOf("merge" to "Merging the index"),
+                                       display = "The computer's index") { context ->
+            context.stage("merge", "running")
+            gate.await()
+            context.stage("merge", "done", "merged")
+            context.outcome(Json.parseToJsonElement("""{"changed":true,"sites":["ug"]}""").jsonObject)
+        }).first
+        runCurrent()
+        assertEquals(Line("running", "Merging the computer's index…"), JobViews.line(queue.job(job.id)!!))
+        gate.complete(Unit)
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(Line("added", "Merged"), JobViews.line(over))
+        val view = JobViews.view(over, queue)
+        assertEquals("Merging the index", view["steps"]!!.jsonArray.single().jsonObject["label"]!!.jsonPrimitive.content)
+        assertEquals(Json.parseToJsonElement("""{"changed":true,"sites":["ug"]}"""), view["outcome"])
+    }
+
+    @Test fun aLookupOfCommandsSaysItsRunningStageAndCountsItsSteps() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val commands = Commands(mapOf("get" to CommandRunner { _, context ->
+            context.stage("song", "done")
+            context.stage("match", "done", "accepted")
+            context.stage("sheet", "running", "from LaCuerda")
+            gate.await()
+        }))
+        val queue = JobQueue(backgroundScope, commands = commands)
+        val job = queue.submit(JobSpec("Fetch Soda Stereo - De música ligera", "soda stereo/de musica ligera", "song",
+                                       emptyList(), display = "Soda Stereo - De música ligera", fetching = true,
+                                       commands = JobCommands.lookupSteps("Soda Stereo", "De música ligera"))).first
+        runCurrent()
+        val view = JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts())
+        assertEquals("Fetching from LaCuerda…", view["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals(JsonPrimitive("2 of 7 done"), view["count"])
+        val sheet = view["steps"]!!.jsonArray[2].jsonObject
+        assertEquals(Json.parseToJsonElement("""{"name":"Sheet","source":"LaCuerda","state":"running"}"""), sheet)
+        // The song new to the library, its song stage adds it, as caracole add would.
+        assertEquals("Adding to the library…", Status.jobLine(fakeRunningSong(queue.job(job.id)!!), null).text)
+        gate.complete(Unit)
+    }
+
+    /** A lookup with its song stage running. */
+    private fun fakeRunningSong(job: Job): Job = job.copy().also {
+        it.stages.forEach { stage -> stage.state = Job.WAITING }
+        it.stages.first { stage -> stage.name == "song" }.state = Job.RUNNING
     }
 }

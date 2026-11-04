@@ -196,7 +196,7 @@ class RoutingTest {
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
                 for (path in listOf("/fetch", "/versions/keep-more", "/lacuerda/search", "/lacuerda/artist",
-                                    "/harptabs/artist", "/jobs/again", "/review", "/versions/choose", "/versions/keep",
+                                    "/harptabs/artist", "/review", "/versions/choose", "/versions/keep",
                                     "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
                                     "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {
@@ -217,7 +217,6 @@ class RoutingTest {
                     val said = test.script("$path?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
                     assertTrue(said.endsWith(" on the phone yet."), said)
                 }
-                assertEquals(409, test.script("/requests.json").status)
             }
         } finally {
             scope.cancel()
