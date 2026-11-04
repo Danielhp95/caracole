@@ -18,17 +18,10 @@ class Response(val url: String, val status: Int, val content: ByteArray, val hea
      * UTF-32 or UTF-16, UTF-8 with its BOM dropped, else by where the first bytes' zeros are), strictly with lone
      * surrogates passed, so a byte that isn't the text's encoding is a ValueError (UnicodeDecodeError), which
      * lyrics.py's and megalobiz.py's readers turn into their parse errors, where [text]'s U+FFFD would read as data.
-     * That reading is lane py-sites' `PyJson.loads(ByteArray)` (vectors/py/sites_json.jsonl's `json.loads(bytes)`).
+     * That reading is `PyJson.loads(ByteArray)` (vectors/py/sites_json.jsonl's `json.loads(bytes)`).
      */
     fun json(): JsonElement = PyJson.loads(content)
 }
-
-/**
- * Stands in for `PyJson.loads(ByteArray)` until lane py-sites' member lands; a member always wins over an extension,
- * so [Response.json] then calls it, and this goes (the compiler warns that the member shadows it).
- */
-@Suppress("UnusedReceiverParameter", "UNUSED_PARAMETER")
-private fun PyJson.loads(bytes: ByteArray): JsonElement = TODO("lane py-sites: PyJson.loads(ByteArray)")
 
 /** http.py's Event: one request's row of `events` (decision ok, not_modified, redirect, blocked, error, budget). */
 data class Event(val provider: String, val url: String, val status: Int?, val decision: String, val message: String?)

@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.http
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import kotlinx.serialization.json.Json
@@ -171,7 +172,7 @@ internal object EmailDate {
                               "EST" to -500, "EDT" to -400, "CST" to -600, "CDT" to -500, "MST" to -700,
                               "MDT" to -600, "PST" to -800, "PDT" to -700)
 
-    private fun int(s: String): BigInteger? = PyIntText.parse(s)
+    private fun int(s: String): BigInteger? = PyInt.parse(s)
 
     fun parse(text: String): Instant? {
         if (text.isEmpty()) return null

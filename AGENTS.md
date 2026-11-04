@@ -1145,8 +1145,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache` under `cacheRoot`, http.py's
     `cache_root`), httpx's request headers (a URL's user and password its basic auth, carried on a redirect as httpx
     carries it), the budget, the pause for given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of
-    tests/test_http.py a session of `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does (py-sites' `PyJson.loads(ByteArray)`: a
-    byte that isn't the text's encoding an error, never `text`'s U+FFFD);
+    tests/test_http.py a session of `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does
+    (`PyJson.loads(ByteArray)`: a byte that isn't the text's encoding an error, never `text`'s U+FFFD);
   - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, a URL httpx won't send refused with
     its UnsupportedProtocol before any socket (ws and wss asked as http and https), gzip and deflate decoded as
     httpx's decoders decode them (zlib's gzip mode: `rules.jsonl`'s `decode`), errors named as httpx's, every host but

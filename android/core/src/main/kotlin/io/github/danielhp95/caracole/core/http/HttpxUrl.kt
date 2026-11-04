@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.http
 
 import io.github.danielhp95.caracole.core.py.IpAddress
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
@@ -257,7 +258,7 @@ internal class HttpxUrl private constructor(
 
         private fun normalizePort(port: String?, scheme: String): BigInteger? {
             if (port.isNullOrEmpty()) return null
-            val n = PyIntText.parse(port) ?: throw invalid("Invalid port: ${PyStr.repr(port)}")
+            val n = PyInt.parse(port) ?: throw invalid("Invalid port: ${PyStr.repr(port)}")
             val default = when (scheme) {
                 "ftp" -> 21
                 "http", "ws" -> 80
@@ -356,47 +357,5 @@ internal class HttpxUrl private constructor(
                 UrlError("UnicodeEncodeError", "'utf-8' codec can't encode characters in position $start-${end - 1}: " +
                     "surrogates not allowed")
             }
-    }
-}
-
-/** Python's `int(text)` for a port or a date's field: Unicode whitespace around, a sign, decimal digits (any
- * script's) with single underscores between them; null where Python raises ValueError. */
-internal object PyIntText {
-    fun parse(given: String): BigInteger? {
-        val s = Py.strip(given)
-        if (s.isEmpty()) return null
-        var i = 0
-        var negative = false
-        if (s[0] == '+' || s[0] == '-') {
-            negative = s[0] == '-'
-            i = 1
-        }
-        if (i >= s.length) return null
-        val digits = StringBuilder()
-        var lastUnderscore = true
-        while (i < s.length) {
-            val cp = s.codePointAt(i)
-            i += Character.charCount(cp)
-            if (cp == '_'.code) {
-                if (lastUnderscore) return null
-                lastUnderscore = true
-                continue
-            }
-            val d = decimal(cp) ?: return null
-            digits.append(('0'.code + d).toChar())
-            lastUnderscore = false
-        }
-        if (lastUnderscore) return null
-        val n = BigInteger(digits.toString())
-        return if (negative) n.negate() else n
-    }
-
-    /** unicodedata.decimal(cp): a decimal digit's value, its place in its run of ten. */
-    private fun decimal(cp: Int): Int? {
-        if (cp in '0'.code..'9'.code) return cp - '0'.code
-        if (!PyUnicode.isDecimal(cp)) return null
-        var start = cp
-        while (start > 0 && PyUnicode.isDecimal(start - 1)) start--
-        return (cp - start) % 10
     }
 }
