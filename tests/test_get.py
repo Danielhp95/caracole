@@ -1204,3 +1204,17 @@ def test_a_lookup_that_finds_lyrics_puts_them_on_the_auto_sheets_page(cfg, conn,
     folder = song_dir(cfg.library_dir, song)
     assert "Des mots inventés" in (folder / "sheet (auto).txt").read_text(encoding="utf-8")
     assert "Des mots inventés" in (folder / "sheet (auto).html").read_text(encoding="utf-8")
+
+
+def test_the_words_of_a_caracole_with_no_pdfs_are_get_pys_own_and_the_computer_says_none():
+    """The phone has no ChordPro, no wanted.txt and no index.html to write: the words its lookup says for them are
+    get.py's (the conformance corpus records them, vectors/lookup/words.jsonl), and a lookup on the computer says none
+    of them."""
+    from caracole import get
+
+    words = (get.ADDED, get.NO_PDFS, get.PAGES_MADE, get.LIBRARY_PAGE)
+    assert all(isinstance(w, str) and w and w == w.strip() for w in words)
+    assert len(set(words)) == len(words)
+    source = Path(get.__file__).read_text(encoding="utf-8")
+    for name in ("ADDED", "NO_PDFS", "PAGES_MADE", "LIBRARY_PAGE"):
+        assert source.count(name) == 1, f"get.py uses {name}: it is the phone's alone"

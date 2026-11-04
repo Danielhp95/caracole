@@ -1197,7 +1197,39 @@ Not built yet. (html-tokenizer, html-tree.)
 
 ##### Lookups on the phone
 
-Not built yet. (lookup.)
+- core.lookup's `Lookup` is get.py's `_Lookup` (`internal/LookupRun.kt`), held to it by vectors/lookup/words, asking
+  and after_the_sheet (tests/test_conformance_lookup.py, `LookupReplay`):
+  - its stages in get.py's order and labels (`LookupWords.STAGES`), each reported as it starts and ends;
+  - the song found, or added (`LibraryStore.add`, the phone's wanted.txt line), the pages picked recorded through
+    `OverrideWriters`; a refusal (ignored, a tab of a kind caracole doesn't use, a pick that can't be recorded) the song
+    stage failed and the rest skipped;
+  - the sheet's order (a LaCuerda pick first, Ultimate Guitar's first pass, LaCuerda when no sheet is kept, asked once
+    a lookup), its running detail `SHEET_FROM`; the lyrics put together as `_then` does; what follows the sheet within
+    `SHEETS_SHARE`; `_owed`; the sheet readable as `_check_readable` says it; the closing `record_ok` and kv
+    `lookup:songs`.
+- Each site's stage is its lane's file of core/lookup/sites/, called with a `StageContext` whose `asking` is the
+  envelope or `InteractiveAsk.afterTheSheet`. A stage words its site's answer as get.py's work does and every other
+  `Asked` through `LookupWords.end`; `LookupWords.NOTHING_TO_ASK` is get.py's None (Megalobiz's, AZLyrics'). A
+  `SharedFolder` fails the stage in get.py's words; anything else is a bug, said in its stage and `LookupResult.bug`.
+- `InteractiveAsk` is get.py's `_ask`: `_usable`'s words, a block recorded, an error counted, a spent budget worded
+  the lookup's, the hour's or kept for sheets; one client a provider a lookup (`Clients.interactive`, at the lookup's
+  run or a command's own, `lookup:lacuerda-search:`). A block alerts once (`Alerts.blocked`): on the phone a lookup
+  alerts, where the computer's sends none, since the phone has no nightly run to tell.
+- What a caracole with no ChordPro, no wanted.txt and no index.html says is get.py's too, recorded in the corpus and
+  used by nothing on the computer: `ADDED` (the song stage), `NO_PDFS` (the pdf stage, skipped while `SongPages` is
+  `NONE`), `PAGES_MADE` (once the phone makes the song's pages), `LIBRARY_PAGE` (the pages stage). The songbooks stage
+  says "not on the phone yet" while `SongbookPages` is `NONE`.
+- `Lookup.run` blocks: a runner calls it inside one `Database.writeBlocking` on the queue's worker, in autocommit, so
+  each event, block and kv record commits as it happens; a write inside it throws; a queue that stops stops it at its
+  next stage.
+- server/lookups' runners: `GetRunner` (`caracole get`, its options checked as commands/get.py checks them,
+  `LookupLines` and `LookupWords.totals` its output; a refusal or a bug exits 1), `VersionsRunner` (`--keep` and
+  `--keep-more` to `VersionsCommands`, then the song's pages and the library page once its kept files changed;
+  `--choose` as get `--tab` at the version's address; `--clear` as `removePin`, then get), `LaCuerdaRunner` (`--artist`,
+  `--search` to `LaCuerdaCommands`) and `HarpTabsRunner` (`--artist`).
+- A lookup command runs in `LookupJobs.context`: what it says is its job's output, a get.py progress line
+  (`JobCommands.progressLine`) its job's event when the command reports them (`JobCommands.reports`, as web/jobs.py's
+  emit reads it); its last line is the one it returns; it records its own good run, as its Python does.
 
 ##### Site passes on the phone
 
