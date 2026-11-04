@@ -3,8 +3,12 @@ package io.github.danielhp95.caracole.viewer.testing.replays
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.viewer.harmony.Contained
 import io.github.danielhp95.caracole.viewer.harmony.Harmony
+import io.github.danielhp95.caracole.viewer.harmony.HarmonyProgressions
+import io.github.danielhp95.caracole.viewer.harmony.HarmonyTables
 import io.github.danielhp95.caracole.viewer.harmony.Numeral
+import io.github.danielhp95.caracole.viewer.harmony.Progression
 import io.github.danielhp95.caracole.viewer.harmony.Relation
 import io.github.danielhp95.caracole.viewer.theory.Chord
 import io.github.danielhp95.caracole.viewer.theory.Key
@@ -22,21 +26,197 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 
 /**
- * viewer/harmony.py (vectors/viewer/harmony_chords.jsonl: lane harmony's chord half; harmony-progressions adds its
- * progressions and tables), every record answered by :viewer as Python answered it: HarmonyTest's record loop, run on
- * the device by CorpusOnDeviceTest. tests/test_conformance_viewer_harmony.py's docstring says each record's shape: a
- * chord is `[root, quality, bass, shown, tones]` with its trailing nulls left out, a key `[tonic, mode]`, a numeral
- * `[text, accidental, roman, quality, extension, bass, of]`, a relation `[kind, source, target]`.
+ * viewer/harmony.py and viewer/harmony_tables.py (vectors/viewer/harmony_chords.jsonl, the chord half;
+ * harmony_progressions.jsonl and harmony_tables.jsonl), every record answered by :viewer as Python answered it:
+ * HarmonyTest's, ProgressionsTest's and HarmonyTablesTest's record loops, run on the device by CorpusOnDeviceTest.
+ * tests/test_conformance_viewer_harmony.py's docstring says each record's shape: a chord is `[root, quality, bass,
+ * shown, tones]` with its trailing nulls left out, a key `[tonic, mode]`, a numeral `[text, accidental, roman, quality,
+ * extension, bass, of]`, a relation `[kind, source, target]`, a progression `[numerals, repeats, name, ending,
+ * variations, contains]`, a token `[root, third]`, a kept answer `{"value", "sha256"}`.
  */
 object HarmonyReplay : AreaReplay {
     override val area = "harmony"
 
     private const val HELPER = "test_conformance_viewer_harmony."
     private const val CHORDS = "viewer/harmony_chords.jsonl"
+    private const val PROGRESSIONS = "viewer/harmony_progressions.jsonl"
+    private const val TABLES = "viewer/harmony_tables.jsonl"
 
     override fun replay(misses: Misses) {
+        chords(misses)
+        progressions(misses)
+        tables(misses)
+    }
+
+    /** vectors/viewer/harmony_chords.jsonl: the chord half. */
+    fun chords(misses: Misses) {
         everyChordRecordIsHarmonyPys(misses)
     }
+
+    /** vectors/viewer/harmony_progressions.jsonl: a section's progression, its parts, the typed numerals' keys and
+     * names, the catalogue's rows and keys. */
+    fun progressions(misses: Misses) {
+        val counts = HashMap<String, Int>()
+        for (record in Corpus.records(PROGRESSIONS)) {
+            counts.merge(record.fn, 1, Int::plus)
+            val args = record.args
+            val out = record.out!!
+            when (record.fn) {
+                HELPER + "progressions_of" -> {
+                    val chords = args[0].jsonArray.map { chord(it)!! }
+                    val sections = args[1].jsonArray.map { s ->
+                        val (name, played) = s.jsonArray
+                        name.jsonPrimitive.content to played.jsonArray.map { if (it is JsonNull) null else chords[it.jsonPrimitive.int] }
+                    }
+                    val key = key(args[2])!!
+                    val got = JsonArray(Harmony.progressions(sections, key).map { (name, p) ->
+                        JsonArray(listOf(JsonPrimitive(name), progression(p)))
+                    })
+                    misses.check(got == out) { "progressions($sections, $key): $got, Python's $out" }
+                }
+                HELPER + "fold_of" -> each(misses, record) { held ->
+                    val f = HarmonyProgressions.fold(strings(held))
+                    JsonArray(listOf(strings(f.cycle), JsonPrimitive(f.repeats), JsonPrimitive(f.varied), ints(f.seams)))
+                }
+                HELPER + "contained_of" -> each(misses, record) { item ->
+                    val (held, mode, seams) = item.jsonArray
+                    JsonArray(HarmonyProgressions.contained(strings(held), mode.jsonPrimitive.content,
+                                                            seams.jsonArray.map { it.jsonPrimitive.int }).map(::contained))
+                }
+                HELPER + "ending_of" -> each(misses, record) { cores -> HarmonyProgressions.ending(strings(cores)).json() }
+                HELPER + "typed_of" -> each(misses, record) { typed ->
+                    if (typed is JsonArray) {
+                        val numerals = strings(typed)
+                        JsonArray(listOf(JsonPrimitive(Harmony.progressionKey(numerals)), Harmony.nameOf(numerals).json(),
+                                         strings(Harmony.readTyped(numerals))))
+                    } else {
+                        val text = typed.jsonPrimitive.content
+                        JsonArray(listOf(JsonPrimitive(Harmony.progressionKey(text)), Harmony.nameOf(text).json(),
+                                         strings(Harmony.readTyped(text))))
+                    }
+                }
+                HELPER + "core_token_of" -> each(misses, record) { text ->
+                    val t = text.jsonPrimitive.content
+                    JsonArray(listOf(JsonPrimitive(HarmonyProgressions.core(t)), token(HarmonyProgressions.token(t))))
+                }
+                HELPER + "rows_of" -> {
+                    val mode = args[0].jsonPrimitive.content
+                    val got = JsonArray(HarmonyProgressions.rows(mode).map { row ->
+                        JsonArray(listOf(JsonPrimitive(row.name), JsonArray(row.tokens.map(::token)), strings(row.numerals),
+                                         JsonPrimitive(row.own), JsonPrimitive(row.loops),
+                                         JsonArray(row.forms.map { form -> JsonArray(form.map(::token)) })))
+                    })
+                    misses.check(got == out) { "_rows($mode): $got, Python's $out" }
+                }
+                HELPER + "catalogue_keys" -> {
+                    val got = pairs(Harmony.catalogue())
+                    misses.check(got == out) { "catalogue_keys(): $got, Python's $out" }
+                }
+                HELPER + "name_keys" -> {
+                    val got = pairs(HarmonyProgressions.nameKeys())
+                    misses.check(got == out) { "_name_keys(): $got, Python's $out" }
+                }
+                else -> fail("an unknown record: ${record.fn}")
+            }
+        }
+        assertTrue("records of every kind: $counts", counts.size == 9 && counts.getValue(HELPER + "progressions_of") > 500)
+    }
+
+    /** vectors/viewer/harmony_tables.jsonl: harmony_tables.tables for a sheet, members and order, and its parts. */
+    fun tables(misses: Misses) {
+        val counts = HashMap<String, Int>()
+        for (record in Corpus.records(TABLES)) {
+            counts.merge(record.fn, 1, Int::plus)
+            val args = record.args
+            val out = record.out!!
+            when (record.fn) {
+                HELPER + "tables_of" -> {
+                    val names = strings(args[0])
+                    val key = key(args[1])
+                    val places = args[2].jsonArray.map { p -> p.jsonArray.let { it[0].jsonPrimitive.int to it[1].jsonPrimitive.int } }
+                    val chords = names.map { Theory.parseChord(it, strict = false) }
+                    val tables = if (key == null) {
+                        HarmonyTables.tables(chords, null, places, emptyMap(), emptyMap())
+                    } else {
+                        val (_, mapped, alts) = ShapesReplay.mappedAndAlts(names, key)
+                        HarmonyTables.tables(chords, key, places, mapped, alts)
+                    }
+                    val want = out.jsonObject
+                    misses.check(JsonArray(tables.keys.map(::JsonPrimitive)) == want.getValue("order")) {
+                        "tables($names, $key)'s members: ${tables.keys}, Python's ${want.getValue("order")}"
+                    }
+                    for ((member, digest) in want.getValue("sha256").jsonObject) {
+                        misses.check(tables[member]?.let(ShapesReplay::sha) == digest.jsonPrimitive.content) {
+                            "tables($names, $key)'s $member: ${tables[member].toString().take(400)}"
+                        }
+                    }
+                    want["whole"]?.let { keptIs(misses, "tables($names, $key)", it, tables) }
+                }
+                HELPER + "parts_of" -> each(misses, record) { text ->
+                    JsonArray(HarmonyTables.parts(text.jsonPrimitive.content).map {
+                        if (it is String) JsonPrimitive(it) else JsonPrimitive(it as Int)
+                    })
+                }
+                HELPER + "text_of" -> {
+                    val texts = strings(args[0])
+                    val key = key(args[1])!!
+                    keptIs(misses, "text_of($texts, $key)", out, HarmonyTables.textOf(texts, key))
+                }
+                HELPER + "pitch_class_of" -> each(misses, record) { note -> JsonPrimitive(HarmonyTables.pitchClass(note.jsonPrimitive.content)) }
+                HELPER + "page_name_of" -> each(misses, record) { item ->
+                    val (c, k, s) = item.jsonArray
+                    JsonPrimitive(HarmonyTables.pageName(chord(c)!!, Theory.spelling(key(k)), s.jsonPrimitive.int))
+                }
+                HELPER + "role_of" -> each(misses, record) { item ->
+                    val (c, k) = item.jsonArray
+                    JsonPrimitive(HarmonyTables.role(chord(c)!!, key(k)!!))
+                }
+                else -> fail("an unknown record: ${record.fn}")
+            }
+        }
+        assertTrue("records of every kind: $counts", counts.size == 6 && counts.getValue(HELPER + "tables_of") > 40)
+    }
+
+    /** Each item of the record's batch (its first argument), its answer and Python's. */
+    private fun each(misses: Misses, record: io.github.danielhp95.caracole.core.testing.Record, got: (JsonElement) -> JsonElement) {
+        val items = record.args[0].jsonArray
+        val want = record.out!!.jsonArray
+        misses.check(items.size == want.size) { "${record.fn}: ${items.size} items, ${want.size} answers" }
+        for ((i, item) in items.withIndex()) {
+            val answer = try {
+                got(item)
+            } catch (e: Exception) {
+                JsonPrimitive("raised ${e.javaClass.simpleName}: ${e.message}")
+            }
+            misses.check(answer == want[i]) { "${record.fn.removePrefix(HELPER)}($item): $answer, Python's ${want[i]}" }
+        }
+    }
+
+    /** A kept answer (`{"value", "sha256"}`): its members as Python's, and in Python's order. */
+    private fun keptIs(misses: Misses, what: String, want: JsonElement, got: JsonElement) {
+        val kept = want.jsonObject
+        misses.check(got == kept.getValue("value")) {
+            "$what: ${got.toString().take(400)}, Python's ${kept.getValue("value").toString().take(400)}"
+        }
+        misses.check(ShapesReplay.sha(got) == kept.getValue("sha256").jsonPrimitive.content) {
+            "$what: its members' order differs from Python's"
+        }
+    }
+
+    fun progression(p: Progression): JsonArray = JsonArray(listOf(strings(p.numerals), JsonPrimitive(p.repeats), p.name.json(),
+        p.ending.json(), JsonPrimitive(p.variations), JsonArray(p.contains.map(::contained))))
+
+    fun contained(c: Contained): JsonArray =
+        JsonArray(listOf(JsonPrimitive(c.name), JsonPrimitive(c.times), strings(c.numerals), JsonPrimitive(c.key)))
+
+    private fun token(t: Pair<Int, String>): JsonArray = JsonArray(listOf(JsonPrimitive(t.first), JsonPrimitive(t.second)))
+
+    private fun pairs(map: Map<String, String>): JsonArray =
+        JsonArray(map.map { (k, v) -> JsonArray(listOf(JsonPrimitive(k), JsonPrimitive(v))) })
+
+    private fun strings(e: JsonElement): List<String> = e.jsonArray.map { it.jsonPrimitive.content }
+
+    private fun strings(xs: List<String>): JsonArray = JsonArray(xs.map(::JsonPrimitive))
 
     private fun everyChordRecordIsHarmonyPys(misses: Misses) {
         val counts = HashMap<String, Int>()

@@ -146,9 +146,12 @@ class Notation:
         return text.casefold() if self.fold else text
 
     def meaning(self, text: str, at: str) -> Symbol | None:
-        """The symbol it reads ``text`` written ``at`` as, or None."""
+        """The symbol it reads ``text`` written ``at`` as, or None: in either case where it ``fold``s, by its key,
+        else as its tokenizer's re.I reads it (an "ı" or an "İ" is an "i" there, which casefold keeps apart)."""
         key = self._key(text)
-        return next((s for s in self.symbols if s.at == at and self._key(s.text) == key), None)
+        return next((s for s in self.symbols if s.at == at and self._key(s.text) == key), None) or (
+            next((s for s in self.symbols if s.at == at and re.fullmatch(re.escape(s.text), text, re.I)), None)
+            if self.fold else None)
 
 
 def _symbols(at: str, means: str, *texts: str, count: int = 1) -> tuple[Symbol, ...]:
@@ -1246,7 +1249,7 @@ def check_spec(spec: Any) -> None:
     if not isinstance(spec, Mapping):
         raise ValueError(f"expected a notation's name or a table of what its symbols mean, got {spec!r}")
     base = spec.get("as", SIGNS.name)
-    if base not in PRESET:
+    if not isinstance(base, str) or base not in PRESET:
         raise ValueError(f"as: expected {_names(list(PRESET))}, got {base!r}")
     for key, word in spec.items():
         if key != "as":

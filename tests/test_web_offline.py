@@ -365,6 +365,36 @@ def test_without_the_library_page_as_written_there_is_no_copy(app, library):
     assert "caracole todo writes it again" in text(refused)
 
 
+def test_manifest_of_is_what_get_api_offline_answers(app, library):
+    from caracole.web.offline_routes import manifest_of
+
+    assert manifest_of(app) == manifest(app)
+
+
+def test_the_pages_an_export_holds_are_the_manifest_and_each_files_bytes_as_served(app, library, cfg):
+    from caracole.web.offline_routes import library_pages
+
+    listed, fetch = library_pages(cfg)
+    assert listed == manifest(app)
+    for entry in listed["files"]:
+        data = fetch(entry["path"])
+        assert hashlib.sha256(data).hexdigest() == entry["sha256"], entry["path"]
+        assert data == get(app, entry["url"]).body
+    assert not (cfg.state_dir / "requests.jsonl").exists()  # a reading alone: its queue never started
+
+
+def test_without_the_library_page_as_written_an_export_holds_no_pages(app, library, cfg):
+    from caracole.web.offline_routes import library_pages, manifest_of
+    from caracole.web.pages import Refused
+
+    index = library / "index.html"
+    index.write_bytes(index.read_bytes().replace(b"<body", b"<BODY", 1))
+    assert library_pages(cfg) is None
+    with pytest.raises(Refused) as refused:
+        manifest_of(app)
+    assert refused.value.status == 503 and "caracole todo" in refused.value.message
+
+
 def test_a_library_page_caracole_kept_no_record_of_is_not_sent(app, conn, cfg):
     # As one written before caracole kept the record: the next command that writes the pages records it.
     rendered_song(conn, cfg)

@@ -374,6 +374,8 @@ Below the table, a section for each step whose modules have more to say.
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
+| peer_file.py | a library in a `.caracole` file: `caracole peer export` writes one, `caracole peer import` syncs with one (below) |
+| peer_import.py | a file to import, staged part by part in `state_dir/peer/import-<id>/` (peer_file.py, below) |
 | politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
@@ -469,6 +471,63 @@ Below the table, a section for each step whose modules have more to say.
 - **A push** (peer_push.py): `POST /peer/push/new` names the files its units keep by their SHA-256, `POST
   /peer/push/file` sends each one this side needs, `POST /peer/push` the document, checked against each unit's digest;
   then `caracole peer take DIR` takes its units from the staging folder as a pull takes a peer's, and deletes it.
+
+#### peer_file.py
+
+- A library in a `.caracole` file: `caracole peer export FILE` writes one, `caracole peer import SOURCE` syncs this
+  library with one as if its caracole were here (commands/peer.py); the design is
+  docs/superpowers/specs/2026-11-03-sync-redesign-design.md, the layout docs/superpowers/plans/2026-11-03-sync-redesign.md
+  §3.3.
+- **The file** (`FORMAT` 1): a zip of what a sync reads from the other side, its members in order:
+  - `caracole.json`, the manifest (the caracole, schema and sync format that made it, the library's id and name,
+    `made`, its parts, its counts, its indexes' sites);
+  - `state.json` (`peer_sync.state_document` of its units), `bases.json` (every base it keeps), `units.jsonl` (each
+    unit's document), `files/<sha256>` (each kept file once);
+  - with the library, `pages.json` and `pages/<sha256>`, the pages made of its units (`offline_routes.library_pages`:
+    `GET /api/offline`'s manifest cut to them), so a phone that takes a song opens its sheet: each page's bytes
+    once, none for a page that is a kept file (held once, under `files/`), so a page is read from `pages/`, else
+    `files/` (`FileSource.page`);
+  - with the indexes, `indexes.sqlite` (`index_transfer.export`).
+  - Its parts (`peer_sync.PARTS`): the library whole, the songbooks with the songs they list (`listed_songs`), the
+    indexes. JSON deflated, blobs stored and copied by the MiB, every member dated `made`.
+  - Its units read in one read transaction and its indexes in their own (`index_transfer.export`'s), state.json
+    naming their newest read as indexes.sqlite holds it; each page read once, one no longer as its manifest says
+    left out; taking no lock; written under a name of its own and renamed, never over a file.
+  - A song whose kept file changed since caracole kept it, or is past `FILE_MAX`, is left out (`Made.left`, with
+    why: `CHANGED`, `TOO_BIG`), its state still naming it, so the file never reads as having lost it.
+  - `file_name`: download_names' cleaning of the library's name, then `-dd-mm-yy.caracole`.
+- **Reading** (`read_file`, `SyncFile`): the manifest first, then every name in the layout, each once, each blob at
+  most `FILE_MAX` (64 MiB), each JSON member `JSON_MAX`, the whole `IMPORT_MAX` (8 GiB); the indexes held only at this
+  database's schema; an index export (`index_transfer.META`) a file of the indexes alone, with no id.
+  - `check_whole` reads every member through before an import takes anything (its CRC, each blob its SHA-256, each
+    document its state's digest, each kept file a song names and each page pages.json lists held): a file that can't
+    be read whole is refused whole.
+- **Refusals**, in the owner's words and the phone's alike, the whys caracole's own (`NOT_A_FILE`, `OTHER_FORMAT`,
+  `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export and a file no newer than
+  this side's last sync with its caracole (its base's latest time, the kept answers' included).
+- **An import is a sync with the file**:
+  - `compare_file`: this side's base for the file's caracole merged with the one the file keeps for this side, and the
+    answers both remembered (`peer_sync.merged_kept`), within the parts the file holds (`in_scope(holds=)`);
+  - `FileSource`, the take's `UnitSource`, so `apply_units` takes a file's units as a peer's: a unit of a part it holds
+    that its state lacks is one its caracole hasn't got (a removal, against the base); one it names without a document,
+    or of a part it doesn't hold, a `PeerError`, left, never a removal;
+  - `record_import`: what the two agree on, stamped `made`, of the units the file speaks for alone (`speaks_for`: of a
+    part it holds, or that it carries), every other unit's base as it was; then each "keep mine" (`kept_answers`)
+    remembered (`peer_sync.record_kept`), a file taking nothing back; none for an import of the indexes alone, so the
+    same file's library may still be imported after.
+  - commands/peer.py's `peer import` takes a staged folder only once its file is whole (`peer_import.whole`), and
+    exits 1 for a unit left or its indexes not merged; with `--progress` its report comes whatever it took.
+- **peer_import.py**: an upload staged part by part, `state_dir/peer/import-<16 hex>/` (0700: `file.caracole` and
+  `open.json`, 0600), one at a time, each part 8 MiB at most and the next one, 8 GiB in all; one untouched an hour is
+  swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
+- `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
+  nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
+  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s), or
+    without them, as caracole serve's Sync tab compares (sync_routes.py `_compared`), so the tab's Sync does what it
+    showed (commands/peer.py `_Compared.named`).
+- Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` (`full`, `songbooks`, `indexes`,
+  `left`) and the fixtures `file_conflict` and `file_indexed` (tests/test_conformance_sync_file.py), which the Kotlin
+  sync ports: an export, a file read and refused, a unit taken from one, an import.
 
 #### service.py
 
@@ -1322,9 +1381,31 @@ Not built yet. (lookup.)
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
   function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
   (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
-  and tables (harmony-progressions): not built yet.
+  and tables (harmony-progressions):
+  - `progressions`, `progressionKey`, `nameOf`, `readTyped` (each of a list or of a string typed) and `catalogue`
+    (`catalogue_keys`), `HarmonyProgressions` function for function (`_fold`, `_passes`, `_varies`, `_whole`, `_rows`,
+    `_contained`, `_ending`, public for the replay), CATALOGUE, `_LOOPS` and its other tables and patterns exported to
+    harmony.json too, a key's turn chosen by code point as Python compares str;
+  - `HarmonyTables.tables`, harmony_tables.py's, each object in Python's insertion order (a chord's reading the one most
+    of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
+  - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
+    kept whole).
 - A sheet's versions and progressions (version-progressions): not built yet.
-- A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
+- A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
+  - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
+    harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
+    tokenizer (`Tokens`, `_alt`'s order and `re.escape`'s rules, through core.py.PyRegex);
+  - `HarpTabs.scan` and its passes (Scanner.kt), its columns Python's code points (`Group.col`, `digit`, `end`), the
+    text UTF-16 while it runs; a notation that folds reads a symbol as its tokenizer's IGNORECASE does
+    (`Notation.meaning`: an "ı" or an "İ" is its "i", `PyRegex.ignoreCase`); the legends (`legend`, `meaning`,
+    `entry`); the candidates, `weighed` (Python's builtin sum, Py.fsum), `read` and `readings`; a pin's `checkSpec`
+    (Python's words and its reprs), `pinned` and `specOf`; `said`, `Reading.standard`; Python's `expandtabs`,
+    `swapcase` (a capital sigma by its context) and `_fold_accents` (`HarpTabText`).
+  - `Scan`, `Reading`, `Prepared` and `Weighed` are the seam harptab-layout builds `parse` on.
+  - `HarptabReplay` (area `harptab`) replays vectors/viewer/harptab_read.jsonl: each fixture tab, the tests' literals
+    and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins, each
+    pin's tab read as it says (`read(notation=)`).
+- A harmonica tab laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
@@ -1793,6 +1874,9 @@ picks one).
   (`test_harptabs_fetch.py::test_caracole_asks_with_its_own_user_agent`): asked by hand on 2026-10-27 (robots.txt,
   the sitemap and two tab pages: all 200, the sitemap after one Cloudflare 530, an error), it answers it.
 - A block there is any site's (`test_pipeline.py::test_a_harptabs_block_cools_it_down_and_marks_no_song`).
+- An export (`caracole peer export`, the Sync tab's Export, the phone's) holds what this site gave too, to share as the
+  owner likes: the owner's choice of 2026-11-03 ("ignore the privacy, share everything"); caracole itself sends it
+  nowhere.
 
 ##### gametabs.net
 
@@ -1816,6 +1900,9 @@ picks one).
   pages and two tab pages), it answered each with 200 from a plain nginx; caracole asks it so
   (`test_gametabs_fetch.py::test_caracole_asks_with_its_own_user_agent`).
 - A block there is any site's (`test_pipeline.py::test_a_gametabs_block_cools_it_down_and_marks_no_song`).
+- An export (`caracole peer export`, the Sync tab's Export, the phone's) holds what this site gave too, to share as the
+  owner likes: the owner's choice of 2026-11-03 ("ignore the privacy, share everything"); caracole itself sends it
+  nowhere.
 
 ##### azlyrics.com
 
@@ -1833,6 +1920,9 @@ picks one).
 - Its block page is a 200, which `http.is_challenge` knows by its words and the client never caches
   (`test_azlyrics_fetch.py::test_its_block_page_is_never_kept_in_the_cache`), a block as at any site
   (`test_pipeline.py::test_an_azlyrics_block_cools_it_down_and_marks_no_song`).
+- An export (`caracole peer export`, the Sync tab's Export, the phone's) holds what this site gave too, to share as the
+  owner likes: the owner's choice of 2026-11-03 ("ignore the privacy, share everything"); caracole itself sends it
+  nowhere.
 
 #### The cache
 
@@ -2029,7 +2119,7 @@ picks one).
 - Every command that asks UG, LRCLIB, LaCuerda, gtptabs.com, MuseScore or YouTube for pages or writes the library
   takes it.
 - `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list`, `songbook show`, `versions` (the list
-  alone), `backup --list` and `index export` (one read transaction) only read and never wait.
+  alone), `backup --list`, `index export` and `peer export` (one read transaction each) only read and never wait.
 - `add` writes its wanted.txt line first, and a `--lacuerda` pick (overrides.toml is in the library) only once it holds
   the lock, failing when the lock file can't be opened
   (`test_commands_sources.py::test_add_with_lacuerda_writes_no_pick_without_caracoles_lock`).
