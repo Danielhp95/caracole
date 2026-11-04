@@ -26,10 +26,11 @@ import org.junit.Assert.assertEquals
  * core.html's tokens (vectors/html/tokens*.jsonl, tests/test_conformance_html.py): for every page caracole reads and
  * the edge set, what lexbor's tokenizer decided as selectolax's tree shows it (the document's mode, the doctype's
  * name, each element's attributes, the text, the comments and processing instructions in document order), read by
- * core.html's tokenizer through [TokensTree], a small tree builder of the replay's own (lane html-tree's is the real
- * one). lexbor's tag and attribute names are ASCII-lowercased before they are compared with the tokenizer's, as it gave
- * them: their SVG and MathML case is the tree's. A `<template>`'s contents are left out, as selectolax's walk never
- * reaches them.
+ * core.html's tokenizer through [TokensTree], a small tree builder of the replay's own, and through core.html's own
+ * tree ([HtmlTreeReplay.tokensRead]). lexbor's tag and attribute names are ASCII-lowercased before they are compared
+ * with the tokenizer's, as it gave them: their SVG and MathML case is the tree's. A `<template>`'s contents are left
+ * out, as selectolax's walk never reaches them. Then the tree's vectors, [HtmlTreeReplay]: [replay] is both, as
+ * CorpusOnDeviceTest and HtmlVectorsTest run them, [tokens] the first alone, TokenizerTest's.
  */
 object HtmlReplay : AreaReplay {
     override val area = "html"
@@ -37,6 +38,12 @@ object HtmlReplay : AreaReplay {
     val TOKENS = listOf("html/tokens.jsonl", "html/tokens_edges.jsonl", "html/tokens_soup.jsonl")
 
     override fun replay(misses: Misses) {
+        tokens(misses)
+        HtmlTreeReplay.replay()
+    }
+
+    /** The token vectors alone, read through [TokensTree] and through core.html's tree. */
+    fun tokens(misses: Misses) {
         for (name in TOKENS) {
             val vector = Misses(name)
             var records = 0
@@ -48,6 +55,7 @@ object HtmlReplay : AreaReplay {
                 val got = TokensTree.read(page)
                 val want = record.out!!.jsonObject
                 compare(vector, case, want, got)
+                compare(vector, "$case, core.html's tree", want, HtmlTreeReplay.tokensRead(page))
             }
             check(records > 0) { "$name has no record" }
             vector.assertNone()
