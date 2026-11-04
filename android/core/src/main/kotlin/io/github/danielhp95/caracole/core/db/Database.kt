@@ -8,7 +8,6 @@ import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.json.PyJson
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.intOrNull
@@ -22,6 +21,7 @@ import java.nio.file.StandardCopyOption
 import java.security.SecureRandom
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -42,7 +42,13 @@ import kotlin.concurrent.withLock
  * The WAL (the plan's prep-db): a big write (an index import, a sync's merge) grows it past [journalSizeLimit] while
  * it runs, and SQLite's own checkpoints copy it back but keep the file; [checkpoint] gives it back whole, as the
  * import and the sync's index stage ask after their merge, and so does opening a database whose WAL a phone killed
- * with it open left over the limit. [warmUp] reads ahead what the first search reads (Warmup).
+ * with it open left over the limit. [warmUp] reads ahead what the first search reads (Warmup). A [journalSizeLimit]
+ * below 0 is SQLite's own default, no limit, and no checkpoint as the database opens (ColdSearch's "before").
+ *
+ * [close] closes no connection a block is using: the readers free and the writer, when no write runs, at once; a
+ * reader lent to a block that still runs (the start's warm-up, say) as that block ends, and the writer as the write
+ * that holds it ends. A read, a write or a checkpoint asked for once the database is closed, or waiting for a
+ * connection when it closes, is an IllegalStateException.
  *
  * Opening migrates once per path (every [Database] of this process on one file waits for the one opening it), from
  * caracole/schema/migrations.json, as db.py's `_migrate_locked`: the version read under the lock; a database at
@@ -57,6 +63,9 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         const val SCHEMA_VERSION = 15
         const val SQLITE_SOURCE_ID = "2025-06-06 14:52:32 b77dc5e0f596d2140d9ac682b2893ff65d3a4140aa86067a3efebe29dc914c95"
         const val BUSY_TIMEOUT_MS = 10_000
+
+        /** How often a read waiting for a free reader looks whether the database was closed meanwhile. */
+        private const val BORROW_WAIT_MS = 100L
 
         /** The most a WAL file keeps on disk once a checkpoint has copied it back (PRAGMA journal_size_limit, every
          * connection's): 16 MiB. A big write grows it past that while it runs; its checkpoint gives the rest back. */
@@ -127,6 +136,12 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
     private val writing = ThreadLocal.withInitial { false }
     private val reading = ThreadLocal.withInitial { 0 }
 
+    /** Held while a connection goes back (to the pool, or to be closed) and while [close] marks the database closed,
+     * so that no connection is closed while lent, nor put back into a pool already closed. */
+    private val closing = Any()
+    @Volatile private var closed = false
+    private var writerClosed = false
+
     init {
         require(readers >= 1) { "a database needs a reader at least" }
         path.absoluteFile.parentFile?.mkdirs()
@@ -139,7 +154,9 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
                     migrate(connection)
                     PhoneSchema.migrate(Db(connection))
                     // What a phone killed with the database open left of a big write: given back before any read.
-                    if (File(path.path + "-wal").length() > journalSizeLimit) checkpointOn(connection, truncate = true)
+                    if (journalSizeLimit >= 0 && File(path.path + "-wal").length() > journalSizeLimit) {
+                        checkpointOn(connection, truncate = true)
+                    }
                 }
             }
             pool = ArrayBlockingQueue(readers)
@@ -199,7 +216,7 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
      * transaction the block began and left open is rolled back before the connection goes back, so it pins no old
      * snapshot for the next block. */
     fun <T> read(block: (Db) -> T): T {
-        val connection = pool.take()
+        val connection = borrow()
         reading.set(reading.get() + 1)
         try {
             return block(Db(connection))
@@ -208,7 +225,41 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
             try {
                 if (connection.inTransaction()) connection.execSQL("ROLLBACK")
             } finally {
-                pool.put(connection)
+                giveBack(connection)
+            }
+        }
+    }
+
+    /** A reader of the pool, once one is free; an IllegalStateException once the database is closed, waiting or not. */
+    private fun borrow(): SQLiteConnection {
+        while (true) {
+            check(!closed) { "$path is closed" }
+            val connection = pool.poll(BORROW_WAIT_MS, TimeUnit.MILLISECONDS) ?: continue
+            if (closed) {
+                giveBack(connection)
+                throw IllegalStateException("$path is closed")
+            }
+            return connection
+        }
+    }
+
+    /** A reader back in the pool, or closed once the database is. */
+    private fun giveBack(connection: SQLiteConnection) {
+        synchronized(closing) {
+            if (closed) runCatching { connection.close() } else pool.put(connection)
+        }
+    }
+
+    /** [block] under [writes], on an open database; the writer closed as the lock goes, once the database is. */
+    private suspend fun <T> underWrites(block: () -> T): T {
+        writes.lock()
+        try {
+            check(!closed) { "$path is closed" }
+            return block()
+        } finally {
+            synchronized(closing) {
+                if (closed) closeWriter()
+                writes.unlock()
             }
         }
     }
@@ -216,13 +267,13 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
     /** The one writer connection, under [writes]. */
     suspend fun <T> write(block: (Db) -> T): T {
         check(!writing.get()) { "a write inside a write's block would wait for itself" }
-        return writes.withLock { writing(block) }
+        return underWrites { writing(block) }
     }
 
     /** [write], for a caller that is not a coroutine (a test, a worker waiting on its job). */
     fun <T> writeBlocking(block: (Db) -> T): T {
         check(!writing.get()) { "a write inside a write's block would wait for itself" }
-        return runBlocking { writes.withLock { writing(block) } }
+        return runBlocking { underWrites { writing(block) } }
     }
 
     /** [block] on the writer, which it leaves in no transaction: one it began and left open (a bare BEGIN, never
@@ -263,23 +314,26 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
     /**
      * A WAL checkpoint after a big write (an index import, a sync's merge): every frame copied back into the
      * database, then the WAL file truncated to nothing ([truncate], `PRAGMA wal_checkpoint(TRUNCATE)`), or left for
-     * the next write to restart and cut to [journalSizeLimit] (PASSIVE). It runs on the writer, under [writes], with
-     * every reader of the pool taken first, so that none holds a snapshot that would keep the WAL (a read that runs
-     * ends first: Database.read rolls each block back, so the pool holds none between reads). Reads wait for it; a
-     * checkpoint asked for inside a read's or a write's block, which would wait for itself, is an
-     * IllegalStateException.
+     * the next write to restart and cut to [journalSizeLimit] (PASSIVE alone). It runs on the writer, under [writes]:
+     * first PASSIVE, which copies the frames back while reads go on (it takes no reader and waits for none: the long
+     * part of a big WAL); then, for [truncate], TRUNCATE with every reader of the pool taken, so that none holds a
+     * snapshot that would keep the WAL (a read that runs ends first: Database.read rolls each block back, so the pool
+     * holds none between reads), which has little left to copy. Reads wait for that last step alone; a checkpoint
+     * asked for inside a read's or a write's block, which would wait for itself, is an IllegalStateException.
      */
     fun checkpoint(truncate: Boolean = true): Checkpointed {
         check(!writing.get()) { "a checkpoint inside a write's block would wait for itself" }
         check(reading.get() == 0) { "a checkpoint inside a read's block would wait for its own reader" }
         return runBlocking {
-            writes.withLock {
+            underWrites {
+                val passive = Timings.time("checkpoint: passive") { checkpointOn(writer, truncate = false) }
+                if (!truncate) return@underWrites passive
                 val taken = ArrayList<SQLiteConnection>(readerCount)
                 try {
-                    repeat(readerCount) { taken.add(pool.take()) }
-                    Timings.time("checkpoint") { checkpointOn(writer, truncate) }
+                    repeat(readerCount) { taken.add(borrow()) }
+                    Timings.time("checkpoint") { checkpointOn(writer, truncate = true) }
                 } finally {
-                    taken.forEach { pool.put(it) }
+                    taken.forEach(::giveBack)
                 }
             }
         }
@@ -296,9 +350,28 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
      * it. A database that can't be read is no warm-up's to report: the search says so. */
     fun warmUp() = Warmup.run(this)
 
+    /** Every connection closed that no block is using, the others as their blocks end (the class's comment);
+     * closing again does nothing. */
     override fun close() {
-        all.forEach { runCatching { it.close() } }
-        all.clear()
+        synchronized(closing) {
+            if (closed) return
+            closed = true
+            while (true) {
+                val free = pool.poll() ?: break
+                runCatching { free.close() }
+            }
+            if (writes.tryLock()) {
+                closeWriter()
+                writes.unlock()
+            }
+        }
+    }
+
+    /** The writer closed, once: under [closing], with [writes] held by the caller. */
+    private fun closeWriter() {
+        if (writerClosed) return
+        writerClosed = true
+        runCatching { writer.close() }
     }
 }
 

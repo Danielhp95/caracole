@@ -38,8 +38,8 @@ import java.io.File
  *   the file's was, the listing of UG's sitemaps the later refresh's.
  *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
- * the first change; once UG's rows changed, UG's full-text indexes are made one segment each as the merge ends
- * (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
+ * the first change; once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
+ * are made one segment each as the merge ends (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
  * keys made current (ensure_current_keys, whole where the file's keys record differs from the database's, which is let
  * go first). A
  * record rewritten whole is written as Python's `json.dumps` of `json.loads`'s reading writes it (Merge.pyLoaded).
@@ -56,9 +56,12 @@ object IndexTransfer {
      * The export's sites into [db] (every one it holds, with none asked for; else those of [sites], in caracole's
      * order), [now] (a stamp) the time a song marked to fetch again is updated at, [backup] called once before the
      * first change. Called inside Database.write, in no transaction or savepoint of the caller's: else an
-     * IllegalStateException, nothing written (a [TransferError] is the file's alone).
+     * IllegalStateException, nothing written (a [TransferError] is the file's alone). UG's full-text indexes are made
+     * one segment each once its sitemaps' rows changed by [optimizeAfter] rows or more, the triggers' included
+     * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never.
      */
-    fun merge(db: Db, export: File, now: String, sites: List<String>? = null, backup: (() -> Unit)? = null): Merged {
+    fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
+              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, backup: (() -> Unit)? = null): Merged {
         // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
         check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
@@ -80,8 +83,13 @@ object IndexTransfer {
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
-            for (plan in plans) taken[plan.site] = Merge.apply(db, plan)
-            if (taken["ug"].orEmpty().isNotEmpty()) Warmup.optimize(db)  // one segment each (prep-db)
+            var ugChanges = 0L
+            for (plan in plans) {
+                val before = Warmup.changes(db)
+                taken[plan.site] = Merge.apply(db, plan)
+                if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
+            }
+            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) Warmup.optimize(db)  // one segment each (prep-db)
             return Merged(taken, true)
         } finally {
             db.detach(Merge.THEIRS)

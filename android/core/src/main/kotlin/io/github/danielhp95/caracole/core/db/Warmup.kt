@@ -13,7 +13,9 @@ import io.github.danielhp95.caracole.core.sites.SiteSearch
  *
  * - [optimize]: an import's merge of UG's rows leaves each of UG's three full-text indexes (its keys' trigrams, its
  *   artists' words, its rows' words) in the many segments its triggers wrote them in, which every search then reads
- *   and merges; FTS5's `optimize` makes each one segment, once, as the merge ends (IndexTransfer.merge).
+ *   and merges; FTS5's `optimize` makes each one segment, once, as the merge ends (IndexTransfer.merge). It rewrites
+ *   each index whole, on the writer, so only a merge that changed many of UG's rows asks it ([optimizes]: an import,
+ *   never a sync's nightly few or a merge of UG's artist pages alone, which FTS5's own automerge keeps).
  * - [run], Database.warmUp: one search, through the reader pool, of what search_routes._found_for asks of :core
  *   (your songs, UG's index, each site's, the close spellings of a query nothing matches, the names it reads): the
  *   lazily loaded data and the code it runs loaded, and the pages it reads read, before the owner's first search.
@@ -27,6 +29,19 @@ internal object Warmup {
     /** A query that names nothing an index holds well, so that the warm-up looks for close spellings too, as a
      * misspelt first search does. */
     const val QUERY = "warmup quiet cello"
+
+    /** The rows changed (sqlite3_total_changes: each statement's, its triggers' included) past which a merge's UG
+     * rows make it worth [optimize]: an import of an index (hundreds of thousands), never a nightly refresh's few
+     * sitemaps (a few thousand new tabs at most). */
+    const val OPTIMIZE_AFTER = 100_000L
+
+    /** The rows the connection changed since it opened (`total_changes()`). */
+    fun changes(db: Db): Long = db.one("SELECT total_changes()") { it.long(0)!! }!!
+
+    /** Whether a merge whose UG actions were [actions] ([Merge.apply]'s, null for none), having changed [changes]
+     * rows, makes UG's full-text indexes one segment each: its sitemaps' rows taken, and [changes] at least [after]. */
+    fun optimizes(actions: Map<String, Int>?, changes: Long, after: Long = OPTIMIZE_AFTER): Boolean =
+        actions.orEmpty().containsKey("sitemap") && changes >= after
 
     /** FTS5's optimize of each of UG's full-text indexes ([UG_FTS]): on the writer, in no transaction of the
      * caller's; each one is its own. */

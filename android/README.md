@@ -295,11 +295,13 @@ Now:
 
 - every connection keeps `PRAGMA journal_size_limit` at 16 MiB (`Database.JOURNAL_SIZE_LIMIT`), so a WAL SQLite
   restarts is cut down to that;
-- the import and the sync's index stage end with `Database.checkpoint()`, `PRAGMA wal_checkpoint(TRUNCATE)` on the
-  writer with every reader taken first, which leaves no WAL at all;
+- the import and the sync's index stage end with `Database.checkpoint()` on the writer: `PRAGMA
+  wal_checkpoint(PASSIVE)` first, which copies the frames back while searches go on, then `TRUNCATE` with every
+  reader taken, which has little left to copy and leaves no WAL at all;
 - opening a database whose WAL is over the limit (a phone killed before its checkpoint) checkpoints it first;
-- a merge that took UG's rows makes each of UG's three full-text indexes one segment (`'optimize'`, a fraction of a
-  second for 300,000 rows);
+- a merge that changed many of UG's rows (`Warmup.OPTIMIZE_AFTER`, 100,000 rows written, its triggers' included: an
+  import, never a sync's nightly few, which FTS5's own merging keeps) makes each of UG's three full-text indexes one
+  segment (`'optimize'`, a fraction of a second for 300,000 rows);
 - the app's start runs one search in the background (`Database.warmUp`), so that the code, the data it loads lazily
   and the pages a search reads are ready before the owner's first search; a search that comes meanwhile runs beside
   it;
