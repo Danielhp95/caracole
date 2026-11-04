@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.sync
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Sites
@@ -63,7 +64,10 @@ class SameCaracole(message: String) : Exception(message)
  *    failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
  *    Database.write (Compare.recordAgreement), with kv `sync:peer:<computer id>` = {address, name, synced_at}, which
- *    GET /api/sync lists.
+ *    GET /api/sync lists, and the computer's settings that state gives taken (PhoneConfig.take: kv `phone:settings`,
+ *    which the phone's lookups read; a computer that gives none leaves them as they were). Nothing of either side's
+ *    politeness crosses (docs/superpowers/specs/2026-11-03-politeness-crossing.md): the phone's cooldowns, request
+ *    counts, pace and the records that gate its requests stay its own, and so do the computer's.
  * 6. **index**: the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
  *    `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
  *    Database.write, the kv brought up to date; skipped when none is newer. A failure there leaves the agreement as
@@ -189,6 +193,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         "address" to JsonPrimitive(c.address), "name" to JsonPrimitive(after.name),
                         "synced_at" to JsonPrimitive(at),
                     )))
+                    after.settings?.let { PhoneConfig.take(db, it) }
                     agreed
                 }
             }

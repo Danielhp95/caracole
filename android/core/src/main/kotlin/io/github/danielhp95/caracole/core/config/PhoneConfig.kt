@@ -71,7 +71,9 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
          * until lane health-pace reads the record. */
         fun read(db: Db): PhoneConfig = DEFAULTS
 
-        /** The computer's settings document (GET /api/peer/state's `settings`) kept as kv `phone:settings`. */
-        fun take(db: Db, settings: JsonObject): Unit = TODO("lane crossing-phone")
+        /** The computer's settings document (GET /api/peer/state's `settings`) kept as kv `phone:settings`, whole and
+         * as db.kv_set_json writes a value, for [read] to lay over the defaults: a sync's agree stage takes it
+         * (SyncEngine), each time replacing the last; a state with none leaves it as it was. */
+        fun take(db: Db, settings: JsonObject): Unit = db.kvSetJson(SETTINGS_KV, settings)
     }
 }

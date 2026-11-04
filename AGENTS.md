@@ -1142,7 +1142,14 @@ Not built yet. (job-views, requests-feed.)
 
 ##### The computer's settings on the phone
 
-Not built yet. (crossing-phone.)
+- A sync's agree stage takes the computer's settings, `GET /api/peer/state`'s `settings` (`PeerState.settings`):
+  `PhoneConfig.take` keeps the document whole as kv `phone:settings`, as `kv_set_json` writes one, replacing the last.
+  A state with none (an older computer) leaves it as it was; a sync that stops before agree takes none (SyncEngine).
+- `PhoneConfig.read` lays it over config.json's defaults wherever the phone reads its config (Assembly, each time).
+- It is no unit: a take changes no unit's digest and no other record (SettingsTest), and the phone sends no settings
+  back. Nothing of either side's politeness crosses (Two caracoles, each its own politeness, below).
+- `SettingsReplay` (area `settings`) replays vectors/sync/settings.jsonl: each caracole.toml's document taken, then read
+  as config.py holds it.
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through

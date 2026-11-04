@@ -44,7 +44,8 @@ import java.util.concurrent.TimeUnit
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
  * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks, and the form token ([token]).
+ *   it agreed on with the phone that asks, its [settings] (politeness.settings_document: none while null, as a
+ *   caracole older than them answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
@@ -72,6 +73,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
     @Volatile var indexes: Map<String, String> = emptyMap()
+    @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
     @Volatile var takeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
@@ -222,7 +224,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         }
     }
 
-    /** peer_sync.state_document, with the form token. */
+    /** peer_sync.state_document, with the settings and the form token (web/peer_routes.state). */
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         return JsonObject(linkedMapOf(
@@ -240,8 +242,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-            "token" to JsonPrimitive(token),
-        ))
+        ).also { doc -> settings?.let { doc["settings"] = it } } + ("token" to JsonPrimitive(token)))
     }
 
     private fun unit(exchange: HttpExchange, unitId: String) {
@@ -563,6 +564,20 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC)
 
         fun obj(vararg members: Pair<String, JsonElement>) = JsonObject(linkedMapOf(*members))
+
+        /** A computer's settings document (politeness.settings_document of a caracole.toml that names its library,
+         * gives its own user agent, turns Megalobiz off, slows UG's lookups and sets its own match and rank): a few
+         * providers of config.py's, in its order, each with its switch and a lookup's settings alone. */
+        val SETTINGS: JsonObject = Canonical.parse("""{"name": "Canciones de Dani · 歌", "user_agent": "caracole/0.1 (Dani's tabs)",
+            "providers": {"ug": {"enabled": true, "lookup_delay": [0.5, 1.5], "lookup_requests": 3,
+                                 "lookup_per_hour": 30, "per_day": null},
+                          "megalobiz": {"enabled": false, "lookup_delay": [0.5, 0.75], "lookup_requests": 6,
+                                        "lookup_per_hour": 60, "per_day": 900},
+                          "lacuerda": {"enabled": true, "lookup_delay": [0.125, 0.375], "lookup_requests": 6,
+                                       "lookup_per_hour": 60, "per_day": null}},
+            "match": {"accept": 85.5, "margin": 8, "review": 70, "artist_gate": 90},
+            "rank": {"coverage_threshold": 0.75, "line_match": 80, "prior_votes": 12, "scored_sheets": 4,
+                     "label_penalty": 0.5, "variant_bonus": 0.25}}""") as JsonObject
 
         fun text(e: JsonElement?): String? = (e as? JsonPrimitive)?.takeIf { it.isString }?.content
 

@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole.core.sync.client
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -358,6 +360,64 @@ class SyncEngineTest {
         assertTrue(stages.any { it.first == "mirror" && "no space left" in it.third })
         assertEquals("done", ended()["agree"])
         assertEquals(1, outcome.agreed)
+    }
+
+    // --- the computer's settings (docs/superpowers/specs/2026-11-03-politeness-crossing.md, "Settings") ---------
+
+    private fun settingsHeld(): String? = phone.read { it.kvGet(PhoneConfig.SETTINGS_KV) }
+
+    @Test fun `the agree stage takes the computer's settings as its state gave them there, and adds no stage`() {
+        onComputer("Radiohead", "Creep")
+        computer.settings = JsonObject(mapOf("user_agent" to JsonPrimitive("caracole/0.1 (at the comparison)")))
+        val c = engine.compare(computer.address.toString())
+        assertEquals(computer.settings, c.peer.settings)
+        assertNull(settingsHeld(), "a comparison takes nothing")
+
+        // The state agree reads is the one whose settings are taken: the computer's latest.
+        computer.settings = FakeComputer.SETTINGS
+        val outcome = apply(c)
+        assertEquals(1, outcome.agreed)
+        assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
+        assertEquals(SyncEngine.STAGES.map { it.first }, stages.map { it.first }.distinct())
+        assertEquals("1 unit the two agree on", stages.last { it.first == "agree" }.third)
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences, "settings are no unit")
+    }
+
+    @Test fun `with nothing to take or give, the settings are taken all the same`() {
+        computer.settings = FakeComputer.SETTINGS
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(SyncOutcome(emptyList(), emptyList(), emptyList(), 0, emptyList()), outcome)
+        assertEquals(mapOf("compare" to "done", "take" to "skipped", "give" to "skipped", "mirror" to "skipped",
+                           "agree" to "done", "index" to "skipped"), ended())
+        assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
+    }
+
+    @Test fun `a computer that gives no settings leaves the phone's as they were`() {
+        phone.writeBlocking { PhoneConfig.take(it, FakeComputer.SETTINGS) }
+        computer.settings = null
+        onComputer("Radiohead", "Creep")
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["agree"])
+        assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
+    }
+
+    @Test fun `a sync that stops before it agrees takes no settings`() {
+        computer.settings = FakeComputer.SETTINGS
+        val c = engine.compare(computer.address.toString())
+        onComputer("Radiohead", "Creep")
+        assertFailsWith<SyncFailed> { apply(c) }
+        assertEquals("failed", ended()["compare"])
+        assertNull(settingsHeld())
+
+        stages.clear()
+        onPhone("Muse", "Hysteria")
+        computer.answers["POST /peer/push/new"] = { exchange ->
+            FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Busy.")))
+        }
+        assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals("failed", ended()["give"])
+        assertNull(ended()["agree"])
+        assertNull(settingsHeld())
     }
 
     @Test fun `a comparison is kept by its id for 10 minutes`() {
