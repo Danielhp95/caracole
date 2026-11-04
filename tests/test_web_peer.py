@@ -8,7 +8,7 @@ from conftest import add_song
 
 from caracole import peer_sync as sync
 from caracole import stamps
-from caracole.db import kv_set_json
+from caracole.db import kv_set, kv_set_json
 from caracole.library import keep_file
 from caracole.overrides import add_version
 from caracole.songbook import make_songbook, songbooks_file
@@ -64,10 +64,49 @@ def test_the_state_gives_this_sides_settings_for_the_phone_and_a_reader_of_the_s
     cfg = dataclasses.replace(cfg, name="Canciones", providers={
         **cfg.providers, "megalobiz": dataclasses.replace(cfg.provider("megalobiz"), enabled=False)})
     status, doc = answer(an_app(cfg), "/api/peer/state")
-    assert status == 200 and doc["format"] == 2
+    assert status == 200 and doc["format"] == sync.FORMAT
     assert doc["settings"] == politeness.settings_document(cfg)
     assert doc["settings"]["name"] == "Canciones" and doc["settings"]["providers"]["megalobiz"]["enabled"] is False
     assert sync.read_state_document(doc).name == "Canciones"
+
+
+def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
+    """The owner's choice of 2026-11-03: each caracole's politeness is its own. A cooldown, the requests sent, the
+    pace's last request and the records that gate a request (LaCuerda's searches and their failures, a 30-day check,
+    an artist's UG page learned) stay on this side: the state has its members and its settings alone, a song's unit
+    carries none of them, and none of them moves a unit's digest."""
+    from datetime import UTC, datetime
+
+    from caracole import health, http
+    from caracole.lacuerda_search import FAILED_KEY
+
+    song = a_song_with_a_sheet(cfg, conn)
+    app = an_app(cfg)
+    before = answer(app, "/api/peer/state")[1]["units"]
+    unit_before = answer(app, f"/api/peer/unit?id=song/{song.key}")[1]
+    blocked_at = datetime(2026, 10, 29, 7, 8, 9, tzinfo=UTC)
+    cooling = health.record_block(conn, "ug", blocked_at, "HTTP 403 from the politeness test")
+    health.EventLog(conn, "lookup:politeness-test", clock=lambda: blocked_at)(
+        http.Event("ug", "https://www.ultimate-guitar.com/politeness-test", 403, "blocked", "politeness test"))
+    kv_set(conn, "http:last_request:ug", "1730185689.250")
+    kv_set_json(conn, FAILED_KEY, {"politenesstestquery": {"at": "2026-10-29T07:08:09Z", "error": "cut short"}})
+    kv_set_json(conn, "lacuerda:search:politenesstestquery", {"at": "2026-10-29T07:08:09Z", "artists": []})
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-10-29T07:08:09Z")
+    kv_set(conn, "ug:artist_url:politenesstestartist", "https://www.ultimate-guitar.com/artist/politeness_1")
+
+    state = get(app, "/api/peer/state")
+    doc = json.loads(state.body)
+    assert set(doc) == {"format", "server", "caracole", "name", "now", "indexes", "units", "base", "settings", "token"}
+    assert doc["format"] == sync.FORMAT and doc["units"] == before
+    unit = get(app, f"/api/peer/unit?id=song/{song.key}")
+    assert json.loads(unit.body) == unit_before
+    for body in (state.body.decode(), unit.body.decode()):
+        for kept_here in (health.get_state(conn, "ug").cooldown_until.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                          "2026-10-29T07:08:09Z", "politeness test", "politeness-test", "1730185689",
+                          "politenesstest", "provider:ug", "http:last_request", "lacuerda:search", "megalobiz:checked",
+                          "ug:artist_url", "health", "events", "strikes", "cooldown"):
+            assert kept_here not in body, kept_here
+    assert cooling.cooldown_until is not None and health.is_cooling(conn, "ug", blocked_at)
 
 
 def test_a_unit_is_answered_whole_with_the_digest_the_state_gives_it(cfg, conn):

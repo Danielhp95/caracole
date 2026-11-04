@@ -64,6 +64,15 @@ keeps its defaults. A state with no `settings` leaves `phone:settings` as it was
 The vectors are `tests/conformance/vectors/sync/settings.jsonl` (tests/test_conformance_sync.py): for each
 caracole.toml of `SETTINGS` (`args[0]`, its text), `out` the document, and `phone` what `PhoneConfig.read` answers once
 it is taken, in config.json's shape (its `switchable` aside) with `name`, made from the config, never the document.
+What no caracole.toml can show, since a computer's document always names every provider of its config, is
+`tests/conformance/vectors/sync/settings_take.jsonl`: the take rule by rule (`SETTINGS_TAKES`, each record's `case`),
+`args` `[kept, settings]` (the kv `phone:settings` before, a document or null, and the state's `settings`, null when
+the state has none), `out` `{kept, read}` (the kv after: the document as given, unknown providers and all, or the one
+kept when the state gives none; and what `PhoneConfig.read` answers then, in `phone`'s shape). Its cases: nothing
+taken yet; a state with no settings keeps the last take; a second take replaces the first whole; a newer computer's
+provider is passed over; a provider an older computer's document doesn't name keeps the defaults, never an earlier
+take's. Its `out` is `phone_takes`', this rule as a model, which a test holds to `phone` on every document of
+settings.jsonl.
 
 ## The phone's index reads go to the computer
 

@@ -5950,11 +5950,14 @@ What a sync does carry is the computer's settings, for the phone's caracole to l
 
 They are caracole.toml's (see [Configure](#configure)): its `name` (null when it names none: the phone's library
 folder is its own), its `user_agent`, every provider's `enabled` and a lookup's settings, `lookup_delay`,
-`lookup_requests`, `lookup_per_hour` and Megalobiz's day, and `[match]` and `[rank]`, so that the phone matches and
-ranks with your thresholds. Never a run's `budget` or `delay` (the phone does no nightly work), a folder, a program or
-your ntfy topic. So a provider you turn off on the computer (`[providers.megalobiz] enabled = false`) is off on the
-phone too once it syncs. The phone sends no settings back, and another computer syncing with this one passes over
-them.
+`lookup_requests` and `lookup_per_hour`, and `[match]` and `[rank]`, so that the phone matches and ranks with your
+thresholds; and each provider's `per_day`, which caracole.toml can't set (Megalobiz's 900 a day, config.py's own;
+null for every other site). Never a run's `budget` or `delay` (the phone does no nightly work), a folder, a program or
+your ntfy topic. The phone sends no settings back, and another computer syncing with this one passes over them.
+
+The phone doesn't take them yet: until it does, it looks songs up with config.py's defaults, whatever the computer's
+caracole.toml says. Once it does, a provider you turn off on the computer (`[providers.megalobiz] enabled = false`)
+is off on the phone too after the next sync.
 
 ### The phone's reads go to the computer (POST /peer/index)
 
