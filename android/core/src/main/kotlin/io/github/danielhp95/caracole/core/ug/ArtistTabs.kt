@@ -2,8 +2,15 @@ package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.http.CachedAnswers
+import io.github.danielhp95.caracole.core.http.PageParseError
+import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyUrl
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * ug/artist_tabs.py's keys: how the tabs of the artist pages caracole read (`ug_artist_tabs`) are filed, made again
@@ -14,6 +21,11 @@ import io.github.danielhp95.caracole.core.py.Py
  * them have) or of its song's (the song, by that tab's), so that a song with both slugged and bare-id tabs is one
  * search hit; else under its names' slug keys (`'song-dongye-宋冬野'`). Its names' forms (Normalize.nameForms and
  * listingForms) are kept beside, for the search's prefilter and its scores. Every call runs inside Database.write.
+ *
+ * A lookup stores each list page of an artist page it reads ([store]: an older read never overwrites a newer one,
+ * only public tabs of caracole's kinds at a tab page kept), keeps a list read whole to the tabs it lists
+ * ([keepOnly]), forgets a page UG answers 404 for ([forget]), and once reads what the HTTP cache holds of every
+ * artist page caracole knows ([backfill]).
  */
 object ArtistTabs {
     /** artist_tabs.KEYS_KEY: the Normalize.KEY_VERSION the keys were made with. */
@@ -115,11 +127,130 @@ object ArtistTabs {
             (it.text(0)!! to it.long(1)!!) to (it.text(2)!! to it.text(3)!!)
         }.toMap()
 
-    // --- milestone 4's additions (lane ug-pages): an artist page's tabs stored as a lookup reads them -----------
+    // --- an artist page's lists stored as a lookup reads them (lane ug-pages) ----------------------------------
 
-    fun store(db: Db, page: String, name: String, tabs: List<UgVersion>, readAt: String): List<Long> =
-        TODO("lane ug-pages")
-    fun keepOnly(db: Db, page: String, kind: String, ids: Collection<Long>, readAt: String): Int = TODO("lane ug-pages")
-    fun forget(db: Db, page: String): Unit = TODO("lane ug-pages")
-    fun backfill(db: Db, cached: CachedAnswers): Int = TODO("lane ug-pages")
+    /** artist_tabs.BACKFILL_KEY: set once the backfill has read the cache. */
+    const val BACKFILL_KEY = "ug:artist_tabs:backfill"
+
+    /** artist_tabs.KINDS: the lists of an artist page caracole reads (UgArtist.KIND_FILTERS). */
+    val KINDS: List<String> = UgArtist.KIND_FILTERS.keys.toList()
+
+    private val TAB_HOST = PyUrl.urlsplit(UgPage.TAB_BASE_URL).netloc
+
+    private val COLUMNS = listOf("page", "tab_id", "type", "artist", "title", "label", "rating", "votes", "url",
+                                 "artist_key", "song_key", "artist_forms", "title_forms", "forms", "read_at")
+    private val STORE = "INSERT INTO ug_artist_tabs (${COLUMNS.joinToString(", ")}) VALUES " +
+        "(${COLUMNS.joinToString(", ") { "?" }}) ON CONFLICT (page, tab_id) DO UPDATE SET " +
+        COLUMNS.drop(2).joinToString(", ") { "$it = excluded.$it" } + " WHERE excluded.read_at >= ug_artist_tabs.read_at"
+
+    /** _kept: a public tab of a kind caracole uses, at a tab page: never Official, nor a link to UG's app. */
+    internal fun kept(tab: UgVersion): Boolean {
+        if (tab.kind == null || tab.access != "public") return false
+        val parts = try {
+            PyUrl.urlsplit(tab.url)
+        } catch (e: PyUrl.Invalid) {  // a link urllib can't split: no tab page
+            return false
+        }
+        return (parts.scheme == "http" || parts.scheme == "https") && parts.netloc == TAB_HOST &&
+            parts.path.startsWith("/tab/")
+    }
+
+    /**
+     * store: the tabs of one list page of the artist page at [page] (its address, as UG's artist pages are kept:
+     * `https://www.ultimate-guitar.com/artist/634073`), whose artist UG names [name] (else each tab's own), as UG gave
+     * them at [readAt]: added, or in place of an older read of them, never of a newer one. Only those [kept]; the ids
+     * kept. The keys are made current first.
+     *
+     * The phone's own part: a page it keeps tabs of is noted for the next push to the computer (core.index.Reads,
+     * site `ug`), at the newest [readAt] it was stored with, so that an older read of another of its lists, from the
+     * cache, never hides a newer one from the push.
+     */
+    fun store(db: Db, page: String, name: String, tabs: List<UgVersion>, readAt: String): List<Long> {
+        val kept = tabs.filter { kept(it) }
+        if (kept.isEmpty()) return emptyList()
+        ensureCurrentKeys(db)
+        db.savepoint("ug_artist_tabs_store") {
+            for (t in kept) {
+                val artist = name.ifEmpty { t.artistName }
+                val n = names(artist, t.songName)
+                db.execute(STORE, page, t.tabId, t.kind, artist, t.songName, t.label ?: n.variant, t.rating, t.votes,
+                           t.url, n.artistKey, n.songKey, n.artistForms, n.titleForms, n.forms, readAt)
+            }
+            file(db, page)
+            val noted = db.kvGet("${Reads.READ}ug:$page")
+            if (noted == null || readAt > noted) Reads.note(db, "ug", page, readAt)
+        }
+        return kept.map { it.tabId }
+    }
+
+    /** keep_only: the page's list of [kind], read whole at [readAt], lists [ids] alone: its other tabs of that kind
+     * go, unless a later read gave them. How many went. */
+    fun keepOnly(db: Db, page: String, kind: String, ids: Collection<Long>, readAt: String): Int =
+        db.savepoint("ug_artist_tabs_keep") {
+            val gone = db.execute(
+                "DELETE FROM ug_artist_tabs WHERE page = ? AND type = ? AND read_at <= ? " +
+                    "AND tab_id NOT IN (SELECT value FROM json_each(?))",
+                page, kind, readAt, ids.toSortedSet().joinToString(", ", "[", "]"),
+            )
+            if (gone > 0) file(db, page)
+            gone
+        }
+
+    /** forget: UG answers 404 for the artist page at [page]: its tabs go. */
+    fun forget(db: Db, page: String) {
+        db.execute("DELETE FROM ug_artist_tabs WHERE page = ?", page)
+    }
+
+    /** known_pages: every artist page caracole knows, learned from a tab page (kv `ug:artist_url:<key>`) or named by
+     * `[artist_url]` (a tab page there is none), each as overrides.artist_page_address writes it, sorted. */
+    fun knownPages(db: Db, overrides: Overrides): List<String> {
+        val learned = db.query("SELECT value FROM kv WHERE substr(key, 1, ?) = ?", UgLookup.ARTIST_URL_KV.length,
+                               UgLookup.ARTIST_URL_KV) { it.text(0)!! }
+        val pasted = overrides.artistUrl.values.filter { OverrideUrls.pastedTabId(it) == null }
+        return (learned + pasted).mapNotNull { OverrideUrls.artistPageAddress(it) }.distinct()
+            .sortedWith(Py.CODE_POINT_ORDER)
+    }
+
+    /**
+     * backfill: once, the lists [cached] (the HTTP cache, read alone) holds of every artist page caracole knows
+     * ([knownPages]) into the table; how many tabs it stored. Nothing is sent, so it works while UG cools down and
+     * spends no budget; a list the cache lacks, or one that won't parse, waits for the next time that page is read.
+     * The keys are made current first; kv [BACKFILL_KEY] `{"pages", "tabs"}` once done.
+     */
+    fun backfill(db: Db, cached: CachedAnswers, overrides: Overrides): Int {
+        ensureCurrentKeys(db)
+        if (db.kvGet(BACKFILL_KEY) != null) return 0
+        val pages = knownPages(db, overrides)
+        val stored = LinkedHashSet<Pair<String, Long>>()
+        for (page in pages) {
+            for (kind in KINDS + listOf<String?>(null)) {  // the unfiltered list last: the others give every tab of a kind
+                cachedList(db, cached, page, kind).forEach { stored += page to it }
+            }
+        }
+        db.kvSetJson(BACKFILL_KEY, JsonObject(linkedMapOf("pages" to JsonPrimitive(pages.size),
+                                                          "tabs" to JsonPrimitive(stored.size))))
+        return stored.size
+    }
+
+    /** _cached_list: the tabs of one of the page's lists, from as many of its pages as the cache holds in a row,
+     * stored. */
+    private fun cachedList(db: Db, cached: CachedAnswers, page: String, kind: String?): List<Long> {
+        val ids = ArrayList<Long>()
+        var number = 1
+        var last = 1
+        while (number <= last) {
+            val url = UgArtist.pageUrl(page, kind, number)
+            val answer = cached.cached(url, setOf(200)) ?: break
+            val listed = try {
+                UgArtist.parse(answer.content, url)
+            } catch (e: PageParseError) {
+                break
+            }
+            last = maxOf(last, listed.pages)
+            val tabs = if (kind == null) listed.tabs else listed.tabs.filter { it.kind == kind }
+            ids += store(db, page, listed.name, tabs, answer.fetchedAt.orEmpty())
+            number++
+        }
+        return ids
+    }
 }

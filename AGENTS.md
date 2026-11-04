@@ -1201,8 +1201,20 @@ Not built yet. (lookup.)
 
 ##### Site passes on the phone
 
-- Ultimate Guitar's pages (ug-pages), ranking and coverage (rank-coverage), its sheet (ug-fetch-sheet) and its artist
-  pages (ug-fetch-artist): not built yet.
+- Ultimate Guitar's pages (ug-pages):
+  - core.ug's `UgPage`, `UgArtist` and `UgLookup` are ug/page.py, ug/artist.py and ug/lookup.py: the js-store read
+    through core.html and PyJson.loads, each field as Python's `float()`, `int()` and `str()` read it
+    (internal/pages/`PyValues`: a list's or an object's text its repr), and half of a surrogate pair U+FFFD in every
+    string, keys too (ug/page.py's `_whole`, the computer's fix too); `IndexTab` Python's, its label and its url.
+  - `ArtistTabs.store`, `keepOnly`, `forget` and `backfill` (from the phone's own cache, `CachedAnswers`) write
+    artist_tabs.py's rows; each page a store keeps tabs of is noted (`Reads.note`, site `ug`) at the newest read it
+    was stored with, for the next push to the computer.
+  - A number past a Long (an id) or an Int (a version, a vote count) is none, and a page nested deeper than
+    `PyJson.MAX_DEPTH` a PageParseError: UG writes neither.
+  - `UgPagesReplay` (area `ug-pages`) replays vectors/sites/ug_pages*.jsonl and ug_artist*.jsonl
+    (tests/test_conformance_ug_pages.py).
+- Ranking and coverage (rank-coverage), UG's sheet (ug-fetch-sheet) and its artist pages (ug-fetch-artist): not built
+  yet.
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
