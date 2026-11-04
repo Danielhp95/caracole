@@ -1256,7 +1256,12 @@ Not built yet. (crossing-phone.)
   - Every answer held by vectors/viewer/voicings, instruments, harp_* and winds (`ShapesReplay`, the `shapes` area),
     a page's objects in Python's order too (a kept answer's `sha256`).
 - Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
-- Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
+- Harmony (harmony): `viewer.harmony.Harmony`, harmony.py's chord half: `numeral` (`Numeral.text`), `relation`,
+  `family`, `explain` (the numeral's tooltip line), `glossary`, `chordTones`, `soloScale`, `keyScale`, `pentatonic`
+  and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
+  function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
+  (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
+  and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
