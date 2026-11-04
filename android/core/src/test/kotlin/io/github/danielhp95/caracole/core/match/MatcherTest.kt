@@ -119,6 +119,22 @@ class MatcherTest {
                          "\"tab_ids\": [1, 7]}]", Songs.byId(db, s.id)!!.matchCandidates)
     }
 
+    @Test fun aStoredPinsTabIdsAreReadAsIntReadsThem() = db { db ->
+        index(db, Triple("oasis", "wonderwall", "chords"))
+        val s = song(db, "Oasis", "Wonderwall")
+        db.execute("UPDATE songs SET match_decision = 'pinned', match_step = 'pin', match_artist_key = 'oasis', " +
+                       "match_song_key = 'wonderwall', ug_dirty = 0, match_candidates = ? WHERE id = ?",
+                   "[{\"artist_key\": \"oasis\", \"song_key\": \"wonderwall\", \"score\": null, \"step\": \"pin\", " +
+                       "\"tab_ids\": [\"1\", \" 7_0\"]}]", s.id)
+        Matcher.matchAll(db, Overrides(pin = mapOf(s.key to listOf(1L, 70L))), policy, listOf(Songs.byId(db, s.id)!!),
+                         now = now)
+        // The same pins (int(" 7_0") is 70): the row is written again, as Python writes it, and nothing is fetched.
+        val stored = Songs.byId(db, s.id)!!
+        assertEquals("[{\"artist_key\": \"oasis\", \"song_key\": \"wonderwall\", \"score\": null, \"step\": \"pin\", " +
+                         "\"tab_ids\": [1, 70]}]", stored.matchCandidates)
+        assertEquals(false, stored.ugDirty)
+    }
+
     @Test fun theStageMatchesTheSongAndSaysSoWithNoBackfillOutsideALookup() = db { db ->
         index(db, Triple("radiohead", "creep", "chords"))
         val s = song(db, "Radiohead", "Creep")

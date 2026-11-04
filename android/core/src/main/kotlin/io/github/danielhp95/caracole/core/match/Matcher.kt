@@ -12,7 +12,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import io.github.danielhp95.caracole.core.py.PyInt
 import java.math.BigDecimal
+import java.math.BigInteger
 
 /** match.MatchCandidate: a UG song a match offers, its score (none for a pin's) and the step that found it (as
  * stored: a candidate a song keeps may name none). */
@@ -130,7 +132,7 @@ object Matcher {
     }
 
     /** match._pins_of: the tab ids a stored pin lists. */
-    private fun pinsOf(song: SongRow): List<Long> {
+    private fun pinsOf(song: SongRow): List<BigInteger> {
         val pin = rowsOf(song).firstOrNull { (it as? JsonObject)?.get("step") == JsonPrimitive("pin") } as? JsonObject
             ?: return emptyList()
         val ids = pin["tab_ids"] as? JsonArray ?: return emptyList()
@@ -141,7 +143,7 @@ object Matcher {
     private fun needsFetch(song: SongRow, new: MatchResult): Boolean {
         if ((new.decision == "accept" || new.decision == "pinned") && song.matchDecision != new.decision) return true
         if (song.matchArtistKey != new.artistKey || song.matchSongKey != new.songKey) return true
-        return new.decision == "pinned" && pinsOf(song) != new.pinned
+        return new.decision == "pinned" && pinsOf(song) != new.pinned.map(BigInteger::valueOf)
     }
 
     /** match._keeps_stored: your overrides always win; an artist page's match stays unless you rejected that UG
@@ -228,14 +230,18 @@ object Matcher {
             }
         }
 
-        /** int(t) of a pin's stored tab id. */
-        fun int(e: JsonElement): Long {
+        /** int(t) of a pin's stored tab id, of any size: a text as int() reads it (PyInt), a boolean 1 or 0, a float
+         * truncated toward zero. */
+        fun int(e: JsonElement): BigInteger {
             val p = e as JsonPrimitive
-            if (p.isString) return p.content.trim().replace("_", "").toLong()
+            if (p.isString) {
+                return PyInt.parse(p.content)
+                    ?: throw IllegalArgumentException("invalid literal for int() with base 10: '${p.content}'")
+            }
             return when (p.content) {
-                "true" -> 1L
-                "false" -> 0L
-                else -> number(p)!!.toBigInteger().toLong()
+                "true" -> BigInteger.ONE
+                "false" -> BigInteger.ZERO
+                else -> number(p)?.toBigInteger() ?: throw IllegalArgumentException("cannot convert ${p.content} to integer")
             }
         }
 
