@@ -30,7 +30,8 @@ data class Progression(val numerals: List<String>, val repeats: Int, val name: S
  * viewer/harmony.py: what each chord does in its key, on top of viewer.theory, answering as harmony.py does for
  * every chord, key and next chord (vectors/viewer/harmony_chords.jsonl): numerals, relations, families, the
  * explanation (the numeral's tooltip line), the glossary's lines, a chord's notes, the scale for a solo over it, the
- * key's scale and its pentatonic box (lane harmony); progressions, their keys and names (lane harmony-progressions).
+ * key's scale and its pentatonic box ([HarmonyChords]); each section's progression, its key for searching and its name
+ * from the catalogue, and numerals typed ([HarmonyProgressions], vectors/viewer/harmony_progressions.jsonl).
  *
  * harmony.py's docstring holds its rules, where music theory reads a chord two ways: B♭ in C is borrowed from C minor,
  * not C Mixolydian's ♭VII; D in C is V/V only going to G (C Lydian's II otherwise); C7 in C is V7/IV only going to an
@@ -76,11 +77,37 @@ object Harmony {
      * for the last. */
     fun goesTo(chords: List<Chord>): List<Chord?> = HarmonyChords.goesTo(chords)
 
+    /** Each section's progression, by its name, in the sheet's order: its chords as numerals, each read with the
+     * next chord on the sheet (across sections), a chord held once, its cycle folded, its name from the catalogue,
+     * the catalogue's progressions played within it and how it ends; a chord caracole can't read (null: N.C.) is left
+     * out, and a section with no chord it can read has none. A copy. */
     fun progressions(sections: List<Pair<String, List<Chord?>>>, key: Key): List<Pair<String, Progression>> =
-        TODO("lane harmony-progressions")
-    fun progressionKey(numerals: List<String>): String = TODO("lane harmony-progressions")
-    fun nameOf(numerals: List<String>): String? = TODO("lane harmony-progressions")
-    fun readTyped(text: String): List<String> = TODO("lane harmony-progressions")
-    /** harmony.catalogue_keys: each catalogue name's key for searching. */
-    fun catalogue(): Map<String, String> = TODO("lane harmony-progressions")
+        ArrayList(HarmonyProgressions.progressions(sections, key))
+
+    /** A progression's key for searching, the same in every key, turn and repeat: the numerals' roots ("Imaj7" is
+     * "I", "V7/V" "V/V", "V7/IV" "I"), a chord held twice once, the cycle once, turned to start where its numerals
+     * sort first: "vi IV I V" and "IV I V vi IV I V vi" are both "I V vi IV". */
+    fun progressionKey(numerals: List<String>): String = HarmonyProgressions.progressionKey(numerals)
+
+    /** [progressionKey] of numerals typed in one string ("vi IV I V", "vi–IV–I–V"). */
+    fun progressionKey(text: String): String = HarmonyProgressions.progressionKey(text)
+
+    /** The catalogue's name for numerals typed ("vi IV I V", "i VII VI V": [readTyped]), played whole, read in a major
+     * key or in a minor one, as a section's is; null for none. */
+    fun nameOf(numerals: List<String>): String? = HarmonyProgressions.nameOf(numerals)
+
+    /** [nameOf] numerals typed in one string. */
+    fun nameOf(text: String): String? = HarmonyProgressions.nameOf(HarmonyProgressions.typed(text))
+
+    /** Numerals as typed, in harmony.py's notation: written in a minor key's own way ("i VII VI V"), a major III, VI or
+     * VII is its ♭III, ♭VI or ♭VII; others as typed. A copy. */
+    fun readTyped(text: String): List<String> = ArrayList(HarmonyProgressions.readTyped(HarmonyProgressions.typed(text)))
+
+    /** [readTyped] of numerals already cut. A copy. */
+    fun readTyped(numerals: List<String>): List<String> = ArrayList(HarmonyProgressions.readTyped(numerals))
+
+    /** harmony.catalogue_keys: each reading of the catalogue's progressions by its progression key, every row on its
+     * own tonic first, then read in a major key and in a minor one ({"I V vi IV": "the pop progression", "i ♭VI ♭III
+     * ♭VII": "the pop progression", …}). A copy. */
+    fun catalogue(): Map<String, String> = LinkedHashMap(HarmonyProgressions.catalogueKeys())
 }
