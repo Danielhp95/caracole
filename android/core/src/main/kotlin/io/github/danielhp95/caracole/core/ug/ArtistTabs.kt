@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.http.CachedAnswers
 import io.github.danielhp95.caracole.core.http.PageParseError
 import io.github.danielhp95.caracole.core.index.Reads
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -162,10 +163,12 @@ object ArtistTabs {
      * kept. The keys are made current first.
      *
      * The phone's own part: a page it keeps tabs of is noted for the next push to the computer (core.index.Reads,
-     * site `ug`), at the newest [readAt] it was stored with, so that an older read of another of its lists, from the
-     * cache, never hides a newer one from the push.
+     * site `ug`) at the store's own time, [now], or [readAt] where that is later, never moved back. Reads.since sends
+     * only what was noted after the last push, so a list stored after a push from a copy the cache held from before
+     * it is noted at the store, not at its older read, and still goes.
      */
-    fun store(db: Db, page: String, name: String, tabs: List<UgVersion>, readAt: String): List<Long> {
+    fun store(db: Db, page: String, name: String, tabs: List<UgVersion>, readAt: String,
+              now: String = Stamps.now()): List<Long> {
         val kept = tabs.filter { kept(it) }
         if (kept.isEmpty()) return emptyList()
         ensureCurrentKeys(db)
@@ -177,8 +180,9 @@ object ArtistTabs {
                            t.url, n.artistKey, n.songKey, n.artistForms, n.titleForms, n.forms, readAt)
             }
             file(db, page)
+            val at = maxOf(readAt, now)
             val noted = db.kvGet("${Reads.READ}ug:$page")
-            if (noted == null || readAt > noted) Reads.note(db, "ug", page, readAt)
+            if (noted == null || at > noted) Reads.note(db, "ug", page, at)
         }
         return kept.map { it.tabId }
     }
@@ -215,16 +219,17 @@ object ArtistTabs {
      * backfill: once, the lists [cached] (the HTTP cache, read alone) holds of every artist page caracole knows
      * ([knownPages]) into the table; how many tabs it stored. Nothing is sent, so it works while UG cools down and
      * spends no budget; a list the cache lacks, or one that won't parse, waits for the next time that page is read.
-     * The keys are made current first; kv [BACKFILL_KEY] `{"pages", "tabs"}` once done.
+     * The keys are made current first; kv [BACKFILL_KEY] `{"pages", "tabs"}` once done. Each page it stores tabs of
+     * is noted at [now], as [store] notes it.
      */
-    fun backfill(db: Db, cached: CachedAnswers, overrides: Overrides): Int {
+    fun backfill(db: Db, cached: CachedAnswers, overrides: Overrides, now: String = Stamps.now()): Int {
         ensureCurrentKeys(db)
         if (db.kvGet(BACKFILL_KEY) != null) return 0
         val pages = knownPages(db, overrides)
         val stored = LinkedHashSet<Pair<String, Long>>()
         for (page in pages) {
             for (kind in KINDS + listOf<String?>(null)) {  // the unfiltered list last: the others give every tab of a kind
-                cachedList(db, cached, page, kind).forEach { stored += page to it }
+                cachedList(db, cached, page, kind, now).forEach { stored += page to it }
             }
         }
         db.kvSetJson(BACKFILL_KEY, JsonObject(linkedMapOf("pages" to JsonPrimitive(pages.size),
@@ -234,7 +239,7 @@ object ArtistTabs {
 
     /** _cached_list: the tabs of one of the page's lists, from as many of its pages as the cache holds in a row,
      * stored. */
-    private fun cachedList(db: Db, cached: CachedAnswers, page: String, kind: String?): List<Long> {
+    private fun cachedList(db: Db, cached: CachedAnswers, page: String, kind: String?, now: String): List<Long> {
         val ids = ArrayList<Long>()
         var number = 1
         var last = 1
@@ -248,7 +253,7 @@ object ArtistTabs {
             }
             last = maxOf(last, listed.pages)
             val tabs = if (kind == null) listed.tabs else listed.tabs.filter { it.kind == kind }
-            ids += store(db, page, listed.name, tabs, answer.fetchedAt.orEmpty())
+            ids += store(db, page, listed.name, tabs, answer.fetchedAt.orEmpty(), now)
             number++
         }
         return ids

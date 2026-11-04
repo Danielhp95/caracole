@@ -67,9 +67,10 @@ data class UgTabPage(val tab: UgVersion, val versions: List<UgVersion>, val cont
  * surrogate pair the JSON escapes alone is U+FFFD in every string of the data, keys too. A page that can't be read
  * is a [PageParseError], a provider's error and never a miss.
  *
- * A number past what the phone keeps (an id past a Long, a version or a vote count past an Int), which UG never
- * writes and Python's sqlite3 couldn't store either, is read as no number: the tab unusable for its id, 0 for the
- * others. Python's json reads 50,000 containers deep, the phone PyJson.MAX_DEPTH (512): a page nested between is a
+ * A number past what the phone keeps, which UG never writes, is read as no number where Python keeps the value: an
+ * id past a Long makes the tab unusable, a version or a vote count past an Int is 0 (Python keeps it, and its sqlite3
+ * stores one up to 2^63), and an artist page's number past an Int falls through to the next one UgArtist reads.
+ * Python's json reads 50,000 containers deep, the phone PyJson.MAX_DEPTH (512): a page nested between is a
  * PageParseError on the phone alone.
  */
 object UgPage {

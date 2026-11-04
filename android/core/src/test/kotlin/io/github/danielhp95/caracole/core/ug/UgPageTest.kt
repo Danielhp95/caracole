@@ -8,7 +8,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.math.BigInteger
 import kotlin.test.assertEquals
@@ -84,7 +83,6 @@ class UgPageTest {
     }
 
     @Test fun aLoneSurrogateOnAPageIsReplacementInTheSheetTheNamesAndTheKeys() {
-        assumeTrue("waiting on html-tree", UgPagesReplay.htmlReady)
         val payload = """{"store":{"page":{"data":{"tab":{"id":1,"type":"Chords","song_name":"Zebra \udc00"},
             "tab_view":{"versions":[],"wiki_tab":{"content":"la \ud83d la 😀"},"meta":{"\udc00":1}}}}}}"""
         val html = "<div class=\"js-store\" data-content=\"${payload.replace("\"", "&quot;")}\"></div>"
@@ -95,7 +93,6 @@ class UgPageTest {
     }
 
     @Test fun aPageNestedPastWhatThePhoneReadsIsAParseError() {
-        assumeTrue("waiting on html-tree", UgPagesReplay.htmlReady)
         val html = "<div class=\"js-store\" data-content=\"${"[".repeat(PyJson.MAX_DEPTH + 1)}\"></div>"
         val e = assertFailsWith<PageParseError> { UgPage.parseTabPage(html.toByteArray(), "https://u/x") }
         assertTrue(e.message!!.startsWith("ug: https://u/x: js-store is not valid JSON: "), e.message)

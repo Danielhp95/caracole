@@ -1293,10 +1293,12 @@ Not built yet. (lookup.)
     (internal/pages/`PyValues`: a list's or an object's text its repr), and half of a surrogate pair U+FFFD in every
     string, keys too (ug/page.py's `_whole`, the computer's fix too); `IndexTab` Python's, its label and its url.
   - `ArtistTabs.store`, `keepOnly`, `forget` and `backfill` (from the phone's own cache, `CachedAnswers`) write
-    artist_tabs.py's rows; each page a store keeps tabs of is noted (`Reads.note`, site `ug`) at the newest read it
-    was stored with, for the next push to the computer.
-  - A number past a Long (an id) or an Int (a version, a vote count) is none, and a page nested deeper than
-    `PyJson.MAX_DEPTH` a PageParseError: UG writes neither.
+    artist_tabs.py's rows; each page a store keeps tabs of is noted (`Reads.note`, site `ug`) for the next push to the
+    computer, at the store's own time (`now`) or the read's if later, never moved back: a list stored from an older
+    copy in the cache after a push is still sent.
+  - A number past a Long (an id) or an Int (a version, a vote count, an artist page's number) is none where Python
+    keeps it (the tab unusable, 0, the next number read), and a page nested deeper than `PyJson.MAX_DEPTH` a
+    PageParseError: UG writes neither.
   - `UgPagesReplay` (area `ug-pages`) replays vectors/sites/ug_pages*.jsonl and ug_artist*.jsonl
     (tests/test_conformance_ug_pages.py).
 - core.ug's `Rank`, `Coverage` and `SheetVersions`: rank.py, coverage.py and sheet_versions.py, Python's numbers and

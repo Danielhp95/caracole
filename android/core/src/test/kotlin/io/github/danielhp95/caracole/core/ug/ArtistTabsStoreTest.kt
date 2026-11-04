@@ -40,13 +40,25 @@ class ArtistTabsStoreTest {
     }
 
     @Test fun aPageIsNotedAtItsNewestReadAndAnOlderOneNeverMovesItBack() = db { db ->
-        assertEquals(listOf(1L), ArtistTabs.store(db, page, "A", listOf(tab(1)), "2026-10-19T00:00:00Z"))
+        val early = "2026-10-01T00:00:00Z"
+        assertEquals(listOf(1L), ArtistTabs.store(db, page, "A", listOf(tab(1)), "2026-10-19T00:00:00Z", early))
         assertEquals("2026-10-19T00:00:00Z", db.kvGet("${Reads.READ}ug:$page"))
-        ArtistTabs.store(db, page, "A", listOf(tab(2)), "2026-10-18T00:00:00Z")  // another list, from the cache
+        ArtistTabs.store(db, page, "A", listOf(tab(2)), "2026-10-18T00:00:00Z", early)  // another list, from the cache
         assertEquals("2026-10-19T00:00:00Z", db.kvGet("${Reads.READ}ug:$page"))
-        ArtistTabs.store(db, page, "A", listOf(tab(3)), "2026-10-20T00:00:00Z")
+        ArtistTabs.store(db, page, "A", listOf(tab(3)), "2026-10-20T00:00:00Z", early)
         assertEquals(mapOf("ug" to listOf(page)), Reads.since(db, "computer"))
         assertEquals("2026-10-20T00:00:00Z", db.kvGet("${Reads.READ}ug:$page"))
+    }
+
+    @Test fun aListStoredAfterAPushFromAnOlderCopyInTheCacheIsNotedAtItsStoreAndStillSent() = db { db ->
+        val other = "https://www.ultimate-guitar.com/artist/b_9"
+        ArtistTabs.store(db, page, "A", listOf(tab(1)), "2026-10-19T00:00:00Z", "2026-10-19T00:00:01Z")
+        Reads.forget(db, "computer", "2026-10-19T00:00:01Z")  // pushed
+        assertEquals(emptyMap(), Reads.since(db, "computer"))
+        // a list the cache has held since the 18th, stored on the 20th
+        ArtistTabs.store(db, other, "B", listOf(tab(2)), "2026-10-18T00:00:00Z", "2026-10-20T00:00:00Z")
+        assertEquals("2026-10-20T00:00:00Z", db.kvGet("${Reads.READ}ug:$other"))
+        assertEquals(mapOf("ug" to listOf(other)), Reads.since(db, "computer"))
     }
 
     @Test fun aStoreThatKeepsNothingNotesNothing() = db { db ->

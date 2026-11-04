@@ -1,12 +1,10 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.http.CachedAnswers
 import io.github.danielhp95.caracole.core.http.PageParseError
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
@@ -45,18 +43,14 @@ import java.security.MessageDigest
  * CorpusOnDeviceTest runs them all under ART.
  *
  * The phone notes each page a store keeps tabs of for the next push to the computer (kv `phone:read:ug:<page>`, the
- * newest read stored), which Python doesn't: checked here, and left out of the kv compared with Python's.
+ * store's time or the read's if later, never moved back), which Python doesn't: checked here, every store made at
+ * [NOW], between the records' reads, and left out of the kv compared with Python's.
  */
 object UgPagesReplay : AreaReplay {
     override val area = "ug-pages"
 
-    /** Phase A guard: core.html is lane html-tree's, and until it merges a page can't be parsed; the records of a
-     * page parsed wait on it (waiting on html-tree). */
-    val htmlReady: Boolean by lazy { runCatching { Html.parse("<p>") }.isSuccess }
-
-    /** Phase A guard: the backfill's known pages read overrides.artist_page_address, lane overrides-model's
-     * (waiting on overrides-model). */
-    val overrideUrlsReady: Boolean by lazy { runCatching { OverrideUrls.artistPageAddress("x") }.isSuccess }
+    /** The time every store of the replay is made at: after the records' early reads, before their late ones. */
+    const val NOW = "2026-10-18T12:00:00Z"
 
     override fun replay(misses: Misses) {
         pages()
@@ -161,7 +155,6 @@ object UgPagesReplay : AreaReplay {
         for (r in Corpus.records("sites/ug_pages.jsonl")) {
             when (r.fn) {
                 "caracole.ug.page.parse_tab_page" -> {
-                    if (!htmlReady) continue  // waiting on html-tree
                     pages++
                     parsed(misses, r) { html, url -> tabPage(UgPage.parseTabPage(html, url)) }
                 }
@@ -187,7 +180,7 @@ object UgPagesReplay : AreaReplay {
                 else -> throw AssertionError("sites/ug_pages.jsonl: no replay for ${r.fn}")
             }
         }
-        if (htmlReady) assertTrue("tab pages replayed: $pages", pages >= 60)
+        assertTrue("tab pages replayed: $pages", pages >= 60)
         misses.assertNone()
     }
 
@@ -215,7 +208,6 @@ object UgPagesReplay : AreaReplay {
         for (r in Corpus.records("sites/ug_artist.jsonl")) {
             when (r.fn) {
                 "caracole.ug.artist.parse_artist_page" -> {
-                    if (!htmlReady) continue  // waiting on html-tree
                     pages++
                     parsed(misses, r) { html, url -> artistPage(UgArtist.parse(html, url)) }
                 }
@@ -227,7 +219,7 @@ object UgPagesReplay : AreaReplay {
                 else -> throw AssertionError("sites/ug_artist.jsonl: no replay for ${r.fn}")
             }
         }
-        if (htmlReady) assertTrue("artist pages replayed: $pages", pages >= 30)
+        assertTrue("artist pages replayed: $pages", pages >= 30)
         misses.assertNone()
     }
 
@@ -257,18 +249,20 @@ object UgPagesReplay : AreaReplay {
     fun artistTabs() {
         val misses = Misses("sites/ug_artist_tabs.jsonl")
         var ops = 0
+        var backfills = 0
         for (line in Corpus.lines("sites/ug_artist_tabs.jsonl")) {
             if (line["header"] == JsonPrimitive(true)) continue
             when (line.getValue("fn").jsonPrimitive.content) {
                 "caracole.ug.artist_tabs.ops" -> ops += replayOps(misses, line)
                 "caracole.ug.artist_tabs.backfill" -> {
-                    if (!htmlReady || !overrideUrlsReady) continue  // waiting on html-tree and overrides-model
+                    backfills++
                     backfill(misses, line)
                 }
                 else -> throw AssertionError("sites/ug_artist_tabs.jsonl: no replay for ${line["fn"]}")
             }
         }
         assertTrue("ops replayed: $ops", ops >= 15)
+        assertTrue("backfills replayed: $backfills", backfills >= 1)
         misses.assertNone()
     }
 
@@ -276,7 +270,6 @@ object UgPagesReplay : AreaReplay {
     private fun replayOps(misses: Misses, record: JsonObject): Int {
         val case = record.getValue("case").jsonPrimitive.content
         val ops = record.getValue("ops").jsonArray.map { it.jsonObject }
-        if (!htmlReady && ops.any { it.getValue("op").jsonPrimitive.content == "store_page" }) return 0  // waiting on html-tree
         val outs = record.getValue("out").jsonArray.map { it.jsonObject }
         val dir = Files.createTempDirectory("caracole-ug-pages").toFile()
         try {
@@ -302,7 +295,7 @@ object UgPagesReplay : AreaReplay {
                         val kind = op.getValue("op").jsonPrimitive.content
                         if (kind.startsWith("store") && want["result"]!!.jsonArray.isNotEmpty()) {
                             val page = op.getValue("page").jsonPrimitive.content
-                            val at = op.getValue("read_at").jsonPrimitive.content
+                            val at = maxOf(op.getValue("read_at").jsonPrimitive.content, NOW)
                             if (noted[page].let { it == null || at > it }) noted[page] = at
                         }
                         misses.check(notes(db) == noted) { "$what: the pages noted ${notes(db)}, the stores' $noted" }
@@ -319,12 +312,13 @@ object UgPagesReplay : AreaReplay {
         fun text(k: String) = op.getValue(k).jsonPrimitive.content
         return when (text("op")) {
             "store" -> ArtistTabs.store(db, text("page"), text("name"),
-                                        op.getValue("tabs").jsonArray.mapNotNull { UgPage.parseVersion(it) }, text("read_at"))
+                                        op.getValue("tabs").jsonArray.mapNotNull { UgPage.parseVersion(it) }, text("read_at"),
+                                        NOW)
             "store_page" -> {
                 val listed = UgArtist.parse(body(op.getValue("body")), text("page"))
                 val kind = (op["kind"] as? JsonPrimitive)?.takeIf { it.isString }?.content
                 ArtistTabs.store(db, text("page"), listed.name, listed.tabs.filter { kind == null || it.kind == kind },
-                                 text("read_at"))
+                                 text("read_at"), NOW)
             }
             "keep_only" -> ArtistTabs.keepOnly(db, text("page"), text("kind"),
                                                op.getValue("ids").jsonArray.map { it.jsonPrimitive.long }, text("read_at"))
@@ -333,14 +327,16 @@ object UgPagesReplay : AreaReplay {
         }
     }
 
-    /** A backfill's scenario: the cache's pages stored, nothing sent; the pages it stored tabs of noted. */
+    /** A backfill's scenario: the cache's pages stored, nothing sent; the pages it stored tabs of noted, at [NOW] or
+     * their newest read if later. */
     private fun backfill(misses: Misses, record: JsonObject) {
         val pasted = record.getValue("kw").jsonObject.getValue("artist_url").jsonObject
             .mapValues { it.value.jsonPrimitive.content }
         Scenarios.replay(record, misses) { world ->
-            val stored = ArtistTabs.backfill(world.db, CachedAnswers("ug", world.cacheDir), Overrides(artistUrl = pasted))
+            val stored = ArtistTabs.backfill(world.db, CachedAnswers("ug", world.cacheDir), Overrides(artistUrl = pasted),
+                                             NOW)
             val pages = world.db.query("SELECT page, MAX(read_at) FROM ug_artist_tabs GROUP BY page") {
-                it.text(0)!! to it.text(1)!!
+                it.text(0)!! to maxOf(it.text(1)!!, NOW)
             }.toMap()
             misses.check(notes(world.db) == pages) { "${record["case"]}: the pages noted ${notes(world.db)}, stored $pages" }
             world.db.execute("DELETE FROM kv WHERE key >= ? AND key < ?", Reads.READ, Reads.READ.dropLast(1) + ";")

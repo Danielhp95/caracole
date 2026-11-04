@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.replays.UgPagesReplay
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -29,7 +28,6 @@ class UgArtistTest {
     }
 
     @Test fun theSodaStereoPageListsItsTabsItsPagesAndItsTwoLists() {
-        assumeTrue("waiting on html-tree", UgPagesReplay.htmlReady)
         val page = UgArtist.parse(Corpus.fixture("ug/artist.html"), soda)
         assertEquals(2946L to "Soda Stereo", page.artistId to page.name)
         assertEquals(1 to 6, page.page to page.pages)
