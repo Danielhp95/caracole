@@ -8,8 +8,6 @@ import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
-import io.github.danielhp95.caracole.core.lookup.SongPages
-import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.mirror.Mirror
@@ -25,23 +23,42 @@ import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
+import io.github.danielhp95.caracole.server.jobs.PhoneKinds
+import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
+import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
+import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
 import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
+import io.github.danielhp95.caracole.server.lookups.InboxRetry
+import io.github.danielhp95.caracole.server.lookups.InboxRunner
 import io.github.danielhp95.caracole.server.lookups.LaCuerdaRunner
+import io.github.danielhp95.caracole.server.lookups.RenderRunner
+import io.github.danielhp95.caracole.server.lookups.ReviewRunner
 import io.github.danielhp95.caracole.server.lookups.VersionsRunner
 import io.github.danielhp95.caracole.server.page.LibraryAssets
 import io.github.danielhp95.caracole.server.page.LibraryPage
 import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.page.PageRoutes
+import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.page.ServerControls
+import io.github.danielhp95.caracole.server.page.SongbookSection
+import io.github.danielhp95.caracole.server.routes.ExportRoutes
+import io.github.danielhp95.caracole.server.routes.GuitarRoutes
+import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.routes.LookupRoutes
 import io.github.danielhp95.caracole.server.routes.RequestsRoutes
+import io.github.danielhp95.caracole.server.routes.ReviewRoutes
 import io.github.danielhp95.caracole.server.routes.SearchRoutes
+import io.github.danielhp95.caracole.server.routes.SongbookRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.VersionsRoutes
+import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
+import io.github.danielhp95.caracole.server.songbooks.SongbookRunner
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,15 +86,26 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
- * RequestsRoutes, SyncRoutes, LibraryRoutes, LookupRoutes (milestone 6's after them, skeleton-m5m6's), then Stubs for
- * every route no module answers; the library's files behind them; one job queue for every write, its command runners
- * (`get`, `versions`, `lacuerda`, `harptabs`), and after each job [afterJob]; and the local server. Its page has the
- * Sync tab (ServerControls.sync). The skeletons write it; a lane that must change it is named in its brief.
+ * RequestsRoutes, SyncRoutes, LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then Stubs for every route no module answers; the
+ * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
+ * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
+ * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
+ * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
+ * the local server. Its page has the Sync tab (ServerControls.sync). Building it queues nothing: the app calls
+ * [start] once it has wired the queue's listeners. [render] null: the phone's own PhoneRender (a test gives another).
+ * The skeletons write it; a lane that must change it is named in its brief.
  */
-class Phone(private val deps: PhoneDeps) {
+class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
-    private val cards = MirrorPageData(deps.mirror)
     private val store = LibraryStore(deps.libraryDir)
+    private val cards = PhonePageData(MirrorPageData(deps.mirror), store, ::config)
+
+    /** The pages the phone makes itself (milestone 5). */
+    val render: PhoneRender = render ?: PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version)
+
+    /** The songbooks' pages the phone makes itself (milestone 6). */
+    val songbookPages = SongbookPagesImpl(deps.database, store)
 
     /** The phone's settings now: config.py's defaults with what the computer gave at the last sync. */
     private fun config(): PhoneConfig = deps.database.read { db -> PhoneConfig.read(db) }
@@ -92,13 +120,24 @@ class Phone(private val deps: PhoneDeps) {
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands))
-        parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, SongPages.NONE,
-                           SongbookPages.NONE, deps.alerts, deps.pacing, deps.searchesLacuerda)
+        // Each seam is NONE until its lane makes it the real one (PhoneRender's, SongbookPagesImpl's), so the lookup
+        // never calls a milestone's code before it lands.
+        parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
+                           songbookPages.seam, deps.alerts, deps.pacing, deps.searchesLacuerda)
         commands["get"] = GetRunner(parts)
         commands["versions"] = VersionsRunner(parts)
         commands["lacuerda"] = LaCuerdaRunner(parts)
         commands["harptabs"] = HarpTabsRunner(parts)
+        commands["review"] = ReviewRunner(parts)
+        commands["harmonica"] = HarmonicaRunner(parts)
+        commands["render"] = RenderRunner(parts)
+        commands["songbook"] = SongbookRunner(parts)
+        commands["inbox"] = InboxRunner(parts)
+        commands["backup"] = BackupRunner(parts)
     }
+
+    /** The files shared to the app that wait for a song, tried again after each job. */
+    private val inbox = InboxRetry(parts)
 
     val search: SearchRoutes = SearchRoutes(deps.database, cards)
 
@@ -118,14 +157,17 @@ class Phone(private val deps: PhoneDeps) {
         PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls,
                    libraryName = { config().libraryName.orEmpty() }),
         search,
-        JobsRoutes(queue, cards, deps.database),
+        JobsRoutes(queue, cards, deps.database, songbooks = { db -> SongbookSection.data(db, store) }),
         RequestsRoutes(parts),
-        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = {
-            search.invalidate()
-            deps.mirror?.reload()
-        }),
+        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync),
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
+        SongbookRoutes(parts),
+        VersionsRoutes(parts),
+        HarmonicaRoutes(parts),
+        ReviewRoutes(parts),
+        ExportRoutes(parts),
+        GuitarRoutes(parts),
     )
 
     val app: App = App(
@@ -142,13 +184,70 @@ class Phone(private val deps: PhoneDeps) {
         deps.scope.launch(Dispatchers.IO) { runCatching { deps.database.warmUp() } }
     }
 
+    /**
+     * What the phone queues at its start, called by the app once it has wired the queue's listeners (Caracole.start:
+     * `queue.onBusy`, so the foreground service hears every job, this one too): the render job when the phone owes
+     * pages ([PhoneRender.stale]: a new build's, say). Nothing while the render is neutral.
+     */
+    fun start() {
+        if (render.stale()) renderAgain()
+    }
+
+    /** After a sync's take, inside the sync's job (SyncRoutes' `afterSync`, its stages over): the copy reloaded, the
+     * phone's pages of what the take moved forgotten, the search's answers forgotten, and the pages owed then made by
+     * the render job, queued after the sync, never inside it. A full queue leaves them owed, for the next start's or
+     * take's render job. */
+    internal fun afterSync() {
+        deps.mirror?.reload()
+        val owed = render.afterSync()
+        search.invalidate()
+        if (owed) {
+            try {
+                renderAgain()
+            } catch (_: QueueFull) {
+            }
+        }
+    }
+
     /** After each job: the search's answers forgotten (a lookup, a sync or an import may have changed what it
-     * finds), and a job that failed told ([Alerts.failed]: the app decides whether its owner was looking). */
+     * finds), a job that failed told ([Alerts.failed]: the app decides whether its owner was looking), and the files
+     * shared to the app that wait for a song tried again ([InboxRetry]). */
     private fun afterJob(job: Job) {
         search.invalidate()
         if (job.state == Job.FAILED) {
             deps.alerts.failed(job.display, JobViews.line(job).text)
         }
+        inbox.afterJob(job)
+    }
+
+    /**
+     * The render job (PhoneKinds' render kind, keyed by the phone's build, its words PhoneKinds'): the pages the phone
+     * owes made by this build, the lookups queued meanwhile run first between two songs (JobContext.yieldToQueued), its
+     * stage saying how far; a song whose pages couldn't be made fails the job, with why. One waiting already is joined.
+     */
+    fun renderAgain(): Job {
+        val kind = PhoneKinds.RENDER
+        val stage = kind.stage.first
+        return queue.submit(
+            JobSpec(
+                title = kind.title, key = kind.key + render.build(), kind = kind.kind,
+                display = kind.display, stages = listOf(kind.stage),
+                run = { job ->
+                    job.stage(stage, "running")
+                    val made = render.renderStale(between = { job.yieldToQueued() }) { done, total ->
+                        job.stage(stage, "running", PhoneKinds.fill(kind.running, "done" to done, "total" to total))
+                    }
+                    search.invalidate()
+                    val failed = made.failed.values.firstOrNull()
+                    if (failed != null) {
+                        val line = PhoneKinds.fill(kind.failed, "why" to failed)
+                        job.stage(stage, "failed", line)
+                        throw IllegalStateException(line)
+                    }
+                    job.stage(stage, "done", PhoneKinds.fill(kind.done, "n" to made.written))
+                },
+            ),
+        ).first
     }
 
     /** What the served page carries of the queue: the songs with a job that waits or runs, and those jobs. */

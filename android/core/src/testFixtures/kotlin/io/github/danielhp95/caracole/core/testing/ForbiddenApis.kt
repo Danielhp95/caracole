@@ -60,7 +60,9 @@ object ForbiddenApis {
         Rule(Regex("""\b(?:IGNORE_CASE|CASE_INSENSITIVE|CASE_INSENSITIVE_ORDER|UNICODE_CHARACTER_CLASS|UNICODE_CASE)\b"""),
              "the JDK's or ICU's case folding and classes: PyRegex.compile(\"(?i)…\"), PyUnicode.casefold"),
         Rule(Regex("""\.(?:$PREDICATES)\(\s*\)"""), "Kotlin's Char predicates are Character's: PyUnicode's"),
-        Rule(Regex("""\.(?:$CASE_MAPS)\("""), "the JDK's case mapping: PyUnicode.lower, upper, casefold"),
+        // PyUnicode.capitalize is Python's own (str.capitalize), never the JDK's.
+        Rule(Regex("""(?<!\bPyUnicode)\.(?:$CASE_MAPS)\("""),
+             "the JDK's case mapping: PyUnicode.lower, upper, casefold, capitalize"),
         Rule(Regex("""\.(?:$TRIMS)\(\s*\)|\.trimMargin\("""),
              "Kotlin's trim and blank are Char.isWhitespace, the JDK's: Py.strip, or trim with the characters named"),
         Rule(Regex("""\.(?:digitToInt|digitToIntOrNull)\("""), "the JDK's digits: PyUnicode.isDecimal's"),

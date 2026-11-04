@@ -23,6 +23,12 @@ object Fixtures {
     fun load(db: Db, name: String, libraryDir: File? = null) {
         val records = Corpus.lines(name).filter { it["header"] != JsonPrimitive(true) }
         require(records.none { "sql" in it }) { "$name makes its own tables: Fixtures.loadRaw" }
+        loadRecords(db, records, libraryDir, name)
+    }
+
+    /** A fixture's [records] (helpers.corpus.dump_fixture's, as a scenario record carries them inline) into [db], as
+     * [load] loads a fixture's file. */
+    fun loadRecords(db: Db, records: List<JsonObject>, libraryDir: File? = null, name: String = "the fixture") {
         db.savepoint("fixture") {
             for (record in records) {
                 when {

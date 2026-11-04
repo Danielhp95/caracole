@@ -201,6 +201,28 @@
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
+            <!-- The phone's backups (BackupsActivity), apart from the sync's rows. -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/backups_label"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/backups"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/backups_open" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/backups_hint"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
             <Button
                 android:id="@+id/open_library"
                 android:layout_width="wrap_content"

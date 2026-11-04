@@ -328,3 +328,23 @@ check's to take.
 Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, MergeSpeedBench)
 and `android/scripts/device-test.sh ColdSearchTest`; `Timings` (core.db, behind `-Dcaracole.timings=1`, never in a
 page) times each step.
+
+## Pages built on the phone
+
+Not built yet.
+
+## Songbooks, versions and printing
+
+Not built yet.
+
+## Guitar Pro
+
+Not built yet.
+
+## Sharing files to caracole
+
+Not built yet.
+
+## Alerts and backups
+
+Not built yet.
