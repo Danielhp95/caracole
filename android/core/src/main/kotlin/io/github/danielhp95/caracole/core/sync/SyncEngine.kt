@@ -166,7 +166,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** Whether the two compare now as they did in [c] (the same hash), the computer's state (or the file) read
      * again; what [compare] throws else. */
     fun stillAsCompared(c: Comparison): Boolean =
-        if (c.kind == FILE) compareFile(c.file!!).hash == c.hash else compared(client(c.address), c.address).hash == c.hash
+        if (c.kind == FILE) compareFile(reread(c.file!!)).hash == c.hash
+        else compared(client(c.address), c.address).hash == c.hash
+
+    /** A comparison's file read again, as it is now (an index export by the name it was read by). */
+    private fun reread(file: SyncFile): SyncFile = SyncFiles.read(file.file, file.name.takeIf { file.indexOnly })
 
     /** A unit's two documents in [c] (`GET /api/sync/unit`): this side's now, and the other's (the computer's, asked
      * now; a file's, from it); null for a side that hasn't got it. */
@@ -347,7 +351,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val fresh = step(stage, CHECK, null) {
             io {
                 try {
-                    compareFile(SyncFiles.read(c.file!!.file, c.file.name.takeIf { c.file.indexOnly }))
+                    compareFile(reread(c.file!!))
                 } catch (e: FileError) {
                     throw SyncFailed(e.message ?: "", null, e)
                 }
