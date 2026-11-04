@@ -172,8 +172,8 @@ working while you leave it, gone once it ends. Its stages show on the tab:
 At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
 comparison"), and Reload shows the library page with the songs as they are now.
 
-The computer needs a caracole that syncs with the phone (sync format 2: `GET /api/peer/state` answers
-`"format": 2`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
+The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
+`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.
 
 **Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your

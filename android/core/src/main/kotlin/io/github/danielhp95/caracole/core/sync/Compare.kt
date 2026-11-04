@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * peer_sync.py's three-way comparison on the phone. Once two sides have synced, each unit has a base: its digest
  * when the two last held it the same (or null, both lacking it). Each side keeps its own (kv `sync:base:<peer id>`,
- * `{"format": 2, "units": {id: [digest or null, when]}}`, [recordAgreement]) and the later of the two counts
+ * `{"format": 3, "units": {id: [digest or null, when]}}`, [recordAgreement]) and the later of the two counts
  * ([mergedBase]). A unit only one side changed since is that side's (`mine`, `theirs`); one both changed, differently,
  * a `conflict` for the owner; with no base (a first sync), a unit on one side alone is that side's, and one both hold,
  * differently, a conflict. The words of each proposal (`why`) are Python's.
@@ -45,7 +45,7 @@ object Compare {
         return readBase(value)
     }
 
-    /** peer_sync._read_base: `{"format": 2, "units": …}`, else none. */
+    /** peer_sync._read_base: `{"format": 3, "units": …}`, else none. */
     internal fun readBase(value: JsonElement?): Base? {
         if (value !is JsonObject || !Python.numberEquals(value["format"], Units.FORMAT)) return null
         return readUnits(value["units"])

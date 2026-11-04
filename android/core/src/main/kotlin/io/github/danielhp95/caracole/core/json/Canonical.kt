@@ -29,7 +29,8 @@ import java.security.MessageDigest
  * - [digest], D(v): the lowercase hex SHA-256 of C(v)'s UTF-8.
  * - [parse]: the strict reading, what Python's `json.loads` reads and nothing it refuses (StrictReader).
  * - [hashStoredJson], H(text), for versions.raw and songs.lyrics_json: null for null, D of what the text holds when
- *   it is JSON and canonicalizable, else the SHA-256 of the text's own bytes as Python's
+ *   it is JSON and canonicalizable (with the members `without` names taken out of an object it holds: UG's ratings
+ *   and votes of a version's raw record, Units.VOLATILE_RAW), else the SHA-256 of the text's own bytes as Python's
  *   `text.encode("utf-8", "surrogatepass")` gives them.
  */
 object Canonical {
@@ -97,16 +98,18 @@ object Canonical {
     /** D(v): the lowercase hex SHA-256 of C(v)'s UTF-8. */
     fun digest(value: JsonElement): String = sha256Hex(JsonText.utf8(write(value)))
 
-    /** H(text), for versions.raw and songs.lyrics_json. */
-    fun hashStoredJson(text: String?): String? {
+    /** H(text), for versions.raw and songs.lyrics_json; [without], members of an object the text holds that are no
+     * part of its hash, taken out of it first (its own members alone; a text that holds no object is hashed whole). */
+    fun hashStoredJson(text: String?, without: Set<String> = emptySet()): String? {
         if (text == null) return null
         val reader = StrictReader(text)
-        val value = try {
+        val read = try {
             reader.read()
         } catch (e: CanonicalError) {
             return ownBytes(text) // not JSON
         }
         if (reader.lone) return ownBytes(text)
+        val value = if (without.isNotEmpty() && read is JsonObject) JsonObject(read.filterKeys { it !in without }) else read
         val canonical = try {
             write(value)
         } catch (e: CanonicalError) {

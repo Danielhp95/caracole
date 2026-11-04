@@ -75,21 +75,23 @@ class CompareTest {
     @Test fun aBaseIsReadOnlyWhenItIsOfThisFormat() {
         val cases = listOf(
             null to null,
-            """{"format": 2, "units": {"song/a": ["1", "t1"], "song/b": [null, "t2"]}}""" to
+            """{"format": 3, "units": {"song/a": ["1", "t1"], "song/b": [null, "t2"]}}""" to
                 mapOf("song/a" to ("1" to "t1"), "song/b" to (null to "t2")),
-            // 2.0 == 2 in Python; an entry that isn't [digest or null, when] is left out; the last of a key wins.
-            """{"format": 2.0, "units": {"song/a": ["1"], "song/b": [1, "t"], "song/c": ["1", 2], "song/d": "x", "song/e": ["1", "t", 3], "song/f": ["0", "t0"], "song/f": ["1", "t1"]}}""" to
+            // 3.0 == 3 in Python; an entry that isn't [digest or null, when] is left out; the last of a key wins.
+            """{"format": 3.0, "units": {"song/a": ["1"], "song/b": [1, "t"], "song/c": ["1", 2], "song/d": "x", "song/e": ["1", "t", 3], "song/f": ["0", "t0"], "song/f": ["1", "t1"]}}""" to
                 mapOf("song/f" to ("1" to "t1")),
-            """{"format": 2, "units": {}}""" to emptyMap(),
-            """{"format": 2}""" to null,
-            """{"format": 2, "units": []}""" to null,
-            """{"format": "2", "units": {}}""" to null,
+            """{"format": 3, "units": {}}""" to emptyMap(),
+            """{"format": 3}""" to null,
+            """{"format": 3, "units": []}""" to null,
+            """{"format": "3", "units": {}}""" to null,
             """{"format": 1, "units": {}}""" to null,
+            // FORMAT 2's base, whose digests hashed UG's ratings and votes, is none: the next sync is a first one.
+            """{"format": 2, "units": {"song/a": ["1", "t1"]}}""" to null,
             """{"format": true, "units": {}}""" to null,
             """{"song/a": ["1", "t"]}""" to null,
             """[]""" to null,
             """{nonsense""" to null,
-            """{"format": 2, "units": {}} x""" to null,
+            """{"format": 3, "units": {}} x""" to null,
         )
         TestDb.fresh(tmp.root).use { database ->
             for ((stored, expected) in cases) {
@@ -109,10 +111,10 @@ class CompareTest {
             val b = SyncUnit("song/b", "b", "2")
             database.writeBlocking { db ->
                 assertEquals(1, Compare.recordAgreement(db, "peer", mapOf("song/a" to a, "song/b" to b), mapOf("song/a" to a), "T1"))
-                assertEquals("""{"format": 2, "units": {"song/a": ["1", "T1"]}}""", db.kvGet("sync:base:peer"))
+                assertEquals("""{"format": 3, "units": {"song/a": ["1", "T1"]}}""", db.kvGet("sync:base:peer"))
                 // song/a gone on both: agreed absent; song/b still only here: unsettled.
                 assertEquals(0, Compare.recordAgreement(db, "peer", mapOf("song/b" to b), emptyMap(), "T2"))
-                assertEquals("""{"format": 2, "units": {"song/a": [null, "T2"]}}""", db.kvGet("sync:base:peer"))
+                assertEquals("""{"format": 3, "units": {"song/a": [null, "T2"]}}""", db.kvGet("sync:base:peer"))
             }
             database.read { db -> assertEquals(mapOf("song/a" to (null to "T2")), Compare.baseOf(db, "peer")) }
         }

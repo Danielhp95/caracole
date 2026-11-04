@@ -427,9 +427,12 @@ Below the table, a section for each step whose modules have more to say.
   - never what caracole makes of one, nor what a lookup finds again.
 - Each unit's `digest` is its canonical JSON's SHA-256 (canonical.py's `digest`), a version's raw record and a song's
   lyrics hashed canonicalized (`stored_hash`), so the phone's Kotlin gets the same digest of the same record.
-- **FORMAT 2** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
-  (`{"format": 2, "units": …}`): a base of another format reads as none, so the first sync after a format bump
-  compares as a first sync (no shim).
+  - A version's raw record is hashed without what `VOLATILE_RAW` names for its provider (`stored_hash`'s `without`):
+    UG's ratings and votes, the owner's choice of 2026-11-03 ("Don't count them for the sync"), so a tab read on
+    both sides on two days is no conflict.
+- **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
+  (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
+  compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later

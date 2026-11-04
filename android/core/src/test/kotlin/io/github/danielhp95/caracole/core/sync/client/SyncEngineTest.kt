@@ -656,7 +656,7 @@ class SyncEngineTest {
         val units = phoneState()
         val unit = phone.read { Units.document(it, phoneLibrary, unitOf(song)) }
         val doc = JsonObject(linkedMapOf(
-            "format" to JsonPrimitive(2), "from" to JsonPrimitive(phoneId), "name" to JsonPrimitive("Phone"),
+            "format" to JsonPrimitive(Units.FORMAT), "from" to JsonPrimitive(phoneId), "name" to JsonPrimitive("Phone"),
             "caracole" to JsonPrimitive("0.1.0"), "at" to JsonPrimitive(state.now),
             "units" to JsonObject(units.mapValues { (_, u) ->
                 JsonObject(linkedMapOf("label" to JsonPrimitive(u.label), "digest" to JsonPrimitive(u.digest)))

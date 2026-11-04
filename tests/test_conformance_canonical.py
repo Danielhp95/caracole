@@ -10,6 +10,9 @@ db.kv_set_json answer, which core.json.Canonical and core.json.PyJson must answe
   ``Canonical.write`` of what it reads throws). Its texts: the spec's vectors, caracole's own stored records
   (UG's version records as ``versions.raw`` holds them, LRCLIB's answers as ``songs.lyrics_json`` does, and the
   fixtures' own texts), numbers, the reading's edges, whitespace.
+- ``stored_hash_without.jsonl``: ``canonical.stored_hash(text, without=["rating", "votes"])``, H of each text of
+  ``stored_hash.jsonl`` and of the edges of taking members out (a version's raw record from UG, as a sync unit's value
+  hashes it: ``peer_sync.VOLATILE_RAW``), ``kw.without`` the members taken out.
 - ``stored_hash_utf16.jsonl``: H of texts that hold a raw lone surrogate, which no corpus string may: each record's
   text is its ``utf16`` code units (``args`` empty), with ``reads`` as above.
 - ``pydumps.jsonl``: ``json.dumps(value, ensure_ascii=False, **kw)``, db.kv_set_json's text with no ``kw`` beyond
@@ -178,6 +181,22 @@ def stored(text: str | None) -> dict:
 def test_stored_hash_vectors():
     write("stored_hash", [{"fn": "caracole.canonical.stored_hash", "args": [text], "kw": {}, **stored(text)}
                           for text in stored_texts()])
+
+
+# Taking members out: an object's own alone, a member that couldn't be canonical, repeated, in another case.
+WITHOUT = ["rating", "votes"]
+WITHOUT_EDGES = ['{"rating": 1e1001, "a": 1}', '{"votes": "\\ud800", "a": 1}', '{"a": {"rating": 1}, "votes": 2}',
+                 '[{"rating": 1}]', '{"rating": 1, "rating": 2, "b": 3}', '{"Rating": 1, "VOTES": 2}', '{"rating": 1}',
+                 '{"votes": 1, "a": "\\udfff"}', '"rating"', '{"rating": [1, 2.50], "a": 4.50}']
+
+
+@needs_the_spec
+def test_stored_hash_without_vectors():
+    texts = stored_texts() + [t for t in WITHOUT_EDGES if t not in stored_texts()]
+    records = [{"fn": "caracole.canonical.stored_hash", "args": [text], "kw": {"without": WITHOUT},
+                "out": canonical.stored_hash(text, WITHOUT)} for text in texts]
+    assert sum(r["out"] != canonical.stored_hash(r["args"][0]) for r in records) > 20  # it takes something out
+    write("stored_hash_without", records)
 
 
 def utf16(text: str) -> list[int]:

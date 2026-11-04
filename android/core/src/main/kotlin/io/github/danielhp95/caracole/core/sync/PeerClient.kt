@@ -40,7 +40,7 @@ class PeerError(message: String, val status: Int? = null, cause: Throwable? = nu
  * nothing to the network): one request at a time, through mirror's [Http] (no redirect followed, no cookie).
  *
  * - **Reads** (`Accept: application/json`): [state], with a 60 s read timeout (a library's every song is read to
- *   answer); [unit], its document checked to be of format 2 and of the id asked; [file], its bytes checked against
+ *   answer); [unit], its document checked to be of [Units.FORMAT] and of the id asked; [file], its bytes checked against
  *   the SHA-256 the unit gives; [job], the computer's request as `GET /api/jobs/<id>` gives it.
  * - **The push**: [pushNew], [pushFile] and [push], each with the form token in the header `X-Caracole-Form-Token`
  *   (caracole serve's `json` and `bytes` routes) and no Origin or Sec-Fetch-Site, which a non-browser never sends. A

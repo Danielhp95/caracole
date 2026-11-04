@@ -55,6 +55,13 @@ object CanonicalReplay : AreaReplay {
             val stored = r.args[0].takeUnless { it is JsonNull }?.jsonPrimitive?.content
             stored(misses, r, stored, rawSurrogates = false)
         }
+        for (r in Corpus.records("canonical/stored_hash_without.jsonl")) {
+            val stored = r.args[0].takeUnless { it is JsonNull }?.jsonPrimitive?.content
+            val without = r.kw.getValue("without").jsonArray.map { it.jsonPrimitive.content }.toSet()
+            misses.expect("stored_hash without $without", stored?.let { hex(it.take(40)) }, r.out ?: JsonNull) {
+                Canonical.hashStoredJson(stored, without)
+            }
+        }
         for (r in Corpus.records("canonical/stored_hash_utf16.jsonl")) {
             val units = r.extra.getValue("utf16").jsonArray.map { it.jsonPrimitive.int.toChar() }
             stored(misses, r, String(units.toCharArray()), rawSurrogates = true)
