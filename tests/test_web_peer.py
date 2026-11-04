@@ -4,6 +4,7 @@ and a pull of another caracole's units, queued as ``caracole peer pull``."""
 import dataclasses
 import json
 
+import pytest
 from conftest import add_song
 
 from caracole import peer_sync as sync
@@ -159,3 +160,182 @@ def test_overrides_that_cant_be_read_are_said_as_data(cfg, conn):
     cfg.overrides_file.write_text("[nonsense\n", encoding="utf-8")
     status, doc = answer(an_app(cfg), "/api/peer/state")
     assert status == 503 and "overrides.toml can't be read" in doc["error"]
+
+
+# --- POST /peer/index: the index pages a phone's lookups read -------------------------------------------------------
+
+
+def _index_export(tmp_path, name="reads.sqlite"):
+    """An export of a phone's reads (index_transfer.export(pages=)), as the phone posts one."""
+    from datetime import UTC, datetime
+
+    import test_index_transfer as tt
+
+    from caracole import index_transfer
+
+    phone = tt.database(tmp_path, f"phone-{name}")
+    try:
+        tt.harp_page(phone, "artist/1178/billy-joel", ["Piano Man"], tt.LATE)
+        path = tmp_path / name
+        index_transfer.export(phone, path, now=datetime(2026, 11, 3, tzinfo=UTC),
+                              pages={"harptabs": ["artist/1178/billy-joel"]})
+    finally:
+        phone.close()
+    return path.read_bytes()
+
+
+@pytest.fixture
+def phone_side(cfg):
+    from test_peer_push import Served
+    from test_web_server import Recorder as Runner
+
+    from caracole.web.security import allowed_hosts
+
+    runner = Runner()
+    serving = Served(WebApp(cfg, JobQueue(runner), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    serving.runner = runner
+    yield serving
+    serving.close()
+
+
+def _staged(cfg):
+    from caracole import peer_push
+
+    return peer_push.staged_indexes(cfg.state_dir)
+
+
+def test_the_phones_index_pages_are_staged_privately_and_their_merge_queued(phone_side, cfg, tmp_path):
+    import stat
+
+    from caracole.web import jobs
+
+    data = _index_export(tmp_path)
+
+    status, _, body = phone_side.ask("POST", "/peer/index", data, kind="application/octet-stream")
+
+    assert status == 202, body
+    job_id = json.loads(body)["job"]
+    [path] = _staged(cfg)
+    assert path.parent == cfg.state_dir / "peer" and path.read_bytes() == data
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600 and stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    [job] = [j for j in phone_side.app.queue.snapshot() if j.id == job_id]
+    assert job.song_key == jobs.INDEX_MERGE + path.name and job.title == "Index pages from another caracole"
+    assert [s.args for s in job.steps] == [("index", "merge", "--delete", "--progress", "--", str(path))]
+
+
+def test_index_pages_need_the_form_token_and_come_from_no_other_site(phone_side, cfg, tmp_path):
+    data = _index_export(tmp_path)
+    status, _, body = phone_side.ask("POST", "/peer/index", data, kind="application/octet-stream", token=None)
+    assert status == 403 and json.loads(body)["reload"] is True
+    status, _, _ = phone_side.ask("POST", "/peer/index", data, kind="application/octet-stream",
+                                  Origin="http://evil.example")
+    assert status == 403
+    status, _, _ = phone_side.ask("POST", "/peer/index", data, kind="application/json")
+    assert status == 415
+    assert _staged(cfg) == [] and phone_side.runner.calls == []
+
+
+def test_index_pages_past_64_mib_are_refused_unread_and_bytes_that_are_no_export_are_refused(phone_side, cfg):
+    import http.client
+
+    conn = http.client.HTTPConnection("127.0.0.1", phone_side.server.server_address[1], timeout=10)
+    try:  # 64 MiB and a byte, claimed: answered at once, unread
+        conn.putrequest("POST", "/peer/index")
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.putheader("X-Caracole-Form-Token", "tok")
+        conn.putheader("Content-Length", str(64 * 1024 * 1024 + 1))
+        conn.endheaders()
+        assert conn.getresponse().status == 413
+    finally:
+        conn.close()
+    status, _, body = phone_side.ask("POST", "/peer/index", b"not a database", kind="application/octet-stream")
+    assert status == 400 and "isn't an index export" in json.loads(body)["error"]
+    assert _staged(cfg) == []
+
+
+def test_an_export_this_side_would_refuse_is_refused_before_the_phone_forgets_its_reads(phone_side, cfg, tmp_path):
+    """The phone forgets its reads on a 202: an export the merge would refuse is refused here, unstaged, 409 for
+    another version (the phone keeps its reads until the two agree), 400 for one that isn't of pages alone."""
+    import sqlite3
+    from datetime import UTC, datetime
+
+    import test_index_transfer as tt
+
+    from caracole import db, index_transfer
+
+    path = tmp_path / "newer.sqlite"
+    path.write_bytes(_index_export(tmp_path))
+    out = sqlite3.connect(path)
+    out.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'schema'", (str(db.SCHEMA_VERSION + 1),))
+    out.commit()
+    out.close()
+    status, _, body = phone_side.ask("POST", "/peer/index", path.read_bytes(), kind="application/octet-stream")
+    said = json.loads(body)["error"]
+    assert status == 409 and said.startswith("The index export was exported at schema version")
+    assert "Bring both caracoles to one version first." in said and str(cfg.state_dir) not in said
+
+    home = tt.database(tmp_path, "home")
+    try:
+        tt.full(home)  # a whole export: the sitemaps' rows and records, which a merge would take as the phone's
+        index_transfer.export(home, tmp_path / "whole.sqlite", ["ug"], now=datetime(2026, 11, 3, tzinfo=UTC))
+    finally:
+        home.close()
+    status, _, body = phone_side.ask("POST", "/peer/index", (tmp_path / "whole.sqlite").read_bytes(),
+                                     kind="application/octet-stream")
+    assert status == 400 and "ug_index holds rows, and an export of pages none" in json.loads(body)["error"]
+    assert _staged(cfg) == [] and phone_side.runner.calls == []
+
+
+def test_two_index_exports_wait_at_most_and_one_left_an_hour_that_no_request_names_goes(cfg, tmp_path):
+    import os
+    import time
+
+    from caracole import peer_push
+
+    data = _index_export(tmp_path)
+    first, second = peer_push.stage_index(cfg.state_dir, data), peer_push.stage_index(cfg.state_dir, data)
+    with pytest.raises(peer_push.PushError) as refused:
+        peer_push.stage_index(cfg.state_dir, data)
+    assert refused.value.status == 409
+    hours_ago = time.time() - 2 * 3600
+    os.utime(first, (hours_ago, hours_ago))
+    os.utime(second, (hours_ago, hours_ago))
+
+    assert peer_push.sweep_indexes(cfg.state_dir, {str(second)}) == [first.name]  # its merge still waits
+
+    assert _staged(cfg) == [second]
+    third = peer_push.stage_index(cfg.state_dir, data)
+    assert _staged(cfg) == sorted([second, third])
+    (cfg.state_dir / "peer" / "index-not-one.sqlite").write_bytes(data)  # no name of caracole's: never touched
+    assert peer_push.sweep_indexes(cfg.state_dir, set(), now=time.time() + 2 * 3600) == sorted(
+        [second.name, third.name])
+    assert (cfg.state_dir / "peer" / "index-not-one.sqlite").exists()
+
+
+def test_index_pages_merged_by_the_queued_command_reach_this_library_and_the_file_goes(tmp_path, monkeypatch):
+    """The whole way: posted to caracole serve, staged, then the command it queued run as its queue runs it."""
+    from test_commands_peer import Side, run
+    from test_peer_push import Served
+
+    from caracole.get import read_progress_line
+    from caracole.web.security import allowed_hosts
+
+    monkeypatch.delenv("CARACOLE_CONFIG", raising=False)
+    computer = Side(tmp_path / "computer")
+    served = Served(WebApp(computer.cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    try:
+        status, _, body = served.ask("POST", "/peer/index", _index_export(tmp_path), kind="application/octet-stream")
+        assert status == 202, body
+        [job] = [j for j in served.app.queue.snapshot() if j.id == json.loads(body)["job"]]
+    finally:
+        served.close()
+    (step,) = job.steps
+
+    result = run(computer, *step.args)
+
+    assert result.exit_code == 0, result.output
+    said = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert said[-1] == {"stage": "merge", "state": "done", "detail": "harptabs.com: 1 artist page"}
+    assert _staged(computer.cfg) == []
+    assert [tuple(r) for r in computer.conn.execute("SELECT title FROM harptabs_artist_tabs")] == [("Piano Man",)]
+    computer.conn.close()

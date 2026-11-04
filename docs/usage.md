@@ -5962,7 +5962,45 @@ lookups, which read them as each one begins, aren't on the phone yet, and its pa
 
 ### The phone's reads go to the computer (POST /peer/index)
 
-Not built yet.
+The pages the phone's lookups read are the computer's too: an artist's Ultimate Guitar pages, LaCuerda's artist
+pages and what its search answered, harptabs.com's artist pages, gametabs.net's game pages. The phone notes each one
+as it stores it, and at the end of every sync (the sync's index stage) sends the computer those noted since its last
+push to that computer, whatever the sync merged from the computer's indexes, and even when that merge failed (never
+a time window: LaCuerda's pages carry no time, and UG's move with the computer's nightly refresh). Its caracole
+exports them as `caracole index export` would, only those pages' rows in each site's tables, with the records of how
+they are keyed, never a sitemap's or a listing's record nor how far an index has got, and posts the file:
+
+    POST /peer/index        an index export, its bytes (64 MiB at most), with the form token in its header
+
+caracole serve checks the token and that the bytes are a SQLite file's, keeps the file as
+`state_dir/peer/index-<16 hex>.sqlite` (only its owner reads it), and reads it as the merge will before it answers:
+an export of pages alone (no sitemap rows, no record but how its rows are keyed, tables and nothing else), of this
+caracole's layout, schema and columns. One that isn't is deleted and refused, `409` for another version of caracole
+(bring both to one version: the phone keeps its pages until then) and `400` for anything else. Otherwise it queues
+the merge and answers `202 {"job": N}`:
+
+    caracole index merge --delete --progress -- FILE
+
+The phone forgets the pages it sent once it has that answer; the sync's index stage says so ("sent 3 pages read
+here, none left to send: its request 12 merges them"). Refused, or not answered, they stay on the phone for the next
+sync, and the stage says why ("1 page read here kept for the next sync: …"); a computer older than this route
+answers 404, which the stage names too. Nothing is sent when the phone read no page since. The pages go to the
+computer the phone syncs with next: a second computer gets only those read after.
+
+It merges as `caracole index merge` always does (see [caracole index export and
+merge](#caracole-index-export-and-merge)): backed up first, a page the file read later taken, a LaCuerda page or
+search answer the computer has already kept as it is, and no progress record moved. The backup is the whole
+database, as before any merge: a sync that brings pages the computer lacks makes one (a few seconds for a large
+library, holding caracole's lock), and the newest three copies are kept, whatever made them, so three such syncs
+in a day leave merges' copies where the nightly ones were (each a whole copy all the same). **`--progress`** reports its one stage, merge, as a JSON
+line, which the Requests tab reads ("Index pages from another caracole": Merged, and what each site took), ending
+`failed` however the command stops short of a merge (caracole's lock or its database not to be had too), and waits
+for the nightly run as a lookup does, which lets it go first at its next pause. **`--delete`** deletes FILE once it
+is merged; refused, only a file caracole serve staged (`state_dir/peer/index-<16 hex>.sqlite`, which can never be
+merged here), never a file named by hand (the database itself, a backup, a typo stay as they were); one that found
+no room for the backup first, or whose merge couldn't have the lock or the database, stays, for Try again. At most
+two such files wait at once (409 for another: the phone sends its pages at the next sync), and one an hour old that
+no waiting request names is deleted as the next one comes.
 
 ### What the offline copy lists
 

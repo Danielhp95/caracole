@@ -25,6 +25,12 @@ three requests, and as a take ends), unless a take holds it (``held``).
 
 A caracole pushes to another as the phone does (``Pusher``, ``push_units``), so ``caracole peer sync --push`` gives
 the other side its units with no need for it to reach this one.
+
+**The phone's index pages** (``POST /peer/index``): an index export of the pages its lookups read
+(``index_transfer.export(pages=)``), at most ``INDEX_MAX`` (64 MiB), whose bytes must open as a SQLite file's, kept
+as ``state_dir/peer/index-<16 hex>.sqlite`` (0600, ``stage_index``) for ``caracole index merge --delete --progress``,
+which deletes it once it is merged or refused. At most ``INDEX_OPEN`` (2) wait at once (409 for another); one an
+hour old that no queued or running request names is deleted as the next comes (``sweep_indexes``).
 """
 
 from __future__ import annotations
@@ -62,6 +68,12 @@ PREFIX = "push-"
 NEW = "new.json"  # who opened the push, the files it named and those this side needed
 DOCUMENT = "push.json"  # the push document, once sent
 FILES = "files"  # the files sent, each named by its SHA-256
+
+INDEX_PREFIX = "index-"  # a phone's index pages staged (POST /peer/index): index-<16 hex>.sqlite
+INDEX_SUFFIX = ".sqlite"
+INDEX_MAX = 64 * 1024 * 1024  # POST /peer/index's export, at most
+INDEX_OPEN = 2  # index exports waiting to be merged, at most
+SQLITE_HEADER = b"SQLite format 3\x00"  # the first 16 bytes of every SQLite database file
 
 _lock = threading.Lock()  # one change at a time to the pushes, of caracole serve's threads
 
@@ -244,6 +256,59 @@ def _staged(folder: Path) -> set[str]:
 def unstaged(state_dir: Path, push_id: str, files: set[str]) -> set[str]:
     """Those of ``files`` the push ``push_id`` hasn't had sent: what a send must find kept here instead."""
     return files - _staged(_folder(state_dir, push_id))
+
+
+# --- the phone's index pages -------------------------------------------------------------------------------------
+
+
+def staged_indexes(state_dir: Path) -> list[Path]:
+    """The index exports staged in ``state_dir/peer``, by their names alone (``index-<16 hex>.sqlite``, a file)."""
+    try:
+        entries = list(os.scandir(state_dir / FOLDER))
+    except OSError:  # none yet, or no folder to read
+        return []
+    return sorted(Path(e.path) for e in entries
+                  if e.name.startswith(INDEX_PREFIX) and e.name.endswith(INDEX_SUFFIX)
+                  and ID.fullmatch(e.name[len(INDEX_PREFIX):-len(INDEX_SUFFIX)]) and e.is_file(follow_symlinks=False))
+
+
+def sweep_indexes(state_dir: Path, named: set[str], now: float | None = None) -> list[str]:
+    """Delete each staged index export untouched for ``EXPIRES`` that ``named`` (the paths of the queued and
+    running requests' commands) doesn't name: its merge is over, or will never come. The names deleted."""
+    now = time.time() if now is None else now
+    gone = []
+    with _lock:
+        for path in staged_indexes(state_dir):
+            try:
+                old = now - os.lstat(path).st_mtime > EXPIRES
+            except FileNotFoundError:
+                continue
+            if old and str(path) not in named:
+                path.unlink(missing_ok=True)
+                gone.append(path.name)
+    return gone
+
+
+def stage_index(state_dir: Path, data: bytes) -> Path:
+    """The index export a phone posted, kept as ``state_dir/peer/index-<16 hex>.sqlite`` (0600) for its merge:
+    its path. PushError for bytes that are no SQLite file (400), or with ``INDEX_OPEN`` waiting already (409);
+    OSError when it can't be written."""
+    if not data.startswith(SQLITE_HEADER):
+        raise PushError("That isn't an index export: caracole's are SQLite files (index_transfer.export).")
+    if len(data) > INDEX_MAX:
+        raise PushError("That index export passes 64 MiB.", 413)
+    with _lock:
+        root = state_dir / FOLDER
+        if len(staged_indexes(state_dir)) >= INDEX_OPEN:
+            raise PushError("Two index exports wait to be merged here already: send it again once they are.", 409)
+        state_dir.mkdir(parents=True, exist_ok=True)
+        _private_dir(root)
+        while True:
+            path = root / f"{INDEX_PREFIX}{secrets.token_hex(8)}{INDEX_SUFFIX}"
+            if not os.path.lexists(path):
+                break
+        _write_private(path, data)
+    return path
 
 
 # --- pushes left, and a take's hold on one -----------------------------------------------------------------------
