@@ -210,6 +210,6 @@ class TokenizerTest {
     }
 
     @Test fun everyRecordOfTheTokensVectorsIsLexbors() {
-        HtmlReplay.replay(Misses("html"))
+        HtmlReplay.tokens(Misses("html"))
     }
 }
