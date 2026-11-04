@@ -17,8 +17,8 @@ import java.math.RoundingMode
  *
  * Members in the JsonObject's own order (insertion order), or by code point with [sortKeys] (`sort_keys=True`);
  * `", "` and `": "` between them, or `","` and `":"` when [compact] (`separators=(",", ":")`); strings escaped as
- * Python escapes them; a number written as its literal, the JsonPrimitive's content as given. Not canonical:
- * Canonical.write is.
+ * Python escapes them; a number written as its literal, the JsonPrimitive's content as given; a value nested deeper
+ * than [MAX_DEPTH], a [RecursionError]. Not canonical: Canonical.write is.
  *
  * A number's literal is Python's when a text Python wrote gave it, or when [float] made it from a Double. Never
  * `JsonPrimitive(Double)`: its literal is `Double.toString`'s (`1.0E-7`, `1.9999999999999998E23`, `4.9E-324`), not
@@ -28,7 +28,7 @@ import java.math.RoundingMode
 object PyJson {
     fun dumps(value: JsonElement, sortKeys: Boolean = false, compact: Boolean = false): String {
         val out = StringBuilder()
-        write(out, value, sortKeys, if (compact) "," else ", ", if (compact) ":" else ": ")
+        write(out, value, sortKeys, if (compact) "," else ", ", if (compact) ":" else ": ", 0)
         return out.toString()
     }
 
@@ -119,26 +119,28 @@ object PyJson {
         }
     }
 
-    private fun write(out: StringBuilder, value: JsonElement, sortKeys: Boolean, item: String, key: String) {
+    private fun write(out: StringBuilder, value: JsonElement, sortKeys: Boolean, item: String, key: String, level: Int) {
         when (value) {
             is JsonNull -> out.append("null")
             is JsonPrimitive -> if (value.isString) JsonText.quote(out, value.content) else out.append(value.content)
             is JsonArray -> {
+                if (level >= MAX_DEPTH) throw tooDeep("encoding a JSON object")
                 out.append('[')
                 value.forEachIndexed { k, element ->
                     if (k > 0) out.append(item)
-                    write(out, element, sortKeys, item, key)
+                    write(out, element, sortKeys, item, key, level + 1)
                 }
                 out.append(']')
             }
             is JsonObject -> {
+                if (level >= MAX_DEPTH) throw tooDeep("encoding a JSON object")
                 out.append('{')
                 val names = if (sortKeys) value.keys.sortedWith(Canonical.KEY_ORDER) else value.keys
                 names.forEachIndexed { k, name ->
                     if (k > 0) out.append(item)
                     JsonText.quote(out, name)
                     out.append(key)
-                    write(out, value.getValue(name), sortKeys, item, key)
+                    write(out, value.getValue(name), sortKeys, item, key, level + 1)
                 }
                 out.append('}')
             }
@@ -148,12 +150,123 @@ object PyJson {
     // --- milestone 4's additions (lane py-sites) ---------------------------------------------------------------------
 
     /**
-     * json.loads: order kept, a duplicate key at its first place with its last value, NaN and Infinity, big ints,
-     * lone surrogates as UTF-16 units; numbers as literals in Python's int or float form ([float]).
+     * Python's json.JSONDecodeError, a ValueError: [msg] at [pos], counted in code points as Python counts them, its
+     * message `"<msg>: line L column C (char P)"`. (An integer of more than 4,300 digits is Python's plain
+     * ValueError, an [IllegalArgumentException] too; a byte that isn't the text's encoding, its UnicodeDecodeError.)
      */
-    fun loads(text: String): JsonElement = TODO("lane py-sites")
+    class DecodeError(val msg: String, val pos: Int, val lineno: Int, val colno: Int) :
+        IllegalArgumentException("$msg: line $lineno column $colno (char $pos)")
 
-    /** json.dumps(v, indent=, ensure_ascii=, sort_keys=), Python's separators for an indent (",", ": "). */
-    fun dumps(value: JsonElement, indent: Int?, ensureAscii: Boolean = false, sortKeys: Boolean = false): String =
-        TODO("lane py-sites")
+    /**
+     * The most containers [loads] reads, and the dumps write, one inside another: past it, [RecursionError].
+     * Canonical's own bound (caracole.canonical.MAX_DEPTH), so that whatever loads gives can be digested too.
+     *
+     * Python's json raises its RecursionError past what its C stack holds (about 50,000 deep on the computer, the
+     * site parsers reading it as a page that won't parse), a limit of the machine's; the phone's is this, the one
+     * place it answers otherwise than Python: a text nested deeper is no page any site sends, and the dumps (as
+     * every walk of a JsonElement, its toString among them) recurse, a frame or more a container, on a lookup's
+     * thread, whose stack on ART is about 1 MiB.
+     */
+    const val MAX_DEPTH = Canonical.MAX_DEPTH
+
+    /** Python's RecursionError where json nests deeper than [MAX_DEPTH]: an [IllegalArgumentException], as each
+     * site parser catches it beside a [DecodeError]. */
+    class RecursionError(message: String) : IllegalArgumentException(message)
+
+    internal fun tooDeep(doing: String) = RecursionError("maximum nesting depth ($MAX_DEPTH) exceeded while $doing")
+
+    /**
+     * json.loads(text), Python 3.14's with its defaults (PyJsonDecoder): order kept, a duplicate key at its first
+     * place with its last value, NaN and Infinity, big integers (to 4,300 digits), lone-surrogate escapes as UTF-16
+     * units; numbers as literals in Python's int or float form ([float]: `1E2` is `100.0`, `-0` is `0`, `1e400`
+     * `Infinity`). [DecodeError] where Python raises it, with its message; [RecursionError] past [MAX_DEPTH].
+     */
+    fun loads(text: String): JsonElement = PyJsonDecoder(text).decode()
+
+    /** json.loads(bytes), as http.py's Response.json reads an answer: the bytes decoded as json.detect_encoding says
+     * (UTF-8 by default, its BOM dropped), lone surrogates passed, then read as [loads] reads a text. */
+    fun loads(bytes: ByteArray): JsonElement = PyJsonDecoder(PyJsonBytes.decode(bytes), bomCheck = false).decode()
+
+    /**
+     * json.dumps(v, indent=, ensure_ascii=, sort_keys=), byte for byte: with an [indent], each member and item on a
+     * line of its own, [indent] spaces deeper than its container (0 still breaks lines), `,` after each but the last
+     * and `": "` after a key, an empty container as `[]` or `{}`; without one, [dumps]'s `", "` and `": "`.
+     * [ensureAscii] writes every character outside ' '–'~' as `\uXXXX` (lowercase hex, an astral one as its two
+     * surrogates). Numbers as their literals, as [dumps] writes them. A value nested deeper than [MAX_DEPTH] is a
+     * [RecursionError], as it is for [dumps].
+     */
+    fun dumps(value: JsonElement, indent: Int?, ensureAscii: Boolean = false, sortKeys: Boolean = false): String {
+        if (indent == null && !ensureAscii) return dumps(value, sortKeys = sortKeys)
+        val out = StringBuilder()
+        writeIndented(out, value, indent?.let { " ".repeat(maxOf(it, 0)) }, 0, ensureAscii, sortKeys)
+        return out.toString()
+    }
+
+    private fun writeIndented(out: StringBuilder, value: JsonElement, step: String?, level: Int, ascii: Boolean,
+                              sortKeys: Boolean) {
+        fun string(s: String) = if (ascii) quoteAscii(out, s) else JsonText.quote(out, s)
+        fun newline(depth: Int) {
+            if (step == null) return
+            out.append('\n')
+            repeat(depth) { out.append(step) }
+        }
+        val item = if (step == null) ", " else ","
+        if ((value is JsonArray || value is JsonObject) && level >= MAX_DEPTH) throw tooDeep("encoding a JSON object")
+        when (value) {
+            is JsonNull -> out.append("null")
+            is JsonPrimitive -> if (value.isString) string(value.content) else out.append(value.content)
+            is JsonArray -> {
+                if (value.isEmpty()) { out.append("[]"); return }
+                out.append('[')
+                value.forEachIndexed { k, element ->
+                    if (k > 0) out.append(item)
+                    newline(level + 1)
+                    writeIndented(out, element, step, level + 1, ascii, sortKeys)
+                }
+                newline(level)
+                out.append(']')
+            }
+            is JsonObject -> {
+                if (value.isEmpty()) { out.append("{}"); return }
+                out.append('{')
+                val names = if (sortKeys) value.keys.sortedWith(Canonical.KEY_ORDER) else value.keys
+                names.forEachIndexed { k, name ->
+                    if (k > 0) out.append(item)
+                    newline(level + 1)
+                    string(name)
+                    out.append(": ")
+                    writeIndented(out, value.getValue(name), step, level + 1, ascii, sortKeys)
+                }
+                newline(level)
+                out.append('}')
+            }
+        }
+    }
+
+    private const val HEX = "0123456789abcdef"
+
+    /** json.encoder's encode_basestring_ascii: `"` `\\` and the five short escapes, every other UTF-16 unit outside
+     * ' '–'~' as `\\uXXXX`. */
+    private fun quoteAscii(out: StringBuilder, s: String) {
+        out.append('"')
+        for (c in s) {
+            when (c) {
+                '"' -> out.append("\\\"")
+                '\\' -> out.append("\\\\")
+                '\b' -> out.append("\\b")
+                '\u000C' -> out.append("\\f")
+                '\n' -> out.append("\\n")
+                '\r' -> out.append("\\r")
+                '\t' -> out.append("\\t")
+                else -> if (c < ' ' || c > '~') {
+                    val v = c.code
+                    out.append("\\u").append(HEX[v shr 12]).append(HEX[(v shr 8) and 15]).append(HEX[(v shr 4) and 15])
+                        .append(HEX[v and 15])
+                } else {
+                    out.append(c)
+                }
+            }
+        }
+        out.append('"')
+    }
 }
