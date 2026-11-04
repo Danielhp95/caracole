@@ -14,9 +14,9 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   goes there: pushed (``--push``, peer_push.py, as the phone pushes), or asked of the other to pull (``--here``, this
   side's address as the other reaches it), or, with neither, the line to run there. ``--compared HASH`` refuses,
   before any change, a comparison that isn't the one the choices were made on (``peer_sync.compared_hash``: the
-  Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it, or,
-  once one was, without them, as caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), so that a
-  Sync from the tab does what the tab showed. Then it keeps what the two agree on, and the peer's address and name
+  Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it and
+  caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), or, once one was, without them, a comparison
+  made before them, so that a Sync does what was shown. Then it keeps what the two agree on, and the peer's address and name
   (kv ``sync:peer:<id>``,
   ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. ``--progress``: get.py's JSON lines, its stages
   compare, take, give and agree (web/jobs.py ``PEER_SYNC_STAGES``), and ``{"event": "unit", "id", "outcome",
@@ -449,9 +449,9 @@ class _Compared:
         return self.base is not None
 
     def named(self, hash_: str) -> list | None:
-        """The comparison ``hash_`` names (``peer_sync.compared_hash``): this one, or, once an import remembered an
-        answer, the same made without the answers, as caracole serve's Sync tab compares (web/sync_routes.py
-        ``_compared``); None for neither, a comparison the two no longer agree with."""
+        """The comparison ``hash_`` names (``peer_sync.compared_hash``): this one, as caracole serve's Sync tab
+        compares too (web/sync_routes.py ``_compared``), or, once an import remembered an answer, the same made
+        without the answers; None for neither, a comparison the two no longer agree with."""
         from caracole import peer_sync as sync
 
         if sync.compared_hash(self.found) == hash_:
