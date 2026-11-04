@@ -7,7 +7,6 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
-import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
 import io.github.danielhp95.caracole.core.lookup.SiteStage
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
@@ -16,13 +15,15 @@ import io.github.danielhp95.caracole.core.ug.ArtistTabs
 
 /**
  * get.py's match stage (`_Lookup.match`): once, the artist pages the phone's HTTP cache holds kept for searches
- * (`artist_tabs.backfill`, from the cache alone: nothing is sent, no client made, so it runs while UG cools down);
- * then the song matched against the offline index alone (Matcher.matchAll over it, at the lookup's time), and
- * get.py's words for what it came to, read from the song as stored (vectors/match/stage.jsonl). The lookup reads the
- * song again after it.
+ * (`artist_tabs.backfill(conn, CachedAnswers("ug", cfg.cache_dir), overrides)`, from the cache alone: nothing is
+ * sent, no client made, so it runs while UG cools down), which makes `ug_artist_tabs`' keys current first; then the
+ * song matched against the offline index alone (Matcher.matchAll over it, at the lookup's time), and get.py's words
+ * for what it came to, read from the song as stored (vectors/match/stage.jsonl). The lookup reads the song again
+ * after it.
  *
- * The cache is the lookup's clients' (InteractiveAsk's `cacheDir`); a stage asked through another Asking (a test's)
- * has none, and backfills nothing, as Python's backfill does for a client without a cache.
+ * The cache is the lookup's, [StageContext.cacheDir], which the frame gives every stage whatever asking it passes;
+ * a context with none (a test's) makes the keys current alone, as Python's backfill does for a client that reads no
+ * cache.
  */
 object MatchStage : SiteStage {
     /** get.MATCH_NOT_FOUND: how the stage ends for a song the offline index lacks, which the phone's Match step
@@ -30,18 +31,10 @@ object MatchStage : SiteStage {
     const val MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
 
     override fun run(ctx: StageContext): StageEnd {
-        val asking = ctx.asking
-        if (asking is InteractiveAsk) backfill(ctx.db, CachedAnswers("ug", asking.clients.cacheDir))
+        val dir = ctx.cacheDir
+        if (dir != null) ArtistTabs.backfill(ctx.db, CachedAnswers("ug", dir), ctx.overrides, Stamps.of(ctx.now))
+        else ArtistTabs.ensureCurrentKeys(ctx.db)
         return StageEnd("done", matched(ctx.db, ctx.song, ctx.overrides, ctx.config.match, Stamps.of(ctx.now)))
-    }
-
-    /** ArtistTabs.backfill, which only finds tabs for searches: the matcher reads none of them. Until lane ug-pages
-     * fills its declaration (a `TODO`), the stage matches the song without it rather than failing the lookup. */
-    private fun backfill(db: Db, cached: CachedAnswers) {
-        try {
-            ArtistTabs.backfill(db, cached)
-        } catch (_: NotImplementedError) {
-        }
     }
 
     /** The stage after the backfill: the song matched, stored at [now], and get.py's words for it. */

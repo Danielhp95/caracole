@@ -1360,12 +1360,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     found.
   - `IndexView` loads the artist keys, the title keys and the catch-alls' songs whole only once a step reaches them: a
     song steps 1 and 2 settle loads none (MatcherTest).
-  - The lookup's match stage (core/lookup/sites/Match.kt, `MatchStage`): the artist pages' backfill from the lookup's
-    cache alone, then `matchAll` over the song, get.py's words for what it came to.
-  - tests/test_conformance_match.py writes vectors/match/ (test_match.py's cases harvested, a seeded library, the
-    stage), tests/test_conformance_fuzz.py vectors/fuzz/osa*.jsonl and token_set.jsonl: `MatchReplay`.
-  - MatcherBench (`gradle bench`, 1.5 M rows on the JVM): a song its own artist's title settles in 6 ms, one that
-    reaches the title alone in about 0.9 s, what that loads 106 MiB of heap.
+  - A stored candidate may name no step (`MatchCandidate.step` null, as match._stored's `c.get("step")`):
+    `candidatesOf` gives those that name a UG song.
+  - The lookup's match stage (core/lookup/sites/Match.kt, `MatchStage`): `ArtistTabs.backfill` from the lookup's
+    cache alone (`StageContext.cacheDir`, which the frame gives every stage whatever asking it passes; its keys made
+    current first), then `matchAll` over the song, get.py's words for what it came to.
+  - tests/test_conformance_match.py writes vectors/match/ (test_match.py's cases harvested, a few views over keys past
+    U+FFFF, a seeded library, the stage), tests/test_conformance_fuzz.py vectors/fuzz/osa*.jsonl and
+    token_set.jsonl: `MatchReplay`.
+  - MatcherBench (`gradle bench`, 1.5 M rows, its own heap) times one song and its heap; a song that reaches
+    title_only loads every title key, about 100 MiB on the JVM, the phone's to measure.
 - core.lyrics' `Lrclib`, `Megalobiz` and `AzLyrics`: lyrics.py, megalobiz*.py and azlyrics*.py for a lookup's song,
   and their stages, get.py's `_lrclib`, `_megalobiz` and `_azlyrics` (core/lookup/sites/, its words; lane lookup's
   frame puts them together as `_then` does).

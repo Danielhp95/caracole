@@ -2,7 +2,9 @@ package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.http.CachedAnswers
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.py.Py
 
 /**
@@ -121,5 +123,11 @@ object ArtistTabs {
         TODO("lane ug-pages")
     fun keepOnly(db: Db, page: String, kind: String, ids: Collection<Long>, readAt: String): Int = TODO("lane ug-pages")
     fun forget(db: Db, page: String): Unit = TODO("lane ug-pages")
-    fun backfill(db: Db, cached: CachedAnswers): Int = TODO("lane ug-pages")
+    /** backfill(conn, client, overrides), in lane ug-pages' signature; until that lane fills it, the keys made
+     * current alone (Python's first step: what a backfill with nothing cached does) and nothing stored, no kv
+     * record, so that the match stage of every lookup runs it and the real one reads the cache once it lands. */
+    fun backfill(db: Db, cached: CachedAnswers, overrides: Overrides, now: String = Stamps.now()): Int {
+        ensureCurrentKeys(db)
+        return 0
+    }
 }

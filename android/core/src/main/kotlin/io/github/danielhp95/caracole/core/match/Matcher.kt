@@ -84,7 +84,8 @@ object Matcher {
         return changes
     }
 
-    /** The song's stored candidates that name a UG song (match._stored's), as `songs.match_candidates` holds them. */
+    /** The song's stored candidates that name a UG song (match._stored's), as `songs.match_candidates` holds them;
+     * a stored one may name no step ([MatchCandidate.step] null), which a reader takes as todo.py's `c.get("step")`. */
     fun candidatesOf(song: SongRow): List<MatchCandidate> = stored(song).candidates
 
     /** match.match_song: the ladder for one song over [index]. */

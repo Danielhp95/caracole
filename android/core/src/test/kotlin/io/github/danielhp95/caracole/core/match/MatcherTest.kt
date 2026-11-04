@@ -3,25 +3,38 @@ package io.github.danielhp95.caracole.core.match
 import io.github.danielhp95.caracole.core.config.MatchPolicy
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.health.Alerts
+import io.github.danielhp95.caracole.core.http.Draws
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
+import io.github.danielhp95.caracole.core.lookup.Lookup
+import io.github.danielhp95.caracole.core.lookup.LookupRequest
 import io.github.danielhp95.caracole.core.lookup.Pacing
+import io.github.danielhp95.caracole.core.lookup.Progress
+import io.github.danielhp95.caracole.core.lookup.SiteStage
+import io.github.danielhp95.caracole.core.lookup.SiteStages
+import io.github.danielhp95.caracole.core.lookup.SongPages
+import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
 import io.github.danielhp95.caracole.core.lookup.sites.MatchStage
 import io.github.danielhp95.caracole.core.testing.FakeAsking
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
+import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.MatchReplay
+import io.github.danielhp95.caracole.core.ug.ArtistTabs
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -35,6 +48,9 @@ class MatcherTest {
 
     private val policy = MatchPolicy()
     private val now = "2026-11-04T09:30:00Z"
+
+    /** artist_tabs.BACKFILL_KEY, which lane ug-pages' backfill writes once it has read the cache. */
+    private val backfillKey = "ug:artist_tabs:backfill"
 
     private fun replayed(name: String, part: (Misses, Db) -> Unit) {
         val misses = Misses("match: $name")
@@ -135,25 +151,50 @@ class MatcherTest {
         assertEquals(false, stored.ugDirty)
     }
 
-    @Test fun theStageMatchesTheSongAndSaysSoWithNoBackfillOutsideALookup() = db { db ->
+    @Test fun aStageWithNoCacheMakesTheArtistTabsKeysCurrentAloneAndMatches() = db { db ->
         index(db, Triple("radiohead", "creep", "chords"))
         val s = song(db, "Radiohead", "Creep")
+        assertNull(db.kvGet(ArtistTabs.KEYS_KEY))
         val ctx = StageContext(db, s, Overrides(), PhoneConfig.DEFAULTS, LibraryStore(tmp.root), FakeAsking(emptyMap()),
                                Instant.parse(now))
         assertEquals(StageEnd("done", "matched to radiohead/creep"), MatchStage.run(ctx))
         assertEquals(now, Songs.byId(db, s.id)!!.matchedAt)
-        assertNull(db.kvGet("ug:artist_tabs:backfilled"))
+        // backfill's first step, as Python's for a client that reads no cache; no cache read, so no kv record of one.
+        assertEquals(Normalize.KEY_VERSION.toString(), db.kvGet(ArtistTabs.KEYS_KEY))
+        assertNull(db.kvGet(backfillKey))
     }
 
-    @Test fun aLookupsStageBackfillsFromItsCacheAloneThenMatches() = db { db ->
-        index(db, Triple("radiohead", "creep", "chords"))
-        val s = song(db, "Radiohead", "Creep")
-        // The lookup's clients, whose transport refuses every request: the stage sends none, nor makes a client.
-        val clients = Clients(PhoneConfig.DEFAULTS, tmp.newFolder("cache"), { RefusingTransport }, Pacing.REAL)
-        val ctx = StageContext(db, s, Overrides(), PhoneConfig.DEFAULTS, LibraryStore(tmp.root), InteractiveAsk(clients),
-                               Instant.parse(now))
-        assertEquals(StageEnd("done", "matched to radiohead/creep"), MatchStage.run(ctx))
-        assertEquals("accept", Songs.byId(db, s.id)!!.matchDecision)
-        assertEquals(0, db.one("SELECT COUNT(*) FROM events") { it.long(0)!!.toInt() })
+    @Test fun aLookupsMatchStageBackfillsFromItsCacheWhateverAskingTheFrameWrapsTheEnvelopeIn() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { db ->
+                index(db, Triple("radiohead", "creep", "chords"))
+                assertNull(db.kvGet(ArtistTabs.KEYS_KEY))
+                val cache = tmp.newFolder("cache")
+                val at = Instant.parse(now)
+                val pacing = Pacing(sleep = {}, draws = Draws { a, _ -> a }, wallSeconds = { at.epochSecond.toDouble() },
+                                    monotonic = { 0.0 }, clock = { at })
+                // The lookup's clients, whose transport refuses every request: the stage sends none, nor makes a client.
+                val clients = Clients(PhoneConfig.DEFAULTS, cache, { RefusingTransport }, pacing)
+                val seen = ArrayList<StageContext>()
+                val quiet = SiteStage { StageEnd("skipped", "nothing to do") }
+                val stages = SiteStages(SiteStage { ctx -> seen += ctx; MatchStage.run(ctx) }, quiet, quiet, quiet,
+                                        quiet, quiet, quiet, quiet, quiet, quiet, quiet)
+                val progress = object : Progress {
+                    override fun stage(name: String, state: String, detail: String) {}
+                }
+                val result = Lookup(PhoneConfig.DEFAULTS, database, LibraryStore(tmp.newFolder("library")), clients,
+                                    SongPages.NONE, SongbookPages.NONE, Alerts.NONE,
+                                    LookupRequest("Radiohead", "Creep"), progress, pacing, stages,
+                                    readOverrides = { Overrides() }).run(db)
+                assertEquals("done" to "matched to radiohead/creep", result.states["match"] to result.details["match"])
+                // The frame asks through a wrapper of its envelope, never the envelope itself: the cache still comes.
+                val ctx = seen.single()
+                assertFalse(ctx.asking is InteractiveAsk)
+                assertEquals(cache, ctx.cacheDir)
+                assertEquals(Normalize.KEY_VERSION.toString(), db.kvGet(ArtistTabs.KEYS_KEY))
+                assertEquals("accept", Songs.byId(db, result.songId!!)!!.matchDecision)
+                assertEquals(0, db.one("SELECT COUNT(*) FROM events") { it.long(0)!!.toInt() })
+            }
+        }
     }
 }
