@@ -69,6 +69,42 @@ class OverrideWritersTest {
         assertEquals("[version] 'Blur - Song 2': key must be a key as a sheet names it", e.message)
     }
 
+    /**
+     * add_version drops one mark and writes the rest, which overrides.toml's next load reads again: the phone keeps
+     * what that load reads, so a row reads as itself. The vectors hold `##t=2`; Python gives no record of these, as
+     * its add_version writes a file its own load reads otherwise (`###t=2`: `#t=2`, which put_song_entries refuses)
+     * or refuses whole (`##key=H`, whose key add_version never checks).
+     */
+    @Test fun aVersionIsKeptAsTheComputerReadsWhatAddVersionWrites() {
+        val checked = mutableListOf<String>()
+        write { db ->
+            OverrideWriters.addVersion(db, "Radiohead - Creep", "###t=2") { checked += it }
+            OverrideWriters.addVersion(db, "Blur - Song 2", " ##key=Gm&capo=0") { checked += it }
+        }
+        assertEquals(listOf("key=Gm&capo=0"), checked)  // the key the file's load would check, once
+        assertEquals(listOf(listOf("version", "blur/song-2", "Blur - Song 2", "\"key=Gm&capo=0\""),
+                            listOf("version", "radiohead/creep", "Radiohead - Creep", "\"t=2\"")), rows())
+        val before = rows()
+        val e = assertFailsWith<OverridesError> {
+            write { db ->
+                OverrideWriters.addVersion(db, "Blur - Song 2", "##key=H") {
+                    throw IllegalArgumentException("key must be a key as a sheet names it")
+                }
+            }
+        }
+        assertEquals("[version] 'Blur - Song 2': key must be a key as a sheet names it", e.message)
+        assertEquals(before, rows())
+    }
+
+    @Test fun aKeyCheckThatAnswersFalseIsAMistakeThatWritesNothing() {
+        assertFailsWith<IllegalStateException> {
+            write { db -> OverrideWriters.addVersion(db, "Blur - Song 2", "key=H") { false } }
+        }
+        assertEquals(emptyList(), rows())
+        write { db -> OverrideWriters.addVersion(db, "Blur - Song 2", "key=G") { true } }  // any other answer passes
+        assertEquals(listOf(listOf("version", "blur/song-2", "Blur - Song 2", "\"key=G\"")), rows())
+    }
+
     @Test fun aHarmonicaReadingIsCheckedAndTheEntryGoesWithItsLastTab() {
         val checked = mutableListOf<JsonElement>()
         val signs = buildJsonObject { put("as", "signs"); put("*", "bend") }

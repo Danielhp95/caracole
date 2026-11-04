@@ -139,12 +139,17 @@ object OverrideWriters {
     /**
      * overrides.add_version: the song's `[version]` made [query] (a viewer's address, its "#" or "?" left out, or a
      * version kept by its key), or with null taken out. A version kept by its key is checked by [keyVersion],
-     * viewer/version.py's `key_version` (M5's `Versions.keyVersion`, which raises IllegalArgumentException with its
-     * words), as Python checks it.
+     * viewer/version.py's `key_version`: pass M5's `Versions::keyVersion`, which refuses by raising
+     * IllegalArgumentException with its words, as Python's raises ValueError. Its answer is ignored but for false,
+     * which is no refusal but a caller's mistake (a predicate where a check that raises belongs) and fails with
+     * IllegalStateException, writing nothing. What is kept is what the computer reads of what add_version writes
+     * (`Readers.versionAsRead`: `##t=2` kept `t=2`, as song_entries gives it), so the row reads back as given.
      */
     fun addVersion(db: Db, display: String, query: String?, keyVersion: (String) -> Any?) {
         val key = Addresses.overrideKey(display)
-        val value = query?.let { Readers.version(JsonPrimitive(it), "[version] ${PyStr.repr(display)}", keyVersion) }
+        val value = query?.let {
+            Readers.versionAsRead(JsonPrimitive(it), "[version] ${PyStr.repr(display)}", keyVersion)
+        }
         db.savepoint("add_version") {
             if (value == null) Rows.delete(db, "version", key) else setEntry(db, "version", key, display, JsonPrimitive(value))
         }

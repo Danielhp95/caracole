@@ -92,6 +92,11 @@ data class Overrides(
          * viewer/harptab.py's `check_spec` (M5's, each raising IllegalArgumentException with its words): a
          * `[version]` kept by its key and a `[harmonica]` reading are checked by them when given, as Python reads
          * them, and trusted otherwise (every writer of the phone checked them).
+         *
+         * Python derives each entry's key from its written name at every load, so a `normalize.KEY_VERSION` bump
+         * re-keys the computer's overrides by itself; the phone reads the key the row keeps, and so relies on
+         * `LibraryStore.ensureCurrentKeys` re-keying `phone_overrides` from each row's written name in the same
+         * bump (the KEY_VERSION lockstep), which M3's re-keying does not do yet.
          */
         fun read(db: Db, keyVersion: ((String) -> Any?)? = null,
                  checkSpec: ((JsonElement) -> Unit)? = null): Overrides {

@@ -76,7 +76,28 @@ internal object Readers {
      * [keyVersion] (viewer/version.py's `key_version`, which raises IllegalArgumentException with its words) when one
      * is given.
      */
-    fun version(value: JsonElement, where: String, keyVersion: ((String) -> Any?)?): String {
+    fun version(value: JsonElement, where: String, keyVersion: ((String) -> Any?)?): String =
+        versionText(value, where).also { checkKey(it, where, keyVersion) }
+
+    /**
+     * What the computer reads of the `[version]` text overrides.add_version writes for [value]: overrides._version's
+     * text, read by it again until it reads as itself, each new text's key checked by [keyVersion] as load_overrides
+     * checks it. add_version drops one mark and writes the rest, which its next load reads again: `##t=2` is written
+     * `#t=2` and read `t=2` (song_entries' value), `# t=2` written ` t=2` and read `t=2`, and `##key=H`, whose key
+     * add_version never sees, is refused here as Python's next load refuses the file. So a row reads as itself, and
+     * the computer's put_song_entries takes it back as given.
+     */
+    fun versionAsRead(value: JsonElement, where: String, keyVersion: ((String) -> Any?)?): String {
+        var text = version(value, where, keyVersion)
+        while (true) {
+            val again = versionText(JsonPrimitive(text), where)
+            if (again == text) return text
+            checkKey(again, where, keyVersion)
+            text = again
+        }
+    }
+
+    private fun versionText(value: JsonElement, where: String): String {
         var text = PyValues.text(value)?.let(PyText::strip)
         if (text != null && (text.startsWith("#") || text.startsWith("?"))) text = text.substring(1)
         val readable = text != null && Py.len(text) <= VERSION_MAX && !control(text) &&
@@ -85,14 +106,22 @@ internal object Readers {
             throw OverridesError("$where: expected a version as the sheet's viewer writes it in its address " +
                                      "(\"$VERSION_SHAPE\"), got ${PyValues.repr(value)}")
         }
-        if (keyVersion != null && text!!.split('&').any { it.substringBefore('=') == "key" }) {
-            try {
-                keyVersion(text)
-            } catch (e: IllegalArgumentException) {
-                throw OverridesError("$where: ${e.message}")
-            }
-        }
         return text!!
+    }
+
+    /** _version's key check: a text that names a `key` checked by [keyVersion], whose IllegalArgumentException is
+     * the OverridesError Python's ValueError becomes. It refuses by raising, as key_version does: an answer of false
+     * is a caller's mistake, never a check passed, and fails loudly rather than letting a bad key be written. */
+    private fun checkKey(text: String, where: String, keyVersion: ((String) -> Any?)?) {
+        if (keyVersion == null || text.split('&').none { it.substringBefore('=') == "key" }) return
+        val answer = try {
+            keyVersion(text)
+        } catch (e: IllegalArgumentException) {
+            throw OverridesError("$where: ${e.message}")
+        }
+        check(answer != false) {
+            "keyVersion refuses by raising IllegalArgumentException with key_version's words, never by answering false"
+        }
     }
 
     /**

@@ -545,6 +545,11 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_ignore", "no song named", {"display": "Song 2"}),
     # add_version
     ("add_version", "a new song's, its # dropped", {"display": "Blur - Song 2", "query": "  #t=2&mode=dorian  "}),
+    # Two marks: add_version drops one and writes "#t=2", which the file then reads as "t=2" (song_entries' value).
+    ("add_version", "two marks: the text the file then reads", {"display": "Blur - Song 2", "query": "##t=2"}),
+    ("add_version", "a mark, then a space", {"display": "Blur - Song 2", "query": "# t=2"}),
+    ("add_version", "a ? then a #", {"display": "Blur - Song 2", "query": "?#t=2"}),
+    ("add_version", "the same again, two marks before it", {"display": "Radiohead - Creep", "query": "##t=1"}),
     ("add_version", "the song written another way: its name kept", {"display": "Radiohead - Creep", "query": "?t=3"}),
     ("add_version", "the same again", {"display": "Radiohead - Creep", "query": "t=1"}),
     ("add_version", "kept by its key", {"display": "Blur - Song 2",
