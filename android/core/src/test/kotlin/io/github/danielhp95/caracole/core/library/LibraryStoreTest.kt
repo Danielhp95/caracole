@@ -1,11 +1,11 @@
 package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
 import io.github.danielhp95.caracole.core.library.internal.Removal
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.Upsert
 import io.github.danielhp95.caracole.core.sync.UnitError
 import io.github.danielhp95.caracole.core.testing.Corpus
@@ -68,7 +68,8 @@ class LibraryStoreTest {
         for (r in records) {
             val got = Stamps.parse(text(r.args[0]))
             val want = r.out as? JsonObject
-            assertEquals(want?.let { text(it["iso"]) to text(it["stamp"]) }, got?.let { it.iso to it.stamp },
+            assertEquals(want?.let { text(it["iso"]) to text(it["stamp"]) },
+                         got?.let { Stamps.isoformat(it) to Stamps.stamp(it) },
                          "stamps.parse(${r.args[0]})")
         }
     }

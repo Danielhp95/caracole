@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.search.Queries
 import io.github.danielhp95.caracole.core.search.SearchLimits
 import io.github.danielhp95.caracole.core.search.SiteHit
+import io.github.danielhp95.caracole.core.search.internal.ug.UgHits
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -111,8 +112,8 @@ internal object SiteText {
         PyUnicode.upper(Py.slice(it, 0, 1)) + Py.slice(it, 1, null)
     }
 
-    /** search.no_ones: an artist key that is no one's name, every `misc-…` of UG's. */
-    fun noOnes(artistKey: String): Boolean = artistKey.startsWith(SearchLimits.CATCH_ALL_PREFIX)
+    /** search.no_ones: an artist key that is no one's name, every `misc-…` of UG's (UgHits.noOnes). */
+    fun noOnes(artistKey: String): Boolean = UgHits.noOnes(artistKey)
 
     /** search.py `_listed_names`: the names of a JSON array gametabs_game_tabs keeps; none of anything else, nor of
      * a text json.loads refuses (Canonical.parse reads what it reads, and nothing more). */

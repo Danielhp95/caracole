@@ -21,6 +21,10 @@ object Normalize {
     /** normalize.KEY_VERSION: a bump re-keys the phone's songs too (LibraryStore.ensureCurrentKeys). */
     const val KEY_VERSION = 2
 
+    /** normalize.PINYIN_PARTIAL_SCALE: a part of a name matched in pinyin tops out at 85 (short syllables are no
+     * proof), never a strong hit; search.py's `_Query` and lacuerda_index.py's scale one by it. */
+    const val PINYIN_PARTIAL_SCALE = 0.85
+
     // --- folds and slug keys ---------------------------------------------------------------------------------------
 
     /** Lowercase, strip accents and transliterate letters NFKD can't decompose. */
