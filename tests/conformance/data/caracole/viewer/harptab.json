@@ -1,0 +1,672 @@
+{
+ "TAB_STOP": 8,
+ "HOLE_SHARE": 0.75,
+ "MISSED_SHARE": 0.4,
+ "REACH": 3,
+ "MAX_CUTS": 20000,
+ "TAB_Q": 0.5,
+ "MARGIN": 0.05,
+ "ROW_TRUST": 0.5,
+ "LEGEND_WEIGHT": 0.2,
+ "ABOVE_LEAD": 2.0,
+ "ABOVE_SHARE": 0.16666666666666666,
+ "BREATHS": [
+  "blow",
+  "draw"
+ ],
+ "EFFECTS": [
+  "hold",
+  "wah",
+  "vibrato",
+  "shake",
+  "trill",
+  "glissando",
+  "staccato"
+ ],
+ "MEANINGS": [
+  "blow",
+  "draw",
+  "bend",
+  "over",
+  "slide",
+  "join",
+  "together",
+  "mark",
+  "hold",
+  "wah",
+  "vibrato",
+  "shake",
+  "trill",
+  "glissando",
+  "staccato"
+ ],
+ "PLACES": [
+  "before",
+  "after",
+  "around",
+  "between"
+ ],
+ "PRESETS": [
+  {
+   "name": "signs",
+   "symbols": [
+    [
+     "-",
+     "draw",
+     "before",
+     1
+    ],
+    [
+     "−",
+     "draw",
+     "before",
+     1
+    ],
+    [
+     "–",
+     "draw",
+     "before",
+     1
+    ],
+    [
+     "+",
+     "blow",
+     "before",
+     1
+    ],
+    [
+     "b",
+     "bend",
+     "before",
+     1
+    ],
+    [
+     "<",
+     "slide",
+     "before",
+     1
+    ],
+    [
+     "'",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "’",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "`",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "b",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "\"",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "”",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "o",
+     "over",
+     "after",
+     1
+    ],
+    [
+     "<",
+     "slide",
+     "after",
+     1
+    ],
+    [
+     "*",
+     "slide",
+     "after",
+     1
+    ]
+   ],
+   "bare": "blow",
+   "fold": false
+  },
+  {
+   "name": "brackets",
+   "symbols": [
+    [
+     "+",
+     "blow",
+     "before",
+     1
+    ],
+    [
+     "()",
+     "draw",
+     "around",
+     1
+    ],
+    [
+     "'",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "’",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "b",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "\"",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "”",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "-",
+     "join",
+     "between",
+     1
+    ]
+   ],
+   "bare": "blow",
+   "fold": false
+  },
+  {
+   "name": "letters",
+   "symbols": [
+    [
+     "b",
+     "blow",
+     "after",
+     1
+    ],
+    [
+     "d",
+     "draw",
+     "after",
+     1
+    ],
+    [
+     "*",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "'",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "’",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "\"",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "”",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "-",
+     "join",
+     "between",
+     1
+    ],
+    [
+     ",",
+     "together",
+     "between",
+     1
+    ]
+   ],
+   "bare": null,
+   "fold": true
+  },
+  {
+   "name": "signs after",
+   "symbols": [
+    [
+     "+",
+     "blow",
+     "after",
+     1
+    ],
+    [
+     "-",
+     "draw",
+     "after",
+     1
+    ],
+    [
+     "−",
+     "draw",
+     "after",
+     1
+    ],
+    [
+     "–",
+     "draw",
+     "after",
+     1
+    ],
+    [
+     "'",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "’",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "\"",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "”",
+     "bend",
+     "after",
+     2
+    ]
+   ],
+   "bare": "blow",
+   "fold": false
+  },
+  {
+   "name": "barrett",
+   "symbols": [
+    [
+     "+",
+     "blow",
+     "after",
+     1
+    ],
+    [
+     "'",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "’",
+     "bend",
+     "after",
+     1
+    ],
+    [
+     "\"",
+     "bend",
+     "after",
+     2
+    ],
+    [
+     "”",
+     "bend",
+     "after",
+     2
+    ]
+   ],
+   "bare": "draw",
+   "fold": false
+  }
+ ],
+ "DOTS": [
+  ".",
+  "hold",
+  "after",
+  1
+ ],
+ "STAR_BENDS": {
+  "name": "signs",
+  "symbols": [
+   [
+    "-",
+    "draw",
+    "before",
+    1
+   ],
+   [
+    "−",
+    "draw",
+    "before",
+    1
+   ],
+   [
+    "–",
+    "draw",
+    "before",
+    1
+   ],
+   [
+    "+",
+    "blow",
+    "before",
+    1
+   ],
+   [
+    "b",
+    "bend",
+    "before",
+    1
+   ],
+   [
+    "<",
+    "slide",
+    "before",
+    1
+   ],
+   [
+    "'",
+    "bend",
+    "after",
+    1
+   ],
+   [
+    "’",
+    "bend",
+    "after",
+    1
+   ],
+   [
+    "`",
+    "bend",
+    "after",
+    1
+   ],
+   [
+    "b",
+    "bend",
+    "after",
+    1
+   ],
+   [
+    "\"",
+    "bend",
+    "after",
+    2
+   ],
+   [
+    "”",
+    "bend",
+    "after",
+    2
+   ],
+   [
+    "o",
+    "over",
+    "after",
+    1
+   ],
+   [
+    "<",
+    "slide",
+    "after",
+    1
+   ],
+   [
+    "*",
+    "bend",
+    "after",
+    1
+   ]
+  ],
+  "bare": "blow",
+  "fold": false
+ },
+ "_NUM": "(?:10|[1-9])",
+ "_KINDS": {
+  "(": "chord",
+  "{": "shake",
+  "[": "split"
+ },
+ "_SIGNS": "+-−–",
+ "_CLOSE": {
+  "(": "()",
+  "[": "[]",
+  "{": "{}"
+ },
+ "_LABEL_WORD": "(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|estrofa)\\b",
+ "PIN_NAMES": [
+  "signs",
+  "brackets",
+  "letters",
+  "signs after",
+  "barrett",
+  "legend"
+ ],
+ "_PIN_WORDS": {
+  "blow": [
+   "blow",
+   1
+  ],
+  "draw": [
+   "draw",
+   1
+  ],
+  "bend": [
+   "bend",
+   1
+  ],
+  "over": [
+   "over",
+   1
+  ],
+  "slide": [
+   "slide",
+   1
+  ],
+  "join": [
+   "join",
+   1
+  ],
+  "together": [
+   "together",
+   1
+  ],
+  "mark": [
+   "mark",
+   1
+  ],
+  "hold": [
+   "hold",
+   1
+  ],
+  "wah": [
+   "wah",
+   1
+  ],
+  "vibrato": [
+   "vibrato",
+   1
+  ],
+  "shake": [
+   "shake",
+   1
+  ],
+  "trill": [
+   "trill",
+   1
+  ],
+  "glissando": [
+   "glissando",
+   1
+  ],
+  "staccato": [
+   "staccato",
+   1
+  ],
+  "double bend": [
+   "bend",
+   2
+  ],
+  "triple bend": [
+   "bend",
+   3
+  ],
+  "overblow": [
+   "over",
+   1
+  ],
+  "joins": [
+   "join",
+   1
+  ]
+ },
+ "_SAY": {
+  "over": "overblow",
+  "join": "joins"
+ },
+ "_ORDER": [
+  "bare",
+  "before",
+  "around",
+  "after",
+  "between"
+ ],
+ "_VOWELS": "AEIOUYaeiouyÀÁÄÈÉËÌÍÏÒÓÖÙÚÜàáäèéëìíïòóöùúü",
+ "_DIGRAPHS": [
+  "ch",
+  "ck",
+  "gh",
+  "ng",
+  "ph",
+  "qu",
+  "sh",
+  "th",
+  "wh"
+ ],
+ "patterns": {
+  "_DECOR": "(?i)-{2,}|_+|\\.{2,}|~+|\\|+|\\^|\\*|,|;|/|\\\\|:|\\(x\\s?\\d+\\)|x\\s?\\d+\\b|\\(\\d+x\\)|\\b\\d+x\\b|\\(hold\\)|hold\\b|>|=",
+  "_HOLD": "(?i)-{2,}|\\.{2,}|_+|\\(hold\\)|hold",
+  "_TIME": "(?<![\\w/:.+−–-])\\d{1,2}(?:[/:]\\d{1,4})+(?![\\w/:])",
+  "_ASIDE": "\\((?P<body>[^()]*)\\)",
+  "_DOT_BEFORE": "(?<![.\\w])\\.[ \\t]*[-+−–]?(?:10|[1-9])(?!\\d)",
+  "_LEAD_LABEL": "^\\s*(?P<label>\\(?[A-Za-z][A-Za-z ]{0,14}(?:\\d{1,2})?\\)?)\\s*[:;]+\\s*",
+  "_LABEL_WORDS": "(?i)^\\W*(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|estrofa)\\b",
+  "_LABEL_REST": "(?i)(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|estrofa)\\b|\\b(?:x\\s?\\d+|\\d+x|\\d+)\\b|[^\\w]",
+  "_CHORUS": "(?i)chorus|coro|estribillo|refr[aeá]i?n",
+  "_URL": "(?i)https?://|www\\.",
+  "_INSTRUCTION": "(?i)^\\W*(?:listen|repeat|play|tabbed|tab by|for the|enjoy|note|thanks|thank you|same|then|watch|check|words and music|written by|by\\b|next verses|rest of)",
+  "_WORD": "\\S+",
+  "_LEGEND_LINE": "^\\s*(?P<sym>\\([^()\\s]{1,8}\\)\\S{0,3}|[^\\s=:]{1,8}?)\\s*(?P<sep>=>|->|=|:|\\s[-–—]\\s|\\s{2,})\\s*(?P<meaning>\\S.*?)\\s*$",
+  "_PLACEHOLDER": "(?i)n[uú]mero|##?#?|(?<![a-z])x(?![a-z])|(?<![a-z])N(?![a-z])|10|[1-9]",
+  "_TWO": "(?i)whole|double|two|dos\\b|2",
+  "_THREE": "(?i)1[.,]5|and a half|three|tres\\b|3",
+  "_BRACKET": "(?P<open>[(\\[{])(?P<body>[^()\\[\\]{}]*?)(?P<close>[)\\]}])",
+  "_SEPARATOR": "[\\s,]*",
+  "_VOWEL_RUN": "[aeiouyøæåœ]+"
+ },
+ "_CHIPS": {
+  "Diatonic": "(?i)\\bdiatonic\\b",
+  "Chromatic": "(?i)\\bchromatic\\b"
+ },
+ "_KEY_PATTERNS": [
+  "\\b([A-G](?:b|#|♭|♯)?)\\s*[- ]?(?:harp|harmonica|harmonika)\\b",
+  "(?i:harp|harmonica|armonica|armónica)\\s*(?i:en|in|de|key(?: of)?|:)?\\s*([A-G](?:b|#|♭|♯)?)(?![\\w#♯♭])"
+ ],
+ "_LEXICON": [
+  [
+   "blow",
+   "(?i)(?<![^\\W\\d_])(?:blow|blown|blowing|exhale\\w*|soplar|sopla|soplo|soplad[oa]s?|blasen|geblasen|souffl\\w*)(?![^\\W\\d_])"
+  ],
+  [
+   "draw",
+   "(?i)(?<![^\\W\\d_])(?:draw|drawn|drawing|inhale\\w*|suck|aspirar|aspira|aspirad[oa]s?|inspirar|ziehen|gezogen)(?![^\\W\\d_])"
+  ],
+  [
+   "bend",
+   "(?i)(?<![^\\W\\d_])(?:bend|bends|bent|bending)(?![^\\W\\d_])"
+  ],
+  [
+   "over",
+   "(?i)(?<![^\\W\\d_])(?:overblow\\w*|overdraw\\w*|over-blow\\w*|over-draw\\w*)(?![^\\W\\d_])"
+  ],
+  [
+   "slide",
+   "(?i)(?<![^\\W\\d_])(?:slide|button)(?![^\\W\\d_])"
+  ],
+  [
+   "hold",
+   "(?i)(?<![^\\W\\d_])(?:hold|held|extend\\w*|sustain\\w*|larg[oa])(?![^\\W\\d_])"
+  ],
+  [
+   "wah",
+   "(?i)(?<![^\\W\\d_])(?:wah?)(?![^\\W\\d_])"
+  ],
+  [
+   "vibrato",
+   "(?i)(?<![^\\W\\d_])(?:vibrato|tremolo)(?![^\\W\\d_])"
+  ],
+  [
+   "shake",
+   "(?i)(?<![^\\W\\d_])(?:shake|headshake|warble)(?![^\\W\\d_])"
+  ],
+  [
+   "trill",
+   "(?i)(?<![^\\W\\d_])(?:trill|trino)(?![^\\W\\d_])"
+  ],
+  [
+   "together",
+   "(?i)(?<![^\\W\\d_])(?:chord|together)(?![^\\W\\d_])"
+  ],
+  [
+   "join",
+   "(?i)(?<![^\\W\\d_])(?:ligad[oa]|slur|legato)(?![^\\W\\d_])"
+  ],
+  [
+   "glissando",
+   "(?i)(?<![^\\W\\d_])(?:glissando|glisando|gliss)(?![^\\W\\d_])"
+  ],
+  [
+   "staccato",
+   "(?i)(?<![^\\W\\d_])(?:staccato)(?![^\\W\\d_])"
+  ],
+  [
+   "mark",
+   "(?i)(?<![^\\W\\d_])(?:bar|rest|repeat|whole note|half note|quarter note|eighth note|sixteenth note|note length)(?![^\\W\\d_])"
+  ]
+ ]
+}

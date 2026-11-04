@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
+import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -17,11 +18,12 @@ data class StoredSongbook(val key: String, val name: String, val songs: JsonArra
 /**
  * songbooks.toml on the phone: table phone_songbooks (phone.sql), a row a songbook, `(key, name, songs, position)`:
  * its [nameKey] when it was written, its name as written, the canonical text of its songs, and its place among the
- * others. The writer is called inside Database.write.
+ * others. The writers are called inside Database.write: [put], a sync's take (songbook.put_songbook), and the rows'
+ * own, which core.songbooks.Songbooks's writers call once they have checked what songbook.py checks.
  *
  * A songbook is found by its name's key computed now (songbook.find_songbook's `name_key(b.name) == key`), never by
  * the key stored beside it alone, so the units ([byKey], and Units.libraryState's `songbook/<name key>`) stay
- * Python's should PyUnicode's tables ever move; [put] then writes the key afresh.
+ * Python's should PyUnicode's tables ever move; each writer then writes the key afresh.
  */
 object SongbookStore {
     /** The parts a song's setting in a songbook has (songbook.check_setting's), in song_value's order. */
@@ -36,30 +38,56 @@ object SongbookStore {
 
     /**
      * songbook.put_songbook: make the songbook [name] hold [songs], found by its name in any case ([nameKey]) and
-     * written under [name], in its place when it is there, else after the others; null takes it out.
+     * written under its name as kept (Songbooks.checkName's), in its place when it is there, else after the others;
+     * null takes it out. The same name and songs again write nothing; else no other songbook may have its name or
+     * its folder (Songbooks.checkFree), so a take leaves a unit that would make two songbooks of one folder, as the
+     * computer's does. Its refusals are SongbookErrors in songbook.py's words, and nothing is written.
      *
      * Each song is `[entry text, parts]`, and its parts are kept as songbook_value gives them back: only the key,
      * the mode, the capo and the instrument that say something (a null part is none), so what is stored is what a
-     * songbook unit's value holds. An entry that isn't a text and an object of those parts is refused
-     * (IllegalArgumentException, as check_setting refuses an unknown part), and nothing is written.
+     * songbook unit's value holds. The name is checked first, as put_songbook checks it; then an entry that isn't
+     * a text and an object of those parts is refused (IllegalArgumentException). A take checks each song's setting
+     * itself before it puts the songbook (Take.takeSongbook, as peer_sync._apply calls check_setting first), so a
+     * unit with a bad name and a bad setting is left for its setting there, as on the computer.
      */
     fun put(db: Db, name: String, songs: JsonArray?) {
-        val key = nameKey(name)
-        val held = all(db).firstOrNull { nameKey(it.name) == key }
-        if (songs == null) {
-            if (held != null) db.execute("DELETE FROM phone_songbooks WHERE key = ?", held.key)
+        val clean = Songbooks.checkName(name)
+        val text = songs?.let { Canonical.write(JsonArray(it.map(::entry))) }
+        val key = nameKey(clean)
+        val books = all(db)
+        val at = books.indexOfFirst { nameKey(it.name) == key }
+        val held = books.getOrNull(at)
+        if (text == null) {
+            if (held != null) drop(db, held)
             return
         }
-        val text = Canonical.write(JsonArray(songs.map(::entry)))
+        if (held != null && held.name == clean && Canonical.write(held.songs) == text) return
+        Songbooks.checkFreeOf(books.map { it.name }, clean, at)
         if (held == null) {
             db.execute(
                 "INSERT INTO phone_songbooks (key, name, songs, position) " +
                     "VALUES (?, ?, ?, (SELECT COALESCE(MAX(position) + 1, 0) FROM phone_songbooks))",
-                key, name, text,
+                key, clean, text,
             )
         } else {
-            db.execute("UPDATE phone_songbooks SET key = ?, name = ?, songs = ? WHERE key = ?", key, name, text, held.key)
+            db.execute("UPDATE phone_songbooks SET key = ?, name = ?, songs = ? WHERE key = ?", key, clean, text, held.key)
         }
+    }
+
+    /** The songbook [held] holding [songs] (each `[entry text, parts]` as stored) in its place, under its name. */
+    internal fun replace(db: Db, held: StoredSongbook, songs: JsonArray) {
+        db.execute("UPDATE phone_songbooks SET key = ?, name = ?, songs = ? WHERE key = ?", nameKey(held.name),
+                   held.name, Canonical.write(JsonArray(songs.map(::entry))), held.key)
+    }
+
+    /** The songbook [held] under [name], in its place, its songs as they are. */
+    internal fun rename(db: Db, held: StoredSongbook, name: String) {
+        db.execute("UPDATE phone_songbooks SET key = ?, name = ? WHERE key = ?", nameKey(name), name, held.key)
+    }
+
+    /** The songbook [held] taken out. */
+    internal fun drop(db: Db, held: StoredSongbook) {
+        db.execute("DELETE FROM phone_songbooks WHERE key = ?", held.key)
     }
 
     /** The songbook whose name's key is [key] now, or null. */

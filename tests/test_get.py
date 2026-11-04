@@ -1106,10 +1106,12 @@ def test_a_songbook_that_cant_be_made_is_said_and_the_lookups_sheet_stands(cfg, 
 
     from helpers.songbooks import FakeChordPro
 
-    # chordpro fails in the songbook's folder alone (its input holds Creep's sheet); the song's own PDF is made
+    # chordpro fails in the songbook's folder alone (its input holds Creep's sheet); the song's own PDF is made. The
+    # songbook's folder is songbook.py's private_dir under the cache, never a checkout's path that holds "/songbook-"
     songbook_fails, other = FakeChordPro(fail=("Creep",)), FakeRunner()
+    songbooks_work = str(cfg.cache_dir / "songbook-")
     result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep",
-                               runner=lambda cmd, **kw: (songbook_fails if "/songbook-" in " ".join(cmd) else other)(
+                               runner=lambda cmd, **kw: (songbook_fails if songbooks_work in " ".join(cmd) else other)(
                                    cmd, **kw))
 
     state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
