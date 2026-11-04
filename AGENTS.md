@@ -1249,7 +1249,8 @@ Not built yet. (job-views, requests-feed.)
   `shown`, `drawnLines`, `writtenTexts`, `peek`, `places`, `played`, `songKey` and `viewerKey`, `givenShapes` and
   `shapesOf`), `ChordPro` (chordpro.py, with render.py's `chordProText`, `asLatin` and `needsFontFile` and
   ug/page.py's `decodeTwice`) and `MusicKeys` (keys.py: `sheetKey`, `sheetKeys`, `songKey` and `letterAlone` over the
-  phone's `files` and `versions`, each file read only as a regular file, never through a link; `SongKey`).
+  phone's `files` and `versions` as core.library reads them, `Kept.keptFiles` and `Versions.get`, each file read only
+  as a regular file, never through a link; `SongKey`).
   - Their constants and patterns exported from the modules by tests/test_conformance_viewer_sheet.py into
     data/caracole/viewer/sheet.json, a member a module, never retyped; Python's lines, whitespace and lengths
     throughout (str.splitlines, str.isspace, code points, a chord's column a display column), never Kotlin's trim or

@@ -2,6 +2,9 @@ package io.github.danielhp95.caracole.viewer.sheet
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.Kept
+import io.github.danielhp95.caracole.core.library.KeptFile
+import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyFloat
 import io.github.danielhp95.caracole.core.py.PyRe
@@ -266,23 +269,13 @@ object MusicKeys {
         return "${spelled ?: MINOR_NAMES[read.tonic]} minor"
     }
 
-    /** A kept file's row (library.KeptFile's fields song_key reads). */
-    private class Kept(val versionId: Long, val name: String, val path: String)
+    /** `{f.name: f for f in kept_files(conn, song.id)}`: the song's kept files by name (core.library's). */
+    private fun kept(db: Db, songId: Long): Map<String, KeptFile> = Kept.keptFiles(db, songId).associateBy { it.name }
 
-    private fun kept(db: Db, songId: Long): Map<String, Kept> {
-        val out = LinkedHashMap<String, Kept>()
-        db.query("SELECT version_id, name, path FROM files WHERE song_id = ? ORDER BY name", songId) {
-            Kept(it.long(0)!!, it.text(1)!!, it.text(2)!!)
-        }.forEach { out[it.name] = it }
-        return out
-    }
-
-    /** versions.get_version(...).raw: a version's data, `{}` for none; NoSuchElementException for no version. */
-    private fun raw(db: Db, versionId: Long): JsonObject {
-        val text = db.one("SELECT raw FROM versions WHERE id = ?", versionId) { it.text(0) ?: "" }
-            ?: throw NoSuchElementException("no version with id $versionId")
-        return PyJson.loads(text.ifEmpty { "{}" }) as? JsonObject ?: JsonObject(emptyMap())
-    }
+    /** versions.get_version(...).raw: a version's data (core.library's), `{}` for none; NoSuchElementException where
+     * Python raises KeyError, no version of that id. */
+    private fun raw(db: Db, versionId: Long): JsonObject =
+        (Versions.get(db, versionId) ?: throw NoSuchElementException("no version with id $versionId")).raw
 
     /** song_key: the song's key from the sheets it keeps, and its source; null without a sheet, or when no source
      * gives one: the human sheet's key, else the auto sheet's. Sheets are read from the library only as regular
@@ -299,7 +292,7 @@ object MusicKeys {
         return humanKey(db, libraryDir, kept) to autoKey(db, libraryDir, kept)
     }
 
-    private fun humanKey(db: Db, libraryDir: File, kept: Map<String, Kept>): SongKey? {
+    private fun humanKey(db: Db, libraryDir: File, kept: Map<String, KeptFile>): SongKey? {
         val human = kept[HUMAN_SHEET] ?: return null
         val raw = raw(db, human.versionId)
         val named = namedIn(raw)
@@ -321,7 +314,7 @@ object MusicKeys {
         return if (named != null && named.second) named.first else null
     }
 
-    private fun autoKey(db: Db, libraryDir: File, kept: Map<String, Kept>): SongKey? {
+    private fun autoKey(db: Db, libraryDir: File, kept: Map<String, KeptFile>): SongKey? {
         val auto = kept[AUTO_SHEET] ?: return null
         namedIn(raw(db, auto.versionId), "key")?.let { return SongKey(it.first, "audio") }
         val text = text(File(libraryDir, auto.path)) ?: return null
@@ -337,7 +330,7 @@ object MusicKeys {
 
     /** _markup: the human sheet's markup and its capo: the `content` of the sheet.json kept with it (of its own
      * version), and the capo in its `meta` ([sheetCapo]). Whatever the file holds gives null at worst. */
-    private fun markup(libraryDir: File, doc: Kept?, sheet: Kept): Pair<String?, Int?> {
+    private fun markup(libraryDir: File, doc: KeptFile?, sheet: KeptFile): Pair<String?, Int?> {
         if (doc == null || doc.versionId != sheet.versionId) return null to null
         val bytes = regularBytes(File(libraryDir, doc.path)) ?: return null to null
         val text = PyText.utf8(bytes) ?: return null to null
