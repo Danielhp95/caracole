@@ -5757,7 +5757,10 @@ your home database's indexes into a service's, see
 
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
     caracole peer sync ADDRESS [--here ADDRESS | --push] [--prefer here|there] [--choose SIDE:ID]...
-                               [--compared HASH] [--progress] [--yes]
+                               [--compared HASH] [--parts PARTS] [--progress] [--yes]
+    caracole peer export FILE [--parts PARTS]                  # this library in a .caracole file
+    caracole peer import SOURCE [--prefer here|there] [--choose SIDE:ID]... [--compared HASH] [--parts PARTS]
+                                [--progress] [--yes]           # a sync with such a file
     caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
     caracole peer take [--progress] DIR                        # a push caracole serve staged (it queues this)
     caracole peer new-id                                       # for a database copied from another caracole's
@@ -5901,6 +5904,74 @@ left as it is. Then the sync keeps what the two agree on, stamped by the other s
 address and name, which caracole serve's Sync tab lists. A unit left doesn't fail the sync (exit 0): it says why.
 **`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
 for caracole serve.
+
+### Export and import: peer export, peer import
+
+**`caracole peer export FILE`** writes this library to one file, to give to another caracole (a friend's, the
+phone's), to keep, or to carry where the two can't reach each other: `caracole peer export ~/tabs.caracole`, or a
+folder (`caracole peer export ~/Downloads`), where it is named for the library and the day,
+`horde_logbook-03-11-26.caracole`. `--parts` says what it holds, by commas:
+
+- **library** (with songbooks, the default): every song (its line, versions, kept files, lyrics and overrides.toml
+  entries), removal, alias, artist's UG page and blocked tab, and the pages caracole made of the songs (their sheets'
+  pages and PDFs, as the phone's app copies them), so that a phone that takes a song from it opens its sheet;
+- **songbooks**: every songbook, and the songs they list, even without the library;
+- **indexes** (`--parts library,songbooks,indexes`): the site indexes, as `caracole index export` writes them
+  (hundreds of MB).
+
+It reads the library in one go, takes no lock, waits for nothing and writes over no file, then says what it wrote. A
+song a kept file of which changed since caracole kept it (edited on a synced device), or is bigger than 64 MiB, is
+left out, and said with why; without the library page as caracole last wrote it the file holds no pages (`caracole
+todo` writes it again), and a page caracole rewrites as the file is made is left out. Everything
+caracole keeps goes in it, what harptabs.com, gametabs.net and AZLyrics gave included: it is yours to share as you
+like (your choice of 2026-11-03), and caracole sends it nowhere.
+
+The file is a zip (format 1) of what a sync reads from the other side: its manifest (`caracole.json`: the library's
+id and name, when it was made, its parts), the state and each unit's document as `GET /api/peer/state` and `GET
+/api/peer/unit` give them, what that caracole last agreed on with each other, the kept files and the pages, each by its
+SHA-256 and each once (a page that is a kept file, a song's sheet.txt, is held as the kept file), and the indexes.
+
+**`caracole peer import SOURCE`** syncs this library with such a file, as if the caracole that exported it were here:
+it compares the two, takes what changed there, and keeps what the two agree on, so that the next file from that
+caracole, or a sync with it over the network, shows only what changed since. A file takes nothing back: what changed
+here stays here (export a file of your own to give it). Its steps, as `--progress` names them:
+
+1. **check**: the file read whole, every part of it checked, then compared. Refused before anything changes (exit 2):
+   something that isn't a file caracole exported; a file of another version of caracole; one cut short, damaged or
+   holding anything else ("That file can't be read whole (…): export it again."); this library's own export ("a
+   library takes nothing from itself": `caracole backup` keeps copies to go back to); and a file no newer than your
+   last sync with its caracole ("Nothing in this file is newer than your sync with horde_logbook on 03/11/26."), the
+   same file imported twice among them.
+2. **take**: the database backed up (`…-before-sync.sqlite`), then each unit the file gives, as `caracole peer pull`
+   takes one. A conflict (changed here and in the file since the two last agreed) goes by `--choose`, else
+   `--prefer`, else asked, else is left. A song the file's library removed since then is removed here; a part the file
+   doesn't hold (a file of the songbooks alone) never removes anything, and its songs come along with their songbooks.
+3. **render**: the songs taken rendered again, the songbooks made, the pages written.
+4. **agree**: what the two agree on, stamped with when the file was made. A conflict you answered **here** (keep
+   mine), or a change of the file's you chose to keep here's for, is remembered: the next file from that caracole
+   doesn't ask it again while neither side changes it, and the next `caracole peer sync` with that caracole gives it
+   your version. Once the file has been imported, it is no newer than your last sync with its caracole: an import of
+   some of its parts (`--parts songbooks`) leaves the rest for a newer file. An import of its indexes alone
+   (`--parts indexes`) agrees on nothing, so its library may still be imported after.
+5. **index**: the file's indexes, when it holds them and `--parts` names them, merged as `caracole index merge`
+   merges a file. A merge that fails says why, and the import exits 1, its units taken all the same.
+
+SOURCE may also be an index export (`caracole index export`'s file): its indexes are merged, nothing else, and no
+agreement is kept. Or it is the folder an upload to caracole serve is staged in, part by part
+(`state_dir/peer/import-<id>/`, one at a time, 8 GiB at most): it is taken only once every part has come (else
+refused, "That file isn't whole yet: send the rest of it.", and left for the rest), deleted once the import is over,
+or an hour after its last part if it is never taken. `--choose`, `--prefer`, `--compared`, `--progress` and `--yes`
+are `peer sync`'s; with `--progress` it ends with a report of what it did, for caracole serve, even when it could
+take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
+
+**`--parts`**, of `peer sync` and `peer import`: the parts of the sync, `library`, `songbooks` and `indexes` by
+commas, all three by default. A difference outside them is neither taken nor given nor listed, but a song a songbook
+lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
+
+A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
+chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
+--compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
+`--prefer`.
 
 ### The Sync tab
 
