@@ -266,7 +266,7 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
         file.unlink(missing_ok=True)
     if not merged.changed:
         typer.echo(f"Nothing to merge: {cfg.db_path} holds everything {file} does, read as recently.")
-        stage("done", "nothing read more recently")
+        stage("done", "Nothing read more recently")
         return
     if merged.backup is not None:
         typer.echo(f"Backed up the database to {merged.backup} first.")
