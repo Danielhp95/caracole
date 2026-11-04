@@ -1299,7 +1299,25 @@ Not built yet. (lookup.)
   - tests/helpers/viewer_corpus.py is the seeded inputs every M5 generator reads (its docstring), the same in every
     process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
     regenerates the corpus.
-- A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
+- A sheet read, ChordPro and a song's key (sheet-keys): `viewer.sheet`'s `Sheets` (viewer/sheet.py: `parse`,
+  `directive`, `written`, `isLegend`, `isLegendLine`, `preambleSection`, `splitPreamble`), `SheetView` (page.py's
+  reading functions that hold no HTML, below the page, so that a version's and the harp's reading need no page:
+  `shown`, `drawnLines`, `writtenTexts`, `peek`, `places`, `played`, `songKey` and `viewerKey`, `givenShapes` and
+  `shapesOf`), `ChordPro` (chordpro.py, with render.py's `chordProText`, `asLatin` and `needsFontFile` and
+  ug/page.py's `decodeTwice`) and `MusicKeys` (keys.py: `sheetKey`, `sheetKeys`, `songKey` and `letterAlone` over the
+  phone's `files` and `versions` as core.library reads them, `Kept.keptFiles` and `Versions.get`, each file read only
+  as a regular file, never through a link; `SongKey`).
+  - Their constants and patterns exported from the modules by tests/test_conformance_viewer_sheet.py into
+    data/caracole/viewer/sheet.json, a member a module, never retyped; Python's lines, whitespace and lengths
+    throughout (str.splitlines, str.isspace, code points, a chord's column a display column), never Kotlin's trim or
+    lines.
+  - Every answer held by vectors/viewer/sheet, chordpro and musickeys (`SheetReplay`, the `sheet` area), a sheet's
+    derived lists by their digest; estimate_key's sums Python's (`Py.fsum`), its correlation compared to the bit.
+  - Their inputs include every string literal of tests/test_viewer_sheet.py, test_viewer_preamble.py,
+    test_chordpro.py and test_keys.py (`SHEET_LITERALS`, `CHORDPRO_LITERALS`, `KEYS_LITERALS`): an edit to one
+    regenerates the corpus.
+  - Where Kotlin holds less than Python: a `{capo}` or a sheet.json capo past an Int is none; and as in Python, a
+    solfège name sre's IGNORECASE reads but no table holds (`[ch]ſol[/ch]`) raises.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): `viewer.shapes`' `Voicings` (chords-db's
   fingerings from viewer/'s own voicings.json and voicings-ukulele.json, a legend's and a `{define}`'s shapes,
   `voicingKeys`, `sheetShapes`) and `Instruments` (`INSTRUMENTS`, easy keys, each one's shapes of a chord, a page's
@@ -1327,9 +1345,31 @@ Not built yet. (lookup.)
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
   function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
   (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
-  and tables (harmony-progressions): not built yet.
+  and tables (harmony-progressions):
+  - `progressions`, `progressionKey`, `nameOf`, `readTyped` (each of a list or of a string typed) and `catalogue`
+    (`catalogue_keys`), `HarmonyProgressions` function for function (`_fold`, `_passes`, `_varies`, `_whole`, `_rows`,
+    `_contained`, `_ending`, public for the replay), CATALOGUE, `_LOOPS` and its other tables and patterns exported to
+    harmony.json too, a key's turn chosen by code point as Python compares str;
+  - `HarmonyTables.tables`, harmony_tables.py's, each object in Python's insertion order (a chord's reading the one most
+    of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
+  - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
+    kept whole).
 - A sheet's versions and progressions (version-progressions): not built yet.
-- A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
+- A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
+  - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
+    harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
+    tokenizer (`Tokens`, `_alt`'s order and `re.escape`'s rules, through core.py.PyRegex);
+  - `HarpTabs.scan` and its passes (Scanner.kt), its columns Python's code points (`Group.col`, `digit`, `end`), the
+    text UTF-16 while it runs; a notation that folds reads a symbol as its tokenizer's IGNORECASE does
+    (`Notation.meaning`: an "ı" or an "İ" is its "i", `PyRegex.ignoreCase`); the legends (`legend`, `meaning`,
+    `entry`); the candidates, `weighed` (Python's builtin sum, Py.fsum), `read` and `readings`; a pin's `checkSpec`
+    (Python's words and its reprs), `pinned` and `specOf`; `said`, `Reading.standard`; Python's `expandtabs`,
+    `swapcase` (a capital sigma by its context) and `_fold_accents` (`HarpTabText`).
+  - `Scan`, `Reading`, `Prepared` and `Weighed` are the seam harptab-layout builds `parse` on.
+  - `HarptabReplay` (area `harptab`) replays vectors/viewer/harptab_read.jsonl: each fixture tab, the tests' literals
+    and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins, each
+    pin's tab read as it says (`read(notation=)`).
+- A harmonica tab laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
