@@ -1,0 +1,90 @@
+{"corpus":"http/rules","header":true,"made_by":"tests/test_conformance_http.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":[false,null,"2026-10-18T03:30:00Z",2592000],"fn":"stale","out":false}
+{"args":[true,"2026-09-19T03:30:00Z","2026-10-18T03:30:00Z",2592000],"fn":"stale","out":false}
+{"args":[true,"2026-09-17T03:30:00Z","2026-10-18T03:30:00Z",2592000],"fn":"stale","out":true}
+{"args":[true,null,"2026-10-18T03:30:00Z",2592000],"fn":"stale","out":true}
+{"args":[true,"2026-09-18T03:30:00Z","2026-10-18T03:30:00Z",2592000],"fn":"stale","out":false}
+{"args":[true,"2026-09-18T03:29:59Z","2026-10-18T03:30:00Z",2592000],"fn":"stale","out":true}
+{"args":[true,"2026-10-18T03:30:00Z","2026-10-18T03:30:00Z",0],"fn":"stale","out":false}
+{"args":[true,"2026-10-18T03:30:01Z","2026-10-18T03:30:00Z",0],"fn":"stale","out":false}
+{"args":[true,"2026-10-18T03:29:59Z","2026-10-18T03:30:00Z",0],"fn":"stale","out":true}
+{"args":[false,"2020-01-01T00:00:00Z","2026-10-18T03:30:00Z",86400],"fn":"stale","out":false}
+{"args":[true,"2026-11-27T00:00:00Z","2026-11-27T00:00:00Z",2592000],"fn":"stale","out":false}
+{"args":[[],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","1"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":1.0}
+{"args":[[["retry-after","0"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["RETRY-AFTER"," 5 "]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","1.5"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","-1"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","soon"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After",""]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","120"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":120.0}
+{"args":[[["Retry-After","99999999999999999999"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":1e+20}
+{"args":[[["Retry-After","٣"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","１"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","+3"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","1 2"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:03 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":3.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 14:59:30 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:00 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:03 +0000"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":3.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 16:00:03 +0100"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":3.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 10:00:03 -0500"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":3.0}
+{"args":[[["Retry-After","Thursday, 29-Oct-26 15:00:07 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":7.0}
+{"args":[[["Retry-After","Thu Oct 29 15:00:09 2026"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":9.0}
+{"args":[[["Retry-After","29 Oct 2026 15:00:04 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":4.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 26 15:00:05 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05 EST"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":18005.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05 PDT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":25205.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05 UT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05 Z"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05 XYZ"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 32 Oct 2026 15:00:05 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Foo 2026 15:00:05 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 October 2026 15:00:05 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":5.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 25:00:05 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:05.5 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Oct 29 2026 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 2026 Oct 29 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu,29 Oct 2026 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 +00"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 70 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 69 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 1 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15.00.06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 gmt"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","thu, 29 oct 2026 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 GMT extra"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29-Oct-2026 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 9999 23:59:59 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":251603571599.0}
+{"args":[[["Retry-After","Thu, 29 Oct 10000 00:00:00 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Feb 2026 00:00:00 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:60:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:61 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 +9999"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 -0000"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 +0530"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","29 Oct, 2026 15:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":null}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 3:00:06 GMT"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":0.0}
+{"args":[[["Retry-After","Thu, 29 Oct 2026 15:00:06 GMT+1"]],"2026-10-29T15:00:00Z"],"fn":"retry_after","out":6.0}
+{"args":[[],{"text":"<html><head><title>DE MUSICA LIGERA CHORDS</title></head><body><script src=\"/cdn-cgi/challenge-platform/scripts/jsd/main.js\"></script></body></html>"}],"fn":"is_challenge","out":false}
+{"args":[[],{"text":"<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><script>window._cf_chl_opt={cvId: '3'};</script><script src=\"/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1\"></script></body></html>"}],"fn":"is_challenge","out":true}
+{"args":[[["cf-mitigated","challenge"]],{"text":"x"}],"fn":"is_challenge","out":true}
+{"args":[[["CF-Mitigated","Challenge"]],{"text":""}],"fn":"is_challenge","out":true}
+{"args":[[["cf-mitigated"," challenge"]],{"text":"x"}],"fn":"is_challenge","out":false}
+{"args":[[["cf-mitigated","managed"]],{"text":"x"}],"fn":"is_challenge","out":false}
+{"args":[[["x","challenge"]],{"text":"x"}],"fn":"is_challenge","out":false}
+{"args":[[],{"text":"<title>Just a moment...</title>"}],"fn":"is_challenge","out":true}
+{"args":[[],{"text":"<TITLE>Just a moment...</TITLE>"}],"fn":"is_challenge","out":false}
+{"args":[[],{"text":""}],"fn":"is_challenge","out":false}
+{"args":[[],{"parts":[{"repeat":"x","times":32757},{"text":"_cf_chl_opt"}]}],"fn":"is_challenge","out":true}
+{"args":[[],{"parts":[{"repeat":"x","times":32758},{"text":"_cf_chl_opt"}]}],"fn":"is_challenge","out":false}
+{"args":[[],{"parts":[{"repeat":"x","times":32765},{"text":"unusual activity from your IP address"}]}],"fn":"is_challenge","out":false}
+{"args":[[],{"base64":"//5BdHRlbnRpb24gUmVxdWlyZWQhIHwgQ2xvdWRmbGFyZQA="}],"fn":"is_challenge","out":true}
+{"args":[[],{"text":"<!DOCTYPE html>\n<html lang=\"en\">\n<head><title>AZLyrics - request for access</title></head>\n<body>\n<p>Our systems have detected unusual activity from your IP address (computer network).</p>\n<p>Please check the box below to regain access to AZLyrics.com.</p>\n</body>\n</html>\n"}],"fn":"is_challenge","out":true}
+{"args":[[],{"text":"<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Pomme - Paroles de \"mononoke\" | Lyrics at AZLyrics.com</title>\n</head>\n<body>\n<div class=\"container main-page\">\n<div class=\"div-share\"><h1>Paroles de \"mononoke\"</h1></div>\n\n<div class=\"lyricsh\">\n<h2><a href=\"//www.azlyrics.com/p/pomme.html\"><b>Pomme Lyrics</b></a></h2>\n</div>\n\n<div class=\"ringtone\">\n<span id=\"cf_text_top\"></span>\n</div>\n\n<b>\"mononoke\"</b><br>\n<br>\n\n<div>\n<!-- Usage of azlyrics.com content by any third-party lyrics provider is prohibited by our licensing agreement. Sorry about that. -->\n<i>[Couplet 1]</i><br>\nDes mots inventés pour ce test<br>\nRien &amp; personne n'a chanté ça<br>\n<br>\nL'été n'existe qu'ici  <br>\nEt s'arrête là<br>\n</div>\n\n<br>\n<br>\n\n<!-- MxM banner -->\n<div class=\"noprint\" id=\"azmxmbanner\" style=\"display:none;\"></div>\n\n<!-- credits -->\n<div class=\"smt\"></div>\n</div>\n</body>\n</html>\n"}],"fn":"is_challenge","out":false}
+{"args":[[],{"text":"<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"description\" content=\"Pomme lyrics - 91 song lyrics sorted by album, including &quot;mononoke&quot;, &quot;seule dans la foule&quot;, &quot;Grandiose&quot;.\"> \n<title>Pomme Lyrics</title>\n</head>\n<body>\n<div class=\"container main-page\">\n<h1><strong>Pomme Lyrics</strong></h1>\n\n<div class=\"ringtone\">\n<span id=\"cf_text_top\"></span>\n</div>\n\n\n<!-- start of song list -->\n<a id=\"az_sort_album\" class=\"btn btn-xs btn-default sorting\"><span class=\"glyphicon glyphicon-sort-by-order\"></span> sort by album</a><a id=\"az_sort_song\" class=\"btn btn-xs btn-default sorting\"><span class=\"glyphicon glyphicon-sort-by-alphabet\"></span> sort by song</a>\n<div id=\"listAlbum\">\n<div id=\"74688\" class=\"album\">album: <b>\"À Peu Près\"</b> (2017)<div class=\"album-image\"></div></div>\n<div class=\"listalbum-item\"><a href=\"/lyrics/pomme/jsuispasdupe.html\" target=\"_blank\">J'suis Pas Dupe</a></div>\n<div class=\"listalbum-item\"><a href=\"/lyrics/pomme/jetemmeneraibien.html\" target=\"_blank\">Je T'emmènerai Bien</a></div>\n<div class=\"listalbum-item\">Chapelle<div class=\"comment\">(Instrumental)</div></div>\n<div class=\"listalbum-item\"><a href=\"https://www.azlyrics.com/lyrics/stromae/mameilleureennemie.html\" target=\"_blank\">Ma Meilleure Ennemie</a><div class=\"comment\">(from &quot;Arcane: Season 2&quot; soundtrack)</div></div>\n<div class=\"listalbum-item\"><a href=\"https://www.azlyrics.com/lyrics/stromae/mameilleureennemiecoldplayremix.html\" target=\"_blank\">Ma Meilleure Ennemie (Coldplay Remix)</a></div>\n<div class=\"album\"><b>other songs:</b></div>\n<div class=\"listalbum-item\"><a href=\"/lyrics/pomme/2019.html\" target=\"_blank\">2019</a></div>\n<div class=\"listalbum-item\"><a href=\"/lyrics/pomme/mononoke.html\" target=\"_blank\">mononoke</a></div>\n\n<script type=\"text/javascript\">\n<!--\nvar songlist = [\n{s:\"_apr le temps des fleurs\", h:\"/lyrics/pomme/aprletempsdesfleurs.html\", c:\"\", a:\"\", link_class:''},\n{s:\"mononoke\", h:\"/lyrics/pomme/mononoke.html\", c:\"\", a:\"\", link_class:''},\n];\nfunction sorted(i) { return '<div class=\"listalbum-item\"><a href=\"'+songlist[i].h+'\" target=\"_blank\">'+songlist[i].s+'</a></div>'; }\n//-->\n</script>\n</div>\n<!-- end of song list -->\n</div>\n</body>\n</html>\n"}],"fn":"is_challenge","out":false}
+{"args":[[],{"fixture":"ug/tab_chords.html"}],"fn":"is_challenge","out":false}

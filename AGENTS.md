@@ -1117,7 +1117,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### core.http, core.health, core.config
 
-Not built yet. (http-client: core.http; health-pace: core.health, core.config, `Pace`, `Clients`.)
+- `core.http` is http.py on the phone, held to Python by `vectors/http/` (tests/test_conformance_http.py), with what
+  it reads as data in `data/caracole/http/` (`robots.json`, `ROBOTS_DISALLOW`; `http.json`, http.py's other
+  constants; `idna.json`, the idna package's tables and each code point's bidi class):
+  - `Urls`: httpx 0.28's URL (`HttpxUrl`: its normalizing and percent-encoding, `withParams` in place of the query, a
+    host not ASCII through `Idna`, the idna package's encode and decode), `resolve` its next request's URL (urljoin as
+    3.14 has it); a string httpx refuses an `UrlError` named as Python's exception;
+  - `Robots.disallows`; `HttpRules` (`stale`, `retryAfter` with email.utils's dates, `isChallenge`, `readOnceMore`);
+  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache`), httpx's request headers, the
+    budget, the pause for given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of tests/test_http.py
+    a session of `client.jsonl`;
+  - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, gzip and deflate decoded as httpx
+    decodes them (Android's OkHttp ungzips a body of `Content-Encoding: gzip` itself), errors named as httpx's, every
+    host but loopback and 10.0.2.2 refused under `caracole.network=loopback`; `RoutedTransport`, a test's sites through
+    the fake sites server (`GET {base}/fetch?url=…`).
+- core.testing's `Scenarios.replay` replays a scenario record (§3 of the M4-6 plan: the fixture, the cache, the
+  answers; the result or what it raised, the requests, the rows, kv, files, events and pauses compared), and
+  `RealTransportChecks` the transport against a ServerSocket on loopback (RealTransportTest on the JVM,
+  RealTransportOnDeviceTest on the device).
+- core.health, core.config's `read`, `Pace` and `Clients` (health-pace): not built yet.
 
 ##### core.html
 
