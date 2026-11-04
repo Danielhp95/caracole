@@ -1,47 +1,23 @@
 package io.github.danielhp95.caracole.core.search
 
-import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.testing.replays.SearchReplay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.test.fail
 
 /**
  * ug/key_search.py's `rows_like` against vectors/search/query.jsonl: each record's patterns over its fixture
- * (vectors/search/fixtures/<name>.jsonl) replayed into a fresh database, as Python ran them, rows and order alike.
+ * (vectors/search/fixtures/<name>.jsonl) replayed into a fresh database, as Python ran them, rows and order alike
+ * (SearchReplay.rowsLike, which the device runs too).
  */
 class KeySearchTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    @Test fun theRowsAPatternFindsAreThoseSearchPyFinds() {
-        val records = Corpus.records(QueryTest.VECTOR).filter { it.fn == QueryTest.ROWS_LIKE }
-        assertTrue(records.isNotEmpty(), "${QueryTest.VECTOR} has no rows_like record")
-        val wrong = mutableListOf<String>()
-        for ((fixture, group) in records.groupBy { it.extra.getValue("fixture").jsonPrimitive.content }) {
-            val dir = tmp.newFolder(fixture)
-            TestDb.fresh(dir).use { database ->
-                database.writeBlocking { db -> Fixtures.load(db, "search/fixtures/$fixture.jsonl", File(dir, "library")) }
-                for (record in group) {
-                    val patterns = record.args[0].jsonArray.map { it.jsonPrimitive.content }
-                    val expected = record.out!!.jsonArray.map { row ->
-                        val (artist, song, count) = row.jsonArray.map { it.jsonPrimitive }
-                        Triple(artist.content, song.content, count.int)
-                    }
-                    val actual = database.read { db -> KeySearch.rowsLike(db, patterns) }
-                    if (actual != expected) wrong.add("$fixture $patterns: Python $expected, Kotlin $actual")
-                }
-            }
-        }
-        if (wrong.isNotEmpty()) fail("${wrong.size} of ${records.size} rows_like records differ:\n" + wrong.take(20).joinToString("\n"))
-    }
+    @Test fun theRowsAPatternFindsAreThoseSearchPyFinds() =
+        Misses("${QueryTest.VECTOR} rows_like").also { SearchReplay.rowsLike(it) }.assertNone()
 
     /** test_search.py::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in, at two keys a
      * pattern: no fixture has a word in more than [KeySearch.KEYS_PER_PATTERN] keys, so the vectors never cut one. */

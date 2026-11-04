@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.core.index
 
 import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.core.testing.replays.IndexReplay
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -15,29 +17,7 @@ import kotlin.test.assertTrue
  * datetime.fromisoformat's C reading, its edges and a seeded sample around them, then the time in UTC; and
  * library/stamps.jsonl, a take's times), and what its callers write with it. */
 class StampsTest {
-    @Test fun parseIsStampsParseForEveryVector() {
-        val records = Corpus.records("index/stamps.jsonl")
-        assertTrue(records.size > 1000)
-        var strings = 0
-        for (r in records) {
-            val value = r.args[0]
-            val shown = value.toString()
-            when (r.err) {
-                null -> {
-                    val expected = (r.out as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
-                    assertEquals(expected, Stamps.parse(value)?.let(Stamps::isoformat), shown)
-                    if (value is JsonPrimitive && value.isString) {
-                        strings++
-                        assertEquals(expected, Stamps.parse(value.content)?.let(Stamps::isoformat), shown)
-                    }
-                }
-                "OverflowError" -> assertFailsWith<ArithmeticException>(shown) { Stamps.parse(value) }
-                "TypeError" -> assertFailsWith<IllegalArgumentException>(shown) { Stamps.parse(value) }
-                else -> error("no such error: ${r.err}")
-            }
-        }
-        assertTrue(strings > 1000)
-    }
+    @Test fun parseIsStampsParseForEveryVector() = Misses(IndexReplay.STAMPS).also { IndexReplay.stamps(it) }.assertNone()
 
     @Test fun aStampIsWrittenToTheSecondInUtc() {
         val at = Stamps.parse("2026-10-18T05:30:00.75+02:00")!!

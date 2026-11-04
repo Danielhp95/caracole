@@ -10,12 +10,13 @@ import io.github.danielhp95.caracole.core.sync.internal.take.Backups
 import io.github.danielhp95.caracole.core.sync.internal.take.Folders
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
-import kotlinx.serialization.json.JsonArray
+import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
+import io.github.danielhp95.caracole.core.testing.sync.InlineSource
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,7 +26,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.nio.file.Files
-import java.util.Base64
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -33,38 +33,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * A UnitSource of documents and files held in memory: a take.jsonl record's `source`, or a fixture's documents and
- * kept files, as the phone's tests read them (the corpus's InlineSource). A file it doesn't hold is a UnitError in
- * Python's words.
- */
-internal class InlineSource(private val units: Map<String, JsonObject?>, private val files: List<Kept>) : UnitSource {
-    data class Kept(val song: String, val name: String, val sha256: String, val bytes: ByteArray)
-
-    val asked = mutableListOf<String>()
-
-    override fun unit(id: String): JsonObject? = units[id].also { asked += id }
-
-    override fun file(songKey: String, name: String, sha256: String): ByteArray =
-        files.firstOrNull { it.song == songKey && it.name == name && it.sha256 == sha256 }?.bytes
-            ?: throw UnitError("$name: there, no such file is kept")
-
-    companion object {
-        /** A take.jsonl record's `source`: `{units: {id: document or null}, files: [{song, name, sha256, base64}]}`. */
-        fun of(source: JsonObject): InlineSource = InlineSource(
-            source.getValue("units").jsonObject.mapValues { it.value as? JsonObject },
-            source.getValue("files").jsonArray.map { it.jsonObject }.map {
-                Kept(it.getValue("song").jsonPrimitive.content, it.getValue("name").jsonPrimitive.content,
-                     it.getValue("sha256").jsonPrimitive.content,
-                     Base64.getDecoder().decode(it.getValue("base64").jsonPrimitive.content))
-            },
-        )
-    }
-}
-
-/**
  * Take against Python's peer_sync.apply_units: every case of vectors/sync/take.jsonl (§5.6's rules, the
- * compare-and-swap, a unit left whole), every fixture of vectors/sync taken into an empty phone, checked_name; and
- * the backup before a sync, which restore puts back.
+ * compare-and-swap, a unit left whole), every fixture of vectors/sync taken into an empty phone, checked_name (their
+ * loops SyncReplay's, which the device runs too); and the backup before a sync, which restore puts back.
  */
 class TakeTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -90,82 +61,14 @@ class TakeTest {
     // --- checked_name ---------------------------------------------------------------------------------------------
 
     @Test fun aKeptFilesNameIsOneASongsFolderCanHold() {
-        val records = Corpus.records("sync/checked_name.jsonl")
-        assertTrue(records.size >= 15)
-        for (r in records) {
-            val name = r.args[0]
-            if (name !is JsonPrimitive || !name.isString) {
-                assertEquals("UnitError", r.err, "a name that isn't text is no name: $name") // the take's nameOf
-                continue
-            }
-            if (r.err != null) {
-                assertEquals("UnitError", r.err)
-                assertFailsWith<UnitError>(name.content) { Take.checkedName(name.content) }
-            } else {
-                assertEquals(text(r.out), Take.checkedName(name.content))
-            }
-        }
+        Misses("sync/checked_name.jsonl").also { SyncReplay.checkedName(it) }.assertNone()
         assertEquals("a kept file named '../sheet.txt', which no song's folder holds",
                      assertFailsWith<UnitError> { Take.checkedName("../sheet.txt") }.message)
     }
 
     // --- apply_units ----------------------------------------------------------------------------------------------
 
-    @Test fun eachTakeDoesWhatPythonsDoes() {
-        val records = Corpus.records("sync/take.jsonl")
-        assertTrue(records.size >= 15)
-        for (r in records) {
-            val case = text(r.extra["case"])!!
-            val phone = phone("sync/fixtures/${text(r.extra["fixture"])}.jsonl")
-            val source = InlineSource.of(r.extra.getValue("source").jsonObject)
-            val wanted = r.args[0].jsonArray.map { w -> w.jsonArray.let { text(it[0])!! to text(it[1]) } }
-            val expected = r.kw.getValue("expected_here").jsonObject.mapValues { text(it.value) }
-            val told = mutableListOf<Pair<String, String>>()
-            val done = phone.write { db ->
-                Take.applyUnits(db, phone.store, source, wanted, expected, text(r.kw["now"])!!) { id, what -> told += id to what }
-            }
-            val out = r.out!!.jsonObject
-            fun strings(name: String) = out.getValue(name).jsonArray.map { it.jsonPrimitive.content }
-            assertEquals(strings("taken"), done.taken, case)
-            val left = out.getValue("left").jsonArray.map { it.jsonArray.let { p -> text(p[0])!! to text(p[1])!! } }
-            assertEquals(left.map { it.first }, done.left.map { it.first }, case)
-            for ((want, got) in left.zip(done.left)) {
-                if (want.second.startsWith("changed ") || want.second.startsWith("a kept file named") ||
-                    want.second.endsWith("no such file is kept") || want.second.contains(" came other than it is there")) {
-                    assertEquals(want.second, got.second, case) // the compare-and-swap's and the take's own words
-                } else {
-                    assertTrue(got.second.isNotEmpty(), "$case: ${got.first} left saying why")
-                }
-            }
-            assertEquals(wanted.size, told.size, case) // each unit told once, as it is done
-            assertEquals((done.taken.map { it to "taken" } + done.left.map { it.first to "left" }).toMap(), told.toMap(), case)
-            assertEquals(strings("respelled"), done.respelled, case)
-            assertEquals(out["songbooks"]?.jsonPrimitive?.content?.toBoolean(), done.songbooksChanged, case)
-            assertEquals(out.getValue("songs").jsonArray.map { it.jsonPrimitive.content.toLong() }, done.songs, case)
-            phone.write { db ->
-                assertEquals(Canonical.write(out.getValue("after")), Canonical.write(after(db)), case)
-                // What a song's value leaves out: its record's other columns, its versions' (rating, votes, coverage,
-                // fetched_at), its files' kept_rank, the carried kv under the phone's own id.
-                val documents = out.getValue("documents").jsonObject
-                assertEquals(documents.keys, after(db).keys.filter { it.startsWith("song/") }.toSet(), case)
-                for ((id, want) in documents) {
-                    assertEquals(Canonical.write(want), Canonical.write(Units.document(db, phone.library, id) ?: JsonNull),
-                                 "$case: $id's document")
-                }
-                assertEquals(out.getValue("ids").jsonObject.mapValues { it.value.jsonPrimitive.content.toLong() },
-                             db.query("SELECT id, key FROM songs ORDER BY id") { it.text(1)!! to it.long(0) }.toMap(), case)
-                // The render records of a folder moved go; the carried kv is the phone's id's.
-                assertEquals(out.getValue("kv").jsonArray.map { kv -> kv.jsonArray.map { it.jsonPrimitive.content } },
-                             db.query("SELECT key, value FROM kv WHERE substr(key, 1, 7) = 'render:' " +
-                                      "OR substr(key, 1, 15) = 'sheet_versions:' ORDER BY key") {
-                                 listOf(it.text(0)!!, it.text(1)!!)
-                             }, case)
-                assertEquals(strings("paths"), db.query("SELECT path FROM files ORDER BY path") { it.text(0)!! }, case)
-            }
-            assertEquals(out.getValue("files").jsonArray.map { f -> f.jsonArray.map { it.jsonPrimitive.content } },
-                         filesOf(phone.library), case)
-        }
-    }
+    @Test fun eachTakeDoesWhatPythonsDoes() = Misses(SyncReplay.TAKE).also { SyncReplay.takes(it) }.assertNone()
 
     @Test fun unitsAreTakenSongsFirstEachLeftAloneWhenItCantBe() {
         val phone = phone()
@@ -276,101 +179,11 @@ class TakeTest {
         phone.write { db -> assertEquals(listOf("Home"), io.github.danielhp95.caracole.core.library.SongbookStore.all(db).map { it.name }) }
     }
 
-    /** This side's units, as take.jsonl's `after` writes them: `{id: {label, digest, value}}`. */
-    private fun after(db: Db): JsonObject = JsonObject(Units.libraryState(db).values.associate { unit ->
-        unit.id to JsonObject(mapOf("label" to JsonPrimitive(unit.label), "digest" to JsonPrimitive(unit.digest),
-                                    "value" to (Units.value(db, unit.id) ?: JsonNull)))
-    })
+    @Test fun everyFixtureTakenIntoAnEmptyPhoneIsItsValuesAndDigests() =
+        Misses("sync fixtures taken").also { SyncReplay.fixturesTaken(it) }.assertNone()
 
-    /** Every file of the library's song folders (not the library's own top files), [path, sha256], by path as
-     * Python sorts its paths (part by part). */
-    private fun filesOf(library: File): List<List<String>> {
-        if (!library.isDirectory) return emptyList()
-        return library.walkTopDown().filter { it.isFile && it.parentFile != library }
-            .map { it.relativeTo(library).invariantSeparatorsPath }
-            .sortedWith { a, b -> compareParts(a.split('/'), b.split('/')) }
-            .map { listOf(it, Canonical.sha256Hex(File(library, it).readBytes())) }
-            .toList()
-    }
-
-    private fun compareParts(a: List<String>, b: List<String>): Int {
-        for (i in 0 until minOf(a.size, b.size)) {
-            val c = Canonical.KEY_ORDER.compare(a[i], b[i])
-            if (c != 0) return c
-        }
-        return a.size - b.size
-    }
-
-    @Test fun everyFixtureTakenIntoAnEmptyPhoneIsItsValuesAndDigests() {
-        val values = Corpus.records("sync/values.jsonl")
-        val documents = Corpus.records("sync/documents.jsonl").filter { it.fn.endsWith(".unit_document") }
-        for (fixture in listOf("rich", "dense", "plain", "empty")) {
-            val units = documents.filter { text(it.extra["fixture"]) == fixture && it.out is JsonObject }
-                .associate { text(it.args[0])!! to it.out!!.jsonObject.getValue("unit").jsonObject }
-            val want = values.filter { text(it.extra["fixture"]) == fixture }.map { it.out!!.jsonObject }
-            val source = InlineSource(units, keptFiles("sync/fixtures/$fixture.jsonl"))
-            val phone = phone()
-            val done = phone.write { db ->
-                Take.applyUnits(db, phone.store, source, want.map { text(it["id"])!! to text(it["digest"]) },
-                                want.associate { text(it["id"])!! to null }, NOW)
-            }
-            assertEquals(emptyList(), done.left, fixture)
-            assertEquals(want.map { text(it["id"]) }.toSet(), done.taken.toSet(), fixture)
-            phone.write { db ->
-                val state = Units.libraryState(db)
-                assertEquals(want.map { text(it["id"]) }.toSet(), state.keys, fixture)
-                for (unit in want) {
-                    val id = text(unit["id"])!!
-                    assertEquals(text(unit["label"]), state.getValue(id).label, "$fixture $id")
-                    assertEquals(text(unit["digest"]), state.getValue(id).digest, "$fixture $id")
-                    assertEquals(Canonical.write(unit.getValue("value")), Canonical.write(Units.value(db, id)!!), "$fixture $id")
-                    // And all a document holds beyond the value: the phone's document is the computer's.
-                    assertEquals(Canonical.write(units.getValue(id)), Canonical.write(Units.document(db, phone.library, id)!!),
-                                 "$fixture $id's document")
-                }
-            }
-        }
-    }
-
-    @Test fun everyTakesFixtureCopiedUnitByUnitIntoAnEmptyPhoneIsTheSameLibrary() {
-        // The take.jsonl fixtures have no values.jsonl records: each is read by the phone (Units, whose readings
-        // UnitsTest holds to Python's), its every unit taken into an empty phone, which then holds them alike.
-        val fixtures = Corpus.records("sync/take.jsonl").map { text(it.extra["fixture"])!! }.distinct()
-        assertTrue(fixtures.size >= 15)
-        for (fixture in fixtures) {
-            val from = phone("sync/fixtures/$fixture.jsonl")
-            val (state, documents) = from.write { db ->
-                Units.libraryState(db).let { s -> s to s.keys.associateWith { Units.document(db, from.library, it) } }
-            }
-            val source = InlineSource(documents, keptFiles("sync/fixtures/$fixture.jsonl"))
-            val into = phone()
-            val done = into.write { db ->
-                Take.applyUnits(db, into.store, source, state.values.map { it.id to it.digest }, state.mapValues { null }, NOW)
-            }
-            assertEquals(emptyList(), done.left, fixture)
-            into.write { db ->
-                assertEquals(state, Units.libraryState(db), fixture)
-                for ((id, doc) in documents) {
-                    assertEquals(Canonical.write(doc!!), Canonical.write(Units.document(db, into.library, id)!!), "$fixture $id")
-                }
-            }
-            // Its kept files alike; the lyrics' files the take writes from lyrics_json besides (lyrics_files.jsonl's,
-            // and take.jsonl's `files`) were never in the fixture's folder.
-            fun kept(library: File) = filesOf(library).filter { it[0].substringAfterLast('/') !in LYRICS }
-            assertEquals(kept(from.library), kept(into.library), fixture)
-        }
-    }
-
-    /** A fixture's kept files, by song key, name and SHA-256, with their bytes. */
-    private fun keptFiles(fixture: String): List<InlineSource.Kept> {
-        val lines = Corpus.lines(fixture).filter { it["header"] != JsonPrimitive(true) }
-        val keys = lines.filter { text(it["table"]) == "songs" }.map { it.getValue("row").jsonObject }
-            .associate { text(it["id"]) to text(it["key"])!! }
-        val bytes = lines.filter { "file" in it }.associate { text(it["file"]) to Base64.getDecoder().decode(text(it["base64"])) }
-        return lines.filter { text(it["table"]) == "files" }.map { it.getValue("row").jsonObject }.mapNotNull { f ->
-            bytes[text(f["path"])]?.let { InlineSource.Kept(keys.getValue(text(f["song_id"])), text(f["name"])!!, text(f["sha256"])!!, it) }
-        }
-    }
+    @Test fun everyTakesFixtureCopiedUnitByUnitIntoAnEmptyPhoneIsTheSameLibrary() =
+        Misses("take.jsonl's fixtures copied").also { SyncReplay.takesCopied(it) }.assertNone()
 
     @Test fun aUnitChangedOnEitherSideSinceTheComparisonIsLeftAsItIs() {
         val record = Corpus.records("sync/take.jsonl").first { text(it.extra["case"]) == "names_as_written" }
@@ -404,7 +217,7 @@ class TakeTest {
         val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, mapOf(), NOW) }
         assertEquals(listOf("song/radiohead/creep" to "the network went"), done.left)
         phone.write { db -> assertNull(Songs.byKey(db, "radiohead/creep")) }
-        assertEquals(emptyList(), filesOf(phone.library))
+        assertEquals(emptyList(), SyncReplay.filesOf(phone.library))
     }
 
     // --- the backup before a sync ---------------------------------------------------------------------------------
