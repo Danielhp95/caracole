@@ -32,6 +32,12 @@ made ``BUILT``:
 - ``stamps``, ``overflow``: phones for ``newest`` alone: odd times in every place it reads one; a time a UTC
   conversion takes out of range (``OverflowError``). ``newest-0`` to ``newest-3``: one time in every place newest
   reads one, each site's its own, and each place the single newest of its site in one of them.
+- ``reads-before``: ``phone-before``'s phone with the pages its lookups read noted as core.index.Reads notes them
+  (kv ``phone:read:<site>:<page>`` = when, ``phone:pushed:<computer id>`` = the last push to that computer): some
+  after the last push to ``PEER``, one before it, one at it, one of a page whose rows are gone (UG answered 404);
+  ``NEVER`` never pushed to, ``AHEAD`` pushed to after every note.
+- ``<case>-export``: the export ``index_transfer.export(pages=)`` makes of it for each case of ``EXPORT_CASES``, a
+  raw fixture as ``full-export`` is (its META ``source`` made ``PHONE_SOURCE``).
 
 **Vectors**:
 
@@ -45,6 +51,13 @@ made ``BUILT``:
 - ``newest.jsonl``: ``{fn: "caracole.index_transfer.newest", fixture, out | err}``, over each phone fixture replayed.
 - ``sites.jsonl``: ``{fn: "caracole.index_transfer.SITES", args: [name], out: {name, title, tables, kv}}``, each site
   in caracole's order.
+- ``export.jsonl``: ``{fn: "caracole.index_transfer.export", fixture: {before, export}, kw: {peer, pages, now,
+  caracole}, note, out | err}``, the phone's push (lane index-push): ``before`` replayed (``Fixtures.load``), the pages
+  ``Reads.since(db, peer)`` gives (``pages``: ``{site: [page, …]}``, sites in code-point order, each site's pages in
+  their notes' key order; ``peer`` null for pages named outright), exported at ``now`` by the caracole of version
+  ``caracole``; ``export`` is that file dumped raw (its META ``source`` the phone's database, made ``PHONE_SOURCE``).
+  ``out``: ``{sites, rows}``, Python's ``Exported`` (the sites in caracole's order, each table's rows). ``err``:
+  ``"TransferError"`` (a site with no pages a lookup reads; a site caracole has no index of), no file made.
 - ``stamps.jsonl``: ``{fn: "caracole.stamps.parse", args: [value], out | err}``: ``out`` the time in UTC as
   ``datetime.isoformat`` writes it (``"2026-10-18T03:30:00+00:00"``, microseconds when there are any), or null;
   ``err`` ``"OverflowError"`` (a UTC conversion out of range) or ``"TypeError"`` (a value that is neither a string nor
@@ -65,6 +78,7 @@ from typing import Any
 import pytest
 
 from caracole import (
+    __version__,
     db,
     gametabs_fetch,
     gtptabs_fetch,
@@ -89,6 +103,7 @@ NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 BUILT = "2026-11-01T00:00:00Z"  # every stamp caracole writes as now, while the fixtures are built
 SOURCE = "/var/lib/caracole/state/caracole.sqlite"  # the export's META source, the computer's database
 STALE = "stale-key"
+PHONE_SOURCE = "/data/user/0/io.github.danielhp95.caracole/files/state/caracole.sqlite"  # an export of the phone's
 SONG_DONGYE = "https://www.ultimate-guitar.com/artist/634073"
 SODA = "https://www.ultimate-guitar.com/artist/soda-stereo_1186"
 GTP = "https://gtptabs.com/tabs/"
@@ -214,6 +229,54 @@ def phone(conn: sqlite3.Connection) -> None:
                     ug_dirty=False, **({"status": "ignored"} if ignored else {}))
 
 
+READ, PUSHED = "phone:read:", "phone:pushed:"  # core.index.Reads' kv records
+PEER, NEVER, AHEAD = "0123456789abcdef", "fedcba9876543210", "ffffffffffffffff"  # computers the phone pushes to
+GONE = "https://www.ultimate-guitar.com/artist/999"  # a page UG answered 404 for: its rows forgotten, its read noted
+
+
+def reads(conn: sqlite3.Connection) -> None:
+    """The phone of ``phone``, with the pages its lookups read noted as core.index.Reads notes them."""
+    phone(conn)
+    pushed = "2026-11-01T00:00:00Z"
+    for site, page, at in (
+            ("ug", SONG_DONGYE, "2026-11-02T10:00:00Z"),
+            ("ug", "https://www.ultimate-guitar.com/artist/12", "2026-10-31T00:00:00Z"),  # before the last push
+            ("ug", GONE, "2026-11-02T11:00:00Z"),
+            ("lacuerda", "estopa/", "2026-11-02T10:00:01Z"),
+            ("lacuerda", lacuerda_index.SEARCH_PAGE, "2026-11-02T10:00:02Z"),
+            ("harptabs", "artist/1178/billy-joel", "2026-11-02T10:00:03Z"),
+            ("harptabs", "artist/50/the-beatles", pushed)):  # at the last push: sent with it
+        db.kv_set(conn, f"{READ}{site}:{page}", at)
+    db.kv_set(conn, PUSHED + PEER, pushed)
+    db.kv_set(conn, PUSHED + AHEAD, "2099-01-01T00:00:00Z")
+
+
+def noted_since(conn: sqlite3.Connection, peer: str) -> dict[str, list[str]]:
+    """core.index.Reads.since: the pages noted after the last push to ``peer`` (every one before the first), by
+    site in code-point order, each site's in their notes' key order."""
+    pushed = db.kv_get(conn, PUSHED + peer)
+    found: dict[str, list[str]] = {}
+    for key, at in conn.execute("SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key",
+                                (READ, READ[:-1] + ";")):
+        if pushed is not None and at <= pushed:
+            continue
+        site, _, page = key[len(READ):].partition(":")
+        found.setdefault(site, []).append(page)
+    return dict(sorted(found.items()))
+
+
+# Each export of the phone's reads: its name (its export fixture's), the computer it goes to (its notes since the
+# last push to it) or the pages named outright, and what the record says.
+EXPORT_CASES: list[tuple[str, str | None, dict[str, list[str]] | None, str]] = [
+    ("reads", PEER, None, "the pages noted since the last push to that computer"),
+    ("reads-all", NEVER, None, "a computer never pushed to: every page noted"),
+    ("reads-none", AHEAD, None, "nothing noted since the last push: an export of no site"),
+    ("reads-game", None, {"gametabs": ["tabs/actraiser", "tabs/actraiser"]}, "a game page, named twice"),
+    ("reads-sitemaps", None, {"gtptabs": ["sitemap-tabs-1.xml"]}, "a site whose index has no pages: refused"),
+    ("reads-unknown", None, {"spotify": ["x"]}, "a site caracole has no index of: refused"),
+]
+
+
 def newest_stamps(conn: sqlite3.Connection) -> None:
     """Odd times in each place newest reads one."""
     from caracole.ug import index as ug
@@ -322,6 +385,7 @@ PHONES: dict[str, Any] = {
     "fresh": lambda conn: [db.kv_set(conn, k, v) for k, v in json.loads(fresh_kv_text())["kv"].items()],
     "unseeded": lambda conn: None,
     "phone": phone,
+    "reads": reads,
     "stamps": newest_stamps,
     "overflow": newest_overflow,
     **{f"newest-{k}": newest_source(k) for k in range(NEWEST_SOURCES)},
@@ -397,6 +461,7 @@ class Corpus:
         self.monkeypatch = monkeypatch
         self.texts: dict[str, str] = {}
         self.merges: list[dict[str, Any]] = []
+        self.exports: list[dict[str, Any]] = []
         self._made = False
 
     def _clock(self, stamp: str) -> None:
@@ -428,6 +493,8 @@ class Corpus:
                 self.texts[f"{name}-before"] = _fixture(dump_fixture(conn), f"{name}-before")
         for name, export, before, sites in MERGES:
             self._merge(name, export, before, sites)
+        for name, peer, pages, note in EXPORT_CASES:
+            self._export(name, peer, pages, note)
 
     def replayed_export(self, name: str, where: Path) -> Path:
         path = where / "export.sqlite"
@@ -463,6 +530,32 @@ class Corpus:
                 self._clock(BUILT)
         record["fixture"] = {"export": f"{export}-export", "before": before, "after": after}
         self.merges.append(record)
+
+    def _export(self, name: str, peer: str | None, pages: dict[str, list[str]] | None, note: str) -> None:
+        where = self.workdir / "exports-of-reads" / name
+        where.mkdir(parents=True)
+        path = where / "reads.sqlite"
+        with closing(self.replayed("reads-before", where)) as conn:
+            if peer is not None:
+                pages = noted_since(conn, peer)
+            record: dict[str, Any] = {"fn": "caracole.index_transfer.export", "note": note,
+                                      "kw": {"peer": peer, "pages": pages, "now": _stamp(NOW),
+                                             "caracole": __version__}}
+            try:
+                exported = index_transfer.export(conn, path, now=NOW, pages=pages)
+            except index_transfer.TransferError:
+                record["err"] = "TransferError"
+                assert not path.exists()
+                record["fixture"] = {"before": "reads-before", "export": None}
+            else:
+                record["out"] = {"sites": list(exported.sites), "rows": exported.rows}
+                with closing(sqlite3.connect(path, isolation_level=None)) as out:
+                    (source,) = out.execute(f"SELECT value FROM {index_transfer.META} WHERE key = 'source'").fetchone()
+                    assert Path(source) == where / "state" / "caracole.sqlite"
+                    out.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'source'", (PHONE_SOURCE,))
+                    self.texts[f"{name}-export"] = _fixture(dump_fixture(out, raw=True), f"{name}-export")
+                record["fixture"] = {"before": "reads-before", "export": f"{name}-export"}
+        self.exports.append(record)
 
     def newest(self) -> list[dict[str, Any]]:
         out = []
@@ -567,6 +660,8 @@ def test_fresh_kv_json_is_what_a_new_database_holds_once_each_index_made_its_key
 
 
 @pytest.mark.parametrize("name", [*(f"{e}-export" for e in EXPORTS), *(f"{p}-before" for p in PHONES),
+                                  *(f"{c[0]}-export" for c in EXPORT_CASES if c[0] not in ("reads-sitemaps",
+                                                                                             "reads-unknown")),
                                   *(f"{m[0]}-after" for m in MERGES if m[0] not in
                                     ("schema", "format", "columns", "nometa", "not-held", "unknown"))])
 def test_a_fixture_is_its_database_dumped(corpus, name):
@@ -575,6 +670,27 @@ def test_a_fixture_is_its_database_dumped(corpus, name):
 
 def test_merge_jsonl_is_what_index_transfer_merge_takes(corpus):
     check(INDEX / "merge.jsonl", jsonl(corpus.merges, corpus="index/merge", made_by=MADE_BY))
+
+
+def test_export_jsonl_is_what_index_transfer_export_makes_of_the_phones_reads(corpus):
+    check(INDEX / "export.jsonl", jsonl(corpus.exports, corpus="index/export", made_by=MADE_BY))
+
+
+def test_the_phones_export_holds_the_pages_noted_since_the_last_push_and_how_their_rows_are_keyed(corpus):
+    by_name = {r["fixture"]["export"]: r for r in corpus.exports if "out" in r}
+    assert by_name["reads-export"]["kw"]["pages"] == {
+        "harptabs": ["artist/1178/billy-joel"], "lacuerda": ["busca.php", "estopa/"], "ug": [SONG_DONGYE, GONE]}
+    assert by_name["reads-all-export"]["kw"]["pages"]["harptabs"] == ["artist/1178/billy-joel",
+                                                                       "artist/50/the-beatles"]
+    assert by_name["reads-none-export"]["out"] == {"sites": [], "rows": {}}
+    rows = read_fixture(corpus.texts["reads-export"])
+    tables = {r["table"] for r in rows if "table" in r}
+    assert "ug_index" not in tables and "harptabs_index" not in tables  # made, but no sitemap's row
+    assert {r["row"]["key"] for r in rows if r.get("table") == "kv"} == {
+        "ug:artist_tabs:keys", "lacuerda:index:keys", "harptabs:artists:keys"}
+    assert {r["row"]["page"] for r in rows if r.get("table") == "ug_artist_tabs"} == {SONG_DONGYE}
+    assert by_name["reads-export"]["out"]["rows"]["ug_artist_tabs"] == 2
+    assert {m["note"] for m in corpus.exports if "err" in m} == {c[3] for c in EXPORT_CASES[-2:]}
 
 
 def test_newest_jsonl_is_what_index_transfer_newest_says(corpus):

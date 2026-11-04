@@ -1,0 +1,16 @@
+{"corpus":"index/fixtures/reads-game-export","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"sql":"CREATE TABLE gametabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  game TEXT NOT NULL,\n  slug TEXT NOT NULL,\n  page INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  slug_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE gametabs_games (\n  path TEXT PRIMARY KEY,\n  game TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE gametabs_game_tabs (\n  page TEXT NOT NULL,\n  path TEXT NOT NULL,\n  game TEXT NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  instruments TEXT NOT NULL DEFAULT '[]',\n  composers TEXT NOT NULL DEFAULT '[]',\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (page, path)\n)"}
+{"sql":"CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"sql":"CREATE TABLE caracole_export (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"row":{"game":"actraiser","name":"Actraiser","path":"tabs/actraiser","read_at":"2026-10-23T03:30:00Z","tabs":1},"table":"gametabs_games"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[]","page":"tabs/actraiser","path":"tabs/actraiser/fillmore","place":0,"rating":null,"title":"Fillmore","title_key":"fillmore","views":0},"table":"gametabs_game_tabs"}
+{"row":{"key":"gametabs:games:keys","value":"2"},"table":"kv"}
+{"row":{"key":"format","value":"1"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"keys","value":"2"},"table":"caracole_export"}
+{"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
+{"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}
+{"row":{"key":"sites","value":"[\"gametabs\"]"},"table":"caracole_export"}
+{"row":{"key":"source","value":"/data/user/0/io.github.danielhp95.caracole/files/state/caracole.sqlite"},"table":"caracole_export"}
