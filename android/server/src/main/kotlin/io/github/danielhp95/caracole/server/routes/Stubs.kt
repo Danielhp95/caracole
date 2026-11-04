@@ -19,13 +19,14 @@ import kotlinx.serialization.json.JsonPrimitive
 fun notYet(what: String): Nothing = throw Refused(409, "Not on the phone yet", "$what isn't on the phone yet.")
 
 /**
- * The routes of caracole serve no module of the phone answers yet (the plan's §5.3), each answering "… isn't on the
- * phone yet." where no module answers it (App: a stub's route answers only there). Their pages (the picker, a sheet's
- * versions, a harmonica tab's readings, the Guitar Pro page, the lookup page, Export PDF) are the message page, 409;
- * their forms are refused, 409, once the form's own checks pass, which the library page says on the line. A route a
- * lane will answer moves to its module, neutral until then (LookupRoutes, RequestsRoutes; skeleton-m5m6 moves M6's).
- * `GET /api/youtube/video` answers as caracole serve does where YouTube is off: the video's id and address, "off",
- * and no guess; YouTube's routes and `GET /lookup` stay here for good.
+ * The routes of caracole serve the phone answers with no module of its own, for good (the plan's §5.4): YouTube's,
+ * since the phone never runs yt-dlp, and `GET /lookup`, the computer's lookup page, whose work the library page's
+ * search does on the phone. `GET /lookup` is the message page, 409, "… isn't on the phone yet."; YouTube's forms are
+ * refused, 409, once the form's own checks pass, which the library page says on the line; `GET /api/youtube/video`
+ * answers as caracole serve does where YouTube is off: the video's id and address, "off", and no guess. Every other
+ * route a lane will answer is its module's, neutral until then (LookupRoutes, RequestsRoutes, SongbookRoutes,
+ * VersionsRoutes, HarmonicaRoutes, ReviewRoutes, ExportRoutes, GuitarRoutes), and a stub answers only where no module
+ * does (App).
  */
 class Stubs : RouteModule {
     override val routes: List<Route> = buildList {
@@ -93,33 +94,13 @@ class Stubs : RouteModule {
         val PATH_ID = Regex("/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})")
         val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 
-        /** The pages caracole serve writes itself that the phone hasn't yet. */
+        /** The pages caracole serve writes itself that the phone has none of. */
         val PAGES = listOf(
-            "/review" to "Picking a song's match",
-            "/versions" to "Choosing a sheet's version",
-            "/harmonica" to "Choosing how a harmonica tab is read",
-            "/guitar" to "The Guitar Pro page",
             "/lookup" to "The lookup page",
-            "/export.pdf" to "Exporting a PDF",
         )
 
-        /** The forms caracole serve reads that the phone doesn't yet, and the page each comes from (its refusals'). */
+        /** YouTube's forms, and the page each comes from (its refusals'). */
         val FORMS = listOf(
-            Triple("/review", "Picking a song's match", "the library"),
-            Triple("/versions/choose", "Choosing a sheet's version", "the version's page"),
-            Triple("/versions/keep", "Keeping a sheet's version", "the version's page"),
-            Triple("/versions/clear", "Going back to caracole's version", "the version's page"),
-            Triple("/harmonica/pin", "Choosing how a harmonica tab is read", "the tab's page of readings"),
-            Triple("/harmonica/clear", "Choosing how a harmonica tab is read", "the tab's page of readings"),
-            Triple("/songbook/make", "Making a songbook", "the library"),
-            Triple("/songbook/add", "Adding to a songbook", "the library"),
-            Triple("/songbook/add-song", "Adding to a songbook", "the library"),
-            Triple("/songbook/get", "Getting a songbook's songs", "the library"),
-            Triple("/songbook/remove", "Taking a song out of a songbook", "the library"),
-            Triple("/songbook/move", "Moving a song in a songbook", "the library"),
-            Triple("/songbook/set", "Setting a song's key in a songbook", "the library"),
-            Triple("/songbook/rename", "Renaming a songbook", "the library"),
-            Triple("/songbook/delete", "Deleting a songbook", "the library"),
             Triple("/youtube", "A sheet from a YouTube video", "the library"),
             Triple("/youtube/search", "YouTube's search", "the library"),
             Triple("/youtube/video", "Reading a YouTube video", "the library"),

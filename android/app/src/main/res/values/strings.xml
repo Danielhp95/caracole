@@ -57,4 +57,12 @@
     <string name="no_app">No app on this phone opens %1$s (%2$s).</string>
     <string name="no_browser">No browser on this phone opens %1$s.</string>
     <string name="handoff_failed">The file couldn\'t be copied for another app: %1$s</string>
+
+    <!-- Milestone 6's hooks (each its lane's: backups and alerts alerts-backups', printing export-print's). -->
+    <string name="backups_label">Backups</string>
+    <string name="backups_open">Backups…</string>
+    <string name="backups_hint">Copies of the phone\'s library, to restore it from: not on the phone yet.</string>
+    <string name="backups_not_built">Backups aren\'t on the phone yet.</string>
+    <string name="alerts_channel">Alerts</string>
+    <string name="print_not_built">Exporting a PDF isn\'t on the phone yet.</string>
 </resources>

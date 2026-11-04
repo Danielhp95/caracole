@@ -1,0 +1,26 @@
+{
+ "cached_statuses": [
+  200,
+  404
+ ],
+ "kept_headers": [
+  "etag",
+  "last-modified",
+  "content-type",
+  "location"
+ ],
+ "challenge_markers": [
+  "_cf_chl_opt",
+  "<title>Just a moment...</title>",
+  "Attention Required! | Cloudflare",
+  "Enable JavaScript and cookies to continue",
+  "unusual activity from your IP address"
+ ],
+ "challenge_head": 32768,
+ "max_redirects": 3,
+ "retry_after_503": {
+  "lrclib.net": 30.0
+ },
+ "retry_jitter": 1.0,
+ "not_a_url": "not a valid URL"
+}
