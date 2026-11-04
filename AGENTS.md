@@ -1362,8 +1362,50 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     against every fixture lyrics) and ug_sheet_versions*.jsonl (over a fixture library): `RankReplay`. They are
     a share of the `sites` area every site lane writes: a record only where it can answer otherwise than another
     (a policy by the fields that differ from `RankPolicy()`'s, which its first record gives).
-- UG's sheet (ug-fetch-sheet) and its artist pages (ug-fetch-artist): not built yet.
-- The matcher (matcher): not built yet.
+- UG's lookup path for a matched song (ug-fetch-sheet): core.ug's `UgFetch` (`processSong`, `keepVersion`,
+  `checkedSince`, `needsArtistPage`), ug/fetch.py's for one song, never its bulk work (no fetch_songs,
+  rescore_kept_sheets or handoffs), in internal/fetch/:
+  - `Pages`: `_read_page` and its one more fetch past the cache, kv `ug:unreadable:<tab>` (7 days, doubling, 90 at
+    most), RobotsClosed neither gone nor unreadable, a 404 a version gone, each page's versions recorded
+    (`_check_links`), its artist's page learned (kv `ug:artist_url:`);
+  - `Slots`: the groups rated from the lowest unrated id (a slug naming no part first), the pins and the pinned URL,
+    the sheet slot (another site's sheet replaced only as `replaces_sheet` says, LaCuerda's you picked never but by a
+    pin, a complete one retiring the auto sheet) and the tab slot; `Beside`: the versions kept beside the sheet, beside
+    a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
+  - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
+    answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
+  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's (it replaces the skeleton's `ArtistRoute.find`,
+    which nothing calls), `artist_is_known` whole; until it lands its route and lists answer as Python's list cut short
+    does: no request, the song marked dirty and left unchecked, never clean.
+- The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
+  scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
+  beside it: …"), `_ug_ready`'s skips ("not on the phone yet" where Python reads the artist's page), and what asking
+  came to in `LookupWords.end`'s words; the envelope (InteractiveAsk) marks the song owed a fetch (`_owed`), and the
+  frame (LookupRun) asks the ug stage within `after_the_sheet`, and LaCuerda after a sheet stage that kept none.
+- tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario records, and
+  ug_sheet_stages.jsonl, get.py's words for the two stages and `_ug_ready`'s answers (`UgFetchReplay`, area
+  `ug-fetch`).
+- UG's artist pages (ug-fetch-artist): not built yet.
+- core.match's `Matcher`: match.py for a lookup's song (`matchAll`, `candidatesOf`; the ladder, `Ladder`; the index
+  as it reads it, `IndexView`), each answer Python's for the same index and overrides.
+  - Its scores are core.fuzz's: `ratio` and `extract`, `osaDistance` and `extractDistance` (rapidfuzz's OSA, the typo
+    route's: the nearest first, then by index), and `tokenSetRatio` (music.py's names); each rounded as
+    `round(score, 1)` (`Py.round`), each list sorted in code points, a range's bound U+10FFFF as one code point.
+  - `matchAll` writes as `_save` does, through `Versions` (`updateSong`, `markStale`, `refreshStatus`), the candidates
+    as json.dumps' text; an index not complete (no `ug:index:built_at`) records no miss and undoes nothing the ladder
+    found.
+  - `IndexView` loads the artist keys, the title keys and the catch-alls' songs whole only once a step reaches them: a
+    song steps 1 and 2 settle loads none (MatcherTest).
+  - A stored candidate may name no step (`MatchCandidate.step` null, as match._stored's `c.get("step")`):
+    `candidatesOf` gives those that name a UG song.
+  - The lookup's match stage (core/lookup/sites/Match.kt, `MatchStage`): `ArtistTabs.backfill` from the lookup's
+    cache alone (`StageContext.cacheDir`, which the frame gives every stage whatever asking it passes; its keys made
+    current first), then `matchAll` over the song, get.py's words for what it came to.
+  - tests/test_conformance_match.py writes vectors/match/ (test_match.py's cases harvested, a few views over keys past
+    U+FFFF, a seeded library, the stage), tests/test_conformance_fuzz.py vectors/fuzz/osa*.jsonl and
+    token_set.jsonl: `MatchReplay`.
+  - MatcherBench (`gradle bench`, 1.5 M rows, its own heap) times one song and its heap; a song that reaches
+    title_only loads every title key, about 100 MiB on the JVM, the phone's to measure.
 - core.lyrics' `Lrclib`, `Megalobiz` and `AzLyrics`: lyrics.py, megalobiz*.py and azlyrics*.py for a lookup's song,
   and their stages, get.py's `_lrclib`, `_megalobiz` and `_azlyrics` (core/lookup/sites/, its words; lane lookup's
   frame puts them together as `_then` does).
@@ -1380,7 +1422,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the link back's, is milestone 5's.
   - tests/test_conformance_lyrics.py writes vectors/sites/{lrclib,megalobiz,azlyrics}.jsonl (the parsers and pickers
     over tests/fixtures/) and vectors/lookup/ the same (each pass of one song as a scenario record): `LyricsReplay`.
-- LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
+- LaCuerda's pages and search (lacuerda-pages), core.lacuerda:
+  - `LaCuerdaPages`, lacuerda.py's pages read as the computer reads them (core.html's tree, PyRegex for its regexes
+    over the raw page, Python's str and int on code points): an artist page's songs, their popularity and the
+    artist's name, the "aqui llega:" body, a version's sheet in UG markup, an answer of its search (every page cut
+    short a `LaCuerdaParseError`), `parseLcd`, `bestAcordesVersion`, `matchTitle`, `looksSpanish`, `searchWords` and
+    `searchUrl`; the listings' pages are the nightly run's alone, never read on the phone;
+  - `LaCuerda`'s store writers, lacuerda_index.py's `store_songs`, `store_artist_page`, `store_search` and
+    `_replace`, each noting the page it wrote (`Reads.note`: "<slug>/", or `busca.php` for an answer with rows, at
+    the store's `at`), which index-push sends;
+  - `LaCuerdaSearch`, lacuerda_search.py: `queryKey`, `asked`, `answersWell`, `answered`, the failures
+    (`recordFailure`, `forgetFailure`, `failed`, `Failure.said`), `searchesUsed`, `gate` (and its /api/search shape,
+    `SearchGate.of`, of `answersWell` over the route's own kept hits) and `search`: its one request, the answer
+    stored and its kv in one savepoint, the count it states Python's int of any size;
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
+    vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
+- LaCuerda's sheets (lacuerda-sheets): not built yet.
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
