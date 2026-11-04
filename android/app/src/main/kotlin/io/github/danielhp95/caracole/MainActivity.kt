@@ -65,6 +65,8 @@ class MainActivity : Activity() {
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
     private lateinit var label: SizeLabel
+    /** alphaTab's bundle from the APK's assets, which the sandboxed Guitar Pro page asks for with no cookie. */
+    private lateinit var alphaTab: AlphaTabAssets
     /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
     private var ownTextZoom = TextZoom.DEFAULT
     private var scope: CoroutineScope = MainScope()
@@ -83,6 +85,7 @@ class MainActivity : Activity() {
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
         settings = Settings(this)
+        alphaTab = AlphaTabAssets(this)
         fitInsets()
 
         ownTextZoom = web.settings.textZoom
@@ -115,8 +118,8 @@ class MainActivity : Activity() {
                 title.text = text?.takeIf { it.isNotBlank() } ?: getString(R.string.app_name)
             }
         }
-        // A link with `download` (a Guitar Pro file on the library page), or a file the WebView can't show, comes
-        // here, not as a navigation.
+        // A link with `download` (a Guitar Pro file on the library page, the viewer's Export PDF), or a file the
+        // WebView can't show, comes here, not as a navigation.
         web.setDownloadListener { url, _, _, _, _ -> follow(url, download = true) }
 
         findViewById<ImageButton>(R.id.more).setOnClickListener { menu(it) }
@@ -282,7 +285,7 @@ class MainActivity : Activity() {
 
     /**
      * Where a link the page follows goes ([Links.route]; with [download], one the WebView's download listener heard);
-     * true when the WebView doesn't load it.
+     * true when the WebView doesn't load it. The viewer's Export PDF prints the viewer shown ([Printer]).
      */
     private fun follow(url: String, download: Boolean = false): Boolean {
         val links = links ?: return true
@@ -290,6 +293,7 @@ class MainActivity : Activity() {
             Route.Page -> false
             is Route.File -> { handOff(route.path); true }
             is Route.Browser -> { Handoff.openBrowser(this, route.url); true }
+            is Route.Print -> { Printer.print(this, web, route.url); true }
             Route.Ignored -> true
         }
     }
@@ -323,10 +327,10 @@ class MainActivity : Activity() {
 
     private inner class Client : WebViewClient() {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-            // The phone's server, at its exact origin, is all the WebView loads: anything else (another port of
-            // 127.0.0.1 among them, which the launch's cookie would reach, cookies ignoring the port) is a 404 here
-            // and reaches no socket.
-            if (links?.loads(request.url.toString()) == true) null else notFound()
+            // alphaTab's bundle first, from the APK ([AlphaTabAssets]). Then the phone's server, at its exact origin,
+            // is all the WebView loads: anything else (another port of 127.0.0.1 among them, which the launch's
+            // cookie would reach, cookies ignoring the port) is a 404 here and reaches no socket.
+            alphaTab.answer(request) ?: if (links?.loads(request.url.toString()) == true) null else notFound()
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             if (request.isForMainFrame) follow(request.url.toString()) else false
