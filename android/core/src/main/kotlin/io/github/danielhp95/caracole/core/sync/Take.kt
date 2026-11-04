@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sync
 
 import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -10,7 +11,6 @@ import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.PyRepr
 import io.github.danielhp95.caracole.core.library.internal.Rekey
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.Upsert
 import io.github.danielhp95.caracole.core.sync.internal.take.Backups
 import io.github.danielhp95.caracole.core.sync.internal.take.SongTake
@@ -65,7 +65,7 @@ object Take {
         val songs = sortedSetOf<Long>()
         val respelled = mutableListOf<String>()
         var songbooks = false
-        Rekey.ensure(db, Stamps.parse(now)?.stamp ?: Stamps.now())
+        Rekey.ensure(db, Stamps.parse(now)?.let(Stamps::stamp) ?: Stamps.now())
         // Each unit's digest here now, before the take changes any; or why this library can't be read.
         var unreadable: String? = null
         val here = if (expectedHere.isEmpty()) emptyMap() else try {

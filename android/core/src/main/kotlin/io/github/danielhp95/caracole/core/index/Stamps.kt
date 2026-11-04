@@ -1,14 +1,18 @@
 package io.github.danielhp95.caracole.core.index
 
+import io.github.danielhp95.caracole.core.library.internal.PyRepr
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 
 /**
- * stamps.py's reading of a stored time, as a merge compares two (`stamps.parse`: `datetime.fromisoformat`, then the
- * time in UTC, a naive one being UTC already), and how caracole writes one (`stamps.stamp`: "2026-10-18T03:30:00Z").
+ * stamps.py on the phone, its one port: how caracole reads a stored time (`stamps.parse`: `datetime.fromisoformat`,
+ * then the time in UTC, a naive one being UTC already), as a merge compares two, a take reads its `now` and LaCuerda's
+ * index asks whether its listings were read whole; and how caracole writes one (`stamps.stamp`:
+ * "2026-10-18T03:30:00Z"). vectors/index/stamps.jsonl and vectors/library/stamps.jsonl hold Python's answers.
  *
  * A time is its instant, in microseconds since 0001-01-01T00:00:00 UTC, so that two compare as Python's aware
  * datetimes do. [parse] reads what CPython 3.14's C `datetime.fromisoformat` reads (tests/conformance/vectors/index/
@@ -34,6 +38,9 @@ object Stamps {
     private const val MIN_US = 0L
     private val END_US: Long by lazy { (ordinal(10000, 1, 1) - 1) * DAY_US }
 
+    /** 1970-01-01T00:00:00 UTC, java.time's epoch, as a time here. */
+    private val UNIX_US: Long by lazy { (ordinal(1970, 1, 1) - 1) * DAY_US }
+
     /** stamps.parse(value) for a string: null when [value] is null, empty or no time. */
     fun parse(value: String?): Long? {
         if (value.isNullOrEmpty()) return null
@@ -57,6 +64,27 @@ object Stamps {
         value is JsonArray && value.isEmpty() -> null
         value is JsonObject && value.isEmpty() -> null
         else -> throw IllegalArgumentException("fromisoformat: argument must be str")
+    }
+
+    /** stamps.stamp of a time the clock gave: [at] in UTC to the second, "2026-10-18T03:30:00Z". */
+    fun of(at: Instant): String = stamp(micros(at))
+
+    /** The clock now, as caracole stores a time (songs.utc_now_iso). */
+    fun now(): String = of(Instant.now())
+
+    /** peer_sync._when, then stamps.stamp: [now] as caracole stores a time, or IllegalArgumentException("not a time:
+     * 'soon'") for one stamps.parse reads as none. */
+    fun stampOf(now: String): String =
+        parse(now)?.let(::stamp) ?: throw IllegalArgumentException("not a time: ${PyRepr.str(now)}")
+
+    /** [at] as a time here: microseconds since 0001-01-01T00:00:00 UTC (a fraction of a microsecond dropped). */
+    fun micros(at: Instant): Long =
+        UNIX_US + Math.multiplyExact(at.epochSecond, SECOND_US) + Math.floorDiv(at.nano, 1000)
+
+    /** A time here as java.time's instant. */
+    fun instant(micros: Long): Instant {
+        val sinceUnix = micros - UNIX_US
+        return Instant.ofEpochSecond(Math.floorDiv(sinceUnix, SECOND_US), Math.floorMod(sinceUnix, SECOND_US) * 1000)
     }
 
     /** stamps.stamp: [instant] in UTC to the second, "2026-10-18T03:30:00Z". */
