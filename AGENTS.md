@@ -1288,7 +1288,19 @@ Not built yet. (lookup.)
 - The matcher (matcher): not built yet.
 - LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- harptabs.com (harptabs) and gametabs.net (gametabs): not built yet.
+- gtptabs.com and MuseScore (tab-files), core.sites' `GtpTabsPages`, `GtpTabsFetch` and `MuseScorePages`: gtptabs.py's,
+  gtptabs_fetch.py's and musescore.py's rules for a lookup's song, every regex PyRegex's.
+  - `GtpTabsFetch.gtptabsFiles`: the pass with `refresh_index=False` (the computer's index, no sitemap read), its
+    candidates (internal `GtpPass`), three downloads at most, the file kept as the lowest free `guitar-N` (Kept,
+    Versions, Numbering), kv `gtptabs:checked:` and `gtptabs:unusable:`, `PagesNotFiles`; no info.json (M5's).
+  - `sniff` reads a Guitar Pro 7 zip's central directory as CPython's zipfile does (internal `ZipNames`: the end
+    records, zip64's, cp437 and UTF-8 names, the Unicode Path field), never java.util.zip's stream; inbox-share
+    reuses it.
+  - `titlePage`, the Requests tab's; `MuseScorePages.songPages`, links from the index alone, with no client.
+  - The lookup's gtptabs stage (core/lookup/sites/GtpTabs.kt) in get.py's words, the envelope's as LookupWords'.
+  - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
+    lookup/gtptabs.jsonl (its stage records asked as get.py asks): `TabFilesReplay`.
 
 ##### The Requests tab on the phone
 
