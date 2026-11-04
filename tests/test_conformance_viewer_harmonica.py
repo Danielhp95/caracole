@@ -63,6 +63,7 @@ Regenerate: ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_con
 
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import json
@@ -294,6 +295,7 @@ def named(name: str) -> dict[str, str]:
     return {"named": name}
 
 
+@functools.cache
 def _page_facts() -> dict[str, tuple[str | None, str | None, dict[str, Any]]]:
     """Each tab page's chips: its key, its harp, its version's raw."""
     out = {}
@@ -363,6 +365,11 @@ def _words_texts() -> list[str]:
 
 
 def harpfit_records() -> list[dict[str, Any]]:
+    return copy.deepcopy(_harpfit_records())
+
+
+@functools.cache
+def _harpfit_records() -> list[dict[str, Any]]:
     rng = random.Random(SEED + 2)
     records: list[dict[str, Any]] = [
         {"fn": F + "pitch", "args": [list(PITCH_NAMES) + [None]], "out": [harpfit.pitch(n) for n in PITCH_NAMES]
@@ -566,13 +573,19 @@ def _call(ref: dict[str, str], kw: dict[str, Any]) -> str:
     return harptab_page.build_harmonica_viewer(text_of(ref), **given)
 
 
+@functools.cache
+def _built() -> tuple[str, ...]:
+    """Each of _pages()'s pages, built once a process."""
+    return tuple(_call(ref, kw) for ref, kw in _pages())
+
+
 def page_records() -> list[dict[str, Any]]:
     out = parts_records()
-    for ref, kw in _pages():
+    for (ref, kw), html in zip(_pages(), _built()):
         given = dict(kw)
         if "cho" in given:
             given["cho"] = named(given["cho"])
-        out.append({"fn": P + "build_harmonica_viewer", "args": [ref], "kw": given, "out": page_out(_call(ref, kw))})
+        out.append({"fn": P + "build_harmonica_viewer", "args": [ref], "kw": given, "out": page_out(html)})
     return out
 
 
@@ -585,7 +598,7 @@ def test_the_pages_cover_every_option():
     pages = _pages()
     used = {k for _, kw in pages for k in kw}
     assert used >= set(DEFAULTS) | {"title", "tab_file"}, set(DEFAULTS) - used
-    built = [(_call(ref, kw), kw) for ref, kw in pages]
+    built = [(html, kw) for (_, kw), html in zip(pages, _built())]
     assert any('<pre class="tab">' in html for html, _ in built)  # a tab shown as written
     assert any('<pre class="tab asw">' in html for html, _ in built)  # a row shown as written
     assert any(_NAMES in html for html, _ in built)
