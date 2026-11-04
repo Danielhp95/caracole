@@ -1276,7 +1276,21 @@ Not built yet. (lookup.)
     a share of the `sites` area every site lane writes: a record only where it can answer otherwise than another
     (a policy by the fields that differ from `RankPolicy()`'s, which its first record gives).
 - The matcher (matcher): not built yet.
-- LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
+- core.lyrics' `Lrclib`, `Megalobiz` and `AzLyrics`: lyrics.py, megalobiz*.py and azlyrics*.py for a lookup's song,
+  and their stages, get.py's `_lrclib`, `_megalobiz` and `_azlyrics` (core/lookup/sites/, its words; lane lookup's
+  frame puts them together as `_then` does).
+  - An answer read as json.loads reads it (PyJson: a number an int or a float as Python's, `lyrics.internal.PyValues`
+    for `isinstance` and `repr`), a length `round()`ed half to even, Megalobiz's stamps as
+    `f'{ms % 60000 / 1000:05.2f}'` writes them (PyFormat), AZLyrics' pages by Python's regexes over the text and
+    `html.unescape` (PyHtml).
+  - LRC's stamps are read in one place, library/internal/LyricsFiles.kt (any decimal digits, a minute of any length,
+    as Python's `\d`, `int()` and `float()`), for `Lyrics.fromRecord` and the files written: `lyrics.txt`,
+    `lyrics.lrc` and `lyrics_json` byte for byte.
+  - kv `lyrics:failed:`, `megalobiz:checked:` and `azlyrics:checked:` as Python's: an error never a miss, a song
+    LRCLIB missed back to pending; Megalobiz's per-day limit is the lookup's client's (`Pace.withinTheDay`); info.json,
+    the link back's, is milestone 5's.
+  - tests/test_conformance_lyrics.py writes vectors/sites/{lrclib,megalobiz,azlyrics}.jsonl (the parsers and pickers
+    over tests/fixtures/) and vectors/lookup/ the same (each pass of one song as a scenario record): `LyricsReplay`.
 - LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
