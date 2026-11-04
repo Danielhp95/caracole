@@ -3,7 +3,9 @@ package io.github.danielhp95.caracole.core.testing.replays
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.sync.PeerState
+import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -17,17 +19,20 @@ import java.nio.file.Files
 
 /**
  * The computer's settings taken (tests/test_conformance_sync.py; the spec
- * docs/superpowers/specs/2026-11-03-politeness-crossing.md, "Settings"), each record on a database of its own:
+ * docs/superpowers/specs/2026-11-03-politeness-crossing.md, "Settings"), each record on a database of its own, and
+ * each take the agree stage's own: a state document of the record's `settings` read by PeerState.read (as
+ * PeerClient.state reads the computer's), then SyncEngine.takeSettings.
  *
  * - vectors/sync/settings.jsonl: for each caracole.toml of Python's (`args[0]`), its settings document (`out`,
- *   politeness.settings_document) taken by PhoneConfig.take, kept as kv `phone:settings` as db.kv_set_json writes a
- *   value, and PhoneConfig.read then answering what config.py holds for that caracole.toml (`phone`: config.json's
- *   shape, its `switchable` aside, with `name`);
+ *   politeness.settings_document) taken, kv `phone:settings` then holding that document whole, and PhoneConfig.read
+ *   answering what config.py holds for that caracole.toml (`phone`: config.json's shape, its `switchable` aside, with
+ *   `name`);
  * - vectors/sync/settings_take.jsonl: the take rule by rule, `args` `[kept, settings]` (kv `phone:settings` before, a
- *   document or null; the state's `settings`, null when it gives none, which the agree stage then takes nothing of),
- *   `out` `{kept, read}` (the record after, and what PhoneConfig.read answers then, in `phone`'s shape).
+ *   document or null; the state's `settings`, null when it gives none), `out` `{kept, read}` (the record after, and
+ *   what PhoneConfig.read answers then, in `phone`'s shape).
  *
- * Value for value: a number by its value, since Python writes `accept` 90 where the phone holds 90.0.
+ * Value for value: a number by its value, since Python writes `accept` 90 where the phone holds 90.0. The record's
+ * text is PyJson.dumps's, which the `canonical` area's vectors hold to Python's json.dumps. A missing vector fails.
  */
 object SettingsReplay : AreaReplay {
     override val area = "settings"
@@ -36,11 +41,9 @@ object SettingsReplay : AreaReplay {
     const val TAKES = "sync/settings_take.jsonl"
 
     override fun replay(misses: Misses) {
-        // waiting on crossing-computer (the vectors) and health-pace (PhoneConfig.read): Phase A's guard.
-        if (!reads()) return
         withDb { db ->
-            if (present(VECTOR)) documents(db, misses)
-            if (present(TAKES)) takes(db, misses)
+            documents(db, misses)
+            takes(db, misses)
         }
     }
 
@@ -53,9 +56,9 @@ object SettingsReplay : AreaReplay {
                 continue
             }
             db.kvDelete(PhoneConfig.SETTINGS_KV)
-            PhoneConfig.take(db, doc)
-            val kept = db.kvGet(PhoneConfig.SETTINGS_KV)
-            misses.check(kept == PyJson.dumps(doc)) { "$case: phone:settings = $kept, kv_set_json's ${PyJson.dumps(doc)}" }
+            take(db, doc)
+            val kept = db.kvGetJson(PhoneConfig.SETTINGS_KV) ?: JsonNull
+            misses.check(same(kept, doc)) { "$case: phone:settings = $kept, the document $doc" }
             val got = shape(PhoneConfig.read(db))
             val want = r.extra["phone"]
             misses.check(want != null && same(got, want)) { "$case: PhoneConfig.read = $got, Python's $want" }
@@ -75,7 +78,7 @@ object SettingsReplay : AreaReplay {
             }
             db.kvDelete(PhoneConfig.SETTINGS_KV)
             if (before is JsonObject) db.kvSetJson(PhoneConfig.SETTINGS_KV, before)
-            if (settings is JsonObject) PhoneConfig.take(db, settings)  // the agree stage: none given, none taken
+            take(db, settings)
             val kept = db.kvGetJson(PhoneConfig.SETTINGS_KV) ?: JsonNull
             val wantKept = out["kept"] ?: JsonNull
             misses.check(same(kept, wantKept)) { "$case: phone:settings = $kept, Python's $wantKept" }
@@ -85,20 +88,17 @@ object SettingsReplay : AreaReplay {
         }
     }
 
-    /** Whether the vectors are there (lane crossing-computer writes them), each or [name]. */
-    fun present(name: String? = null): Boolean =
-        (name?.let(::listOf) ?: listOf(VECTOR, TAKES)).all { Corpus.open(it)?.use { true } ?: false }
+    /** The agree stage's take of a state whose `settings` is [settings] (JsonNull: a state that gives none). */
+    private fun take(db: Db, settings: JsonElement) = SyncEngine.takeSettings(db, PeerState.read(state(settings)))
 
-    /** Whether PhoneConfig.read lays kv `phone:settings` over the defaults (lane health-pace's; the defaults alone
-     * before it). */
-    fun reads(): Boolean {
-        var reads = false
-        withDb { db ->
-            db.kvSet(PhoneConfig.SETTINGS_KV, """{"user_agent": "caracole/0.1 (a probe)"}""")
-            reads = PhoneConfig.read(db).userAgent == "caracole/0.1 (a probe)"
-        }
-        return reads
-    }
+    /** A state document as GET /api/peer/state answers one, with no unit and [settings] as its `settings`. */
+    private fun state(settings: JsonElement): JsonObject = obj(
+        "format" to JsonPrimitive(Units.FORMAT), "server" to JsonPrimitive("0123456789abcdef"),
+        "caracole" to JsonPrimitive("0.1.0"), "name" to JsonPrimitive("Desk"),
+        "now" to JsonPrimitive("2026-11-03T12:00:00Z"), "indexes" to JsonObject(emptyMap()),
+        "units" to JsonObject(emptyMap()), "base" to JsonNull, "settings" to settings,
+        "token" to JsonPrimitive("computer-token-1"),
+    )
 
     /** [cfg] in config.json's shape (tests/test_conformance_config.py's, its `switchable` aside), with `name`. */
     fun shape(cfg: PhoneConfig): JsonObject = JsonObject(linkedMapOf(

@@ -16,11 +16,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -38,8 +38,6 @@ class SettingsTest {
     private val settings = FakeComputer.SETTINGS
 
     @Test fun `every record of vectors sync settings and settings_take is answered as Python answered it`() {
-        assumeTrue("waiting on crossing-computer: ${SettingsReplay.VECTOR}, ${SettingsReplay.TAKES}", SettingsReplay.present())
-        assumeTrue("waiting on health-pace: PhoneConfig.read", SettingsReplay.reads())
         val misses = Misses("settings")
         SettingsReplay.replay(misses)
         misses.assertNone()
@@ -63,6 +61,18 @@ class SettingsTest {
             assertNull(read.settings, "$none")
             assertEquals("Desk", read.name)
             assertEquals("computer-token-1", read.token)
+        }
+        // PeerState.read, the replay's way in, is the same reading; a document that isn't a state is a PeerError.
+        assertEquals(Documents.state(state("settings" to settings)), PeerState.read(state("settings" to settings)))
+        assertFailsWith<PeerError> { PeerState.read(JsonObject(mapOf("settings" to settings))) }
+    }
+
+    @Test fun `the agree stage's take keeps what a state gives and nothing of one that gives none`() = db { db ->
+        SyncEngine.takeSettings(db, PeerState.read(state("settings" to settings)))
+        assertEquals(PyJson.dumps(settings), db.kvGet(PhoneConfig.SETTINGS_KV))
+        for (none in listOf(state(), state("settings" to JsonNull), state("settings" to JsonArray(emptyList())))) {
+            SyncEngine.takeSettings(db, PeerState.read(none))
+            assertEquals(PyJson.dumps(settings), db.kvGet(PhoneConfig.SETTINGS_KV), "$none")
         }
     }
 
@@ -99,7 +109,6 @@ class SettingsTest {
     }
 
     @Test fun `what a take keeps is what PhoneConfig read answers`() = db { db ->
-        assumeTrue("waiting on health-pace: PhoneConfig.read", SettingsReplay.reads())
         db.kvDelete(PhoneConfig.SETTINGS_KV)
         PhoneConfig.take(db, settings)
         val cfg = PhoneConfig.read(db)
@@ -111,7 +120,7 @@ class SettingsTest {
         assertEquals(PhoneConfig.DEFAULTS.provider("lacuerda"), cfg.provider("lacuerda"))
         assertEquals(PhoneConfig.DEFAULTS.provider("lrclib"), cfg.provider("lrclib"), "a provider it doesn't name")
         assertEquals(MatchPolicy(accept = 85.5, review = 70.0), cfg.match)
-        assertEquals(RankPolicy(coverageThreshold = 0.75, lineMatch = 80, priorVotes = 12, scoredSheets = 4), cfg.rank)
+        assertEquals(RankPolicy(coverageThreshold = 0.75, lineMatch = 80.0, priorVotes = 12.0, scoredSheets = 4), cfg.rank)
     }
 
     private fun kv(db: Db): Map<String, String?> =

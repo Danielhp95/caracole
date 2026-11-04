@@ -565,9 +565,11 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
         fun obj(vararg members: Pair<String, JsonElement>) = JsonObject(linkedMapOf(*members))
 
-        /** A computer's settings document (politeness.settings_document of a caracole.toml that names its library,
-         * gives its own user agent, turns Megalobiz off, slows UG's lookups and sets its own match and rank): a few
-         * providers of config.py's, in its order, each with its switch and a lookup's settings alone. */
+        /** A settings document made by hand, partial as an older computer's might be (one settings_document writes
+         * names every provider of config.py's, in order; vectors/sync/settings.jsonl holds such documents): a library
+         * named, its own user agent, Megalobiz off, UG's lookups slowed, its own match and rank, and three providers
+         * alone, each with its switch and a lookup's settings, so that a test sees a provider it doesn't name keep
+         * the phone's. */
         val SETTINGS: JsonObject = Canonical.parse("""{"name": "Canciones de Dani · 歌", "user_agent": "caracole/0.1 (Dani's tabs)",
             "providers": {"ug": {"enabled": true, "lookup_delay": [0.5, 1.5], "lookup_requests": 3,
                                  "lookup_per_hour": 30, "per_day": null},

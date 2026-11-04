@@ -373,9 +373,12 @@ class SyncEngineTest {
         assertEquals(computer.settings, c.peer.settings)
         assertNull(settingsHeld(), "a comparison takes nothing")
 
-        // The state agree reads is the one whose settings are taken: the computer's latest.
-        computer.settings = FakeComputer.SETTINGS
+        // The state agree reads is the one whose settings are taken: the computer's latest, never the comparison's
+        // nor the one stage 1 reads again (the settings change on the computer while the phone takes its unit).
+        computer.settings = JsonObject(mapOf("user_agent" to JsonPrimitive("caracole/0.1 (as the sync began)")))
+        computer.onUnit = { computer.settings = FakeComputer.SETTINGS }
         val outcome = apply(c)
+        assertEquals(listOf(c.differences.single().id), outcome.taken)
         assertEquals(1, outcome.agreed)
         assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
         assertEquals(SyncEngine.STAGES.map { it.first }, stages.map { it.first }.distinct())
