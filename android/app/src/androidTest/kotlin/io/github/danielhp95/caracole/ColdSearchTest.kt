@@ -19,10 +19,13 @@ import java.io.File
  * the JVM's): a phone imports 300,000 ug_index rows (BigIndex, made in the test) as Settings' Import does, is killed
  * with its database open, starts again, warms up as Phone does at start, and answers /api/search (ColdSearch). The
  * import leaves a WAL of at most the journal size limit, and the first search answers within 3 s, or within twice a
- * warm search's time, whichever is larger. Its numbers go to the instrumentation's output and the log (ColdSearchTest),
- * for android/README.md's Performance notes.
+ * warm search's time, whichever is larger. Its numbers, and those of the same run as the phone ran before prep-db's
+ * fixes (ColdSearch's `fixed` false), go to the instrumentation's output and the log (ColdSearchTest), for
+ * android/README.md's Performance notes; each method in a process of its own, as a start is:
  *
- *     android/scripts/device-test.sh ColdSearchTest
+ *     android/scripts/device-test.sh 'ColdSearchTest#asThePhoneRanBeforeTheFixes' \
+ *         'ColdSearchTest#theFirstSearchAfterAStartAnswersAsAWarmOneDoes'
+ *     android/scripts/device-test.sh ColdSearchTest    # both, in one process
  */
 @RunWith(AndroidJUnit4::class)
 class ColdSearchTest {
@@ -38,6 +41,14 @@ class ColdSearchTest {
     @After
     fun gone() {
         dir.deleteRecursively()
+    }
+
+    /** The same run as the phone ran before prep-db's fixes (ColdSearch's `fixed` false), measured alone, for the
+     * Performance notes' "before": run it in a process of its own, as a start is
+     * (`device-test.sh 'ColdSearchTest#asThePhoneRanBeforeTheFixes'`), never after the other in one. */
+    @Test
+    fun asThePhoneRanBeforeTheFixes() {
+        said("ColdSearchTest: " + ColdSearch(dir, ROWS, fixed = false).run())
     }
 
     @Test

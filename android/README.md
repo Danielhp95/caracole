@@ -310,27 +310,37 @@ Now:
   (`Vocabulary.REREAD`), rather than added one at a time to lists of tens of thousands.
 
 **Measured** (`ColdSearch`: a synthetic index of 300,000 ug_index rows, 70,687 words of their keys, imported, the
-phone killed with it open, started again, its warm-up, then a misspelt query that looks for close spellings too):
+phone killed with it open, started again, its warm-up, then a misspelt query that looks for close spellings too).
+"Before" is the same run over the same index with the fixes off (`ColdSearch(fixed = false)`: no journal size limit,
+no checkpoint after the import or as the database opens, no optimize, no warm-up; Vocabulary's re-read, which it
+can't turn off, is in both), each in a process of its own, as a start is:
 
-| | Before | After |
-|---|---|---|
-| Emulator (Android 36, x86_64): the WAL the import left | 66.5 MiB | 0 |
-| Emulator: the import (merge, then checkpoint) | 8.0 s | 11.9 s, the checkpoint 14 ms |
-| Emulator: the first /api/search after a start, and a warm one | 35 ms, 27 ms | 51 ms after a 54 ms warm-up, 30 ms |
-| Emulator: the first search after an import while the app runs, and a warm one | | 14 ms, 10 ms |
-| JVM (`gradle bench`): the WAL the import left | 66.5 MiB | 0 (the merge alone, of 200,000 rows: 16 MiB, the limit) |
+| Emulator (Android 36, x86_64) | Before | After | What moved it |
+|---|---|---|---|
+| The WAL the import left | 72.7 MiB | 0 | the import's checkpoint (without it, the journal size limit: 16 MiB) |
+| The import: merge, then checkpoint | 5.5 s | 5.5 s, the checkpoint 3 ms | nothing (the optimize is under 0.1 s of it) |
+| A start: the database opened, and the WAL it finds | 3 ms, 72.7 MiB | 3 ms, none | the import's checkpoint (killed before it: the one at open) |
+| The first search's steps in a new process, cold | 133 ms | 116 ms | nothing: the same steps (your songs 32 to 42 ms, MuseScore 44 ms, the close spellings 25 to 29 ms), which the warm-up now pays as the app starts |
+| The first /api/search after a start, and a warm one | 21 ms, 14 ms | 20 ms after a 22 ms warm-up, 12 ms | nothing beyond the emulator's noise |
+| The first search after an import while the app runs, and a warm one | 18 ms, 10 ms | 12 ms, 8 ms | a few ms, near the noise: the optimize's one segment each |
 
-The "before" index had fewer words (a first version of the generator), so its search times aren't the "after"'s to
-compare; the WAL is. Neither the emulator nor the JVM shows the phone's 30 s: over an index in the page cache the
-first search's own steps take about 0.2 s cold on the emulator (`ColdSearch.Result.steps`: your songs 73 ms, MuseScore
-105 ms, the close spellings 80 ms, the names 19 ms; UG's index, LaCuerda and the other sites under 10 ms each), which
-the warm-up now pays. What was cold on the phone is what a big WAL costs on its storage: the rebuild of the WAL's
-index from a 387 MB file at a start, and reads through it until a checkpoint. The owner's phone's numbers are the M4
-check's to take.
+ColdSearch runs the cold steps first, so the start after them finds the code loaded: the first search after it, and
+the warm-up's 22 ms, are the database's alone. On the JVM (`gradle bench`) the import's WAL is the same, 72.7 MiB
+before and 0 after, and CheckpointBench's merge of 200,000 rows alone leaves 16 MiB (the limit), which its checkpoint
+gives back (PASSIVE 10 ms, then TRUNCATE 2 ms); its search times are left out, within the noise of a machine other
+builds share.
 
-Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, MergeSpeedBench)
-and `android/scripts/device-test.sh ColdSearchTest`; `Timings` (core.db, behind `-Dcaracole.timings=1`, never in a
-page) times each step.
+Neither the emulator nor the JVM shows the phone's 30 s: over an index in the page cache the first search's own steps
+take about 0.13 s cold on the emulator (`ColdSearch.Result.steps`), which the warm-up now pays. What was cold on the
+phone is what a big WAL costs on its storage: the rebuild of the WAL's index from a 387 MB file at a start, and reads
+through it until a checkpoint, which the import's checkpoint now leaves none of. The owner's phone's numbers are the
+M4 check's to take.
+
+Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, its two runs each
+in a JVM of its own, and MergeSpeedBench) and `android/scripts/device-test.sh
+'ColdSearchTest#asThePhoneRanBeforeTheFixes' 'ColdSearchTest#theFirstSearchAfterAStartAnswersAsAWarmOneDoes'` (each in
+a process of its own; `ColdSearchTest` alone runs both in one); `Timings` (core.db, behind `-Dcaracole.timings=1`,
+never in a page) times each step.
 
 ## Pages built on the phone
 

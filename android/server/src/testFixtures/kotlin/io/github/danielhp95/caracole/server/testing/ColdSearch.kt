@@ -39,16 +39,23 @@ import java.io.File
  *   ([Result.imported], merge and checkpoint), then [Result.afterImport], the first search after it, and
  *   [Result.warmAfterImport], the next ones'.
  *
+ * With [fixed] false, the same run as the phone ran before prep-db's fixes, for the "before" of the Performance notes'
+ * table: no journal size limit (SQLite's default) and so no checkpoint as a database opens, no checkpoint after the
+ * import, no FTS5 optimize after its merge and no warm-up. (Vocabulary's re-read after an import, the one fix it
+ * can't turn off, is in both.)
+ *
  * The folder [dir] holds the export and four phones; nothing else is written.
  */
-class ColdSearch(private val dir: File, private val rows: Int, private val now: String = "2026-11-03T12:00:00Z") {
+class ColdSearch(private val dir: File, private val rows: Int, private val now: String = "2026-11-03T12:00:00Z",
+                 private val fixed: Boolean = true) {
     class Result(
         val rows: Int, val words: Long, val merge: Long, val checkpoint: Long, val wal: Long, val open: Long,
         val walOpened: Long,
         val steps: List<Timings.Step>, val warmUp: Long, val first: Long, val warm: Long, val imported: Long,
-        val afterImport: Long, val warmAfterImport: Long, val queries: List<String>,
+        val afterImport: Long, val warmAfterImport: Long, val queries: List<String>, val fixed: Boolean = true,
     ) {
         override fun toString(): String = buildString {
+            append(if (fixed) "after: " else "before: ")
             append("$rows ug_index rows ($words words of their keys): merged in $merge ms, ")
             append("checkpoint $checkpoint ms, WAL left ${mib(wal)}; ")
             append("a start opened in $open ms, its WAL ${mib(walOpened)}; ")
@@ -62,16 +69,28 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         private fun mib(bytes: Long) = "${Math.round(bytes / 1048576.0 * 10) / 10.0} MiB"
     }
 
+    /** A phone's database, as [fixed] says: with the journal size limit, or none, SQLite's default. */
+    private fun phoneDb(file: File): Database =
+        Database(file, journalSizeLimit = if (fixed) Database.JOURNAL_SIZE_LIMIT else -1L)
+
+    private fun openIn(dir: File): Database = phoneDb(File(dir, "caracole.sqlite"))
+
+    /** The import's merge, its FTS5 optimize after it only when [fixed]. */
+    private fun mergeInto(db: Db, export: File) {
+        if (fixed) IndexTransfer.merge(db, export, now)
+        else IndexTransfer.merge(db, export, now, optimizeAfter = Long.MAX_VALUE)
+    }
+
     fun run(): Result {
         val big = BigIndex(rows)
         val export = big.export(File(dir, "export.sqlite"))
         val imported = File(dir, "import/caracole.sqlite")
         var merge = 0L
         var checkpoint = 0L
-        Database(imported).use { database ->
+        phoneDb(imported).use { database ->
             database.writeBlocking { IndexTransfer.seedFresh(it) }
-            merge = ms { database.writeBlocking { db -> IndexTransfer.merge(db, export, now) } }
-            checkpoint = ms { database.checkpoint() }
+            merge = ms { database.writeBlocking { db -> mergeInto(db, export) } }
+            if (fixed) checkpoint = ms { database.checkpoint() }
             // The phone killed with the database open, as Android stops an app: what it wrote, its WAL and all.
             BigIndex.killedCopy(imported, File(dir, "steps/caracole.sqlite"))
             BigIndex.killedCopy(imported, File(dir, "started/caracole.sqlite"))
@@ -84,7 +103,7 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         Timings.enabled = true
         Timings.take()
         val steps = try {
-            Database(File(dir, "steps/caracole.sqlite")).use { database -> database.read { db -> steps(db, query) } }
+            phoneDb(File(dir, "steps/caracole.sqlite")).use { database -> database.read { db -> steps(db, query) } }
             Timings.take()
         } finally {
             Timings.enabled = was
@@ -94,7 +113,8 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         val started = File(dir, "started")
         lateinit var routes: SearchRoutes
         val opening = System.nanoTime()
-        val app = TestApp(started, { db -> listOf(SearchRoutes(db, MirrorPageData(null)).also { routes = it }) })
+        val app = TestApp(started, { db -> listOf(SearchRoutes(db, MirrorPageData(null)).also { routes = it }) },
+                          open = ::openIn)
         val open = (System.nanoTime() - opening) / 1_000_000
         val target = "/api/search?q=${PyUrl.quote(query, safe = "")}&box=a"
         val walOpened: Long
@@ -103,7 +123,7 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         val warm: Long
         app.use {
             walOpened = File(started, "caracole.sqlite-wal").length()
-            warmUp = ms { app.database.warmUp() }
+            warmUp = if (fixed) ms { app.database.warmUp() } else 0L
             first = ms { check(app.script(target).status == 200) }
             warm = median { routes.invalidate(); check(app.script(target).status == 200) }
         }
@@ -112,19 +132,20 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         val running = File(dir, "running")
         var words = 0L
         lateinit var live: SearchRoutes
-        TestApp(running, { db -> listOf(SearchRoutes(db, MirrorPageData(null)).also { live = it }) }).use { phone ->
+        TestApp(running, { db -> listOf(SearchRoutes(db, MirrorPageData(null)).also { live = it }) },
+                open = ::openIn).use { phone ->
             phone.database.writeBlocking { IndexTransfer.seedFresh(it) }
             check(phone.script(target).status == 200)
             val imported = ms {
-                phone.database.writeBlocking { db -> IndexTransfer.merge(db, export, now) }
-                phone.database.checkpoint()
+                phone.database.writeBlocking { db -> mergeInto(db, export) }
+                if (fixed) phone.database.checkpoint()
                 live.invalidate()  // as Assembly.importIndex's job and afterJob do
             }
             words = phone.database.read { db -> db.one("SELECT COUNT(*) FROM ug_key_words") { it.long(0)!! }!! }
             val afterImport = ms { check(phone.script(target).status == 200) }
             val warmAfterImport = median { live.invalidate(); check(phone.script(target).status == 200) }
             return Result(rows, words, merge, checkpoint, wal, open, walOpened, steps, warmUp, first, warm, imported,
-                          afterImport, warmAfterImport, big.queries)
+                          afterImport, warmAfterImport, big.queries, fixed)
         }
     }
 
@@ -154,5 +175,29 @@ class ColdSearch(private val dir: File, private val rows: Int, private val now: 
         val t0 = System.nanoTime()
         block()
         return (System.nanoTime() - t0) / 1_000_000
+    }
+
+    companion object {
+        /** `ColdSearch DIR ROWS FIXED`: one run, printed, in a process of its own, as a phone's start is: what a
+         * process loads lazily (its code, the Unicode and pinyin tables, its regexes) cold for the first search, never
+         * warmed by another run before it (ColdSearchBench runs "before" and "after" each so). */
+        @JvmStatic
+        fun main(args: Array<String>) {
+            val (dir, rows, fixed) = args
+            println(ColdSearch(File(dir), rows.toInt(), fixed = fixed.toBooleanStrict()).run())
+        }
+
+        /** [main] in a JVM of its own, given this one's class path, heap and `caracole.*` properties: its output. */
+        fun inItsOwnProcess(dir: File, rows: Int, fixed: Boolean): String {
+            val java = File(System.getProperty("java.home"), "bin/java").path
+            val properties = System.getProperties().stringPropertyNames().filter { it.startsWith("caracole.") }
+                .sorted().map { "-D$it=${System.getProperty(it)}" }
+            val command = listOf(java, "-Xmx3g") + properties +
+                listOf("-cp", System.getProperty("java.class.path"), ColdSearch::class.java.name, dir.path, "$rows", "$fixed")
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            check(process.waitFor() == 0) { "ColdSearch in its own process failed:\n$output" }
+            return output.trim()
+        }
     }
 }
