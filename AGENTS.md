@@ -1172,7 +1172,18 @@ Not built yet. (crossing-phone.)
 
 ##### :viewer
 
-- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory): not built yet.
+- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory):
+  - `viewer.theory` is viewer/theory.py (`Chord`, `Key`, `Theory`, Python's parameter names), its tables and
+    patterns read from `data/caracole/viewer/theory.json`, which tests/test_conformance_viewer_theory.py writes from
+    the module, never retyped; `Chord` a class with a data class's members, so that its `tones` are a frozen copy as
+    Python's frozenset is, and every list handed out a copy (TheoryTest mutates them).
+  - `ViewerAssets` reads viewer/'s files as page.py does (strict UTF-8) and names each page kind's (`Page`, held by
+    vectors/viewer/theory_assets.jsonl); `ViewerData.table(module)` reads `data/caracole/viewer/<module>.json`
+    (viewer_corpus.py `data_json`'s format), which shares its classpath folder with viewer/'s assets: no module's
+    data is named `voicings*.json`.
+  - tests/helpers/viewer_corpus.py is the seeded inputs every M5 generator reads (its docstring), the same in every
+    process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
+    regenerates the corpus.
 - A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): not built yet.
 - Pinyin with tones, OpenCC and hanzi (chinese): not built yet.

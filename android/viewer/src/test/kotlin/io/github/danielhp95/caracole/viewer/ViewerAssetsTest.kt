@@ -71,7 +71,7 @@ class ViewerAssetsTest {
         assertSame(theory, ViewerData.table("theory"))
         assertEquals(listOf("ionian", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian"),
                      theory.getValue("MODES").jsonArray.map { it.jsonPrimitive.content })
-        for (name in listOf("", "../theory", "Theory", "theory.json", "a/b")) {
+        for (name in listOf("", "../theory", "Theory", "theory.json", "a/b", "voicings", "voicings_ukulele")) {
             assertFailsWith<IllegalArgumentException>(name) { ViewerData.table(name) }
         }
         assertFailsWith<IllegalStateException> { ViewerData.table("no_module_here") }
