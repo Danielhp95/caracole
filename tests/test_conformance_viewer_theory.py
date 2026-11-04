@@ -226,7 +226,7 @@ def key_of(key: Key) -> dict:
 
 def edge_of(key: Key) -> dict:
     """``key_of`` a key whose tonic is below 0, and capo_hints, sounding, shapes_key and bare_key where a limit or a
-    capo is."""
+    capo is below 0."""
     hints = [[capo, limit, theory.capo_hints(key, limit, capo=capo)] for capo in (0, *EDGE_CAPOS)
              for limit in (2, *EDGE_LIMITS)]
     shapes = []
