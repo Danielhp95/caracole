@@ -58,6 +58,9 @@ ran. So a job of other commands reads the same way:
   words, a wait too. While one runs, its running stage's line (``STAGE_LINES``: "Taking what changed there…").
   Another caracole's index pages merged (``caracole index merge --progress``) say "Merged".
 
+A caracole with no to-do page (the phone's, ``job_line``'s ``todo=None``) says a Not found and a review with
+nothing to pick in the same words, with no link.
+
 A line that ends in a failure or a wait also links to the job's output in
 the library page's Requests tab (``Line.details``, ``#tab=requests&job=N``). Every link is relative to the
 library page, which ``caracole serve`` serves at /. The Requests tab (feed.py) reads the same line and says
@@ -224,9 +227,12 @@ def details_href(job_id: int) -> str:
     return f"{REQUESTS}&job={job_id}"
 
 
-def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page: str | None = None) -> Line:
+def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page: str | None = None,
+             todo: str | None = TODO) -> Line:
     """The job's line; ``song`` is None while the library has no such song; ``ahead``: the jobs before it;
-    ``songbook_page``: for a songbook's change, its songbook's page (``songbooks.songbook_page``), if any."""
+    ``songbook_page``: for a songbook's change, its songbook's page (``songbooks.songbook_page``), if any;
+    ``todo``: the to-do page a Not found or a review with nothing to pick links, None for a caracole with none (the
+    phone's): the same words, with no link."""
     if job.state == "queued":
         return Line("queued", f"Queued behind {plural(ahead, 'request')}…" if ahead else "Queued…")
     if job.state == "running":
@@ -243,9 +249,9 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:
             if song.review:
-                return Line("review", "Needs review", _review_link(song), details)
+                return Line("review", "Needs review", _review_link(song, todo), details)
             if song.not_found:
-                return Line("missing", "Not found", ("see the to-do page", TODO), details)
+                return Line("missing", "Not found", _todo_link(todo), details)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     kind = peer_kind(job)
     if kind is not None:  # no song's: what it took, gave and left
@@ -277,13 +283,13 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if song is not None and song.ignored:
         return Line("added", "Ignored in overrides.toml")
     if song is not None and song.review:
-        return Line("review", "Needs review", _review_link(song))
+        return Line("review", "Needs review", _review_link(song, todo))
     if not job.fetching and song is not None and song.lacuerda:
         return Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
     if not job.fetching or song is None:
         return Line("added", "Added: the nightly run looks for it")
     if song.checked_now:
-        return Line("missing", "Not found", ("see the to-do page", TODO))
+        return Line("missing", "Not found", _todo_link(todo))
     return Line("waiting", "Not fetched yet", details=details)
 
 
@@ -323,9 +329,15 @@ def _peer_done(job: Job, kind: str, details: str) -> Line:
     return Line("ready", _PEER_DONE[kind])
 
 
-def _review_link(song: SongFacts) -> tuple[str, str]:
-    """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page."""
-    return ("Pick the match", song.picker) if song.picker else ("see the to-do page", TODO)
+def _review_link(song: SongFacts, todo: str | None) -> tuple[str, str] | None:
+    """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page (none
+    without one)."""
+    return ("Pick the match", song.picker) if song.picker else _todo_link(todo)
+
+
+def _todo_link(todo: str | None) -> tuple[str, str] | None:
+    """The to-do page's link, or None for a caracole with no to-do page (``todo`` None, the phone's)."""
+    return ("see the to-do page", todo) if todo is not None else None
 
 
 def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
