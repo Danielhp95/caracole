@@ -1,13 +1,20 @@
-"""Python's JSON, HTML entities, numbers, capitalize and URLs, for the phone's site parsers: what core.py answers in
-their place (core/py/PyHtml, PyNumbers, PyUrl, PyUnicode.capitalize; core/json/PyJson's loads and dumps with an
-indent), record for record (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, lane py-sites).
+"""Python's JSON, HTML entities, numbers, capitalize and URLs, for the phone's site parsers, and its format specs,
+rounding, difflib and East Asian width, for what the phone writes and compares: what core.py answers in their place
+(core/py/PyHtml, PyNumbers, PyUrl, PyUnicode.capitalize; core/json/PyJson's loads and dumps with an indent;
+core/py/PyFormat, PySequence, PyUnicode.eastAsianWidth), record for record
+(docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, lanes py-sites and py-format).
 
 caracole's site modules read every page with Python's own functions: ``html.unescape`` (azlyrics.py, ug/page.py),
 ``json.loads`` (UG's js-store, LRCLIB's and Megalobiz's answers, harptabs.com's and gametabs.net's JSON), ``float()``
 and ``int()`` (harptabs.py, ug/page.py's numbers), ``str.capitalize`` (lacuerda_index.py, progressions.py) and
 ``urllib.parse``'s ``urljoin``, ``urlencode`` and ``urlunsplit`` (ug/fetch.py, ug/artist.py, icons.py, the routes),
 and write what they keep with ``json.dumps(..., ensure_ascii=False, indent=2)`` (ug/fetch.py, lacuerda_fetch.py,
-library.py). The phone answers as they do, to the byte.
+library.py). The phone answers as they do, to the byte. What they write and compare leans on f-strings' ``f`` and
+``%`` specs (Megalobiz's LRC stamps, ``{s:05.2f}``; a coverage's ``{x:.0%}``; a Q's ``{q:.2f}``), ``round(x)``
+(LRCLIB's and Megalobiz's duration), ``difflib.SequenceMatcher(None, a, b, autojunk=False)`` (harpfit.py's lines
+matched word by word) and ``unicodedata.east_asian_width`` (chordpro.py's, page.py's and pdf_text.py's widths,
+youtube.py's wide letters). The JVM's ``String.format`` is its locale's and rounds half-up on a decimal string;
+Python rounds half-even on the exact binary value, and the phone must too.
 
 Runtime data, tests/conformance/data/caracole/unicode/ (caracole/unicode/ on the phone's classpath):
 
@@ -16,7 +23,7 @@ Runtime data, tests/conformance/data/caracole/unicode/ (caracole/unicode/ on the
   digraphs (ǆ to ǅ), the ligatures and ß (``Ss``), the Greek letters with ypogegrammeni and the Georgian letters,
   whose title case is themselves. The first line names its unicodedata version, as every table there does.
 
-Vectors, tests/conformance/vectors/py/ (lane py-format adds its own ``format*.jsonl`` beside them):
+Vectors, tests/conformance/vectors/py/:
 
 - ``sites_unescape.jsonl``: ``html.unescape`` over batches of strings (``args[0]``, ``out`` the answers in order):
   every name of ``html.entities.html5`` with its ``;`` and without, followed by a letter, as a prefix of a longer
@@ -47,11 +54,29 @@ Vectors, tests/conformance/vectors/py/ (lane py-format adds its own ``format*.js
 - ``sites_url.jsonl``: ``urllib.parse.urljoin`` (``args`` a base and a batch of references), ``urlunsplit``
   (``args`` a batch of five-part tuples) and ``urlencode`` (``args`` a batch of pair lists, ``kw.doseq``; with
   ``doseq`` a value may be a list). An answer is a string, or ``{"err": "ValueError: <message>"}``.
+- ``format_numbers.jsonl`` (a float that isn't finite is written ``"inf"``, ``"-inf"`` or ``"nan"``): ``format(x)``
+  records, ``out`` each spec of ``FORMAT_SPECS`` by name and what ``format(x, spec)`` answered (``0W.Nf`` is
+  ``PyFormat.fixed(x, N, W, zero=true)``, ``W.Nf`` with spaces, ``.N%`` ``PyFormat.percent``), over exact ties at
+  every digit (``(2k+1)/2^(d+1)``, half of the last digit kept, and their neighbours a unit of the last place away),
+  tied after ``%``'s ``x * 100``, curated values, durations as Megalobiz's stamps read them and seeded random doubles
+  of every magnitude; then ``round(x)`` records, ``round()`` with no digits (half-even: a whole number), or ``err``
+  where Python raises (``ValueError`` for NaN, ``OverflowError`` for an infinity). Only values whose round() fits in
+  a Long are asked: ``PyFormat.roundHalfEven`` answers a Long and throws past it.
+- ``format_sequence.jsonl``: ``difflib.SequenceMatcher`` records, ``args`` the two sequences (a string stands for its
+  characters, a list for its strings), ``out`` its ``ratio`` and ``matching_blocks`` (each ``[a, b, size]``, the
+  last ``[len(a), len(b), 0]``): curated pairs, seeded random pairs over small alphabets (``find_longest_match``'s
+  ties, the recursion, adjacent blocks merged; past 200 elements, where autojunk would have dropped the popular
+  ones), and the pairs ``harpfit.record_fit`` itself compares, caught as it fits the harmonica tab fixtures of
+  ``HARP_TABS`` to a sheet of each one's sung lines, some read a little differently.
+- ``format_width.jsonl``: one ``unicodedata.east_asian_width.code_points`` record, ``[start, end, width]`` runs over
+  every code point, ``N`` left out (the table data/caracole/unicode/east_asian_width.txt holds the same, written by
+  tests/test_conformance_unicode.py).
 """
 
 from __future__ import annotations
 
 import decimal
+import difflib
 import functools
 import hashlib
 import html
@@ -62,8 +87,10 @@ import math
 import random
 import struct
 import sys
+import types
 import unicodedata
 import urllib.parse
+from unittest import mock
 
 import pytest
 
@@ -289,7 +316,7 @@ def _loads_record(text: str, note: str | None = None) -> dict:
 
 
 # The fixtures whose JSON the records hold, named one by one, never globbed: a fixture another lane adds changes no
-# vector until it is listed here (by lane py-sites or py-format, which own this file in turn).
+# vector until it is listed here.
 JSON_PAGES = (
     "gametabs/game_actraiser.html", "gametabs/game_final-fantasy-vii.html", "gametabs/game_hollow-knight.html",
     "gametabs/tab_actraiser_fillmore.html", "gametabs/tab_hollow-knight_resting-grounds-2.html",
@@ -830,3 +857,278 @@ def test_caracoles_own_url_calls_are_among_the_records():
     parts = urllib.parse.urlsplit(url)
     assert urllib.parse.urlunsplit(parts) == url
     assert ([("filter", "chords"), ("page", "2")], False) in _encode_cases()
+
+
+# --- format specs and round() ---------------------------------------------------------------------------------
+
+
+FORMAT_SPECS = (".0f", ".1f", ".2f", ".3f", "5.1f", "05.2f", "06.3f", "08.2f", ".0%", ".1%", ".2%")
+INT64 = 2 ** 63  # PyFormat.roundHalfEven answers a Long
+
+
+def _float_json(x: float) -> float | str:
+    """A float as a record holds it: a non-finite one by name."""
+    if math.isnan(x):
+        return "nan"
+    if math.isinf(x):
+        return "inf" if x > 0 else "-inf"
+    return x
+
+
+FORMAT_CURATED = [
+    0.0, -0.0, math.inf, -math.inf, math.nan, 0.5, 1.5, 2.5, -2.5, -0.5, 0.125, 0.375, 2.675, 1.005, 0.005, 0.045,
+    0.0005, 94.745, 99.995, 99.95, 9.995, 59.995, 59.999, 59.9951, 0.1, 0.2, 0.3, 0.1 + 0.2, 1 / 3, 2 / 3, -1 / 3,
+    66.66666666666667, 85.71428571428571, 0.725, 0.835, 0.615, 1.255, 8.345, 12.345, 123456.789, 1e16, 2.0 ** 53,
+    2.0 ** 53 + 2, 4503599627370495.5, 1e22, 1e23, 1e-7, -1e-7, 1e-300, 5e-324, -5e-324, 2.2250738585072014e-308,
+    1.7976931348623157e308, -1.7976931348623157e308, 1e300, 0.999, 0.9995, 0.99995, -0.001, -0.004, -0.005, -0.0049,
+    9.5, 10.5, 99.5, 999.5, 0.0125, 0.00125, 0.000125, 0.07, 0.29, 0.57, 1.15, 1.25, 1.35, 0.15, 0.25, 0.35, 0.45,
+    0.55, 0.65, 0.75, 0.85, 0.95,
+]
+
+
+def _is_tie(x: float, digits: int) -> bool:
+    """Whether ``x``'s exact value lies halfway between two numbers of ``digits`` decimals."""
+    from fractions import Fraction
+
+    return (Fraction(x) * 10 ** digits).denominator == 2
+
+
+def _ties() -> list[float]:
+    """Exact ties at each number of digits kept (``(2k+1)/2^(d+1)``, a whole number added, lies halfway at ``d``
+    digits after the point: no other tie is a double), their negatives and their neighbours a unit of the last place
+    away."""
+    ties = sorted({whole + (2 * k + 1) / 2 ** (digits + 1)
+                   for digits in range(5) for k in range(6) for whole in (0, 1, 42, 123456)})
+    assert all(any(_is_tie(x, d) for d in range(5)) for x in ties)
+    near = [math.nextafter(x, math.inf) for x in ties] + [math.nextafter(x, -math.inf) for x in ties]
+    return ties + [-x for x in ties] + near
+
+
+def _percent_ties() -> list[float]:
+    """Values whose ``x * 100`` (in double, as ``%`` takes it) is an exact tie at 0 to 2 digits."""
+    out = []
+    for n in range(0, 2000, 37):
+        for x in (n / 1000, n / 10000, n / 100000, (2 * n + 1) / 2000):
+            if any(_is_tie(x * 100, d) for d in range(3)):
+                out.append(x)
+    return out
+
+
+def _random_doubles(rng: random.Random) -> list[float]:
+    out = [rng.uniform(-1000, 1000) for _ in range(60)]
+    out += [rng.uniform(0, 1) for _ in range(50)]  # shares, for %
+    out += [rng.randrange(0, 60000) / 1000 for _ in range(50)]  # Megalobiz's ms % 60000 / 1000
+    out += [round(rng.uniform(0, 100), 3) + 0.0005 for _ in range(30)]
+    out += [rng.uniform(-1, 1) * 10 ** rng.randrange(-12, 25) for _ in range(40)]
+    bits = [struct.unpack("<d", rng.getrandbits(64).to_bytes(8, "little"))[0] for _ in range(60)]
+    out += [x for x in bits if math.isfinite(x) and abs(x) < 1e60][:20]  # every magnitude, but a page of digits
+    return out
+
+
+@functools.cache
+def _format_inputs() -> list[float]:
+    rng = random.Random(SEED)
+    seen: set[bytes] = set()
+    out = []
+    for x in FORMAT_CURATED + _ties() + _percent_ties() + _random_doubles(rng):
+        key = struct.pack("<d", x)  # -0.0 is not 0.0; every NaN is one
+        if key not in seen:
+            seen.add(key)
+            out.append(x)
+    return out
+
+
+def _rounded(x: float) -> dict:
+    try:
+        return {"out": round(x)}
+    except (ValueError, OverflowError) as e:
+        return {"err": type(e).__name__}
+
+
+ROUND_CURATED = [0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5, 0.49999999999999994, 0.5000000000000001, 4503599627370495.5,
+                 4503599627370497.0, 2.0 ** 52 + 0.5, 2.0 ** 62, -(2.0 ** 63), 9.223372036854775e18, 1e18, -1e18,
+                 1e-300]
+
+
+def format_number_records() -> list[dict]:
+    records: list[dict] = []
+    for x in _format_inputs():
+        records.append({"fn": "format", "args": [_float_json(x)],
+                        "out": {spec: format(x, spec) for spec in FORMAT_SPECS}})
+    rng = random.Random(SEED + 1)
+    halves = [n + 0.5 for n in range(-12, 13)] + [rng.randrange(-10 ** 6, 10 ** 6) + 0.5 for _ in range(40)]
+    for x in ROUND_CURATED + halves + _format_inputs():
+        if math.isfinite(x) and not -INT64 <= round(x) < INT64:
+            continue  # past a Long: PyFormat.roundHalfEven throws (PyFormatTest)
+        records.append({"fn": "round", "args": [_float_json(x)], **_rounded(x)})
+    return records
+
+
+def test_format_numbers_jsonl():
+    check(OUT / "format_numbers.jsonl", jsonl(format_number_records(), corpus="py/format_numbers", made_by=MADE_BY))
+
+
+def test_the_ties_are_ties_and_the_specs_round_them_half_even():
+    ties = _ties()
+    assert sum(1 for x in ties if any(_is_tie(x, d) for d in range(5))) >= 100
+    assert format(0.125, ".2f") == "0.12" and format(0.375, ".2f") == "0.38" and format(2.5, ".0f") == "2"
+    assert format(0.125, ".0%") == "12%"  # 12.5 exactly, to the even
+
+
+def test_the_round_records_reach_a_longs_least_value_and_each_error_python_raises():
+    rounded = {r["args"][0]: r for r in format_number_records() if r["fn"] == "round"}
+    assert rounded[-(2.0 ** 63)]["out"] == -INT64
+    assert rounded["nan"]["err"] == "ValueError" and rounded["inf"]["err"] == "OverflowError"
+
+
+# --- difflib.SequenceMatcher -----------------------------------------------------------------------------------
+
+
+SEQUENCE_CURATED = [
+    ("", ""), ("", "a"), ("a", ""), ("a", "a"), ("ab", "ba"), ("abxcd", "abcd"), ("qabxcd", "abycdf"),
+    (" abcd", "abcd abcd"), ("abcd", "bcde"), ("aaaa", "aa"), ("aa", "aaaa"), ("abab", "baba"), ("abcabc", "cba"),
+    ("private Thread currentThread;", "private volatile Thread currentThread;"), ("tide", "diet"),
+    ("abcdefg", "gfedcba"), ("ababababab", "bababa"), ("xyz", "abc"), ("宋冬野安和桥", "安和桥宋冬野"),
+    ("a\U0001f600b", "\U0001f600ab"), ("aXbXc", "aYbYc"),
+    (["the", "road", "is", "long"], ["the", "long", "road"]),
+    (["made", "up", "words", "for", "row", "one"], ["made", "up", "words", "for", "row", "two"]),
+    (["la", "la", "la", "la"], ["la", "la"]), ([""], [""]), (["", "a"], ["a", ""]),
+]
+
+
+def _random_sequence_pairs(rng: random.Random) -> list[tuple[str, str]]:
+    out = []
+    for _ in range(600):
+        alphabet = "abcde"[: rng.randrange(1, 6)]
+        out.append(tuple("".join(rng.choice(alphabet) for _ in range(rng.randrange(0, 24))) for _ in range(2)))
+    for _ in range(12):  # past 200 elements, the popular ones kept (autojunk=False)
+        alphabet = "abcdefgh"[: rng.randrange(2, 9)]
+        a = "".join(rng.choice(alphabet) for _ in range(rng.randrange(150, 260)))
+        b = "".join(rng.choice(alphabet) for _ in range(rng.randrange(200, 260)))
+        out.append((a, b))
+    for _ in range(50):  # one an edit of the other
+        a = "".join(rng.choice("abcdefghij") for _ in range(rng.randrange(5, 40)))
+        b = list(a)
+        for _ in range(rng.randrange(1, 5)):
+            at = rng.randrange(0, len(b) + 1)
+            choice = rng.randrange(3)
+            if choice == 0 and b:
+                del b[min(at, len(b) - 1)]
+            elif choice == 1:
+                b.insert(at, rng.choice("abcdefghij"))
+            elif b:
+                b[min(at, len(b) - 1)] = rng.choice("abcdefghij")
+        out.append((a, "".join(b)))
+    return out
+
+
+# The harmonica tab fixtures (tests/fixtures/harptabs/tabs/) record_fit's pairs come from, named one by one as
+# JSON_PAGES are: those with sung rows.
+HARP_TABS = ("1278_house-of-the-rising-sun", "164_blowin-in-the-wind", "16_amazing-grace", "1786_simple-man",
+             "25_piano-man", "3489_wonderwall", "53_love-me-do", "588_hotel-california", "99_free-bird")
+SHEET_CHORDS = ("G", "C", "D", "Em", "Am", "F", "B7")
+UNLIKE_PAIRS = 20  # of a tab's pairs too unlike to be one line, those kept
+
+
+def _sheet_of(lyrics: list[str], rng: random.Random) -> str:
+    """A chord sheet of a tab's sung lines, as another site would chart the song: each line under a chord, one in
+    three read a little differently (a word dropped, doubled or misspelt)."""
+    lines = []
+    for lyric in lyrics:
+        said = lyric.split()
+        if said and rng.randrange(3) == 0:
+            at = rng.randrange(len(said))
+            edit = rng.randrange(3)
+            if edit == 0 and len(said) > 1:
+                del said[at]
+            elif edit == 1:
+                said.insert(at, said[at])
+            else:
+                said[at] = said[at][::-1]
+        lines.append(f"[{rng.choice(SHEET_CHORDS)}]" + " ".join(said))
+    return "{title: Harvest}\n{artist: Placeholder Band}\n" + "\n".join(lines) + "\n"
+
+
+@functools.cache
+def _record_fit_pairs() -> tuple[list[tuple[list[str], list[str]]], int]:
+    """What harpfit.record_fit hands difflib.SequenceMatcher, caught as it runs (each tab row's sung words against
+    each sheet line's, then against the line it chose) over HARP_TABS, each with a sheet of its own sung lines
+    (``_sheet_of``): of each tab, every pair alike enough to be one line (``LINE_MATCH``) and ``UNLIKE_PAIRS`` of the
+    others, drawn. Also how many were alike."""
+    from caracole.viewer import harpfit
+    from caracole.viewer.harptab import parse
+
+    rng = random.Random(SEED + 3)
+    caught: list[tuple[list[str], list[str]]] = []
+
+    def matcher(isjunk, a, b, autojunk=True):
+        assert isjunk is None and autojunk is False  # record_fit's: SequenceMatcher(None, a, b, autojunk=False)
+        caught.append((list(a), list(b)))
+        return difflib.SequenceMatcher(isjunk, a, b, autojunk=autojunk)
+
+    out, alike = [], 0
+    for name in HARP_TABS:
+        tab = parse((FIXTURES / "harptabs" / "tabs" / f"{name}.txt").read_text(encoding="utf-8"))
+        caught.clear()
+        with mock.patch.object(harpfit, "difflib", types.SimpleNamespace(SequenceMatcher=matcher)):
+            harpfit.record_fit(tab, _sheet_of([row.lyric for row in tab.rows() if row.lyric is not None], rng))
+        pairs = [(list(a), list(b)) for a, b in dict.fromkeys((tuple(a), tuple(b)) for a, b in caught)]
+        same = [p for p in pairs if difflib.SequenceMatcher(None, *p, autojunk=False).ratio() >= harpfit.LINE_MATCH]
+        others = [p for p in pairs if p not in same]
+        drawn = sorted(rng.sample(range(len(others)), min(UNLIKE_PAIRS, len(others))))
+        out += same + [others[k] for k in drawn]
+        alike += len(same)
+    return out, alike
+
+
+def format_sequence_records() -> list[dict]:
+    rng = random.Random(SEED + 2)
+    records = []
+    for a, b in itertools.chain(SEQUENCE_CURATED, _random_sequence_pairs(rng), _record_fit_pairs()[0]):
+        matcher = difflib.SequenceMatcher(None, list(a), list(b), autojunk=False)
+        records.append({"fn": "difflib.SequenceMatcher", "args": [a, b],
+                        "out": {"ratio": matcher.ratio(),
+                                "matching_blocks": [list(m) for m in matcher.get_matching_blocks()]}})
+    return records
+
+
+def test_format_sequence_jsonl():
+    check(OUT / "format_sequence.jsonl", jsonl(format_sequence_records(), corpus="py/format_sequence",
+                                               made_by=MADE_BY))
+
+
+def test_the_harvest_is_record_fits_own_and_the_long_pairs_would_have_been_autojunked():
+    pairs, alike = _record_fit_pairs()
+    assert alike >= 50 and len(pairs) - alike >= 100  # lines it matched and lines it passed over
+    for name in HARP_TABS:
+        assert (FIXTURES / "harptabs" / "tabs" / f"{name}.txt").is_file(), name
+    rng = random.Random(SEED + 2)
+    long = [(a, b) for a, b in _random_sequence_pairs(rng) if len(b) >= 200]
+    differ = sum(1 for a, b in long if difflib.SequenceMatcher(None, a, b).ratio()
+                 != difflib.SequenceMatcher(None, a, b, autojunk=False).ratio())
+    assert differ >= len(long) // 2  # so the vectors hold autojunk=False to its word
+
+
+# --- unicodedata.east_asian_width ------------------------------------------------------------------------------
+
+
+@functools.cache
+def _width_runs() -> list[list]:
+    """``unicodedata.east_asian_width`` over every code point, as ``[start, end, width]`` runs, ``N`` left out."""
+    widths = list(map(unicodedata.east_asian_width, map(chr, range(MAX))))
+    changes = [0, *itertools.compress(range(1, MAX), map(str.__ne__, widths[1:], widths[:-1])), MAX]
+    return [[a, b - 1, widths[a]] for a, b in itertools.pairwise(changes) if widths[a] != "N"]
+
+
+def format_width_records() -> list[dict]:
+    return [{"fn": "unicodedata.east_asian_width.code_points", "args": [], "out": _width_runs()}]
+
+
+@pytest.mark.slow
+def test_format_width_jsonl():
+    check(OUT / "format_width.jsonl", jsonl(format_width_records(), corpus="py/format_width", made_by=MADE_BY))
+
+
+@pytest.mark.slow
+def test_the_widths_name_every_value_python_has():
+    assert {w for _, _, w in _width_runs()} == {"W", "F", "H", "Na", "A"}

@@ -1125,13 +1125,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
 - Milestones 1–3 are built (docs/android_port.md's status); lookups, the page builder, songbooks and PDFs on the phone
-  are later rounds', their routes `server/routes/Stubs.kt`'s "… isn't on the phone yet." (409), or a route module of
-  their own answering it neutrally until its lane lands; a declaration not built yet is `TODO("lane <id>")` in a file
-  its lane owns (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5).
+  are later rounds' (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5):
+  - each route a module of its own, answering "… isn't on the phone yet." (409) until its lane lands;
+    `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, for good;
+  - a declaration not built yet is `TODO("lane <id>")` in a file its lane owns, or, for a seam the phone already
+    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer;
+  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, `SongPages.NONE` and
+    `SongbookPages.NONE` until their lanes make it the real one, so it calls no milestone's code before it lands.
+- Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
+  the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
+- The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
+  words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
-  `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays` and
-  `server.testing.ServerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`, `LocalServerTest`,
-  `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+  `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
+  `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
 
 ##### core.http, core.health, core.config
 
@@ -1192,6 +1200,41 @@ Not built yet. (job-views, requests-feed.)
 ##### The computer's settings on the phone
 
 Not built yet. (crossing-phone.)
+
+##### :viewer
+
+- Its assets and data, `ViewerAssets` and `ViewerData`, and music theory (theory): not built yet.
+- A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
+- Voicings, instruments, the harmonica and the winds (shapes-harp-winds): not built yet.
+- Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
+- Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): not built yet.
+- A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
+- The sheet page (pages): not built yet.
+- A harmonica tab's page (harmonica-page): not built yet.
+- The phone's own pages, `PhoneRender` (phone-render): not built yet.
+
+##### The phone's written pages
+
+Not built yet. (written-pages.)
+
+##### Songbooks, versions and printing on the phone
+
+- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- Export PDF and Make this my version (export-print): not built yet.
+
+##### Guitar Pro on the phone
+
+Not built yet. (guitar-alphatab.)
+
+##### Files shared to the app
+
+Not built yet. (inbox-share.)
+
+##### Alerts and backups on the phone
+
+Not built yet. (alerts-backups.)
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
