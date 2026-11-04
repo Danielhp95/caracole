@@ -1,6 +1,7 @@
 """The sync corpus, for the phone: what peer_sync.py answers (a library's units, their values, digests, labels and
-documents; the three-way comparison and what it keeps; a take, rule by rule) and how the library adds, removes and
-re-keys a song, over fixture libraries, written for the Kotlin sync lanes (core/sync, core/library) to agree with.
+documents; the three-way comparison and what it keeps; a take, rule by rule), the settings the computer gives the
+phone (politeness.py), and how the library adds, removes and re-keys a song, over fixture libraries, written for the
+Kotlin sync lanes (core/sync, core/library, core/config) to agree with.
 
 **Fixtures** (``vectors/sync/fixtures/<name>.jsonl`` and ``vectors/library/fixtures/<name>.jsonl``,
 helpers.corpus's format): each a library built with caracole's own writers (helpers/peer_libraries.py's ``Library``:
@@ -65,6 +66,16 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
   compare-and-swap (``peer_sync.CHANGED_HERE``, ``CHANGED_THERE``) are the phone's too, the others (SQLite's own
   message among them) say what a unit was left for;
 - sync/checked_name.jsonl: ``caracole.peer_sync.checked_name``, a name kept or ``err`` ``UnitError``;
+- sync/settings.jsonl: ``caracole.politeness.settings_document`` of a config, ``args`` ``[caracole.toml's text]``
+  (read by ``config.load_config``), ``case`` its name (``SETTINGS``), ``out`` the document ``GET /api/peer/state``
+  gives as ``settings``, and ``phone`` the phone's settings once it takes that document (``phone_settings``,
+  made from the config, never the document: data/caracole/config/config.json's shape, its ``switchable`` aside, with
+  ``name``), which ``PhoneConfig.read`` answers after ``PhoneConfig.take``;
+- sync/settings_take.jsonl: the phone's take rule by rule (``SETTINGS_TAKES``, ``case``), what no caracole.toml can
+  show: ``args`` ``[kept, settings]``, the kv ``phone:settings`` before (a document or null) and the state's
+  ``settings`` (null: the state has none), ``out`` ``{kept, read}``, the kv after and what ``PhoneConfig.read``
+  answers then (settings.jsonl's ``phone`` shape), of ``phone_takes``, the spec's rule as a model, which a test holds
+  to settings.jsonl's ``phone`` on every document there;
 - library/add.jsonl: ``caracole.songs.upsert_song`` as wanted.txt's sync calls it (``kw``), over a library ``before``
   (``songs``: ``[artist, title]`` added in order; ``removed``: tombstones), ``out`` ``{created, song, songs, removed}``;
 - library/remove.jsonl: ``caracole.removal.remove_song`` of the song of ``args[0]``'s key over ``fixture``, ``out``
@@ -105,7 +116,7 @@ SYNC = VECTORS / "sync"
 LIBRARY = VECTORS / "library"
 TOP_FILES = ("wanted.txt", "overrides.toml", "songbooks.toml")  # the computer's: the phone holds them as rows
 SYNC_FILES = ("values", "documents", "compare", "merged_base", "record_agreement", "decide", "name_key",
-              "compared_hash", "take", "checked_name")
+              "compared_hash", "take", "checked_name", "settings", "settings_take")
 LIBRARY_FILES = ("add", "remove", "lyrics_files", "stamps", "ensure_current_keys")
 
 
@@ -1009,11 +1020,132 @@ def rekey_records(corpus: Corpus) -> list[dict]:
     return [record("caracole.songs.ensure_current_keys", "rekey", [], {}, rekey)]
 
 
+# caracole.toml as the computer's owner may write it, each case a settings document the phone takes.
+SETTINGS = {
+    "defaults": "",
+    "named": 'name = "Canciones de Dani · 歌 🎸"\nuser_agent = "caracole/0.1 (Dani\'s tabs; +https://example.org)"\n',
+    "switches": "[providers.megalobiz]\nenabled = false\n[providers.youtube]\nenabled = false\n"
+                "[providers.ytimg]\nenabled = false\n[providers.gametabs]\nenabled = true\n",
+    "lookup": "[providers.ug]\nlookup_delay = [0, 0]\nlookup_requests = 3\nlookup_per_hour = 30\nbudget = 7\n"
+              "delay = [9, 10]\n[providers.lacuerda]\nlookup_delay = [0.5, 1.5]\n[providers.azlyrics]\n"
+              "lookup_requests = 0\nlookup_per_hour = 1000\n",
+    "thresholds": "[match]\naccept = 85.5\nmargin = 5\nreview = 70\nartist_gate = 95\n[rank]\n"
+                  "coverage_threshold = 0.7\nline_match = 80\nprior_votes = 0\nscored_sheets = 5\n"
+                  "label_penalty = 1\nvariant_bonus = 0.125\n",
+    # caracole.toml may give any of them but scored_sheets a fraction, line_match and prior_votes too (config.py
+    # keeps what it reads), and a whole number where the default is a float
+    "fractions": "[match]\naccept = 100\nmargin = 0.5\nreview = 0\n[rank]\nline_match = 82.5\nprior_votes = 2.5\n"
+                 "coverage_threshold = 1\nlabel_penalty = 0\n",
+}
+
+
+def phone_settings(cfg) -> dict[str, Any]:
+    """The phone's settings once it takes ``cfg``'s document, in data/caracole/config/config.json's shape
+    (``switchable`` aside) with ``name``: config.py's defaults, each provider's switch and a lookup's settings the
+    computer's, bulk work's ``budget`` and ``delay`` the defaults' (the phone does none); the user agent, ``[match]``,
+    ``[rank]`` and caracole.toml's name the computer's. Made from the config itself, never from the document."""
+    import dataclasses
+
+    from caracole import config
+
+    def fields(obj) -> dict:
+        return {f.name: list(v) if isinstance(v := getattr(obj, f.name), tuple) else v
+                for f in dataclasses.fields(obj)}
+
+    providers = {}
+    for name, default in config.DEFAULT_PROVIDERS.items():
+        mine = cfg.provider(name)
+        providers[name] = fields(dataclasses.replace(
+            default, enabled=mine.enabled, lookup_delay=mine.lookup_delay, lookup_requests=mine.lookup_requests,
+            lookup_per_hour=mine.lookup_per_hour, per_day=mine.per_day))
+    return {"providers": providers, "user_agent": cfg.user_agent, "match": fields(cfg.match),
+            "rank": fields(cfg.rank), "name": cfg.name}
+
+
+def settings_config(corpus: Corpus, case: str):
+    """The config of ``SETTINGS[case]``'s caracole.toml, in a folder of its own."""
+    from caracole.config import load_config
+
+    folder = corpus.workdir / "settings" / case
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "caracole.toml").write_text(SETTINGS[case], encoding="utf-8")
+    return load_config(folder / "caracole.toml", env={"HOME": str(folder / "home")})
+
+
+def settings_records(corpus: Corpus) -> list[dict]:
+    from caracole.politeness import settings_document
+
+    out = []
+    for case, text in SETTINGS.items():
+        cfg = settings_config(corpus, case)
+        out.append(record("caracole.politeness.settings_document", None, [text], {},
+                          lambda cfg=cfg: settings_document(cfg), case=case, phone=phone_settings(cfg)))
+    return out
+
+
+# The phone's take, rule by rule (settings_take.jsonl): what no caracole.toml can show, since a computer's document
+# always names every provider of its own config, and the phone takes a document after another.
+SETTINGS_TAKES = (
+    "nothing taken yet",
+    "a state with no settings keeps the last take",
+    "a second take replaces the first",
+    "a newer computer's provider is passed over",
+    "an older computer's document leaves a provider it doesn't name at the defaults",
+    "a provider the second take doesn't name is the defaults', never the first take's",
+)
+
+
+def phone_takes(kept: dict | None, settings: dict | None) -> dict[str, Any]:
+    """The phone's rule for the computer's settings, as the spec states it (PhoneConfig.take, then
+    PhoneConfig.read): ``kept`` the kv ``phone:settings`` before (a document, or None), ``settings`` the state's
+    member (None: the state has none). ``{"kept", "read"}``: the kv after (the document as given, or ``kept`` as it
+    was when the state gives none), and what ``PhoneConfig.read`` answers then, in config.json's shape (its
+    ``switchable`` aside) with ``name``: config.json's defaults, each provider the document names that the phone
+    knows taking its five fields (``politeness.LOOKUP_FIELDS``) over them, its ``budget`` and ``delay`` the defaults',
+    a provider the document doesn't name the defaults' whole (never an earlier take's), one the phone doesn't know
+    passed over; the user agent, ``[match]``, ``[rank]`` and the name the document's. A model for the corpus: the
+    test below holds it to ``phone_settings``, made from the config, on every document of ``SETTINGS``."""
+    from caracole.politeness import LOOKUP_FIELDS
+    from test_conformance_config import config_json
+
+    defaults = json.loads(config_json())
+    del defaults["switchable"]
+    taken = settings if settings is not None else kept
+    if taken is None:
+        return {"kept": None, "read": {**defaults, "name": None}}
+    given = taken["providers"]
+    providers = {name: policy | ({field: given[name][field] for field in LOOKUP_FIELDS} if name in given else {})
+                 for name, policy in defaults["providers"].items()}
+    return {"kept": taken, "read": {"providers": providers, "user_agent": taken["user_agent"],
+                                    "match": taken["match"], "rank": taken["rank"], "name": taken["name"]}}
+
+
+def settings_take_records(corpus: Corpus) -> list[dict]:
+    import copy
+
+    from caracole.politeness import settings_document
+
+    lookup = settings_document(settings_config(corpus, "lookup"))
+    thresholds = settings_document(settings_config(corpus, "thresholds"))
+    newer = copy.deepcopy(lookup)
+    newer["providers"]["songsterr"] = {"enabled": False, "lookup_delay": [9.0, 9.5], "lookup_requests": 1,
+                                       "lookup_per_hour": 2, "per_day": 3}
+    older = copy.deepcopy(lookup)
+    del older["providers"]["lacuerda"]
+    without_ug = copy.deepcopy(lookup)
+    del without_ug["providers"]["ug"]
+    takes = dict(zip(SETTINGS_TAKES, (
+        (None, None), (lookup, None), (lookup, thresholds), (None, newer), (None, older), (lookup, without_ug))))
+    return [record("test_conformance_sync.phone_takes", None, [kept, given], {},
+                   lambda kept=kept, given=given: phone_takes(kept, given), case=case)
+            for case, (kept, given) in takes.items()]
+
+
 MAKERS: dict[str, Callable[[Corpus], list[dict]]] = {
     "values": value_records, "documents": document_records, "compare": compare_records,
     "merged_base": merged_base_records, "record_agreement": record_agreement_records, "decide": decide_records,
     "name_key": name_key_records, "compared_hash": compared_hash_records, "take": take_records,
-    "checked_name": checked_name_records,
+    "checked_name": checked_name_records, "settings": settings_records, "settings_take": settings_take_records,
     "add": add_records, "remove": remove_records, "lyrics_files": lyrics_records, "stamps": stamp_records,
     "ensure_current_keys": rekey_records,
 }
@@ -1110,6 +1242,59 @@ def test_every_unit_kind_compare_case_and_take_rule_is_in_the_vectors(corpus):
                 ("same on both, as agreed: nothing", ()), ("both changed, the same way: nothing", ()),
                 ("gone on both: nothing", ())]:
         assert row in rows, row
+
+
+def test_the_phone_takes_the_settings_over_config_jsons_defaults(corpus):
+    """settings.jsonl's ``phone`` is config.json (PhoneConfig.DEFAULTS) with the computer's settings laid over it: the
+    defaults case is config.json itself, no case moves a run's budget or pause, and each case changes what its
+    caracole.toml says and nothing else."""
+    from test_conformance_config import config_json
+
+    defaults = json.loads(config_json())
+    del defaults["switchable"]
+    records = {r["case"]: r for r in corpus.records("settings")}
+    assert list(records) == list(SETTINGS) and all("err" not in r for r in records.values())
+    assert records["defaults"]["phone"] == {**defaults, "name": None}
+    for case, r in records.items():
+        doc, phone = r["out"], r["phone"]
+        assert list(doc) == ["name", "user_agent", "providers", "match", "rank"], case
+        for name, policy in phone["providers"].items():
+            assert (policy["budget"], policy["delay"]) == (defaults["providers"][name]["budget"],
+                                                           defaults["providers"][name]["delay"]), (case, name)
+            assert {k: policy[k] for k in doc["providers"][name]} == doc["providers"][name], (case, name)
+        assert (phone["name"], phone["user_agent"], phone["match"], phone["rank"]) == (
+            doc["name"], doc["user_agent"], doc["match"], doc["rank"]), case
+    assert records["lookup"]["phone"]["providers"]["ug"]["lookup_delay"] == [0.0, 0.0]
+    assert records["switches"]["out"]["providers"]["megalobiz"]["enabled"] is False
+    assert records["thresholds"]["out"]["match"]["accept"] == 85.5 and records["named"]["out"]["name"]
+    assert records["fractions"]["out"]["rank"]["line_match"] == 82.5 and records["fractions"]["out"]["rank"][
+        "coverage_threshold"] == 1
+
+
+def test_the_phones_take_rule_is_the_settings_phone_on_every_document(corpus):
+    """phone_takes, settings_take.jsonl's model, answers settings.jsonl's ``phone`` (made from the config, never the
+    document) for every document there, taken first or after another."""
+    lookup = next(r["out"] for r in corpus.records("settings") if r["case"] == "lookup")
+    for r in corpus.records("settings"):
+        for kept in (None, lookup):
+            assert phone_takes(kept, r["out"]) == {"kept": r["out"], "read": r["phone"]}, r["case"]
+
+
+def test_every_rule_of_the_phones_take_is_in_the_vectors(corpus):
+    """Each of SETTINGS_TAKES once, and each shows what its name says."""
+    records = {r["case"]: r for r in corpus.records("settings_take")}
+    assert list(records) == list(SETTINGS_TAKES) and all("err" not in r for r in records.values())
+    phone = {r["case"]: r["phone"] for r in corpus.records("settings")}
+    nothing, kept, replaced, newer, older, dropped = (records[case] for case in SETTINGS_TAKES)
+    assert nothing["out"] == {"kept": None, "read": phone["defaults"]}
+    assert kept["out"]["kept"] == kept["args"][0] and kept["out"]["read"] == phone["lookup"]
+    assert replaced["out"]["kept"] == replaced["args"][1] and replaced["out"]["read"] == phone["thresholds"]
+    assert replaced["out"]["read"]["providers"]["ug"]["lookup_requests"] == 6  # the first take's 3 gone
+    assert "songsterr" in newer["out"]["kept"]["providers"] and newer["out"]["read"] == phone["lookup"]
+    ug, lacuerda = (older["out"]["read"]["providers"][name] for name in ("ug", "lacuerda"))
+    assert ug["lookup_requests"] == 3 and lacuerda == phone["defaults"]["providers"]["lacuerda"]
+    ug, lacuerda = (dropped["out"]["read"]["providers"][name] for name in ("ug", "lacuerda"))
+    assert ug == phone["defaults"]["providers"]["ug"] and lacuerda["lookup_delay"] == [0.5, 1.5]
 
 
 def test_every_rule_of_the_take_is_in_the_vectors(corpus):

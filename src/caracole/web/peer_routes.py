@@ -5,7 +5,8 @@ and this library's site indexes.
     GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
                                  a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
                                  its digest, and what it last agreed on with the caracole ``peer`` names (its id):
-                                 ``peer_sync.state_document``; and the form token, for a pull's form
+                                 ``peer_sync.state_document``; its settings, which a phone takes
+                                 (``politeness.settings_document``); and the form token, for a pull's form
     GET  /api/peer/unit?id=      a unit whole, as another caracole takes it: ``peer_sync.unit_document`` (404: no such
                                  unit here)
     GET  /api/peer/file?song=&name=   a song's kept file (``files``), while it is what caracole recorded (404 else)
@@ -93,10 +94,8 @@ def _library(app: WebApp):
 
 def state(app: WebApp, params: dict[str, str]) -> Response:
     """``GET /api/peer/state``: ``peer_sync.state_document`` of this library, or why it can't be read, as JSON."""
-    from caracole import __version__
+    from caracole import __version__, index_transfer, politeness
     from caracole import peer_sync as sync
-
-    from caracole import index_transfer
 
     try:
         overrides, books = _library(app)
@@ -107,10 +106,13 @@ def state(app: WebApp, params: dict[str, str]) -> Response:
             indexes = index_transfer.newest(conn)
     except Refused as e:
         return json_response(e.status, {"error": e.message})
-    # The form token, for the pull the other caracole may post (POST /peer/pull) and a push's requests: no wider
-    # than a page's, which any client that reaches the server reads, and another site's page can read neither.
+    # The settings, for a phone, which looks songs up with them (a reader that isn't one passes over them: the
+    # sync's FORMAT is the same). The form token, for the pull the other caracole may post (POST /peer/pull) and a
+    # push's requests: no wider than a page's, which any client that reaches the server reads, and another site's
+    # page can read neither.
     return json_response(200, sync.state_document(server, __version__, app.cfg.library_name, units, base,
-                                                  indexes=indexes) | {"token": app.csrf})
+                                                  indexes=indexes)
+                         | {"settings": politeness.settings_document(app.cfg), "token": app.csrf})
 
 
 def unit(app: WebApp, params: dict[str, str]) -> Response:
