@@ -46,6 +46,9 @@ object LrclibStage : SiteStage {
  * the envelope ends it as get.py's `asking` does ([ended]); and the words of an end that isn't the work's ([end]):
  * get.py's `_usable` and `asking`, as lane lookup's LookupWords.end says them, and [NOTHING_TO_ASK], equal to its
  * LookupWords.NOTHING_TO_ASK (get.py's None: the Megalobiz and AZLyrics stages' when there is nothing to ask).
+ *
+ * A copy until lane lookup's LookupWords is on main: then the three stages call `LookupWords.end` and
+ * `LookupWords.NOTHING_TO_ASK`, and this object goes (the integration's, or lookup-scenarios', which follows both).
  */
 internal object LyricsStages {
     val NOTHING_TO_ASK = StageEnd("nothing", "")

@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.lyrics
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.HttpAnswer
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -76,6 +77,8 @@ class LyricsStagesTest {
             assertEquals(StageEnd("failed", "LRCLIB failed (lrclib: 500: ${soda.removePrefix("GET ")}: HTTP 500); the nightly " +
                                       "run tries again"), failed)
             assertEquals("pending", w.db { io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!! }.lyricsStatus)
+            // Remembered for Megalobiz and AZLyrics before the stage says it failed: they ask about it after LRCLIB.
+            assertEquals(Stamps.of(w.now), w.db { it.kvGet("${Lrclib.FAILED}${song.id}") })
             val (spent, _) = stage(w, LrclibStage::run, song, "lrclib", mapOf(soda to answer(404, "{}")), budget = 1)
             assertEquals(StageEnd("skipped", "the lookup's 6 requests to LRCLIB are spent; the nightly run does the rest"), spent)
         }

@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
+import io.github.danielhp95.caracole.core.lyrics.internal.PyValues
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
@@ -13,7 +14,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 
 /**
@@ -58,9 +58,9 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
         internal fun text(value: JsonElement?): String =
             if (value is JsonPrimitive && value.isString) value.content.replace("\r\n", "\n").replace("\r", "\n") else ""
 
-        /** lyrics._float: a JSON number (never a bool) as a float. */
-        internal fun number(value: JsonElement?): Double? =
-            if (value is JsonPrimitive && !value.isString && value.booleanOrNull == null) value.doubleOrNull else null
+        /** lyrics._float: a JSON number (never a bool) as a float, as the sites' readers take one (PyValues.number:
+         * an int too big for a float Python's OverflowError, an ArithmeticException). */
+        internal fun number(value: JsonElement?): Double? = PyValues.number(value)
 
         /** lyrics._int: a JSON integer (never a bool). */
         internal fun integer(value: JsonElement?): Long? =

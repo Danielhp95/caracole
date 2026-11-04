@@ -110,15 +110,33 @@ internal object LyricsFiles {
             val (stamps, end) = leadingStamps(cps)
             if (stamps.isEmpty()) continue
             val text = Py.split(withoutWordStamps(cps, end)).joinToString(" ")
-            for ((minutes, seconds) in stamps) timed += (minutes.toDouble() + seconds) to text
+            for ((minutes, seconds) in stamps) timed += (minuteSeconds(minutes) + seconds) to text
         }
         return timed.sortedBy { it.first }
     }
 
-    /** `(?:\s*\[\d+:\d{2}(?:\.\d+)?\])+` matched at the start: each stamp's minutes (times 60) and seconds, and where
-     * the match ends; no stamps when it doesn't match. */
-    private fun leadingStamps(cps: IntArray): Pair<List<Pair<BigInteger, Double>>, Int> {
-        val stamps = mutableListOf<Pair<BigInteger, Double>>()
+    /** `int(minutes) * 60` as a float, as Python adds it to the seconds: past [INT_MAX_STR_DIGITS] digits `int()`'s
+     * ValueError (an IllegalArgumentException), a product too big for a float its OverflowError (an
+     * ArithmeticException). */
+    private fun minuteSeconds(digits: String): Double {
+        require(digits.length <= INT_MAX_STR_DIGITS) {
+            "Exceeds the limit ($INT_MAX_STR_DIGITS digits) for integer string conversion: value has ${digits.length} " +
+                "digits; use sys.set_int_max_str_digits() to increase the limit"
+        }
+        val seconds = BigInteger(digits).multiply(SIXTY).toDouble()
+        if (seconds.isInfinite()) throw ArithmeticException("int too large to convert to float")
+        return seconds
+    }
+
+    /** Python's sys.int_info.default_max_str_digits: the longest decimal text `int()` reads. */
+    private const val INT_MAX_STR_DIGITS = 4300
+
+    private val SIXTY = BigInteger.valueOf(60)
+
+    /** `(?:\s*\[\d+:\d{2}(?:\.\d+)?\])+` matched at the start: each stamp's minutes (their digits, in ASCII) and
+     * seconds, and where the match ends; no stamps when it doesn't match. */
+    private fun leadingStamps(cps: IntArray): Pair<List<Pair<String, Double>>, Int> {
+        val stamps = mutableListOf<Pair<String, Double>>()
         var end = 0
         while (true) {
             var p = end
@@ -130,8 +148,8 @@ internal object LyricsFiles {
         return stamps to end
     }
 
-    /** One `<open>\d+:\d{2}(?:\.\d+)?<close>` at [from]: (minutes × 60, seconds) and where it ends. */
-    private fun stamp(cps: IntArray, from: Int, open: Int, close: Int): Pair<Pair<BigInteger, Double>, Int>? {
+    /** One `<open>\d+:\d{2}(?:\.\d+)?<close>` at [from]: (the minutes' digits, seconds) and where it ends. */
+    private fun stamp(cps: IntArray, from: Int, open: Int, close: Int): Pair<Pair<String, Double>, Int>? {
         if (from >= cps.size || cps[from] != open) return null
         var p = from + 1
         val minutes = StringBuilder()
@@ -149,7 +167,7 @@ internal object LyricsFiles {
             while (p < cps.size && PyUnicode.isDecimal(cps[p])) seconds.append(digit(cps[p++]))
         }
         if (p >= cps.size || cps[p] != close) return null
-        return (BigInteger(minutes.toString()).multiply(BigInteger.valueOf(60)) to seconds.toString().toDouble()) to p + 1
+        return (minutes.toString() to seconds.toString().toDouble()) to p + 1
     }
 
     /** lyrics._WORD_STAMP (`<\d+:\d{2}(?:\.\d+)?>`) taken out of the line from [from] on. */

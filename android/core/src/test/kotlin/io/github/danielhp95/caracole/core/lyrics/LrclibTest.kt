@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -94,6 +95,20 @@ class LrclibTest {
             assertEquals("lrclib", stored.provider)
             assertEquals(1040023L, stored.lrclibId)
         }
+    }
+
+    @Test fun numbersTooBigForAFloatAreAnErrorAsPythonsIntAndFloatMakeThem() {
+        // Python: float(10**400) is an OverflowError; int() of 4301 digits a ValueError; a float literal past the
+        // largest double json.loads reads as inf.
+        val big = "1" + "0".repeat(400)
+        assertFailsWith<ArithmeticException> { Lyrics.fromRecord(PyJson.loads("""{"duration": $big}""").jsonObject) }
+        assertEquals(Double.POSITIVE_INFINITY, Lyrics.fromRecord(PyJson.loads("""{"duration": 1e309}""").jsonObject).duration)
+        assertFailsWith<ArithmeticException> { Lyrics.syncedLines("[${"1".repeat(400)}:00.25]Far") }
+        assertFailsWith<IllegalArgumentException> { Lyrics.syncedLines("[${"1".repeat(4301)}:00.25]Far") }
+        assertFailsWith<IllegalArgumentException> { Lyrics.syncedLines("[${"\u0660".repeat(4301)}:00.25]Far") }
+        assertEquals(listOf(0.25 to "Near"), Lyrics.syncedLines("[${"0".repeat(4300)}:00.25]Near"))
+        // A word stamp is taken out, never read as a number.
+        assertEquals(listOf(1.0 to "a b"), Lyrics.syncedLines("[00:01.00]a <${"9".repeat(4301)}:00.00> b"))
     }
 
     @Test fun plainLyricsAloneTakeAStaleLrcAway() {
