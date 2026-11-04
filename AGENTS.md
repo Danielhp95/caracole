@@ -1244,9 +1244,23 @@ Not built yet. (job-views, requests-feed.)
     process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
     regenerates the corpus.
 - A sheet read, ChordPro and a song's key (sheet-keys): not built yet.
-- Voicings, instruments, the harmonica and the winds (shapes-harp-winds): not built yet.
+- Voicings, instruments, the harmonica and the winds (shapes-harp-winds): `viewer.shapes`' `Voicings` (chords-db's
+  fingerings from viewer/'s own voicings.json and voicings-ukulele.json, a legend's and a `{define}`'s shapes,
+  `voicingKeys`, `sheetShapes`) and `Instruments` (`INSTRUMENTS`, easy keys, each one's shapes of a chord, a page's
+  `voicings` and `instruments`), `viewer.harp`'s `Harp` (the layout, the chords a harp plays, the ranking in one
+  place, the tables, `holeNote`, `holeTables`) and `viewer.winds`' `Winds`.
+  - Their constants exported from the modules by tests/test_conformance_viewer_shapes.py: data/caracole/viewer/
+    instruments.json (voicings.py's patterns too, viewer/voicings.json being chords-db's), harp.json (harmony's
+    pentatonic boxes too) and winds.json (harmony's `_BASS_DEGREES` too: a chord's tones in harmony's order).
+  - Every answer held by vectors/viewer/voicings, instruments, harp_* and winds (`ShapesReplay`, the `shapes` area),
+    a page's objects in Python's order too (a kept answer's `sha256`).
 - Pinyin with tones, OpenCC and hanzi (chinese): not built yet.
-- Harmony (harmony), its progressions and tables (harmony-progressions): not built yet.
+- Harmony (harmony): `viewer.harmony.Harmony`, harmony.py's chord half: `numeral` (`Numeral.text`), `relation`,
+  `family`, `explain` (the numeral's tooltip line), `glossary`, `chordTones`, `soloScale`, `keyScale`, `pentatonic`
+  and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
+  function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
+  (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
+  and tables (harmony-progressions): not built yet.
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
