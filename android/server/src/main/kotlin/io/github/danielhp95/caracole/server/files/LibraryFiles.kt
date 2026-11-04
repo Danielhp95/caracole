@@ -12,7 +12,6 @@ import io.github.danielhp95.caracole.mirror.Looked
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.UnitGate
 import io.github.danielhp95.caracole.mirror.pageFor
-import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
@@ -58,8 +57,8 @@ class PhoneGate(val database: Database) : UnitGate {
  * Null for none: the App answers 404.
  */
 class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate, val database: Database) {
-    /** The library the message pages name: the App's, which sets it. */
-    internal var name: LibraryName = LibraryName(AppConfig.PHONE, MessagePage.PHONE_BADGE)
+    /** The library the message pages name, read for each: the App's, which sets it. */
+    internal var name: () -> LibraryName = { LibraryName.phone(null) }
 
     fun serve(path: String): Response? {
         if (!path.startsWith("/")) return null
@@ -116,10 +115,10 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
             is Looked.Page -> Response(200, Body.FromFile(looked.file, looked.file.length()),
                                        (listOf("Content-Type" to looked.entry.type) + looked.entry.headers.toList()).toMutableList())
             is Looked.Gated -> when (looked.gate) {
-                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "This song was removed on the phone.", name = name)
+                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "This song was removed on the phone.", name = name())
                 else -> MessagePage.page(409, "Changed on the phone",
                                          "This song changed on the phone since the computer made its page.",
-                                         sheetOf(looked.entry.unit)?.let { it to "The phone's sheet" }, name)
+                                         sheetOf(looked.entry.unit)?.let { it to "The phone's sheet" }, name())
             }
             Looked.Missing -> null
         }
