@@ -1287,7 +1287,16 @@ Not built yet. (job-views, requests-feed.)
   - `HarptabReplay` (area `harptab`) replays vectors/viewer/harptab_read.jsonl: each fixture tab, the tests' literals
     and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins, each
     pin's tab read as it says (`read(notation=)`).
-- A harmonica tab laid out (harptab-layout): not built yet.
+- A harmonica tab laid out (harptab-layout): `HarpTabs.parse`, harptab.py's layout half, giving Python's `Tab`:
+  - Layout.kt: each line's kind, the tabber's notes, the sections, a row's words under it or above it (`above`), a
+    section's name beside a row or sung (`isLabel(besideRow=)`), prose and later verses, `namedKey`, `Row.trusted`,
+    `Tab.readable` and `missed`;
+  - Align.kt: `syllableStarts` and `align`, which answers the row with its parts (Python's sets them in place), the
+    cuts weighed as `_cuts` weighs them (`math.comb` exact, the costs summed as Python's builtin sum, Py.fsum), every
+    column a code point;
+  - `HarptabReplay` replays vectors/viewer/harptab_layout.jsonl too: each tab of harptab_read's records and drawn
+    ones, parsed and read as another reading's pin says, its rows' parts as lengths, its lines and words, `align`
+    and `_cuts` on drawn rows and MAX_CUTS's edges.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
