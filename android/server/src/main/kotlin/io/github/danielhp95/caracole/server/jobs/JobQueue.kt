@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.Refused
@@ -19,8 +20,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
 /**
  * A job to queue: what it is ([title], and [display], what the page names it by: its title when empty), the key it is
@@ -257,10 +256,9 @@ class Job internal constructor(val id: Int, spec: JobSpec, queuedAt: Instant = I
         const val WAITING = "waiting"
         const val SKIPPED = "skipped"
 
-        private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC)
-
-        /** A time as caracole serve writes one ("%Y-%m-%dT%H:%M:%SZ", in UTC), or null. */
-        internal fun stamp(at: Instant?): JsonElement = if (at == null) JsonNull else JsonPrimitive(STAMP.format(at))
+        /** A time as caracole serve writes one ("%Y-%m-%dT%H:%M:%SZ", in UTC: stamps.stamp, core.index.Stamps), or
+         * null. */
+        internal fun stamp(at: Instant?): JsonElement = if (at == null) JsonNull else JsonPrimitive(Stamps.of(at))
 
         /** A job's stages, all waiting: its spec's, then those its commands report it hasn't (JobCommands.stages). */
         private fun stagesOf(spec: JobSpec, steps: List<Step>): List<Stage> {

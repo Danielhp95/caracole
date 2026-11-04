@@ -16,7 +16,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import java.math.BigDecimal
 import java.math.BigInteger
 
 /**
@@ -58,7 +57,8 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
                 match = MatchPolicy(m.getValue("accept").jsonPrimitive.double, m.getValue("margin").jsonPrimitive.double,
                                     m.getValue("review").jsonPrimitive.double, m.getValue("artist_gate").jsonPrimitive.double),
                 rank = RankPolicy(r.getValue("coverage_threshold").jsonPrimitive.double,
-                                  r.getValue("line_match").jsonPrimitive.int, r.getValue("prior_votes").jsonPrimitive.int,
+                                  r.getValue("line_match").jsonPrimitive.double,
+                                  r.getValue("prior_votes").jsonPrimitive.double,
                                   r.getValue("scored_sheets").jsonPrimitive.int,
                                   r.getValue("label_penalty").jsonPrimitive.double,
                                   r.getValue("variant_bonus").jsonPrimitive.double),
@@ -86,9 +86,8 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
          * - Each value as config.py would hold it, or it keeps its default: a delay `[min, max]` of finite numbers with
          *   `0 <= min <= max` (`_delay`); a count a whole number of 0 or more (`_count`; one past an Int the most an
          *   Int holds, as many as any lookup sends); `[match]`'s and `[rank]`'s in their ranges (`_MATCH_RANGES`,
-         *   `_RANK_RANGES`; `scored_sheets` an int), and a `review` above `accept` the defaults' `[match]` whole.
-         *   [RankPolicy]'s `lineMatch` and `priorVotes` are Ints: a fraction there (`line_match = 82.5`, which
-         *   caracole.toml may give) keeps the default.
+         *   `_RANK_RANGES`: `line_match = 82.5` is 82.5, `scored_sheets` an int alone), and a `review` above
+         *   `accept` the defaults' `[match]` whole.
          *
          * A record that isn't a JSON object (PyJson.loads's), the defaults whole.
          */
@@ -127,9 +126,9 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
                 match = if (match.review > match.accept) base.match else match,
                 rank = RankPolicy(
                     coverageThreshold = r.number("coverage_threshold", 0.0, 1.0) ?: base.rank.coverageThreshold,
-                    lineMatch = r.whole("line_match", 0, 100, floats = true) ?: base.rank.lineMatch,
-                    priorVotes = r.whole("prior_votes", 0, null, floats = true) ?: base.rank.priorVotes,
-                    scoredSheets = r.whole("scored_sheets", 1, null, floats = false) ?: base.rank.scoredSheets,
+                    lineMatch = r.number("line_match", 0.0, 100.0) ?: base.rank.lineMatch,
+                    priorVotes = r.number("prior_votes", 0.0, null) ?: base.rank.priorVotes,
+                    scoredSheets = r.whole("scored_sheets", 1, null) ?: base.rank.scoredSheets,
                     labelPenalty = r.number("label_penalty", 0.0, null) ?: base.rank.labelPenalty,
                     variantBonus = r.number("variant_bonus", 0.0, null) ?: base.rank.variantBonus,
                 ),
@@ -156,29 +155,20 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
 
         private fun JsonObject.number(key: String, low: Double, high: Double?): Double? = number(this[key], low, high)
 
-        /**
-         * An Int of config.py's from [low] up to [high]: an int (`_count`, `_number(…, whole=True)`) or, where
-         * config.py takes a float too ([floats], `_number(…, whole=False)`), a float that is a whole number; past an
-         * Int, the most an Int holds.
-         */
-        private fun whole(e: JsonElement?, low: Long, high: Long?, floats: Boolean): Int? {
-            val literal = literal(e) ?: return null
-            val n = when {
-                isInt(literal) -> BigInteger(literal)
-                !floats -> return null
-                else -> PyFloat.parse(literal)?.takeIf { it.isFinite() && it == Math.rint(it) }
-                    ?.let { BigDecimal(it).toBigIntegerExact() } ?: return null
-            }
+        /** An int of config.py's (`_count`, `_number(…, whole=True)`: never a float, 4.0 too) from [low] up to
+         * [high]; past an Int, the most an Int holds. */
+        private fun whole(e: JsonElement?, low: Long, high: Long?): Int? {
+            val literal = literal(e)?.takeIf(::isInt) ?: return null
+            val n = BigInteger(literal)
             if (n < BigInteger.valueOf(low)) return null
             if (high != null && n > BigInteger.valueOf(high)) return null
             return n.min(BigInteger.valueOf(Int.MAX_VALUE.toLong())).toInt()
         }
 
-        private fun JsonObject.whole(key: String, low: Long, high: Long?, floats: Boolean): Int? =
-            whole(this[key], low, high, floats)
+        private fun JsonObject.whole(key: String, low: Long, high: Long?): Int? = whole(this[key], low, high)
 
         /** config._count: an int of 0 or more. */
-        private fun JsonObject.count(key: String): Int? = whole(this[key], 0, null, floats = false)
+        private fun JsonObject.count(key: String): Int? = whole(this[key], 0, null)
 
         /** config._delay: two finite numbers (never booleans) with `0 <= min <= max`. */
         private fun JsonObject.delay(key: String): Pair<Double, Double>? {
@@ -193,7 +183,7 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
          * a count leaves [mine]. */
         private fun stricter(mine: Int?, given: JsonElement?): Int? {
             if (given == null || given is JsonNull) return mine
-            val theirs = whole(given, 0, null, floats = false) ?: return mine
+            val theirs = whole(given, 0, null) ?: return mine
             return if (mine == null) theirs else minOf(mine, theirs)
         }
 
@@ -204,7 +194,9 @@ data class PhoneConfig(val providers: Map<String, ProviderPolicy>, val userAgent
         private fun JsonObject.text(key: String): String? =
             (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
-        /** The computer's settings document (GET /api/peer/state's `settings`) kept as kv `phone:settings`. */
-        fun take(db: Db, settings: JsonObject): Unit = TODO("lane crossing-phone")
+        /** The computer's settings document (GET /api/peer/state's `settings`) kept as kv `phone:settings`, whole and
+         * as db.kv_set_json writes a value, for [read] to lay over the defaults: a sync's agree stage takes it
+         * (SyncEngine), each time replacing the last; a state with none leaves it as it was. */
+        fun take(db: Db, settings: JsonObject): Unit = db.kvSetJson(SETTINGS_KV, settings)
     }
 }

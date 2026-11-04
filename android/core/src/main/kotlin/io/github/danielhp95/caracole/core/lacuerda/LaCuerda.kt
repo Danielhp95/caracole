@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.lacuerda
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
@@ -262,5 +263,5 @@ object LaCuerda {
     }
 
     /** lacuerda_index.complete_at, as stamps.parse reads it: null when it is missing or unreadable ([IsoTime]). */
-    private fun completeAt(db: Db): String? = db.kvGet(COMPLETE_KEY)?.takeIf { it.isNotEmpty() && IsoTime.reads(it) }
+    private fun completeAt(db: Db): String? = db.kvGet(COMPLETE_KEY)?.takeIf { Stamps.parse(it) != null }
 }

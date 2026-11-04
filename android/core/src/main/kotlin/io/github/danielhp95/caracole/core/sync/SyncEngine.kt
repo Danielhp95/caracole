@@ -1,14 +1,17 @@
 package io.github.danielhp95.caracole.core.sync
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Sites
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.internal.client.Address
 import io.github.danielhp95.caracole.core.sync.internal.client.Give
 import io.github.danielhp95.caracole.core.sync.internal.client.Kept
-import io.github.danielhp95.caracole.core.sync.internal.client.Stamps
+import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +66,11 @@ class SameCaracole(message: String) : Exception(message)
  *    failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
  *    Database.write (Compare.recordAgreement), with kv `sync:peer:<computer id>` = {address, name, synced_at}, which
- *    GET /api/sync lists.
+ *    GET /api/sync lists, and the computer's settings that state gives taken ([takeSettings], PhoneConfig.take: kv
+ *    `phone:settings`, which the phone's lookups read; a computer that gives none leaves them as they were).
+ *    Nothing of either side's politeness crosses (docs/superpowers/specs/2026-11-03-politeness-crossing.md): the
+ *    phone's cooldowns, request counts, pace and the records that gate its requests stay its own, and so do the
+ *    computer's.
  * 6. **index**: the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
  *    `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
  *    Database.write, the kv brought up to date; skipped when none is newer. A failure there leaves the agreement as
@@ -189,6 +196,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         "address" to JsonPrimitive(c.address), "name" to JsonPrimitive(after.name),
                         "synced_at" to JsonPrimitive(at),
                     )))
+                    takeSettings(db, after)
                     agreed
                 }
             }
@@ -309,9 +317,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The computer's newer indexes, merged; a failure is said on the stage and leaves the rest as it is. */
     private suspend fun index(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, computer: String,
                               indexes: Map<String, String>) {
-        val had = database.read { db -> Stamps.sites(db.kvGetJson(INDEX_KEY + computer)) }
+        val had = database.read { db -> IndexStamps.sites(db.kvGetJson(INDEX_KEY + computer)) }
         val newer = indexes.filter { (site, stamp) ->
-            Sites.named(site) != null && (had[site]?.let { Stamps.newer(stamp, it) } ?: true)
+            Sites.named(site) != null && (had[site]?.let { IndexStamps.newer(stamp, it) } ?: true)
         }.keys.sortedBy { site -> Sites.ALL.indexOfFirst { it.name == site } }
         if (newer.isEmpty()) {
             stage(INDEX, SKIPPED_STATE, "no index is newer there")
@@ -328,7 +336,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             io {
                 database.write { db ->
                     IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
-                    db.kvSetJson(INDEX_KEY + computer, Stamps.json(had + newer.associateWith { indexes.getValue(it) }))
+                    db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                 }
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
             }
@@ -410,6 +418,14 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
          * "http://phone.lan:8737/"), as caracole asks it: `http://` when no scheme is given, no trailing `/`. A
          * [PeerError] in its words for one that isn't. */
         fun peerAddress(text: String): String = Address.peerAddress(text)
+
+        /** The agree stage's take of the computer's settings (docs/superpowers/specs/2026-11-03-politeness-crossing.md,
+         * "Settings"): those [state] gives kept by PhoneConfig.take, replacing the last; a state that gives none (a
+         * computer older than them, or a `settings` that isn't an object: [PeerState.settings] null) leaves the
+         * phone's as they were. SettingsReplay replays vectors/sync/settings_take.jsonl through it. */
+        fun takeSettings(db: Db, state: PeerState) {
+            state.settings?.let { PhoneConfig.take(db, it) }
+        }
 
         private const val MINE = "mine"
         private const val THEIRS = "theirs"

@@ -91,7 +91,7 @@ class PhoneConfigTest {
         assertEquals(PhoneConfig.DEFAULTS.providers.keys, cfg.providers.keys)
         assertEquals(PhoneConfig.DEFAULTS.provider("lrclib"), cfg.provider("lrclib"))
         assertEquals(MatchPolicy(accept = 92.0, margin = 8.5, review = 70.0, artistGate = 88.0), cfg.match)
-        assertEquals(RankPolicy(0.75, 80, 12, 4, 0.25, 0.5), cfg.rank)
+        assertEquals(RankPolicy(0.75, 80.0, 12.0, 4, 0.25, 0.5), cfg.rank)
     }
 
     @Test fun aMemberMissingOrOfAnotherKindKeepsItsDefault() = db { db ->
@@ -130,13 +130,16 @@ class PhoneConfigTest {
         db.kvSet(PhoneConfig.SETTINGS_KV, """{"providers": {"ug": {"lookup_per_hour": 1000000000000}}}""")
         assertEquals(Int.MAX_VALUE, PhoneConfig.read(db).provider("ug").lookupPerHour)  // config.py takes it
         db.kvSet(PhoneConfig.SETTINGS_KV, """{"match": {"accept": 101, "margin": -1, "review": NaN},
-            "rank": {"coverage_threshold": 1.5, "line_match": 82.5, "prior_votes": -2, "scored_sheets": 0,
+            "rank": {"coverage_threshold": 1.5, "line_match": 100.5, "prior_votes": -2, "scored_sheets": 0,
                      "label_penalty": -0.1, "variant_bonus": Infinity}}""")
         assertEquals(PhoneConfig.DEFAULTS.match to PhoneConfig.DEFAULTS.rank,
                      PhoneConfig.read(db).let { it.match to it.rank })
-        // A whole number config.py holds as a float is the Int it is; scored_sheets is an int alone.
-        db.kvSet(PhoneConfig.SETTINGS_KV, """{"rank": {"line_match": 80.0, "prior_votes": 2, "scored_sheets": 4.0}}""")
-        assertEquals(RankPolicy(lineMatch = 80, priorVotes = 2), PhoneConfig.read(db).rank)
+        // line_match and prior_votes are numbers, ints or floats, as config.py takes them (82.5 is 82.5); scored_sheets
+        // is an int alone, 4.0 refused.
+        db.kvSet(PhoneConfig.SETTINGS_KV, """{"rank": {"line_match": 82.5, "prior_votes": 2, "scored_sheets": 4.0}}""")
+        assertEquals(RankPolicy(lineMatch = 82.5, priorVotes = 2.0), PhoneConfig.read(db).rank)
+        db.kvSet(PhoneConfig.SETTINGS_KV, """{"rank": {"line_match": 80.0, "prior_votes": 2.5, "scored_sheets": 4}}""")
+        assertEquals(RankPolicy(lineMatch = 80.0, priorVotes = 2.5, scoredSheets = 4), PhoneConfig.read(db).rank)
         // review above accept: config.py refuses that [match], so the phone keeps its own whole.
         db.kvSet(PhoneConfig.SETTINGS_KV, """{"match": {"accept": 70, "margin": 5, "review": 75, "artist_gate": 80}}""")
         assertEquals(PhoneConfig.DEFAULTS.match, PhoneConfig.read(db).match)

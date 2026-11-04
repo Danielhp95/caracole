@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.server.http.App
-import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PageIcon
@@ -22,10 +21,11 @@ import java.time.temporal.ChronoUnit
  * The page's own policy is in its meta tag; its header's is `frame-ancestors 'none'` alone, as caracole serve's
  * (a header policy would apply on top of the tag's), and the App adds every answer's others (App.finish). The icon,
  * an SVG, opened as a page of its own may load and run nothing. Its data is read in one Database.read: a route never
- * writes. The page names the library [libraryName], AppConfig's (its default, AppConfig.PHONE, the App's own).
+ * writes. The page names the library [libraryName] gives for each request, AppConfig's (the computer's name, as
+ * the last sync gave it; none before the first), with the phone's badge (LibraryName.phone).
  */
 class PageRoutes(val database: Database, val page: LibraryPage, val data: PageData, val controls: () -> ServerControls,
-                 val libraryName: String = AppConfig.PHONE) : RouteModule {
+                 val libraryName: () -> String = { "" }) : RouteModule {
     override val routes: List<Route> = listOf(
         Route("GET", "/", "the library page", get = GetAnswer { library() }),
         Route("GET", "/index.html", "the library page", get = GetAnswer { library() }),
@@ -37,7 +37,7 @@ class PageRoutes(val database: Database, val page: LibraryPage, val data: PageDa
         val controls = controls()
         val now = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
         val built = database.read { db -> data.data(db, now) }
-        val html = page.served(page.withServer(built, controls), controls, libraryName)
+        val html = page.served(page.withServer(built, controls), controls, libraryName())
         return Response(200, Body.Bytes(html.toByteArray()), mutableListOf("Content-Type" to HTML, "Content-Security-Policy" to App.FRAMES))
     }
 

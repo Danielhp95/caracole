@@ -1234,7 +1234,20 @@ Not built yet. (lookup.)
 
 ##### The computer's settings on the phone
 
-Not built yet. (crossing-phone.)
+- A sync's agree stage takes the computer's settings from the state it reads again there (`PeerState.settings`, `GET
+  /api/peer/state`'s `settings`; a member that isn't an object is none), inside the agreement's write:
+  `SyncEngine.takeSettings`, then `PhoneConfig.take`, the document whole as kv `phone:settings`, as `kv_set_json`
+  writes one, replacing the last. A state with none (an older computer) leaves it as it was; a sync that stops before
+  agree takes none.
+- `PhoneConfig.read` lays it over config.json's defaults, value by value as config.py would hold it (`[rank]`'s
+  `line_match` and `prior_votes` numbers, 82.5 too, so `RankPolicy`'s are Doubles; a provider the phone doesn't know
+  passed over). Assembly reads it for each lookup's clients and the cards; the library's `name` is shown nowhere yet,
+  the phone's pages naming it `AppConfig.libraryName`, "Phone", until that reads `PhoneConfig.read(db).libraryName`.
+- It is no unit: a take changes no unit's digest and no other record (SettingsTest), and the phone sends no settings
+  back. Nothing of either side's politeness crosses (Two caracoles, each its own politeness, below).
+- `SettingsReplay` (area `settings`) replays vectors/sync/settings.jsonl (each caracole.toml's document taken, then
+  read as config.py holds it) and settings_take.jsonl (the take rule by rule), each take through `PeerState.read` and
+  `SyncEngine.takeSettings`.
 
 ##### :viewer
 

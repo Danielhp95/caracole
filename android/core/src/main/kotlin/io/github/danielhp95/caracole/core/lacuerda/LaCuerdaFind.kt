@@ -18,7 +18,6 @@ internal object LaCuerdaFind {
     const val NAMED = 80.0
     const val WORD_NAMED = 75.0
     const val INSIDE_SCALE = 0.85
-    const val PINYIN_PARTIAL_SCALE = 0.85 // normalize.PINYIN_PARTIAL_SCALE
     val READINGS = listOf("title", "both", "artist")
     const val ARTIST_ROWS = 3
     const val SONG_ROWS = 5
@@ -324,9 +323,9 @@ internal object LaCuerdaFind {
 
         /** What a partial match counts for: [PARTIAL_SCALE] when it is whole words of [words] (spaced, or
          * [together]), or the query is the start of one of [starts] as typed so far; [INSIDE_SCALE] for letters inside
-         * a word; a Chinese query's pinyin, [PINYIN_PARTIAL_SCALE]. */
+         * a word; a Chinese query's pinyin, [Normalize.PINYIN_PARTIAL_SCALE]. */
         private fun scale(part: Fuzz.Alignment, words: List<String>, together: Boolean, starts: List<List<String>>): Double {
-            if (runs.isNotEmpty()) return PINYIN_PARTIAL_SCALE
+            if (runs.isNotEmpty()) return Normalize.PINYIN_PARTIAL_SCALE
             val (begins, ends) = bounds(words, together)
             if ((part.destStart in begins && part.destEnd in ends) || starts.any { typedStart(this.words, it) }) {
                 return PARTIAL_SCALE
