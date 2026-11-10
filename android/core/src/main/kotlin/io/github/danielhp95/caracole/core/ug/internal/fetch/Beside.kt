@@ -32,8 +32,8 @@ internal object Beside {
      * the sheet's or a kept version's; null for none, and for any other file's (the tab's). */
     fun sameText(run: SongRun, name: String, data: ByteArray): String? {
         val held = holder(run, name, data)
-        if (held == UgFetch.SHEET_FILES[0]) return Ports.SHEET_PAGE
-        val tab = held?.let(Ports::tabOf)
+        if (held == UgFetch.SHEET_FILES[0]) return SheetVersions.SHEET_PAGE
+        val tab = held?.let(SheetVersions::tabOf)
         if (tab != null && held == SheetVersions.versionNames(tab).first) return SheetVersions.versionNames(tab).third
         return null
     }
@@ -59,13 +59,13 @@ internal object Beside {
         val sha = Slots.sha256(stripped(page))
         dropVersion(run, tab)
         for (f in Kept.keptFiles(run.db, run.song.id)) {
-            val other = Ports.tabOf(f.name)
+            val other = SheetVersions.tabOf(f.name)
             if (f.sha256 == sha && other != null) dropVersion(run, other)
         }
     }
 
     private fun keptVersionTabs(run: SongRun): Set<String> =
-        Kept.keptFiles(run.db, run.song.id).mapNotNull { Ports.tabOf(it.name) }.toCollection(LinkedHashSet())
+        Kept.keptFiles(run.db, run.song.id).mapNotNull { SheetVersions.tabOf(it.name) }.toCollection(LinkedHashSet())
 
     /**
      * `_keep_beside`: [beside] (rank order) kept as the song's versions, but for the [chosen] one (`sheet.txt`), and
@@ -90,7 +90,7 @@ internal object Beside {
                 if (shown != null) same[c.tabId] = shown
             }
         }
-        val key = Ports.sameKey(run.song.id)
+        val key = SheetVersions.sameKey(run.song.id)
         if (same.isNotEmpty()) {
             run.db.kvSetJson(key, JsonObject(same.mapValues { JsonPrimitive(it.value) }))
         } else {

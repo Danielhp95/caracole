@@ -6,7 +6,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
@@ -23,7 +22,6 @@ class KeepVersionTest {
     }
 
     @Test fun everyRecordOfKeepVersionReplays() {
-        assumeTrue("waiting on ug-pages, rank-coverage and html-tree", UgFetchReplay.ready)
         val misses = Misses(UgFetchReplay.KEEP)
         UgFetchReplay.keep(misses)
         misses.assertNone()

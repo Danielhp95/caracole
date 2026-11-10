@@ -23,7 +23,6 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -40,7 +39,6 @@ class VersionsCommandsTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test fun everyRecordOfTheVersionsCommandsReplays() {
-        assumeTrue("waiting on ug-pages, rank-coverage and html-tree", UgFetchReplay.ready)
         val misses = Misses(UgFetchReplay.VERSIONS)
         UgFetchReplay.versions(misses)
         misses.assertNone()

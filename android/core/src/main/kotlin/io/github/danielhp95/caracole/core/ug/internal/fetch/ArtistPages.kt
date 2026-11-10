@@ -108,9 +108,6 @@ internal object ArtistPages {
         return true
     }
 
-    /** `artist_is_known`: [ArtistRoute.artistIsKnown]. */
-    fun artistIsKnown(db: Db, song: SongRow, overrides: Overrides): Boolean = ArtistRoute.artistIsKnown(db, song, overrides)
-
     // --- the page's address --------------------------------------------------------------------------------------
 
     private fun pastedKey(tabId: Long): String = "ug:pasted_tab:$tabId"
@@ -218,7 +215,7 @@ internal object ArtistPages {
     private fun learnArtistPage(run: SongRun, keys: List<String>): String? {
         for (key in keys) {
             for (tab in UgLookup.artistTabs(run.db, key, limit = ArtistRoute.LEARN_TRIES)) {
-                val url = Ports.url(tab)
+                val url = tab.url
                 if (Pages.closed(url)) continue
                 val page = try {
                     Pages.getPage(run.ctx.client, url, Pages::tabPage).first
@@ -235,7 +232,7 @@ internal object ArtistPages {
      * page. */
     private fun learnFromOwnTabs(run: SongRun, tabs: List<IndexTab>, keys: List<String>): String? {
         for (tab in tabs.take(ArtistRoute.LEARN_TRIES)) {
-            val page = Pages.page(run, tab.tabId, Ports.url(tab), tab.type)
+            val page = Pages.page(run, tab.tabId, tab.url, tab.type)
             if (page != null) knownArtistPage(run.db, keys, run.ctx.overrides)?.let { return it }
         }
         return null
@@ -287,9 +284,9 @@ internal object ArtistPages {
             }
             first = first ?: page
             last = maxOf(last, page.pages)
-            val listed = page.tabs.filter { Ports.kind(it) == kind }
+            val listed = page.tabs.filter { it.kind == kind }
             Pages.checkLinks(run, listed, url)
-            kept += ArtistTabs.store(run.db, base, page.name, listed, readAt)
+            kept += ArtistTabs.store(run.db, base, page.name, listed, readAt, now = run.stamp)
             val found = listed.mapNotNull { titleHit(it, forms, fresh) }
             hits += found
             if (hits.isNotEmpty() && !(found.isNotEmpty() && found.last().tab === listed.last())) {
@@ -316,7 +313,7 @@ internal object ArtistPages {
             return emptySet()
         }
         if (page == null) return null
-        ArtistTabs.store(run.db, base, page.name, page.tabs, resp.fetchedAt ?: run.stamp)
+        ArtistTabs.store(run.db, base, page.name, page.tabs, resp.fetchedAt ?: run.stamp, now = run.stamp)
         return page.filters.ifEmpty { ArtistRoute.ARTIST_PAGE_KINDS.toSet() }
     }
 

@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.match.Match
+import io.github.danielhp95.caracole.core.ug.ArtistRoute
 import io.github.danielhp95.caracole.core.ug.FetchContext
 import io.github.danielhp95.caracole.core.ug.IndexTab
 import io.github.danielhp95.caracole.core.ug.SheetVersions
@@ -26,7 +27,7 @@ internal object SongFetch {
 
     /** `_KEPT_TEXT_SQL`: `files f` rows of a kept UG sheet or tab, or of a version kept beside the sheet. */
     private val KEPT_TEXT_SQL =
-        "(f.name IN (${KEPT_TEXT.joinToString(",") { "?" }}) OR f.name GLOB '${Ports.VERSION_PREFIX}[0-9]*')"
+        "(f.name IN (${KEPT_TEXT.joinToString(",") { "?" }}) OR f.name GLOB '${SheetVersions.PREFIX}[0-9]*')"
 
     /**
      * `process_song`: one song's UG versions fetched, ranked and kept, one slot at a time. A not-found song is first
@@ -47,7 +48,7 @@ internal object SongFetch {
         } else if (song.matchDecision !in setOf("accept", "pinned")) {
             dropUndone(run)
             return unfinished()
-        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ARTIST_PAGE_KINDS)) {
+        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ArtistRoute.ARTIST_PAGE_KINDS)) {
             return unfinished()
         }
         val tabs = songIndexTabs(ctx.db, song, ctx.overrides.block)
@@ -91,9 +92,6 @@ internal object SongFetch {
                                 keptVersions = run.keptVersions)
     }
 
-    /** ARTIST_PAGE_KINDS: the artist page's lists read, the sheet's first. */
-    private val ARTIST_PAGE_KINDS = listOf("chords", "tabs")
-
     /**
      * `_finish`: every slot is done: the status refreshed and the song marked checked. A song with a page that
      * couldn't be read is neither checked nor clean (an error is never a miss). The tabs [block] left out are
@@ -136,7 +134,7 @@ internal object SongFetch {
         val artist = song.matchArtistKey
         val tabs = if (!song.matchSongKey.isNullOrEmpty() && artist != null) UgLookup.songTabs(db, artist, song.matchSongKey)
                    else emptyList()
-        return tabs.filter { it.tabId !in block && !Pages.closed(Ports.url(it)) }
+        return tabs.filter { it.tabId !in block && !Pages.closed(it.url) }
     }
 
     /** `_live_chords`: the chords tabs among the song's index [tabs] that UG hasn't since answered 404 for. */
@@ -163,7 +161,7 @@ internal object SongFetch {
         if (ignored(run.song, run.ctx.overrides) || !undone(run.db, run.song.id)) return
         Slots.dropLeftOver(run, UgFetch.SHEET_FILES)
         Slots.dropLeftOver(run, UgFetch.TAB_FILES)
-        val tabs = Kept.keptFiles(run.db, run.song.id).mapNotNull { Ports.tabOf(it.name) }.toCollection(LinkedHashSet())
+        val tabs = Kept.keptFiles(run.db, run.song.id).mapNotNull { SheetVersions.tabOf(it.name) }.toCollection(LinkedHashSet())
         for (tab in tabs) {
             val (txt, doc, _) = SheetVersions.versionNames(tab)
             Slots.dropLeftOver(run, listOf(txt, doc))
@@ -205,7 +203,7 @@ internal object SongFetch {
         }
         val content = page.content!!
         Versions.setCoverage(db, row.id, Slots.coverage(run, content, Slots.lyrics(run)))
-        val (chosen, kept) = Ports.libraryState(db, song.id)
+        val (chosen, kept) = SheetVersions.libraryState(db, song.id)
         if (chosen == row.tabId) return "sheet"
         val ranks = Kept.keptFiles(db, song.id).associate { it.name to it.keptRank }
         val txt = SheetVersions.versionNames(row.tabId).first
@@ -217,9 +215,9 @@ internal object SongFetch {
         }
         val shown = Beside.sameText(run, txt, UgPage.stripMarkup(content).toByteArray(Charsets.UTF_8)) ?: return "held"
         SheetVersions.noteKeptByYou(db, song.id, row.tabId)
-        val same = LinkedHashMap(Ports.samePages(db, song.id))
+        val same = LinkedHashMap(SheetVersions.samePages(db, song.id))
         same[row.tabId] = shown
-        db.kvSetJson(Ports.sameKey(song.id), JsonObject(same.mapValues { JsonPrimitive(it.value) }))
+        db.kvSetJson(SheetVersions.sameKey(song.id), JsonObject(same.mapValues { JsonPrimitive(it.value) }))
         return "same"
     }
 

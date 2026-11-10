@@ -13,7 +13,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -28,7 +27,6 @@ class ArtistRouteTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test fun everyRecordOfTheArtistRouteReplays() {
-        assumeTrue("waiting on ug-pages, rank-coverage and html-tree", UgFetchReplay.ready)
         val misses = Misses(UgFetchReplay.ARTIST)
         UgFetchReplay.artist(misses)
         misses.assertNone()

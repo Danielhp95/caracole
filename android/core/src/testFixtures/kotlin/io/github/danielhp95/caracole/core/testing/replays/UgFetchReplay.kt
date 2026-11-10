@@ -1,10 +1,10 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.config.RankPolicy
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.ProviderBlocked
@@ -12,22 +12,26 @@ import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.Asking
 import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.StageContext
+import io.github.danielhp95.caracole.core.lookup.sites.UgStages
 import io.github.danielhp95.caracole.core.lookup.sites.VersionsCommands
+import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.FakeAsking
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
+import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.ug.ArtistRoute
 import io.github.danielhp95.caracole.core.ug.FetchContext
-import io.github.danielhp95.caracole.core.ug.Rank
 import io.github.danielhp95.caracole.core.ug.SongFetchOutcome
 import io.github.danielhp95.caracole.core.ug.UgFetch
-import io.github.danielhp95.caracole.core.ug.UgPage
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -41,14 +45,17 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
+import java.nio.file.Files
 import java.time.Instant
 
 /**
  * UG's lookup path (vectors/lookup/ug_sheet.jsonl, ug_keep.jsonl, ug_artist.jsonl, commands_versions.jsonl;
  * tests/test_conformance_ug_fetch.py) replayed as Python recorded it: each record's passes of `UgFetch.processSong`
  * (or `keepVersion`s, or `VersionsCommands`' turns) in its world, the requests in order, the rows, kv and files
- * written, the events and the result compared (core.testing.Scenarios). UgFetchSheetTest, KeepVersionTest,
- * ArtistRouteTest and VersionsCommandsTest call each part on the JVM; CorpusOnDeviceTest runs them all under ART.
+ * written, the events and the result compared (core.testing.Scenarios); and get.py's words for the two UG stages
+ * (ug_sheet_stages.jsonl): what each says a pass did, and `_ug_ready`'s answer for a song. UgFetchSheetTest,
+ * KeepVersionTest, ArtistRouteTest and VersionsCommandsTest call each part on the JVM; CorpusOnDeviceTest runs them
+ * all under ART.
  *
  * The phone notes each artist page a store keeps tabs of for its next push to the computer (kv
  * `phone:read:ug:<page>`), which Python doesn't: an artist record's `noted` says which, checked and then left out of
@@ -61,22 +68,12 @@ object UgFetchReplay : AreaReplay {
     const val KEEP = "lookup/ug_keep.jsonl"
     const val ARTIST = "lookup/ug_artist.jsonl"
     const val VERSIONS = "lookup/commands_versions.jsonl"
-
-    /** Phase A guard: a page is read by lane ug-pages' UgPage over lane html-tree's core.html, and ranked by lane
-     * rank-coverage's Rank and Coverage; until each has merged, the records wait (waiting on ug-pages, rank-coverage
-     * and html-tree). */
-    val ready: Boolean by lazy {
-        runCatching {
-            Html.parse("<p>")
-            UgPage.kindOf("Chords")
-            Rank.priorMean(emptyList())
-        }.isSuccess
-    }
+    const val STAGES = "lookup/ug_sheet_stages.jsonl"
 
     override fun replay(misses: Misses) {
-        if (!ready) return  // waiting on ug-pages, rank-coverage and html-tree
         sheet(misses)
         keep(misses)
+        stages(misses)
         artist(misses)
         versions(misses)
     }
@@ -110,6 +107,81 @@ object UgFetchReplay : AreaReplay {
                     UgFetch.keepVersion(context(world, pass), Songs.byId(world.db, song)!!, tab.jsonPrimitive.long)
                 }
             }
+        }
+    }
+
+    /**
+     * vectors/lookup/ug_sheet_stages.jsonl: the sheet stage's words (`_sheet_from_ug`, `[state, detail]`) and the ug
+     * stage's (`ug`) for a pass that came to the record's outcome, and `_ug_ready`'s answer for its song over its
+     * index, kv and overrides.
+     */
+    fun stages(misses: Misses) {
+        for (record in records(STAGES)) {
+            val case = record.getValue("case").jsonPrimitive.content
+            val kw = record.getValue("kw").jsonObject
+            val want = record.getValue("out")
+            when (val fn = record.getValue("fn").jsonPrimitive.content) {
+                "caracole.get._Lookup._sheet_from_ug" -> {
+                    val got = JsonArray(listOf(JsonPrimitive("done"), JsonPrimitive(UgStages.sheetSaid(cameTo(kw)))))
+                    misses.check(got == want) { "$case: $got, Python's $want" }
+                }
+                "caracole.get._Lookup.ug" -> {
+                    val got = JsonPrimitive(UgStages.restSaid(cameTo(kw)))
+                    misses.check(got == want) { "$case: $got, Python's $want" }
+                }
+                "caracole.get._Lookup._ug_ready" -> {
+                    val got = ready(kw)
+                    val python = (want as? JsonPrimitive)?.takeIf { it.isString }?.content
+                    misses.check(got == python) { "$case: ${got?.let(PyStr::repr) ?: "None"}, Python's $want" }
+                }
+                else -> misses.check(false) { "$case: no replay for $fn" }
+            }
+        }
+    }
+
+    /** A record's `outcome`, `{sheet, tab, kept_versions}`, as the pass's SongFetchOutcome. */
+    private fun cameTo(kw: JsonObject): SongFetchOutcome {
+        val o = kw.getValue("outcome").jsonObject
+        return SongFetchOutcome(1, o["sheet"]?.jsonPrimitive?.longOrNull, o["tab"]?.jsonPrimitive?.longOrNull, 3,
+                                settled = true,
+                                keptVersions = o.getValue("kept_versions").jsonArray.map { it.jsonPrimitive.content })
+    }
+
+    /** `_ug_ready` of a record's song in a database of its index's artists and its kv, with its overrides. */
+    private fun ready(kw: JsonObject): String? {
+        val s = kw.getValue("song").jsonObject
+        val song = SongRow(
+            id = 1, key = "soda-stereo/persiana-americana", artist = s.getValue("artist").jsonPrimitive.content,
+            title = "Persiana Americana", artists = s.getValue("artists").jsonArray.map { it.jsonPrimitive.content },
+            album = null, durationMs = null, isrc = null, sourceIds = "{}", addedAt = "2026-10-01T00:00:00Z",
+            variant = null, status = "wanted", review = false,
+            matchDecision = s.getValue("match_decision").jsonPrimitive.content, matchStep = null, matchScore = null,
+            matchArtistKey = null, matchSongKey = null, matchCandidates = s.getValue("match_candidates").toString(),
+            matchedAt = null, ugDirty = true, ugCheckedAt = null, lyricsStatus = "pending", lyricsJson = null,
+            lyricsAt = null, lacuerdaCheckedAt = null, createdAt = "2026-10-01T00:00:00Z",
+        )
+        val written = kw.getValue("overrides").jsonObject
+        val overrides = Overrides(
+            alias = (written["alias"] as? JsonObject).orEmpty().mapValues { (_, v) -> v.jsonArray.map { it.jsonPrimitive.content } },
+            artistUrl = (written["artist_url"] as? JsonObject).orEmpty().mapValues { it.value.jsonPrimitive.content },
+        )
+        val dir = Files.createTempDirectory("caracole-ug-ready").toFile()
+        try {
+            return TestDb.fresh(dir).use { database ->
+                database.writeBlocking { db ->
+                    kw.getValue("index").jsonArray.forEachIndexed { n, key ->
+                        db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                                       "VALUES (?, ?, 'a-song', 'chords', 'last', '2026-10-01T00:00:00Z', '')",
+                                   7L + n, key.jsonPrimitive.content)
+                    }
+                    for ((k, v) in kw.getValue("kv").jsonObject) db.kvSet(k, v.jsonPrimitive.content)
+                    val ctx = StageContext(db, song, overrides, PhoneConfig.DEFAULTS, LibraryStore(dir),
+                                           FakeAsking(emptyMap()), Instant.EPOCH)
+                    UgStages.notReady(ctx)
+                }
+            }
+        } finally {
+            dir.deleteRecursively()
         }
     }
 

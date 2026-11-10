@@ -1,10 +1,14 @@
 package io.github.danielhp95.caracole.server.routes.search
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
+import io.github.danielhp95.caracole.core.lacuerda.SearchGate
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.search.IndexFound
+import io.github.danielhp95.caracole.core.search.LaCuerdaUnlisted
 import io.github.danielhp95.caracole.core.search.IndexHit
 import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.Search
@@ -18,6 +22,7 @@ import io.github.danielhp95.caracole.server.page.SongCards
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import java.time.Instant
 
 /** search_routes.LIBRARY_HITS, INDEX_HITS, SITE_HITS: your songs, the index's songs and each site's a search gives. */
 internal const val LIBRARY_HITS = 5
@@ -42,14 +47,18 @@ internal class IndexAnswers(
 
 /**
  * One search's answer, as search_routes._found_for makes it, over [db]: your songs, the artists the query names, the
- * index's songs, which leads, the row Enter may act on, each site's rows, the songs spelled close to it, and where it
- * looked. What the phone can't answer in this round is null: `progression` (M5's progressions), `lacuerda_unlisted`
- * and `lacuerda_search` (LaCuerda's own pages and search, M4), `youtube` (M4). [check] is called between two of its
- * queries, and throws to stop it ([Superseded]).
+ * index's songs, which leads, the row Enter may act on, each site's rows, the songs spelled close to it, where it
+ * looked, a LaCuerda artist's page to read (`lacuerda_unlisted`, LaCuerdaUnlisted) and whether LaCuerda's own search may be
+ * sent for it (`lacuerda_search`: LaCuerdaSearch.gate under [config] at [now], with its `why` when it failed lately;
+ * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers). What the phone can't answer is
+ * null: `progression` (M5's progressions) and `youtube` (the phone runs no yt-dlp). [check] is called between two of
+ * its queries, and throws to stop it ([Superseded]).
  */
 internal class Found(
     private val db: Db, private val enabled: Set<String>, private val cards: SongCards, private val forms: SongForms,
     private val answers: AnswerCache<IndexAnswers>, private val check: () -> Unit,
+    private val config: PhoneConfig = PhoneConfig.DEFAULTS, private val searchesLacuerda: Boolean = false,
+    private val now: Instant = Instant.EPOCH,
 ) {
     fun answer(q: String): JsonObject {
         val mine = Search.searchLibrary(db, q, LIBRARY_HITS)
@@ -96,17 +105,34 @@ internal class Found(
         check()
         val suggest = close.map { suggestion(rows, it) }
         check()
+        val unlisted = LaCuerdaUnlisted.of(db, q, kept.indexFound.artists, kept.indexFound.songs, kept.indexFound.lead,
+                                           lacuerdaArtists = kept.lcArtists, lacuerdaSongs = kept.lacuerda)
+            ?.let { (name, letter) -> obj("name" to name, "letter" to letter) }
+        check()
+        val gate = if (searchesLacuerda) lacuerdaSearchGate(q, kept, mine) else null
+        check()
         return obj(
             "query" to q, "library" to library, "index" to hits, "artists" to artists, "lead" to lead,
             "best" to best(answer.best), "hint" to kept.hint, "progression" to null, "unseen" to kept.unseen,
             // the artist and the title the query names, which the request form is filled in with; null for none
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
             "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
-            "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to null, "lacuerda_leads" to leads,
-            "lacuerda_search" to null, "youtube" to null, "suggest" to suggest,
+            "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to unlisted, "lacuerda_leads" to leads,
+            "lacuerda_search" to gate, "youtube" to null, "suggest" to suggest,
             "skipped" to skipped.map { it.json() }, "partial" to partial.map { it.json() },
             "looked" to looked.looked(skipped, partial),
         )
+    }
+
+    /** search_routes._lacuerda_search_gate: what sending LaCuerda's search for [q] would be, with no request: null,
+     * or its `state`, the `query` and its `key`, and, `failed`, why the page doesn't send it by itself (`why`). None
+     * when the answer's own hits answer it well already (LaCuerdaSearch.answersWell: LaCuerda's index's, [kept], and
+     * your library's, [mine]). */
+    private fun lacuerdaSearchGate(q: String, kept: IndexAnswers, mine: List<LibraryHit>): JsonObject? {
+        val strong = LaCuerdaSearch.answersWell(kept.lcArtists, kept.lacuerda, mine)
+        val said = SearchGate.of(q, LaCuerdaSearch.gate(config, db, q, strong, now)) ?: return null
+        return obj("state" to said.state, "query" to said.query, "key" to said.key) with
+            (said.why?.let { obj("why" to it) } ?: obj())
     }
 
     /** search_routes._index_answers: those kept, [AnswerCache.SECONDS] old at most, else made now and kept, none of a
