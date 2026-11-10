@@ -55,8 +55,12 @@ import io.github.danielhp95.caracole.server.routes.ShareRoutes
 import io.github.danielhp95.caracole.server.routes.share.ShareReader
 import io.github.danielhp95.caracole.server.routes.SongbookRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
+import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.sync.Exports
+import io.github.danielhp95.caracole.server.routes.sync.Imports
+import io.github.danielhp95.caracole.server.routes.sync.MirrorPages
 import io.github.danielhp95.caracole.server.routes.VersionsRoutes
 import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
 import io.github.danielhp95.caracole.server.songbooks.SongbookRunner
@@ -88,7 +92,9 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
- * RequestsRoutes, SyncRoutes, LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
+ * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
+ * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
@@ -154,7 +160,23 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                 Unit
             }
         },
+        // An import's pages kept as a layer of the mirror, the layers then cut to what the phone still serves.
+        pagesFromFile = deps.mirror?.let { SyncFileRoutes.pagesFromFile(it, deps.libraryDir, PhoneGate(deps.database)) },
     )
+
+    /** The Sync tab's routes, which the app's unattended sync (`alone`) and Settings' Test (`tested`) ask too. */
+    val sync: SyncRoutes = SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync)
+
+    /** The exports made for their one download (`stateDir/cache/peer/`), every one an earlier start left cleared. */
+    private val exports = Exports(File(deps.stateDir, "cache")).also { it.clear() }
+
+    /** Export and Import a file: a file staged in `stateDir/peer/import-<id>/`, its import the engine's; the export's
+     * pages the mirror's and its layers' (MirrorPages), its start page the phone's own library page's data. */
+    private val files = SyncFileRoutes(
+        engine, queue, deps.database, deps.libraryDir, Imports(deps.stateDir), exports,
+        pages = { MirrorPages(deps.mirror, deps.database.read { db -> MirrorPages.startPage(cards.data(db, now())) }) },
+        afterSync = ::afterSync, version = deps.version,
+    ).also { sync.files = it }
 
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(
@@ -163,7 +185,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         search,
         JobsRoutes(queue, cards, deps.database, songbooks = { db -> SongbookSection.data(db, store, deps.mirror, cards) }),
         RequestsRoutes(parts),
-        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync),
+        sync,
+        files,
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         SongbookRoutes(parts),
