@@ -282,6 +282,24 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # YouTube's image host, of which caracole asks a suggested video's thumbnail alone (youtube_search.py); /sb/ is
     # a video's storyboard frames.
     "i.ytimg.com": ("/sb/",),
+    # The services a link shared to the phone is read from, each asked once a share (config.SHARE_PROVIDERS, the
+    # phone's core.share.ShareLinks), each host's `User-agent: *` group as its live robots.txt had it on 2026-11-10
+    # (tests/fixtures/itunes/, spotify/, tidal/ and youtube/www-robots.txt). Apple's catalogue: /lookup? is open,
+    # /{cc}/lookup? closed. Spotify's track pages are open, its embeds closed (its oEmbed is open, and unasked). Its
+    # short links' hosts close Branch's /_r/. tidal.com's and tidal.link's close nothing. YouTube's /oembed is open;
+    # its /results and /youtubei/, which yt-dlp asks against them (the one exception), no PoliteClient ever asks.
+    "itunes.apple.com": (
+        "/WebObjects/MZFastFinance.woa", "/WebObjects/MZFinance.woa", "/WebObjects/MZPersonalizer.woa",
+        "/WebObjects/MZStoreElements.woa", "/station/idst.", "/WebObjects/*", "/search*", "/*/rss/*", "/*/lookup?",
+    ),
+    "open.spotify.com": ("/local/", "/download/", "/embed/"),
+    "spotify.link": ("/_r/",),
+    "spotify.app.link": ("/_r/",),
+    "www.youtube.com": (
+        "/api/", "/channel_picker", "/comment", "/feeds/videos.xml", "/file_download", "/get_video", "/get_video_info",
+        "/get_midroll_info", "/live_chat", "/login", "/qr", "/results", "/signup", "/t/terms", "/timedtext_video",
+        "/verify_age", "/watch_ajax", "/watch_fragments_ajax", "/watch_popup", "/watch_queue_ajax", "/youtubei/",
+    ),
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",
