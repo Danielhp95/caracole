@@ -1,8 +1,8 @@
-"""LaCuerda's pages, its index writers and its own search, for the phone: what lacuerda.py's parsers,
-lacuerda_index.py's store writers and lacuerda_search.py answer, written for the Kotlin port's core.lacuerda
-(``LaCuerdaPages``, ``LaCuerda``'s writers, ``LaCuerdaSearch``) to agree with
-(docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, lane lacuerda-pages; lane lacuerda-sheets adds its own
-records after these).
+"""LaCuerda for the phone: what lacuerda.py's parsers, lacuerda_index.py's store writers, lacuerda_search.py,
+lacuerda_fetch.py for a lookup's song and ``caracole lacuerda --artist`` and ``--search`` answer, written for the Kotlin
+port's core.lacuerda (``LaCuerdaPages``, ``LaCuerda``'s writers, ``LaCuerdaSearch``, ``LaCuerdaSheets``) and
+core.lookup.sites' ``LaCuerdaCommands`` to agree with (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, lanes
+lacuerda-pages and lacuerda-sheets).
 
 A body is ``{"fixture": …}``, a file of tests/fixtures/, or ``{"text": …}``: the page as Python's parsers are handed
 it, ``resp.text`` (its bytes read as UTF-8, a byte that isn't replaced). A song is ``plain(LCSong)``, ``{slug, title,
@@ -41,19 +41,42 @@ words>"``, or urllib's ``"ValueError: <its words>"`` (a link urlsplit refuses).
   ``kw.query``: the one request, the answer stored in the index, kv ``lacuerda:search:<key>`` and the failures' kv in
   one savepoint, a cached answer younger than 30 days asked for no more, an older one asked again, one that won't
   parse asked once more past the cache, a page cut short or a block an error that records nothing, a spent budget.
+- lookup/lacuerda_sheets.jsonl (lane lacuerda-sheets): scenario records of ``caracole.lacuerda_fetch.lacuerda_sheets``
+  for a lookup's songs (``kw.only``; ``kw.rank``, the rank policy's fields that differ from ``RankPolicy()``'s), its
+  stats ``{tried, errors, budget_exhausted, failures: [[song id, error's class, its words]], kept, missing, shared:
+  [words]}``, over a library and its overrides.toml (the phone's ``phone_overrides`` rows, overrides.py's writers'
+  entries): a sheet kept, picked, or not replacing a better one, the auto sheet retired, a sheet the library lost
+  written again, a shared folder waiting; the artist's slugs tried in order, a 404 or "aqui llega:" moving on; each
+  page cached 30 days, a stale copy no answer once the budget is spent; misses (``lacuerda_checked_at``) and errors;
+  and ``caracole.lacuerda_fetch.read_artist_page`` (``kw.artist``, its result ``[slug, songs]`` or null).
+- lookup/commands_lacuerda.jsonl (lane lacuerda-sheets): ``caracole lacuerda --artist`` and ``--search --progress``
+  (``command_record``: ``kw.command``, ``artist`` or ``query`` and ``auto``) as caracole serve queues them, each a
+  scenario through the record's client, the command's own run's events logged into its database; ``out.result``
+  ``{"lines"}``, every line it prints, its last ("Read: ", "Not found: ", "Not read: ", "Searched: ", "Found
+  already: ", "Nothing found: ", "Not searched: ") the one its runner says.
+
+Each of those two files' records also carries ``noted``: the pages the pass stored in LaCuerda's index (``noting``),
+which the phone notes for its next push to the computer (kv ``phone:read:lacuerda:<page>`` at the record's now) and
+Python doesn't; the replay checks them and leaves them out of the kv it compares. songs.py's clock is the record's
+time while a pass runs (``sheets_clock``), and info.json, the viewer's (milestone 5's), is written by none.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
 import types
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
+import httpx
 from conftest import add_song, migrated_database
-from helpers.corpus import VECTORS, check, dump_fixture, fixture_bytes, fixture_ref, jsonl, plain
+from helpers.corpus import VECTORS, check, dump_fixture, fixture_bytes, fixture_ref, jsonl, phone_schema, plain
 from helpers.lacuerda_site import artist_page, artists_search_page, fixture, search_page
 from helpers.scenario import record as scenario
 
@@ -931,3 +954,1016 @@ def test_the_search_stores_its_answer_or_records_nothing(tmp_path):
             assert not r["after"]["kv"] and not r["after"]["rows"], r["case"]
     assert records[5]["out"]["requests"] == []
     assert len(records[8]["out"]["requests"]) == 1
+
+
+# --- the sheets (lane lacuerda-sheets) ---------------------------------------------------------------------------
+
+# Every line of these lyrics is in tests/fixtures/lacuerda/version.html's sheet (all invented, as
+# tests/test_lacuerda_fetch.py's): with them that sheet is complete, with the eight lines after them half of it.
+SHEET_LYRICS = """\
+Cruzo la plaza con el café frío
+y cuento las luces del tren de las seis
+nadie me espera en el andén vacío
+guardo tu nombre y no sé qué hacer
+Baila la lluvia sobre los tejados
+suena la radio de la vecindad
+llevo en el bolso tu carta doblada
+mañana el puerto se va a despertar
+"""
+OTHER_LINES = """\
+Siete caballos corren hacia el norte
+el viento canta coplas de cristal
+la madrugada quema mis bolsillos
+y las campanas tocan sin final
+Un perro viejo duerme en la escalera
+las golondrinas vuelven a su hogar
+mi abuela teje redes de colores
+y el río lento aprende a nadar
+"""
+HALF_LYRICS = SHEET_LYRICS + OTHER_LINES
+ENGLISH_LYRICS = """\
+I walk the long road when the city is asleep
+and the lights are on in every window of the town
+you never told me what the river said to you
+so I keep on walking till the morning comes around
+"""
+SHEETS = LOOKUP / "lacuerda_sheets.jsonl"
+COMMANDS = LOOKUP / "commands_lacuerda.jsonl"
+ADDED = "2026-10-01T00:00:00Z"
+STAMP_SHAPE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
+DML_PAGE = f"{BASE_URL}/soda_stereo/de_musica_ligera"
+DML_3 = f"{DML_PAGE}-3.shtml"
+DML = "De Música Ligera"
+
+
+def small_artist(name: str | None, *songs: tuple[str, str, str], popular: str | None = None) -> str:
+    """An artist page as small as lacuerda.py reads one: its heading, ``(slug, title, lcd)`` per song, and
+    ``popular`` its popOrder's list."""
+    items = "".join(f"<li lcd='{lcd}'><a href=\"{slug}\">{title} <em>acordes</em></a></li>" for slug, title, lcd in songs)
+    heading = f"<div class=bTit><h1>{name}</h1></div>" if name is not None else ""
+    script = f"<script>var popOrder = [{popular}];</script>" if popular is not None else ""
+    return f"<html><body>{heading}<ul id=b_main>{items}</ul>{script}</body></html>"
+
+
+def small_version(lines: str) -> str:
+    """A version page as small as lacuerda.py reads one: each lyric line under a line of chords."""
+    rows = []
+    for n, line in enumerate(lines.splitlines()):
+        rows += [f"<A>{('Am', 'F', 'C', 'G')[n % 4]}</A>        <A>Dm</A>", line]
+    return "<html><body><div id=t_body><PRE>Intro: <A>Am</A>\n\n" + "\n".join(rows) + "\n</PRE></div></body></html>"
+
+
+def soft_404(slug: str) -> dict[str, Any]:
+    return _page(f"aqui llega:../tabs/{slug[0]}/{slug}/index.html")
+
+
+@contextmanager
+def sheets_clock(stamp_: str):
+    """songs.py's clock at ``stamp_``, and no info.json (the viewer's, M5's: the phone writes none)."""
+    with mock.patch("caracole.songs.utc_now_iso", lambda: stamp_), \
+            mock.patch("caracole.lacuerda_fetch.write_info", lambda *a, **k: None):
+        yield
+
+
+@contextmanager
+def noting(pages: list[str]):
+    """Each page a pass stores in LaCuerda's index (an artist's, ``<slug>/``; an answer of its search with rows,
+    ``busca.php``), which the phone notes for its next push to the computer (core.index.Reads) and Python doesn't."""
+    store_songs, store_search = lacuerda_index.store_songs, lacuerda_index.store_search
+
+    def songs(conn, slug, *args, **kwargs):
+        store_songs(conn, slug, *args, **kwargs)
+        pages.append(f"{slug}/")
+
+    def search(conn, answer):
+        stored = store_search(conn, answer)
+        if answer.songs or answer.artists:
+            pages.append(lacuerda_index.SEARCH_PAGE)
+        return stored
+
+    with mock.patch("caracole.lacuerda_fetch.store_songs", songs), \
+            mock.patch("caracole.lacuerda_index.store_search", search):
+        yield
+
+
+def canonical_json(value: Any) -> str:
+    from caracole import canonical as c
+
+    return c.dumps(value)
+
+
+def stats_plain(s) -> dict[str, Any]:
+    """A LaCuerdaStats as the records write it: the failures as ``[song id, error's class, its words]``, the songs
+    that wait for a shared folder as their error's words."""
+    return {"tried": s.tried, "errors": s.errors, "budget_exhausted": s.budget_exhausted,
+            "failures": [[song.id, type(e).__name__, str(e)] for song, e in s.failures],
+            "kept": s.kept, "missing": s.missing, "shared": [str(e) for e in s.shared]}
+
+
+def stamped(made: dict[str, Any]) -> None:
+    """keep_file's ``created_at``, SQLite's clock: each ``files`` row a pass wrote holds a time of that form now,
+    recorded as the record's ``now``, the time the phone's Kept.keepFile is given (tests/test_conformance_ug_fetch.py's
+    rule); a table whose rows are then as before is no change."""
+    done = made.get("out") or made["after"]
+    rows = done["rows"]
+    if "files" not in rows:
+        return
+    before = [r["row"] for r in made["fixture"] if r.get("table") == "files"]
+    old = {r["id"]: r for r in before}
+    for row in rows["files"]:
+        was = old.get(row["id"])
+        if was is not None and was["created_at"] == row["created_at"]:
+            continue
+        assert STAMP_SHAPE.fullmatch(row["created_at"]), row["created_at"]
+        at = datetime.strptime(row["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        assert abs(datetime.now(UTC) - at) < timedelta(minutes=5), row["created_at"]
+        row["created_at"] = NOW_STAMP
+    if rows["files"] == before:
+        del rows["files"]
+
+
+class SheetWorld:
+    """A library for one scenario: its database (the phone's tables too), its folder and its overrides.toml, whose
+    entries the phone holds as ``phone_overrides`` rows (tests/test_conformance_ug_fetch.py's ``rows_of``)."""
+
+    def __init__(self, tmp: Path, name: str):
+        self.dir = tmp / name
+        self.conn = fresh(self.dir, "caracole")
+        phone_schema(self.conn)
+        self.library = self.dir / "library"
+        self.library.mkdir()
+        self.overrides_file = self.dir / "overrides.toml"
+        self.displays: dict[str, str] = {}
+        self.records = 0
+
+    def song(self, artist: str = "Soda Stereo", title: str = DML, *, lyrics: str | None = SHEET_LYRICS,
+             added: str = ADDED, **fields: Any) -> int:
+        from caracole.lyrics import Lyrics
+        from caracole.normalize import identity_key
+        from caracole.songs import update_song, upsert_song
+
+        with sheets_clock(ADDED):
+            song_id, _ = upsert_song(self.conn, artists=[artist], title=title, album=None, duration_ms=213000,
+                                     isrc=None, source="wanted", source_id=identity_key(artist, title), added_at=added)
+            if lyrics is not None:
+                found = Lyrics(plain=lyrics, synced=None, instrumental=False, duration=213.0, lrclib_id=7)
+                fields |= {"lyrics_status": "found", "lyrics_json": found.to_json(), "lyrics_at": ADDED}
+            if fields:
+                update_song(self.conn, song_id, **fields)
+        return song_id
+
+    def get(self, song_id: int):
+        from caracole.songs import get_song
+
+        return get_song(self.conn, song_id)
+
+    def kept(self, song_id: int, *, provider: str = "ug", tab_id: str = "101", kind: str = "chords",
+             coverage: float | None = None, text: str = "Am F C\nla luz del bar\n", version: int = 1,
+             files: tuple[str, ...] = ("sheet.txt",), url: str | None = None, raw: dict[str, Any] | None = None,
+             pick: bool = True) -> int:
+        """A version the song keeps: its files (a sheet.json of it as its provider's own record), its coverage,
+        and its pick."""
+        from caracole.library import keep_file
+        from caracole.songs import refresh_status
+        from caracole.versions import SHEET_KINDS, set_coverage, set_picks, upsert_version
+
+        with sheets_clock(ADDED):
+            vid = upsert_version(self.conn, provider=provider, tab_id=tab_id, song_id=song_id, slot="sheet", kind=kind,
+                                 rating=4.5 if provider == "ug" else 0, votes=20 if provider == "ug" else 0,
+                                 version=version, label=None,
+                                 url=url or f"https://tabs.ultimate-guitar.com/tab/{tab_id}", raw=raw or {},
+                                 now=ADDED)
+            set_coverage(self.conn, vid, coverage)
+            for name in files:
+                data = (json.dumps({"provider": provider, "content": text}) + "\n" if name.endswith(".json")
+                        else text).encode("utf-8")
+                keep_file(self.conn, self.library, song=self.get(song_id), version_id=vid, name=name, data=data,
+                          rank=1)
+            if pick:
+                set_picks(self.conn, song_id, SHEET_KINDS if kind != "auto" else ("auto",), [vid])
+            refresh_status(self.conn, song_id, ignored=False)
+        self.settle()
+        return vid
+
+    def settle(self) -> None:
+        """The files' ``created_at`` at the world's time (SQLite's clock wrote them)."""
+        self.conn.execute("UPDATE files SET created_at = ?", (ADDED,))
+
+    def overrides(self, *edits) -> None:
+        """Each of ``edits`` writes overrides.toml with overrides.py's writers, ``(writer, display, value)``;
+        the phone's rows of it follow."""
+        from caracole.overrides import SONG_TABLES, load_overrides, song_entries
+        from caracole.normalize import identity_key  # noqa: F401  (song_entries reads keys as written)
+
+        for writer, display, value in edits:
+            if value is None:
+                writer(self.overrides_file, display)
+            else:
+                writer(self.overrides_file, display, value)
+            self.displays[self.key_of(display)] = display
+        o = load_overrides(self.overrides_file)
+        self.conn.execute("DELETE FROM phone_overrides")
+        keys = sorted({k for t in SONG_TABLES for k in getattr(o, t)} | set(o.ignore))
+        for key in keys:
+            entries = song_entries(o, key)
+            for table in (*SONG_TABLES, "ignore"):
+                if table in entries:
+                    self.conn.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES (?, ?, ?, ?)",
+                                      (table, key, self.displays[key], canonical_json(entries[table])))
+
+    @staticmethod
+    def key_of(display: str) -> str:
+        from caracole.overrides import override_key
+
+        return override_key(display)
+
+    def load(self):
+        from caracole.overrides import load_overrides
+
+        return load_overrides(self.overrides_file)
+
+    def record(self, fn: str, case: str, call, kw: dict[str, Any], answers: dict[str, dict[str, Any]] | None,
+               cache: dict[str, Any] | None = None, budget: int = 6, run: str | None = None,
+               library: bool = True) -> dict[str, Any]:
+        self.records += 1
+        pages: list[str] = []
+        with sheets_clock(NOW_STAMP), noting(pages):
+            made = scenario(self.conn, self.library if library else None, fn=fn, case=case, call=call, kw=kw, now=NOW,
+                            clients={"lacuerda": {"budget": budget, "delay": [0.125, 0.375]}}, answers=answers or {},
+                            cache={"lacuerda": cache} if cache else None, run=run,
+                            cache_dir=self.dir / f"cache-{self.records}")
+        made["noted"] = list(dict.fromkeys(pages))
+        stamped(made)
+        done = made.get("out") or made["after"]
+        made["answers"] = {r: a for r, a in made["answers"].items() if r in done["requests"]}
+        if run is not None:
+            made["run"] = run
+        self.settle()
+        return made
+
+    def sheets(self, case: str, song_id: int, answers: dict[str, dict[str, Any]] | None = None, *,
+               cache: dict[str, Any] | None = None, budget: int = 6, rank: dict[str, Any] | None = None,
+               only: list[int] | None = None) -> dict[str, Any]:
+        from caracole.config import RankPolicy
+        from caracole.lacuerda_fetch import lacuerda_sheets
+
+        policy = replace(RankPolicy(), **(rank or {}))
+        asked = sorted(only or [song_id])
+
+        def call(made):
+            return stats_plain(lacuerda_sheets(self.conn, made["lacuerda"], self.library, policy, NOW,
+                                               overrides=self.load(), only=set(asked)))
+
+        kw: dict[str, Any] = {"only": asked}
+        if rank:
+            kw["rank"] = rank
+        return self.record("caracole.lacuerda_fetch.lacuerda_sheets", case, call, kw, answers, cache, budget)
+
+    def artist_page(self, case: str, artist: str, answers: dict[str, dict[str, Any]] | None = None, *,
+                    cache: dict[str, Any] | None = None, budget: int = 6) -> dict[str, Any]:
+        from caracole.lacuerda_fetch import read_artist_page
+
+        def call(made):
+            found = read_artist_page(self.conn, made["lacuerda"], artist, NOW)
+            return list(found) if found is not None else None
+
+        return self.record("caracole.lacuerda_fetch.read_artist_page", case, call, {"artist": artist}, answers, cache,
+                           budget, library=False)
+
+    def stage(self, case: str, song_id: int, answers: dict[str, dict[str, Any]] | None = None, *,
+              cache: dict[str, Any] | None = None, budget: int = 6) -> dict[str, Any]:
+        """get.py's lacuerda stage for the song, ``_Lookup.lacuerda`` (the sheet stage's too, for a pick): its
+        ``[state, detail]``, or what its work raises, its asking the record's client alone, so that the words are
+        the work's own (the envelope's are lane lookup's vectors', asking.jsonl)."""
+        from types import SimpleNamespace
+
+        from caracole import get
+        from caracole.config import RankPolicy
+
+        def call(made):
+            song = self.get(song_id)
+            lk = get._Lookup(SimpleNamespace(library_dir=self.library, rank=RankPolicy()),
+                             get.LookupRequest(song.artist, song.title), get.Progress(), runner=None, now=NOW,
+                             clock=lambda: 0.0)
+            lk.conn, lk.song, lk.overrides = self.conn, song, self.load()
+            lk.asking = lk.after_the_sheet = lambda provider, work: work(made["lacuerda"])
+            out = lk.lacuerda()
+            return list(out) if isinstance(out, tuple) else ["done", out]
+
+        return self.record("caracole.get._Lookup.lacuerda", case, call, {"song": song_id}, answers, cache, budget)
+
+    def listing(self, *artists: tuple[str, str, int]) -> None:
+        """LaCuerda's listings of every artist, as the computer's index holds them, with these artists."""
+        lacuerda_index.store_artists(self.conn, "tabs/s/index0.html", [LCArtist(*a) for a in artists])
+
+
+def cached(body_: Any, fetched: str, status: int = 200) -> dict[str, Any]:
+    return {"status": status, "fetched_at": fetched, "body": body(body_) if isinstance(body_, str) else body_}
+
+
+def sheet_records(directory: Path) -> list[dict[str, Any]]:
+    from caracole.overrides import add_ignore, add_lacuerda, add_pin
+
+    soda = _page(fixture_ref("lacuerda/artist.html"))
+    dml3 = _page(fixture_ref("lacuerda/version.html"))
+    records: list[dict[str, Any]] = []
+    n = iter(range(1000))
+
+    def world() -> SheetWorld:
+        return SheetWorld(directory, f"w{next(n)}")
+
+    # Asked, chosen and kept.
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a Spanish song with no sheet: its artist's page, the best acordes version kept", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=None)
+    records.append(w.sheets("no lyrics: its Spanish title decides, the sheet kept of no coverage", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    records.append(w.sheets("a sheet of half the lyrics is kept where none is", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("completeness by the rank policy", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3},
+                            rank={"coverage_threshold": 1.0, "line_match": 99}))
+    w = world()
+    w.listing(("soda_stereo_oficial", "Soda Stereo", 120), ("soda", "Soda Stereo", 3), ("otra", "Otra Banda", 9))
+    s = w.song()
+    records.append(w.sheets("the slugs LaCuerda's listings give the name first, most songs first, then those built "
+                            "from it; a 404 and its 'aqui llega:' move on", s,
+                            {f"GET {BASE_URL}/soda_stereo_oficial/": _page("x", 404), f"GET {BASE_URL}/soda/": soft_404("soda"),
+                             f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    matador = "Me quedo con la luz de la mañana\ny el ruido de la calle que se va\n"
+    s = w.song("Los Fabulosos Cadillacs", "Matador", lyrics=matador)
+    fab = small_artist("Los Fabulosos Cadillacs", ("matador", "Matador", "TR-21"), ("vasos_vacios", "Vasos Vacíos", "R-1"),
+                       popular="1,0")
+    records.append(w.sheets("the second slug built from the name answers, its songs stored with their popularity",
+                            s, {f"GET {BASE_URL}/fabulosos_cadillacs/": soft_404("fabulosos_cadillacs"),
+                                f"GET {BASE_URL}/los_fabulosos_cadillacs/": _page(fab),
+                                f"GET {BASE_URL}/los_fabulosos_cadillacs/matador-2.shtml": _page(small_version(matador))}))
+    w = world()
+    s = w.song("Estopa", "Como Camarón", lyrics=None)
+    records.append(w.sheets("an artist page with no name in its heading: the slug names them", s,
+                            {f"GET {BASE_URL}/estopa/": _page(small_artist(None, ("como_camaron", "Como Camarón",
+                                                                                     "RT-12"))),
+                             f"GET {BASE_URL}/estopa/como_camaron.shtml": _page(small_version("Como camarón\n"))}))
+
+    # Misses, asked again after 30 days.
+    w = world()
+    s = w.song("Nadie Conocido", "Canción de Nadie", lyrics=None)
+    records.append(w.sheets("an artist LaCuerda doesn't have is a miss", s,
+                            {f"GET {BASE_URL}/nadie_conocido/": soft_404("nadie_conocido")}))
+    w = world()
+    s = w.song("Soda Stereo", "Canción Inexistente", lyrics=None)
+    records.append(w.sheets("a title the artist's page lacks is a miss", s, {f"GET {SODA}": soda}))
+    w = world()
+    s = w.song("Soda Stereo", "Telarañas")
+    records.append(w.sheets("a song with no acordes version is a miss", s, {f"GET {SODA}": soda}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a version page that is gone is a miss", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": _page(fixture_ref("lacuerda/not_found.html"), 404)}))
+    w = world()
+    s = w.song(lacuerda_checked_at="2026-09-01T00:00:00Z")
+    records.append(w.sheets("a miss asked again after 30 days, the artist's page from a fresh copy", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3},
+                            cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-09-01T00:00:00Z")}))
+
+    # The cache.
+    w = world()
+    s = w.song()
+    records.append(w.sheets("an artist's page cached within 30 days, the version page from the cache too", s,
+                            cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-10-20T00:00:00Z"),
+                                   f"GET {DML_3}": cached(fixture_ref("lacuerda/version.html"), "2026-10-20T00:00:00Z")}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a stale artist's page once the budget is spent is no answer", s, budget=0,
+                            cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-09-01T00:00:00Z")}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("no budget: nothing asked, the song left for later", s, budget=0))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a cached version page that won't parse is asked for once more", s,
+                            {f"GET {DML_3}": dml3},
+                            cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-10-20T00:00:00Z"),
+                                   f"GET {DML_3}": cached("<html><body>Mantenimiento</body></html>",
+                                                          "2026-10-20T00:00:00Z")}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a cached artist's page that won't parse is asked for once more", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3},
+                            cache={f"GET {SODA}": cached("<html><body>Mantenimiento</body></html>",
+                                                         "2026-10-20T00:00:00Z")}))
+
+    # Errors are never misses.
+    w = world()
+    s = w.song()
+    records.append(w.sheets("an artist's page without its list is an error", s,
+                            {f"GET {SODA}": _page(fixture_ref("lacuerda/song.html"))}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a version page without its sheet is an error", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": _page(fixture_ref("lacuerda/song.html"))}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a server's error leaves the song for later", s, {f"GET {SODA}": _page("x", 500)}))
+    w = world()
+    s = w.song()
+    records.append(w.sheets("a block is raised, nothing marked", s, {f"GET {SODA}": _page("Forbidden", 403)}))
+
+    # Which songs are tried.
+    w = world()
+    s = w.song("Oasis", "Wonderwall", lyrics=ENGLISH_LYRICS)
+    records.append(w.sheets("an English song isn't tried", s))
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    records.append(w.sheets("English lyrics outweigh a Spanish title", s))
+    w = world()
+    s = w.song(lacuerda_checked_at="2026-10-20T00:00:00Z")
+    records.append(w.sheets("asked within 30 days: not tried", s))
+    w = world()
+    s = w.song()
+    w.overrides((add_ignore, "Soda Stereo - De Música Ligera", None))
+    records.append(w.sheets("ignored in overrides.toml: not tried", s))
+    w = world()
+    s = w.song(status="ignored")
+    records.append(w.sheets("an ignored song isn't tried", s))
+    w = world()
+    s = w.song()
+    w.kept(s, coverage=1.0)
+    records.append(w.sheets("a complete sheet kept: not tried", s))
+    w = world()
+    other = w.song("Soda Stereo", "Persiana Americana", added="2026-10-02T00:00:00Z")
+    s = w.song()
+    records.append(w.sheets("the lookup's song alone", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    assert other
+
+    # Keeping it, or not.
+    w = world()
+    s = w.song()
+    w.kept(s, coverage=0.5, files=("sheet.txt", "sheet.json"))
+    records.append(w.sheets("a complete sheet replaces a partial one", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, coverage=0.25, files=("sheet.txt", "sheet.json"))
+    records.append(w.sheets("a partial sheet that covers more replaces a partial one", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, coverage=0.75, files=("sheet.txt", "sheet.json"))
+    records.append(w.sheets("a partial sheet that covers less leaves the kept one, its version recorded", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    w.kept(s, coverage=None, files=("sheet.txt", "sheet.json"))
+    records.append(w.sheets("a complete sheet replaces one of unknown coverage", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=None)
+    w.kept(s, coverage=None, files=("sheet.txt", "sheet.json"))
+    records.append(w.sheets("without lyrics a kept sheet is never replaced", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    w.kept(s, provider="auto", tab_id="auto", kind="auto", files=("sheet (auto).txt",), url="file:///audio.m4a")
+    records.append(w.sheets("a complete sheet retires the auto sheet", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, provider="auto", tab_id="auto", kind="auto", files=("sheet (auto).txt",), url="file:///audio.m4a")
+    records.append(w.sheets("a partial sheet is kept beside the auto sheet", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, provider="auto", tab_id="auto", kind="auto", files=("sheet (auto).txt",), url="file:///audio.m4a")
+    _lacuerda_sheet_of(w, s)
+    _lyrics(w, s, SHEET_LYRICS)
+    records.append(w.sheets("the partial sheet kept, rescored complete once the lyrics are its own: the auto sheet "
+                            "goes", s, cache=_cached_dml()))
+    w = world()
+    s = w.song(lyrics=None)
+    _lacuerda_sheet_of(w, s)
+    _lyrics(w, s, SHEET_LYRICS)
+    records.append(w.sheets("the sheet kept while the lyrics were pending is rescored, not written again", s,
+                            cache=_cached_dml()))
+    w = world()
+    s = w.song()
+    _lacuerda_sheet_of(w, s, checked="2026-10-30T00:00:00Z")
+    (w.library / "Soda Stereo" / DML / "sheet.txt").unlink()
+    records.append(w.sheets("a kept LaCuerda sheet the library lost is written again, asked about lately or not", s,
+                            cache=_cached_dml()))
+    w = world()
+    s = w.song()
+    _lacuerda_sheet_of(w, s, checked="2026-10-30T00:00:00Z")
+    (w.library / "Soda Stereo" / DML / "sheet.json").write_bytes(b"")
+    records.append(w.sheets("a kept sheet cut short counts as lost", s, cache=_cached_dml()))
+
+    # A song whose sheet would go where another song keeps one.
+    live = ("Persiana Americana, en vivo en el estadio de River Plate para la gira de despedida del grupo en 2007, "
+            "con orquesta y coros, toma")
+    w = world()
+    one = w.song(title=f"{live} uno", added="2026-10-03T00:00:00Z")
+    w.kept(one, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    two = w.song(title=f"{live} dos", added="2026-10-02T00:00:00Z")
+    page = small_artist("Soda Stereo", ("persiana_dos", f"{live} dos", "R-1"))
+    records.append(w.sheets("a sheet that would go where another song keeps one waits", two,
+                            {f"GET {SODA}": _page(page), f"GET {BASE_URL}/soda_stereo/persiana_dos.shtml": dml3}))
+
+    # Your pick.
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    w.kept(s, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_3))
+    records.append(w.sheets("the version you picked is kept whatever the song's language and its coverage", s,
+                            {f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    w.conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, songs, "
+                   "versions, acordes, popular, page) VALUES (?, 'soda_stereo', 'Soda Stereo', 'soda-stereo', ?, "
+                   "'musica-ligera', 0, 'RHRTTTDTB', 3, 0, 'soda_stereo/')", ("soda_stereo/de_musica_ligera", DML))
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_PAGE))
+    records.append(w.sheets("a song you picked: its best acordes version as the index names it", s,
+                            {f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_PAGE))
+    records.append(w.sheets("a song you picked the index lacks: its artist's page first", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    w.conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, songs, "
+                   "versions, acordes, popular, page) VALUES ('soda_stereo/disco_eterno_unplugged', 'soda_stereo', "
+                   "'Soda Stereo', 'soda-stereo', 'Disco eterno (unplugged)', 'disco-eterno', 0, 'T', 0, NULL, "
+                   "'soda_stereo/')")
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", f"{BASE_URL}/soda_stereo/disco_eterno_unplugged"))
+    records.append(w.sheets("a song you picked with no acordes version, as the index says, is a miss", s))
+    w = world()
+    s = w.song()
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", f"{BASE_URL}/soda_stereo/de_musica_ligera-9.shtml"))
+    records.append(w.sheets("a version you picked that is gone is a miss", s,
+                            {f"GET {BASE_URL}/soda_stereo/de_musica_ligera-9.shtml": _page("x", 404)}))
+    w = world()
+    s = w.song(lacuerda_checked_at="2026-10-20T00:00:00Z")
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_3))
+    records.append(w.sheets("a pick asked about this month waits", s))
+    w = world()
+    s = w.song()
+    w.kept(s, tab_id="85053", coverage=0.5, files=("sheet.txt", "sheet.json"))
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_3),
+                (add_pin, "Soda Stereo - De Música Ligera", ["https://tabs.ultimate-guitar.com/tab/85053"]))
+    records.append(w.sheets("a sheet you pinned on Ultimate Guitar wins over your pick", s))
+    w = world()
+    s = w.song()
+    w.kept(s, tab_id="85053", coverage=0.5, files=("sheet.txt", "sheet.json"))
+    w.overrides((add_pin, "Soda Stereo - De Música Ligera", ["https://tabs.ultimate-guitar.com/tab/777"]))
+    records.append(w.sheets("a pin of another tab leaves the sheet open to LaCuerda", s,
+                            {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    _lacuerda_sheet_of(w, s)
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_PAGE))
+    records.append(w.sheets("the pick's sheet kept already: never asked again", s))
+    return records
+
+
+def _cached_dml() -> dict[str, Any]:
+    """Soda Stereo's page and De Música Ligera's version 3, as the cache holds them since 20 October."""
+    return {f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-10-20T00:00:00Z"),
+            f"GET {DML_3}": cached(fixture_ref("lacuerda/version.html"), "2026-10-20T00:00:00Z")}
+
+
+def _lyrics(w: SheetWorld, song_id: int, plain: str) -> None:
+    """The song's lyrics now ``plain``."""
+    from caracole.lyrics import Lyrics
+    from caracole.songs import update_song
+
+    with sheets_clock(ADDED):
+        update_song(w.conn, song_id, lyrics_status="found", lyrics_at=ADDED,
+                    lyrics_json=Lyrics(plain=plain, synced=None, instrumental=False, duration=213.0,
+                                       lrclib_id=7).to_json())
+
+
+def _lacuerda_sheet_of(w: SheetWorld, song_id: int, checked: str = "2026-09-01T00:00:00Z") -> int:
+    """The song keeping version.html's sheet as a pass keeps it (asked for, from the cache, at ``checked``)."""
+    from caracole.config import RankPolicy
+    from caracole.lacuerda_fetch import lacuerda_sheets
+    from caracole.songs import update_song
+
+    pages = {f"{SODA}": fixture("artist.html"), DML_3: fixture("version.html")}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=pages[str(request.url)], headers=[("content-type", "text/html")])
+
+    from caracole.http import PoliteClient
+
+    client = PoliteClient("lacuerda", replace(config.DEFAULT_PROVIDERS["lacuerda"], budget=10, delay=(0.0, 0.0)),
+                          w.dir / "setup-cache", user_agent=config.DEFAULT_USER_AGENT,
+                          transport=httpx.MockTransport(handler), sleep=lambda s: None, clock=lambda: 0.0,
+                          wall_clock=lambda: NOW)
+    try:
+        with sheets_clock(ADDED):
+            stats = lacuerda_sheets(w.conn, client, w.library, RankPolicy(), NOW, overrides=w.load(), only={song_id})
+            update_song(w.conn, song_id, lacuerda_checked_at=checked)
+    finally:
+        client.close()
+    assert stats.kept == 1, stats
+    w.settle()
+    w.conn.execute("UPDATE versions SET fetched_at = ?", (ADDED,))
+    return stats.kept
+
+
+def artist_read_records(directory: Path) -> list[dict[str, Any]]:
+    soda = _page(fixture_ref("lacuerda/artist.html"))
+    w = SheetWorld(directory, "artist-by-slug")
+    by_slug = w.artist_page("an artist's page by its slug", "soda_stereo", {f"GET {SODA}": soda})
+    w = SheetWorld(directory, "artist-by-name")
+    w.listing(("soda_stereo_oficial", "Soda Stereo", 120))
+    by_name = w.artist_page("by their name: the listings' slug first, then the slugs built from it", "Soda Stereo",
+                            {f"GET {BASE_URL}/soda_stereo_oficial/": soft_404("soda_stereo_oficial"),
+                             f"GET {SODA}": soda})
+    w = SheetWorld(directory, "artist-slug-first")
+    w.listing(("estopa_oficial", "Estopa", 50))
+    slug_first = w.artist_page("a slug written as one asked first, before the listings'", "estopa",
+                               {f"GET {BASE_URL}/estopa/": _page(small_artist(
+                                   "Estopa", ("como_camaron", "Como Camarón", "RT-12"),
+                                   ("como_camaron", "Como Camarón (bis)", "R-1")))})
+    w = SheetWorld(directory, "artist-none")
+    none = w.artist_page("no page by any of their slugs", "Los Nadie",
+                         {f"GET {BASE_URL}/nadie/": soft_404("nadie"), f"GET {BASE_URL}/los_nadie/": _page("x", 404)})
+    w = SheetWorld(directory, "artist-cached")
+    from_cache = w.artist_page("from the cache within 30 days", "Soda Stereo",
+                               cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"), "2026-10-20T00:00:00Z")})
+    w = SheetWorld(directory, "artist-blocked")
+    blocked = w.artist_page("a block is raised", "soda_stereo", {f"GET {SODA}": _page("Forbidden", 403)})
+    w = SheetWorld(directory, "artist-unreadable")
+    unreadable = w.artist_page("a page that won't parse is an error", "soda_stereo",
+                               {f"GET {SODA}": _page(fixture_ref("lacuerda/song.html"))})
+    w = SheetWorld(directory, "artist-spent")
+    spent = w.artist_page("no budget", "soda_stereo", budget=0)
+    return [by_slug, by_name, slug_first, none, from_cache, blocked, unreadable, spent]
+
+
+def stage_records(directory: Path) -> list[dict[str, Any]]:
+    """get.py's words for what LaCuerda's pass came to, the lacuerda stage's and a pick's in the sheet stage: each
+    of ``lacuerda()``'s own ends, and the work's raises its asking turns into the envelope's words."""
+    from caracole.overrides import add_lacuerda, add_pin
+
+    soda = _page(fixture_ref("lacuerda/artist.html"))
+    dml3 = _page(fixture_ref("lacuerda/version.html"))
+    pick = (add_lacuerda, "Soda Stereo - De Música Ligera", DML_3)
+    records: list[dict[str, Any]] = []
+    n = iter(range(1000))
+
+    def world() -> SheetWorld:
+        return SheetWorld(directory, f"s{next(n)}")
+
+    w = world()
+    s = w.song()
+    records.append(w.stage("a sheet kept", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song("Nadie Conocido", "Canción de Nadie", lyrics=None)
+    records.append(w.stage("an artist LaCuerda doesn't have", s,
+                           {f"GET {BASE_URL}/nadie_conocido/": soft_404("nadie_conocido")}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, coverage=0.75, files=("sheet.txt", "sheet.json"))
+    records.append(w.stage("a sheet that covers less than the one kept", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    live = ("Persiana Americana, en vivo en el estadio de River Plate para la gira de despedida del grupo en 2007, "
+            "con orquesta y coros, toma")
+    w = world()
+    one = w.song(title=f"{live} uno", added="2026-10-03T00:00:00Z")
+    w.kept(one, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    two = w.song(title=f"{live} dos", added="2026-10-02T00:00:00Z")
+    page = small_artist("Soda Stereo", ("persiana_dos", f"{live} dos", "R-1"))
+    records.append(w.stage("a sheet that would go where another song keeps one", two,
+                           {f"GET {SODA}": _page(page), f"GET {BASE_URL}/soda_stereo/persiana_dos.shtml": dml3}))
+    w = world()
+    s = w.song("Oasis", "Wonderwall", lyrics=ENGLISH_LYRICS)
+    records.append(w.stage("not a song for LaCuerda", s))
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    w.kept(s, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    w.overrides(pick)
+    records.append(w.stage("your pick kept as the sheet", s, {f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", f"{BASE_URL}/soda_stereo/de_musica_ligera-9.shtml"))
+    records.append(w.stage("your pick gone", s, {f"GET {BASE_URL}/soda_stereo/de_musica_ligera-9.shtml": _page("x", 404)}))
+    w = world()
+    s = w.song()
+    _lacuerda_sheet_of(w, s)
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_PAGE))
+    records.append(w.stage("your pick is the sheet already", s))
+    w = world()
+    s = w.song()
+    w.kept(s, tab_id="85053", coverage=0.5, files=("sheet.txt", "sheet.json"))
+    w.overrides(pick, (add_pin, "Soda Stereo - De Música Ligera", ["https://tabs.ultimate-guitar.com/tab/85053"]))
+    records.append(w.stage("your pick waits for the tab you pinned", s))
+    w = world()
+    s = w.song(lacuerda_checked_at="2026-10-20T00:00:00Z")
+    w.overrides(pick)
+    records.append(w.stage("your pick waits: asked this month", s))
+    w = world()
+    s = w.song(status="ignored")
+    w.overrides(pick)
+    records.append(w.stage("your pick waits for the nightly run", s))
+    w = world()
+    s = w.song()
+    records.append(w.stage("no budget", s, budget=0))
+    w = world()
+    s = w.song()
+    records.append(w.stage("a server's error", s, {f"GET {SODA}": _page("x", 500)}))
+    w = world()
+    s = w.song()
+    records.append(w.stage("a block", s, {f"GET {SODA}": _page("Forbidden", 403)}))
+    return records
+
+
+def test_lacuerda_sheets_jsonl(tmp_path):
+    records = [*sheet_records(tmp_path / "sheets"), *artist_read_records(tmp_path / "artists"),
+               *stage_records(tmp_path / "stages")]
+    check(SHEETS, jsonl(records, corpus="lookup/lacuerda_sheets", made_by=MADE_BY))
+
+
+def test_the_stage_says_each_of_its_ends(tmp_path):
+    records = stage_records(tmp_path / "stages")
+    said = {tuple(r["out"]["result"]) for r in records if "out" in r}
+    assert said == {
+        ("done", "sheet kept from LaCuerda"), ("done", "not on LaCuerda"), ("done", "kept what it had"),
+        ("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"),
+        ("done", "the LaCuerda sheet you picked is the sheet already"),
+        ("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"),
+        ("skipped", "your pick on LaCuerda waits: it was asked for this month"),
+        ("skipped", "your pick on LaCuerda waits for the nightly run"),
+    }, said
+    assert {r["raises"]["type"] for r in records if "raises" in r} == {"BudgetExhausted", "ProviderError",
+                                                                        "ProviderBlocked"}
+    shared = next(r for r in records if r["case"] == "a sheet that would go where another song keeps one")
+    assert not shared["out"]["library"]  # nothing written over the other song's sheet
+
+
+def test_the_sheets_cover_each_outcome(tmp_path):
+    records = sheet_records(tmp_path / "sheets")
+    results = [r["out"]["result"] for r in records if "out" in r]
+    assert sum(r["kept"] for r in results) >= 20 and sum(r["missing"] for r in results) >= 6
+    assert any(r["shared"] for r in results) and any(r["failures"] for r in results)
+    assert any(r["budget_exhausted"] for r in results)
+    assert {r["raises"]["type"] for r in records if "raises" in r} == {"ProviderBlocked"}
+    noted = [r["noted"] for r in records]
+    assert ["soda_stereo_oficial/", "soda/", "soda_stereo/"] not in noted  # a 404 and its "aqui llega:" store nothing
+    assert any(n == ["soda_stereo/"] for n in noted) and any(not n for n in noted)
+    written = [r["out"]["library"] for r in records if "out" in r and r["out"]["library"]]
+    assert any(set(w) == {"Soda Stereo/De Música Ligera/sheet.json", "Soda Stereo/De Música Ligera/sheet.txt"}
+               for w in written)
+
+
+# --- the commands: lacuerda --artist and --search (lane lacuerda-sheets) ----------------------------------------
+
+
+class _Kept:
+    """The record's client as ``make_client`` hands it to the command, its policy the command's (the lookup's pace,
+    and its budget, which the record's is), its close left to the record."""
+
+    def __init__(self, client, policy):
+        assert client.policy.budget == policy.budget and tuple(client.policy.delay) == tuple(policy.delay), policy
+        client.policy = policy
+        self._client = client
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def close(self) -> None:
+        pass
+
+
+class _Open:
+    """The world's connection, which the command's ``closing(open_db(cfg))`` leaves open."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def close(self) -> None:
+        pass
+
+
+def command_record(w: SheetWorld, case: str, command: str, answers: dict[str, dict[str, Any]] | None = None, *,
+                   cache: dict[str, Any] | None = None, **kw: Any) -> dict[str, Any]:
+    """``caracole lacuerda --artist NAME`` (``command`` "artist", ``kw.artist``) or ``--search QUERY --progress``
+    (``search``, ``kw.query`` and ``kw.auto``) as caracole serve queues it, at the record's now, through the record's
+    client, whose budget is the one ``make_client`` gives the command (the lookup's what this hour's lookups leave; the
+    search's one request) and whose events are logged under the command's run; ``out.result`` its ``{"lines"}``, every
+    line it prints, the last one its runner's. The computer's search first stores the artist pages its HTTP cache
+    holds (``backfill_cached``), of a folder of its own here, as the phone stores each page as it reads it."""
+    from contextlib import nullcontext
+
+    from caracole.commands import _common
+    from caracole.commands import lyrics as cmd
+
+    cfg = types.SimpleNamespace(provider=lambda name: config.DEFAULT_PROVIDERS[name], cache_dir=w.dir / "no-cache")
+    search = command == "search"
+    run = f"{SEARCH_RUN}{NOW_STAMP}" if search else None
+    budget = 1 if search else _common.lookup_policy(cfg, w.conn, "lacuerda", NOW).budget
+
+    def call(made):
+        lines: list[str] = []
+
+        def make_client(cfg_, conn, provider, run_id, *, policy=None, interactive=False):
+            assert provider == "lacuerda" and interactive and run_id == (run or f"lookup:{NOW_STAMP}"), run_id
+            return _Kept(made["lacuerda"], policy or _common.lookup_policy(cfg_, w.conn, provider, NOW))
+
+        with mock.patch.object(cmd, "exclusive", lambda *a, **k: nullcontext()), \
+                mock.patch.object(cmd, "open_db", lambda cfg_: _Open(w.conn)), \
+                mock.patch.object(cmd, "make_client", make_client), \
+                mock.patch.object(cmd, "utcnow", lambda: NOW), \
+                mock.patch("typer.echo", lines.append):
+            if search:
+                cmd._lacuerda_search(cfg, kw["query"], auto=kw["auto"], progress=True)
+            else:
+                cmd._lacuerda_artist(cfg, kw["artist"])
+        return {"lines": lines}
+
+    return w.record(f"caracole.commands.lyrics._lacuerda_{command}", case, call, {"command": command, **kw}, answers,
+                    cache, budget, run=run, library=False)
+
+
+def _cooling(w: SheetWorld) -> None:
+    _set(w.conn, "provider:lacuerda", '{"strikes": 1, "cooldown_until": "%s", "last_block": "%s"}'
+         % (stamp(NOW + timedelta(hours=20)), ago(hours=4)))
+
+
+def _hour_spent(w: SheetWorld, used: int = 60) -> None:
+    """``used`` requests every lookup of the last hour sent LaCuerda."""
+    _event(w.conn, "lookup:2026-11-03T11:30:00Z", ago(minutes=30), n=used)
+
+
+def command_records(directory: Path) -> list[dict[str, Any]]:
+    soda = _page(fixture_ref("lacuerda/artist.html"))
+    whole = _page(fixture_ref("lacuerda/search.html"))
+    records: list[dict[str, Any]] = []
+    n = iter(range(1000))
+
+    def world() -> SheetWorld:
+        return SheetWorld(directory, f"c{next(n)}")
+
+    # lacuerda --artist
+    w = world()
+    records.append(command_record(w, "read by its slug: its name as its page heads it", "artist",
+                                  {f"GET {SODA}": soda}, artist="soda_stereo"))
+    w = world()
+    w.listing(("soda_stereo_oficial", "Soda Stereo", 120))
+    records.append(command_record(w, "read by their name: the listings' slug, then those built from it", "artist",
+                                  {f"GET {BASE_URL}/soda_stereo_oficial/": _page("x", 404), f"GET {SODA}": soda},
+                                  artist="Soda Stereo"))
+    w = world()
+    records.append(command_record(w, "a page with no name in its heading: the slug names them", "artist",
+                                  {f"GET {BASE_URL}/estopa/": _page(small_artist(
+                                      None, ("como_camaron", "Como Camarón", "RT-12"), ("tu_calorro", "Tu Calorro",
+                                                                                        "T-1")))}, artist="estopa"))
+    w = world()
+    records.append(command_record(w, "one song", "artist", {f"GET {BASE_URL}/estopa/": _page(small_artist(
+        "Estopa", ("como_camaron", "Como Camarón", "RT-12")))}, artist="estopa"))
+    w = world()
+    records.append(command_record(w, "no page by any of their slugs: not found", "artist",
+                                  {f"GET {BASE_URL}/nadie/": soft_404("nadie"),
+                                   f"GET {BASE_URL}/los_nadie/": _page("x", 404)}, artist="Los Nadie"))
+    w = world()
+    records.append(command_record(w, "from the cache: read, nothing sent, no good run recorded", "artist",
+                                  cache={f"GET {SODA}": cached(fixture_ref("lacuerda/artist.html"),
+                                                               "2026-10-20T00:00:00Z")}, artist="soda_stereo"))
+    w = world()
+    _cooling(w)
+    records.append(command_record(w, "cooling down after a block: not read, nothing asked", "artist",
+                                  artist="soda_stereo"))
+    w = world()
+    records.append(command_record(w, "a block: its cooldown begun", "artist", {f"GET {SODA}": _page("Forbidden", 403)},
+                                  artist="soda_stereo"))
+    w = world()
+    records.append(command_record(w, "a server's error: counted, nothing changed", "artist",
+                                  {f"GET {SODA}": _page("x", 500)}, artist="soda_stereo"))
+    w = world()
+    records.append(command_record(w, "a page that won't parse is an error", "artist",
+                                  {f"GET {SODA}": _page(fixture_ref("lacuerda/song.html"))}, artist="soda_stereo"))
+    w = world()
+    slugs = [f"soda_{i}" for i in range(7)]
+    w.listing(*[(s, "Soda", 100 - i) for i, s in enumerate(slugs)])
+    records.append(command_record(w, "the lookup's requests spent on slugs LaCuerda doesn't have", "artist",
+                                  {f"GET {BASE_URL}/{s}/": _page("x", 404) for s in slugs[:6]}, artist="Soda"))
+    w = world()
+    _hour_spent(w)
+    records.append(command_record(w, "this hour's lookup requests spent", "artist", artist="soda_stereo"))
+    w = world()
+    _hour_spent(w, 59)
+    w.listing(("soda_stereo_oficial", "Soda Stereo", 120))
+    records.append(command_record(w, "what this hour leaves spent before the page", "artist",
+                                  {f"GET {BASE_URL}/soda_stereo_oficial/": _page("x", 404)}, artist="Soda Stereo"))
+
+    # lacuerda --search --progress
+    tiza = "corazón de tiza"
+    key = lacuerda_search.query_key(tiza)
+    w = world()
+    records.append(command_record(w, "no word of four letters: nothing asked", "search", query="sol y luz", auto=True))
+    w = world()
+    records.append(command_record(w, "songs found, in the index now", "search",
+                                  {f"GET {search_url(tiza)}": whole}, query=tiza, auto=True))
+    w = world()
+    records.append(command_record(w, "more songs than it shows", "search", {f"GET {search_url(tiza)}": _page(search_page(
+        ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
+        ("otros", "Otros", [("tiza", "Tiza", "R-1")]), stated=40, pages=3))}, query=tiza, auto=False))
+    w = world()
+    records.append(command_record(w, "a count past a 64-bit integer, said whole", "search",
+                                  {f"GET {search_url(tiza)}": _page(search_page(
+                                      ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
+                                      stated=PAST_A_LONG, pages=2))}, query=tiza, auto=False))
+    w = world()
+    gaviotas = artists_search_page([("bragas_de_la_gaviota", "Las Bragas de la Gaviota", 1), ("gaviota", "Gaviota", 12)])
+    records.append(command_record(w, "artists alone", "search", {f"GET {search_url('la gaviota')}": _page(gaviotas)},
+                                  query="la gaviota", auto=True))
+    w = world()
+    records.append(command_record(w, "nothing found", "search",
+                                  {f"GET {search_url('la flaca')}": _page(search_page(query="flaca"))},
+                                  query="la flaca", auto=True))
+    w = world()
+    _set(w.conn, lacuerda_search.KV_PREFIX + key,
+         '{"at": "%s", "songs": 3, "artists": 0, "stated": 3}' % ago(days=12))
+    records.append(command_record(w, "asked within 30 days: what it answered then", "search", query="tiza corazón",
+                                  auto=True))
+    w = world()
+    _set(w.conn, lacuerda_search.KV_PREFIX + key, '{"at": "%s", "songs": 1, "artists": 0, "stated": 1}' % ago(days=1))
+    records.append(command_record(w, "asked yesterday for one song", "search", query=tiza, auto=False))
+    w = world()
+    s = w.song("Los Imaginarios", "Corazón de Tiza", lyrics=None)
+    assert s
+    records.append(command_record(w, "your library answers it already: nothing asked", "search",
+                                  query="los imaginarios corazón de tiza", auto=True))
+    w = world()
+    _cooling(w)
+    records.append(command_record(w, "cooling down after a block: nothing asked", "search", query=tiza, auto=True))
+    w = world()
+    _hour_spent(w)
+    records.append(command_record(w, "this hour's lookup requests spent", "search", query=tiza, auto=False))
+    w = world()
+    _set(w.conn, lacuerda_search.FAILED_KEY, _failures(**{key: (ago(minutes=10), "LaCuerda failed: cut short")}))
+    records.append(command_record(w, "sent by the page: its own search failed within the hour", "search",
+                                  query=tiza, auto=True))
+    w = world()
+    _set(w.conn, lacuerda_search.FAILED_KEY, _failures(**{key: (ago(minutes=10), "LaCuerda failed: cut short")}))
+    records.append(command_record(w, "by hand, its failure within the hour: asked, the failure gone", "search",
+                                  {f"GET {search_url(tiza)}": whole}, query=tiza, auto=False))
+    w = world()
+    _set(w.conn, lacuerda_search.FAILED_KEY, _failures(
+        **{"flaca": (ago(minutes=5), "one"), "gaviota": (ago(minutes=15), "two"), "nandu": (ago(minutes=25), "three")}))
+    records.append(command_record(w, "sent by the page once three searches failed within the hour", "search",
+                                  query=tiza, auto=True))
+    w = world()
+    _event(w.conn, f"{SEARCH_RUN}2026-11-03T11:40:00Z", ago(minutes=20), n=20)
+    records.append(command_record(w, "sent by the page with the hour's searches it sends by itself spent", "search",
+                                  query=tiza, auto=True))
+    w = world()
+    _event(w.conn, f"{SEARCH_RUN}2026-11-03T11:40:00Z", ago(minutes=20), n=20)
+    records.append(command_record(w, "by hand with the page's searches spent: asked", "search",
+                                  {f"GET {search_url(tiza)}": whole}, query=tiza, auto=False))
+    w = world()
+    records.append(command_record(w, "from the cache: nothing sent, no good run recorded", "search", query=tiza,
+                                  auto=True, cache={f"GET {search_url(tiza)}": cached(fixture_ref("lacuerda/search.html"),
+                                                                                      ago(days=3))}))
+    w = world()
+    records.append(command_record(w, "a block: its cooldown begun, no failure kept", "search",
+                                  {f"GET {search_url(tiza)}": _page("Forbidden", 403)}, query=tiza, auto=True))
+    w = world()
+    records.append(command_record(w, "a server's error: counted and kept an hour", "search",
+                                  {f"GET {search_url(tiza)}": _page("x", 500)}, query=tiza, auto=True))
+    w = world()
+    records.append(command_record(w, "a page cut short: an error kept an hour", "search",
+                                  {f"GET {search_url(tiza)}": _page(fixture_ref("lacuerda/search_cut.html"))},
+                                  query=tiza, auto=False))
+    return records
+
+
+def test_commands_lacuerda_jsonl(tmp_path):
+    check(COMMANDS, jsonl(command_records(tmp_path), corpus="lookup/commands_lacuerda", made_by=MADE_BY))
+
+
+def test_the_commands_end_with_each_of_their_lines(tmp_path):
+    records = command_records(tmp_path)
+    ends = [r["out"]["result"]["lines"][-1] for r in records]
+    assert all("raises" not in r for r in records)
+    for start in ("Read: ", "Not found: ", "Not read: ", "Searched: ", "Found already: ", "Nothing found: ",
+                  "Not searched: "):
+        assert any(e.startswith(start) for e in ends), start
+    spent = [e for e in ends if "are spent" in e]
+    assert any("the lookup's 6 requests" in e for e in spent) and any("this hour's 60 lookup requests" in e
+                                                                      for e in spent)
+    searches = [r for r in records if r["kw"]["command"] == "search"]
+    for r in searches[1:]:  # every one past the first, which reads no word, says it is asking first
+        assert r["out"]["result"]["lines"][0].startswith('caracole-progress: {"stage":"search","state":"running"'), r
+    assert all(r["out"]["requests"] for r in searches if r["out"]["result"]["lines"][-1].startswith("Nothing found"))
+    ok = [r for r in records if "provider:lacuerda" in r["out"]["kv"]]
+    assert len(ok) >= 8
+    assert any(f"has {PAST_A_LONG} songs" in e for e in ends)  # Python's int, whole

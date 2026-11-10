@@ -1,13 +1,15 @@
-// A song of yours opened on index.html, which card.css draws as a card under its line (library.js lineFor puts these
-// parts in its panel): what you play from it as tiles, each source's versions of each as chips that open a drawer,
-// its progressions, the links that find it elsewhere, and its foot. Drawn from the song's data alone, with
-// createElement, createElementNS and textContent: opening a chip or a drawer asks nothing of anyone.
-// ``icons``: the data's sources (icons.py); ``rows``: caracoleRows', whose marks, glyphs and links it shares.
+// A song of yours on index.html: on its line, a button for each thing to play from (``plays``, rows.js puts them right
+// after its title), and opened, what card.css draws as a card under its line (library.js lineFor puts these parts in
+// its panel): what you play from it as tiles, each source's versions of each as chips that open a drawer, which sites
+// have it, its progressions, the links that find it elsewhere, and its foot. Drawn from the song's data alone, with
+// createElement, createElementNS and textContent: a button opens a file of the library's, and opening a chip or a
+// drawer asks nothing of anyone. ``icons``: the data's sources (icons.py); ``rows``: caracoleRows', whose marks,
+// glyphs and links it shares.
 const caracoleCard = (icons, rows) => {
   "use strict";
   const own = Object.prototype.hasOwnProperty;
   const ICONS = icons && typeof icons === "object" ? icons : {};
-  const { glyph, sourceMark, safeHref, link, many } = rows;
+  const { glyph, sourceMark, siteMarks, safeHref, link, many } = rows;
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -230,9 +232,10 @@ const caracoleCard = (icons, rows) => {
   // --- the tiles ----------------------------------------------------------------------------------------------
   // A tile: its body opens what it holds (``open``, ``said`` its name for a screen reader), its subtitle says which
   // (``from``); its row of chips, one a source (``chips``: { source, count, unit, fixed, fill(drawer) }, after its
-  // ``lead``); its formats as downloads (``downloads``). More than one version: a small stack.
+  // ``lead``); its formats as downloads (``downloads``). More than one version: a small stack. Every tile alike, none
+  // first; an auto sheet's in its own colour.
   const tileOf = (t, card) => {
-    const box = el("div", "tile tile-" + t.kind + (t.primary ? " primary" : "") + (t.auto ? " auto" : ""));
+    const box = el("div", "tile tile-" + t.kind + (t.auto ? " auto" : ""));
     const chips = listOf(t.chips);
     if (chips.reduce((n, c) => n + (Number(c.count) || 0), 0) > 1) box.classList.add("stack");
     const open = anchor(t.open.href, "tile-open", t.open);
@@ -277,12 +280,16 @@ const caracoleCard = (icons, rows) => {
     return box;
   };
 
-  // What a song of yours holds, a tile each, in this order: its sheet, its Guitar Pro file (else its text tab), its
-  // harmonica tab, its lyrics and a score you filed; and the drawer their chips open, one at a time. ``opts``:
-  // ``guitar``, caracole serve shows Guitar Pro files (alphaTab); ``acts``, what a drawer's versions do (Use this
-  // one, Fetch them, Back to caracole's pick, LaCuerda's Use this one: each makes its control; or, from the file,
-  // ``keepMoreCommand``, the command that fetches them). ``claimed``, given, gets every file a tile shows.
-  const tiles = (s, opts) => {
+  // What a song of yours holds to play from, in this order: its chord sheet (the human one, else the auto one; UG's
+  // Ukulele Chords), its Guitar Pro files, its text tab, its harmonica tabs, its tabs of game music, its lyrics and the
+  // scores you filed; a tile each in its card (tiles), and but its lyrics a button each on its line (plays). Each
+  // { kind, glyph, name, open, said, from, lead, chips, downloads, opener, auto, sources, count, unit }: ``sources``,
+  // where its versions came from, the one in use first; ``count``, how many versions of it the card lists (in its
+  // drawers, or as files), in ``unit``s. ``opts``: ``guitar``, caracole serve shows Guitar Pro files (alphaTab);
+  // ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to caracole's pick, LaCuerda's Use this one:
+  // each makes its control; or, from the file, ``keepMoreCommand``, the command that fetches them). ``claimed``,
+  // given, gets every file a tile shows.
+  const things = (s, opts) => {
     const o = opts || {};
     const acts = o.acts || {};
     const title = String(s.title);
@@ -327,38 +334,44 @@ const caracoleCard = (icons, rows) => {
         claim(f);
         downloads.push(downloadLink(f, "PDF · " + f.version, "Download the PDF of " + title + " in " + f.version));
       }
-      made.push({ kind: "sheet", glyph: "sheet", name, primary: !autoOnly, auto: autoOnly,
+      // Its versions the card lists: UG's kept, LaCuerda's met, the auto sheet beside it; and the one in use, if none
+      // of those is it (a sheet from your inbox, say). Where they came from, the one in use first.
+      const kept = v ? listOf(v.list).filter((x) => x && typeof x === "object").length : 0;
+      const listed = kept + met.length + (auto ? 1 : 0);
+      const inUse = (s.source === "ug" && kept > 0) || (s.source === "lacuerda" && met.some((x) => x && x.sheet));
+      const sources = [s.source, kept ? "ug" : "", met.length ? "lacuerda" : "", auto ? "auto" : ""];
+      made.push({ kind: "sheet", glyph: ukulele ? "ukulele" : "sheet", name, auto: autoOnly,
         open: { href: primary.href }, said: "Open the " + name.toLowerCase() + " of " + title, from,
-        lead: "Versions", chips, downloads });
+        lead: "Versions", chips, downloads, sources: distinct(sources), count: listed + (inUse ? 0 : 1),
+        unit: "version" });
     }
 
-    // Guitar Pro files (or a Power Tab file), else a text tab.
+    // Guitar Pro files (or a Power Tab file); and a text tab, a thing of its own.
     const guitar = files.filter((f) => GUITAR.test(f.name));
     const tab = named("tab.txt");
     const browser = (f) => (o.guitar && typeof f.guitarPage === "string" && f.guitarPage ? { href: f.guitarPage }
       : null);
     if (guitar.length) {
       guitar.forEach(claim);
-      claim(tab);
       const first = guitar[0];
       const shown = browser(first);
       const ext = "." + GUITAR.exec(first.name)[1].toLowerCase();
-      const downloads = [downloadLink(first, ext, "Download " + plainLabel(first) + " of " + title)];
-      if (tab) downloads.push(downloadLink(tab, "Text tab", "Download the text tab of " + title));
       const t = { kind: "guitar", glyph: "guitar", name: "Guitar Pro", plural: "Guitar Pro files", unit: "file",
         open: shown || { href: first.href, download: typeof first.download === "string" ? first.download : "" },
         said: (shown ? "Open the Guitar Pro tab of " : "Download the Guitar Pro file of ") + title,
-        from: String(first.name), lead: "Files", downloads,
-        opener: (f) => browser(f) };
+        from: String(first.name), lead: "Files",
+        downloads: [downloadLink(first, ext, "Download " + plainLabel(first) + " of " + title)],
+        opener: (f) => browser(f), count: guitar.length };
       t.chips = bySource(guitar).map((g) => ({ source: g.source, count: g.files.length, unit: "file",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);
-    } else if (tab) {
+    }
+    if (tab) {
       claim(tab);
-      made.push({ kind: "guitar", glyph: "guitar", name: "Guitar tab", open: { href: tab.href },
+      made.push({ kind: "tab", glyph: "guitar", name: "Guitar tab", open: { href: tab.href },
         said: "Open the guitar tab of " + title, from: tab.source ? nameOf(tab.source) : "a text tab", lead: "From",
         chips: tab.source ? [{ source: tab.source, count: 1, fixed: true }] : [],
-        downloads: [downloadLink(tab, "Text", "Download the guitar tab of " + title)] });
+        downloads: [downloadLink(tab, "Text", "Download the guitar tab of " + title)], count: 1, unit: "tab" });
     }
 
     // Harmonica tabs.
@@ -370,7 +383,7 @@ const caracoleCard = (icons, rows) => {
         open: { href: harpPage(first) || first.href }, said: "Open the harmonica tab of " + title,
         from: plainLabel(first).replace(/^Harmonica tab/, "Tab"), lead: "Tabs",
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
-        opener: (f) => ({ href: harpPage(f) || f.href }) };
+        opener: (f) => ({ href: harpPage(f) || f.href }), count: harp.length };
       t.chips = bySource(harp).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);
@@ -385,7 +398,7 @@ const caracoleCard = (icons, rows) => {
         open: { href: first.href }, said: "Open the game music tab of " + title,
         from: plainLabel(first).replace(/^Game music tab/, "Tab"), lead: "Tabs",
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
-        opener: (f) => ({ href: f.href }) };
+        opener: (f) => ({ href: f.href }), count: games.length };
       t.chips = bySource(games).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);
@@ -420,12 +433,23 @@ const caracoleCard = (icons, rows) => {
           ? first.download : "" },
         said: (pdf ? "Open the score of " : "Download the score of ") + title, from: plainLabel(first), lead: "Files",
         downloads: scores.map((f) => downloadLink(f, format(f), "Download " + plainLabel(f) + " of " + title)),
-        opener: (f) => (/[.]pdf$/i.test(f.name) ? { href: f.href } : null) };
+        opener: (f) => (/[.]pdf$/i.test(f.name) ? { href: f.href } : null), count: scores.length };
       t.chips = bySource(scores).map((g) => ({ source: g.source, count: g.files.length, unit: "file",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);
     }
 
+    for (const t of made) {  // where each came from, as its chips say, but where it said already (the sheet's)
+      if (!t.sources) t.sources = distinct(listOf(t.chips).map((c) => c.source));
+      if (!t.count) t.count = 1;
+    }
+    return made;
+  };
+  const distinct = (keys) => keys.filter((k, n) => typeof k === "string" && k && keys.indexOf(k) === n);
+
+  // A tile each (``things``, the same ``opts``), and the drawer their chips open, one at a time; null for none.
+  const tiles = (s, opts) => {
+    const made = things(s, opts);
     if (!made.length) return null;
     const box = el("div", "tiles");
     const drawer = el("div", "drawer");  // a region, named by its head; no section, as a line's group has one
@@ -522,6 +546,64 @@ const caracoleCard = (icons, rows) => {
       if (tileBox) place(drawer, tileBox);
     }
   }) : null;
+
+  // --- the line's buttons -------------------------------------------------------------------------------------
+  // A song's line has a button for each thing it holds to play from but its lyrics (``things``, the same ``opts``),
+  // in their order, none first: a link that opens it at once (its viewer, its harmonica tab's page, the Guitar Pro
+  // page, the file: what its tile opens). Each its instrument's glyph (an auto sheet's in its own colour), the marks
+  // of the sites its versions came from at its foot (two at most, the one in use first), how many versions the card
+  // lists of it at its corner when more than one; named for all of it ("Open the harmonica tab of Creep, from
+  // harptabs.com, 2 tabs"), and ``data-inst`` the Filter panel's instruments it is one of (library.js INSTRUMENTS),
+  // which filter.css lights while one is on. None: null.
+  const PLAYS = ["sheet", "guitar", "tab", "harmonica", "gametab", "score"];
+  const MARKS_SHOWN = 2;
+  const listed = (names) => (names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
+    : names.join(""));
+  const instOf = (s, t) => (t.kind === "sheet"
+    ? (listOf(s.instruments).indexOf("ukulele") >= 0 ? "sheet ukulele" : "sheet")
+    : t.kind === "harmonica" || t.kind === "score" ? t.kind : "guitar");
+  const plays = (s, opts) => {
+    const shown = things(s, opts).filter((t) => PLAYS.indexOf(t.kind) >= 0);
+    if (!shown.length) return null;
+    const box = el("span", "line-plays");
+    for (const t of shown) {
+      const a = anchor(t.open.href, "play play-" + t.kind + (t.auto ? " auto" : ""), t.open);
+      const from = t.sources.map(nameOf);
+      const said = t.said + (from.length ? ", from " + listed(from) : "") +
+        (t.count > 1 ? ", " + many(t.count, t.unit || "version") : "");
+      a.setAttribute("aria-label", said);
+      a.title = said;
+      a.dataset.kind = t.kind;
+      a.dataset.inst = instOf(s, t);
+      a.appendChild(glyph(t.glyph));
+      if (t.count > 1) {
+        const n = el("span", "n", t.count);
+        n.setAttribute("aria-hidden", "true");
+        a.appendChild(n);
+      }
+      const marks = el("span", "marks");
+      marks.setAttribute("aria-hidden", "true");
+      for (const key of t.sources.slice(0, MARKS_SHOWN)) {
+        const mark = sourceMark(key);
+        if (!mark) continue;
+        mark.removeAttribute("title");
+        marks.appendChild(mark);
+      }
+      if (marks.childNodes.length) a.appendChild(marks);
+      box.appendChild(a);
+    }
+    return box;
+  };
+
+  // Which sites have the song (``sites``, song_sites.py, rows.js siteMarks), under its tiles: each site's mark in its
+  // colours where it has it, grey where it had nothing, fainter on a dashed edge where it wasn't asked yet. None: null.
+  const sitesOf = (sites) => {
+    const marks = siteMarks(sites);
+    if (!marks.childNodes.length) return null;
+    const box = el("div", "card-sites");
+    box.append(el("p", "card-label", "On the sites"), marks);
+    return box;
+  };
 
   // The song's progressions (``items``: { text, said, go }): chips that find your songs that play each.
   // The song's progressions, a chip each: four of them, the rest one press away ("+2"); a long string of numerals is
@@ -625,5 +707,5 @@ const caracoleCard = (icons, rows) => {
     }
     return box.childNodes.length ? box : null;
   };
-  return { tiles, progressions, findElsewhere, foot };
+  return { plays, tiles, sites: sitesOf, progressions, findElsewhere, foot };
 };

@@ -346,8 +346,8 @@ Below the table, a section for each step whose modules have more to say.
 - library_page.py: `index.html`.
 - library_assets/.
 - songbook_section.py: its Songbooks tab's data.
-- song_sites.py: which sites have each song, had nothing or weren't asked yet: its line's marks, rows.js
-  `siteMarks`.
+- song_sites.py: which sites have each song, had nothing or weren't asked yet: its card's marks, rows.js
+  `siteMarks` (card.js `sitesOf`).
 
 #### backup
 
@@ -819,10 +819,14 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
-- A song of yours closes to a line of what it holds (rows.js `holds`, each a `glyph`: inline SVG made with
-  `createElementNS`, the one address the page names) and opens as a card (card.js `caracoleCard`, card.css):
-  - a tile for each thing to play from, each source's versions a chip whose drawer reads the page's data alone, never
-    a request;
+- A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
+  `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
+  came from, how many; the lyrics none), Fetch now's download glyph where it has one (rows.js `fetchIcon`, a site's
+  song's Get it too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
+  its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
+    data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 
@@ -1443,8 +1447,58 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     stored and its kv in one savepoint, the count it states Python's int of any size;
   - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
     vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
-- LaCuerda's sheets (lacuerda-sheets): not built yet.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- LaCuerda's sheets (lacuerda-sheets):
+  - `LaCuerdaSheets`, lacuerda_fetch.py for a lookup's songs (`only`): `_to_try` and `mayAsk`, the artist's slugs in
+    `_artist_songs`' order (a slug given first, the listings' `artistSlugs`, then `artistSlugCandidates`; a 404 or
+    "aqui llega:" moving on), each page cached 30 days (a stale copy no answer once the budget is spent), your pick's
+    page, `_record` and `_keep` (`sheet.json` as `json.dumps(indent=2)` and a newline, then `sheet.txt`; no
+    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage` (its `first`, which
+    Python's lacks, asked in place of the name written as a slug). The songs re-keyed first, as `list_songs` does.
+    Each page stored is noted for the next push. Python's nightly parts are left out: the popular artists' pages, the
+    listings pass, the handoffs, info.json;
+  - core.lookup.sites' `LaCuerdaPickStage` and `LaCuerdaStage`: get.py's `lacuerda()` through the stage's asking, its
+    words for what the pass came to, and `LookupWords.end`'s for what asking came to;
+  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (with `progress`, its default, the
+    search's `--progress` lines said; the last returned), the cooldown and the gate checked as Python checks them,
+    the block and the error recorded by the asking, a good run by `LookupWords.lookupRunOf`'s run, which the runner's
+    asking logs under; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and
+    stores no cached page first (`backfill_cached`: the phone stores each page as it reads it);
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
+    page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
+    LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
+- harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
+  lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
+  sitemap and makes no artist pass):
+  - its pages read as selectolax reads them (core.html), their JSON-LD by `PyJson.loads` (a value's `str()` as
+    Python's), their counts by `PyFloat` and `PyInt`, whole as Python's int: one past SQLite's integers is its
+    OverflowError only where it is written (`HarpTabsPages.sqliteInteger`), never on a page passed over;
+  - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
+    `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
+  - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
+    `harptabs`, the page's path);
+  - the lookup's harptabs stage (`HarpTabsStage`, the rest of what asking came to `LookupWords.end`'s) and
+    `caracole harptabs --artist` (`HarpTabsCommands.artist`, its one line, commands/lyrics.py's words), through
+    StageContext's and CommandContext's asking;
+  - tests/test_conformance_harptabs.py writes vectors/sites/harptabs.jsonl, vectors/lookup/harptabs.jsonl,
+    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (asking through `InteractiveAsk` over each
+    record's client, each request with caracole's own user agent, the pages noted beside Python's rows).
+- gametabs.net (gametabs): core.sites' `GameTabsPages` (gametabs.py's tab and game pages read through core.html,
+  `parseTabPage` and `parseGamePage`) and `GameTabsFetch` (gametabs_fetch.py for a lookup's song alone, no sitemap
+  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words, the envelope's
+  `LookupWords.end`'s).
+  - A `data-tab` value as gametabs.py reads it: Python's truth and `str()` of each JSON value, its ints unbounded
+    (`BigInteger`), each as the float Python makes of it (the nearest, a tie to the even one, whatever the platform's
+    `BigInteger.toDouble` rounds), one too large for a float an OverflowError as `math.isfinite` raises; a version's
+    votes are the views as SQLite holds them (64 bits, sqlite3's OverflowError past them).
+  - Candidates by game (its slug's key, its page's name) or composer, `CANDIDATES` (4) at most, the most viewed
+    first, then by path in code points; the most viewed page that fits kept as `gametab-N.txt`, a pick
+    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`, of the lookup's song alone; the game pages'
+    title keys made again first (`SiteKeys.gametabsEnsureCurrentKeys`, kv `gametabs:games:keys`), as the computer's
+    pass does.
+  - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
+    helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
+    vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.
+- gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
 
@@ -1623,7 +1677,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
   - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
     kept whole).
-- A sheet's versions and progressions (version-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): `viewer.version`'s `Versions`, viewer/version.py's page
+  side function for function, and render.py's `own_version` (`ownVersion`); `apply_version`, a sheet's ChordPro for
+  chordpro's PDF of a version, is the computer's alone.
+  - `fromQuery` and `query`, a version as the viewer's address reads and writes it (Python's parse_qsl, JavaScript's
+    Number(), URLSearchParams' bytes); `playedKey`, `forInstrument`, `label` and `playedLabel`; `settingProblem` in
+    Python's words and reprs, of any value a form or a file gives; `inSetting`; `keyVersion` (an
+    IllegalArgumentException with key_version's words, which `Overrides.read` and `OverrideWriters.addVersion` take as
+    their check), `inKey`, `entry` and `KeyVersion.query` and `label`, byte for byte, as `[version]` is in a song's
+    sync unit.
+  - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
+    text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
+    library-cards' to wire (Found.kt).
+  - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
+    tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
+    (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of
+    room.
+  - Where Kotlin holds less than Python: a chord's index, a shape's number or a swap's root or bass past an Int, in an
+    address, is dropped, and a record's song id past a Long is none.
 - A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
   - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
     harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
@@ -1649,8 +1721,40 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     ones, parsed and read as another reading's pin says (layout/'s small tabs whole, the rest by digest, for the
     viewer's budget), its rows' parts as lengths, its lines and words, `align` on drawn rows, and `_cuts` on drawn
     words, on ties that each of its numbers decides (`TIED_CUTS`) and on MAX_CUTS's edges.
-- The sheet page (pages): not built yet.
-- A harmonica tab's page (harmonica-page): not built yet.
+- The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
+  writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
+  inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
+    writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
+    a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
+    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
+    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - A page record is the generator's `page_out` and `PagesReplay.out`: `sha256` and `size` of the whole page, `body`
+    and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
+    digits each), so that it pins the members' order too; another lane's page records take that shape.
+  - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
+    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
+    Chromium's print emulation).
+- A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
+  `build` writes `build_harmonica_viewer`'s page on SheetPage's frame (`page`, `namesTable`, `isChinese`, `zhAttr`,
+  `artistLine`, `words`, `LIBRARY_PAGE`; `ViewerAssets.Page.HARMONICA`), its data's members in Python's order (`groups` and `rows` filled as the tab
+  is written), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
+  `viewer.harpfit.HarpFit`, harpfit.py: `pitch`, `words`, `sheetLines`, `recordFit` (PySequence.SequenceMatcher, the
+  fits by share then harp), `choose` and `Choice.tabsHarp`, and render.py's `_tab_harps` as `tabHarps` (each
+  `HarmonicaTab` a kept tab as render.py reads it; one it can't read, a refused pin among them, gives no harp), the
+  harps a sheet's viewers start on (`harpTabs`).
+  - Its constants are data/caracole/viewer/harmonica_page.json (harpfit.py's, and harptab_page.py's `_BAR`,
+    `_BAR_RAW`, `_PILL`, `_SAID`…), written by tests/test_conformance_viewer_harmonica.py; its numbers as Python
+    writes them (`round(q, 2)` a PyJson float; `{share:.0%}`, `{views/1000:.0f}k`, `{views/1e6:.1f}M`,
+    `{rating:.1f}★` and `({q:.2f})` through PyFormat), a fact counted only where Python's `isinstance` takes it.
+  - `HarmonicaPageReplay` (area `harmonica-page`): vectors/viewer/harpfit.jsonl (pitch, words, a sheet's sung lines,
+    each tab's fit and choices, `_tab_harps`), harmonica_pages.jsonl (the parts, and every page as digests: the page,
+    its header, tab, foot and bar, each data member, the overlay's two) and harmonica_pages_whole.jsonl (a small page
+    whole, the files it inlines by name); the texts that are no fixture in harpfit_texts.jsonl.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 
 ##### The phone's written pages
@@ -1666,6 +1770,23 @@ Not built yet. (written-pages.)
 ##### Guitar Pro on the phone
 
 Not built yet. (guitar-alphatab.)
+
+##### A song shared to the app
+
+- A music app's Share of a song is `ShareLinkActivity`'s (SEND of text/plain alone, its own intent filter; files are
+  ShareActivity's): its extras logged under `caracole-share` (`SharedLink.said`), then the library screen loads
+  `GET /share` with them (`SharedLink.page`; MainActivity takes a share page alone from an intent, and Cancel,
+  `/share/cancel`, as `leaveShare`: the history before the share, the sender in front).
+- core.share's `SharedText.read`, the one place that knows each app's words, before read_names: the app (package,
+  link host, words), the first link, each app's shape (`SHAPES`: Deezer's, Shazam's, SoundCloud's… as "Artist -
+  Title"), else the text less its links and an app's name. A link alone names no song: never a request to the
+  service. tests/fixtures/share/shares.jsonl holds each app's shapes and where they were found (SharedTextTest).
+- server's `ShareRoutes` is the phone's own page, which caracole serve has none of:
+  - the names through `SongNames.readNames`, searched as `/api/search` searches (`SearchRoutes.answer`);
+  - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
+  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+    and policy (`MessagePage.html`: no script).
+- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
 
 ##### Files shared to the app
 

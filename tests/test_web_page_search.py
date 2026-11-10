@@ -310,9 +310,9 @@ def test_a_hit_for_one_instrument_says_which_and_nothing_is_left_out_for_it(cfg,
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.wait("document.querySelectorAll('#results article.line').length >= 5")
     marks = dict(browser.js(MARKS))
-    assert marks["Wonderwall Remix"] == []  # a song of yours says it by what its line holds
-    assert browser.js("[...document.querySelectorAll('#results article.line[data-id] .line-holds svg')]"
-                      ".map((g) => g.getAttribute('aria-label'))") == ["Harmonica tab", "Score"]
+    assert marks["Wonderwall Remix"] == []  # a song of yours says it by its line's buttons
+    assert browser.js("[...document.querySelectorAll('#results article.line[data-id] .line-plays .play')]"
+                      ".map((a) => a.dataset.kind)") == ["harmonica", "score"]
     lines = browser.js(LINES)
     assert ["Oasis", [["Wonderwall", "ug"]]] in lines and ["Ryan Adams", [["Wonderwall", "ug"]]] in lines
     rows = browser.js(MARKS)
@@ -505,10 +505,10 @@ def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, brows
     line = "document.querySelector('#results .progress').closest('article')"
     assert browser.wait("!!document.querySelector('#results .progress')")
     assert browser.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
-    # Once done, the result's line is the song's own line, around its request line: its sheet its button.
+    # Once done, the result's line is the song's own line, around its request line: its sheet's button on it.
     assert browser.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
-    assert browser.wait(f"{line}.querySelector('.line-action a') && "
-                        f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")
+    assert browser.wait(f"{line}.querySelector('.line-plays .play-sheet') && "
+                        f"/sheet[.]pdf$/.test({line}.querySelector('.line-plays .play-sheet').getAttribute('href'))")
     # Back to your songs: the new song has a line of its own above the list.
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
@@ -534,8 +534,7 @@ def test_a_song_get_it_brought_offers_no_songbook_until_the_page_is_loaded_again
     line = "document.querySelector('#results .progress').closest('article')"
     assert browser.wait("!!document.querySelector('#results .progress')")
     assert browser.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
-    assert browser.wait(f"{line}.querySelector('.line-action a') && "
-                        f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")  # the song's line now
+    assert browser.wait(f"{line}.querySelector('.line-plays .play-sheet') !== null")  # the song's line now
     assert "Add to a songbook…" not in browser.js(f"{OFFERS}({line})")
     oasis = ("[...document.querySelectorAll('#results section.artist')].find((g) => "
              "g.querySelector('.artist-name').textContent === 'Oasis').querySelector('article.line')")
@@ -628,7 +627,8 @@ def test_a_removed_song_shows_among_the_results_and_add_again_brings_it_back(cfg
     assert browser.js(LINES) == [["Radiohead", [["Creep", ""], ["Karma Police", "ug"]]]]  # its artist's group
     line = "#results .removed-hit"
     assert browser.js(f"document.querySelector('{line} .line-status').textContent") == "Removed 2026-10-20"
-    assert browser.js(f"document.querySelector('{line} .line-action button').textContent") == "Add again"
+    assert browser.js(f"document.querySelector('{line} .line-action button.line-fetch').getAttribute('aria-label')"
+                      ) == "Add Radiohead - Creep again"  # the download glyph, named for what it does
     browser.press("Enter")  # never what Enter acts on: it moves to the first result, and asks for nothing
     assert browser.js("document.activeElement.closest('article') && document.activeElement.closest('article')"
                       ".querySelector('h3').textContent") == "Creep"
@@ -707,7 +707,7 @@ def test_a_results_name_looks_the_song_up_and_cant_be_pressed_twice(cfg, live, b
     assert len(queue.snapshot()) == 1
 
 
-def test_a_song_of_yours_keeps_its_title_link_and_a_removed_songs_name_adds_it_again(cfg, live, browser):
+def test_a_song_of_yours_keeps_its_buttons_and_a_removed_songs_name_adds_it_again(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("radiohead", "creep", 2), ("radiohead", "karma-police", 2)])
     removed(cfg, "Radiohead", "Creep")
@@ -723,7 +723,7 @@ def test_a_song_of_yours_keeps_its_title_link_and_a_removed_songs_name_adds_it_a
     assert browser.wait(f"{answer_to('radiohead')} && !!document.querySelector('#results .removed-hit') && "
                         "!!document.querySelector('#results .line[data-id]')")
     yours = "#results .line[data-id]"
-    assert browser.js(f"!!document.querySelector(\"{yours} a.line-title h3\")") is True  # opens its sheet
+    assert browser.js(f"!!document.querySelector(\"{yours} .line-plays a.play-sheet\")") is True  # opens its sheet
     assert browser.js(f"document.querySelector(\"{yours} .title-get\")") is None
     gone = "#results .removed-hit"
     assert browser.js(f"document.querySelector(\"{NAME.format(gone)}\").getAttribute('aria-label')"
@@ -1522,7 +1522,8 @@ def test_a_title_spelled_close_is_a_line_in_its_artists_band_whose_get_it_looks_
         "artist meant", "nothing"]
     assert browser.js(STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
     assert browser.js(f"document.querySelector('{MEANT_LINE} .line-facts').textContent") == "chords ×6"
-    assert browser.js(f"document.querySelector('{MEANT_LINE} .line-action button').textContent") == "Get it"
+    assert browser.js(f"document.querySelector('{MEANT_LINE} .line-action button.line-fetch').getAttribute("
+                      "'aria-label')") == "Get Eagles - Hotel California from Ultimate Guitar"
     assert browser.js(f"document.querySelector('{MEANT_LINE} h3 .title-get').getAttribute('aria-label')") == (
         "Get Eagles - Hotel California")  # its name gets it, as its Get it does
     assert browser.js("document.querySelector('#results section.meant .their-songs').textContent") == (
@@ -1554,8 +1555,8 @@ def test_a_title_spelled_close_that_you_have_is_your_own_line_in_its_band(cfg, l
     assert browser.wait(f"{answer_to('hotl califrnai')} && !!document.querySelector('#results section.meant')")
     assert browser.js(GROUPS) == ["Did you mean Eagles · 2 songs on UG · you have 1"]
     assert browser.js(LINES) == [["Eagles", [["Hotel California", "yours"]]]]  # one line: your own, which opens it
-    assert browser.js("document.querySelector('#results section.meant article.line[data-id] .line-action a')"
-                      ".textContent") == "Open PDF"
+    assert browser.js("document.querySelector('#results section.meant article.line[data-id] .line-plays a')"
+                      ".getAttribute('href')").endswith("sheet.pdf")
     # Your song is among the results: the words say it first, as the marks do.
     assert browser.js(STATUS) == "1 of your songs · nothing on the sites · did you mean Hotel California by Eagles?"
     assert browser.js(COUNTS)[0] == ["library", "done", 1]

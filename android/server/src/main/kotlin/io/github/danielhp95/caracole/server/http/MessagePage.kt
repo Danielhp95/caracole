@@ -68,6 +68,10 @@ object MessagePage {
                         JsonObject(mapOf("error" to JsonPrimitive(message))))
     }
 
+    /** A page of the phone's own in this frame, style and policy ([csp]: no script): [body] under the header (the page
+     * of a song shared to the app, ShareRoutes'). */
+    internal fun html(title: String, body: String, name: LibraryName): String = page(title, body, name)
+
     /** pages.page: the head, the header (top.py's) and [body]. */
     private fun page(title: String, body: String, name: LibraryName): String =
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n" +
