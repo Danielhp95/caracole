@@ -87,10 +87,22 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # video, never asked twice (youtube_search.py). No pause, the owner's choice of 2026-10-29: a provider of its own,
     # so that YouTube's pause between yt-dlp runs never holds it back, and a block of either cools the other nothing.
     "ytimg": ProviderPolicy(budget=20, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0)),
+    # A link shared to the phone whose text names no song, read by asking its service once, the owner's choice of
+    # 2026-11-10 (the phone's core.share.ShareLinks): Apple's catalogue for an Apple Music link (one lookup), Spotify's
+    # and TIDAL's track page for theirs (a short link's one hop more), YouTube's oEmbed for a video's title and channel
+    # (never yt-dlp). The phone alone asks them, at the lookup pace: no bulk work, so no budget, and one share's
+    # requests at most (lookup_requests). This side's settings document gives the phone their switches.
+    "itunes": ProviderPolicy(budget=0, delay=(0.0, 0.0), lookup_requests=1),
+    "spotify": ProviderPolicy(budget=0, delay=(0.0, 0.0), lookup_requests=2),
+    "tidal": ProviderPolicy(budget=0, delay=(0.0, 0.0), lookup_requests=2),
+    "youtube-oembed": ProviderPolicy(budget=0, delay=(0.0, 0.0), lookup_requests=1),
 }
+# The services a link shared to the phone is read from (above): no run, command or lookup of this side asks them.
+SHARE_PROVIDERS = ("itunes", "spotify", "tidal", "youtube-oembed")
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
+SWITCHABLE = frozenset({"megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg",
+                        *SHARE_PROVIDERS})
 
 
 @dataclass(frozen=True)

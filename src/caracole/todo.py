@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from caracole.config import DEFAULT_PROVIDERS, Config
+from caracole.config import DEFAULT_PROVIDERS, SHARE_PROVIDERS, Config
 from caracole.db import kv_get_json
 from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
@@ -51,7 +51,7 @@ from caracole.youtube_fetch import (
     videos_by_audio,
 )
 
-PROVIDERS = tuple(DEFAULT_PROVIDERS)
+PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p not in SHARE_PROVIDERS)  # the phone's alone: never asked here
 SCORES_TITLE = "Scores on MuseScore"
 NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes the audio from YouTube
 NOTHING_TITLE = "Nothing on YouTube for these"

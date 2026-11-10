@@ -269,6 +269,5 @@ What a lane porting a site's parser (ug-pages, lacuerda-pages, harptabs, gametab
   straight port would skip the node and read a sheet. Such a parser is fixed in Python first, test first (`tag =
   child.tag or "-"`), and then ported; core.html keeps `"-pi"`.
 - **`iter()`** is `children(includeText = false)`, **`iter(include_text=True)`** `children()` (The API).
-- **harptabs.py's `_pre_text`** is in the replay as a copy of its own (`HtmlTreeReplay.preText`), for `tree.jsonl`'s
-  `pre` reads. Lane harptabs ports it into main code; the replay's `pre` comparison then calls that port, and the copy
-  goes.
+- **harptabs.py's `_pre_text`** is core.sites' own (`HarpTabsPages.preText`, lane harptabs'), which the replay's
+  `pre` comparison calls for `tree.jsonl`'s `pre` reads: no copy of it in the replay.
