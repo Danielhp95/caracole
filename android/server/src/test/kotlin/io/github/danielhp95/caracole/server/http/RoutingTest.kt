@@ -195,8 +195,8 @@ class RoutingTest {
                        HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                for (path in listOf("/fetch", "/versions/keep-more", "/lacuerda/search", "/lacuerda/artist",
-                                    "/harptabs/artist", "/review", "/versions/choose", "/versions/keep",
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the rest neutral still.
+                for (path in listOf("/review", "/versions/choose", "/versions/keep",
                                     "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
                                     "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {

@@ -967,6 +967,7 @@
     "id": 1,
     "identity": "sigur-ros/hoppipolla",
     "key": null,
+    "lyricsFrom": null,
     "review": false,
     "search": "sigur ros | sigurros | jonsi | hoppipolla | sigur ros - hoppipolla | sigurroshoppipolla",
     "sites": [],
@@ -1044,6 +1045,8 @@
      "Jónsi"
     ],
     "key": "sigur-ros/hoppipolla",
+    "lyrics_json": null,
+    "lyrics_status": "pending",
     "review": false,
     "status": "wanted",
     "title": "Hoppípolla (Live)"
@@ -1085,6 +1088,7 @@
     "identity": "宋冬野/斑马斑马",
     "initials": "bmbm",
     "key": null,
+    "lyricsFrom": null,
     "review": true,
     "search": "宋冬野 | song dong ye | songdongye | 斑马斑马 | ban ma ban ma | banmabanma | 宋冬野 - 斑马斑马 | 宋冬野斑马斑马 | song dong ye ban ma ban ma | songdongyebanmabanma",
     "sites": [],
@@ -1117,6 +1121,8 @@
      "宋冬野"
     ],
     "key": "宋冬野/斑马斑马",
+    "lyrics_json": null,
+    "lyrics_status": "pending",
     "review": true,
     "status": "found",
     "title": "斑马斑马"
@@ -1144,6 +1150,7 @@
     "identity": "guns-n-roses/sweet-child-o-mine",
     "initials": "scom",
     "key": null,
+    "lyricsFrom": null,
     "review": false,
     "search": "guns n' roses | gunsnroses | sweet child o' mine | sweetchildomine | guns n' roses - sweet child o' mine | gunsnrosessweetchildomine",
     "sites": [],
@@ -1168,6 +1175,8 @@
      "Guns N' Roses"
     ],
     "key": "guns-n-roses/sweet-child-o-mine",
+    "lyrics_json": null,
+    "lyrics_status": "pending",
     "review": true,
     "status": "found",
     "title": "Sweet Child O' Mine"
@@ -1187,6 +1196,7 @@
     "identity": "ac-dc/t-n-t",
     "initials": "tnt",
     "key": null,
+    "lyricsFrom": null,
     "review": false,
     "search": "ac/dc | acdc | t.n.t. | tnt | ac/dc - t.n.t. | acdctnt",
     "sites": [],
@@ -1204,9 +1214,190 @@
     "artist": "AC/DC",
     "artists": [],
     "key": "ac-dc/t-n-t",
+    "lyrics_json": null,
+    "lyrics_status": "pending",
     "review": false,
     "status": "wanted",
     "title": "T.N.T."
+   }
+  },
+  {
+   "card": {
+    "added": "2026-10-05T00:00:00Z",
+    "artist": "Estopa",
+    "artistLetter": "E",
+    "artists": [
+     "Estopa"
+    ],
+    "display": "Estopa - Como Camarón",
+    "files": [
+     {
+      "href": "Estopa/Como%20Camar%C3%B3n/sheet.txt",
+      "label": "Sheet text",
+      "name": "sheet.txt",
+      "primary": true,
+      "source": null
+     },
+     {
+      "href": "Estopa/Como%20Camar%C3%B3n/lyrics.txt",
+      "label": "Lyrics",
+      "name": "lyrics.txt",
+      "primary": false,
+      "source": "lrclib"
+     }
+    ],
+    "id": 5,
+    "identity": "estopa/como-camaron",
+    "initials": "cc",
+    "key": null,
+    "lyricsFrom": {
+     "href": "https://megalobiz.com/lrc/maker/estopa-como-camaron.123",
+     "source": "megalobiz"
+    },
+    "review": false,
+    "search": "estopa | como camaron | comocamaron | estopa - como camaron | estopacomocamaron",
+    "sites": [],
+    "sortArtist": "estopa",
+    "sortTitle": "como-camaron",
+    "source": null,
+    "status": "found",
+    "title": "Como Camarón",
+    "titleLetter": "C"
+   },
+   "files": [
+    [
+     "lyrics.txt",
+     "Estopa/Como Camarón/lyrics.txt"
+    ],
+    [
+     "sheet.txt",
+     "Estopa/Como Camarón/sheet.txt"
+    ]
+   ],
+   "ignored": false,
+   "song": {
+    "added_at": "2026-10-05T00:00:00Z",
+    "artist": "Estopa",
+    "artists": [
+     "Estopa"
+    ],
+    "key": "estopa/como-camaron",
+    "lyrics_json": "{\"provider\": \"megalobiz\", \"plain\": \"Como camar\\u00f3n\", \"url\": \"https://megalobiz.com/lrc/maker/estopa-como-camaron.123\"}",
+    "lyrics_status": "found",
+    "review": false,
+    "status": "found",
+    "title": "Como Camarón"
+   }
+  },
+  {
+   "card": {
+    "added": "2026-10-06T00:00:00Z",
+    "artist": "Gloria Trevi",
+    "artistLetter": "G",
+    "artists": [
+     "Gloria Trevi"
+    ],
+    "display": "Gloria Trevi - Pelo Suelto",
+    "files": [
+     {
+      "href": "Gloria%20Trevi/Pelo%20Suelto/lyrics.txt",
+      "label": "Lyrics",
+      "name": "lyrics.txt",
+      "primary": false,
+      "source": "lrclib"
+     }
+    ],
+    "id": 6,
+    "identity": "gloria-trevi/pelo-suelto",
+    "initials": "ps",
+    "key": null,
+    "lyricsFrom": {
+     "href": "https://www.azlyrics.com/lyrics/gloriatrevi/pelosuelto.html",
+     "source": "azlyrics"
+    },
+    "review": false,
+    "search": "gloria trevi | gloriatrevi | pelo suelto | pelosuelto | gloria trevi - pelo suelto | gloriatrevipelosuelto",
+    "sites": [],
+    "sortArtist": "gloria-trevi",
+    "sortTitle": "pelo-suelto",
+    "source": null,
+    "status": "found",
+    "title": "Pelo Suelto",
+    "titleLetter": "P"
+   },
+   "files": [
+    [
+     "lyrics.txt",
+     "Gloria Trevi/Pelo Suelto/lyrics.txt"
+    ]
+   ],
+   "ignored": false,
+   "song": {
+    "added_at": "2026-10-06T00:00:00Z",
+    "artist": "Gloria Trevi",
+    "artists": [
+     "Gloria Trevi"
+    ],
+    "key": "gloria-trevi/pelo-suelto",
+    "lyrics_json": "{\"provider\": \"azlyrics\", \"plain\": \"Pelo suelto\", \"url\": \"https://www.azlyrics.com/lyrics/gloriatrevi/pelosuelto.html\"}",
+    "lyrics_status": "found",
+    "review": false,
+    "status": "found",
+    "title": "Pelo Suelto"
+   }
+  },
+  {
+   "card": {
+    "added": "2026-10-07T00:00:00Z",
+    "artist": "Ella Baila Sola",
+    "artistLetter": "E",
+    "artists": [
+     "Ella Baila Sola"
+    ],
+    "display": "Ella Baila Sola - Lo Echamos a Suertes",
+    "files": [
+     {
+      "href": "Ella%20Baila%20Sola/Lo%20Echamos%20a%20Suertes/lyrics.lrc",
+      "label": "Timed lyrics",
+      "name": "lyrics.lrc",
+      "primary": false,
+      "source": "lrclib"
+     }
+    ],
+    "id": 7,
+    "identity": "ella-baila-sola/lo-echamos-a-suertes",
+    "initials": "leas",
+    "key": null,
+    "lyricsFrom": null,
+    "review": false,
+    "search": "ella baila sola | ellabailasola | lo echamos a suertes | loechamosasuertes | ella baila sola - lo echamos a suertes | ellabailasolaloechamosasuertes",
+    "sites": [],
+    "sortArtist": "ella-baila-sola",
+    "sortTitle": "lo-echamos-a-suertes",
+    "source": null,
+    "status": "found",
+    "title": "Lo Echamos a Suertes",
+    "titleLetter": "L"
+   },
+   "files": [
+    [
+     "lyrics.lrc",
+     "Ella Baila Sola/Lo Echamos a Suertes/lyrics.lrc"
+    ]
+   ],
+   "ignored": false,
+   "song": {
+    "added_at": "2026-10-07T00:00:00Z",
+    "artist": "Ella Baila Sola",
+    "artists": [
+     "Ella Baila Sola"
+    ],
+    "key": "ella-baila-sola/lo-echamos-a-suertes",
+    "lyrics_json": "{\"provider\": \"lrclib\", \"plain\": \"Lo echamos\", \"url\": \"https://lrclib.net/api/get/1\"}",
+    "lyrics_status": "found",
+    "review": false,
+    "status": "found",
+    "title": "Lo Echamos a Suertes"
    }
   }
  ],

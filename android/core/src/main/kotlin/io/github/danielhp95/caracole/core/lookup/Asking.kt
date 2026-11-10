@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import java.io.File
 import java.time.Instant
 
 /**
@@ -35,9 +36,11 @@ interface Asking {
 }
 
 /** What a site's stage of a lookup reads: the database (autocommit), the song, the overrides and settings now, the
- * library, the asking and the lookup's time. */
+ * library, the asking and the lookup's time; [cacheDir], the lookup's HTTP cache (its clients', `cfg.cache_dir`),
+ * for what a stage reads from the cache alone with no client (the match stage's backfill): every lookup gives it,
+ * whatever asking wraps the envelope; a test's context may have none. */
 data class StageContext(val db: Db, val song: SongRow, val overrides: Overrides, val config: PhoneConfig,
-                        val library: LibraryStore, val asking: Asking, val now: Instant)
+                        val library: LibraryStore, val asking: Asking, val now: Instant, val cacheDir: File? = null)
 
 /** How a stage ended: done, skipped or failed, and get.py's words for it. */
 data class StageEnd(val state: String, val detail: String)

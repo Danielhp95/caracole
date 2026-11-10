@@ -26,7 +26,7 @@ internal object SongForm {
     /** library_routes.TEXT_LIMIT: a request's one text, `q`. */
     const val TEXT_LIMIT = 500
 
-    /** library_routes.PICK_LIMITS: a site's pick the phone takes no further (a lookup on the sites is M4's). */
+    /** library_routes.PICK_LIMITS: the longest pick of each site a form may carry. */
     val PICK_LIMITS = linkedMapOf("ug" to 300, "tab" to 600, "lacuerda" to 600, "harptabs" to 600, "gametabs" to 600)
 
     private val DURATION_SHAPE = PyRegex.compile("""\d+(?::\d+){0,2}""")
@@ -52,8 +52,9 @@ internal object SongForm {
 
     /** wanted_line's checks, short of wanted.txt: each field within its limit, an artist and a title, a length that
      * reads as one, and names the computer's wanted.txt can hold (an artist with " - " in it it can't, nor one or a
-     * title that is nothing once cleaned); the names cleaned as its line writes them (format_line). */
-    fun song(form: Map<String, String>): NamedSong {
+     * title that is nothing once cleaned); the names cleaned as its line writes them (format_line). [picks]: each
+     * site's pick within its length too (a lookup's `_pick`, which a request never reads). */
+    fun song(form: Map<String, String>, picks: Boolean = true): NamedSong {
         val values = LIMITS.keys.associateWith { Py.strip(form[it].orEmpty()) }
         for ((name, value) in values) {
             if (Py.len(value) > LIMITS.getValue(name)) {
@@ -80,7 +81,7 @@ internal object SongForm {
         if (written.first.isEmpty() || written.second.isEmpty()) {
             throw Refused(400, "Not added", "caracole can't add this song: a song needs an artist and a title")
         }
-        checkPicks(form)
+        if (picks) checkPicks(form)
         val album = values.getValue("album").takeIf { it.isNotEmpty() }?.let(::clean)?.ifEmpty { null }
         return NamedSong(written.first, written.second, album, durationMs)
     }
