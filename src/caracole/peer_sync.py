@@ -875,6 +875,7 @@ PULL_PATH = "/peer/pull"
 INDEX_PATH = "/api/peer/index"
 PEER_TIMEOUT = 60.0  # seconds: a phone's caracole reads every song of its library to answer
 INDEX_MAX = 8 * 1024 ** 3  # the bytes of another caracole's indexes read at most (peer_file.IMPORT_MAX's)
+INDEX_WAIT = 600.0  # seconds its first byte may take: it copies its indexes whole before it sends one
 _CHUNK = 1024 * 1024  # what its indexes are written by, never whole in memory
 
 
@@ -1000,7 +1001,8 @@ class Peer:
         fd = os.open(to, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         try:
             with open(fd, "wb") as out, self._client.stream(
-                    "GET", self.address + INDEX_PATH, params=params, headers={"Accept": "application/json"}) as got:
+                    "GET", self.address + INDEX_PATH, params=params, headers={"Accept": "application/json"},
+                    timeout=httpx.Timeout(PEER_TIMEOUT, read=INDEX_WAIT)) as got:
                 if got.status_code != 200:
                     got.read()
                     raise self._refused(got)

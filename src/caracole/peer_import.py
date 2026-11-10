@@ -292,6 +292,7 @@ class Uploader(peer_push.Pusher):
         import_id, part = opened.get("import"), opened.get("part")
         if not (isinstance(import_id, str) and ID.fullmatch(import_id) and type(part) is int and 0 < part):
             raise sync.PeerError(f"The caracole at {self.address} opened an import it can't name.")
+        part = min(part, PART_MAX)  # never more of the file in memory at once than this side's own parts
         at = 0
         with open(path, "rb") as f:
             while chunk := f.read(part):
