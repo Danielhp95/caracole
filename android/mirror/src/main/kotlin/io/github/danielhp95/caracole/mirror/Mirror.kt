@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.mirror
 
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -13,16 +14,23 @@ import java.util.concurrent.locks.ReentrantLock
  * as `blobs/<sha256>`, and `manifest.json`, the server's list as last synced whole, which says what each path
  * is. Only a sync writes here ([SyncEngine], one at a time under [syncLock]); the WebView reads through
  * [lookup], which keeps the list it read until [reload].
+ *
+ * Beside it, in `layers/`, the pages files held of the units the phone took from them ([Layer], [takeLayer]), which
+ * [pageFor] serves where the computer's page isn't the phone's; the computer's sync never touches them.
  */
 class Mirror(val dir: File) {
     val blobs = File(dir, "blobs")
     val manifestFile = File(dir, "manifest.json")
+
+    /** The layers' folder: `layers/<id>/` each ([Layer]). */
+    val layersDir = File(dir, "layers")
 
     /** Held by a sync from its first request to its clean-up. */
     val syncLock = ReentrantLock()
 
     @Volatile private var current: Manifest? = null
     @Volatile private var loaded = false
+    @Volatile private var layersRead: List<Layer>? = null
 
     /** The list the mirror shows, read once; null when no sync ever ended (or the list can't be read). */
     fun manifest(): Manifest? = if (loaded) current else reload()
@@ -57,10 +65,38 @@ class Mirror(val dir: File) {
         return Response(200, "OK", entry.mimeType, entry.charset, entry.headers, served.file)
     }
 
-    /** The bytes the mirror takes on the phone. */
+    /** The bytes the mirror takes on the phone, its layers' with it. */
     fun storageBytes(): Long =
         (blobs.listFiles()?.sumOf { if (it.isFile) it.length() else 0L } ?: 0L) +
-            (if (manifestFile.isFile) manifestFile.length() else 0L)
+            (if (manifestFile.isFile) manifestFile.length() else 0L) +
+            layers().sumOf { it.bytes() }
+
+    /** The layers, those of `layers/<16 hex>/` with a list it can read, the newest taken first; read once, until a
+     * [takeLayer] here. */
+    fun layers(): List<Layer> = layersRead ?: readLayers(layersDir).also { layersRead = it }
+
+    /**
+     * Keeps the pages of [units] that a file's list of pages, [manifest] (its `pages.json`: `GET /api/offline`'s
+     * format 1), names, and its start page, as the layer [id] (the 16 hex of the caracole that exported it), each
+     * page's bytes from [blob] by its SHA-256; the layer becomes the newest. A layer taken before under that id keeps
+     * its pages of other units and loses those of [units] and its start page. Each blob is checked by its size and
+     * its SHA-256 as it is written, then the layer's list is written whole and the blobs it no longer names are
+     * deleted, so a page the file lacks or holds otherwise than listed fails it ([LayerError]) and leaves the layer as
+     * it was. One at a time, as a sync of the computer's is ([syncLock]).
+     */
+    fun takeLayer(id: String, manifest: ByteArray, units: Set<String>, blob: (String) -> InputStream?) {
+        syncLock.lock()
+        try {
+            val taken = (readLayers(layersDir).maxOfOrNull { it.taken } ?: 0L) + 1
+            try {
+                writeLayer(layersDir, id, manifest, units, taken, blob)
+            } finally {
+                layersRead = null
+            }
+        } finally {
+            syncLock.unlock()
+        }
+    }
 
     /** Writes [bytes] as the new `manifest.json` whole: a temporary file, synced, then renamed over it. */
     internal fun swapManifest(bytes: ByteArray) {
@@ -96,7 +132,7 @@ class Mirror(val dir: File) {
 
         private val random = SecureRandom()
 
-        private fun token(): String {
+        internal fun token(): String {
             val bytes = ByteArray(8).also { random.nextBytes(it) }
             return bytes.joinToString("") { "%02x".format(it) }
         }
@@ -160,9 +196,29 @@ sealed interface Looked {
     data object Missing : Looked
 }
 
-/** The mirror's file at [path], checked by [gate] when its entry names a unit. */
+/**
+ * The mirror's file at [path], checked by [gate] when its entry names a unit: the computer's when the gate serves it
+ * (or it names no unit); else the first layer's ([Mirror.layers], the newest first) of a unit the gate serves; else
+ * what the computer's answered (Gated), or where the computer has nothing at [path], the first layer's (Gated), or
+ * Missing. A layer's file of no unit (its start page) is never served: the phone's library page is its own.
+ */
 fun Mirror.pageFor(path: String, gate: UnitGate): Looked {
-    val served = lookup(path) ?: return Looked.Missing
+    val computers = lookup(path)?.let { checked(it, gate) }
+    if (computers is Looked.Page) return computers
+    var layers: Looked.Gated? = null
+    for (layer in layers()) {
+        val served = layer.lookup(path) ?: continue
+        if (served.entry.unit == null) continue
+        when (val looked = checked(served, gate)) {
+            is Looked.Page -> return looked
+            is Looked.Gated -> if (layers == null) layers = looked
+            Looked.Missing -> {}
+        }
+    }
+    return computers ?: layers ?: Looked.Missing
+}
+
+private fun checked(served: Served, gate: UnitGate): Looked {
     val unit = served.entry.unit ?: return Looked.Page(served.entry, served.file)
     return when (val checked = gate.check(unit, served.entry.digest)) {
         Gate.SERVE -> Looked.Page(served.entry, served.file)
