@@ -60,8 +60,11 @@ class VersionsPageTest {
     private fun versions(tab: String, doing: String): String =
         Pages.origin() + "/versions?" + PyUrl.urlencode(listOf("sheet" to SHEET, "tab" to tab, "do" to doing))
 
-    private fun loaded(main: ActivityScenario<MainActivity>, starts: String) = waitUntil("$starts loaded") {
-        url(main).startsWith(starts) && evaluate(main, "document.readyState") == "complete"
+    /** The page at an address that [starts] so, once its document is the one [shows] tells (the WebView names the
+     * address it goes to before the document it leaves is gone). */
+    private fun loaded(main: ActivityScenario<MainActivity>, starts: String, shows: String) = waitUntil("$starts loaded") {
+        url(main).startsWith(starts) && evaluate(main, "document.readyState") == "complete" &&
+            evaluate(main, shows) == true
     }
 
     /** The library screen, once its start has shown the library page: nothing loads over a page opened after. */
@@ -82,7 +85,7 @@ class VersionsPageTest {
     @Test fun aTopLevelGetReachesThePageAndItsFormPostsWithTheToken() = started { main ->
         val address = versions(OTHER, "keep")
         open(main, address)
-        loaded(main, address)
+        loaded(main, address, "document.title.includes('Keep a version')")
         val title = evaluate(main, "document.title") as String
         assertTrue(title, "Keep a version · Soda Stereo - De Música Ligera" in title)
         val form = JSONObject(evaluate(main, """JSON.stringify({action: document.querySelector('form.confirm').action,
@@ -91,7 +94,7 @@ class VersionsPageTest {
         assertTrue("the form carries the server's token", form.getString("token").length >= 32)
 
         evaluate(main, "document.querySelector('form.confirm button').click()")
-        loaded(main, "$address&job=")
+        loaded(main, "$address&job=", "location.search.includes('job=') && document.title.includes('Keep a version')")
         val id = url(main).substringAfterLast("job=").toInt()
         val job = runBlocking { withTimeout(120_000) { Caracole.phone(context).queue.await(id) } }
         assertEquals(listOf("versions", "--keep=$OTHER", "--progress", "--", "Soda Stereo", "De Música Ligera"),
@@ -116,12 +119,12 @@ class VersionsPageTest {
         started { main ->
             val viewer = Pages.address(sheet)
             open(main, viewer)
-            loaded(main, viewer)
+            loaded(main, viewer, "document.documentElement.dataset.ready === '1'")
             waitUntil("the viewer's script") { evaluate(main, "document.documentElement.dataset.ready === '1'") == true }
             assertEquals("the viewer runs in its sandbox", "null", evaluate(main, "String(window.origin)"))
             val address = versions(OTHER, "choose")
             evaluate(main, "location.assign(${JSONObject.quote(address.removePrefix(Pages.origin()))})")
-            loaded(main, address)
+            loaded(main, address, "document.title.includes('Make this the one')")
             assertTrue(text(main), "Make this the one" in text(main))
             assertTrue("a page of the server's own", evaluate(main, "document.querySelector('form.confirm') !== null") == true)
         }
