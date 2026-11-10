@@ -7,6 +7,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import io.github.danielhp95.caracole.Pages.waitUntil
+import io.github.danielhp95.caracole.core.http.HttpAnswer
+import io.github.danielhp95.caracole.core.http.Transport
+import io.github.danielhp95.caracole.core.http.TransportError
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.server.jobs.JobCommands
@@ -25,6 +28,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A song's link shared to caracole as text, in the app (no computer; CaracoleTestRunner: every site refused):
@@ -36,7 +40,9 @@ import java.util.concurrent.TimeUnit
  * it came, and opens on the library screen, already open (a single-task activity: its new intent), the page of what
  * it names: what caracole read, the best match, its sites. Get it posts the library page's own lookup, which lands on
  * the Requests tab and queues `caracole get` with the index's song; Cancel takes the screen back to the library page
- * and behind the app that shared; a link alone says so and offers Edit, whose names are searched again.
+ * and behind the app that shared; a link alone of Spotify's is read from its track page, asked once (a fake site's
+ * answer: tests/fixtures/spotify/track.html), and one Spotify won't answer (every site refused) says so in one line
+ * and offers Edit, whose names are searched again.
  *
  * The library screen is reached through the lifecycle monitor, never ActivityScenario, which loses track of a
  * single-task activity that gets a new intent.
@@ -48,6 +54,7 @@ class ShareLinkTest {
 
     @Before fun anIndexAndTheLibraryScreen() {
         Corpus.open = { name -> runCatching { instrumentation.context.assets.open("conformance/$name") }.getOrNull() }
+        Corpus.openFixture = { name -> runCatching { instrumentation.context.assets.open("fixtures/$name") }.getOrNull() }
         val phone = Caracole.phone(context)
         // Once a process: the tests of a class share the app's database.
         phone.parts.database.writeBlocking { db ->
@@ -60,6 +67,7 @@ class ShareLinkTest {
     }
 
     @After fun leave() {
+        Caracole.sitesForTests = CaracoleTestRunner.REFUSING
         instrumentation.runOnMainSync { (at(Stage.RESUMED) ?: at(Stage.STOPPED) ?: at(Stage.PAUSED))?.finish() }
         waitUntil("the library screen gone") { listOf(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).all { at(it) == null } }
     }
@@ -157,10 +165,25 @@ class ShareLinkTest {
         }
     }
 
+    @Test fun aSpotifyLinkAloneIsReadFromItsPageAskedOnce() {
+        val track = "https://open.spotify.com/track/4u7EnebtmKWzUH433cf5Qv"
+        val asked = AtomicInteger()
+        Caracole.sitesForTests = Transport { request ->
+            asked.incrementAndGet()
+            if (request.url != track) throw TransportError("refused", request.url)
+            HttpAnswer(200, listOf("content-type" to "text/html"), Corpus.fixture("spotify/track.html"))
+        }
+        share("$track?si=0f3c1c4d5e6f4a7b")
+        shownAt("the share's page", "/share?")
+        assertEquals("Read from Spotify's page: Queen – Bohemian Rhapsody.", text(".lede"))
+        assertEquals(1, asked.get())
+        assertEquals(true, evaluate("document.querySelector('form[action=\"/lookup\"] input[name=title][value=\"Bohemian Rhapsody\"]') !== null"))
+    }
+
     @Test fun aLinkAloneSaysSoAndEditSearchesTheNamesTyped() {
         share("https://open.spotify.com/track/40riOy7x9W7GXjyGp4pjAv?si=1")
         shownAt("the share's page", "/share?")
-        assertTrue(text(".lede"), "a link alone, which names no song" in text(".lede"))
+        assertTrue(text(".lede"), "caracole couldn't read it: asking Spotify failed (refused" in text(".lede"))
         assertEquals(true, evaluate("document.querySelector('details.picker[open] form[action=\"/share\"]') !== null"))
         evaluate("(() => { const f = document.querySelector('form[action=\"/share\"]'); " +
             "f.artist.value = 'Eagles'; f.title.value = 'Hotel California'; f.submit(); return true; })()")
