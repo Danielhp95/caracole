@@ -1081,8 +1081,8 @@ It is rows.js's, shared by both pages:
     `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
     newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
     conflict it proposes chosen first);
-  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
-    of another `source` than a peer's, a file's, refused);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now, an import's
+    read from its staged file (`sync_file_routes.file_unit`, as the phone's `SyncEngine.documents` reads a file's);
   - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
     phone, a client, reads;
   - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)

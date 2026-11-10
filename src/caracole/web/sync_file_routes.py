@@ -44,7 +44,8 @@ indexes, each a write with the form token in its header, into its staging folder
 peer_import.py), one at a time; deleted once its import is over, or an hour after its last part unless an import holds
 it, or sooner: dropped (the page's Cancel), or let go as another is opened when no request names it and it is whole
 (compared, never synced) or its upload stopped (``peer_import.let_go``). Its comparison reads it whole first
-(``peer_file.check_whole``), and a file refused is deleted. Nothing of it reaches the library but through ``caracole
+(``peer_file.check_whole``), and a file refused is deleted; a unit's two documents on its comparison (``GET
+/api/sync/unit``, a conflict's card) are this library's and the file's, read from it (``file_unit``). Nothing of it reaches the library but through ``caracole
 peer import``, a queued command under caracole's lock, which reads it whole again before it takes anything.
 """
 
@@ -458,6 +459,30 @@ def import_compare(app: WebApp, form: dict[str, str]) -> Response:
     return json_response(200, comparison_answer(comparison, peer, found.synced, file.holds, differences,
                                                 found.compared.base, found.compared.kept, found.compared.listed,
                                                 found.songbooks, found.indexes))
+
+
+def file_unit(app: WebApp, import_id: str, unit_id: str) -> dict[str, Any] | None:
+    """A unit's document as the file staged as ``import_id`` holds it, for ``GET /api/sync/unit`` on its comparison
+    (``peer_file.FileSource.unit``), read with no request, as the phone's ``SyncEngine.documents`` reads a file's:
+    None for a unit it hasn't got, and for one it names but left out as it was exported, or of a part it doesn't
+    hold (nothing of it to show). Refused 409 for a file gone or being imported now, or that can no longer be read."""
+    from caracole import peer_file
+    from caracole import peer_sync as sync
+
+    try:
+        folder = peer_import.folder_of(app.cfg.state_dir, import_id)
+        with peer_import.held(folder, wait=False):
+            path = peer_import.whole(app.cfg.state_dir, import_id)
+            file = peer_file.read_file(path, name=peer_import.opened_name(folder))
+            with peer_file.FileSource(file, None, app.cfg.library_dir) as source:
+                try:
+                    return source.unit(unit_id)
+                except sync.PeerError:
+                    return None
+    except peer_import.StagingError as e:
+        raise Refused(409, "Compare again", FILE_GONE if e.status == 404 else str(e)) from None
+    except (peer_file.FileError, sync.PeerError) as e:
+        raise Refused(409, "Compare again", str(e)) from None
 
 
 def compared_again(app: WebApp, import_id: str) -> str:

@@ -6129,8 +6129,9 @@ is `phone` and a comparison's other side, the computer, is of `kind` `computer`)
   it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
   whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
 - `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
-  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
-  page's own script may ask it (the form token in its header).
+  for, or read from the file for a file's comparison (null for a side that hasn't got it); 409 for a comparison
+  past, or a file gone since, 404 for a unit it didn't find. Only the page's own script may ask it (the form token
+  in its header).
 - `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
   it gives the computer its index pages.
 - `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and

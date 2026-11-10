@@ -711,6 +711,8 @@ def test_the_sheets_fake_answers_are_shaped_as_the_real_routes_answer(computers)
     status, from_file = file_compared(here.app, sent(here.app, data, made["name"]))
     assert status == 200 and fits(shape(FILE_COMPARISON), shape(from_file)), (shape(FILE_COMPARISON),
                                                                               shape(from_file))
+    status, unit = script(here.app, f"/api/sync/unit?comparison={from_file['comparison']}&id={CREEP}")
+    assert status == 200 and unit["there"] is not None and unit_fits(fake_unit, unit), unit
     choices = "\n".join(f"here\t{d['id']}" for d in from_file["differences"] if d["proposal"] == "conflict")
     status, answer = script(here.app, "/sync/apply", {"comparison": from_file["comparison"], "prefer": "",
                                                        "choices": choices})
