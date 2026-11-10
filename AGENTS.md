@@ -2068,10 +2068,11 @@ Not built yet. (inbox-share.)
   `stateDir/backups/` alone), run as jobs of the phone's own (`backup(label)`, `restore(backup)`: PhoneKinds' backup
   and restore kinds, their words JobViews'), so on the queue's one worker, never beside a lookup's write; a restore
   owes every page again in its savepoint (`owePages`: each `render:<id>:phone` and `phone:render-build` forgotten),
-  and the app then reloads the mirror, forgets the search's answers and queues the render job
-  (`BackupsActivity.afterRestore`; a restore run again from the Requests tab leaves them to the next start's render
-  job). Meanwhile written-pages' gating serves none of the phone's pages whose bytes or unit the restored records no
-  longer match, a songbook's as a song's (BackupRunnerTest).
+  and the app then reloads the mirror, forgets the search's answers and queues the render job, after one done or one
+  failed once its tables came back (`BackupsActivity.afterRestore`; a restore run again from the Requests tab leaves
+  them to the next start's render job). Meanwhile written-pages' gating serves none of the phone's pages whose bytes or
+  unit the restored records no longer match, a songbook's as a song's, until the render job makes them again, its
+  songbooks' through `SongbookPagesImpl.renderOwn` (BackupRunnerTest).
 - **The app**: `BackupsActivity` (Settings' Backups row): the list, Back up now, Export… through
   `ACTION_CREATE_DOCUMENT` (`application/zip`), Restore… asked first; `BackupWorker`, the daily backup, a periodic
   WorkManager job while the phone is idle and its battery isn't low, which queues the backup and waits for it, kept

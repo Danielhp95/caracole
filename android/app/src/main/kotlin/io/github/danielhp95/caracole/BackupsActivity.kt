@@ -189,8 +189,8 @@ class BackupsActivity : Activity() {
         }
     }
 
-    /** [spec] of the phone queued and awaited in the process's own scope, with what follows a restore done there, so
-     * both outlive this screen; null when the queue is full. */
+    /** [spec] of the phone queued and awaited in the process's own scope, with what follows a restore over there
+     * (done, or failed once its tables came back), so both outlive this screen; null when the queue is full. */
     private suspend fun queued(spec: (Phone) -> JobSpec): Job? {
         val context = applicationContext
         return Caracole.background.async(Dispatchers.IO) {
@@ -201,7 +201,11 @@ class BackupsActivity : Activity() {
                 return@async null
             }
             val over = phone.queue.await(job.id)
-            if (over.spec.kind == RESTORE_KIND && over.state == Job.DONE) afterRestore(context, phone)
+            // A failed restore may have put the tables back before a file failed (PartlyRestored): what follows
+            // one is made for it too, and changes nothing for one refused whole.
+            if (over.spec.kind == RESTORE_KIND && (over.state == Job.DONE || over.state == Job.FAILED)) {
+                afterRestore(context, phone)
+            }
             over
         }.await()
     }
