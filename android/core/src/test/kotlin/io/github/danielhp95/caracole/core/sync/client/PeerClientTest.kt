@@ -47,7 +47,7 @@ class PeerClientTest {
     }
 
     private val sha = "ab".repeat(32)
-    private val state = """{"format":2,"server":"0f1e2d3c4b5a6978","caracole":"0.1.0","name":"Desk",""" +
+    private val state = """{"format":3,"server":"0f1e2d3c4b5a6978","caracole":"0.1.0","name":"Desk",""" +
         """"now":"2026-11-03T12:00:00Z","indexes":{"lacuerda":"2026-11-02T00:00:00Z","ug":"2026-11-03T01:00:00Z"},""" +
         """"units":{"song/soda-stereo/de-musica-ligera":{"label":"Soda Stereo - De Música Ligera","digest":"$sha"},""" +
         """"removed/oasis/wonderwall":{"label":"Oasis - Wonderwall (removed)","digest":"${"cd".repeat(32)}"}},""" +
@@ -60,7 +60,7 @@ class PeerClientTest {
         val peer = client.state("a1b2c3d4e5f60718")
         assertEquals("peer=a1b2c3d4e5f60718", got.single().query)
         assertEquals("application/json", got.single().headers["accept"])
-        assertEquals(2, peer.format)
+        assertEquals(3, peer.format)
         assertEquals("0f1e2d3c4b5a6978", peer.server)
         assertEquals("0.1.0", peer.caracole)
         assertEquals("Desk", peer.name)
@@ -83,9 +83,9 @@ class PeerClientTest {
     }
 
     @Test fun `a state of another format, or none, is refused in peer_sync's words`() {
-        answer("GET /api/peer/state", 200, state.replace("\"format\":2", "\"format\":1"))
+        answer("GET /api/peer/state", 200, state.replace("\"format\":3", "\"format\":2"))
         val other = assertFailsWith<PeerError> { client.state("me") }
-        assertTrue("not a caracole sync state of format 2" in other.message!!, other.message)
+        assertTrue("not a caracole sync state of format 3" in other.message!!, other.message)
         answer("GET /api/peer/state", 404, """{"error":"no"}""")
         val none = assertFailsWith<PeerError> { client.state("me") }
         assertTrue("not as a caracole that syncs" in none.message!!, none.message)
@@ -112,19 +112,19 @@ class PeerClientTest {
         assertFailsWith<SyncError.NoAnswer> { impatient.unit("song/a/b") }
     }
 
-    @Test fun `a unit is its document's unit, of format 2 and of the id asked, and none is null`() {
+    @Test fun `a unit is its document's unit, of format 3 and of the id asked, and none is null`() {
         val got = mutableListOf<Got>()
         answer("GET /api/peer/unit", 200,
-               """{"format":2,"id":"artist_url/宋冬野","digest":"$sha","unit":{"name":"宋冬野","page":"https://x"}}""", got)
+               """{"format":3,"id":"artist_url/宋冬野","digest":"$sha","unit":{"name":"宋冬野","page":"https://x"}}""", got)
         assertEquals(JsonObject(mapOf("name" to JsonPrimitive("宋冬野"), "page" to JsonPrimitive("https://x"))),
                      client.unit("artist_url/宋冬野"))
         assertEquals("id=artist_url%2F%E5%AE%8B%E5%86%AC%E9%87%8E", got.single().query)
 
         answer("GET /api/peer/unit", 404, """{"error":"no unit here"}""")
         assertNull(client.unit("song/a/b"))
-        answer("GET /api/peer/unit", 200, """{"format":1,"id":"song/a/b","digest":"$sha","unit":{}}""")
+        answer("GET /api/peer/unit", 200, """{"format":2,"id":"song/a/b","digest":"$sha","unit":{}}""")
         assertTrue("can't read" in assertFailsWith<PeerError> { client.unit("song/a/b") }.message!!)
-        answer("GET /api/peer/unit", 200, """{"format":2,"id":"song/a/c","digest":"$sha","unit":{}}""")
+        answer("GET /api/peer/unit", 200, """{"format":3,"id":"song/a/c","digest":"$sha","unit":{}}""")
         assertFailsWith<PeerError> { client.unit("song/a/b") }
     }
 
@@ -153,7 +153,7 @@ class PeerClientTest {
 
         assertEquals("0123456789abcdef" to listOf(sha), client.pushNew("tok-1", "a1b2c3d4e5f60718", listOf(sha, sha)))
         val new = opened.single()
-        assertEquals("""{"format":2,"from":"a1b2c3d4e5f60718","files":["$sha"]}""", new.body.toString(Charsets.UTF_8))
+        assertEquals("""{"format":3,"from":"a1b2c3d4e5f60718","files":["$sha"]}""", new.body.toString(Charsets.UTF_8))
         assertEquals("application/json", new.headers["content-type"])
 
         val bytes = ByteArray(1000) { it.toByte() }
@@ -162,7 +162,7 @@ class PeerClientTest {
         assertEquals("application/octet-stream", sent.single().headers["content-type"])
         assertContentEquals(bytes, sent.single().body)
 
-        val doc = JsonObject(mapOf("format" to JsonPrimitive(2), "take" to JsonArray(emptyList())))
+        val doc = JsonObject(mapOf("format" to JsonPrimitive(3), "take" to JsonArray(emptyList())))
         assertEquals(7, client.push("tok-1", "0123456789abcdef", doc))
         assertEquals("push=0123456789abcdef", posted.single().query)
         assertEquals(doc, Canonical.parse(posted.single().body.toString(Charsets.UTF_8)).jsonObject)

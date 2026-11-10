@@ -201,7 +201,7 @@ def test_a_pull_of_a_song_spelled_otherwise_here_takes_the_peers_names_and_the_t
     assert [line.split(" | ")[0] for line in here.cfg.wanted_file.read_text(encoding="utf-8").splitlines()
             if line and not line.startswith("#")] == [CREEP]  # its line, as the peer writes the song
     stored = json.loads(db.kv_get(here.conn, sync.BASE_KEY + sync.own_id(there.conn)))
-    assert stored["format"] == 2 and stored["units"][f"song/{song.key}"][0] == here.units()[f"song/{song.key}"].digest
+    assert stored["format"] == 3 and stored["units"][f"song/{song.key}"][0] == here.units()[f"song/{song.key}"].digest
     assert "Nothing differs." in run(here, "peer", "diff", HOST).output
 
 

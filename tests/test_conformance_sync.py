@@ -26,7 +26,8 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
 - ``sync/fixtures/dense``: every field of a song's value and document, and of a songbook's setting, that ``rich``
   leaves at its default, set (helpers/peer_libraries.py's ``dense``): an album, a duration, a variant, two artists, a
   match decided with a REAL score, a song in review, lyrics missing and instrumental, a version gone with a pick, a
-  REAL coverage and a label, carried kv of every prefix, settings with a mode and an instrument;
+  REAL coverage and a label, carried kv of every prefix, settings with a mode and an instrument; and raw records
+  whose ratings and votes are no part of their hash (UG's own members) and are (within one, and LaCuerda's);
 - ``sync/fixtures/plain``: a song with nothing kept and a song removed; ``sync/fixtures/empty``: nothing;
 - ``sync/fixtures/take_<case>``: this side's library before each case of take.jsonl;
 - ``library/fixtures/remove`` and ``library/fixtures/rekey``: the libraries remove.jsonl and ensure_current_keys.jsonl
@@ -220,7 +221,18 @@ def build_rich(lib: Library) -> None:
 
 
 def build_dense(lib: Library) -> None:
+    from caracole.versions import upsert_version
+
     dense(lib)
+    # A version's raw is hashed without what VOLATILE_RAW names for its provider alone (FORMAT 3): UG's ratings and
+    # votes, its own members, never one within them; another site's whole.
+    live = lib.conn.execute("SELECT id FROM songs WHERE title LIKE 'De Música Ligera%'").fetchone()[0]
+    upsert_version(lib.conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=live, slot="sheet",
+                   kind="acordes", rating=0, votes=0, version=1, label=None, url="https://acordes.lacuerda.net/x",
+                   raw={"lcd": "soda_stereo", "rating": 4.5, "votes": 3}, now=NOW)
+    upsert_version(lib.conn, provider="ug", tab_id="303", song_id=live, slot="sheet", kind="chords", rating=4.0,
+                   votes=2, version=1, label=None, url="https://u/303",
+                   raw={"votes": 2, "meta": {"rating": 4.0, "votes": 2}, "rating": 4.0}, now=NOW)
 
 
 def build_plain(lib: Library) -> None:
@@ -683,15 +695,18 @@ def record_agreement_records(corpus: Corpus) -> list[dict]:
     from caracole import peer_sync as sync
 
     at = "2026-10-31T00:00:00Z"
-    tagged = json.dumps({"format": 2, "units": {"song/gone": ["x", "2026-10-01T00:00:00Z"],
-                                                "song/differs": ["y", "2026-10-01T00:00:00Z"],
-                                                "song/ü": ["z", "2026-10-01T00:00:00Z"]}}, ensure_ascii=False)
+    tagged = json.dumps({"format": sync.FORMAT, "units": {"song/gone": ["x", "2026-10-01T00:00:00Z"],
+                                                          "song/differs": ["y", "2026-10-01T00:00:00Z"],
+                                                          "song/ü": ["z", "2026-10-01T00:00:00Z"]}}, ensure_ascii=False)
     cases = [
         ("no base before", None, _units(_u("song/a", "1"), _u("song/b", "2")), _units(_u("song/a", "1"))),
         ("a base before: what both hold the same and what both lack agreed, the rest kept", tagged,
          _units(_u("song/same", "1"), _u("song/differs", "2"), _u("song/ü", "z")),
          _units(_u("song/same", "1"), _u("song/differs", "3"), _u("song/ü", "z"))),
         ("an untagged base before is none", json.dumps({"song/old": ["x", "2026-10-01T00:00:00Z"]}),
+         _units(_u("song/a", "1")), _units(_u("song/a", "1"))),
+        ("a base of FORMAT 2, whose digests hashed UG's ratings, is none",
+         json.dumps({"format": 2, "units": {"song/old": ["x", "2026-10-01T00:00:00Z"]}}),
          _units(_u("song/a", "1")), _units(_u("song/a", "1"))),
         ("a base that isn't JSON is none", "{nonsense", {}, {}),
         ("keys in code-point order: a supplementary letter after U+FF61",

@@ -182,6 +182,20 @@ def test_nesting_deeper_than_max_depth_is_not_canonicalizable():
 
 def test_null_stays_null():
     assert canonical.stored_hash(None) is None
+    assert canonical.stored_hash(None, without=("rating",)) is None
+
+
+def test_a_stored_hash_without_some_members_is_of_the_object_they_are_taken_out_of():
+    drop = ("rating", "votes")
+    assert canonical.stored_hash('{"rating": 4.50, "votes": 3, "a": 1}', without=drop) == canonical.digest({"a": 1})
+    assert canonical.stored_hash('{"a": 1}', without=drop) == canonical.stored_hash('{"a": 1}')
+    # An object's own members alone: never one within it, nor anything of a text that holds no object.
+    assert canonical.stored_hash('{"a": {"rating": 1}}', without=drop) == canonical.digest({"a": {"rating": 1}})
+    for text in ('[{"rating": 1}]', '"rating"', "not json", nested(513), '{"a": "\\ud800", "rating": 1}'):
+        assert canonical.stored_hash(text, without=drop) == canonical.stored_hash(text), ascii(text)
+    # A member taken out is no part of the text's hash, whether it could be canonical or not.
+    assert canonical.stored_hash('{"rating": 1e1001, "a": 1}', without=drop) == canonical.digest({"a": 1})
+    assert canonical.stored_hash('{"votes": "\\ud800", "a": 1}', without=drop) == canonical.digest({"a": 1})
 
 
 def values(seed: int, count: int):

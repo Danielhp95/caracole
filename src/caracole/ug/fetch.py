@@ -160,6 +160,10 @@ _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
 KEPT_TEXT = (*SHEET_FILES, *TAB_FILES)  # the files a kept UG sheet or tab is
+# What a kept version's JSON leaves out of UG's raw record: the tab's rating and votes as they are the day its page is
+# read, so that one tab read on two days, here or by another caracole, is kept in the same bytes (a sync's digest leaves
+# them out of the raw record too: peer_sync.VOLATILE_RAW).
+KEPT_WITHOUT = ("rating", "votes")
 # ``files f`` rows of a kept UG sheet or tab, or of a version kept beside the sheet (sheet_versions.py).
 _KEPT_TEXT_SQL = "(f.name IN ({}) OR f.name GLOB '{}[0-9]*')".format(",".join("?" for _ in KEPT_TEXT), VERSION_PREFIX)
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
@@ -745,13 +749,15 @@ def _keep(run: _SongRun, version_id: int, name: str, data: bytes, rank: int = 1)
 def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str, str], rank: int = 1) -> None:
     """Keep a sheet or tab: the text without UG's markup, and the version's JSON with the raw content.
 
-    The JSON also carries the page's ``meta``, where UG gives the capo.
+    The JSON also carries the page's ``meta``, where UG gives the capo; its ``version`` is UG's raw record without
+    what ``KEPT_WITHOUT`` names.
     """
     assert page.content is not None
     txt, doc = names
     url = get_version(run.conn, version_id).url
     _keep(run, version_id, txt, strip_markup(page.content).encode("utf-8"), rank)
-    body = {"version": dict(page.tab.raw), "content": page.content, "url": url, "meta": dict(page.meta)}
+    version = {k: v for k, v in page.tab.raw.items() if k not in KEPT_WITHOUT}
+    body = {"version": version, "content": page.content, "url": url, "meta": dict(page.meta)}
     _keep(run, version_id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank)
 
 
