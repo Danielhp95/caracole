@@ -177,7 +177,7 @@ object SongbookTabReplay : AreaReplay {
         val before = values(db)
         val (name, entry, given) = r.args
         val got = try {
-            Songbooks.set(db, text(name), text(entry), setting(given)) { s -> Versions.settingProblem(s.key, s.mode, s.capo, s.instrument) }
+            Songbooks.set(db, text(name), text(entry), setting(given), SongbookEntries::problem)
             JsonObject(mapOf("out" to values(db)))
         } catch (e: SongbookError) {
             misses.check(values(db) == before) { "set_song_setting(${r.args}): a refusal changed the songbooks" }

@@ -11,7 +11,8 @@ since it was written, songs with no sheet (one ignored by overrides.toml, one by
 files; its songbooks both in songbooks.toml and in phone_songbooks, as the phone keeps them (each
 ``peer_sync.songbook_value``'s songs in canonical JSON), with settings of every kind. Its stamps are made ``NOW``, its
 pages and PDFs stand-ins (``PLACEHOLDER``: nothing here reads them, and the tab only sees that they are there), and
-its kv the records the entries read alone. Every record is asked of that fixture replayed into a fresh database and
+its kv the records the entries read alone (``KEPT_KV``; of a render record, its .cho's entry), so a change to the
+viewer's pages leaves it as it is. Every record is asked of that fixture replayed into a fresh database and
 library folder (helpers.corpus.replay_fixture), as Kotlin's Fixtures.load replays it.
 
 The overrides every record is asked with are entries.jsonl's first record (``overrides``: ``Overrides(version=,
@@ -81,7 +82,7 @@ PART = 16
 DIGEST = 8
 PLACEHOLDER = b"a stand-in"  # the bytes of every page and PDF of the fixture
 PHONE_FILES = (("songbook.html", "Phone page"),)
-# The modification time of the songbooks' files, in seconds since the epoch: 2026-11-02T08:30:00Z
+# The modification time of the songbooks' files, in seconds since the epoch: 2025-11-02T08:30:00Z
 TIME = 1762072200
 
 # --- the library ----------------------------------------------------------------------------------------------------
@@ -230,7 +231,7 @@ def _stamped(conn: sqlite3.Connection) -> None:
 
 
 # The kv records the entries and the tab read; the render's others (its inputs, its progressions) name the
-# viewer's build, which no reader here needs.
+# viewer's build, which no reader here needs, and so do its records' pages (only their .cho is kept).
 KEPT_KV = ("render:files:", "songs:key_version")
 
 
@@ -292,6 +293,10 @@ def _build(conn: sqlite3.Connection, cfg) -> None:
     _stamped(conn)
     conn.execute("DELETE FROM kv WHERE NOT (" + " OR ".join("key LIKE ?" for _ in KEPT_KV) + ")",
                  [f"{k}%" for k in KEPT_KV])
+    # Of each render record, its .cho alone: its pages' entries name the viewer's bytes, which no reader here reads
+    for key, value in conn.execute("SELECT key, value FROM kv WHERE key LIKE 'render:files:%'").fetchall():
+        record = {name: entry for name, entry in json.loads(value).items() if name.endswith(".cho")}
+        conn.execute("UPDATE kv SET value = ? WHERE key = ?", (json.dumps(record), key))
 
 
 @functools.cache

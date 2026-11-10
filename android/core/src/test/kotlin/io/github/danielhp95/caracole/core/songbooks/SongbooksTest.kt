@@ -184,6 +184,7 @@ class SongbooksTest {
                "instrument": "ukulele", "key": "G", "mode": "dorian"}]]}""")), Canonical.write(Songbooks.value(gig)))
         // None, or an empty setting, takes it off: the song says nothing again
         write { db -> Songbooks.set(db, "Gig", "Oasis - Wonderwall", Setting(), problem) }
+        assertEquals(3, asked.size)  // a setting that says nothing is no setting to check, as check_setting's caller has it
         assertEquals(listOf(null, null), database.read { db -> Songbooks.all(db).single().songs.map { it.setting } })
         write { db -> Songbooks.set(db, "Gig", "Radiohead - Creep", Setting(capo = 2), problem) }
         write { db -> Songbooks.set(db, "Gig", "Radiohead - Creep", null, problem) }

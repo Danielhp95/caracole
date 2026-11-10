@@ -74,6 +74,11 @@ object SongbookEntries {
     /** render.FILES_KEY: kv `render:files:<song id>`, what caracole wrote in the song's folder. */
     private const val FILES_KEY = "render:files:"
 
+    /** songbook.check_setting's problem: why [setting]'s parts make no setting (version.setting_problem), or null;
+     * what Songbooks.set checks a setting by. */
+    fun problem(setting: Setting): String? =
+        Versions.settingProblem(setting.key, setting.mode, setting.capo, setting.instrument)
+
     /** songbook.songbook_entries: the songbook's songs, in order, each with its sheet or why it has none: a song the
      * library hasn't got (removed since, say) or one without a sheet is missing, never an error. The library is
      * re-keyed first, as find_song re-keys it, unless [rekey] is false: a read (the Songbooks tab's data in

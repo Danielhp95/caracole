@@ -262,8 +262,8 @@ object Songbooks {
      * songbook, by its name in any case; then the song. The other songs, and the songbook's place, stay as they are.
      */
     fun set(db: Db, name: String, entry: String, setting: Setting?, problem: (Setting) -> String?) {
-        val given = setting?.let { s -> problem(s)?.let { throw SongbookError("a setting: $it") }; s }
-            ?.takeUnless { it == Setting() }
+        val given = setting?.takeUnless { it == Setting() }
+        given?.let(problem)?.let { throw SongbookError("a setting: $it") }
         db.savepoint(SAVEPOINT) {
             val held = header(db, name)
             val songs = held.songs.toMutableList()
