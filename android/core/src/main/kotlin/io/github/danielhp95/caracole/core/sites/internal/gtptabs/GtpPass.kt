@@ -180,13 +180,14 @@ internal class GtpPass(private val db: Db, private val client: Client, private v
         }
 
         /** The songs, newest first, not ignored, with no Guitar Pro or Power Tab file, and not looked up on
-         * gtptabs.com in the last 30 days. */
-        fun songsWantingAFile(db: Db, now: Instant, overrides: Overrides): List<SongRow> {
+         * gtptabs.com in the last 30 days; of [only] alone when given (a lookup's song), filtered before any song's
+         * kv is read, as `gtptabs_files`' filter after it would leave the same. */
+        fun songsWantingAFile(db: Db, now: Instant, overrides: Overrides, only: Set<Long>? = null): List<SongRow> {
             val withFile = GtpTabsFetch.songsWithAGuitarFile(db)
             val cutoff = cutoff(now)
             return Songs.list(db).filter { song ->
-                song.status != "ignored" && song.key !in overrides.ignore && song.id !in withFile &&
-                    before(db.kvGet("${GtpTabsFetch.CHECKED_PREFIX}${song.id}"), cutoff)
+                (only == null || song.id in only) && song.status != "ignored" && song.key !in overrides.ignore &&
+                    song.id !in withFile && before(db.kvGet("${GtpTabsFetch.CHECKED_PREFIX}${song.id}"), cutoff)
             }
         }
 

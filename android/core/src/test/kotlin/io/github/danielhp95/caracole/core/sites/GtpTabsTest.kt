@@ -199,10 +199,14 @@ class GtpTabsTest {
             assertNull(db.kvGet("gtptabs:checked:1"))
         }
 
-    @Test fun aSpentBudgetLeavesTheRestToTheNightlyRun() = stage(emptyMap(), budget = 0) { _, end, t ->
-        assertEquals(StageEnd("skipped", "the lookup's 6 requests to gtptabs.com are spent; the nightly run does the rest"),
-                     end)
+    /** A spent budget is no miss: the stage is skipped and nothing is sent or recorded. Its words are the envelope's
+     * (FakeAsking words every spent budget as the lookup's, where Python words a client's budget under
+     * `lookup_requests` as the hour's): the corpus records "the stage: the hour's lookup requests spent" and "the
+     * stage: the lookup's requests spent", replayed through InteractiveAsk, hold both. */
+    @Test fun aSpentBudgetLeavesTheRestToTheNightlyRun() = stage(emptyMap(), budget = 0) { db, end, t ->
+        assertEquals("skipped", end.state)
         assertEquals(emptyList(), t.said)
+        assertNull(db.kvGet("gtptabs:checked:1"))
     }
 
     @Test fun aFileKeptIsTheStagesWords() {

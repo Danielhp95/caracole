@@ -243,7 +243,8 @@ def artist_records() -> list[dict[str, Any]]:
         _artist(mini(*(item(str(n), info=i) for n, i in enumerate((
             "(12 Kb)", "( 12.5 kb )", "(12KB)", "(12.1234 Kb)", "(1234567 Kb)", "(12345678 Kb)", "(١٢ Kb)",
             "(12 Kb)", "(12 K b)", "size (3.27 Kb) Added by: x", "(.5 Kb)", "(5. Kb)", "(1 Kb)(2 Kb)", "",
-            "(12 Kb)", "(\n12\nKb\n)", "(0 Kb)", "(00012.100 Kb)"), start=1)), item("99", info=None))),
+            "(12 Kb)", "(\n12\nKb\n)", "(0 Kb)", "(00012.100 Kb)",
+            "(12 \u212ab)", "(12 \u212aB)", "(12 K\u0299)"), start=1)), item("99", info=None))),
         _artist(mini(*(item(str(n), cls=c) for n, c in enumerate((
             "autorSong gp3", "autorSong", "autorSong  gpx extra", "gp4 autorSong", "autorSong GP5", "autorSong\tgp",
             "autorSong ptb", "autorSong pdf", "autorSong autorSong gp5"), start=1)))),
@@ -663,6 +664,10 @@ def stats_of(s) -> dict[str, Any]:
 
 
 ELTON = f"{BASE}/tabs/10/john-elton.html"
+RADIOHEAD = f"{BASE}/tabs/9/radiohead.html"
+# Two takes whose titles agree for longer than a folder's name keeps: their songs make one folder.
+PINKPOP = ("Creep, live at the Pinkpop festival in Landgraaf, the Netherlands, on the fifth of June nineteen ninety six, "
+           "in the encore, take")
 
 
 def artist(name: str, *entries: str) -> dict[str, Any]:
@@ -723,6 +728,8 @@ class Lookups:
         return rec
 
     def build(self) -> list[dict[str, Any]]:  # noqa: PLR0915 (one case after another)
+        from caracole.normalize import slug_key
+
         gp3, gp5, gpx, ptb, gp7 = gp_file(b"v3.00"), gp_file(b"v5.00"), gpx_file(), ptb_file(), gp7_file()
 
         w = self.world()
@@ -860,6 +867,19 @@ class Lookups:
         self.files(w, "an artist's key meets the index's with its hyphens aside", w.song("ACDC", "TNT"),
                    {f"{BASE}/tabs/1/ac-dc.html": artist("AC/DC", entry(41, "tabs/1/ac-dc/tnt.html", "T.N.T.")),
                     download(41): file_answer(gp5, 41)})
+        w = self.world(extra=tuple(f"http://gtptabs.com/tabs/{p}.html" for p in (
+            "4/ac-dc", "1/ac-dc", "1/acdc", "1/a-cdc", "2/dc-ac", "3/d-cac")))
+        self.files(w, "keys that agree without their hyphens are read sorted, each key's pages sorted, after its own",
+                   w.song("AC DC", "TNT"), {f"{BASE}/tabs/{p}.html": status(404) for p in (
+                       "1/ac-dc", "4/ac-dc", "1/a-cdc", "1/acdc", "2/dc-ac", "3/d-cac")}, budget=8)
+        w = self.world(extra=("http://gtptabs.com/tabs/9/radiohead.html",))
+        one = w.song("Radiohead", f"{PINKPOP} one")
+        w.keep(one, "1", "guitar-1.gp5", gp5)
+        two = w.song("Radiohead", f"{PINKPOP} two")
+        self.files(w, "a song whose folder another song's file is in takes the next guitar-N, never that file's", two,
+                   {RADIOHEAD: artist("Radiohead", entry(31, f"tabs/9/radiohead/{slug_key(PINKPOP)}-two.html",
+                                                         f"{PINKPOP} two")),
+                    download(31): file_answer(gp3, 31)}, budget=8)
         w = self.world()
         self.files(w, "people are found under the site's Last, First", w.song("Elton John", "Crocodile Rock"),
                    {ELTON: elton(rock(1)), download(1): file_answer(gp5, 1)})

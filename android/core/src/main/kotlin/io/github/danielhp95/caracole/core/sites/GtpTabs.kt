@@ -105,10 +105,11 @@ object GtpTabsPages {
         return Normalize.ugSlugKey(words.joinToString("-"))
     }
 
-    /** gtptabs._base: a title key without its upload number (2 or more). */
+    /** gtptabs._base: a title key without its upload number (2 or more). The number is `\d{1,3}`, so it fits an Int;
+     * never BigInteger.TWO, which Android has only from API 33. */
     private fun base(key: String): String {
         val m = PyRe.fullmatch(VERSION, key) ?: return key
-        return if (PyInt.parse(m.groupValues[2])!! >= java.math.BigInteger.TWO) m.groupValues[1] else key
+        return if (PyInt.parse(m.groupValues[2])!!.toInt() >= 2) m.groupValues[1] else key
     }
 
     /** The keys an artist may have in the index: the name's own and, for two words or more, the same with its last
@@ -189,7 +190,7 @@ object GtpTabsFetch {
     fun gtptabsFiles(db: Db, client: Client, lib: LibraryStore, now: Instant, overrides: Overrides,
                      only: Set<Long>): GtpTabsStats {
         val stats = GtpTabsStats()
-        val wanting = GtpPass.songsWantingAFile(db, now, overrides).filter { it.id in only }
+        val wanting = GtpPass.songsWantingAFile(db, now, overrides, only)
         if (wanting.isEmpty()) return stats
         val index = GtpIndex(db)
         val run = GtpPass(db, client, lib, now)
