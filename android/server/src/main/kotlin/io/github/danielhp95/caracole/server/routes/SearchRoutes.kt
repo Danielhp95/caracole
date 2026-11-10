@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.DatabaseTooNew
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.GetAnswer
+import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
@@ -21,6 +22,7 @@ import io.github.danielhp95.caracole.server.routes.search.SongForms
 import io.github.danielhp95.caracole.server.routes.search.Superseded
 import io.github.danielhp95.caracole.server.routes.search.jsonResponse
 import io.github.danielhp95.caracole.server.routes.search.obj
+import kotlinx.serialization.json.JsonObject
 import java.io.IOException
 import java.time.Instant
 
@@ -87,6 +89,23 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
                 jsonResponse(503, obj("query" to q, "error" to "The database can't be read: ${said(e)}"))
             }
         } ?: jsonResponse(200, superseded)
+    }
+
+    /**
+     * What /api/search answers [q] (its query already made by [SearchQuery.of], never a short one), for a page of the
+     * phone's own that shows a search (ShareRoutes' page of a song shared to the app): the same answer, read alone,
+     * with no search of a box beside it and none to stop it. Refused (503) when the database can't be read.
+     */
+    internal fun answer(q: String): JsonObject = searches.alone {
+        try {
+            database.read { db ->
+                val config = PhoneConfig.read(db)
+                Found(db, on(config), cards, forms, answers, {}, config, searchesLacuerda, clock()).answer(q)
+            }
+        } catch (e: Exception) {
+            if (!unreadable(e)) throw e
+            throw Refused(503, "Can't search", "The database can't be read: ${said(e)}")
+        }
     }
 
     /** search_routes._artist: harptabs.com's before LaCuerda's, LaCuerda's before UG's; each field stripped. */

@@ -14,7 +14,7 @@ import java.time.Instant
  * - **Candidates**: the song's tabs in the offline index, at their slugged URLs, and its pins, which replace the kind
  *   group they belong to and are read at the slugged address you pasted; blocked ids never compete, nor a tab at a URL
  *   robots.txt closes, nor one UG redirects there (RobotsClosed: neither gone nor unreadable). A not-found song is
- *   looked up on its artist's UG page, lane ug-fetch-artist's seam (internal/fetch/ArtistPages.kt).
+ *   looked up on its artist's UG page, as `_artist_page_route` does ([ArtistRoute], internal/fetch/ArtistPages.kt).
  * - **Ratings**: for each kind group (chords; tabs; ukulele) the page of the lowest unrated id, a slug naming no part
  *   first, up to `maxPagesPerGroup` pages (`guitarPagesPerGroup` for the tabs).
  * - **Slots**, one at a time: the sheet (the top `scoredSheets` chords versions scored for lyric coverage, ranked
@@ -39,6 +39,11 @@ object UgFetch {
     const val AUTO_SHEET = "sheet (auto).txt"
     val SHEET_FILES: List<String> = listOf("sheet.txt", "sheet.json")
     val TAB_FILES: List<String> = listOf("tab.txt", "tab.json")
+
+    /** ug/fetch.py's KEPT_WITHOUT: what a kept version's JSON leaves out of UG's raw record, the tab's rating and votes
+     * as they are the day its page is read, so that one tab read on two days, here or by the computer, is kept in the
+     * same bytes (a sync's digest leaves them out of the raw record too: Units.VOLATILE_RAW). */
+    val KEPT_WITHOUT: Set<String> = setOf("rating", "votes")
 
     /** A tab page that won't parse, even fetched again, is asked for again after a week, then after twice as long each
      * time it still won't, 90 days at most. */

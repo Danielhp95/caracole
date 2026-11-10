@@ -234,6 +234,24 @@ def export_file(conn: sqlite3.Connection, cfg, overrides, books: Sequence, path:
     return Made(path, parts, manifest["songs"], manifest["songbooks"], path.stat().st_size, snapshot.left)
 
 
+def indexes_size(conn: sqlite3.Connection) -> int | None:
+    """About what an export's site indexes take, in bytes: the pages SQLite keeps of each table of
+    ``index_transfer.SITES`` and of the indexes it made for their constraints, which an export makes again, as its
+    ``dbstat`` counts them; None where this SQLite was built without it (no ``ENABLE_DBSTAT_VTAB`` among its
+    ``compile_options``)."""
+    from caracole import index_transfer
+
+    if "ENABLE_DBSTAT_VTAB" not in {row[0] for row in conn.execute("PRAGMA compile_options")}:
+        return None
+    tables = [table for site in index_transfer.SITES.values() for table in site.tables]
+    marks = ", ".join("?" for _ in tables)
+    names = tables + [name for (name,) in conn.execute(
+        f"SELECT name FROM main.sqlite_master WHERE type = 'index' AND sql IS NULL AND tbl_name IN ({marks}) "
+        "ORDER BY name", tables)]
+    return sum(conn.execute("SELECT COALESCE(SUM(pgsize), 0) FROM dbstat('main') WHERE name = ?",
+                            (name,)).fetchone()[0] for name in names)
+
+
 def _newest_of(path: Path) -> dict[str, str]:
     """Each site's newest read in the index export at ``path`` (``index_transfer.newest`` of it): what state.json
     says of the indexes the file holds, whatever the database read since."""
