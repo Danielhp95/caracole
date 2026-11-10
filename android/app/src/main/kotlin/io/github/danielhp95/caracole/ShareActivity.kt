@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.app.Activity
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -22,15 +23,19 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /**
- * Files shared to caracole: ACTION_SEND and SEND_MULTIPLE of the stream types the manifest names alone (a Guitar Pro
- * file, MusicXML, a PDF, MIDI, MuseScore; never VIEW, text/plain or any type: a music app's link is
- * ShareLinkActivity's). Each file is read from its EXTRA_STREAM (or the share's ClipData) while the activity holds the
- * share's read grant, with its display name and type; the phone stages it in `state/inbox/` and queues its filing as
- * the inbox runner's job (server's InboxShare, PhoneKinds' inbox kind), as `_inbox/` files a file on the computer,
- * while the activity is still in front (so the queue's foreground service may start); then it finishes. Once each
- * job is over (or [WAIT_MS] on), a toast says how each went, its line on the Requests tab: "Filed
- * as guitar-1.gp5 of Oasis - Wonderwall", "Waiting for a song that fits: …" (tried again after each sync and lookup,
- * for 30 days), "Not filed: …".
+ * Files shared to caracole: ACTION_SEND and SEND_MULTIPLE of the stream types the manifest names (a Guitar Pro file,
+ * MusicXML, a PDF, MIDI, MuseScore; never VIEW or text/plain: a music app's link is ShareLinkActivity's). A share of
+ * mixed types (any type at all, or any of `application` or `audio`) offers caracole too, as Android matches a wildcard
+ * type against any type a filter names: each file of a kind caracole keeps nothing of is answered "Not filed". Each
+ * file is read from its EXTRA_STREAM (or the share's ClipData), one at a time, while the activity holds the share's
+ * read grant, with its display name and type, and only from a `content:` address ([refused]: a `file:` one could name
+ * caracole's own files, its database among them, which its process may open); the phone stages it in `state/inbox/`
+ * and queues its filing as the inbox runner's job (server's InboxShare, PhoneKinds' inbox kind), as `_inbox/` files a
+ * file on the computer, while the activity is still in front (so the queue's foreground service may start); then it
+ * finishes.
+ * Once each job is over (or [WAIT_MS] on), a toast says how each went, its line on the Requests tab: "Filed as
+ * guitar-1.gp5 of Oasis - Wonderwall", "Waiting for a song that fits: …" (tried again after each sync and lookup, for
+ * 30 days), "Not filed: …", a line a file.
  */
 class ShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,18 +50,11 @@ class ShareActivity : Activity() {
         val type = intent?.type
         Caracole.background.launch(Dispatchers.IO) {
             // Read while the share's grant holds, and queued while the activity is in front, so the phone's queue
-            // may start its foreground service and keep the process going: then finished.
+            // may start its foreground service and keep the process going: then finished. One file at a time, each
+            // read, staged and queued apart: one file in memory, and one that fails says so on its own line.
             val queued = try {
-                val read = streams.map { read(it, type) }
-                val phone = Caracole.phone(app)
-                read.map { file ->
-                    val data = file.data ?: return@map Queued(PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to file.why!!))
-                    val shared = InboxShare.share(phone.parts, file.name, file.type, data)
-                    shared.job?.let { Queued(job = it, phone = phone) } ?: Queued(shared.said!!)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "a share not filed", e)
-                listOf(Queued(PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to (e.message ?: e::class.java.simpleName))))
+                val phone = runCatching { Caracole.phone(app) }
+                streams.map { queue(it, type, phone) }
             } finally {
                 withContext(Dispatchers.Main) { finish() }
             }
@@ -70,6 +68,20 @@ class ShareActivity : Activity() {
         }
     }
 
+    /** The file at [uri] read, staged and its filing queued on [phone]'s queue; what is said of it if it can't be. */
+    private fun queue(uri: Uri, type: String?, phone: Result<Phone>): Queued = try {
+        val file = read(uri, type)
+        if (file.data == null) {
+            Queued(notFiled(file.why!!))
+        } else {
+            val shared = InboxShare.share(phone.getOrThrow().parts, file.name, file.type, file.data)
+            shared.job?.let { Queued(job = it, phone = phone.getOrThrow()) } ?: Queued(shared.said!!)
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "a shared file not filed: $uri", e)
+        Queued(notFiled(e.message ?: e::class.java.simpleName))
+    }
+
     /** A file shared, queued: its [job] on [phone]'s queue, or what is [said] of it. */
     private class Queued(val said: String? = null, val job: Job? = null, val phone: Phone? = null)
 
@@ -79,6 +91,7 @@ class ShareActivity : Activity() {
     /** The file at [uri], read whole (at most InboxShare.MAX_BYTES), its name the provider's display name, else its
      * address's last part. */
     private fun read(uri: Uri, shareType: String?): SharedFile {
+        refused(uri)?.let { return SharedFile(uri.lastPathSegment, shareType, null, it) }
         val name = runCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null
@@ -115,6 +128,21 @@ class ShareActivity : Activity() {
 
         /** What a share with no file says. */
         const val NOTHING = "Nothing to file: the app shared no file"
+
+        /**
+         * Why the file at [uri] is never read: an address that isn't a content provider's (a `file:` path, which
+         * caracole's own process could open, its database and settings among them, whatever app named it); null for
+         * a `content:` one, read with the grant its app gave. (caracole's own FileProvider shares only the cache's
+         * `handoff/`, the copies of the library's files it handed to other apps.)
+         */
+        fun refused(uri: Uri): String? = when (val scheme = uri.scheme) {
+            ContentResolver.SCHEME_CONTENT -> null
+            null -> "caracole reads a shared file from the app that shares it alone, never an address with no scheme"
+            else -> "caracole reads a shared file from the app that shares it alone, never a $scheme: address"
+        }
+
+        /** PhoneKinds' line for a file not filed, and [why]. */
+        private fun notFiled(why: String): String = PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to why)
 
         /** The last toast a share showed (ShareTest reads it). */
         @Volatile var told: String? = null

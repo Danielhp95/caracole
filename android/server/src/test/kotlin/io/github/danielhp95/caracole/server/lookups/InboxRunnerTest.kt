@@ -41,8 +41,10 @@ import kotlin.test.assertTrue
 /**
  * A file shared to the app on the phone's queue: staged, filed by the inbox runner in PhoneKinds' words, its song's
  * pages made again; one no song fits waits in `stateDir/inbox/`, tried again after a sync, a lookup or an add (the
- * phone's afterJob, InboxRetry) and filed once a song fits, dropped after 30 days; a file caracole keeps nothing of
- * is never staged.
+ * phone's afterJob, InboxRetry) and filed once a song fits, dropped after 30 days; one whose filing failed tried again
+ * after a sync or a day on, never after every lookup; one a process's end cut short tried again after its first job;
+ * the bytes of a copy whose place holds other bytes now not filed, and why; a file caracole keeps nothing of is never
+ * staged.
  */
 class InboxRunnerTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -75,7 +77,8 @@ class InboxRunnerTest {
     private fun add(artist: String, title: String) =
         database.writeBlocking { db -> parts.store.add(db, artist, title, now = "2026-11-01T00:00:00Z") }
 
-    private fun share(name: String?, data: ByteArray, type: String? = null) = InboxShare.share(parts, name, type, data, now)
+    private fun share(name: String?, data: ByteArray, type: String? = null) =
+        InboxShare.share(parts, name, type, data) { now }
 
     private fun await(job: Job): Job = runBlocking { withTimeout(10_000) { queue.await(job.id) } }
 
@@ -186,7 +189,7 @@ class InboxRunnerTest {
         val failing = PhoneParts(parts.database, parts.store, parts.stateDir, parts.config, parts.queue, parts.cards,
                                  parts.clients, SongPages { _, _, _ -> throw IllegalStateException("no font") },
                                  parts.songbooks, parts.alerts, parts.pacing, parts.searchesLacuerda)
-        val shared = InboxShare.share(failing, "Oasis - Wonderwall.gp5", null, "GP".toByteArray(), now)
+        val shared = InboxShare.share(failing, "Oasis - Wonderwall.gp5", null, "GP".toByteArray()) { now }
         val over = await(shared.job!!)
         assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(over))
         assertTrue("pages not made: no font" in over.output)
@@ -208,6 +211,76 @@ class InboxRunnerTest {
         assertEquals("waiting", line(shared.job!!).tone)
         assertEquals("ignored", database.read { db -> Songs.byId(db, song.id)!!.status })
         assertEquals(listOf("Oasis - Wonderwall.gp5"), folder.waiting())
+    }
+
+    @Test fun theBytesOfACopyWhosePlaceHoldsOtherBytesNowAreNotFiledAndSaySo() {
+        wired()
+        val song = add("Oasis", "Wonderwall")
+        await(share("Oasis - Wonderwall.gp5", "GP-DATA".toByteArray()).job!!)
+        val kept = File(parts.store.folderOf(song), "guitar-1.gp5")
+        kept.writeText("yours since")
+        val again = share("download.gp5", "GP-DATA".toByteArray())
+        val over = await(again.job!!)
+        assertEquals(Job.FAILED, over.state)
+        assertEquals("Not filed: download.gp5 is guitar-1.gp5 of Oasis - Wonderwall, whose place holds other bytes " +
+                         "now, and nothing is replaced.", JobViews.line(over).text)
+        assertEquals("yours since", kept.readText())  // nothing replaced
+        assertEquals(listOf("download.gp5"), folder.waiting())  // it stays, as inbox.py leaves it in _inbox/
+        assertNull(folder.failedAt("download.gp5"))  // no failure to wait out: it is tried once its place is free
+        await(queue.submit(JobSpec("Sync", "sync", "sync", emptyList(), run = {})).first)
+        assertEquals(2, queue.snapshot().count { it.spec.kind == "inbox" })  // it still fits nothing
+        assertTrue(kept.delete())
+        await(queue.submit(JobSpec("Sync", "sync:2", "sync", emptyList(), run = {})).first)
+        val put = waitFor { queue.snapshot().firstOrNull { it.spec.kind == "inbox" && it.id > again.job!!.id } }
+        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(put))
+        assertEquals("GP-DATA", kept.readText())
+    }
+
+    @Test fun aFilingThatFailedIsTriedAgainAfterASyncOrADayOnNeverAfterEveryLookup() {
+        wired()
+        val song = add("Oasis", "Wonderwall")
+        val place = parts.store.folderOf(song)
+        place.parentFile.mkdirs()
+        place.writeText("a file where the song's folder goes")  // no folder can be made there: every filing fails
+        val shared = share("Oasis - Wonderwall.gp5", "GP".toByteArray())
+        assertEquals(Job.FAILED, await(shared.job!!).state)
+        assertEquals(now, folder.failedAt("Oasis - Wonderwall.gp5"))
+        assertEquals(listOf("Oasis - Wonderwall.gp5"), folder.waiting())
+        fun inboxJobs() = queue.snapshot().count { it.spec.kind == "inbox" }
+        fun latestInbox() = queue.snapshot().filter { it.spec.kind == "inbox" }.maxBy { it.id }
+        fun ended(kind: String, key: String) {
+            await(queue.submit(JobSpec(kind, key, kind, emptyList(), run = {})).first)
+            queue.snapshot().filter { it.spec.kind == "inbox" }.forEach { await(it) }
+        }
+        ended("song", "oasis/wonderwall")
+        ended("add", "oasis/wonderwall")
+        assertEquals(1, inboxJobs())  // a lookup and an add within the day try nothing
+        ended("sync", "sync:1")
+        assertEquals(2, inboxJobs())  // a sync tries it
+        assertEquals(Job.FAILED, latestInbox().state)
+        ended("song", "oasis/wonderwall:1")
+        assertEquals(2, inboxJobs())
+        now = now.plus(Duration.ofDays(1))
+        assertTrue(place.delete())  // the song's folder free again
+        ended("song", "oasis/wonderwall:2")  // a day on, a lookup tries it
+        assertEquals(3, inboxJobs())
+        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"),
+                     JobViews.line(latestInbox()))
+        assertEquals(emptyList(), folder.waiting())
+        assertNull(folder.failedAt("Oasis - Wonderwall.gp5"))
+    }
+
+    @Test fun aShareTheProcesssEndCutShortIsTriedAgainAfterItsFirstJobWhateverItsKind() {
+        add("Oasis", "Wonderwall")
+        // Staged, its job cut short by the process's end (Try again can't repeat a run of the phone's own).
+        folder.stage("Oasis - Wonderwall.gp5", "GP".toByteArray(), now)
+        wired()
+        await(queue.submit(JobSpec("Export", "export:1", "export", emptyList(), run = {})).first)
+        val filed = waitFor { queue.snapshot().firstOrNull { it.spec.kind == "inbox" } }
+        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(filed))
+        folder.stage("Oasis - Wonderwall (ver 2).gp5", "GP2".toByteArray(), now)
+        await(queue.submit(JobSpec("Export", "export:2", "export", emptyList(), run = {})).first)
+        assertEquals(1, queue.snapshot().count { it.spec.kind == "inbox" })  // the process's first job alone
     }
 
     private fun <T : Any> waitFor(what: () -> T?): T {

@@ -28,8 +28,9 @@ import kotlin.test.assertTrue
 
 /**
  * inbox.py's filing of one entry on the phone: Python's answers (vectors/inbox/), and what no record shows: that
- * [Inbox.fits] says what [Inbox.file] does, that a score is placed by its name alone, and the folder the shared files
- * wait in ([InboxFolder]).
+ * [Inbox.fits] says what [Inbox.file] does (with the songs' names made once too), that [Inbox.changed] names the copy
+ * a file is left waiting for, that a score is placed by its name alone, and the folder the shared files wait in
+ * ([InboxFolder]), with the failures it remembers.
  */
 class InboxTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -66,6 +67,7 @@ class InboxTest {
     @Test fun fitsSaysWhetherFilingWouldDoAnythingForEveryRecord() {
         for (record in Corpus.records(InboxReplay.FILE)) {
             library { db, lib ->
+                val case = record.extra["case"]!!.jsonPrimitive.content
                 for ((path, change) in (record.extra["changes"] as? JsonObject).orEmpty()) {
                     val file = File(lib.libraryDir, path)
                     if (change is JsonNull) file.delete()
@@ -74,7 +76,18 @@ class InboxTest {
                 val name = record.kw.getValue("name").jsonPrimitive.content
                 val data = Base64.getDecoder().decode(record.kw.getValue("data").jsonObject.getValue("base64").jsonPrimitive.content)
                 val filed = record.out!!.jsonObject.getValue("filed").jsonPrimitive.content
-                assertEquals(filed != "unmatched", Inbox.fits(db, lib, name, data), "${record.extra["case"]}")
+                assertEquals(filed != "unmatched", Inbox.fits(db, lib, name, data), case)
+                assertEquals(filed != "unmatched", Inbox.fits(db, lib, name, data, Inbox.Candidates.of(db)), case)
+                // Left waiting for a copy whose place holds other bytes now: that copy is named, for no other record.
+                val changed = Inbox.changed(db, lib, name, data)
+                if (case.startsWith("bytes of a kept file whose place holds other bytes now")) {
+                    assertEquals("guitar-1.gp5" to "blur/song-2",
+                                 changed?.let { it.name to Songs.byId(db, it.songId)!!.key }, case)
+                    assertEquals(Filed.Unmatched, Inbox.file(db, lib, name, data, "2026-11-10T00:00:00Z"), case)
+                    assertEquals(changed, Inbox.changed(db, lib, name, data), case)
+                } else {
+                    assertNull(changed, case)
+                }
             }
         }
     }
@@ -144,6 +157,34 @@ class InboxTest {
         assertEquals(listOf("young.gp5"), folder.waiting())
         assertFalse(staging.exists())
         assertEquals(emptyList(), InboxFolder(File(dir, "none")).sweep(now))
+    }
+
+    @Test fun aFailureIsRememberedUntilTheFileIsFiledDroppedOrStagedAgain() {
+        val dir = tmp.newFolder("inbox")
+        val folder = InboxFolder(dir)
+        folder.stage("Oasis - Wonderwall.gp5", "one".toByteArray(), now)
+        assertNull(folder.failedAt("Oasis - Wonderwall.gp5"))
+        folder.failed("Oasis - Wonderwall.gp5", now)
+        assertEquals(now, folder.failedAt("Oasis - Wonderwall.gp5"))
+        assertEquals(listOf("Oasis - Wonderwall.gp5"), folder.waiting())  // the failures' folder waits for nothing
+        folder.failed("Oasis - Wonderwall.gp5", now.plusSeconds(60))
+        assertEquals(now.plusSeconds(60), folder.failedAt("Oasis - Wonderwall.gp5"))
+        folder.failed("nobody.gp5", now)  // no file waits under that name: nothing to remember
+        assertNull(folder.failedAt("nobody.gp5"))
+        assertEquals(listOf(), folder.sweep(now))
+        assertEquals(now.plusSeconds(60), folder.failedAt("Oasis - Wonderwall.gp5"))  // a day or a month on
+        folder.drop("Oasis - Wonderwall.gp5")
+        assertNull(folder.failedAt("Oasis - Wonderwall.gp5"))
+        // A failure whose file went otherwise is forgotten by the sweep, and is none of a file staged later.
+        folder.stage("Blur - Song 2.gp5", "two".toByteArray(), now)
+        folder.failed("Blur - Song 2.gp5", now)
+        assertTrue(File(dir, "Blur - Song 2.gp5").delete())
+        assertEquals("Blur - Song 2.gp5", folder.stage("Blur - Song 2.gp5", "three".toByteArray(), now))
+        assertNull(folder.failedAt("Blur - Song 2.gp5"))
+        folder.failed("Blur - Song 2.gp5", now)
+        assertTrue(File(dir, "Blur - Song 2.gp5").delete())
+        folder.sweep(now)
+        assertFalse(File(File(dir, InboxFolder.FAILED), "Blur - Song 2.gp5").exists())
     }
 
     @Test fun aSharedFileIsNamedByItsNameItsBytesOrItsType() {

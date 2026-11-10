@@ -31,8 +31,9 @@ import java.io.File
  * A share as Android's share sheet sends it to ShareActivity (SEND or SEND_MULTIPLE of a stream, the file behind a
  * content URI of the app's own FileProvider): each file is filed as `_inbox/` files one, for the song its name is of,
  * and the toast says so in the Requests tab's words; one no song fits waits in `state/inbox/` and is filed once a song
- * that fits is added (the phone's afterJob); a file of a kind caracole keeps nothing of is never staged; and the
- * share filters offer caracole for files alone, never for a text, a VIEW or any type.
+ * that fits is added (the phone's afterJob); a file of a kind caracole keeps nothing of is never staged; a `file:`
+ * address is never read (it could name caracole's own files); and the share filters offer caracole for files, and for
+ * a share of mixed types (Android matches a wildcard type against any a filter names), never for a text or a VIEW.
  */
 @RunWith(AndroidJUnit4::class)
 class ShareTest {
@@ -125,6 +126,20 @@ class ShareTest {
         assertFalse("notes.txt" in waiting())
     }
 
+    @Test fun aFileAddressIsNeverReadThoughItNamesASongsFile() {
+        val song = add("Share Test", "A Private File")
+        val private = File(context.filesDir, "Share Test - A Private File.gp5").apply { writeBytes(gp5) }
+        try {
+            val said = share("application/octet-stream", Uri.fromFile(private))
+            assertEquals("Not filed: caracole reads a shared file from the app that shares it alone, never a file: " +
+                             "address", said)
+            assertEquals(emptyList<String>(), kept(song))
+            assertFalse(private.name in waiting())
+        } finally {
+            private.delete()
+        }
+    }
+
     @Test fun aShareWithNoFileSaysSo() {
         ShareActivity.told = null
         context.startActivity(Intent(Intent.ACTION_SEND).setClass(context, ShareActivity::class.java)
@@ -132,7 +147,7 @@ class ShareTest {
         assertEquals(ShareActivity.NOTHING, waitFor("the share's toast") { ShareActivity.told })
     }
 
-    @Test fun caracoleIsOfferedForFilesAloneNeverForATextAViewOrAnyType() {
+    @Test fun caracoleIsOfferedForFilesAndMixedSharesNeverForATextOrAView() {
         val share = ComponentName(context, ShareActivity::class.java)
         fun offered(intent: Intent): Boolean = context.packageManager
             .queryIntentActivities(intent.setPackage(context.packageName), PackageManager.MATCH_DEFAULT_ONLY)
@@ -145,5 +160,14 @@ class ShareTest {
         }
         assertFalse(offered(Intent(Intent.ACTION_SEND).setType("text/plain")))
         assertFalse(offered(Intent(Intent.ACTION_SEND).setType("image/png")))
+        // A share of mixed types (a PDF with a photo, a .gp5 with a .txt) is one of any type, or any of a family: Android
+        // offers every app that names a type of it, caracole too, which answers each file it keeps nothing of
+        // "Not filed" (aFileOfAKindCaracoleKeepsNothingOfIsNeverStaged).
+        for (type in listOf("*/*", "application/*", "audio/*")) {
+            assertTrue(type, offered(Intent(Intent.ACTION_SEND).setType(type)))
+            assertTrue(type, offered(Intent(Intent.ACTION_SEND_MULTIPLE).setType(type)))
+        }
+        assertFalse(offered(Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/*")))
+        assertFalse(offered(Intent(Intent.ACTION_SEND_MULTIPLE).setType("video/*")))
     }
 }

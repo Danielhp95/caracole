@@ -470,7 +470,11 @@ caracole files each one as the computer files what you drop into `_inbox/`:
 - **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed as guitar-1.gp5 of …".
   One the library lost (deleted on another device) is put back where it was.
 - **A file no song fits waits**, up to 30 days, and is tried again after each sync and each lookup: share a Guitar
-  Pro file first and look its song up after, and it is filed then.
+  Pro file first and look its song up after, and it is filed then. One that couldn't be filed (its song's folder is
+  another song's too, the phone is full) waits too, tried again after the next sync, or a day later.
+- **The bytes of a file caracole keeps whose copy you changed since** are not filed: "Not filed: … whose place holds
+  other bytes now, and nothing is replaced". caracole replaces nothing of yours; the file is put back once that place
+  is free.
 - A score is placed by its name alone on the phone: a MusicXML file named "score.musicxml" waits, where the computer
   would read the title and composer inside it.
 
@@ -478,8 +482,10 @@ A toast says how each went, as its line on the Requests tab does: "Filed as guit
 "Waiting for a song that fits: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
 Guitar Pro files and scores alone). A file shared with no extension takes the one its bytes or its type tell.
 
-caracole is offered for files alone: never to open a PDF (Android's Open with), and never for a text (a music app's
-song, above, is another share).
+caracole is offered for files: never to open a PDF (Android's Open with), and never for a text (a music app's song,
+above, is another share). A share of several kinds of file at once (a PDF with a photo, say) offers caracole too, as
+Android offers it every app that takes any of them: a file caracole keeps nothing of is answered "Not filed". caracole
+reads a file only from the app that shares it, never a `file:` address another app names.
 
 ## Alerts and backups
 

@@ -34,7 +34,8 @@ sealed interface Filed {
     /** The library holds that very file already ([Inbox.held] names the copy). */
     data object Duplicate : Filed
 
-    /** No song fits it, or its copy's place holds other bytes now (nothing is replaced): it waits. */
+    /** No song fits it, or its copy's place holds other bytes now (nothing is replaced: [Inbox.changed] names that
+     * copy): it waits. */
     data object Unmatched : Filed
 }
 
@@ -52,6 +53,19 @@ sealed interface Filed {
  * is placed by its name alone (the plan's §11, Q12).
  */
 object Inbox {
+    /**
+     * The songs a download may be of: every song not ignored, in list_songs' order, each with its names (music.Names),
+     * made once for many files: [fits] of every file that waits, after a job.
+     */
+    class Candidates(val songs: List<SongRow>) {
+        internal val names: List<MusicNames> by lazy { songs.map { MusicNames.of(it.artist, it.title) } }
+
+        companion object {
+            /** The songs of [db] a download may be of. */
+            fun of(db: Db): Candidates = Candidates(Songs.list(db).filter { it.status != "ignored" })
+        }
+    }
+
     /** inbox.SCORE_EXTENSIONS: what MuseScore downloads, its own format, MusicXML (compressed or not), PDF and MIDI. */
     val SCORE_EXTENSIONS: Set<String> = setOf(".mscz", ".mxl", ".musicxml", ".pdf", ".mid", ".midi")
 
@@ -115,9 +129,10 @@ object Inbox {
      * a song fits it, or it is a file caracole keeps that the library holds or lost. Only reads: the phone asks it of
      * the files that wait, after a sync or a lookup, before it queues their filing.
      */
-    fun fits(db: Db, lib: LibraryStore, name: String, data: ByteArray): Boolean {
+    fun fits(db: Db, lib: LibraryStore, name: String, data: ByteArray,
+             among: Candidates = Candidates.of(db)): Boolean {
         if (!keeps(name)) return false
-        val found = downloadSong(db, name)
+        val found = downloadSong(db, name, among)
         val copies = copies(db, Canonical.sha256Hex(data))
         if (copies.isNotEmpty() && (found == null || copies.any { it.songId == found.id })) {
             return copies.filter { found == null || it.songId == found.id }.any { copy ->
@@ -126,6 +141,25 @@ object Inbox {
             }
         }
         return found != null
+    }
+
+    /**
+     * The copy caracole keeps that [name] with [data] is, left alone by [file] because its place holds other bytes
+     * now (yours, since: nothing is replaced), when that is why [file] answers [Filed.Unmatched]; null when the file
+     * is of no such copy. Only reads.
+     */
+    fun changed(db: Db, lib: LibraryStore, name: String, data: ByteArray): KeptFile? {
+        if (!keeps(name)) return null
+        val found = downloadSong(db, name)
+        val copies = copies(db, Canonical.sha256Hex(data))
+        if (copies.isEmpty() || (found != null && copies.none { it.songId == found.id })) return null
+        val mine = copies.filter { found == null || it.songId == found.id }
+        if (mine.any { Kept.holds(Place.under(lib, it.path), it.sha256, data.size.toLong()) }) return null  // held
+        val taken = mine.map { copy ->
+            copy to (lexists(Place.under(lib, copy.path)) || lexists(placeOf(db, lib, copy).second.second))
+        }
+        if (taken.any { !it.second }) return null  // one lost, which file puts back
+        return taken.firstOrNull()?.first
     }
 
     /**
@@ -153,7 +187,11 @@ object Inbox {
      * (music.Names, at [MATCH_CUTOFF] or more), the first of the closest; a name without an artist is only trusted
      * when exactly one song fits.
      */
-    fun match(artist: String?, title: String, songs: List<SongRow>): SongRow? {
+    fun match(artist: String?, title: String, songs: List<SongRow>): SongRow? = match(artist, title, Candidates(songs))
+
+    /** [match] among [among], whose names are made once for every file asked of them. */
+    fun match(artist: String?, title: String, among: Candidates): SongRow? {
+        val songs = among.songs
         val named = !artist.isNullOrEmpty()
         if (named) {
             val key = Normalize.identityKey(artist!!, title)
@@ -163,8 +201,8 @@ object Inbox {
         var best: SongRow? = null
         var bestScore = 0.0
         var fits = 0
-        for (song in songs) {
-            val other = MusicNames.of(song.artist, song.title)
+        for ((i, song) in songs.withIndex()) {
+            val other = among.names[i]
             val score = if (named) own.score(other) else own.titleScore(other)
             if (score < MATCH_CUTOFF) continue
             fits++
@@ -177,12 +215,11 @@ object Inbox {
         return best
     }
 
-    /** inbox._download_song, by its name alone: the song the download [name] is of, among every song not ignored;
-     * null when it is no song's. Only reads. */
-    fun downloadSong(db: Db, name: String): SongRow? {
-        val songs = Songs.list(db).filter { it.status != "ignored" }
+    /** inbox._download_song, by its name alone: the song the download [name] is of, among every song not ignored
+     * ([among]); null when it is no song's. Only reads. */
+    fun downloadSong(db: Db, name: String, among: Candidates = Candidates.of(db)): SongRow? {
         val (artist, title, _) = parseDownloadName(name)
-        return match(artist, title, songs)
+        return match(artist, title, among)
     }
 
     // --- placing it ---------------------------------------------------------------------------------------------

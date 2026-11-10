@@ -11,6 +11,7 @@ import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
+import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
@@ -24,8 +25,10 @@ import java.time.Instant
  * The files shared to the app that wait to be filed, the phone's `_inbox/`: `stateDir/inbox/`, each under the name it
  * was shared by (made a file's name: [nameFor]), one a name (" (2)" before the extension of a second one, which
  * parse_download_name drops as a browser's), the time it was staged its modification time. A file waits [DAYS] days
- * for a song that fits ([sweep]), as `_inbox/` keeps one until a song fits; one filed is dropped ([drop]). Only regular
- * files are read: a link is never followed, and a name that begins with a dot (a file being staged) is none of them.
+ * for a song that fits ([sweep]), as `_inbox/` keeps one until a song fits; one filed is dropped ([drop]). A filing
+ * that failed is remembered by the file's name in `.failed/` ([failed], [failedAt]), so the phone tries it again only
+ * after a sync or a day on, never after every job. Only regular files are read: a link is never followed, and a name
+ * that begins with a dot (a file being staged, the failures' folder) is none of them.
  */
 class InboxFolder(val dir: File) {
     /** [data] staged as [name] (one of [nameFor]'s: an extension inbox.py files) at [now], under a name of its own
@@ -45,6 +48,7 @@ class InboxFolder(val dir: File) {
             synchronized(LOCK) {
                 val free = free(name)
                 Files.move(tmp, folder.resolve(free), StandardCopyOption.ATOMIC_MOVE)
+                marker(free)?.let(Files::deleteIfExists)  // a failure of a file gone before is none of this one's
                 return free
             }
         } finally {
@@ -88,12 +92,27 @@ class InboxFolder(val dir: File) {
     fun stagedAt(name: String): Instant? = at(name)?.let(::attributes)?.takeIf { it.isRegularFile }?.lastModifiedTime()
         ?.toInstant()
 
-    /** The file waiting as [name] dropped (filed, or kept too long); nothing when none waits. A link there is
-     * deleted, never followed. */
+    /** The file waiting as [name] dropped (filed, or kept too long), its failure forgotten; nothing when none waits.
+     * A link there is deleted, never followed. */
     fun drop(name: String) {
         val path = at(name) ?: return
         Files.deleteIfExists(path)
+        marker(name)?.let(Files::deleteIfExists)
     }
+
+    /** Filing the file waiting as [name] failed at [now] (a shared folder, a full disk): remembered until it is
+     * filed, dropped or failed again. */
+    fun failed(name: String, now: Instant) {
+        val marker = marker(name) ?: return
+        if (attributes(dir.toPath().resolve(name))?.isRegularFile != true) return
+        Files.createDirectories(marker.parent)
+        Files.write(marker, ByteArray(0))
+        Files.setLastModifiedTime(marker, FileTime.from(now))
+    }
+
+    /** When filing the file waiting as [name] last failed; null when it hasn't since it was staged. */
+    fun failedAt(name: String): Instant? =
+        marker(name)?.let(::attributes)?.takeIf { it.isRegularFile }?.lastModifiedTime()?.toInstant()
 
     /** The files that waited [DAYS] days or more by [now] dropped, and a staging left behind a day ago; the names
      * dropped of the files that waited. */
@@ -116,12 +135,26 @@ class InboxFolder(val dir: File) {
             }
         } catch (_: NoSuchFileException) {
         }
+        try {  // the failures of files no longer waiting forgotten
+            Files.newDirectoryStream(dir.toPath().resolve(FAILED)).use { entries ->
+                for (entry in entries) {
+                    if (attributes(dir.toPath().resolve(entry.fileName.toString()))?.isRegularFile != true) {
+                        Files.deleteIfExists(entry)
+                    }
+                }
+            }
+        } catch (_: NoSuchFileException) {
+        } catch (_: NotDirectoryException) {
+        }
         return dropped.sortedWith(Py.CODE_POINT_ORDER)
     }
 
     /** The path of a file named [name] in the folder; null for a name that can't be one of its files. */
     private fun at(name: String): Path? =
         if (name.isEmpty() || '/' in name || name.startsWith(".") || '\u0000' in name) null else dir.toPath().resolve(name)
+
+    /** Where a failure to file the file waiting as [name] is remembered; null for a name that can't be one. */
+    private fun marker(name: String): Path? = at(name)?.let { dir.toPath().resolve(FAILED).resolve(name) }
 
     /** [name], or "<stem> (2)<ext>", " (3)"… : the first no file of the folder has. */
     private fun free(name: String): String {
@@ -138,6 +171,9 @@ class InboxFolder(val dir: File) {
     companion object {
         /** How many days a file waits for a song that fits. */
         const val DAYS = 30L
+
+        /** The folder of the failures remembered. */
+        const val FAILED = ".failed"
 
         /** A file's name is at most this many bytes of UTF-8, room left for " (99)" under a file system's 255. */
         const val MAX_NAME_BYTES = 240
