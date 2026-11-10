@@ -39,7 +39,7 @@ computer=""
 sites=""
 classes=()
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 2; }  # the header, whole
 
 while [ $# -gt 0 ]; do
     case "$1" in
