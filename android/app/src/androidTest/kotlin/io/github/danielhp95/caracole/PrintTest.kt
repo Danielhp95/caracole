@@ -70,6 +70,7 @@ class PrintTest {
     fun exportPdfPrintsTheViewerShownNamedForTheVersion() {
         song()
         val before = libraryFiles()
+        val queued = jobIds()
         launched { main ->
             val job = printed(main, export("t=2&capo=0&fs=20"))
             assertNotNull("a print job", job)
@@ -81,16 +82,17 @@ class PrintTest {
             assertTrue("the job is this app's", listed)
         }
         assertEquals("nothing is kept in the library", before, libraryFiles())
-        assertTrue("no job queued", phone().queue.snapshot().isEmpty())
+        assertEquals("no job queued", queued, jobIds())
     }
 
     @Test
     fun mineQueuesMakeThisMyVersionAndStillPrints() {
         val song = song()
+        val queued = jobIds()
         launched { main ->
             assertNotNull(printed(main, export("t=2&capo=0&mine=1")))
         }
-        val job = phone().queue.snapshot().single()
+        val job = phone().queue.snapshot().single { it.id !in queued }
         assertEquals("export:${song.key}:t=2&capo=0:mine", job.key)
         val ended = runBlocking { withTimeout(60_000) { phone().queue.await(job.id) } }
         assertEquals(ended.output.toString(), Job.DONE, ended.state)
@@ -100,6 +102,7 @@ class PrintTest {
     @Test
     fun aRefusalPrintsNothing() {
         song()
+        val queued = jobIds()
         launched { main ->
             assertNull(printed(main, Pages.origin() + "/export.pdf?sheet=Nobody/Nothing/sheet.html&t=2"))
         }
@@ -107,7 +110,7 @@ class PrintTest {
         val said = Printer.ask(phone.app::handle, URI(phone.server.origin), Caracole.secret,
                                phone.server.origin + "/export.pdf?sheet=Nobody/Nothing/sheet.html&t=2")
         assertEquals(Printer.Named.Refused(404, "There's no such sheet in the library."), said)
-        assertTrue(phone.queue.snapshot().isEmpty())
+        assertEquals(queued, jobIds())
     }
 
     @Test
@@ -148,6 +151,9 @@ class PrintTest {
     // --- helpers ------------------------------------------------------------------------------------------------
 
     private fun phone() = Caracole.phone(context)
+
+    /** The jobs the phone's queue holds: the class's tests share its process, and so its queue. */
+    private fun jobIds(): Set<Int> = phone().queue.snapshot().map { it.id }.toSet()
 
     /** The viewer's Export PDF link for the song's sheet, its version [query]. */
     private fun export(query: String): String = Pages.origin() + "/export.pdf?sheet=" +
