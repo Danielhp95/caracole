@@ -1602,7 +1602,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     words, on ties that each of its numbers decides (`TIED_CUTS`) and on MAX_CUTS's edges.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
-- The phone's own pages, `PhoneRender` (phone-render): not built yet.
+- The phone's own pages, `PhoneRender` (phone-render): render.py's page path with no PDF, for the songs no mirror
+  page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
+  render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
+  the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
+  sheets), after `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror
+  serves gets its progressions and script alone, the phone's own pages of it forgotten.
+  - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
+    made at (Units.digestOf, every entry of a pass `restamp`ed); kv `render:<id>:phone` (`unit`, `build`, `script`,
+    which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's kv `songbook:<folder>`.
+  - `InfoJson` is library.write_info, its `render` null; `RenderBuild` hashes the app's version and every viewer
+    asset and runtime data file the pages read, each listed and held to its folder (PhoneRenderTest).
+  - `render` is the lookup's pdf stage (in its write); `renderStale` the render job's, a write a song, `between` two
+    (JobContext.yieldToQueued), passing over a song a lookup made meanwhile, then kv `phone:render-build`.
+  - tests/helpers/phone_render.py is the reference (render_all with `_render_sheet_pdf`, `_render_traditional` and
+    `_remake_exports` making nothing, then the phone's records and info.json); tests/test_conformance_viewer_render.py
+    writes vectors/viewer/render.jsonl (fixture libraries and steps: renders, a file dropped, one deleted), which
+    `RenderReplay` (area `render`) replays: the names, each pass's info.json and units, and every step whole.
 
 ##### The phone's written pages
 

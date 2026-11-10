@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
@@ -294,7 +295,7 @@ class PhoneRenderTest {
             File(mirror.blobs, MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) })
                 .writeBytes(bytes)
             JsonObject(buildMap {
-                put("path", JsonPrimitive(path)); put("url", JsonPrimitive("/$path"))
+                put("path", JsonPrimitive(path)); put("url", JsonPrimitive(PyUrl.quote("/$path")))
                 put("size", JsonPrimitive(bytes.size)); put("sha256", JsonPrimitive(sha(bytes)))
                 put("type", JsonPrimitive("text/html; charset=utf-8")); put("headers", JsonObject(emptyMap()))
                 of?.let { put("unit", JsonPrimitive(it)); put("digest", JsonPrimitive(digest)) }
