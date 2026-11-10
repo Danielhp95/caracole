@@ -273,9 +273,10 @@ DIR PORT --address 127.0.0.1`):
 Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
 app send no request to a site: every test's sites refuse, unless the test names the fake sites server.
 
-`android/scripts/device-test.sh` does all of it, one caller at a time (it builds first, then holds the emulator's
-lock, `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`), starting the emulator if none is
-up and leaving it up:
+`android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the
+first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-5554, -5556 and -5558, holding its lock,
+`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
+port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
