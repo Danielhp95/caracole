@@ -1176,8 +1176,8 @@ def _haystack(texts: list[str]) -> str:
 # pages share, are importable from here too.
 STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css",
                "library-screens.css", "songbooks.css", "sites.css", "sync.css", "requests.css")
-SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "sites.js", "sync.js",
-           "requests.js", "drawn.js")
+SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "sites.js", "sync-words.js",
+           "sync.js", "requests.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)
