@@ -359,22 +359,23 @@ def test_an_instrument_with_no_song_is_disabled(conn, cfg, shelf, laptop):
     assert laptop.js("document.getElementById('f-inst').closest('.fsec').hidden") is True
 
 
-def test_a_lines_glyph_of_a_chosen_instrument_is_lit(shelf, laptop):
+def test_a_lines_button_of_a_chosen_instrument_is_lit(shelf, laptop):
+    # Each button of an instrument that is on is filled with the accent: its background is the accent's.
     held = """(() => { const line = [...document.querySelectorAll('#list article.line')]
         .find((l) => l.querySelector('h3').textContent === 'Hotel California');
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const probe = document.createElement('span'); probe.style.color = accent; document.body.append(probe);
-      const lit = getComputedStyle(probe).color; probe.remove();
-      return [...line.querySelectorAll('.line-holds svg')].map((g) => [g.getAttribute('aria-label'),
-        getComputedStyle(g).color === lit]); })()"""
+      const probe = document.createElement('span'); probe.style.backgroundColor = accent; document.body.append(probe);
+      const lit = getComputedStyle(probe).backgroundColor; probe.remove();
+      return [...line.querySelectorAll('.line-plays .play')].map((a) => [a.dataset.kind,
+        getComputedStyle(a).backgroundColor === lit]); })()"""
     laptop.open(shelf.as_uri())
     assert not any(lit for _, lit in laptop.js(held))
     laptop.open(shelf.as_uri() + "#inst=harmonica")
-    assert laptop.js(held) == [["Chord sheet", False], ["Guitar Pro", False], ["Harmonica tab", True],
-                               ["Lyrics", False], ["Score", False]]
+    assert laptop.js(held) == [["sheet", False], ["guitar", False], ["tab", False], ["harmonica", True],
+                               ["score", False]]
     laptop.open(shelf.as_uri() + "#inst=sheet,guitar")
-    assert laptop.js(held) == [["Chord sheet", True], ["Guitar Pro", True], ["Harmonica tab", False],
-                               ["Lyrics", False], ["Score", False]]
+    assert laptop.js(held) == [["sheet", True], ["guitar", True], ["tab", True], ["harmonica", False],
+                               ["score", False]]
 
 
 def test_inst_is_kept_in_the_address_and_read_back(shelf, laptop):

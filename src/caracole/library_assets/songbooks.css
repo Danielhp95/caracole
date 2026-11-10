@@ -180,17 +180,17 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .selecting [data-picker] > .line-panel, .selecting [data-picker] .filter-mark, .selecting [data-picker] .artist-only,
 .selecting [data-picker] .progress a, .selecting [data-picker] .progress .dot { display: none; }
 .selecting [data-picker] button.artist { min-height: 0; }  /* no target of its own: the line is */
-/* A line's box comes first, beside its title, its key and what is under it (both lines on a phone); its action and
-   its chevron wait. */
+/* A line's box comes first, beside its title (its buttons with it), its key and what is under it (both lines on a
+   phone); its action and its chevron wait. */
 .selecting .line { grid-template-columns: 44px minmax(0, 1fr) auto;
   grid-template-areas: "pick title key" "pick meta meta"; }
 .selecting .line > .pick { grid-area: pick; align-self: center; }
 .selecting .line.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 720px) {
-  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem var(--sites-w) 6.5rem 2.75rem;
-    grid-template-areas: "pick title by status sites src key"; }
-  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem var(--sites-w) 6.5rem 2.75rem;
-    grid-template-areas: "pick title status sites src key"; }
+  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 2.75rem;
+    grid-template-areas: "pick title by status key"; }
+  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-areas: "pick title status key"; }
 }
 .selecting .page { padding-bottom: 104px; }
 .selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }
