@@ -172,8 +172,8 @@ working while you leave it, gone once it ends. Its stages show on the tab:
 At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
 comparison"), and Reload shows the library page with the songs as they are now.
 
-The computer needs a caracole that syncs with the phone (sync format 2: `GET /api/peer/state` answers
-`"format": 2`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
+The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
+`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.
 
 **Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your
@@ -372,7 +372,24 @@ never in a page) times each step.
 
 ## Pages built on the phone
 
-Not built yet.
+The phone makes a song's pages itself, as the computer's render does them but with no PDF, whenever the computer's
+pages in the copy aren't of the song as the phone holds it: a song added or looked up on the phone, or changed there
+since the last sync. The song's sheet page (`sheet.html`, and an auto sheet's beside it), the page of each version kept
+beside the sheet (`version-<tab>.html`) and of each harmonica tab (`harmonica-N.html`), with the sheet's `.cho` and its
+`info.json`, go into the song's folder in the app's library, each written only when its bytes change; a version's or a
+tab's page goes once the song keeps it no longer. An auto sheet made before its song had lyrics takes them first, as
+the computer's render does. No page links a PDF: the phone makes none.
+
+For every song, those the computer's pages serve too, the phone records what the library page finds it by: the
+progressions its sheet plays and whether its words are Chinese.
+
+A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync that changed
+songs, and when the app starts as a new build (any APK whose code or tables differ, whatever its version says), the
+phone makes the pages it owes in the background, a request of the Requests tab ("Make the pages again"), which lets a
+lookup asked for meanwhile go first, between two songs. A song whose pages can't be made says why on that request, and
+costs the other songs nothing; it is tried again once the song changes or a new build is installed.
+
+On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
@@ -381,6 +398,63 @@ Not built yet.
 ## Guitar Pro
 
 Not built yet.
+
+## Sharing a song from a music app
+
+In a music app, **Share** a song and pick **caracole** in Android's share sheet: caracole opens on a page of its own
+for that song.
+
+1. **What it read**: "caracole read Queen – Bohemian Rhapsody." It reads the artist and the title from the text the
+   app shared, the way caracole reads what you type in a search box, with no request. "What Spotify sent" shows the
+   text as it came. When the app shared a link alone, caracole asks its service once what the link names (below):
+   "Read from Spotify's page: Queen – Bohemian Rhapsody."
+2. **The best match**: the song the phone's search finds for those names, in your library or in the indexes, with
+   what each site has of it ("Ultimate Guitar: chords ×12 · tabs ×3 · LaCuerda ×2"), and "In your library" when the
+   song is yours. Up to three other songs the search found come under it, each with its own Get it.
+3. **Your choice**:
+   - **Get it** looks the song up now, like a search line's Get it, and the Requests tab shows how the lookup goes.
+   - **Open** shows your song, when the library has it.
+   - **Edit** takes the artist and the title as you type them, then searches again.
+   - **Cancel** takes you back to the app you shared from.
+
+Nothing is sent to a tab site until you tap Get it. With no index imported, the page says so, and Get it still looks
+the song up by its names.
+
+What each app shares (tests/fixtures/share/shares.jsonl lists them, each with where it was found):
+
+- **Names in the text**, read as they come: Deezer ("I've found a song for you... Hotel California by Eagles 🔥
+  Listen now on #Deezer"), Shazam ("I used Shazam to discover … by …"), SoundCloud ("Listen to … by … on
+  #SoundCloud"), SoundHound, Musixmatch, YouTube (its subject, the video's title), Audile ("Hotel California -
+  Eagles", title first), and Ultrasonic with Share on server off (its "Title:" and "Artist:" lines, in any of its
+  languages).
+- **A link alone**: Spotify, Apple Music, TIDAL and YouTube Music, as far as anyone has written down what they
+  send; Navic, DSub and Ultrasonic's server shares send a link to your Navidrome or Subsonic server. Tempo copies its
+  share's link instead of sharing it. Symfonium's text isn't known yet: share from it once and read the log (below).
+- Any other app's text is read as you'd type it in the search box, less its links and the app's name at its end
+  ("… | Spotify").
+
+**A link alone** of Apple Music, Spotify, TIDAL, YouTube or YouTube Music is read by asking its service once, at a
+lookup's pace, with caracole's own user agent:
+
+| Link | Asked | Requests |
+|---|---|---|
+| Apple Music, a song (`music.apple.com/us/album/…?i=…`, `/song/…`) | Apple's catalogue, `itunes.apple.com/lookup` | 1 |
+| Spotify, a track (`open.spotify.com/track/…`) | the track's page | 1 |
+| Spotify's short link (`spotify.link/…`) | the link, then the track's page | 2 |
+| TIDAL, a track (`tidal.com/track/…`, `/browse/track/…`) | the track's page, `tidal.com/track/…` | 1 |
+| TIDAL's short link (`tidal.link/…`) | the link, then the track's page | 2 |
+| YouTube, YouTube Music (`watch?v=`, `youtu.be`, `shorts`) | YouTube's oEmbed: the video's title and channel | 1 |
+
+The page then says "Read from Spotify's page: Queen – Bohemian Rhapsody", and goes on as for a text that named the
+song. A link to an album (Apple Music's with no `?i=`), a playlist, an artist or a channel names no song: the page says
+which, with no request. When the service fails, blocks caracole or is turned off, the page says so in one line and
+opens Edit. A link shared again is read from the cache, with no request. Each service is turned off on the computer,
+`[providers.spotify] enabled = false` (or `itunes`, `tidal`, `youtube-oembed`) in caracole.toml, which the phone takes
+at its next sync. Deezer's shares carry the song's names; a Navidrome or Subsonic link is never asked.
+
+**To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
+Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
+as they came.
 
 ## Sharing files to caracole
 

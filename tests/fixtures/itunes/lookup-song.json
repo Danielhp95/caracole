@@ -1,0 +1,11 @@
+
+
+
+{
+ "resultCount":1,
+ "results": [
+{"wrapperType":"track", "kind":"song", "artistId":136975, "collectionId":1440833098, "trackId":1440833334, "artistName":"The Beatles", "collectionName":"1", "trackName":"Love Me Do", "collectionCensoredName":"1", "trackCensoredName":"Love Me Do", "artistViewUrl":"https://music.apple.com/us/artist/the-beatles/136975?uo=4", "collectionViewUrl":"https://music.apple.com/us/album/love-me-do/1440833098?i=1440833334&uo=4", "trackViewUrl":"https://music.apple.com/us/album/love-me-do/1440833098?i=1440833334&uo=4", 
+"collectionPrice":12.99, "trackPrice":1.29, "releaseDate":"1962-10-05T12:00:00Z", "collectionExplicitness":"notExplicit", "trackExplicitness":"notExplicit", "discCount":1, "discNumber":1, "trackCount":27, "trackNumber":1, "trackTimeMillis":140173, "country":"USA", "currency":"USD", "primaryGenreName":"Rock", "isStreamable":true}]
+}
+
+

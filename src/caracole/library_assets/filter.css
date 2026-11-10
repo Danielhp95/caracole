@@ -93,12 +93,14 @@ html.sheet-open { overflow: hidden; }
 .filter-panel .live { color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }
 .filter-panel .show-n, .filter-panel:modal .live { display: none; }
 .filter-panel:modal .show-n { display: inline-flex; }
-/* While a filter of instruments is on, each line's glyph of one that is on is drawn in the accent. */
-[data-lit~="sheet"] .line-holds .glyph:is(.glyph-sheet, .glyph-ukulele),
-[data-lit~="guitar"] .line-holds .glyph.glyph-guitar,
-[data-lit~="ukulele"] .line-holds .glyph.glyph-ukulele,
-[data-lit~="harmonica"] .line-holds .glyph.glyph-harmonica,
-[data-lit~="score"] .line-holds .glyph.glyph-score { color: var(--accent); }
+/* While a filter of instruments is on, each line's button of one that is on (card.js plays, its ``data-inst``) is
+   filled with the accent, its glyph in the accent's text colour. */
+[data-lit~="sheet"] .line-plays .play[data-inst~="sheet"],
+[data-lit~="guitar"] .line-plays .play[data-inst~="guitar"],
+[data-lit~="ukulele"] .line-plays .play[data-inst~="ukulele"],
+[data-lit~="harmonica"] .line-plays .play[data-inst~="harmonica"],
+[data-lit~="score"] .line-plays .play[data-inst~="score"] { border-color: var(--accent); background: var(--accent);
+  color: var(--on-accent); }
 @media (max-width: 719px) {
   .masthead.lib { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "app tabs" "sum sum"; gap: 4px 8px; }
   .masthead.lib .summary { justify-self: start; }

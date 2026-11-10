@@ -262,8 +262,42 @@ def test_sheet_chosen_by_coverage_then_rating(conn, tmp_path):
     assert pick_ids(conn, song, "chords") == [102]
     doc = json.loads(read(tmp_path, song, "sheet.json"))
     assert doc["url"] == f"{TAB}soda-stereo/persiana-americana-chords-102"
-    assert doc["version"]["id"] == 102 and doc["version"]["rating"] == 4.6
+    assert doc["version"]["id"] == 102 and doc["version"]["version"] == 2
     assert doc["content"].startswith("[Intro]\r\nsheet 102\r\n")
+
+
+def test_a_tab_read_on_two_days_is_kept_alike_and_is_one_song_to_a_sync(conn, tmp_path):
+    # UG gives a tab's rating and votes as they are the day it is read: the version's JSON kept beside the text
+    # leaves them out (as a sync's digest leaves them out of the raw record, peer_sync.VOLATILE_RAW), so that two
+    # caracoles that read one tab on two days keep the same bytes and agree on the song.
+    from caracole import db, peer_sync
+    from conftest import migrated_database
+
+    other_root = tmp_path / "other"
+    (other_root / "state").mkdir(parents=True)
+    (other_root / "state" / "caracole.sqlite").write_bytes(migrated_database())
+    other = db.connect(other_root / "state" / "caracole.sqlite")
+    digests = []
+    try:
+        for c, root, (rating, votes) in ((conn, tmp_path, (4.6, 10)), (other, other_root, (4.9, 57))):
+            song = accepted(c)
+            index(c, (101, "soda-stereo", "persiana-americana", "chords"), (301, "soda-stereo", "persiana-americana",
+                                                                             "tabs"))
+            ug = FakeUG()
+            ug.tab(v(101, rating=rating, votes=votes), content=sheet("sheet 101", LINES), meta={"capo": 2})
+            ug.tab(v(301, "tabs", rating=rating, votes=votes), content="[tab]e|---0---|[/tab]")
+            process_song(context(c, ug.client(root / "cache"), root), song)
+            state = peer_sync.library_state(c, Overrides(), ())
+            digests.append(state[f"song/{song.key}"].digest)
+    finally:
+        other.close()
+
+    for name in ("sheet.json", "tab.json"):
+        assert read(tmp_path, song, name) == read(other_root, song, name)
+        version = json.loads(read(tmp_path, song, name))["version"]
+        assert "rating" not in version and "votes" not in version and version["id"] in (101, 301)
+    assert json.loads(read(tmp_path, song, "sheet.json"))["meta"] == {"capo": 2}
+    assert digests[0] == digests[1]
 
 
 def test_only_top_three_sheets_scored(conn, tmp_path):

@@ -22,7 +22,8 @@ import java.util.Base64
  * - Before every request but the first, a pause of `policy.delay` (a [draws] draw), less the time since the last one
  *   ([monotonic]); `policy.budget` requests, then [BudgetExhausted].
  * - A URL robots.txt closes is never asked for: [RobotsClosed]; a string httpx can't take as a URL a ProviderError.
- * - Redirects followed one hop at a time, at most three, each a request like any other and on the site asked for.
+ * - Redirects followed one hop at a time, at most three, each a request like any other and on the site asked for;
+ *   one whose status the caller accepts is its answer, never followed (a short link's hop, its `location` kept).
  * - A 403, a 429 or a challenge page: [ProviderBlocked], and nothing more is sent.
  * - LRCLIB's 503 with a Retry-After it can wait asked once more after it and a jitter under a second.
  * - [maxConsecutiveErrors] other errors in a row: [ProviderUnavailable].
@@ -85,13 +86,13 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
                 ?.let { extra += "If-Modified-Since" to it }
         }
 
-        var (at, resp) = answer(full, extra)
+        var (at, resp) = answer(full, extra, accept)
         val wait = retryWait(at, resp, accept)
         if (wait != null) {
             val said = HttpRules.header(resp.headers, "retry-after")
             event(at, resp.status, "error", "HTTP ${resp.status}, asked again in ${oneDecimal(wait)} s (Retry-After: $said)")
             sleep(wait)
-            val again = answer(full, extra)
+            val again = answer(full, extra, accept)
             at = again.first
             resp = again.second
         }
@@ -123,9 +124,10 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
 
     override fun close() {}
 
-    /** GET [full] with [extra] headers, its redirects followed one checked hop at a time: the URL that answered (the
-     * one asked for, or the last hop) and its answer. */
-    private fun answer(full: String, extra: List<Pair<String, String>>): Pair<String, Answer> {
+    /** GET [full] with [extra] headers, its redirects followed one checked hop at a time, but one whose status the
+     * caller accepts ([accept]), which is the answer: the URL that answered (the one asked for, or the last hop) and
+     * its answer. */
+    private fun answer(full: String, extra: List<Pair<String, String>>, accept: Set<Int>): Pair<String, Answer> {
         val first = HttpxUrl.parse(full)
         var headers = listOf("Host" to first.netloc, "Accept" to "*/*", "Accept-Encoding" to "gzip, deflate",
                              "Connection" to "keep-alive", "User-Agent" to userAgent) + extra
@@ -135,6 +137,7 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
         var hops = 0
         while (true) {
             val next = resp.next ?: break
+            if (resp.status in accept) break
             hops++
             val target = next.request.url
             val problem = when {

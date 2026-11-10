@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server
 
 import io.github.danielhp95.caracole.core.lookup.RenderStats
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -10,6 +9,7 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
+import io.github.danielhp95.caracole.server.routes.ShareRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -72,7 +72,7 @@ class AssemblyTest {
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "LibraryRoutes",
                             "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes", "ReviewRoutes",
-                            "ExportRoutes", "GuitarRoutes"), phone.modules.map { it::class.simpleName })
+                            "ExportRoutes", "GuitarRoutes", "ShareRoutes"), phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
         assertEquals(emptyMap(), twice)
@@ -95,6 +95,9 @@ class AssemblyTest {
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
         )
+        // The phone's own page of a song shared to the app, which caracole serve has none of.
+        assertEquals(listOf("GET /share", "GET /share/cancel"),
+                     phone.modules.filterIsInstance<ShareRoutes>().single().routes.map { "${it.method} ${it.path}" })
         val ownerOf = owners.associate { (route, module) -> route to module::class.simpleName }
         for ((module, routes) in moved) {
             for (route in routes) assertEquals(module, ownerOf[route], route)
@@ -108,13 +111,14 @@ class AssemblyTest {
 
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
         // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
-        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code.
+        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code; the render's
+        // has (phone-render).
         assertSame(phone.render.seam, phone.parts.pages)
         assertSame(phone.songbookPages.seam, phone.parts.songbooks)
-        assertSame(SongPages.NONE, phone.parts.pages)
+        assertSame(phone.render, phone.parts.pages)
         assertSame(SongbookPages.NONE, phone.parts.songbooks)
         assertTrue(phone.parts.cards is PhonePageData)
-        // Nothing is stale while the phone's render is neutral, so its start queues no render job, nor does a take.
+        // A library with no song owes no page, so its start queues no render job, nor does a take that brought none.
         phone.start()
         phone.afterSync()
         assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind })

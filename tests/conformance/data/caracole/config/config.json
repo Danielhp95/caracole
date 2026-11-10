@@ -164,6 +164,66 @@
    "lookup_requests": 6,
    "lookup_per_hour": 60,
    "per_day": null
+  },
+  "itunes": {
+   "budget": 0,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 1,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "spotify": {
+   "budget": 0,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 2,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "tidal": {
+   "budget": 0,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 2,
+   "lookup_per_hour": 60,
+   "per_day": null
+  },
+  "youtube-oembed": {
+   "budget": 0,
+   "delay": [
+    0.0,
+    0.0
+   ],
+   "enabled": true,
+   "lookup_delay": [
+    0.125,
+    0.375
+   ],
+   "lookup_requests": 1,
+   "lookup_per_hour": 60,
+   "per_day": null
   }
  },
  "switchable": [
@@ -171,9 +231,13 @@
   "gametabs",
   "gtptabs",
   "harptabs",
+  "itunes",
   "megalobiz",
   "musescore",
+  "spotify",
+  "tidal",
   "youtube",
+  "youtube-oembed",
   "ytimg"
  ],
  "user_agent": "caracole/0.1 (personal tab library)",

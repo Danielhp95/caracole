@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.html.internal.tree.Text
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyCodec
+import io.github.danielhp95.caracole.core.sites.internal.harptabs.HarpTabsPages
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import kotlinx.serialization.json.JsonArray
@@ -34,7 +35,8 @@ import io.github.danielhp95.caracole.core.html.internal.tree.Node as DomNode
  * [HtmlReplay] runs them: each page built by core.html and read through [HtmlDoc] and [HtmlNode] as caracole's site
  * parsers read it, against what lexbor built and selectolax answered: the tree's shape, every element's text, the
  * parsers' selectors from the document and from a node, harptabs.py's `<pre>` read with `replace_with` and
- * `insert_after`, selectors alone in quirks and standards mode, and the seeded mutations' shapes by digest.
+ * `insert_after` (core.sites' own port of it, HarpTabsPages.preText), selectors alone in quirks and standards mode,
+ * and the seeded mutations' shapes by digest.
  */
 object HtmlTreeReplay {
     val TREES = listOf("html/tree.jsonl", "html/tree_edges.jsonl")
@@ -173,7 +175,7 @@ object HtmlTreeReplay {
             if (k >= pres.size) break
             val place = shape.index.getValue(pres[k].node)
             misses.check(place == at.jsonPrimitive.int) { "$case: pre $k at another place" }
-            val got = preText(Html.parse(page).css("pre")[k])
+            val got = HarpTabsPages.preText(Html.parse(page).css("pre")[k])
             misses.check(got == text(read)) {
                 "$case: pre $k reads ${show(got.take(60))}, lexbor ${show(text(read).take(60))}"
             }
@@ -196,17 +198,6 @@ object HtmlTreeReplay {
         }
         val sha = MessageDigest.getInstance("SHA-256").digest(parts.joinToString("\u0000").toByteArray(Charsets.UTF_8))
         return hexBytes(sha)
-    }
-
-    /** harptabs.py's `_pre_text`, a copy of the replay's own until lane harptabs ports it into core.sites' main
-     * code: then the `pre` comparison above calls that port, and this copy goes. */
-    fun preText(pre: HtmlNode): String {
-        for (node in pre.css("br")) node.replaceWith("\n")
-        for (node in pre.css("p, div")) {
-            val after = node.next
-            if (after != null && !(after.isText && (after.textContent ?: "").startsWith("\n"))) node.insertAfter("\n")
-        }
-        return pre.text(deep = true)
     }
 
     private fun selectorsAlone() {
