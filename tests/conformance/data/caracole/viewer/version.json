@@ -1,0 +1,90 @@
+{
+ "version": {
+  "patterns": {
+   "_DIGITS": {
+    "pattern": "[0-9]*",
+    "ignorecase": false
+   },
+   "_INDEX": {
+    "pattern": "0|[1-9][0-9]*",
+    "ignorecase": false
+   },
+   "_NUMBER": {
+    "pattern": "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?",
+    "ignorecase": false
+   },
+   "_BAD_ESCAPE": {
+    "pattern": "%(?![0-9A-Fa-f]{2})",
+    "ignorecase": false
+   },
+   "_TONIC": {
+    "pattern": "[A-G][#b]?",
+    "ignorecase": false
+   },
+   "_ESCAPED": {
+    "pattern": "[%&=,.\\s]",
+    "ignorecase": false
+   },
+   "_KEY_NAME": {
+    "pattern": "[A-G][#b]?(?:m| (?:ionian|dorian|phrygian|lydian|mixolydian|aeolian|locrian))?",
+    "ignorecase": false
+   }
+  },
+  "MODE_NAMES": {
+   "ionian": "Major",
+   "dorian": "Dorian",
+   "phrygian": "Phrygian",
+   "lydian": "Lydian",
+   "mixolydian": "Mixolydian",
+   "aeolian": "Minor",
+   "locrian": "Locrian"
+  },
+  "_SAID": {
+   "ukulele-low-g": "low-G ukulele"
+  },
+  "CAPO_MAX": 11,
+  "_FORM_SAFE": "*-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"
+ },
+ "progressions": {
+  "KV": "render:progressions:",
+  "UNNAMED": "untitled section",
+  "patterns": {
+   "_TYPED": {
+    "pattern": "[♭♯b#]?(?:VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(?:maj|add|sus|dim|aug|[°ø+o0-9♭♯#b])*(?:/[♭♯b#]?(?:(?:VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)|[0-9]+))*",
+    "ignorecase": false
+   },
+   "_SEPARATORS": {
+    "pattern": "[\\s,–—-]+",
+    "ignorecase": false
+   },
+   "_WORD": {
+    "pattern": "[^\\W_]+",
+    "ignorecase": false
+   },
+   "_APOSTROPHES": {
+    "pattern": "['’‘`´ʼ]",
+    "ignorecase": false
+   }
+  },
+  "_GENERIC": [
+   "a",
+   "cadence",
+   "chords",
+   "of",
+   "progression",
+   "the"
+  ],
+  "_SAYS_PROGRESSION": [
+   "cadence",
+   "progression"
+  ],
+  "_NAME_LETTERS": 5,
+  "_NOT_ALONE": [
+   "major",
+   "minor"
+  ],
+  "_TITLES": [
+   "creep"
+  ]
+ }
+}
