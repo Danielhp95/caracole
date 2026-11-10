@@ -27,7 +27,6 @@ class FileChooser(private val activity: Activity) {
             pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }
         try {
-            @Suppress("DEPRECATION") // Activity's own: the app has no ActivityResult registry
             activity.startActivityForResult(pick, REQUEST)
         } catch (e: ActivityNotFoundException) {
             waiting = null

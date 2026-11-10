@@ -63,9 +63,11 @@ class MainActivity : Activity() {
     private lateinit var title: TextView
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
-    private var files: LocalFiles? = null
-    /** The server's origin, once it has started. */
-    private var origin: String? = null
+    /** The server's files read in this process, once it has started (the WebView's client reads it on its own
+     * threads, for an export). */
+    @Volatile private var files: LocalFiles? = null
+    /** The server's origin, once it has started (read on the WebView's threads too). */
+    @Volatile private var origin: String? = null
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
     private lateinit var label: SizeLabel
@@ -340,12 +342,8 @@ class MainActivity : Activity() {
     }
 
     /** The picker's answer, for the page's file input ([chooser]). */
-    @Deprecated("Activity's own: the app has no ActivityResult registry")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (!chooser.result(requestCode, resultCode, data)) {
-            @Suppress("DEPRECATION")
-            super.onActivityResult(requestCode, resultCode, data)
-        }
+        if (!chooser.result(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
 
     /** The sync sheet's export at [url], read from the phone's server in this process and handed to Android's share
