@@ -97,6 +97,17 @@ object JobCommands {
         "take" to "Taking what changed there",
         "give" to "Giving what changed here",
         "agree" to "What the two agree on",
+        "index" to "Bringing the indexes up to date",
+    )
+
+    /** `caracole peer import --progress`'s (commands/peer.py's PEER_IMPORT_STAGES), a file staged by caracole serve
+     * synced with. */
+    val PEER_IMPORT_STAGES: List<Pair<String, String>> = listOf(
+        "check" to "Reading the file",
+        "take" to "Taking what changed there",
+        "render" to "Rendering what was taken",
+        "agree" to "What the two agree on",
+        "index" to "Merging the indexes",
     )
 
     /** `caracole index merge --delete --progress -- FILE`'s, the index pages another caracole's lookups read. */
@@ -115,6 +126,7 @@ object JobCommands {
     const val YOUTUBE_SHEET = "youtube:"  // a sheet from a YouTube video: the song's identity key after it
     const val INDEX_MERGE = "index-merge:"  // an index export's merge
     const val SYNCING = "sync:"  // a sync's (sync_routes.SYNCING): the address it syncs with after it
+    const val IMPORTING = "import:"  // a file's import (sync_routes.IMPORTING): the staged file's id after it
     const val SONGBOOK = "songbook\u001f"  // a songbook's change (web/songbooks.py's KEY)
 
     /** What a site's index reads, and a search's suggestion: jobs of no song's. */
@@ -252,6 +264,7 @@ object JobCommands {
         return when (args.getOrNull(1)) {
             "take" -> PEER_TAKE_STAGES
             "sync" -> PEER_SYNC_STAGES
+            "import" -> PEER_IMPORT_STAGES
             else -> emptyList()
         }
     }
@@ -328,7 +341,7 @@ object JobCommands {
         key.startsWith(YOUTUBE_SEARCH) -> "youtube-search"
         key.startsWith(YOUTUBE_SHEET) -> "youtube"
         key.startsWith(INDEX_MERGE) -> "index-merge"
-        key.startsWith(SYNCING) -> "sync"
+        key.startsWith(SYNCING) || key.startsWith(IMPORTING) -> "sync"
         key == "index" -> "index"
         phoneKinds.keys.any { key.startsWith(it) } -> phoneKinds.entries.first { key.startsWith(it.key) }.value
         commands.isEmpty() && "add" in stageNames -> "add"

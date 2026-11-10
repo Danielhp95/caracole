@@ -528,9 +528,9 @@ Below the table, a section for each step whose modules have more to say.
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
-  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s), or
-    without them, as caracole serve's Sync tab compares (sync_routes.py `_compared`), so the tab's Sync does what it
-    showed (commands/peer.py `_Compared.named`).
+  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s, and
+    caracole serve's Sync tab's, sync_routes.py `_compared`), or without them, a comparison made before them
+    (commands/peer.py `_Compared.named`).
 - Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` (`full`, `songbooks`, `indexes`,
   `left`) and the fixtures `file_conflict` and `file_indexed` (tests/test_conformance_sync_file.py), which the Kotlin
   sync ports: an export, a file read and refused, a unit taken from one, an import.
@@ -1020,17 +1020,53 @@ It is rows.js's, shared by both pages:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
 - **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker, the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
+  agreed on with the asker and the answers its imports of the asker's files kept (`kept`), the settings a phone
+  takes (`settings`, politeness.py) and the form token (no wider than a
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
-- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html):
-  `GET /api/sync`, `POST /sync/compare` (one `GET /api/peer/state` of the other caracole, kept 10 minutes) and `POST
-  /sync/apply` (`caracole peer sync --push --compared HASH --choose=…` queued, a job of kind `sync`). The phone
-  answers the same three routes with the same shapes (vectors/web/sync_routes.jsonl).
+- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html), the
+  sync redesign's §3.4.1:
+  - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
+  - `POST /sync/test`: one `GET /api/peer/state` of the other caracole, nothing written, its counts, newest index read
+    and the last sync in words (`tested_words`), refused as a comparison is;
+  - `POST /sync/compare`: one `GET /api/peer/state`, then a `GET /api/peer/unit` for each songbook that differs and
+    the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
+    difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
+    `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
+    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
+    conflict it proposes chosen first);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
+    of another `source` than a peer's, a file's, refused);
+  - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
+    phone, a client, reads;
+  - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)
+    with no side refused, then `caracole peer sync --push [--parts=…] --compared HASH --choose=…` queued, a job of
+    kind `sync`.
+  - The phone's server/routes/SyncRoutes.kt answers the six alike (SyncJson; vectors/web/sync_routes.jsonl, under
+    UTC, which `WebReplay.syncRoutes` replays with the other side's `peer_units`), but its `device` `phone` and the
+    computer's `kind` `computer`; `tested` is Settings' Test too, and `alone(address)` the unattended sync (the three
+    parts, `Conflicts.LEAVE`, none queued while one with that address waits or runs).
+- **sync_file_routes.py** is the sync's Export and Import a file: `GET /api/sync/sizes` (what an export would hold:
+  the library's bytes, its songbooks, the indexes' bytes by SQLite's dbstat, `peer_file.indexes_size`, and their
+  tabs), `POST /sync/export` (`peer_file.export_file` of the parts named into `cache_dir/peer/`, one at a time) and
+  `GET /api/sync/export` (that file once, an attachment named `peer_file.file_name`, streamed); `POST
+  /sync/import/open` and `/sync/import/part` (a file sent in parts, `json` and `bytes` routes with the form token in
+  their header, staged by peer_import.py for `caracole peer import`), `POST /sync/import/compare` (the staged file
+  read whole and compared as `caracole peer import` compares it, `sync_routes.comparison_answer`, kept as a
+  `Compared` of source `import:<id>`, kind `file`, holding the file's parts; refused in peer_file.py's words and
+  deleted) and `POST /sync/import/drop`.
+  - `POST /sync/apply` on that comparison reads the staged file again (409 `STALE` once this library moved) and queues
+    `caracole peer import --yes --progress [--parts=…] --compared HASH --choose=… -- FOLDER` under `import:<id>`, a
+    job of kind `sync` (`status.PEER_KINDS`), "Sync with a file from <name>".
+  - `caracole peer sync`'s index stage gives a site read more recently here through these routes
+    (peer_import.py `Uploader`: open, parts, compare, apply of the indexes alone, then `peer_push.wait_for`), and
+    takes one read more recently there (`peer_sync.Peer.index`, then `index_transfer.merge`), each counted for its
+    report (`{"event": "report"}`, `jobs.Job.report`, `jobs_routes.peer_outcome`'s `report`).
+  - The phone's SyncFileRoutes answers alike (vectors/web/sync_file_routes.jsonl, its routes' limits among them).
 
 ##### The router
 
@@ -1822,7 +1858,30 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### The phone's written pages
 
-Not built yet. (written-pages.)
+- `LibraryFiles` serves a page the phone wrote (a sheet's viewer, a kept version's, a harmonica tab's, a songbook's in
+  `_songbooks/<folder>/`) as app.py's `_written_page` does, before the mirror's:
+  - while it is the bytes WrittenPages recorded (`render:files:<id>` among the songs whose folder it is in, of those
+    with a record; `songbook:<folder>`), read once, of a recorded size and SHA-256, and its unit (the song's, or the
+    songbook's, `WrittenPages.songbookUnit`) is still at the digest it was made at (each entry's `unit`);
+  - with `SheetPage.viewerCsp` of those very bytes (its `_NOTHING` sandbox for a page with no policy) and
+    `frame-ancestors 'none'`;
+  - otherwise the mirror's through PhoneGate, else a message page: 409 for a unit moved since its page was made (the
+    phone's sheet.txt linked), 404 Not sent, by the page's kind, for one changed on disk;
+  - a .cho it wrote the same way, as text (LibraryFilesTest).
+- Its checks are made on the path, then the file is opened with no link followed and its bytes checked: the library
+  is the app's own folder, which nothing but the app writes.
+- `PhoneRender.afterSync`, after a take: the pages the take superseded forgotten (`forgetSuperseded`: each deleted
+  while it is as written, its record's entry with it), a song's or a songbook's made at a digest its unit has moved
+  from where the mirror now serves it at its digest, and a songbook's whose folder no songbook has any more; a moved
+  song's page the mirror doesn't serve stays, never served, for the render job to make again.
+- A removal takes the phone's written pages by their records: each `render:files:<id>` entry naming the `unit` it was
+  made at, as removal.py takes a version's or a tab's page (the phone makes no PDF, so no render record names them); a
+  record render.py wrote names no unit and keeps removal.py's answer (RemovalWrittenTest).
+- A take that moves or respells a song's folder deletes the phone's pages of it still as written rather than moving
+  them (`Removal.phonesWritten`, SongTake), so no page is left there unrecorded and a removal after it empties the
+  folder (RemovalWrittenTest).
+- PagesServedTest opens one in the WebView: its own policy and an opaque origin, refused once changed on disk or once
+  its song's unit moves.
 
 ##### Songbooks, versions and printing on the phone
 
@@ -1964,7 +2023,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 - tests/test_android_e2e.py, marked `android_e2e` and `slow`, is skipped unless `CARACOLE_ANDROID_E2E=1`: the goal's
   scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
   serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
-- **The device step**, the one place an emulator runs, one at a time (android/README.md, "Try it on an emulator"):
+- **The device step**, the one place an emulator runs, through device-test.sh's pool of emulators, each one caller at a
+  time (android/README.md, "Try it on an emulator"):
   `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
@@ -1973,7 +2033,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
   io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner`.
 
-- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, `--dist worksteal`).
+- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
+  the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
 - `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and `-m autochords` do.
 - `slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro or the models
   (`@pytest.mark.chordpro` and `autochords` add `slow`) or another process: mark a new one too.
@@ -2092,9 +2153,12 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then holds the
-  emulator's lock (`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`) while it installs and
-  runs, starts the one emulator if none is up and leaves it up.
+  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then takes the first
+  free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556,
+  -5558, each one caller at a time) and holds its lock (emulator-5554's
+  `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
+  port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
+  it up.
 - **Big data sets** (more than a few thousand rows) run only in a `*Bench` class of the gated `bench` task
   (`nix develop ./android -c gradle -p android bench`: a 3 GiB heap, one fork), never in `test`, which excludes them.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment: clear what could leak in,
@@ -2729,7 +2793,16 @@ picks one).
   export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
   `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
   a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
-  `peer_push.sweep_indexes`). Everything else stays a queued command's.
+  `peer_push.sweep_indexes`).
+- And for Export and Import a file (sync_file_routes.py), nothing else: an export's file
+  (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time, its units from one read transaction and its
+  indexes from one of their own, no lock; one waits to be sent at most, the one before it deleted as the next is made;
+  deleted once it is open to be sent, or an hour after if never asked, a part a killed process left swept only while
+  no export is made); and a file to import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py:
+  0700, its `file.caracole` and `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in
+  all), deleted once its import is over, refused at its comparison, dropped (`POST /sync/import/drop`), let go as
+  another is opened when no request names it and it is whole or its upload stopped (`peer_import.let_go`,
+  `STOPPED`), or an hour after its last part, unless an import holds it. Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 

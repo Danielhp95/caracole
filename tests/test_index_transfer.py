@@ -812,6 +812,15 @@ def test_newest_is_each_sites_latest_read_of_its_rows_and_progress_records(home)
     assert list(transfer.newest(home)) == list(SITES)
 
 
+def test_tab_counts_are_the_rows_of_each_sites_first_table(home):
+    assert transfer.tab_counts(home) == {site: 0 for site in SITES}
+    full(home)
+    counts = transfer.tab_counts(home)
+    assert list(counts) == list(SITES)
+    assert counts == {site: len(rows(home, transfer.SITES[site].tables[0])) for site in SITES}
+    assert (counts["ug"], counts["harptabs"]) == (3, 2)  # UG's tabs of its sitemaps, never its artist pages'
+
+
 def test_newest_reads_no_time_it_cant_and_names_no_site_with_none(home):
     db.kv_set(home, ug_index.BUILT_KEY, "not a time")
     db.kv_set(home, lacuerda_index.COMPLETE_KEY, "2026-10-19T03:30:00Z")
