@@ -36,9 +36,9 @@ class UnitError(message: String) : Exception(message)
  * - `song/<key>`: a song's names, decisions, versions (by provider and tab, in SQLite's order), kept files' hashes
  *   and every overrides.toml entry about it (phone_overrides, [OverridesStore.songEntries]), "Artist - Title";
  * - `removed/<key>`: a tombstone's names, "Artist - Title (removed)";
- * - `songbook/<name key>`: a songbook's name and songs (phone_songbooks, [SongbookStore]), "the songbook Name";
+ * - `songbook/<name key>`: a songbook's name and songs (phone_songbooks, [SongbookStore]), "songbook Name";
  * - `alias/<artist key>`, `artist_url/<artist key>`, `block/<tab>`: overrides.toml's entries about an artist or a
- *   tab, "the alias of key", "the UG page of Name", "the blocked tab 4242".
+ *   tab, "alias of key", "UG page of Name", "blocked tab 4242".
  *
  * A unit's document (GET /api/peer/unit's "unit") is everything another side needs to take it, and
  * [valueOfDocument] reads the value back from it alone, so what a side receives is checked against the digest it
@@ -66,14 +66,14 @@ object Units {
             add("removed/$key", "$artist - $title (removed)", Documents.removedValue(artist, title))
         }
         for (book in SongbookStore.all(db)) {
-            add("songbook/${SongbookStore.nameKey(book.name)}", "the songbook ${book.name}",
+            add("songbook/${SongbookStore.nameKey(book.name)}", "songbook ${book.name}",
                 Documents.songbookValue(book.name, book.songs))
         }
-        for ((artist, slugs) in OverridesStore.aliases(db)) add("alias/$artist", "the alias of $artist", slugs)
+        for ((artist, slugs) in OverridesStore.aliases(db)) add("alias/$artist", "alias of $artist", slugs)
         for ((artist, value) in OverridesStore.artistUrls(db)) {
-            add("artist_url/$artist", "the UG page of ${(value.getValue("name") as JsonPrimitive).content}", value)
+            add("artist_url/$artist", "UG page of ${(value.getValue("name") as JsonPrimitive).content}", value)
         }
-        for (tab in OverridesStore.blocks(db)) add("block/$tab", "the blocked tab $tab", JsonPrimitive(true))
+        for (tab in OverridesStore.blocks(db)) add("block/$tab", "blocked tab $tab", JsonPrimitive(true))
         units
     }
 

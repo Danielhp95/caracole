@@ -27,17 +27,17 @@ object LookupWords {
     /** get.STAGES: a lookup's stages, in order, with their labels. */
     val STAGES: List<Pair<String, String>> = listOf(
         "song" to "Find the song",
-        "match" to "Match it against the offline index",
-        "sheet" to "The sheet",
-        "pdf" to "The PDF",
-        "lyrics" to "Lyrics from LRCLIB",
-        "ug" to "Ultimate Guitar: the sheets scored, the tab",
+        "match" to "Match on UG's index",
+        "sheet" to "Sheet",
+        "pdf" to "PDF",
+        "lyrics" to "Lyrics",
+        "ug" to "UG: versions scored, tab",
         "lacuerda" to "LaCuerda",
-        "gtptabs" to "A Guitar Pro file from gtptabs.com",
-        "harptabs" to "A harmonica tab from harptabs.com",
-        "gametabs" to "A tab of game music from gametabs.net",
-        "pages" to "The library page",
-        "songbooks" to "The songbooks it is in",
+        "gtptabs" to "Guitar Pro file from gtptabs",
+        "harptabs" to "Harmonica tab from harptabs",
+        "gametabs" to "Game music tab from gametabs",
+        "pages" to "The logbook page",
+        "songbooks" to "Its songbooks",
     )
 
     /** get.NAMES: each site's name in words. */
@@ -51,28 +51,28 @@ object LookupWords {
     const val SHEETS_SHARE = 0.5
 
     /** get.SHEET_FROM: a running sheet stage's detail once it asks a site, which the Requests tab's line reads. */
-    val SHEET_FROM: Map<String, String> = linkedMapOf("lacuerda" to "from LaCuerda", "ug" to "from Ultimate Guitar")
+    val SHEET_FROM: Map<String, String> = linkedMapOf("lacuerda" to "from LaCuerda", "ug" to "from UG")
 
     /** get.MATCH_NOT_FOUND: how the match stage begins for a song the offline index lacks. */
-    const val MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
+    const val MATCH_NOT_FOUND = "not in UG's index"
     const val GTPTABS_KEPT = "Guitar Pro file downloaded"
     const val HARPTABS_KEPT = "harmonica tab kept"
     const val GAMETABS_KEPT = "game music tab kept"
 
     /** get.NOT_IN_INDEX: the sheet stage's detail for a song Ultimate Guitar can't be asked about. */
-    const val NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
+    const val NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 
     /** get.ADDED: the song stage's detail for a song new to the phone (the computer's says its wanted.txt line). */
-    const val ADDED = "added to the library"
+    const val ADDED = "added to the book"
 
     /** get.NO_PDFS: the pdf stage's detail, skipped, while the phone makes no page of the song (SongPages.NONE). */
-    const val NO_PDFS = "this caracole makes no PDF"
+    const val NO_PDFS = "no PDFs on this scribe"
 
     /** get.PAGES_MADE: the pdf stage's detail once the phone has made the song's pages. */
-    const val PAGES_MADE = "its pages made; this caracole makes no PDF"
+    const val PAGES_MADE = "pages made; no PDFs on this scribe"
 
     /** get.LIBRARY_PAGE: the pages stage's detail on the phone, whose library page is made as it is asked for. */
-    const val LIBRARY_PAGE = "the library page shows it as it is now"
+    const val LIBRARY_PAGE = "the logbook shows it as it is now"
 
     /** The pdf stage's detail for a song with no sheet yet. */
     const val NO_SHEET_YET = "no sheet yet"
@@ -90,15 +90,15 @@ object LookupWords {
     // --- the envelope (get.py's `_usable` and `asking`) -----------------------------------------------------------
 
     /** `_usable`: a provider turned off. */
-    fun off(provider: String): String = "${name(provider)} is off in caracole.toml"
+    fun off(provider: String): String = "${name(provider)} is off (caracole.toml)"
 
     /** `_usable`: a provider that blocked caracole earlier in this lookup. */
     fun blockedEarlier(provider: String): String =
-        "${name(provider)} blocked caracole: it cools down, and the nightly run asks again later"
+        "${name(provider)} turned us back; we wait it out, and tonight's run asks again"
 
     /** `_usable`: a provider that failed earlier in this lookup. */
     fun failedEarlier(provider: String): String =
-        "${name(provider)} failed earlier in this lookup; the nightly run tries again"
+        "${name(provider)} failed earlier in this fetch; tried again tonight"
 
     /** A cooldown's end as get.py says it, `strftime("%Y-%m-%d %H:%M UTC")`, or "later" for none. */
     fun until(at: Instant?): String {
@@ -109,36 +109,35 @@ object LookupWords {
 
     /** `_usable`: a provider cooling down after a block. */
     fun cooling(provider: String, until: Instant?): String =
-        "${name(provider)} is cooling down after a block, until ${until(until)}"
+        "Waiting out ${name(provider)} until ${until(until)}"
 
     /** `asking`: a block met just now, and the cooldown it began. */
     fun blocked(error: ProviderError, until: Instant?): String =
-        "${name(error.provider)} blocked caracole (${error.message}): no more requests to it until ${until(until)}. " +
-            "Nothing was marked not found."
+        "${name(error.provider)} turned us back (${error.message}). No more asks until ${until(until)}. " +
+            "Nothing marked not on the sites."
 
     /** `_kept_for_sheets`: what follows the sheet held to what leaves [SHEETS_SHARE] (a half) for sheets. */
     fun keptForSheets(provider: String, policy: ProviderPolicy): String =
-        "this hour's lookups have spent half of their ${policy.lookupPerHour} requests to ${name(provider)}, and " +
-            "the other half is kept for sheets"
+        "half this hour's ${policy.lookupPerHour} asks of ${name(provider)} are spent; the rest is kept for sheets"
 
     /** `asking`'s BudgetExhausted: kept for sheets, the hour's lookups spent, or the lookup's own. */
     fun spent(provider: String, policy: ProviderPolicy, hour: Boolean, keptForSheets: Boolean): String {
         val spent = when {
             keptForSheets -> keptForSheets(provider, policy)
-            hour -> "this hour's ${policy.lookupPerHour} lookup requests to ${name(provider)} are spent"
-            else -> "the lookup's ${policy.lookupRequests} requests to ${name(provider)} are spent"
+            hour -> "no more asks of ${name(provider)} this hour (${policy.lookupPerHour} spent)"
+            else -> "this fetch's ${policy.lookupRequests} asks of ${name(provider)} are spent"
         }
-        return "$spent; the nightly run does the rest"
+        return "$spent; tonight's run does the rest"
     }
 
     /** `asking`'s ProviderError: the site's part ends for this lookup. */
     fun failed(error: ProviderError): String =
-        "${name(error.provider)} failed (${error.message}); the nightly run tries again"
+        "${name(error.provider)} failed (${error.message}); tried again tonight"
 
     /** report.shared_folder: a file that would go where another song keeps one. */
     fun sharedFolder(error: SharedFolder): String =
-        "${error.message}. Nothing is written over it, and the song waits until the folder is its own: remove one of " +
-            "the two (caracole remove), and ask for it again under a shorter title."
+        "${error.message}. Nothing written over it. The song waits for a folder of its own: remove one of the two " +
+            "(caracole remove), then ask again under a shorter title."
 
     /**
      * A stage's end for what asking [provider] came to: [done] of the work's value, else get.py's words for the rest
@@ -181,20 +180,20 @@ object LookupWords {
 
     /** The songbooks stage's detail when songbooks.toml can't be read. */
     fun songbooksUnread(error: String?): String =
-        "songbooks.toml can't be read (${error.orEmpty()}); no songbook was made again"
+        "can't read songbooks.toml (${error.orEmpty()}); no songbook remade"
 
     /** The songbooks stage's detail for a lookup that leaves them (`--no-songbooks`). */
-    const val SONGBOOKS_LEFT = "left to the job that makes the songbook after the lookups"
+    const val SONGBOOKS_LEFT = "left for the songbook's own job, after the fetches"
 
     /** The songbooks stage's detail for a song no songbook lists. */
-    const val NO_SONGBOOK = "no songbook lists it"
+    const val NO_SONGBOOK = "in no songbook"
 
     /** The songbooks stage's end once the songbooks [names] (", "-joined) list were made again as [stats] says. */
     fun songbooksEnd(names: String, stats: SongbookStats): StageEnd = when {
         stats.failed.isNotEmpty() ->
-            StageEnd("failed", "a file of ${stats.failed.joinToString(", ")} couldn't be made; the nightly run tries again")
+            StageEnd("failed", "a file of ${stats.failed.joinToString(", ")} wasn't made; tried again tonight")
         stats.fontError != null -> StageEnd("skipped", stats.fontError)
-        else -> StageEnd("done", if (stats.rendered > 0) "$names made again" else "$names up to date")
+        else -> StageEnd("done", if (stats.rendered > 0) "$names remade" else "$names up to date")
     }
 
     // --- a lookup command's lines and records ----------------------------------------------------------------------
@@ -255,10 +254,10 @@ object LookupWords {
 
     /** commands/get.py's _totals: the lookup's last line. */
     fun totals(result: LookupResult): String {
-        result.refused?.let { return "Nothing looked up: $it." }
+        result.refused?.let { return "Nothing fetched: $it." }
         val sent = result.requests.filterValues { it != 0 }
         val total = sent.values.sum()
-        var words = "$total request" + if (total == 1) "" else "s"
+        var words = "$total ask" + if (total == 1) "" else "s"
         if (sent.isNotEmpty()) words += " (" + sent.entries.joinToString(", ") { "${name(it.key)} ${it.value}" } + ")"
         return "Done in ${PyFormat.fixed(result.seconds, 1)} s: $words."
     }

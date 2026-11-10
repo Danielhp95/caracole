@@ -19,7 +19,7 @@ import io.github.danielhp95.caracole.core.sites.HarpTabsFetch
  */
 object HarpTabsStage : SiteStage {
     /** The stage's detail when nothing was asked: no song wanting a tab, or no candidate. */
-    const val NOT_TRIED = "no tab wanted, or harptabs.com's index has no tab of the title by the artist"
+    const val NOT_TRIED = "no tab wanted, or harptabs lists none of this title by the artist"
 
     /** The stage's detail when every candidate answered and none is the artist's. */
     const val NONE_THERE = "no tab there by the artist"

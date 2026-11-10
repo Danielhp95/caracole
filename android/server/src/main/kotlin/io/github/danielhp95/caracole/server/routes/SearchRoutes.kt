@@ -85,7 +85,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
             } catch (e: Exception) {
                 if (e is Superseded || !unreadable(e)) throw e
                 if (ticket.over) throw Superseded()  // stopped by a newer one: it reads now
-                jsonResponse(503, obj("query" to q, "error" to "The database can't be read: ${said(e)}"))
+                jsonResponse(503, obj("query" to q, "error" to "Can't read the database: ${said(e)}"))
             }
         } ?: jsonResponse(200, superseded)
     }
@@ -103,7 +103,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
             }
         } catch (e: Exception) {
             if (!unreadable(e)) throw e
-            throw Refused(503, "Can't search", "The database can't be read: ${said(e)}")
+            throw Refused(503, "Can't search", "Can't read the database: ${said(e)}")
         }
     }
 
@@ -144,7 +144,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
             jsonResponse(answered.status, answered.json)
         } catch (e: Exception) {
             if (!unreadable(e)) throw e
-            jsonResponse(503, obj("error" to "The database can't be read: ${said(e)}"))
+            jsonResponse(503, obj("error" to "Can't read the database: ${said(e)}"))
         }
     }
 

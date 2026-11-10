@@ -68,17 +68,17 @@ object LaCuerdaCommands {
             is Asked.Blocked -> return NOT_READ + blocked(asked)
             is Asked.Spent -> {
                 val p = PhoneConfig.read(db).provider(PROVIDER)
-                val spent = if (asked.hour) "this hour's ${p.lookupPerHour} lookup requests to $NAME are spent"
-                            else "the lookup's ${p.lookupRequests} requests to $NAME are spent"
-                return "$NOT_READ$spent; ask again later."
+                val spent = if (asked.hour) "no more asks of $NAME this hour (${p.lookupPerHour} spent)"
+                            else "this fetch's ${p.lookupRequests} asks of $NAME are spent"
+                return "$NOT_READ$spent. Ask again later."
             }
-            is Asked.Failed -> return "${NOT_READ}$NAME failed (${asked.error.message}); nothing changed: try again later."
+            is Asked.Failed -> return "${NOT_READ}$NAME failed (${asked.error.message}). Try again later."
         }
         recordOk(c, LookupWords.lookupRunOf(now))
-        if (found == null) return "Not found: $NAME has no artist page for $artist."
+        if (found == null) return "Not found: $NAME has no page for $artist."
         val (slug, songs) = found
         val name = db.one("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1", slug) { it.text(0) } ?: artist
-        return "Read: $NAME's page of $name lists ${plural(songs, "song")}, in the index now."
+        return "Read: $NAME's page of $name lists ${plural(songs, "song")}."
     }
 
     /** `caracole lacuerda --search QUERY` (with `--auto`: a search the page sent by itself); its last line, and with
@@ -96,19 +96,17 @@ object LaCuerdaCommands {
         }
         val key = LaCuerdaSearch.queryKey(query)
         if (key.isEmpty()) {
-            return end("${NOT_SEARCHED}LaCuerda's search reads only words of 4 letters or more, and $shownQuery has none.")
+            return end("${NOT_SEARCHED}LaCuerda needs a word of 4 letters or more; $shownQuery has none.")
         }
         say("running", "asking LaCuerda")
         val now = c.now
         LaCuerdaSearch.asked(db, key, now)?.let { was ->
             val at = Stamps.parse(was["at"])?.let { shown(Stamps.instant(it)) } ?: "?"
-            return end("Searched: $NAME was asked for $shownQuery on $at: ${plural(count(was["songs"]), "song")}, in " +
-                           "the index.", "done")
+            return end("Searched: $NAME, asked for $shownQuery on $at: ${plural(count(was["songs"]), "song")}.", "done")
         }
         Rekey.ensure(db, Stamps.of(now))  // songs.ensure_current_keys, which search_library's list_songs runs first
         if (LaCuerdaSearch.answered(db, query)) {  // what the page's gate saw may be older than the index now
-            return end("Found already: caracole has $shownQuery already, in your library or its copy of LaCuerda's " +
-                           "index; no request sent.", "done")
+            return end("Found already: $shownQuery is in your book or LaCuerda's index. No ask sent.", "done")
         }
         val config = PhoneConfig.read(db)
         val p = config.provider(PROVIDER)
@@ -117,16 +115,15 @@ object LaCuerdaCommands {
         }
         val policy = Pace.lookupPolicy(config, db, PROVIDER, now)
         if (policy.budget < 1) {
-            return end("${NOT_SEARCHED}this hour's ${p.lookupPerHour} lookup requests to $NAME are spent; ask again later.")
+            return end("${NOT_SEARCHED}no more asks of $NAME this hour (${p.lookupPerHour} spent). Ask again later.")
         }
         if (auto) {
             LaCuerdaSearch.failed(db, key, now)?.let { failure ->
-                return end("$NOT_SEARCHED${failure.said(shownQuery)}; its Ask LaCuerda button, Try again or a terminal " +
-                               "asks now.")
+                return end("$NOT_SEARCHED${failure.said(shownQuery)}. Ask LaCuerda or Try again asks now.")
             }
             if (LaCuerdaSearch.searchesUsed(db, now) >= LaCuerdaSearch.SEARCHES_PER_HOUR) {
-                return end("${NOT_SEARCHED}this hour's ${LaCuerdaSearch.SEARCHES_PER_HOUR} searches of LaCuerda the page " +
-                               "sends by itself are spent; its Ask LaCuerda button, or a terminal, asks anyway.")
+                return end("${NOT_SEARCHED}this hour's ${LaCuerdaSearch.SEARCHES_PER_HOUR} automatic searches are spent. " +
+                               "Ask LaCuerda asks anyway.")
             }
         }
         val asked = c.asking.ask(PROVIDER, policy.copy(budget = 1)) { client ->
@@ -137,26 +134,25 @@ object LaCuerdaCommands {
             is Asked.Cooling -> return end(NOT_SEARCHED + cooling(asked.until))
             is Asked.Off -> return end("$NOT_SEARCHED${asked.why}; nothing changed.")
             is Asked.Blocked -> return end(NOT_SEARCHED + blocked(asked))
-            is Asked.Spent -> return end("${NOT_SEARCHED}the search's one request to $NAME is spent; ask again later.")
+            is Asked.Spent -> return end("${NOT_SEARCHED}the search's one ask is spent. Ask again later.")
             is Asked.Failed -> {
                 // Not sent by the page by itself for an hour.
                 LaCuerdaSearch.recordFailure(db, key, now, "$NAME failed: ${asked.error.message}")
-                return end("${NOT_SEARCHED}$NAME failed (${asked.error.message}); nothing changed: try again later.")
+                return end("${NOT_SEARCHED}$NAME failed (${asked.error.message}). Try again later.")
             }
         }
         recordOk(c, LookupWords.searchRunId(now))
         return when {
             answer.songs.isNotEmpty() -> {
                 val some = if (answer.stated > BigInteger.valueOf(answer.songs.size.toLong())) {
-                    "${plural(answer.stated, "song")} for $shownQuery: the first ${answer.songs.size} are"
+                    "${plural(answer.stated, "song")} for $shownQuery; the first ${answer.songs.size} are"
                 } else {
                     "${plural(answer.songs.size.toLong(), "song")} for $shownQuery,"
                 }
-                end("Searched: $NAME has $some in the index now.", "done")
+                end("Searched: $NAME has $some in the index.", "done")
             }
             answer.artists.isNotEmpty() ->
-                end("Searched: $NAME names ${plural(answer.artists.size.toLong(), "artist")} for $shownQuery, in the " +
-                        "index now.", "done")
+                end("Searched: $NAME names ${plural(answer.artists.size.toLong(), "artist")} for $shownQuery.", "done")
             else -> end("Nothing found: $NAME has no song for $shownQuery.", "done")
         }
     }
@@ -168,11 +164,10 @@ object LaCuerdaCommands {
     }
 
     private fun cooling(until: Instant?): String =
-        "$NAME is cooling down after a block until ${shown(until)}; caracole won't ask it before then."
+        "waiting out $NAME until ${shown(until)}."
 
     private fun blocked(asked: Asked.Blocked): String =
-        "$NAME blocked caracole (${asked.error.message}); no more requests to it until " +
-            "${shown(asked.state.cooldownUntil)}."
+        "$NAME turned us back (${asked.error.message}); no asks until ${shown(asked.state.cooldownUntil)}."
 
     /** get.progress_line of the search's stage. */
     private fun progressLine(state: String, detail: String): String = LookupWords.progressLine(

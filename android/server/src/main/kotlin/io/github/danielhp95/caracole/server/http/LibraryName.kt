@@ -31,7 +31,7 @@ data class LibraryName(val name: String, val badge: String? = null) {
 
     companion object {
         /** library_name.BADGE_TITLE: the badge's tooltip. */
-        const val BADGE_TITLE = "Not your usual library"
+        const val BADGE_TITLE = "Scratch"
 
         /** The badge every page the phone writes itself shows beside the library's name. */
         const val PHONE_BADGE = "Phone"

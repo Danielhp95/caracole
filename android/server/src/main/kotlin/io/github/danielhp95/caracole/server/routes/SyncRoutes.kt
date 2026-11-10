@@ -103,7 +103,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
             engine.forget(made)
             throw Refused(409, "Compare again", SyncEngine.STALE)
         }
-        val shown = "Sync with ${Py.slice(Py.strip(kept.peer.name).ifEmpty { kept.address }, null, 120)}"
+        val shown = "Share with ${Py.slice(Py.strip(kept.peer.name).ifEmpty { kept.address }, null, 120)}"
         val (job, new) = queue.submitOrRefuse(JobSpec(
             title = shown, key = SYNCING + kept.address, kind = "sync", stages = SyncEngine.STAGES, display = shown,
             run = { context ->
@@ -125,8 +125,8 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
             },
         ))
         if (!new) {
-            throw Refused(409, "Syncing already", "A sync with ${kept.address} is on its way already (request " +
-                                                  "${job.id}): compare again once it is over.")
+            throw Refused(409, "Sharing already", "Already sharing with ${kept.address} (request ${job.id}). " +
+                                                  "Compare again once it's done.")
         }
         engine.forget(made)
         return Answers.queued(JobViews.view(job, queue), "/#tab=sync")
@@ -137,7 +137,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     private fun <T> asking(ask: () -> T): T = try {
         ask()
     } catch (e: SameCaracole) {
-        throw Refused(409, "The same caracole", e.message ?: "")
+        throw Refused(409, "The same scribe", e.message ?: "")
     } catch (e: SyncError.BadAddress) {
         throw Refused(400, "Not an address", e.message ?: "")
     } catch (e: PeerError) {
@@ -159,7 +159,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
             val unit = if (tab < 0) "" else line.substring(tab + 1)
             if (side == null || unit !in ids) {
                 throw Refused(400, "Not a choice", "${PyStr.repr(Py.slice(line, null, 200))} isn't a choice of this " +
-                                                   "comparison's: here, there or skip, a tab, then one of its units.")
+                                                   "compare: here, there or skip, a tab, then a unit.")
             }
             if ((found[unit] ?: side) != side) {
                 throw Refused(400, "Not a choice", "${Py.slice(unit, null, 200)} is chosen two ways.")
@@ -178,8 +178,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         const val SYNCING = "sync:"
 
         /** sync_routes.GONE: a comparison no longer kept. */
-        const val GONE = "That comparison is more than 10 minutes old, or caracole serve has restarted since: " +
-            "compare the two again."
+        const val GONE = "That comparison is over 10 minutes old, or caracole serve restarted. Compare again."
 
         private const val CONFLICT = "conflict"
         private val SIDES = mapOf("here" to Side.HERE, "there" to Side.THERE, "skip" to Side.SKIP)

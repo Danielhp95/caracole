@@ -24,7 +24,7 @@ import java.time.ZonedDateTime
  * Python's answers, byte for byte (RequestsReplay).
  *
  * Under **Now**, the request that runs, with how long ago it started, its line and its steps (the chips the library
- * page draws under a song's line), and those queued under it in order ("Queued, next", "Queued, 2nd"), each with
+ * page draws under a song's line), and those queued under it in order ("Queued · next", "Queued · 2nd"), each with
  * Cancel (`POST /jobs/cancel`); then the finished ones, newest first under **Today** and **Earlier** (by when each
  * ended, in the phone's time zone), each with its outcome (a word in its tone, a reason, its next step and the one
  * beside it) and when it ended. A next step is a link (`href`) or a form the tab posts with the form token (`post`
@@ -46,20 +46,19 @@ import java.time.ZonedDateTime
 object Feed {
     val STATE_TEXT: Map<String, String> = linkedMapOf(
         "queued" to "Queued", "running" to "Running", "done" to "Done", "failed" to "Failed", "waiting" to "Waiting",
-        "skipped" to "Skipped", "cancelled" to "Cancelled", "interrupted" to "Interrupted",
+        "skipped" to "Skipped", "cancelled" to "Cancelled", "interrupted" to "Cut short",
     )
 
-    /** The next steps that are the request's way on; the others (Try again, Request by name…) are plain buttons. */
-    val PRIMARY: Set<String> = setOf("Open", "Pick the match", "Get it from there", "Open songbook",
-                                     "See what caracole search finds")
-    const val SEARCH = "See what caracole search finds"
+    /** The next steps that are the request's way on; the others (Try again, Ask by name…) are plain buttons. */
+    val PRIMARY: Set<String> = setOf("Open", "Pick", "Fetch from there", "Open songbook", "Search the index")
+    const val SEARCH = "Search the index"
 
     /** What `caracole fetch --song` says of a song that needs review first (commands/fetch.py). */
     private const val NEEDS_REVIEW = "needs review first"
-    const val PICK_STAGE = "Not fetched yet: its Ultimate Guitar sheet waits for the match. Pick the match, with " +
-        "Fetch it now ticked, and it is fetched then."
-    const val PICK_STEP = "Not fetched yet: caracole fetch waits for the match. Pick the match, with Fetch it now " +
-        "ticked, and it is fetched then."
+    const val PICK_STAGE = "Not fetched: its UG sheet waits for the match. Pick it, with Fetch ticked, and we fetch it " +
+        "then."
+    const val PICK_STEP = "Not fetched: caracole fetch waits for the match. Pick it, with Fetch ticked, and we fetch " +
+        "it then."
 
     private val GROUPS = listOf("Now", "Today", "Earlier")
 
@@ -119,13 +118,13 @@ object Feed {
         return JsonObject(shown)
     }
 
-    /** A request that waits: its place ("Queued, next", "Queued, 3rd") and Cancel, which takes it out of the queue. */
+    /** A request that waits: its place ("Queued · next", "Queued · 3rd") and Cancel, which takes it out of the queue. */
     private fun queued(job: Job, place: Int): JsonObject {
-        val shown = head(job, Job.QUEUED, "Queued, ${ordinal(place)}")
+        val shown = head(job, Job.QUEUED, "Queued · ${ordinal(place)}")
         shown["actions"] = JsonArray(listOf(JsonObject(linkedMapOf(
             "label" to JsonPrimitive("Cancel"), "post" to JsonPrimitive("/jobs/cancel"),
             "fields" to JsonObject(mapOf("job" to JsonPrimitive(job.id.toString()))),
-            "aria" to JsonPrimitive("Cancel the request for ${job.display}"), "primary" to JsonPrimitive(false),
+            "aria" to JsonPrimitive("Cancel ${job.display}"), "primary" to JsonPrimitive(false),
         ))))
         return JsonObject(shown)
     }

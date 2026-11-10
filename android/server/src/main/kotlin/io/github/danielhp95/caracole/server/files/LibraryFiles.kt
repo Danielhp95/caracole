@@ -115,9 +115,9 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
             is Looked.Page -> Response(200, Body.FromFile(looked.file, looked.file.length()),
                                        (listOf("Content-Type" to looked.entry.type) + looked.entry.headers.toList()).toMutableList())
             is Looked.Gated -> when (looked.gate) {
-                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "This song was removed on the phone.", name = name())
+                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "Removed from the phone's book.", name = name())
                 else -> MessagePage.page(409, "Changed on the phone",
-                                         "This song changed on the phone since the computer made its page.",
+                                         "Changed on the phone since the computer wrote this page.",
                                          sheetOf(looked.entry.unit)?.let { it to "The phone's sheet" }, name())
             }
             Looked.Missing -> null

@@ -35,7 +35,7 @@ internal class Artists(private val db: Db, private val enabled: Set<String>, pri
     /** search_routes._artist_songs, for a [key] and an [offset] api_artist has checked. */
     fun ug(key: String, offset: String): Answered {
         val named = Search.indexArtist(db, key)
-            ?: return Answered(404, obj("error" to "The offline Ultimate Guitar index has no such artist."))
+            ?: return Answered(404, obj("error" to "UG's index has no such artist."))
         val from = BigInteger(offset)
         val (hits, total) = Search.artistSongs(db, key, limit = ARTIST_PAGE, offset = from.min(INT_MAX).toInt())
         val songs = Songs.list(db)
@@ -68,7 +68,7 @@ internal class Artists(private val db: Db, private val enabled: Set<String>, pri
     /** search_routes.api_harptabs_artist: by their page's [path] (`artist/<number>/<slug>`). */
     fun harptabs(path: String): Answered {
         val named = (if (isArtistPath(path)) SiteSearch.harptabsArtist(db, path) else null)
-            ?: return Answered(404, obj("error" to "harptabs.com's index has no such artist."))
+            ?: return Answered(404, obj("error" to "harptabs' index has no such artist."))
         val read = db.one("SELECT 1 FROM harptabs_artists WHERE path = ?", path) { true } ?: false
         val songs = Songs.list(db)
         val rows = Rows(db, songs, cards, forms, enabled)

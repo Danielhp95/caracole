@@ -62,10 +62,10 @@ internal object LookupForms {
     /** What a full queue's refusal says of a song new to the library, which the phone added nowhere. */
     const val NOTHING_ADDED = LibraryRoutes.FULL
 
-    const val NO_SUCH_SONG = "That song isn't in the library."
+    const val NO_SUCH_SONG = "That song isn't in the logbook."
 
     /** versions_routes._NO_SHEET: a viewer's path that names no sheet of the library's. */
-    private val NO_SHEET get() = Refused(404, "Not found", "There's no such sheet in the library.")
+    private val NO_SHEET get() = Refused(404, "Not found", "No such sheet in the book.")
 
     /** review.SHOWN: the candidates a review lists. */
     private const val SHOWN = 9
@@ -116,7 +116,7 @@ internal object LookupForms {
     fun overrides(db: Db): Overrides = try {
         Overrides.read(db)
     } catch (e: OverridesError) {
-        throw Refused(503, "overrides.toml can't be read", "overrides.toml can't be read: ${e.message}.")
+        throw Refused(503, "Can't read overrides.toml", "Can't read overrides.toml: ${e.message}.")
     }
 
     /**
@@ -175,14 +175,14 @@ internal object LookupForms {
         val artistKey = if (sep >= 0) ug.substring(0, sep) else ug
         val songKey = if (sep >= 0) ug.substring(sep + 1) else ""
         if (ug.isNotEmpty() && (sep < 0 || artistKey.isEmpty() || songKey.isEmpty() || '/' in songKey)) {
-            throw Refused(400, "Not a pick", "${PyStr.repr(ug)} isn't an Ultimate Guitar song (artist-key/song-key).")
+            throw Refused(400, "Not a pick", "${PyStr.repr(ug)} isn't a UG song (artist-key/song-key).")
         }
         val tab = pick.getValue("tab")
         if (tab.isNotEmpty()) {
             try {
                 OverrideUrls.tabIdFromUrl(tab)
             } catch (e: OverridesError) {
-                throw Refused(400, "Not a pick", "That isn't an Ultimate Guitar tab: ${e.message}")
+                throw Refused(400, "Not a pick", "Not a UG tab: ${e.message}")
             }
         }
         return pick to if (ug.isNotEmpty()) artistKey to songKey else null
@@ -194,11 +194,11 @@ internal object LookupForms {
 
     /** library_routes.harptabs_field. */
     fun harptabsField(form: Map<String, String>): String? =
-        field(form, "harptabs", "a harptabs.com tab") { OverrideUrls.harptabsPickFromUrl(it).url }
+        field(form, "harptabs", "a harptabs tab") { OverrideUrls.harptabsPickFromUrl(it).url }
 
     /** library_routes.gametabs_field. */
     fun gametabsField(form: Map<String, String>): String? =
-        field(form, "gametabs", "a gametabs.net tab") { OverrideUrls.gametabsPickFromUrl(it).url }
+        field(form, "gametabs", "a gametabs tab") { OverrideUrls.gametabsPickFromUrl(it).url }
 
     private fun field(form: Map<String, String>, name: String, what: String, url: (String) -> String): String? {
         val value = Py.strip(form[name].orEmpty())
@@ -208,7 +208,7 @@ internal object LookupForms {
         return try {
             url(value)
         } catch (e: OverridesError) {
-            throw Refused(400, "Not a pick", "That isn't $what: ${e.message}")
+            throw Refused(400, "Not a pick", "Not $what: ${e.message}")
         }
     }
 
@@ -245,14 +245,14 @@ internal object LookupForms {
         val song = found?.let { NamedSong(it.artist, it.title, null, null) } ?: SongForm.song(form)
         // the song as your library has it: no second song, and no new source for it; else caracole serve's note
         // names its wanted.txt line, and the phone writes none
-        val note = found?.let { "In your library as ${it.display}." }.orEmpty()
+        val note = found?.let { "In your book as ${it.display}." }.orEmpty()
         val commands = JobCommands.lookupSteps(song.artist, song.title, album = song.album, durationMs = song.durationMs,
                                                ug = pick.getValue("ug").ifEmpty { null },
                                                tab = pick.getValue("tab").ifEmpty { null },
                                                lacuerda = lacuerda, harptabs = harptabs, gametabs = gametabs)
         val full = if (found != null) {
-            "$note The queue is full, so it wasn't looked up now: the nightly run looks for it, or ask again once the " +
-                "queue empties."
+            "$note The queue is full: not fetched now. Tonight's run looks for it, or ask again once the queue " +
+                "empties."
         } else NOTHING_ADDED
         return LookupAsk(spec("Fetch ${song.artist} - ${song.title}", found?.key ?: song.key, commands,
                               display = found?.display ?: song.display, note = note, fetching = true), full)
@@ -275,9 +275,9 @@ internal object LookupForms {
         val (song, overrides) = database.read { db -> overrides(db).let { song(db, asked) to it } }
         notIgnored(song, overrides)
         if (reviewFirst(song, overrides)) {
-            throw Refused(409, "Review it first",
-                          "caracole isn't sure which Ultimate Guitar song ${song.display} is, so it can't fetch it " +
-                              "yet: run caracole review, or settle it in overrides.toml, then fetch it.")
+            throw Refused(409, "Pick its match first",
+                          "Not sure which UG song ${song.display} is, so we can't fetch it yet. Run caracole review " +
+                              "or settle it in overrides.toml, then fetch.")
         }
         return LookupAsk(spec("Fetch ${song.display}", song.key, JobCommands.lookupSteps(song.artist, song.title),
                               display = song.display, fetching = true), QUEUE_FULL)
@@ -293,7 +293,7 @@ internal object LookupForms {
         val name = Py.split(form["name"].orEmpty()).joinToString(" ")
         val (display, key, who) = if (name.isNotEmpty() && slug.isEmpty()) {
             if (Py.len(name) > SongForm.LIMITS.getValue("artist") || LaCuerda.artistSlugCandidates(name).isEmpty()) {
-                throw Refused(400, "Not an artist", "That name makes no LaCuerda artist page's address.")
+                throw Refused(400, "Not an artist", "That name makes no LaCuerda artist page.")
             }
             Triple(name, JobCommands.LACUERDA_ARTIST + "name:" + LaCuerda.nameKey(name), name)
         } else {
@@ -304,7 +304,7 @@ internal object LookupForms {
                 ?: throw Refused(404, "No such artist", "LaCuerda's index has no such artist.")
             Triple(named.artist, JobCommands.LACUERDA_ARTIST + slug, slug)
         }
-        return LookupAsk(spec("Read the page of $display on LaCuerda", key, JobCommands.lacuerdaArtistSteps(who, display),
+        return LookupAsk(spec("Read $display's page on LaCuerda", key, JobCommands.lacuerdaArtistSteps(who, display),
                               display = "$display on LaCuerda"), QUEUE_FULL)
     }
 
@@ -313,13 +313,13 @@ internal object LookupForms {
     fun harptabsRead(database: Database, form: Map<String, String>): LookupAsk {
         val path = Py.strip(form["path"].orEmpty())
         if (!HARP_ARTIST.matches(path)) {
-            throw Refused(400, "Not an artist", "Which artist? The form names no harptabs.com artist page.")
+            throw Refused(400, "Not an artist", "Which artist? The form names no harptabs artist page.")
         }
         val named = database.read { db -> SiteSearch.harptabsArtist(db, path) }
-            ?: throw Refused(404, "No such artist", "harptabs.com's index has no such artist.")
-        return LookupAsk(spec("Read the page of ${named.artist} on harptabs.com", JobCommands.HARPTABS_ARTIST + path,
+            ?: throw Refused(404, "No such artist", "harptabs' index has no such artist.")
+        return LookupAsk(spec("Read ${named.artist}'s page on harptabs", JobCommands.HARPTABS_ARTIST + path,
                               JobCommands.harptabsArtistSteps(path, named.artist),
-                              display = "${named.artist} on harptabs.com"), QUEUE_FULL)
+                              display = "${named.artist} on harptabs"), QUEUE_FULL)
     }
 
     /**
@@ -336,28 +336,27 @@ internal object LookupForms {
         val q = Py.split(form["q"].orEmpty()).joinToString(" ")
         val byHand = form["by_hand"].orEmpty() == "1"
         if (q.isEmpty() || Py.len(q) > QUERY_LIMIT) {
-            throw Refused(400, "Not a query", "Which query? A search is 1 to $QUERY_LIMIT characters.")
+            throw Refused(400, "Not a query", "Which query? 1 to $QUERY_LIMIT characters.")
         }
         if (LaCuerdaSearch.queryKey(q).isEmpty()) {
-            throw Refused(400, "Not a query", "LaCuerda's search reads only words of 4 letters or more: “$q” has none.")
+            throw Refused(400, "Not a query", "LaCuerda's search reads words of 4 letters or more: “$q” has none.")
         }
         val said = if (searchesLacuerda) database.read { db -> LaCuerdaSearch.gate(config, db, q, now) } else null
         when {
             said == null -> throw Refused(409, "Found already",
-                                          "Your library or LaCuerda's index has “$q” already: no search needed.")
+                                          "Your logbook or LaCuerda's index has “$q” already: no search needed.")
             said.state == "asked" -> throw Refused(409, "Searched already",
-                                                   "LaCuerda was asked for “$q” within 30 days: what it answered is in " +
-                                                       "its index.")
+                                                   "LaCuerda was asked for “$q” within 30 days: its answer is in the " +
+                                                       "index.")
             said.state == "spent" -> throw Refused(429, "Not now",
-                                                   "LaCuerda is cooling down after a block, or this hour's lookups to " +
-                                                       "it are spent: ask again later.")
+                                                   "LaCuerda turned us back, or no more asks this hour. Ask again " +
+                                                       "later.")
             said.state == "failed" && !byHand -> throw Refused(429, "Not by itself",
-                                                               "${said.why.orEmpty().removeSuffix(".")}: press Ask " +
-                                                                   "LaCuerda to ask anyway.")
+                                                               "${said.why.orEmpty().removeSuffix(".")}. Ask " +
+                                                                   "LaCuerda asks anyway.")
             said.state == "button" && !byHand -> throw Refused(429, "Not by itself",
-                                                               "This hour's ${LaCuerdaSearch.SEARCHES_PER_HOUR} searches " +
-                                                                   "the page sends by itself are spent: press Ask " +
-                                                                   "LaCuerda to ask anyway.")
+                                                               "This hour's ${LaCuerdaSearch.SEARCHES_PER_HOUR} automatic " +
+                                                                   "searches are spent. Ask LaCuerda asks anyway.")
         }
         return LookupAsk(spec("Search LaCuerda for “$q”", JobCommands.LACUERDA_SEARCH + said!!.key,
                               JobCommands.lacuerdaSearchSteps(q, auto = !byHand), display = "“$q” on LaCuerda"),
@@ -386,8 +385,8 @@ internal object LookupForms {
             Triple(song, overrides, SheetVersions.mayKeep(db, song.id, versions, overrides.block))
         }
         if (toKeep.isEmpty()) {
-            throw Refused(409, "Nothing to do", "Nothing is left to keep of ${song.display}: every Ultimate Guitar " +
-                                                "version caracole may keep is kept already, or can't be.")
+            throw Refused(409, "Nothing to do", "Nothing left to keep of ${song.display}: every UG version we may " +
+                                                "keep is kept, or can't be.")
         }
         notIgnored(song, overrides)
         return LookupAsk(spec("Fetch the other versions of ${song.display}", song.key,

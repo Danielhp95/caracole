@@ -96,7 +96,7 @@ object Compare {
                 when {
                     aChanged && !bChanged -> MINE to changed("here", a, was)
                     bChanged && !aChanged -> THEIRS to changed("there", b, was)
-                    else -> CONFLICT to "changed on both sides since the last sync"
+                    else -> CONFLICT to "both books changed it since the last share"
                 }
             }
             found.add(Difference(id, label, a, b, proposal, why))
@@ -105,15 +105,15 @@ object Compare {
     }
 
     private fun firstTime(a: SyncUnit?, b: SyncUnit?): Pair<String, String> = when {
-        b == null -> MINE to "only here"
-        a == null -> THEIRS to "only there"
-        else -> CONFLICT to "on both sides, different, and never synced"
+        b == null -> MINE to "only in our book"
+        a == null -> THEIRS to "only in theirs"
+        else -> CONFLICT to "in both books, different, never shared"
     }
 
     private fun changed(where: String, unit: SyncUnit?, was: String?): String = when {
-        unit == null -> "gone $where since the last sync"
-        was == null -> "new $where since the last sync"
-        else -> "changed $where since the last sync"
+        unit == null -> "gone $where since the last share"
+        was == null -> "new $where since the last share"
+        else -> "changed $where since the last share"
     }
 
     /** Which differences this side takes ([THEIRS]) and which the peer takes ([MINE]): each as proposed, each conflict

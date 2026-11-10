@@ -268,7 +268,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * sync; the file is deleted after, and the WAL the merge grew given back (Database.checkpoint). */
     fun importIndex(file: File): Job = queue.submit(
         JobSpec(
-            title = "Import the index", key = "index", kind = "index", display = "The computer's index",
+            title = "Import the computer's index", key = "index", kind = "index", display = "The computer's index",
             stages = listOf("merge" to "Merging the index"),
             run = { job ->
                 job.stage("merge", "running")

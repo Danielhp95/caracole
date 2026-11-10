@@ -34,8 +34,8 @@ data class Applied(val taken: List<String>, val left: List<Pair<String, String>>
  */
 object Take {
     /** Why a unit is left: either side holds it otherwise than when the two were compared. */
-    const val CHANGED_HERE = "changed here since the comparison"
-    const val CHANGED_THERE = "changed there since the comparison"
+    const val CHANGED_HERE = "changed here since compared"
+    const val CHANGED_THERE = "changed there since compared"
 
     /** The order units are taken in: songs first, then tombstones, songbooks and the rest (peer_sync._KINDS). */
     private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
@@ -117,7 +117,7 @@ object Take {
                                          "page" to JsonPrimitive(SongTake.text(SongTake.need(it, "page")))))
                     })
                     "block" -> OverridesStore.putBlock(db, tab(rest), doc != null)
-                    else -> throw UnitError("this caracole doesn't know units of kind ${PyRepr.str(kind)}")
+                    else -> throw UnitError("we don't know entries of kind ${PyRepr.str(kind)}")
                 }
             } catch (e: Exception) {
                 if (databaseFailed(e)) throw e
@@ -192,7 +192,7 @@ object Take {
             val parts = pair?.getOrNull(1) as? JsonObject
             if (pair == null || pair.size != 2 || parts == null) throw UnitError("a songbook's song that can't be read")
             parts.keys.firstOrNull { it !in SETTING_PARTS }?.let {
-                throw UnitError("its document can't be read (TypeError: check_setting() got an unexpected keyword " +
+                throw UnitError("its entry can't be read (TypeError: check_setting() got an unexpected keyword " +
                                 "argument ${PyRepr.str(it)})")
             }
             settingProblem(parts)?.let { throw UnitError("a setting: $it") }

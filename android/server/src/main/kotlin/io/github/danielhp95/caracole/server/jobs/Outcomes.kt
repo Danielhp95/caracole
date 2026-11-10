@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /** outcome.py's Chip: a step of a request, its state (waiting, running, done, failed; or plain, over and neither,
- * "Match: not on UG") and the site it names ([source], "" for none). */
+ * "Match · not on UG") and the site it names ([source], "" for none). */
 data class Chip(val name: String, val state: String, val source: String = "") {
     fun asJson(): JsonObject = JsonObject(linkedMapOf(
         "name" to JsonPrimitive(name), "source" to JsonPrimitive(source), "state" to JsonPrimitive(state),
@@ -64,49 +64,49 @@ object Outcomes {
     /** A request of other commands: each command's step, by what it does. */
     val COMMAND_STEPS: Map<String, String> = mapOf(
         "add" to "Add", "match" to "Match", "fetch" to "Sheet", "render" to "PDF", "review" to "Your pick",
-        "remove" to "Remove", "lacuerda" to "LaCuerda", "songbook" to "Songbook", JobCommands.LOOKUP to "Look it up",
+        "remove" to "Remove", "lacuerda" to "LaCuerda", "songbook" to "Songbook", JobCommands.LOOKUP to "Fetch",
     )
 
     /** A sync's, a take's and a merge's steps, by their stages' names (outcome.py's PEER_STEPS). */
     val PEER_STEPS: Map<String, String> = mapOf(
-        "compare" to "Compare", "check" to "Check", "take" to "Take", "give" to "Give", "render" to "Render",
-        "mirror" to "Pages", "agree" to "Agree", "index" to "Indexes", "merge" to "Merge",
+        "compare" to "Compare", "check" to "Check", "take" to "Take", "give" to "Give", "render" to "Pages",
+        "mirror" to "Copy", "agree" to "Agree", "index" to "Indexes", "merge" to "Merge",
     )
 
     private val OVER = setOf(Job.DONE, Job.SKIPPED, Job.FAILED)
     private const val MATCHED_IN = "UG"
-    const val NOT_ON_UG = "Match: not on UG"
-    private const val MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"  // get.py's
+    const val NOT_ON_UG = "Match · not on UG"
+    private const val MATCH_NOT_FOUND = "not in UG's index"  // get.py's
     private const val GTPTABS_KEPT = "Guitar Pro file downloaded"  // get.py's
 
     /** A running sheet stage's site, by its words (get.py's SHEET_FROM, icons.tag). */
-    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from Ultimate Guitar" to "UG")
+    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from UG" to "UG")
 
     /** What a stage leaves for tonight's run when it ends in a wait or an error: its name, and its verb. */
     internal val WHAT = mapOf(
         "sheet" to ("the sheet" to "waits"), "lyrics" to ("the lyrics" to "wait"),
-        "ug" to ("its other versions and its tab" to "wait"), "lacuerda" to ("LaCuerda's sheet" to "waits"),
+        "ug" to ("its other versions and tab" to "wait"), "lacuerda" to ("LaCuerda's sheet" to "waits"),
         "gtptabs" to ("the Guitar Pro file" to "waits"), "harptabs" to ("the harmonica tab" to "waits"),
-        "gametabs" to ("the tab of game music" to "waits"),
+        "gametabs" to ("the game music tab" to "waits"),
     )
 
     // How get.py words them (_Lookup.asking, _usable), as outcome.py reads them.
-    private val FAILED = PyRegex.compile("""^(.+?) failed \((.*)\); the nightly run tries again$""")
+    private val FAILED = PyRegex.compile("""^(.+?) failed \((.*)\); tried again tonight$""")
     private val STATUS = PyRegex.compile("""^[\w.-]+: (\d{3})(?::|$)""")
-    private val BLOCKED = PyRegex.compile("""^(.+?) blocked caracole\b(?:.*?no more requests to it until (.+?)\.(?:\s|$))?""")
-    private val COOLING = PyRegex.compile("""^(.+?) is cooling down after a block, until (.+)$""")
-    private val SPENT = PyRegex.compile("""^(.+); the nightly run does the rest$""")
+    private val BLOCKED = PyRegex.compile("""^(.+?) turned us back\b(?:.*?No more asks until (.+?)\.(?:\s|$))?""")
+    private val COOLING = PyRegex.compile("""^Waiting out (.+?) until (.+)$""")
+    private val SPENT = PyRegex.compile("""^(.+); tonight's run does the rest$""")
 
-    const val NO_CHORDS = "Ultimate Guitar has no chords for it"
-    const val NOT_INDEXED = "Not in the offline Ultimate Guitar index under this name"
-    const val NOT_ASKED = "caracole didn't ask Ultimate Guitar this time (a cooldown, a block, a spent budget or an " +
-        "error: the output says which)."
-    const val IN_REVIEW = "caracole isn't sure which Ultimate Guitar song it is."
-    const val CANCELLED = "Taken out of the queue before it ran."
-    const val INTERRUPTED_RAN = "caracole serve stopped while it ran: run it again to finish it."
-    const val INTERRUPTED_WAITED = "caracole serve stopped before it ran: Try again runs it."
+    const val NO_CHORDS = "UG has no chords for it"
+    const val NOT_INDEXED = "Not in UG's index under this name"
+    const val NOT_ASKED = "UG not asked this time: waiting out a block, no asks left, or an error. The output says " +
+        "which."
+    const val IN_REVIEW = "Not sure which UG song it is."
+    const val CANCELLED = "Cancelled before it ran."
+    const val INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
+    const val INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
-                                  "gtptabs" to "gtptabs.com's index lists a page for it")
+                                  "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
     val COMPARE_AGAIN = Action("Compare again", href = "/#tab=sync")
 
@@ -236,11 +236,11 @@ object Outcomes {
         }
         if (tone == "review") {
             val picker = facts?.picker
-            return Outcome("review", "Needs review", IN_REVIEW,
-                           if (picker != null) Action("Pick the match", href = href(picker)) else inLibrary(songId))
+            return Outcome("review", "Needs your pick", IN_REVIEW,
+                           if (picker != null) Action("Pick", href = href(picker)) else inLibrary(songId))
         }
-        val (word, rest) = partition(text, ": ")
         if (JobCommands.INDEX_READS.any(job.key::startsWith)) {
+            val (word, rest) = partition(text, ": ")  // "Read: …", "Not read: …"
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)
         }
         if (tone == "missing") return notFound(job, facts, songId)
@@ -248,6 +248,7 @@ object Outcomes {
         if (tone == "waiting") {
             return Outcome("waiting", text, waits(job.stages).ifEmpty { if (job.stages.isNotEmpty()) "" else NOT_ASKED }, again)
         }
+        val (word, rest) = partition(text, " · ")  // "Added · fetched tonight"
         return Outcome(tone, word, if (rest.isNotEmpty()) sentence(capitalFirst(rest)) else "")
     }
 
@@ -266,11 +267,11 @@ object Outcomes {
         val given = job.units.count { it.outcome == "given" }
         val left = job.units.count { it.outcome == "left" }
         val parts = ArrayList<String>()
-        if (taken > 0 || kind != "sync") parts += "took ${Status.plural(taken, "change")} here"
-        if (given > 0) parts += "gave ${Status.plural(given, "change")} there"
-        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(" and ")) + "." else "Nothing changed on either side."
+        if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
+        if (given > 0) parts += "${Status.plural(given, "change")} given"
+        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(" and ")) + "." else "Nothing changed in either book."
         if (line.tone == "ready") return Outcome("ready", line.text, said)
-        val word = if (left > 0) partition(line.text, ": ").first else "Not taken"
+        val word = if (left > 0) partition(line.text, " · ").first else "Not taken"
         val reason = if (left > 0) "$said ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
                      else sentence(line.text)
         return Outcome("waiting", word, reason, action)
@@ -281,27 +282,27 @@ object Outcomes {
     private fun notFound(job: Shape, facts: SongFacts?, songId: Long?): Outcome {
         val unmatched = facts != null && facts.notFound
         val head = if (facts != null && facts.askedUg) NO_CHORDS else if (unmatched) NOT_INDEXED else ""
-        val search = if (unmatched && songId != null) Action("See what caracole search finds", href = "/review?song=$songId")
+        val search = if (unmatched && songId != null) Action("Search the index", href = "/review?song=$songId")
                      else null
         if (job.stages.any { it.name == "gtptabs" && it.state == Job.DONE && it.detail == GTPTABS_KEPT }) {
-            return Outcome("missing", "Not found", joined(head, "caracole got a Guitar Pro file from gtptabs.com"),
+            return Outcome("missing", "Not on the sites", joined(head, "Got a Guitar Pro file from gtptabs"),
                            inLibrary(songId), search)
         }
         val where = facts?.elsewhere
         if (where != null && songId != null && where.first in ELSEWHERE) {
             val (source, url) = where
             val fields = listOf("song" to songId.toString()) + if (source == "lacuerda") listOf("lacuerda" to url) else emptyList()
-            return Outcome("missing", "Not found", joined(head, ELSEWHERE.getValue(source)),
-                           Action("Get it from there", post = "/lookup", fields = fields), search)
+            return Outcome("missing", "Not on the sites", joined(head, ELSEWHERE.getValue(source)),
+                           Action("Fetch from there", post = "/lookup", fields = fields), search)
         }
         val named = job.job.display.ifEmpty { job.job.title }
-        return Outcome("missing", "Not found", sentence(head),
-                       search ?: Action("Request by name", href = "/#" + PyUrl.urlencode(listOf("q" to named))))
+        return Outcome("missing", "Not on the sites", sentence(head),
+                       search ?: Action("Ask by name", href = "/#" + PyUrl.urlencode(listOf("q" to named))))
     }
 
-    private fun joined(head: String, rest: String): String = sentence(if (head.isNotEmpty()) "$head; $rest" else rest)
+    private fun joined(head: String, rest: String): String = sentence(if (head.isNotEmpty()) "$head. $rest" else rest)
 
-    private fun inLibrary(songId: Long?): Action? = songId?.let { Action("Open in the library", href = "/#song=$it") }
+    private fun inLibrary(songId: Long?): Action? = songId?.let { Action("Open in the book", href = "/#song=$it") }
 
     /** The first stage's wait or error, in one sentence; "" for none; [afterSheet], the stages after the sheet. */
     private fun waits(stages: List<Stage>, afterSheet: Boolean = false): String {
@@ -347,19 +348,19 @@ object Outcomes {
             FAILED.find(detail)?.let { m ->
                 val status = STATUS.find(m.groupValues[2])
                 val answered = if (status != null) "answered ${status.groupValues[1]}" else "failed"
-                return "${m.groupValues[1]} $answered: $what $verb for tonight's run."
+                return "${m.groupValues[1]} $answered. $what $verb until tonight."
             }
         }
         if (stage.state != Job.SKIPPED) return ""
         BLOCKED.find(detail)?.let { m ->
             val until = m.groups[2]?.value?.takeIf { it.isNotEmpty() } ?: "it cools down"
-            return "${m.groupValues[1]} blocked caracole: $what $verb until $until."
+            return "${m.groupValues[1]} turned us back. $what $verb until $until."
         }
         COOLING.find(detail)?.let { m ->
-            return "${m.groupValues[1]} is cooling down after a block: $what $verb until ${m.groupValues[2]}."
+            return "Waiting out ${m.groupValues[1]} until ${m.groupValues[2]}. $what $verb."
         }
         SPENT.find(detail)?.let { m ->
-            return "${capitalFirst(m.groupValues[1])}: $what $verb for tonight's run."
+            return "${capitalFirst(m.groupValues[1])}. $what $verb until tonight."
         }
         return ""
     }

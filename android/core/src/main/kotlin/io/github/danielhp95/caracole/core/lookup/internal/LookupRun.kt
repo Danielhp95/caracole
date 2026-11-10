@@ -82,7 +82,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         overrides = try {
             lookup.readOverrides(db)
         } catch (e: OverridesError) {
-            return refuse("overrides.toml can't be read: ${e.message}")
+            return refuse("Can't read overrides.toml: ${e.message}")
         }
         try {
             lookup.store.ensureCurrentKeys(db)
@@ -211,22 +211,22 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     private fun findSong(): String {
         val key = Normalize.identityKey(request.artist, request.title)
         if (key in overrides.ignore) {
-            throw Stop("${request.display} is ignored in overrides.toml: take it out of [ignore] to look it up")
+            throw Stop("${request.display} is ignored (overrides.toml [ignore]). Take it out to fetch it")
         }
         if (!request.tab.isNullOrEmpty()) refuseAnUnusedKind(request.tab)
         var song = Songs.byKey(db, key)
-        var said = "in the library"
+        var said = "in the book"
         if (song == null) {
             song = try {
                 lookup.store.add(db, request.artist, request.title, request.album, request.durationMs,
                                  now = Stamps.of(now))
             } catch (e: IllegalArgumentException) {  // a song the phone can't hold, as wanted.txt can't
-                throw Stop("caracole can't add this song: ${e.message}")
+                throw Stop("Can't add this song: ${e.message}")
             }
             said = LookupWords.ADDED
         }
         if (song.status == "ignored") {
-            throw Stop("${song.display} is ignored in overrides.toml: take it out of [ignore] to look it up")
+            throw Stop("${song.display} is ignored (overrides.toml [ignore]). Take it out to fetch it")
         }
         val picked = mutableListOf<String>()
         try {
@@ -257,14 +257,14 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
             }
             if (picked.isNotEmpty()) overrides = lookup.readOverrides(db)
         } catch (e: OverridesError) {
-            throw Stop("your pick can't be recorded in overrides.toml: ${e.message}")
+            throw Stop("Couldn't note your pick in overrides.toml: ${e.message}")
         }
         found = song
         songId = song.id
         display = song.display
         ask.owedSong = song.id
         lookup.progress.song(song.id, song.display)
-        return said + if (picked.isNotEmpty()) "; recorded in overrides.toml: ${picked.joinToString(", ")}" else ""
+        return said + if (picked.isNotEmpty()) "; noted in overrides.toml: ${picked.joinToString(", ")}" else ""
     }
 
     /** get.py's `_refuse_an_unused_kind`: stop before anything is written when the tab asked for is of a type caracole
@@ -277,7 +277,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         }
         val kind = OverrideUrls.classifyTabUrl(OverrideUrls.pinUrl(tab))
         if (kind != null && kind != OverrideUrls.BARE && kind != OverrideUrls.UNRECOGNIZED) {
-            throw Stop("tab $tabId is not a chords, tabs or ukulele chords page")
+            throw Stop("tab $tabId isn't chords, a tab or ukulele chords")
         }
     }
 
