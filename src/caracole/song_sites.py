@@ -1,4 +1,4 @@
-"""Which sites have a song: its line's marks on index.html (library_page.py's ``sites``, rows.js ``siteMarks``).
+"""Which sites have a song: its card's marks on index.html (library_page.py's ``sites``, rows.js ``siteMarks``).
 
 Every site caracole asks that is on (``shown``), in one order (``ORDER``), is one of three to each song:
 
