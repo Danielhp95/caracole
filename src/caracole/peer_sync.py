@@ -11,7 +11,7 @@ chosen to take: a pull, the side that takes a unit asking the other for it, or a
 - ``song/<identity key>``: a song, by ``songs.key``: its names as its wanted.txt line gives them (artist, title,
   album, duration, variant), its record's decisions (status, review, the match, its lyrics: their status and a
   hash of their JSON), its versions (provider, tab, slot, kind, label, pick, gone, the URL, a hash of the raw
-  record's JSON), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
+  record's JSON, UG's without its ratings and votes: ``VOLATILE_RAW``), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
   (``overrides.SONG_TABLES``, ``[ignore]`` among them: ``overrides.song_entries``);
 - ``removed/<identity key>``: a tombstone of ``caracole remove``;
 - ``songbook/<name key>``: a songbook, its name and its songs in order, each with its setting;
@@ -28,14 +28,15 @@ so that two caracoles that wrote one record in two texts agree; its ``label`` wh
 /api/peer/unit`` answers) holds everything another side needs to take it, and its value, the digest's, is read back
 from it alone (``value_of_document``), so a side checks what it is given before it takes it.
 
-**FORMAT 2** (``FORMAT``) is of every document a side answers (the state, a unit, a push), and of the base each
-side keeps. A side refuses a document of another format; a base kept by another format is no base (``base_of``),
-so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
+**FORMAT 3** (``FORMAT``) is of every document a side answers (the state, a unit, a push), and of the base each
+side keeps. It hashes a version's raw record without UG's ratings and votes, which FORMAT 2 hashed, so that a tab
+one side read again a day later no longer differs. A side refuses a document of another format; a base kept by another format
+is no base (``base_of``), so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
 was made by its side's clock (``now``), which both sides stamp their agreement with, and the newest read of each of
 its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
 
 **Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
-it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 2, "units": {unit:
+it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
 [digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
 makes; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the two counts
 (``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it. A
@@ -101,7 +102,7 @@ from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 from caracole import canonical
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
-FORMAT = 2  # of every document a side answers, and of the base it keeps: changes only with their shapes
+FORMAT = 3  # of every document a side answers, and of the base it keeps: changes with their shapes and digests
 ID_KEY = "sync:id"
 # kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed,
 # and "kept": {unit: [digest here, digest there, when]}, the answers an import remembered (none: no member)
@@ -123,6 +124,9 @@ VERSION_COLUMNS = ("provider", "tab_id", "slot", "kind", "rating", "votes", "ver
 # The per-song kv a song unit carries (songs._PER_SONG_KV's): which kept versions are yours, and which can't be.
 CARRIED_KV = ("sheet_versions:yours:", "sheet_versions:unkeepable:", "sheet_versions:same:")
 LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
+# What a version's raw record holds that is no part of its unit, by provider: UG's tab page gives a tab's rating and
+# votes as they are the day it is read, so two caracoles that read one tab on two days hold one version (FORMAT 3).
+VOLATILE_RAW = {"ug": ("rating", "votes")}
 # Why a unit is left: either side holds it otherwise than when the two were compared.
 CHANGED_HERE = "changed here since the comparison"
 CHANGED_THERE = "changed there since the comparison"
@@ -167,6 +171,12 @@ def _stored_hash(text: str | None) -> str | None:
     JSON it holds, so that two texts of one record (its keys in another order, other spaces, ``4.50`` for ``4.5``)
     hash alike, else of its bytes (``canonical.stored_hash``)."""
     return canonical.stored_hash(text)
+
+
+def _raw_hash(provider: Any, raw: str | None) -> str | None:
+    """A version's raw record as a unit's value holds it: ``_stored_hash``'s, without the members ``VOLATILE_RAW``
+    names for its provider (UG's ratings and votes)."""
+    return canonical.stored_hash(raw, VOLATILE_RAW.get(provider, ()) if isinstance(provider, str) else ())
 
 
 # --- who this side is, and when it last agreed with a peer -------------------------------------------------------
@@ -378,7 +388,7 @@ def song_value(conn: sqlite3.Connection, song, overrides) -> dict[str, Any]:
     status, review, decision, match_artist, match_song, lyrics_status, lyrics_json = row
     versions = [
         {"provider": provider, "tab": tab_id, "slot": slot, "kind": kind, "label": label, "pick": pick_rank,
-         "gone": bool(gone), "url": url, "raw": _stored_hash(raw)}
+         "gone": bool(gone), "url": url, "raw": _raw_hash(provider, raw)}
         for provider, tab_id, slot, kind, label, pick_rank, gone, url, raw in conn.execute(
             "SELECT provider, tab_id, slot, kind, label, pick_rank, gone, url, raw FROM versions WHERE song_id = ? "
             "ORDER BY provider, tab_id", (song.id,))
@@ -614,7 +624,8 @@ def _song_value_of(doc: Mapping[str, Any]) -> dict[str, Any]:
             raise TypeError("a raw record that isn't text")
         versions.append({"provider": version["provider"], "tab": version["tab_id"], "slot": version["slot"],
                          "kind": version["kind"], "label": version["label"], "pick": version["pick_rank"],
-                         "gone": bool(version["gone"]), "url": version["url"], "raw": _stored_hash(raw)})
+                         "gone": bool(version["gone"]), "url": version["url"],
+                         "raw": _raw_hash(version["provider"], raw)})
         for f in version["files"]:
             files[_text(f["name"])] = f["sha256"]
     lyrics_json = record["lyrics_json"]

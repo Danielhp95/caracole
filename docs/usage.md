@@ -5381,7 +5381,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
-      sheet.json            the same version as the source gave it
+      sheet.json            the same version as the source gave it (Ultimate Guitar's without its rating and votes)
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
       sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
@@ -5817,7 +5817,7 @@ different things, is a conflict for you to settle. Before then, a unit on one si
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
 
-Two caracoles sync in one format, format 2, which every answer of theirs names: a caracole of another format is
+Two caracoles sync in one format, format 3, which every answer of theirs names: a caracole of another format is
 refused, and says so. What each remembers it agreed on is kept in that format too, and a caracole of an earlier
 format remembered it in its own, which this one doesn't read: the first sync after the upgrade compares as a first
 sync, a unit on one side alone that side's and one both hold differently a conflict, with no history to say which
@@ -5825,7 +5825,10 @@ side changed it. A song one side removed since the two last synced then shows as
 here's for it. Each answer also says the time on its side's clock, which both sides stamp what they agree on with,
 and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
 they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
-other spaces, `4.50` for `4.5`) agree on it.
+other spaces, `4.50` for `4.5`) agree on it; and a version from Ultimate Guitar without its rating and votes, which
+change from one day to the next (format 3: format 2 counted them). Nor does the `sheet.json`, `tab.json` or
+`version-<tab>.json` caracole keeps of a version from Ultimate Guitar hold them, so a tab both caracoles read on two
+days is the same on both; one kept before holds them until caracole keeps it again.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what

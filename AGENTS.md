@@ -429,9 +429,15 @@ Below the table, a section for each step whose modules have more to say.
   - never what caracole makes of one, nor what a lookup finds again.
 - Each unit's `digest` is its canonical JSON's SHA-256 (canonical.py's `digest`), a version's raw record and a song's
   lyrics hashed canonicalized (`stored_hash`), so the phone's Kotlin gets the same digest of the same record.
-- **FORMAT 2** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
-  (`{"format": 2, "units": …}`): a base of another format reads as none, so the first sync after a format bump
-  compares as a first sync (no shim).
+  - A version's raw record is hashed without what `VOLATILE_RAW` names for its provider (`stored_hash`'s `without`):
+    UG's ratings and votes, the owner's choice of 2026-11-03 ("Don't count them for the sync"); the version's JSON
+    kept beside a UG sheet or tab (`sheet.json`, `tab.json`, `version-<tab>.json`) holds neither
+    (ug/fetch.py `KEPT_WITHOUT`, the phone's `Slots.keepText` alike), so a tab read on both sides on two days is no
+    conflict (`test_fetch.py::test_a_tab_read_on_two_days_is_kept_alike_and_is_one_song_to_a_sync`). A JSON kept
+    before that holds them until the fetch keeps it again.
+- **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
+  (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
+  compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -1460,7 +1466,39 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
     page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
     LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
+  lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
+  sitemap and makes no artist pass):
+  - its pages read as selectolax reads them (core.html), their JSON-LD by `PyJson.loads` (a value's `str()` as
+    Python's), their counts by `PyFloat` and `PyInt`, whole as Python's int: one past SQLite's integers is its
+    OverflowError only where it is written (`HarpTabsPages.sqliteInteger`), never on a page passed over;
+  - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
+    `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
+  - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
+    `harptabs`, the page's path);
+  - the lookup's harptabs stage (`HarpTabsStage`, the rest of what asking came to `LookupWords.end`'s) and
+    `caracole harptabs --artist` (`HarpTabsCommands.artist`, its one line, commands/lyrics.py's words), through
+    StageContext's and CommandContext's asking;
+  - tests/test_conformance_harptabs.py writes vectors/sites/harptabs.jsonl, vectors/lookup/harptabs.jsonl,
+    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (asking through `InteractiveAsk` over each
+    record's client, each request with caracole's own user agent, the pages noted beside Python's rows).
+- gametabs.net (gametabs): core.sites' `GameTabsPages` (gametabs.py's tab and game pages read through core.html,
+  `parseTabPage` and `parseGamePage`) and `GameTabsFetch` (gametabs_fetch.py for a lookup's song alone, no sitemap
+  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words, the envelope's
+  `LookupWords.end`'s).
+  - A `data-tab` value as gametabs.py reads it: Python's truth and `str()` of each JSON value, its ints unbounded
+    (`BigInteger`), each as the float Python makes of it (the nearest, a tie to the even one, whatever the platform's
+    `BigInteger.toDouble` rounds), one too large for a float an OverflowError as `math.isfinite` raises; a version's
+    votes are the views as SQLite holds them (64 bits, sqlite3's OverflowError past them).
+  - Candidates by game (its slug's key, its page's name) or composer, `CANDIDATES` (4) at most, the most viewed
+    first, then by path in code points; the most viewed page that fits kept as `gametab-N.txt`, a pick
+    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`, of the lookup's song alone; the game pages'
+    title keys made again first (`SiteKeys.gametabsEnsureCurrentKeys`, kv `gametabs:games:keys`), as the computer's
+    pass does.
+  - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
+    helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
+    vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.
+- gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
 
@@ -1526,6 +1564,49 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `SettingsReplay` (area `settings`) replays vectors/sync/settings.jsonl (each caracole.toml's document taken, then
   read as config.py holds it) and settings_take.jsonl (the take rule by rule), each take through `PeerState.read` and
   `SyncEngine.takeSettings`.
+
+##### Syncing on the phone
+
+- **The rules** are peer_sync.py's, replayed (`SyncReplay`, area `sync`): `Compare`'s kept answers (`keptOf`,
+  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` dropping each agreed unit's, the base written with a
+  `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
+  `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
+  scope.jsonl.
+- **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
+  `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
+  either side's songbooks `listed` (each songbook difference's document asked of the computer once,
+  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
+  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents (a
+  file's none of a unit it left out or of a part it doesn't hold, `FileSource.says`) and `tested` what the computer
+  holds (its state read once, nothing changed).
+- **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
+  (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
+  songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
+  is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
+  `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
+  peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
+  `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
+  format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
+  whole), compared within the parts it holds
+  (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
+  `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
+  "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
+  - Its zip is read by `Zip`, CPython 3.14's zipfile by hand (the end records, zip64's too, the central directory,
+    names in UTF-8 or cp437, each member's local header, its data stored or inflated, its CRC-32 at its end), never
+    java.util.zip.ZipFile, which Android refuses at open for a name with `..` or a name twice (ZipPathValidator),
+    where peer_file says which member is wrong: file.jsonl's zips made by hand hold it to Python's, on the device too.
+  - Its JSON members are read as `json.loads(bytes)` reads them (`SyncFiles.json`: json.detect_encoding's UTF-8,
+    UTF-16 or UTF-32, lone surrogates passed).
+- **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
+  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
+  its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
+  after its merge job, none from a computer that doesn't count them.
+- A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
+  `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
+  `PageSource`, none until one is wired).
+- What the phone says otherwise: the report leaves out a site whose merge moved its progress records alone (no row
+  taken, its count the same), as IndexTransfer's `Merged` says what changed of the merge whole (`SyncEngine.taken`).
 
 ##### :viewer
 
