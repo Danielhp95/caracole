@@ -18,7 +18,7 @@
   //                   row (Harp: the harps of the header line, the first by default; this page's choice alone),
   //                   which lists the song's harmonica tabs too (data.harmonicaTabs: a link each to its page beside
   //                   the page, harmonica-N.html, its holes over the words, and to its text, with the key its
-  //                   harptabs.com page named, "key C (harptabs.com)", never a harp's).
+  //                   harptabs.com page named, "key C (harptabs)", never a harp's).
   //   the flute and   winds.py's tables: data.windForms[f], a chord's notes as steps above its root, its form ``f``
   //   the recorder    by its index (data.windChords[mode][i], data.windAlts[mode][i][j]; mode "" for a sheet with no
   //                   key); each note read is data.winds.low + the root's pitch class as shown + a step, and the key's
@@ -155,7 +155,9 @@
       const item = el("li", "", links);
       const name = String(tab.name || tab.href);
       if (typeof tab.page === "string" && tab.page) {
-        el("a", "link", item, name.replace(/\.txt$/, "")).href = tab.page + String(view.carry || "");
+        const number = /^harmonica-(\d+)\.txt$/.exec(name);  // "harmonica-1.txt": Tab 1
+        el("a", "link", item, number ? "Tab " + number[1] : name.replace(/\.txt$/, "")).href = tab.page
+          + String(view.carry || "");
         const text = el("a", "wd-text", item, "text");
         text.href = tab.href;
         text.setAttribute("aria-label", name + ", as text");
@@ -163,8 +165,8 @@
         el("a", "link", item, name).href = tab.href;
       }
       if (tab.key) {
-        el("span", "wd-key", item, "key " + tab.key + " (harptabs.com)").title =
-          "The key harptabs.com's page names: the song's on some tabs, the harp's on others";
+        el("span", "wd-key", item, "key " + tab.key + " (harptabs)").title =
+          "The key harptabs' page names: the song's or the harp's";
       }
     }
   };
@@ -189,7 +191,7 @@
     panel(view, box) {
       const list = harps(view);
       if (!list.length) {
-        el("p", "hint", box, "With no key, caracole can't tell which harp plays the song.");
+        el("p", "hint", box, "No key, so no harp to suggest.");
         tabs(view, box);
         return;
       }
@@ -200,8 +202,8 @@
           harpAt = h[0];
           again(view.instrument.id, "harp-" + h[0]);
         })));
-      el("p", "hint", box, "The harps that play the song, the best first, and each chord on the one chosen: its "
-        + "holes, the minor chord a harp plays for a major one it lacks, or none.");
+      el("p", "hint", box, "Harps for the song, best first. Each chord on the one chosen: its holes, a minor "
+        + "substitute, or none.");
       const rows = el("ul", "wl", box);
       for (const chord of view.chords) {
         const entry = entryOf(view, chord, harp);

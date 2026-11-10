@@ -457,11 +457,11 @@ def key_scales(mode: str) -> list[list[Any]]:
 def outside(mode: str, offset: int) -> list[str | int]:
     """What the key card says under the holes of the harp ``offset`` semitones above the song's tonic, a key in
     ``mode``, as a text (steps for the notes): the notes it blows or draws outside the key's scale, from the harp's
-    key up ("Outside B minor: C."), or that none is ("Every note it blows or draws is in B minor.")."""
+    key up ("Outside B minor: C."), or that none is ("Every note it plays is in B minor.")."""
     words = " " + _MODE_WORDS.get(mode, mode)
     out = [(offset + i) % 12 for i in _IONIAN if (offset + i) % 12 not in SCALES[mode]]
     if not out:
-        return ["Every note it blows or draws is in ", 0, words + "."]
+        return ["Every note it plays is in ", 0, words + "."]
     text: list[str | int] = ["Outside ", 0, words + ": "]
     for n, step in enumerate(out):
         text += ([", "] if n else []) + [step]

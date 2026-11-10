@@ -191,7 +191,7 @@
     const tuning = spec.tuning || [], strings = tuning.length, last = strings - 1;
     const frets = 15, left = 14, top = 9, cell = 19, gap = 9;
     const root = svg("svg", { class: "neck key-neck", viewBox: "0 0 " + (left + cell * frets + 4) + " " + (top * 2 + gap * last),
-      role: "img", "aria-label": head.textContent + ": the tonic, " + spec.tonicName + ", marked" }, group);
+      role: "img", "aria-label": head.textContent + ", tonic " + spec.tonicName + " marked" }, group);
     fretboard(root, strings, frets);
     for (let s = 0; s < strings; s++) {
       for (let f = 0; f <= frets; f++) {
@@ -214,7 +214,7 @@
       group.dataset.name = chord.name;
       el("p", "nk-name", group, chord.name);
       if (!chord.list.length) {
-        el("p", "nk-none", group, "No shape to show for this chord.");
+        el("p", "nk-none", group, "No shape for this chord.");
         continue;
       }
       const chosen = Math.min(chord.chosen || 0, chord.list.length - 1);
@@ -267,7 +267,7 @@
     return at ? at.ordinal + (short ? "" : " position") + (at.mode ? ", " + at.mode : "") : "";
   };
   const listed = (xs) => (xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs[0] || "");
-  // What the harp plays of the song's chords: each it plays whole or as its triad, then each as its minor stand-in.
+  // What the harp plays of the song's chords: each it plays whole or as its triad, then each as its minor substitute.
   const playsLine = (m, offset) => {
     const whole = [], subs = [];
     for (const c of m.chords) {
@@ -276,16 +276,16 @@
       if (entry[0] === "minor") subs.push(c.name + " as " + c.root + entry[4]);
       else whole.push(c.name);
     }
-    if (!whole.length && !subs.length) return "Plays none of the song's chords: melody only.";
+    if (!whole.length && !subs.length) return "None of the song's chords: melody only.";
     return "Plays " + (whole.length ? listed(whole) + (subs.length ? "; " + listed(subs) : "") : listed(subs)) + ".";
   };
-  // What a chord's card says of its run: "draw 4–6", "blow 1–3 · as F#, its triad", "draw 4–6 · as Em, the minor
-  // stand-in", or that the harp has no such chord.
+  // What a chord's card says of its run: "draw 4–6", "blow 1–3 · as F#, its triad", "draw 4–6 · as Em, minor
+  // substitute", or that the harp has no such chord.
   const runLine = (c, entry) => {
-    if (!entry) return "no chord here: its notes, one hole at a time";
+    if (!entry) return "no chord here: play its notes one hole at a time";
     const where = entry[1] + " " + entry[2] + "–" + entry[3];
     if (entry[0] === "part") return where + " · as " + c.root + entry[4] + ", its triad";
-    if (entry[0] === "minor") return where + " · as " + c.root + entry[4] + ", the minor stand-in";
+    if (entry[0] === "minor") return where + " · as " + c.root + entry[4] + ", minor substitute";
     return where;
   };
 
@@ -299,7 +299,7 @@
   const wheel = (m, chosen) => {
     const picked = new Set(m.choices.map((h) => h[1]));
     const root = svg("svg", { class: "hw-ring", viewBox: "0 0 " + W + " " + W, role: "radiogroup",
-      "aria-label": "Harp, for " + m.key });
+      "aria-label": "Harps for " + m.key });
     root.dataset.f = "ring";
     svg("circle", { class: "hw-track", cx: MID, cy: MID, r: R }, root);
     // The band under each run of picked harps side by side on the circle.
@@ -413,7 +413,7 @@
         const card = el("section", "hk", pane);
         el("p", "hk-name", card, m.plain.name);
         const p = { names: m.plain.names, tonic: m.plain.tonic, holes: m.plain.holes };
-        card.appendChild(harpChart(p, 0, () => "plain", { bends: true, label: m.plain.name + ": its holes' notes" }));
+        card.appendChild(harpChart(p, 0, () => "plain", { bends: true, label: m.plain.name + ": notes of each hole" }));
       }
       return;
     }
@@ -426,7 +426,7 @@
     el("p", "hw-pos", side, positionWords(m, chosen));
     if (m.tabs.indexOf(chosen) >= 0) el("p", "hw-tag", side, "the tab's");
     el("p", "hw-plays", side, playsLine(m, chosen));
-    el("p", "hw-hint", pane, "Tap a harp. Shaded: the ones that play the song's chords.");
+    el("p", "hw-hint", pane, "Tap a harp. Shaded: harps that play the song's chords.");
 
     // The key on that harp: its scale, its pentatonic or the blues, over the ten holes with their bends.
     const card = el("section", "hk", pane);
@@ -445,7 +445,7 @@
       return bent ? "bent-" + kind : kind;
     };
     card.appendChild(harpChart(m, chosen, roleOf, { bends: true,
-      label: m.key + " on " + an(name) + ": the tonic and the " + m.scales[which][0].toLowerCase() + " marked" }));
+      label: m.key + " on " + an(name) + ": tonic and " + m.scales[which][0].toLowerCase() + " marked" }));
     const legend = el("p", "hk-legend", card);
     const item = (cls, words) => {
       const span = el("span", "", legend);
@@ -495,7 +495,7 @@
       if (how) {
         const handle = el("button", "ov-handle", box);
         handle.type = "button";
-        handle.setAttribute("aria-label", "Whole screen");
+        handle.setAttribute("aria-label", "Full screen");
         handle.setAttribute("aria-pressed", how === "full" ? "true" : "false");
         handle.setAttribute("aria-controls", aside.id);
         el("span", "ov-grip", handle).setAttribute("aria-hidden", "true");
@@ -504,7 +504,7 @@
       if (tabs.length > 1) {
         const control = el("div", "seg ov-tabs", row);
         control.setAttribute("role", "tablist");
-        control.setAttribute("aria-label", "The rail");
+        control.setAttribute("aria-label", "Instruments");
         control.dataset.f = "tabs";
         for (const [id, words] of tabs) {
           const b = el("button", "", control, words);
@@ -526,7 +526,7 @@
       } else {
         const hide = el("button", "nk-hide", row);
         hide.type = "button";
-        hide.setAttribute("aria-label", "Hide chord necks");
+        hide.setAttribute("aria-label", "Hide necks");
         hide.setAttribute("aria-controls", aside.id);
         svg("path", { d: SIDEBAR, "fill-rule": "evenodd" }, svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }, hide));
       }
