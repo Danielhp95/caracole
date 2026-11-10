@@ -27,6 +27,37 @@ The record (a dict, ready for ``corpus.jsonl``)::
 changed (null: deleted); ``library`` only the files it wrote or deleted; ``pauses`` how many pauses the clients took
 (their lengths are random, and never compared). A pass that raises records ``raises`` (``{"type", "message"}``) and
 what it did up to then under ``after``, in place of ``out``.
+
+**Whole lookups** (``record_lookup``, lane lookup-scenarios'): a pass that makes its own clients, as get.py's
+``_Lookup`` does through ``_common.make_client``, is recorded over a caracole's ``Config`` rather than given clients.
+``record_lookup(cfg, *, fn, call, answers, now, case="", kw=None, cache=None, settle=None, leaves_out=LEAVES_OUT)``
+runs ``call()`` with:
+
+- the transport hook, ``_common.transport_for``, answering every provider from ``answers`` (a mapping as above, or a
+  function of ``"GET <url>"`` that gives an answer or None): a request it doesn't answer fails the recording, and the
+  record carries the answers asked for alone;
+- ``_common.sleep`` recorded and skipped (each client's pauses and the pause after a provider's last request alike),
+  and every clock a lookup reads fixed at ``now``: ``_common``'s ``time.time()`` (kv ``http:last_request:``) and
+  ``datetime.now`` (the hour's and the day's requests), its ``EventLog``'s, each client's (monotonic at 0, its wall
+  clock at ``now``), and songs.py's and match.py's ``utc_now_iso``;
+- what a caracole with no ChordPro, no PDF, no index.html and no songbook makes stood still (render.py's
+  ``render_all``, todo.py's ``write_pages`` and songbook.py's ``render_songbooks`` answer an empty pass), so that the
+  pass writes no PDF, page or ``render:*`` record, as the phone's ``SongPages.NONE`` and ``SongbookPages.NONE``
+  make none;
+- ``cache`` seeded into ``cfg.cache_dir`` first, as above.
+
+``settle(conn)``, when given, runs once the pass is over, before what it did is read (a generator's own bookkeeping,
+such as a stamp SQLite's clock wrote). ``leaves_out`` is what the phone never writes, left out of the fixture and of
+what the pass did alike: ``{"kv": [prefix, ...], "files": [file name, ...]}`` (``LEAVES_OUT``: wanted.txt's
+``wanted:first_seen:``, as the phone adds a song through ``LibraryStore.add`` with no wanted.txt, and every
+``info.json``, milestone 5's viewer's). The record::
+
+    {"fn": fn, "case": case, "fixture": [...], "kw": kw, "now": "<stamp>", "cache": {...}, "answers": {...},
+     "leaves_out": leaves_out,
+     "out": {"result": <plain(result)>, "requests": [...], "rows": {...}, "kv": {...}, "library": {...},
+             "events": [[run, provider, url, status, decision], ...], "pauses": N}}
+
+its ``events`` naming each request's run too (a lookup's own, ``lookup:<now>``).
 """
 
 from __future__ import annotations
@@ -177,6 +208,147 @@ def record(conn, library_dir: Path | None, *, fn: str, call: Callable[[dict[str,
         "fn": fn, "case": case, "fixture": before, "kw": plain(dict(kw or {})), "now": stamp,
         "clients": {p: {"budget": c["budget"], "delay": list(c["delay"])} for p, c in clients.items()},
         "cache": carried_cache, "answers": {r: carried for r, (_, carried) in responses.items()},
+    }
+    if raised is not None:
+        out["raises"] = {"type": type(raised).__name__, "message": str(raised)}
+        out["after"] = done
+    else:
+        out["out"] = {"result": plain(result), **done}
+    return out
+
+
+# --- whole lookups ----------------------------------------------------------------------------------------------
+
+# What the phone never writes: wanted.txt's first-seen times (the phone adds a song through LibraryStore.add, with no
+# wanted.txt) and info.json (milestone 5's viewer's).
+LEAVES_OUT: dict[str, list[str]] = {"kv": ["wanted:first_seen:"], "files": ["info.json"]}
+
+
+class _Clock:
+    """The ``time`` module, its ``time()`` at a fixed instant."""
+
+    def __init__(self, epoch: float):
+        self._epoch = epoch
+
+    def time(self) -> float:
+        return self._epoch
+
+    def __getattr__(self, name: str) -> Any:
+        import time
+
+        return getattr(time, name)
+
+
+def _left(records: list[dict[str, Any]], leaves_out: Mapping[str, Any]) -> list[dict[str, Any]]:
+    prefixes = tuple(leaves_out.get("kv", ()))
+    names = set(leaves_out.get("files", ()))
+    return [r for r in records
+            if not ("kv" in r and prefixes and r["kv"].startswith(prefixes))
+            and not ("file" in r and r["file"].rsplit("/", 1)[-1] in names)]
+
+
+def _empty_pass(kind: str) -> Callable[..., Any]:
+    """render_all's, write_pages' or render_songbooks' stand-in: a pass that made nothing."""
+    from caracole.render import RenderStats
+    from caracole.songbook import SongbookStats
+
+    made = {"render": RenderStats, "songbooks": SongbookStats}.get(kind)
+    return lambda *_a, **_k: made() if made is not None else None
+
+
+def record_lookup(cfg, *, fn: str, call: Callable[[], Any],
+                  answers: Mapping[str, Mapping[str, Any]] | Callable[[str], Mapping[str, Any] | None],
+                  now: datetime, case: str = "", kw: Mapping[str, Any] | None = None,
+                  cache: Mapping[str, Mapping[str, Mapping[str, Any]]] | None = None,
+                  settle: Callable[[Any], None] | None = None,
+                  leaves_out: Mapping[str, list[str]] = LEAVES_OUT) -> dict[str, Any]:
+    """One whole-lookup record (the module's docstring): ``call()`` run over ``cfg`` answering ``answers``."""
+    from contextlib import ExitStack, closing
+    from functools import partial
+    from unittest import mock
+
+    from caracole import db
+    from caracole.commands import _common
+
+    now = now.astimezone(UTC)
+    stamp = now.strftime(STAMP)
+    asked = answers if callable(answers) else (lambda said: answers.get(said))
+    carried_answers: dict[str, dict[str, Any]] = {}
+    requests: list[str] = []
+    unanswered: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        said = f"{request.method} {request.url}"
+        requests.append(said)
+        answer = asked(said)
+        if answer is None:
+            unanswered.append(said)
+            return httpx.Response(599, content=b"unanswered by the scenario")
+        response, carried = _answer(answer)
+        carried_answers[said] = carried
+        return response
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            return now.astimezone(tz) if tz is not None else now.replace(tzinfo=None)
+
+    real_client = _common._locked_client()
+
+    class FrozenClient(real_client):  # type: ignore[misc, valid-type]
+        def __init__(self, *args: Any, **kwargs: Any):
+            kwargs.setdefault("clock", lambda: 0.0)
+            kwargs.setdefault("wall_clock", lambda: now)
+            super().__init__(*args, **kwargs)
+
+    pauses: list[float] = []
+    with closing(db.connect(cfg.db_path)) as conn:
+        before = _left(dump_fixture(conn, cfg.library_dir), leaves_out)
+        carried_cache = {p: _seed_cache(cfg.cache_dir, p, entries) for p, entries in (cache or {}).items()}
+        events_before = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+        files_before = _files(cfg.library_dir)
+        result: Any = None
+        raised: BaseException | None = None
+        with ExitStack() as stack:
+            for target, value in (
+                ("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(handler)),
+                ("caracole.commands._common.sleep", pauses.append),
+                ("caracole.commands._common.time", _Clock(now.timestamp())),
+                ("caracole.commands._common.datetime", Frozen),
+                ("caracole.commands._common.EventLog", partial(EventLog, clock=lambda: now)),
+                ("caracole.commands._common._locked_client", lambda: FrozenClient),
+                ("caracole.songs.utc_now_iso", lambda: stamp),
+                ("caracole.match.utc_now_iso", lambda: stamp),
+                ("caracole.render.render_all", _empty_pass("render")),
+                ("caracole.todo.write_pages", _empty_pass("pages")),
+                ("caracole.songbook.render_songbooks", _empty_pass("songbooks")),
+            ):
+                stack.enter_context(mock.patch(target, value))
+            try:
+                result = call()
+            except Exception as e:  # recorded: a pass that raises is a scenario too
+                raised = e
+        if unanswered:
+            raise AssertionError(f"the scenario answers none of: {', '.join(unanswered)}")
+        if settle is not None:
+            settle(conn)
+        after = _left(dump_fixture(conn, cfg.library_dir), leaves_out)
+        events = [list(r) for r in conn.execute(
+            "SELECT run, provider, url, status, decision FROM events WHERE id > ? ORDER BY id", (events_before,))]
+    old_rows, new_rows = _tables(before), _tables(after)
+    rows = {t: new_rows.get(t, []) for t in sorted(set(old_rows) | set(new_rows))
+            if t != "events" and old_rows.get(t, []) != new_rows.get(t, [])}
+    old_kv, new_kv = _kv(before), _kv(after)
+    kv = {k: new_kv.get(k) for k in sorted(set(old_kv) | set(new_kv)) if old_kv.get(k) != new_kv.get(k)}
+    names = set(leaves_out.get("files", ()))
+    files_after = _files(cfg.library_dir)
+    library = {p: files_after.get(p) for p in sorted(set(files_before) | set(files_after))
+               if files_before.get(p) != files_after.get(p) and p.rsplit("/", 1)[-1] not in names}
+    done = {"requests": requests, "rows": rows, "kv": kv, "library": library, "events": events,
+            "pauses": len(pauses)}
+    out: dict[str, Any] = {
+        "fn": fn, "case": case, "fixture": before, "kw": plain(dict(kw or {})), "now": stamp,
+        "cache": carried_cache, "answers": carried_answers, "leaves_out": {k: list(v) for k, v in leaves_out.items()},
     }
     if raised is not None:
         out["raises"] = {"type": type(raised).__name__, "message": str(raised)}
