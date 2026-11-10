@@ -45,8 +45,9 @@ peer_import.py), one at a time; deleted once its import is over, or an hour afte
 it, or sooner: dropped (the page's Cancel), or let go as another is opened when no request names it and it is whole
 (compared, never synced) or its upload stopped (``peer_import.let_go``). Its comparison reads it whole first
 (``peer_file.check_whole``), and a file refused is deleted; a unit's two documents on its comparison (``GET
-/api/sync/unit``, a conflict's card) are this library's and the file's, read from it (``file_unit``). Nothing of it reaches the library but through ``caracole
-peer import``, a queued command under caracole's lock, which reads it whole again before it takes anything.
+/api/sync/unit``, a conflict's card) are this library's and the file's, read from it (``file_unit``). Nothing of it
+reaches the library but through ``caracole peer import``, a queued command under caracole's lock, which reads it
+whole again before it takes anything.
 """
 
 from __future__ import annotations
