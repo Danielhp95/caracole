@@ -6004,9 +6004,8 @@ commas, all three by default. A difference outside them is neither taken nor giv
 lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
 
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
---compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
-`--prefer`.
+chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+is given there, with no question asked.
 
 ### The Sync tab
 
@@ -6034,6 +6033,32 @@ change left as it was"), then offers **Reload**. The sync is a request like any,
 sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
 comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
 two agree on, and the other side's address and name, which `GET /api/sync` lists.
+
+What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
+is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
+
+- `GET /api/sync`: this caracole's id and library's name, `device` (`computer`; the phone's says `phone`), its songs
+  and songbooks counted (`songbooks` is null while songbooks.toml can't be read: that stops the songbooks alone), the
+  address it last synced with and every caracole it synced with before.
+- `POST /sync/test` (`address`): asks the other caracole for its state, one request, and changes nothing on either
+  side. It answers its songs, its songbooks, the newest read of its site indexes, when this one last synced with it,
+  and says it: "Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26" (the day in the server's zone), or
+  "…, no indexes". Refused as Compare is: not an address (400), nothing answering (502), this very caracole (409).
+- `POST /sync/compare` also gives each song's artist and title, what each side did to each unit since the two last
+  agreed (new, changed, gone, or nothing), its part (library or songbooks), the songbooks either side has that list
+  it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
+  whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
+- `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
+  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
+  page's own script may ask it (the form token in its header).
+- `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
+  it gives the computer its index pages.
+- `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and
+  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
+  `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
+
+The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 

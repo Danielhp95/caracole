@@ -528,9 +528,9 @@ Below the table, a section for each step whose modules have more to say.
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
-  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s), or
-    without them, as caracole serve's Sync tab compares (sync_routes.py `_compared`), so the tab's Sync does what it
-    showed (commands/peer.py `_Compared.named`).
+  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s, and
+    caracole serve's Sync tab's, sync_routes.py `_compared`), or without them, a comparison made before them
+    (commands/peer.py `_Compared.named`).
 - Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` (`full`, `songbooks`, `indexes`,
   `left`) and the fixtures `file_conflict` and `file_indexed` (tests/test_conformance_sync_file.py), which the Kotlin
   sync ports: an export, a file read and refused, a unit taken from one, an import.
@@ -1027,10 +1027,28 @@ It is rows.js's, shared by both pages:
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
-- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html):
-  `GET /api/sync`, `POST /sync/compare` (one `GET /api/peer/state` of the other caracole, kept 10 minutes) and `POST
-  /sync/apply` (`caracole peer sync --push --compared HASH --choose=…` queued, a job of kind `sync`). The phone
-  answers the same three routes with the same shapes (vectors/web/sync_routes.jsonl).
+- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html), the
+  sync redesign's §3.4.1:
+  - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
+  - `POST /sync/test`: one `GET /api/peer/state` of the other caracole, nothing written, its counts, newest index read
+    and the last sync in words (`tested_words`), refused as a comparison is;
+  - `POST /sync/compare`: one `GET /api/peer/state`, then a `GET /api/peer/unit` for each songbook that differs and
+    the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
+    difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
+    `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
+    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
+    conflict it proposes chosen first);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
+    of another `source` than a peer's, a file's, refused);
+  - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
+    phone, a client, reads;
+  - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)
+    with no side refused, then `caracole peer sync --push [--parts=…] --compared HASH --choose=…` queued, a job of
+    kind `sync`.
+  - The phone's server/routes/SyncRoutes.kt answers the six alike (SyncJson; vectors/web/sync_routes.jsonl, under
+    UTC, which `WebReplay.syncRoutes` replays with the other side's `peer_units`), but its `device` `phone` and the
+    computer's `kind` `computer`; `tested` is Settings' Test too, and `alone(address)` the unattended sync (the three
+    parts, `Conflicts.LEAVE`, none queued while one with that address waits or runs).
 
 ##### The router
 
@@ -1822,7 +1840,30 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### The phone's written pages
 
-Not built yet. (written-pages.)
+- `LibraryFiles` serves a page the phone wrote (a sheet's viewer, a kept version's, a harmonica tab's, a songbook's in
+  `_songbooks/<folder>/`) as app.py's `_written_page` does, before the mirror's:
+  - while it is the bytes WrittenPages recorded (`render:files:<id>` among the songs whose folder it is in, of those
+    with a record; `songbook:<folder>`), read once, of a recorded size and SHA-256, and its unit (the song's, or the
+    songbook's, `WrittenPages.songbookUnit`) is still at the digest it was made at (each entry's `unit`);
+  - with `SheetPage.viewerCsp` of those very bytes (its `_NOTHING` sandbox for a page with no policy) and
+    `frame-ancestors 'none'`;
+  - otherwise the mirror's through PhoneGate, else a message page: 409 for a unit moved since its page was made (the
+    phone's sheet.txt linked), 404 Not sent, by the page's kind, for one changed on disk;
+  - a .cho it wrote the same way, as text (LibraryFilesTest).
+- Its checks are made on the path, then the file is opened with no link followed and its bytes checked: the library
+  is the app's own folder, which nothing but the app writes.
+- `PhoneRender.afterSync`, after a take: the pages the take superseded forgotten (`forgetSuperseded`: each deleted
+  while it is as written, its record's entry with it), a song's or a songbook's made at a digest its unit has moved
+  from where the mirror now serves it at its digest, and a songbook's whose folder no songbook has any more; a moved
+  song's page the mirror doesn't serve stays, never served, for the render job to make again.
+- A removal takes the phone's written pages by their records: each `render:files:<id>` entry naming the `unit` it was
+  made at, as removal.py takes a version's or a tab's page (the phone makes no PDF, so no render record names them); a
+  record render.py wrote names no unit and keeps removal.py's answer (RemovalWrittenTest).
+- A take that moves or respells a song's folder deletes the phone's pages of it still as written rather than moving
+  them (`Removal.phonesWritten`, SongTake), so no page is left there unrecorded and a removal after it empties the
+  folder (RemovalWrittenTest).
+- PagesServedTest opens one in the WebView: its own policy and an opaque origin, refused once changed on disk or once
+  its song's unit moves.
 
 ##### Songbooks, versions and printing on the phone
 
