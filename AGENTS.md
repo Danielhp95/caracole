@@ -2030,7 +2030,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 - tests/test_android_e2e.py, marked `android_e2e` and `slow`, is skipped unless `CARACOLE_ANDROID_E2E=1`: the goal's
   scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
   serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
-- **The device step**, the one place an emulator runs, one at a time (android/README.md, "Try it on an emulator"):
+- **The device step**, the one place an emulator runs, through device-test.sh's pool of emulators, each one caller at a
+  time (android/README.md, "Try it on an emulator"):
   `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
@@ -2158,9 +2159,12 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then holds the
-  emulator's lock (`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`) while it installs and
-  runs, starts the one emulator if none is up and leaves it up.
+  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then takes the first
+  free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556,
+  -5558, each one caller at a time) and holds its lock (emulator-5554's
+  `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
+  port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
+  it up.
 - **Big data sets** (more than a few thousand rows) run only in a `*Bench` class of the gated `bench` task
   (`nix develop ./android -c gradle -p android bench`: a 3 GiB heap, one fork), never in `test`, which excludes them.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment: clear what could leak in,
