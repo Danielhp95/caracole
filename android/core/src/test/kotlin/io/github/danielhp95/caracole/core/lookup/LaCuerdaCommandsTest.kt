@@ -28,8 +28,8 @@ class LaCuerdaCommandsTest {
     private val now = Instant.parse("2026-11-03T12:00:00Z")
 
     /** Each command's last line ("Read: ", "Not found: ", "Not read: ", "Searched: ", "Found already: ", "Nothing
-     * found: ", "Not searched: "), its search's progress lines before it, its writes; those that parse a page wait on
-     * html-tree. */
+     * found: ", "Not searched: "), its search's progress lines before it, its writes, through lane lookup's
+     * InteractiveAsk as LaCuerdaRunner asks. */
     @Test fun everyCommandRecordMatches() = Misses("lookup/commands_lacuerda.jsonl").also { LaCuerdaReplay.commands(it) }.assertNone()
 
     private class Context(override val db: Db, override val asking: Asking, override val now: Instant) : CommandContext {
@@ -86,5 +86,13 @@ class LaCuerdaCommandsTest {
                          "lacuerda: 500: x), so the page won't send it by itself before 2026-11-03 13:00 UTC; its Ask " +
                          "LaCuerda button, Try again or a terminal asks now.",
                      LaCuerdaCommands.search(failed, "corazón de tiza", auto = true))
+    }
+
+    /** Without `--progress`, a search says its last line alone, as Python prints it. */
+    @Test fun aSearchWithoutProgressSaysNothingButItsLastLine() = world { db ->
+        val quiet = Context(db, asking(Asked.Spent(hour = true, keptForSheets = false)), now)
+        assertEquals("Not searched: the search's one request to LaCuerda is spent; ask again later.",
+                     LaCuerdaCommands.search(quiet, "corazón de tiza", auto = false, progress = false))
+        assertEquals(emptyList(), quiet.said)
     }
 }

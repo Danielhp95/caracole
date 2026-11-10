@@ -1442,18 +1442,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `_artist_songs`' order (a slug given first, the listings' `artistSlugs`, then `artistSlugCandidates`; a 404 or
     "aqui llega:" moving on), each page cached 30 days (a stale copy no answer once the budget is spent), your pick's
     page, `_record` and `_keep` (`sheet.json` as `json.dumps(indent=2)` and a newline, then `sheet.txt`; no
-    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage`. Each page stored is
-    noted for the next push. Python's nightly parts are left out: the popular artists' pages, the listings pass, the
-    handoffs, info.json;
+    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage` (its `first`, which
+    Python's lacks, asked in place of the name written as a slug). The songs re-keyed first, as `list_songs` does.
+    Each page stored is noted for the next push. Python's nightly parts are left out: the popular artists' pages, the
+    listings pass, the handoffs, info.json;
   - core.lookup.sites' `LaCuerdaPickStage` and `LaCuerdaStage`: get.py's `lacuerda()` through the stage's asking, its
-    words for what the pass came to and for what asking came to (until lane lookup's LookupWords, a copy of its
-    `end`);
-  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (the search's `--progress` lines said,
-    the last returned), the cooldown and the gate checked as Python checks them, the block and the error recorded by
-    the asking; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and stores
-    no cached page first (`backfill_cached`: the phone stores each page as it reads it);
-  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl and commands_lacuerda.jsonl
-    (`LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes).
+    words for what the pass came to, and `LookupWords.end`'s for what asking came to;
+  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (with `progress`, its default, the
+    search's `--progress` lines said; the last returned), the cooldown and the gate checked as Python checks them,
+    the block and the error recorded by the asking, a good run by `LookupWords.lookupRunOf`'s run, which the runner's
+    asking logs under; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and
+    stores no cached page first (`backfill_cached`: the phone stores each page as it reads it);
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
+    page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
+    LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone

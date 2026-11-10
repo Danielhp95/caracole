@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.library.SharedFolder
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.library.internal.Rekey
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import java.time.Duration
@@ -74,7 +75,9 @@ object LaCuerdaSheets {
         val stats = LaCuerdaStats()
         val stamp = Stamps.of(now)
         val fetched = HashSet<String>()  // the URLs fetched from LaCuerda in this pass
-        // _songs_to_try, read whole before the first turn as Python's list is.
+        // _songs_to_try, read whole before the first turn as Python's list is, list_songs re-keying them first
+        // (songs.ensure_current_keys: nothing but one kv read while the keys are current).
+        Rekey.ensure(db, stamp)
         val songs = Songs.list(db).filter { it.id in only && ToTry.toTry(db, lib, rank, now, overrides, it) }
         val turns = Passes.eachSong(songs.asSequence(), stats, "LaCuerda") { song ->
             val pick = overrides.lacuerda[song.key]

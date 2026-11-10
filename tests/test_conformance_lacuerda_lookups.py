@@ -1230,6 +1230,28 @@ class SheetWorld:
         return self.record("caracole.lacuerda_fetch.read_artist_page", case, call, {"artist": artist}, answers, cache,
                            budget, library=False)
 
+    def stage(self, case: str, song_id: int, answers: dict[str, dict[str, Any]] | None = None, *,
+              cache: dict[str, Any] | None = None, budget: int = 6) -> dict[str, Any]:
+        """get.py's lacuerda stage for the song, ``_Lookup.lacuerda`` (the sheet stage's too, for a pick): its
+        ``[state, detail]``, or what its work raises, its asking the record's client alone, so that the words are
+        the work's own (the envelope's are lane lookup's vectors', asking.jsonl)."""
+        from types import SimpleNamespace
+
+        from caracole import get
+        from caracole.config import RankPolicy
+
+        def call(made):
+            song = self.get(song_id)
+            lk = get._Lookup(SimpleNamespace(library_dir=self.library, rank=RankPolicy()),
+                             get.LookupRequest(song.artist, song.title), get.Progress(), runner=None, now=NOW,
+                             clock=lambda: 0.0)
+            lk.conn, lk.song, lk.overrides = self.conn, song, self.load()
+            lk.asking = lk.after_the_sheet = lambda provider, work: work(made["lacuerda"])
+            out = lk.lacuerda()
+            return list(out) if isinstance(out, tuple) else ["done", out]
+
+        return self.record("caracole.get._Lookup.lacuerda", case, call, {"song": song_id}, answers, cache, budget)
+
     def listing(self, *artists: tuple[str, str, int]) -> None:
         """LaCuerda's listings of every artist, as the computer's index holds them, with these artists."""
         lacuerda_index.store_artists(self.conn, "tabs/s/index0.html", [LCArtist(*a) for a in artists])
@@ -1585,9 +1607,103 @@ def artist_read_records(directory: Path) -> list[dict[str, Any]]:
     return [by_slug, by_name, slug_first, none, from_cache, blocked, unreadable, spent]
 
 
+def stage_records(directory: Path) -> list[dict[str, Any]]:
+    """get.py's words for what LaCuerda's pass came to, the lacuerda stage's and a pick's in the sheet stage: each
+    of ``lacuerda()``'s own ends, and the work's raises its asking turns into the envelope's words."""
+    from caracole.overrides import add_lacuerda, add_pin
+
+    soda = _page(fixture_ref("lacuerda/artist.html"))
+    dml3 = _page(fixture_ref("lacuerda/version.html"))
+    pick = (add_lacuerda, "Soda Stereo - De Música Ligera", DML_3)
+    records: list[dict[str, Any]] = []
+    n = iter(range(1000))
+
+    def world() -> SheetWorld:
+        return SheetWorld(directory, f"s{next(n)}")
+
+    w = world()
+    s = w.song()
+    records.append(w.stage("a sheet kept", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song("Nadie Conocido", "Canción de Nadie", lyrics=None)
+    records.append(w.stage("an artist LaCuerda doesn't have", s,
+                           {f"GET {BASE_URL}/nadie_conocido/": soft_404("nadie_conocido")}))
+    w = world()
+    s = w.song(lyrics=HALF_LYRICS)
+    w.kept(s, coverage=0.75, files=("sheet.txt", "sheet.json"))
+    records.append(w.stage("a sheet that covers less than the one kept", s, {f"GET {SODA}": soda, f"GET {DML_3}": dml3}))
+    live = ("Persiana Americana, en vivo en el estadio de River Plate para la gira de despedida del grupo en 2007, "
+            "con orquesta y coros, toma")
+    w = world()
+    one = w.song(title=f"{live} uno", added="2026-10-03T00:00:00Z")
+    w.kept(one, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    two = w.song(title=f"{live} dos", added="2026-10-02T00:00:00Z")
+    page = small_artist("Soda Stereo", ("persiana_dos", f"{live} dos", "R-1"))
+    records.append(w.stage("a sheet that would go where another song keeps one", two,
+                           {f"GET {SODA}": _page(page), f"GET {BASE_URL}/soda_stereo/persiana_dos.shtml": dml3}))
+    w = world()
+    s = w.song("Oasis", "Wonderwall", lyrics=ENGLISH_LYRICS)
+    records.append(w.stage("not a song for LaCuerda", s))
+    w = world()
+    s = w.song(lyrics=ENGLISH_LYRICS)
+    w.kept(s, coverage=1.0, files=("sheet.txt", "sheet.json"))
+    w.overrides(pick)
+    records.append(w.stage("your pick kept as the sheet", s, {f"GET {DML_3}": dml3}))
+    w = world()
+    s = w.song()
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", f"{BASE_URL}/soda_stereo/de_musica_ligera-9.shtml"))
+    records.append(w.stage("your pick gone", s, {f"GET {BASE_URL}/soda_stereo/de_musica_ligera-9.shtml": _page("x", 404)}))
+    w = world()
+    s = w.song()
+    _lacuerda_sheet_of(w, s)
+    w.overrides((add_lacuerda, "Soda Stereo - De Música Ligera", DML_PAGE))
+    records.append(w.stage("your pick is the sheet already", s))
+    w = world()
+    s = w.song()
+    w.kept(s, tab_id="85053", coverage=0.5, files=("sheet.txt", "sheet.json"))
+    w.overrides(pick, (add_pin, "Soda Stereo - De Música Ligera", ["https://tabs.ultimate-guitar.com/tab/85053"]))
+    records.append(w.stage("your pick waits for the tab you pinned", s))
+    w = world()
+    s = w.song(lacuerda_checked_at="2026-10-20T00:00:00Z")
+    w.overrides(pick)
+    records.append(w.stage("your pick waits: asked this month", s))
+    w = world()
+    s = w.song(status="ignored")
+    w.overrides(pick)
+    records.append(w.stage("your pick waits for the nightly run", s))
+    w = world()
+    s = w.song()
+    records.append(w.stage("no budget", s, budget=0))
+    w = world()
+    s = w.song()
+    records.append(w.stage("a server's error", s, {f"GET {SODA}": _page("x", 500)}))
+    w = world()
+    s = w.song()
+    records.append(w.stage("a block", s, {f"GET {SODA}": _page("Forbidden", 403)}))
+    return records
+
+
 def test_lacuerda_sheets_jsonl(tmp_path):
-    records = [*sheet_records(tmp_path / "sheets"), *artist_read_records(tmp_path / "artists")]
+    records = [*sheet_records(tmp_path / "sheets"), *artist_read_records(tmp_path / "artists"),
+               *stage_records(tmp_path / "stages")]
     check(SHEETS, jsonl(records, corpus="lookup/lacuerda_sheets", made_by=MADE_BY))
+
+
+def test_the_stage_says_each_of_its_ends(tmp_path):
+    records = stage_records(tmp_path / "stages")
+    said = {tuple(r["out"]["result"]) for r in records if "out" in r}
+    assert said == {
+        ("done", "sheet kept from LaCuerda"), ("done", "not on LaCuerda"), ("done", "kept what it had"),
+        ("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"),
+        ("done", "the LaCuerda sheet you picked is the sheet already"),
+        ("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"),
+        ("skipped", "your pick on LaCuerda waits: it was asked for this month"),
+        ("skipped", "your pick on LaCuerda waits for the nightly run"),
+    }, said
+    assert {r["raises"]["type"] for r in records if "raises" in r} == {"BudgetExhausted", "ProviderError",
+                                                                        "ProviderBlocked"}
+    shared = next(r for r in records if r["case"] == "a sheet that would go where another song keeps one")
+    assert not shared["out"]["library"]  # nothing written over the other song's sheet
 
 
 def test_the_sheets_cover_each_outcome(tmp_path):
@@ -1761,6 +1877,11 @@ def command_records(directory: Path) -> list[dict[str, Any]]:
         ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
         ("otros", "Otros", [("tiza", "Tiza", "R-1")]), stated=40, pages=3))}, query=tiza, auto=False))
     w = world()
+    records.append(command_record(w, "a count past a 64-bit integer, said whole", "search",
+                                  {f"GET {search_url(tiza)}": _page(search_page(
+                                      ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
+                                      stated=PAST_A_LONG, pages=2))}, query=tiza, auto=False))
+    w = world()
     gaviotas = artists_search_page([("bragas_de_la_gaviota", "Las Bragas de la Gaviota", 1), ("gaviota", "Gaviota", 12)])
     records.append(command_record(w, "artists alone", "search", {f"GET {search_url('la gaviota')}": _page(gaviotas)},
                                   query="la gaviota", auto=True))
@@ -1845,3 +1966,4 @@ def test_the_commands_end_with_each_of_their_lines(tmp_path):
     assert all(r["out"]["requests"] for r in searches if r["out"]["result"]["lines"][-1].startswith("Nothing found"))
     ok = [r for r in records if "provider:lacuerda" in r["out"]["kv"]]
     assert len(ok) >= 8
+    assert any(f"has {PAST_A_LONG} songs" in e for e in ends)  # Python's int, whole

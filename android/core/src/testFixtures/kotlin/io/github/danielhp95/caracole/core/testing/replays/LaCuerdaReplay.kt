@@ -5,12 +5,8 @@ import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.config.RankPolicy
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.EventLog
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.LaCuerdaParseError
-import io.github.danielhp95.caracole.core.http.ProviderBlocked
-import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -26,10 +22,18 @@ import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaStats
 import io.github.danielhp95.caracole.core.lacuerda.SearchGate
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.Asking
+import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
+import io.github.danielhp95.caracole.core.lookup.LookupWords
+import io.github.danielhp95.caracole.core.lookup.Pacing
+import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaCommands
+import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaPickStage
+import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaStage
 import io.github.danielhp95.caracole.core.py.PyCodec
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -37,6 +41,7 @@ import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -379,8 +384,8 @@ object LaCuerdaReplay : AreaReplay {
     /**
      * Every scenario of lookup/lacuerda_sheets.jsonl: `lacuerda_sheets` of the record's songs (`kw.only`, the rank
      * policy's fields that differ from RankPolicy()'s in `kw.rank`) through LaCuerdaSheets.lacuerdaSheets, its stats
-     * as the record writes them, and `read_artist_page` (`kw.artist`) through LaCuerdaSheets.readArtistPage; the
-     * pages each stored noted for the next push ([noted]).
+     * as the record writes them; `read_artist_page` (`kw.artist`) through LaCuerdaSheets.readArtistPage; and get.py's
+     * lacuerda stage for a song (`kw.song`, [stage]); the pages each stored noted for the next push ([noted]).
      */
     fun sheets(misses: Misses = Misses(SHEETS)) {
         for (line in Corpus.lines(SHEETS)) {
@@ -396,6 +401,7 @@ object LaCuerdaReplay : AreaReplay {
                         "caracole.lacuerda_fetch.read_artist_page" ->
                             LaCuerdaSheets.readArtistPage(world.db, client, kw.getValue("artist").jsonPrimitive.content,
                                                           world.now)
+                        "caracole.get._Lookup.lacuerda" -> stage(world, client, kw.getValue("song").jsonPrimitive.long)
                         else -> throw AssertionError("no sheets record $fn")
                     }
                 }
@@ -406,7 +412,7 @@ object LaCuerdaReplay : AreaReplay {
     /**
      * Every record of lookup/commands_lacuerda.jsonl: `caracole lacuerda --artist` (`kw.artist`) or `--search
      * --progress` (`kw.query`, `kw.auto`) through LaCuerdaCommands, in a command's context over the record's client
-     * ([CommandAsking]): every line it says, then the last it returns, as Python prints them.
+     * ([envelope]): every line it says, then the last it returns, as Python prints them.
      */
     fun commands(misses: Misses = Misses(COMMANDS)) {
         for (line in Corpus.lines(COMMANDS)) {
@@ -414,10 +420,11 @@ object LaCuerdaReplay : AreaReplay {
             val kw = line.getValue("kw").jsonObject
             Scenarios.replay(line, misses, events(line)) { world ->
                 val said = ArrayList<String>()
+                val search = kw.getValue("command").jsonPrimitive.content == "search"
+                val ask = envelope(world, LookupWords.lookupRunOf(world.now, search))
                 val c = object : CommandContext {
                     override val db: Db = world.db
-                    override val asking: Asking =
-                        CommandAsking(world.db, world.clients.getValue(LaCuerdaSheets.PROVIDER), world.now)
+                    override val asking: Asking = ask
                     override val now: Instant = world.now
                     override fun say(line: String) {
                         said += line
@@ -443,6 +450,27 @@ object LaCuerdaReplay : AreaReplay {
         } finally {
             noted(world, line, misses)
         }
+    }
+
+    /**
+     * get.py's lacuerda stage for [song] (`_Lookup.lacuerda`): LaCuerdaPickStage for a song you picked a LaCuerda
+     * page for, else LaCuerdaStage, asked through [client] alone (an asking that hands the work its client and lets
+     * what it raises out, as the record's `asking` does), so that the end compared is the work's own words; the
+     * envelope's words for what it raises are LookupWords' (lane lookup's vectors/lookup/asking.jsonl).
+     */
+    private fun stage(world: ScenarioWorld, client: Client, song: Long): List<String> {
+        val row = Songs.byId(world.db, song) ?: throw AssertionError("no song $song")
+        val overrides = Overrides.read(world.db)
+        val bare = object : Asking {
+            override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> =
+                Asked.Done(work(client))
+
+            override val requests: Map<String, Int> get() = mapOf(client.provider to client.requestsMade)
+        }
+        val ctx = StageContext(world.db, row, overrides, PhoneConfig.read(world.db), LibraryStore(world.library), bare,
+                               world.now)
+        val end = (if (overrides.lacuerda[row.key] != null) LaCuerdaPickStage else LaCuerdaStage).run(ctx)
+        return listOf(end.state, end.detail)
     }
 
     /** The pages the pass noted for the next push (kv `phone:read:lacuerda:<page>`, at the record's now) checked
@@ -488,32 +516,19 @@ object LaCuerdaReplay : AreaReplay {
     }
 
     /**
-     * A lookup command's asking of the record's client, as lane lookup's InteractiveAsk asks for one: none while
-     * LaCuerda cools down; the policy the command gives (the search's one request) else the client's, the lookup's,
-     * which the record's is; a block cools it down (Health.recordBlock) and an error is counted (Health.recordError);
-     * a spent budget the hour's when the client's budget is below `lookup_requests`; the requests counted from the
-     * command's start.
+     * A lookup command's asking as LaCuerdaRunner gives it one (LookupJobs.context): lane lookup's InteractiveAsk at
+     * the command's run [runId] (LookupWords.lookupRunOf: the lookup's, or the search's own), at the phone's settings,
+     * over the record's client in place of the one Clients.interactive would make, given the policy the command asks
+     * with (the search's one request), else the record's own, the lookup pace's.
      */
-    class CommandAsking(private val db: Db, private val client: Client, private val now: Instant) : Asking {
-        private val start = client.requestsMade
-
-        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
-            if (Health.isCooling(db, provider, now)) return Asked.Cooling(Health.state(db, provider).cooldownUntil)
-            if (policy != null) client.policy = policy
-            return try {
-                Asked.Done(work(client))
-            } catch (e: ProviderBlocked) {
-                Asked.Blocked(e, Health.recordBlock(db, e.provider, now, e.message.orEmpty()))
-            } catch (e: BudgetExhausted) {
-                val p = PhoneConfig.read(db).provider(provider)
-                Asked.Spent(hour = client.policy.budget < p.lookupRequests, keptForSheets = false)
-            } catch (e: ProviderError) {
-                Health.recordError(db, e.provider, now, e.message.orEmpty())
-                Asked.Failed(e)
-            }
-        }
-
-        override val requests: Map<String, Int> get() = mapOf(client.provider to client.requestsMade - start)
+    private fun envelope(world: ScenarioWorld, runId: String): InteractiveAsk {
+        val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { world.now.epochSecond.toDouble() },
+                            monotonic = { 0.0 }, clock = { world.now })
+        val config = PhoneConfig.read(world.db)
+        return InteractiveAsk(Clients(config, world.cacheDir, { RefusingTransport }, pacing), world.db, runId, world.now,
+                              config = config, make = { provider, policy ->
+                                  world.clients.getValue(provider).also { if (policy != null) it.policy = policy }
+                              })
     }
 
     // --- a database ------------------------------------------------------------------------------------------

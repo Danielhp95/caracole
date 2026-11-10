@@ -3,13 +3,13 @@ package io.github.danielhp95.caracole.core.lookup.sites
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Stamps
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearchAnswer
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSheets
 import io.github.danielhp95.caracole.core.library.internal.Rekey
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.Pace
 import io.github.danielhp95.caracole.core.py.PyInt
 import kotlinx.serialization.json.JsonElement
@@ -38,8 +38,10 @@ import java.time.format.DateTimeFormatter
  *   a cooldown, a block, a spent share or budget, an error, which is remembered for an hour, or with [auto] a search
  *   that failed lately or the hour's searches the page sends by itself spent).
  *
- * A good run is recorded where Python records it (Health.recordOk after Health.answeredAny of the command's run: the
- * lookup's, `lookup:<now>`, or the search's, `lookup:lacuerda-search:<now>`, the runs the runner's asking logs under).
+ * A good run is recorded where Python records it (Health.recordOk after Health.answeredAny of the command's run,
+ * LookupWords.lookupRunOf's: the lookup's, `lookup:<now>`, or the search's own, `lookup:lacuerda-search:<now>`, under
+ * which LaCuerdaSearch.searchesUsed counts the hour's searches the page sends by itself). So the runner's asking logs
+ * its events under that run at the same [CommandContext.now], as LaCuerdaRunner's InteractiveAsk does.
  * The computer's search first stores the artist pages its HTTP cache holds that its index lacks (backfill_cached);
  * the phone stores each page it reads as it reads it, so it has none to store. vectors/lookup/commands_lacuerda.jsonl
  * holds both to Python's (tests/test_conformance_lacuerda_lookups.py, LaCuerdaReplay).
@@ -49,7 +51,6 @@ object LaCuerdaCommands {
     const val NOT_READ = "Not read: "
     const val NOT_SEARCHED = "Not searched: "
     private const val NAME = "LaCuerda"
-    private const val PROGRESS = "caracole-progress: "  // get.PROGRESS_PREFIX
     private const val STAGE = "search"
     private val WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC)
 
@@ -73,27 +74,31 @@ object LaCuerdaCommands {
             }
             is Asked.Failed -> return "${NOT_READ}$NAME failed (${asked.error.message}); nothing changed: try again later."
         }
-        recordOk(c, Pace.lookupRunId(now))
+        recordOk(c, LookupWords.lookupRunOf(now))
         if (found == null) return "Not found: $NAME has no artist page for $artist."
         val (slug, songs) = found
         val name = db.one("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1", slug) { it.text(0) } ?: artist
         return "Read: $NAME's page of $name lists ${plural(songs, "song")}, in the index now."
     }
 
-    /** `caracole lacuerda --search QUERY --progress` (with `--auto`: a search the page sent by itself); its last line,
-     * its progress events said before it. */
-    fun search(c: CommandContext, query: String, auto: Boolean): String {
+    /** `caracole lacuerda --search QUERY` (with `--auto`: a search the page sent by itself); its last line, and with
+     * [progress] (`--progress`, as caracole serve and LaCuerdaRunner always run it) its stage's events said before
+     * it. */
+    fun search(c: CommandContext, query: String, auto: Boolean, progress: Boolean = true): String {
         val db = c.db
         val shownQuery = "“$query”"
+        fun say(state: String, detail: String) {
+            if (progress) c.say(progressLine(state, detail))
+        }
         fun end(line: String, state: String = "skipped"): String {
-            c.say(progress(state, line))
+            say(state, line)
             return line
         }
         val key = LaCuerdaSearch.queryKey(query)
         if (key.isEmpty()) {
             return end("${NOT_SEARCHED}LaCuerda's search reads only words of 4 letters or more, and $shownQuery has none.")
         }
-        c.say(progress("running", "asking LaCuerda"))
+        say("running", "asking LaCuerda")
         val now = c.now
         LaCuerdaSearch.asked(db, key, now)?.let { was ->
             val at = Stamps.parse(was["at"])?.let { shown(Stamps.instant(it)) } ?: "?"
@@ -139,7 +144,7 @@ object LaCuerdaCommands {
                 return end("${NOT_SEARCHED}$NAME failed (${asked.error.message}); nothing changed: try again later.")
             }
         }
-        recordOk(c, Pace.LOOKUP_RUN + LaCuerdaSearch.RUN + Stamps.of(now))
+        recordOk(c, LookupWords.searchRunId(now))
         return when {
             answer.songs.isNotEmpty() -> {
                 val some = if (answer.stated > BigInteger.valueOf(answer.songs.size.toLong())) {
@@ -170,9 +175,9 @@ object LaCuerdaCommands {
             "${shown(asked.state.cooldownUntil)}."
 
     /** get.progress_line of the search's stage. */
-    private fun progress(state: String, detail: String): String = PROGRESS + PyJson.dumps(
+    private fun progressLine(state: String, detail: String): String = LookupWords.progressLine(
         JsonObject(linkedMapOf("stage" to JsonPrimitive(STAGE), "state" to JsonPrimitive(state),
-                               "detail" to JsonPrimitive(detail))), compact = true)
+                               "detail" to JsonPrimitive(detail))))
 
     /** stamps.shown: a time in UTC, "2026-11-03 12:30 UTC"; "?" for none. */
     private fun shown(at: Instant?): String = at?.let(WHEN::format) ?: "?"

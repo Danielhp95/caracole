@@ -44,8 +44,8 @@ class LaCuerdaSheetsTest {
     private val soda = "https://acordes.lacuerda.net/soda_stereo/"
 
     /** A sheet kept, picked, or not replacing a better one; the artist's slugs in order, a 404 or "aqui llega:" moving
-     * on; the index's rows; sheet.json; the misses and errors; read_artist_page. Those that parse a page or write a
-     * sheet wait on html-tree and ug-pages. */
+     * on; the index's rows; sheet.json; the misses and errors; read_artist_page; and get.py's words for each of the
+     * stage's own ends, and what its work raises. */
     @Test fun everySheetScenarioReplays() = Misses("lookup/lacuerda_sheets.jsonl").also { LaCuerdaReplay.sheets(it) }.assertNone()
 
     private fun <T> world(block: (Db, LibraryStore) -> T): T = TestDb.fresh(folder.root).use { database ->
@@ -55,11 +55,12 @@ class LaCuerdaSheetsTest {
     private fun song(db: Db, lib: LibraryStore, artist: String = "Soda Stereo", title: String = "De Música Ligera"): SongRow =
         lib.add(db, artist, title, now = "2026-10-01T00:00:00Z")
 
-    private fun client(answers: Map<String, Pair<Int, String>> = emptyMap(), budget: Long = 6): Client =
-        PoliteClient(LaCuerdaSheets.PROVIDER, ProviderPolicy(budget = budget, delay = 0.0 to 0.0), File(folder.root, "cache"),
-                     PhoneConfig.DEFAULTS.userAgent,
-                     FakeTransport(answers.mapValues { (_, a) -> FakeTransport.answer(a.first, a.second) }), sleep = {},
-                     draws = { low, _ -> low }, monotonic = { 0.0 }, wallClock = { now })
+    private fun client(answers: Map<String, Pair<Int, String>> = emptyMap(), budget: Long = 6,
+                       site: FakeTransport = FakeTransport(answers.mapValues { (_, a) -> FakeTransport.answer(a.first, a.second) }),
+                       cache: String = "cache"): Client =
+        PoliteClient(LaCuerdaSheets.PROVIDER, ProviderPolicy(budget = budget, delay = 0.0 to 0.0), File(folder.root, cache),
+                     PhoneConfig.DEFAULTS.userAgent, site, sleep = {}, draws = { low, _ -> low }, monotonic = { 0.0 },
+                     wallClock = { now })
 
     private fun ctx(db: Db, lib: LibraryStore, song: SongRow, asking: Asking, overrides: Overrides = Overrides()) =
         StageContext(db, song, overrides, PhoneConfig.DEFAULTS, lib, asking, now)
@@ -164,5 +165,19 @@ class LaCuerdaSheetsTest {
                              "GET https://acordes.lacuerda.net/los_nadie/" to (200 to "aqui llega:../tabs/l/los_nadie/index.html")))
         assertEquals(null, LaCuerdaSheets.readArtistPage(db, c, "Los Nadie", now))
         assertEquals(2, c.requestsMade)
+    }
+
+    /** readArtistPage's `first` (read_artist_page has none; LaCuerdaRunner passes none) is asked before every other
+     * slug, in place of the name itself when it is written as a slug, the name's slugs after it as ever. */
+    @Test fun aFirstSlugGivenIsAskedBeforeTheNamesOwn() = world { db, _ ->
+        val oficial = "GET https://acordes.lacuerda.net/estopa_oficial/"
+        val estopa = "GET https://acordes.lacuerda.net/estopa/"
+        val site = FakeTransport(mapOf(oficial to FakeTransport.answer(404, "x"), estopa to FakeTransport.answer(404, "x")))
+        assertEquals(null, LaCuerdaSheets.readArtistPage(db, client(site = site), "estopa", now, first = "estopa_oficial"))
+        assertEquals(listOf(oficial, estopa), site.said)
+
+        val alone = FakeTransport(mapOf(estopa to FakeTransport.answer(404, "x")))
+        assertEquals(null, LaCuerdaSheets.readArtistPage(db, client(site = alone, cache = "another cache"), "estopa", now))
+        assertEquals(listOf(estopa), alone.said)  // the name written as a slug is its one slug
     }
 }
