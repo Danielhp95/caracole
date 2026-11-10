@@ -202,8 +202,9 @@ object HarpTabsPages {
     }
 
     /** _pre_text: the tab's `<pre>` as its lines show: a `<br>` breaks a line, and so does the end of a `<p>` (or a
-     * `<div>`) where no line break follows it in the page. It edits the tree, as Python's does. */
-    private fun preText(pre: HtmlNode): String {
+     * `<div>`) where no line break follows it in the page. It edits the tree, as Python's does (HtmlTreeReplay holds
+     * it to what selectolax read of every `<pre>` of vectors/html/tree.jsonl). */
+    fun preText(pre: HtmlNode): String {
         for (node in pre.css("br")) node.replaceWith("\n")
         for (node in pre.css("p, div")) {
             val after = node.next
