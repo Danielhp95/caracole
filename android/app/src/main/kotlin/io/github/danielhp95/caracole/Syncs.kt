@@ -50,7 +50,7 @@ object Syncs {
      * Syncs with the address in the settings, telling [Caracole.status] how far it is, and keeps the outcome.
      * With [probe] (the sync on Wi-Fi), no caracole at the address ([SyncError.noCaracole]: no address, nothing
      * answering, or something else answering, such as a Wi-Fi login page) does nothing, says nothing, and keeps
-     * the last outcome; Sync now says it. [stopped] is asked between two files and between two chunks of one.
+     * the last outcome; Copy pages says it. [stopped] is asked between two files and between two chunks of one.
      */
     fun run(context: Context, probe: Boolean, stopped: () -> Boolean = { false }): Outcome? {
         val settings = Settings(context)
@@ -60,7 +60,7 @@ object Syncs {
             val address = ServerAddress.parse(settings.server)
             val engine = SyncEngine(Caracole.mirror(context), Caracole.http())
             // The list is asked for inside the sync, once it holds the lock: never one fetched before another
-            // sync (on Wi-Fi, or Sync now) ended.
+            // sync (on Wi-Fi, or Copy pages) ended.
             val report = engine.sync(address, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
             // The library page's search answers your songs with the copy's cards: none of a list gone.
             Caracole.started()?.search?.invalidate()
@@ -79,11 +79,11 @@ object Syncs {
         return outcome
     }
 
-    /** "Synced 3 min ago: 12 files new, 2 removed", or "Sync failed 3 min ago: No answer from …". */
+    /** "Copied 3 min ago · 12 new files, 2 removed", or "Copy failed 3 min ago · No answer from …". */
     fun describe(outcome: Outcome?, now: Long = System.currentTimeMillis()): String? {
         outcome ?: return null
         val ago = ago(now - outcome.at)
-        return if (outcome.ok) "Synced $ago: ${outcome.text}" else "Sync failed $ago: ${outcome.text}"
+        return if (outcome.ok) "Copied $ago · ${outcome.text}" else "Copy failed $ago · ${outcome.text}"
     }
 
     /** "just now", "3 min ago", "2 h ago", "4 days ago". */
@@ -100,7 +100,7 @@ object Syncs {
     fun size(context: Context, bytes: Long): String = Formatter.formatShortFileSize(context, bytes)
 }
 
-/** A sync, by hand ("Sync now") or on Wi-Fi every 6 hours (input [Syncs.PROBE]). */
+/** A sync, by hand ("Copy pages") or on Wi-Fi every 6 hours (input [Syncs.PROBE]). */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val probe = inputData.getBoolean(Syncs.PROBE, false)

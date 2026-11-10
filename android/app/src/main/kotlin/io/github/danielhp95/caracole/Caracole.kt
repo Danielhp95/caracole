@@ -187,5 +187,5 @@ sealed interface SyncState {
     data class Ended(val outcome: Outcome) : SyncState
 }
 
-/** How a sync ended, [at] a time: [ok], and what it did ([text]: "12 files new, 2 removed") or why it failed. */
+/** How a sync ended, [at] a time: [ok], and what it did ([text]: "12 new files, 2 removed") or why it failed. */
 data class Outcome(val at: Long, val ok: Boolean, val text: String)

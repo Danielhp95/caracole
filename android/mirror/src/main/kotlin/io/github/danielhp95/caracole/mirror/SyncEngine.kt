@@ -23,15 +23,15 @@ data class SyncReport(
     val downloaded: Int,
     val skipped: List<String>,
 ) {
-    /** "12 files new, 2 removed", or "nothing changed"; with the entries skipped, if any. */
+    /** "12 new files, 2 removed", or "nothing changed"; with the entries skipped, if any. */
     fun summary(): String {
         val parts = buildList {
-            if (added > 0) add("$added ${if (added == 1) "file" else "files"} new")
+            if (added > 0) add("$added new ${if (added == 1) "file" else "files"}")
             if (changed > 0) add("$changed changed")
             if (removed > 0) add("$removed removed")
         }
         val said = if (parts.isEmpty()) "nothing changed" else parts.joinToString(", ")
-        return if (skipped.isEmpty()) said else "$said; ${skipped.size} left out (the server listed them wrong)"
+        return if (skipped.isEmpty()) said else "$said · ${skipped.size} left out, listed wrong"
     }
 }
 
@@ -61,7 +61,7 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                 answer.status != 200 -> throw SyncError.NotCaracole(address, "it answered HTTP ${answer.status}")
             }
             readAtMost(answer.body, MAX_MANIFEST_BYTES)
-                ?: throw SyncError.BadManifest("it is longer than ${MAX_MANIFEST_BYTES / (1024 * 1024)} MB")
+                ?: throw SyncError.BadManifest("it's over ${MAX_MANIFEST_BYTES / (1024 * 1024)} MB")
         }
         return Fetched(bytes, Manifest.parse(bytes, address))
     }
@@ -86,7 +86,7 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
             try {
                 mirror.blobs.mkdirs()
                 mirror.removeTemporaries()
-                if (!mirror.blobs.isDirectory) throw SyncError.Storage("the folder ${mirror.blobs} can't be made")
+                if (!mirror.blobs.isDirectory) throw SyncError.Storage("can't make ${mirror.blobs}")
 
                 // Each content once: two paths with the same bytes share a blob.
                 val missing = manifest.entries.distinctBy { it.sha256 }.filter { !mirror.blob(it.sha256).isFile }
@@ -99,7 +99,7 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                 }
                 if (cancelled()) throw SyncError.Cancelled()
                 if (manifest.entries.any { !mirror.blob(it.sha256).isFile }) {
-                    throw SyncError.Storage("a file downloaded is gone from the phone's storage")
+                    throw SyncError.Storage("a downloaded file is gone from the phone's storage")
                 }
                 mirror.swapManifest(list.bytes)
             } catch (e: IOException) {
@@ -130,9 +130,9 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
         val tmp = mirror.newTemporary()
         try {
             http.get(address, address.resolve(entry.url)) { answer ->
-                if (answer.status != 200) throw SyncError.Changed(entry.path, "the server answered HTTP ${answer.status}")
+                if (answer.status != 200) throw SyncError.Changed(entry.path, "the computer answered HTTP ${answer.status}")
                 if (answer.contentLength >= 0 && answer.contentLength != entry.size) {
-                    throw SyncError.Changed(entry.path, "it is ${answer.contentLength} bytes, not ${entry.size}")
+                    throw SyncError.Changed(entry.path, "it's ${answer.contentLength} bytes, not ${entry.size}")
                 }
                 val digest = MessageDigest.getInstance("SHA-256")
                 var total = 0L
@@ -148,13 +148,13 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                         val n = answer.body.read(buffer, 0, room)
                         if (n < 0) break
                         total += n
-                        if (total > entry.size) throw SyncError.Changed(entry.path, "it is longer than ${entry.size} bytes")
+                        if (total > entry.size) throw SyncError.Changed(entry.path, "it's over ${entry.size} bytes")
                         digest.update(buffer, 0, n)
                         storage { out.write(buffer, 0, n) }
                     }
                     storage { out.fd.sync() }
                 }
-                if (total != entry.size) throw SyncError.Changed(entry.path, "it is $total bytes, not ${entry.size}")
+                if (total != entry.size) throw SyncError.Changed(entry.path, "it's $total bytes, not ${entry.size}")
                 val sha256 = digest.digest().joinToString("") { "%02x".format(it) }
                 if (sha256 != entry.sha256) throw SyncError.Changed(entry.path, "its bytes aren't the ones listed")
             }

@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The settings: caracole serve's address, Test (the list fetched and counted, nothing downloaded), Sync now,
+ * The settings: caracole serve's address, Test (the list fetched and counted, nothing downloaded), Copy pages,
  * the last sync's time and outcome, the storage the copy takes, the sync on Wi-Fi by itself, the computer's indexes
  * imported (from caracole serve, or from a file: [IndexImports]) with the last import's outcome, the text size a
  * pinch left, with Reset, and the phone's backups ([BackupsActivity]).
@@ -185,7 +185,7 @@ class SettingsActivity : Activity() {
         super.onStop()
     }
 
-    /** Asks caracole for its list, and says what it holds: "caracole answered: 312 files, 41 MB". */
+    /** Asks caracole for its list, and says what it holds: "Answered · 312 files, 41 MB". */
     private fun test() {
         settings.server = address.text.toString().trim()
         testResult.visibility = View.VISIBLE

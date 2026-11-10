@@ -62,7 +62,7 @@ class Manifest(val start: String, val entries: List<Entry>, val skipped: List<St
          * for a format other than [FORMAT], [SyncError.BadManifest] for a list the app can't use whole.
          */
         fun parse(bytes: ByteArray, address: ServerAddress? = null): Manifest {
-            val where = address?.toString() ?: "the server"
+            val where = address?.toString() ?: "the computer"
             fun notCaracole(why: String): Nothing =
                 if (address != null) throw SyncError.NotCaracole(address, why) else throw SyncError.BadManifest(why)
 

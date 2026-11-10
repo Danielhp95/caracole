@@ -59,7 +59,7 @@ object IndexImports {
     private val SQLITE = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
     private val random = SecureRandom()
 
-    /** What an import under way is doing ("Downloading the index: 12 MB of 400 MB"), or null when none is. */
+    /** What an import under way is doing ("Downloading · 12 MB of 400 MB"), or null when none is. */
     val running = MutableStateFlow<String?>(null)
 
     /** One import asked for at a time: the check that none is under way, and the work queued, together. */
@@ -104,9 +104,9 @@ object IndexImports {
         http.get(address, address.resolve(INDEX), readTimeoutMs = PeerClient.INDEX_TIMEOUT_MS) { answer ->
             when {
                 answer.status == 404 -> throw IndexImportError(
-                    "caracole at $address gives no index ($INDEX): the phone needs a newer caracole there.")
+                    "$address gives no index ($INDEX). Update caracole there.")
                 answer.status != 200 -> throw IndexImportError(
-                    "caracole at $address answered HTTP ${answer.status} for its index" +
+                    "$address refused its index (HTTP ${answer.status})" +
                         (refusal(answer.body)?.let { ": $it" } ?: "."))
             }
             write(answer.body, dir, "$address", stopped) { done -> progress(done, answer.contentLength) }
@@ -114,7 +114,7 @@ object IndexImports {
 
     /** The export in [input], picked among the phone's files, into a file of its own in [dir], as [download] does. */
     fun copy(input: InputStream, dir: File, stopped: () -> Boolean = { false }): File =
-        write(input, dir, "That file", stopped) {}
+        write(input, dir, "that file", stopped) {}
 
     /** The computer's own words for a refusal: its JSON answer's `error` (peer_routes.py's), read from at most
      * [REFUSAL_MAX] bytes; null for none. */
@@ -166,7 +166,7 @@ object IndexImports {
                 out.fd.sync()
             }
             progress(done)
-            if (!isSqlite(part)) throw IndexImportError("$what sent something that isn't an index export (caracole index export's file).")
+            if (!isSqlite(part)) throw IndexImportError("Not an index export, from $what.")
             val file = File(dir, "$name.sqlite")
             if (!part.renameTo(file)) throw IOException("can't name the index ${file.name}")
             return file
@@ -201,17 +201,17 @@ object IndexImports {
             val sites = (outcome?.get("sites") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
             val said = if (changed == true && sites.isNotEmpty()) sites.joinToString(", ")
                        else job.stages.firstOrNull { it.name == MERGE }?.detail.orEmpty()
-            return Outcome(at, true, if (said.isEmpty()) "Indexes imported" else "Indexes imported: $said")
+            return Outcome(at, true, if (said.isEmpty()) "Indexes imported" else "Indexes imported · $said")
         }
         val said = job.output.lastOrNull { it.startsWith(ERROR_LINE) }?.removePrefix(ERROR_LINE)
             ?: job.stages.firstOrNull { it.state == Job.FAILED }?.detail
         val why = said?.trim()?.ifEmpty { null }?.let { text -> file?.let { text.replace(it.path, "the file") } ?: text }
-        return Outcome(at, false, "The import failed: " + (why ?: job.state))
+        return Outcome(at, false, "Import failed · " + (why ?: job.state))
     }
 
-    /** "Indexes imported: merged (3 min ago)", or what the last import said, or that none ran yet. */
+    /** "Indexes imported · merged · 3 min ago", or what the last import said, or that none ran yet. */
     fun line(context: Context, outcome: Outcome?, now: Long = System.currentTimeMillis()): String =
-        if (outcome == null) context.getString(R.string.never_imported) else "${outcome.text} (${Syncs.ago(now - outcome.at)})"
+        if (outcome == null) context.getString(R.string.never_imported) else "${outcome.text} · ${Syncs.ago(now - outcome.at)}"
 
     private fun token(): String = ByteArray(4).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
 
@@ -251,7 +251,7 @@ class IndexImportWorker(context: Context, params: WorkerParameters) : CoroutineW
         } catch (e: Throwable) {
             // Anything, an Error among them (a native library that won't load, say): a failed outcome kept and
             // shown, never a worker that dies with nothing said.
-            Outcome(System.currentTimeMillis(), false, "The import failed: " + said(e))
+            Outcome(System.currentTimeMillis(), false, "Import failed · " + said(e))
         } finally {
             IndexImports.running.value = null
         }
