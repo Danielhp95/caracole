@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaPages
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
@@ -55,7 +56,12 @@ class LookupRunnersTest {
     private val pacing = Pacing(sleep = {}, draws = Draws { a, _ -> a }, wallSeconds = { now.epochSecond.toDouble() },
                                 monotonic = { 0.0 }, clock = { now })
     private val ug = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"
-    private val site = FakeTransport(mapOf("GET $ug" to FakeTransport.answer(403, "Forbidden")))
+    private val lacuerdaSearch = LaCuerdaPages.searchUrl("de musica ligera")
+    private val site = FakeTransport(mapOf("GET $ug" to FakeTransport.answer(403, "Forbidden"),
+                                           "GET $lacuerdaSearch" to FakeTransport.answer(500, "x")) +
+                                     LaCuerdaPages.artistSlugCandidates("soda stereo").associate {
+                                         "GET ${LaCuerdaPages.artistUrl(it)}" to FakeTransport.answer(404, "x")
+                                     })
     private val quiet = SiteStage { StageEnd("skipped", "nothing to do") }
 
     private fun stages(ugSheet: SiteStage = quiet, lrclib: SiteStage = quiet) = SiteStages(
@@ -282,13 +288,23 @@ class LookupRunnersTest {
     }
 
     @Test fun eachLookupCommandIsItsRunnersAndSaysItsLastLine() {
-        for (args in listOf(listOf("lacuerda", "--artist=soda  stereo"), listOf("harptabs", "--artist=Billy Joel"),
-                            listOf("lacuerda", "--search=de musica ligera", "--progress"))) {
+        val noIndex = "Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole " +
+            "harptabs --index now."  // lane harptabs': nothing asked of a phone with no index
+        for ((args, said) in listOf(
+            listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no artist page for soda stereo.",
+            listOf("harptabs", "--artist=Billy Joel") to noIndex,
+            listOf("lacuerda", "--search=de musica ligera", "--progress") to
+                "Not searched: LaCuerda failed (lacuerda: 500: $lacuerdaSearch: HTTP 500); nothing changed: try again later.",
+        )) {
             job(listOf(io.github.danielhp95.caracole.server.jobs.Command("Ask", args)), { p ->
                 mapOf("lacuerda" to LaCuerdaRunner(p), "harptabs" to HarpTabsRunner(p))
-            }) { job, _ ->
+            }) { job, database ->
                 assertEquals(Job.DONE, job.state, "$args")
-                assertEquals(listOf("Not on the phone yet."), job.steps.single().output)  // each site lane's until
+                assertEquals(listOf(said), job.steps.single().output, "$args")  // the progress lines its stages
+                if ("--progress" in args) database.writeBlocking { db ->  // the error counted, under the search's run
+                    assertNotNull(Health.state(db, "lacuerda").lastError)
+                    assertEquals(1, Pace.lookupRequestsUsed(db, "lacuerda", now, "lookup:lacuerda-search:"))
+                }
             }
         }
     }

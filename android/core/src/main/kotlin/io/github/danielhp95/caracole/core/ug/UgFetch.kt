@@ -40,6 +40,11 @@ object UgFetch {
     val SHEET_FILES: List<String> = listOf("sheet.txt", "sheet.json")
     val TAB_FILES: List<String> = listOf("tab.txt", "tab.json")
 
+    /** ug/fetch.py's KEPT_WITHOUT: what a kept version's JSON leaves out of UG's raw record, the tab's rating and votes
+     * as they are the day its page is read, so that one tab read on two days, here or by the computer, is kept in the
+     * same bytes (a sync's digest leaves them out of the raw record too: Units.VOLATILE_RAW). */
+    val KEPT_WITHOUT: Set<String> = setOf("rating", "votes")
+
     /** A tab page that won't parse, even fetched again, is asked for again after a week, then after twice as long each
      * time it still won't, 90 days at most. */
     val UNREADABLE_RETRY: Duration = Duration.ofDays(7)
