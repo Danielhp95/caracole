@@ -376,7 +376,20 @@ Not built yet.
 
 ## Songbooks, versions and printing
 
-Not built yet.
+**A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
+computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
+what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
+that page until it is over (the page reloads every ten seconds), and in the Requests tab: Make this the one looks the
+song up with that tab and keeps your choice in overrides; Keep it reads the version's page from Ultimate Guitar, at a
+lookup's pace, and keeps it beside the sheet; Back to caracole's pick takes your choice out and looks the song up
+again. A page the computer made and the phone copied names no version of the phone's: choose there on the computer.
+
+**A harmonica tab's readings.** A harmonica tab's page links its Read as line (or, at its foot, **Change how it's
+read**) to the readings caracole weighs, best first, each with its Q and a button that pins it (harptabs.com's own
+notation among them), and Back to caracole's guess for a tab you pinned. The tab's page is made again with your
+reading.
+
+Songbooks and printing: not built yet.
 
 ## Guitar Pro
 

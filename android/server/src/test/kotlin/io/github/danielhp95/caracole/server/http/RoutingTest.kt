@@ -191,23 +191,24 @@ class RoutingTest {
         try {
             TestApp(tmp.root, modules = { db ->
                 val parts = TestParts.of(db, tmp.root, scope)
-                listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts), VersionsRoutes(parts),
-                       HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
+                listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts),
+                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts),
+                       ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the rest neutral still.
-                for (path in listOf("/review", "/versions/choose", "/versions/keep",
-                                    "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), a sheet's versions and a
+                // harmonica tab's readings VersionsRoutes' and HarmonicaRoutes' (VersionsRoutesTest,
+                // HarmonicaRoutesTest), the rest neutral still.
+                for (path in listOf("/review", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
-                                    "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {
+                                    "/songbook/rename", "/songbook/delete")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val refused = test.postScript(path, listOf("song" to "1"))
                     assertEquals(409, refused.status, path)
                     assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
                 }
-                for (path in listOf("/review", "/versions", "/harmonica", "/guitar", "/export.pdf",
-                                    "/assets/alphatab/alphaTab.min.js")) {
+                for (path in listOf("/review", "/guitar", "/export.pdf", "/assets/alphatab/alphaTab.min.js")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")
                     assertEquals(409, page.status, path)
