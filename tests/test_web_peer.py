@@ -71,6 +71,21 @@ def test_the_state_gives_this_sides_settings_for_the_phone_and_a_reader_of_the_s
     assert sync.read_state_document(doc).name == "Canciones"
 
 
+def test_the_state_document_gives_the_asker_the_kept_answers_this_side_keeps_for_it(cfg, conn):
+    """What this side's imports of the asker's files answered "keep mine" (kv ``sync:base:<id>``'s ``kept``), as
+    stored, ``here`` this side's digest: the asker's sync reads it (``PeerState.kept``) and gives this side its
+    version no more. An asker that names no id is given none, and one this side kept nothing for an empty one."""
+    song = a_song_with_a_sheet(cfg, conn)
+    unit = f"song/{song.key}"
+    sync.record_kept(conn, "phone", {unit: ("d-here", "d-phone")}, NOW)
+    app = an_app(cfg)
+    status, doc = answer(app, "/api/peer/state?peer=phone")
+    assert status == 200 and doc["kept"] == {unit: ["d-here", "d-phone", NOW]}
+    assert sync.read_state_document(doc).kept == {unit: ("d-here", "d-phone", NOW)}
+    assert answer(app, "/api/peer/state?peer=desk")[1]["kept"] == {}
+    assert "kept" not in answer(app, "/api/peer/state")[1]
+
+
 def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
     """The owner's choice of 2026-11-03: each caracole's politeness is its own. A cooldown, the requests sent, the
     pace's last request and the records that gate a request (LaCuerda's searches and their failures, a 30-day check,
