@@ -1,9 +1,17 @@
 package io.github.danielhp95.caracole.server.files
 
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.SongbookStore
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.testing.sync.InlineSource
 import io.github.danielhp95.caracole.mirror.Entry
 import io.github.danielhp95.caracole.mirror.Gate
 import io.github.danielhp95.caracole.mirror.Manifest
@@ -19,7 +27,10 @@ import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import io.github.danielhp95.caracole.server.testing.text
-import io.github.danielhp95.caracole.viewer.render.Written
+import io.github.danielhp95.caracole.viewer.pages.SheetPage
+import io.github.danielhp95.caracole.viewer.pages.ViewerInputs
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -267,196 +278,279 @@ class LibraryFilesTest {
 
     // --- the phone's written pages --------------------------------------------------------------------------------
 
-    /** WrittenPages' records as a test sets them: each page's record by song and name, those whose unit is still at
-     * the digest it was made at, the songbooks' files, and the viewer's policy of a page's bytes. */
-    private class Pages : PhonePages {
-        val records = HashMap<Pair<Long, String>, Written>()
-        val current = HashSet<Pair<Long, String>>()
-        val songbooks = HashMap<String, Map<String, Pair<String, Long>>>()
-        override fun written(db: Db, songId: Long, name: String): Written? = records[songId to name]
-        override fun current(db: Db, songId: Long, name: String): Boolean = (songId to name) in current
-        override fun songbook(db: Db, folder: String): Map<String, Pair<String, Long>> = songbooks[folder].orEmpty()
-        override fun csp(page: ByteArray): String =
-            "sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-${page.size}'"
-    }
+    private val folder = "Soda Stereo/De Música Ligera"
 
-    /** The phone's page [name] of [songId] written at [path] and recorded, at a unit [current] or moved since. */
-    private fun written(test: TestApp, pages: Pages, songId: Long, path: String, content: String, current: Boolean = true) {
+    /** A song as the phone adds one (its key the library's own), the keys current as a new database seeds them. */
+    private fun added(test: TestApp, artist: String = "Soda Stereo", title: String = "De Música Ligera"): SongRow =
+        test.database.writeBlocking { db ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+            LibraryStore(test.libraryDir).add(db, artist, title, now = "2026-11-01T00:00:00Z")
+        }
+
+    private fun unitOf(song: SongRow) = "song/${song.key}"
+
+    private fun digestOf(test: TestApp, unit: String): String = test.database.read { Units.digestOf(it, unit)!! }
+
+    /** A sheet's viewer as the phone builds one: its own policy in its `<meta>`, its scripts' hashes in it. */
+    private fun viewer(words: String): String = SheetPage.build(ViewerInputs("{title: $words}\n[C]$words"))
+
+    /** The phone's file [name] of [song] written into the song's folder and noted (WrittenPages.note) at [digest],
+     * its unit's digest now unless given. */
+    private fun written(test: TestApp, song: SongRow, name: String, content: String, digest: String? = null): ByteArray {
         val bytes = content.toByteArray()
-        File(test.libraryDir, path).apply { parentFile.mkdirs() }.writeBytes(bytes)
-        val name = path.substringAfterLast('/')
-        pages.records[songId to name] = Written(sha(bytes), bytes.size.toLong(), "the unit's digest")
-        if (current) pages.current += songId to name else pages.current -= songId to name
+        File(test.libraryDir, "${SafeName.songFolder(song.artist, song.title).toList().joinToString("/")}/$name")
+            .apply { parentFile.mkdirs() }.writeBytes(bytes)
+        test.database.writeBlocking { db ->
+            WrittenPages.note(db, song.id, name, bytes, digest ?: Units.digestOf(db, unitOf(song))!!)
+        }
+        return bytes
     }
 
-    private fun policyOf(content: String) =
-        "sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-${content.toByteArray().size}'; " +
-            "frame-ancestors 'none'"
+    /** web/app.py's `_written_page` policy of [bytes]: viewer_csp of these very bytes, framed by none. */
+    private fun policyOf(bytes: ByteArray) = "${SheetPage.viewerCsp(bytes)}; frame-ancestors 'none'"
 
-    @Test fun thePhonesPageIsServedWhileItIsTheRecordsAtItsUnitsDigestBeforeTheMirrors() {
-        val folder = "Soda Stereo/De Música Ligera"
-        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/$key"),
-                            Triple("$folder/version-39144.html", "<!doctype html>the computer's version", "song/$key"))
+    private fun address(path: String) = "/" + path.split('/').joinToString("/") { PyUrl.quote(it, safe = "") }
+
+    /** A sync's take of [song] as the computer has it now (marked for review there), which moves the song's unit;
+     * the digest it moved to. */
+    private fun take(test: TestApp, song: SongRow): String = test.database.writeBlocking { db ->
+        val unit = unitOf(song)
+        val doc = Units.document(db, test.libraryDir, unit)!!
+        val record = doc.getValue("song").jsonObject
+        val theirs = JsonObject(doc + ("song" to JsonObject(record + ("review" to JsonPrimitive(1)))))
+        val done = Take.applyUnits(db, LibraryStore(test.libraryDir), InlineSource(mapOf(unit to theirs), emptyList()),
+                                   listOf(unit to Canonical.digest(Units.valueOfDocument(unit, theirs)!!)), emptyMap(),
+                                   "2026-11-05T00:00:00Z")
+        assertEquals(listOf(unit), done.taken, done.toString())
+        Units.digestOf(db, unit)!!
+    }
+
+    @Test fun thePhonesPageIsServedWhileItIsTheRecordsAtItsUnitsDigestWithItsOwnPolicyBeforeTheMirrors() {
+        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/soda stereo/x"),
+                            Triple("$folder/version-39144.html", "<!doctype html>the computer's version", null))
         TestApp(tmp.root, mirror = mirror, gate = { UnitGate { _, _ -> Gate.SERVE } }).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
+            val song = added(test)
             for (name in listOf("sheet.html", "sheet (auto).html", "version-39144.html", "harmonica-2.html")) {
-                written(test, pages, id, "$folder/$name", "<!doctype html>the phone's $name")
-                val page = test.get("/" + "$folder/$name".split('/').joinToString("/") { PyUrl.quote(it, safe = "") })
+                val bytes = written(test, song, name, viewer("the phone's $name"))
+                val page = test.get(address("$folder/$name"))
                 assertEquals(200, page.status, name)
-                assertEquals("<!doctype html>the phone's $name", page.text)
-                assertEquals(listOf("Content-Type" to "text/html; charset=utf-8",
-                                    "Content-Security-Policy" to policyOf("<!doctype html>the phone's $name")) + finished,
-                             page.headers.filter { it.first != "Referrer-Policy" }, name)
+                assertContentEquals(bytes, page.bytes)
+                val policy = policyOf(bytes)
+                assertTrue(policy.startsWith("sandbox allow-scripts allow-downloads; default-src 'none'"), policy)
+                assertTrue("script-src 'sha256-" in policy, policy)
+                assertEquals(listOf("Content-Type" to "text/html; charset=utf-8", "Content-Security-Policy" to policy) +
+                                 finished, page.headers.filter { it.first != "Referrer-Policy" }, name)
                 assertEquals("same-origin", page.header("Referrer-Policy"))
             }
+            // A page with no policy of its own: viewer_csp's sandbox that runs and loads nothing (page._NOTHING).
+            written(test, song, "sheet.html", "<!doctype html>no policy")
+            assertEquals("sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                         test.get(address("$folder/sheet.html")).header("Content-Security-Policy"))
         }
     }
 
-    @Test fun aPageChangedOnDiskIsRefusedForTheMirrorsOrSaysSo() {
-        val folder = "Soda Stereo/De Música Ligera"
-        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/$key"))
+    @Test fun aPageChangedOnDiskIsRefusedForTheMirrorsOrSaysSoByItsKind() {
+        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/soda stereo/x"))
         TestApp(tmp.root, mirror = mirror, gate = { UnitGate { _, _ -> Gate.SERVE } }).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
-            written(test, pages, id, "$folder/sheet.html", "<!doctype html>the phone's")
-            written(test, pages, id, "$folder/harmonica-2.html", "<!doctype html>the phone's tab")
+            val song = added(test)
+            written(test, song, "sheet.html", "<!doctype html>the phone's")
             File(test.libraryDir, "$folder/sheet.html").writeText("<!doctype html>THE phone's") // its length kept
-            assertEquals("<!doctype html>the computer's", test.get("/$folder/sheet.html").text,
+            assertEquals("<!doctype html>the computer's", test.get(address("$folder/sheet.html")).text,
                          "the mirror's page, its unit as the computer listed it")
-            File(test.libraryDir, "$folder/harmonica-2.html").appendText("<script>")
-            val refused = test.get("/$folder/harmonica-2.html")
-            assertEquals(404, refused.status, "no mirror's page to stand for it")
-            assertTrue("<h1>Not sent</h1>" in refused.text, refused.text)
-            assertTrue("isn&#x27;t the one the phone made here" in refused.text, refused.text)
+            for ((name, words) in listOf(
+                "harmonica-2.html" to "This harmonica tab&#x27;s page isn&#x27;t the page the phone last wrote here",
+                "version-1.html" to "This version&#x27;s viewer isn&#x27;t the page the phone last wrote here",
+                "sheet (auto).html" to "This sheet viewer isn&#x27;t the page the phone last wrote here")) {
+                written(test, song, name, "<!doctype html>the phone's $name")
+                File(test.libraryDir, "$folder/$name").appendText("<script>")
+                val refused = test.get(address("$folder/$name"))
+                assertEquals(404, refused.status, "no mirror's page to stand for $name")
+                assertTrue("<h1>Not sent</h1>" in refused.text, refused.text)
+                assertTrue(words in refused.text, refused.text)
+            }
             // A link in its place, to the very bytes recorded: never followed.
             val outside = File(tmp.newFolder("outside"), "page.html").apply { writeText("<!doctype html>the phone's tab") }
             File(test.libraryDir, "$folder/harmonica-2.html").delete()
             Files.createSymbolicLink(File(test.libraryDir, "$folder/harmonica-2.html").toPath(), outside.toPath())
-            assertEquals(404, test.get("/$folder/harmonica-2.html").status)
+            assertEquals(404, test.get(address("$folder/harmonica-2.html")).status)
             File(test.libraryDir, "$folder/harmonica-2.html").delete()
-            assertEquals(404, test.get("/$folder/harmonica-2.html").status, "a page gone")
+            assertEquals(404, test.get(address("$folder/harmonica-2.html")).status, "a page gone")
         }
     }
 
-    @Test fun onceItsUnitMovesTheMirrorsPageServesWhenItsGateSaysSo() {
-        val folder = "Soda Stereo/De Música Ligera"
+    @Test fun onceATakeMovesTheUnitTheMirrorsPageServesWhenPhoneGateSaysSoAndThePhonesIsForgotten() {
         val mirror = Mirror(tmp.newFolder())
         TestApp(tmp.root, mirror = mirror).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
-            keep(test, id, "$folder/sheet.txt", "[C]Ella durmió")
-            written(test, pages, id, "$folder/sheet.html", "<!doctype html>the phone's", current = false)
-            // The computer rendered the song again at the unit the phone holds now (a take moved it there).
-            val now = test.database.read { Units.digestOf(it, "song/$key") }!!
-            mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/$key"),
-                   digests = mapOf("song/$key" to now), into = mirror)
-            assertEquals("<!doctype html>the computer's", test.get("/$folder/sheet.html").text)
-            // The computer's of an older unit: kept back, as the phone's of a moved one is.
-            mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/$key"), into = mirror)
-            val changed = test.get("/$folder/sheet.html")
+            val song = added(test)
+            val other = added(test, "Eagles", "Hotel California")
+            keep(test, song.id, "$folder/sheet.txt", "[C]Ella durmió")
+            val before = digestOf(test, unitOf(song))
+            val ours = written(test, song, "sheet.html", viewer("the phone's"))
+            written(test, other, "sheet.html", viewer("the phone's Eagles"))
+            mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", unitOf(song)),
+                   digests = mapOf(unitOf(song) to before), into = mirror)
+            assertContentEquals(ours, test.get(address("$folder/sheet.html")).bytes, "the phone's, before the mirror's")
+
+            val now = take(test, song)
+            val otherNow = take(test, other)
+            assertTrue(now != before)
+            // The computer's of the unit as it was: kept back, as the phone's of a moved one is (PhoneGate: CHANGED).
+            val changed = test.get(address("$folder/sheet.html"))
             assertEquals(409, changed.status)
+            assertTrue("<h1>Changed on the phone</h1>" in changed.text, changed.text)
             assertTrue("since the computer made its page" in changed.text, changed.text)
             // No page of the computer's at all: the phone's of a moved unit is never served either.
             mirror(into = mirror)
-            val stale = test.get("/$folder/sheet.html")
+            val stale = test.get(address("$folder/sheet.html"))
             assertEquals(409, stale.status)
-            assertTrue("<h1>Changed on the phone</h1>" in stale.text, stale.text)
-            assertTrue("since its page was made" in stale.text, stale.text)
+            assertTrue("<h1>Changed since</h1>" in stale.text, stale.text)
+            assertTrue("This song changed since the phone made its page" in stale.text, stale.text)
             assertTrue("href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.txt\"" in stale.text, stale.text)
-            pages.current += id to "sheet.html"
-            assertEquals("<!doctype html>the phone's", test.get("/$folder/sheet.html").text, "its unit back where it was")
+
+            // The computer rendered the song again at the unit the phone holds now: PhoneGate says SERVE.
+            mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", unitOf(song)),
+                   digests = mapOf(unitOf(song) to now), into = mirror)
+            assertEquals("<!doctype html>the computer's", test.get(address("$folder/sheet.html")).text)
+            val render = PhoneRender(test.database, test.libraryDir, mirror, "0.1.0")
+            assertTrue(render.afterSync(), "pages owed: the songs the mirror doesn't serve at their digest")
+            assertFalse(File(test.libraryDir, "$folder/sheet.html").exists(), "the phone's superseded page, forgotten")
+            assertNull(test.database.read { WrittenPages.written(it, song.id, "sheet.html") })
+            assertEquals("<!doctype html>the computer's", test.get(address("$folder/sheet.html")).text)
+            assertTrue(File(test.libraryDir, "Eagles/Hotel California/sheet.html").isFile,
+                       "a moved song's page no mirror's stands for stays, for the render job to make again")
+            assertTrue(test.database.read { WrittenPages.written(it, other.id, "sheet.html") } != null)
+            assertEquals(409, test.get(address("Eagles/Hotel California/sheet.html")).status)
+            assertEquals(otherNow, digestOf(test, unitOf(other)))
         }
     }
 
     @Test fun theMirrorsPageServesWhereThePhoneWroteNone() {
-        val folder = "Soda Stereo/De Música Ligera"
-        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/$key"))
+        val mirror = mirror(Triple("$folder/sheet.html", "<!doctype html>the computer's", "song/soda stereo/x"))
         TestApp(tmp.root, mirror = mirror, gate = { UnitGate { _, _ -> Gate.SERVE } }).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
+            val song = added(test)
             File(test.libraryDir, folder).mkdirs()
             File(test.libraryDir, "$folder/sheet.html").writeText("<!doctype html>no record of it")
             File(test.libraryDir, "$folder/version-1.html").writeText("<!doctype html>no record of it")
-            assertEquals("<!doctype html>the computer's", test.get("/$folder/sheet.html").text)
-            assertEquals(404, test.get("/$folder/version-1.html").status)
+            assertEquals("<!doctype html>the computer's", test.get(address("$folder/sheet.html")).text)
+            assertEquals(404, test.get(address("$folder/version-1.html")).status)
             // A record of another song's: none of this one's folder.
             val unrecorded = "<!doctype html>no record of it".toByteArray()
-            val record = Written(sha(unrecorded), unrecorded.size.toLong(), "d")
-            val other = song(test.database, "Eagles", "Hotel California", "eagles|hotel california")
-            pages.records[other to "version-1.html"] = record
-            pages.current += other to "version-1.html"
-            assertEquals(404, test.get("/$folder/version-1.html").status)
-            assertEquals(404, test.get("/$folder/sheet.cho").status, "no page: the phone's own files' rules")
-            pages.records[id to "version-1.html"] = record
-            pages.current += id to "version-1.html"
-            assertEquals("<!doctype html>no record of it", test.get("/$folder/version-1.html").text)
+            val other = added(test, "Eagles", "Hotel California")
+            test.database.writeBlocking { db ->
+                WrittenPages.note(db, other.id, "version-1.html", unrecorded, Units.digestOf(db, unitOf(other))!!)
+            }
+            assertEquals(404, test.get(address("$folder/version-1.html")).status)
+            assertEquals(404, test.get(address("$folder/sheet.cho")).status, "no page: the phone's own files' rules")
+            test.database.writeBlocking { db ->
+                WrittenPages.note(db, song.id, "version-1.html", unrecorded, Units.digestOf(db, unitOf(song))!!)
+            }
+            assertEquals("<!doctype html>no record of it", test.get(address("$folder/version-1.html")).text)
         }
     }
 
     @Test fun aChordProThePhoneWroteIsServedAsItsPagesAreAsText() {
-        val folder = "Soda Stereo/De Música Ligera"
-        val mirror = mirror(Triple("$folder/sheet (auto).cho", "{title: the computer's}", "song/$key"))
+        val mirror = mirror(Triple("$folder/sheet (auto).cho", "{title: the computer's}", "song/soda stereo/x"))
         TestApp(tmp.root, mirror = mirror, gate = { UnitGate { _, _ -> Gate.SERVE } }).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            val id = song(test.database, "Soda Stereo", "De Música Ligera", key)
-            written(test, pages, id, "$folder/sheet.cho", "{title: the phone's}")
-            val cho = test.get("/$folder/sheet.cho")
+            val song = added(test)
+            written(test, song, "sheet.cho", "{title: the phone's}")
+            val cho = test.get(address("$folder/sheet.cho"))
             assertEquals("{title: the phone's}", cho.text)
             assertEquals("text/plain; charset=utf-8", cho.header("Content-Type"))
             assertEquals("frame-ancestors 'none'", cho.header("Content-Security-Policy"))
-            written(test, pages, id, "$folder/sheet (auto).cho", "{title: the phone's auto}", current = false)
-            assertEquals("{title: the computer's}", test.get("/$folder/sheet (auto).cho").text, "a unit moved since")
+            written(test, song, "sheet (auto).cho", "{title: the phone's auto}", digest = "an older digest")
+            assertEquals("{title: the computer's}", test.get(address("$folder/sheet (auto).cho")).text,
+                         "a unit moved since")
             File(test.libraryDir, "$folder/sheet.cho").writeText("{title: THE phone's}")
-            assertEquals(404, test.get("/$folder/sheet.cho").status, "changed on disk, and no mirror's")
-            written(test, pages, id, "$folder/song.gp5", "GP5")
-            assertEquals(404, test.get("/$folder/song.gp5").status, "a download is a kept file's alone")
+            assertEquals(404, test.get(address("$folder/sheet.cho")).status, "changed on disk, and no mirror's")
+            written(test, song, "song.gp5", "GP5")
+            assertEquals(404, test.get(address("$folder/song.gp5")).status, "a download is a kept file's alone")
+            written(test, song, "notes.txt", "notes")
+            assertEquals(404, test.get(address("$folder/notes.txt")).status, "the phone writes no other file to serve")
         }
     }
 
     @Test fun eitherSongOfAFolderTwoSongsShareServesItsRecord() {
-        val folder = "Soda Stereo/De Música Ligera"
         TestApp(tmp.root).use { test ->
-            val pages = Pages().also { test.files.pages = it }
-            song(test.database, "Soda Stereo", "De Música Ligera", key)
-            val other = song(test.database, "Soda Stereo", "De Música Ligera", "$key (2)")
-            written(test, pages, other, "$folder/sheet.html", "<!doctype html>the other's")
-            assertEquals("<!doctype html>the other's", test.get("/$folder/sheet.html").text)
+            val song = added(test)
+            val other = test.database.writeBlocking { db ->
+                db.execute("INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) " +
+                           "VALUES (?, 'Soda Stereo', 'De Música Ligera', '[\"Soda Stereo\"]', '2026-11-02T00:00:00Z', " +
+                           "'2026-11-02T00:00:00Z', '2026-11-02T00:00:00Z')", "${song.key} (2)")
+                Songs.byId(db, db.lastRowid())!!
+            }
+            written(test, other, "sheet.html", "<!doctype html>the other's")
+            assertEquals("<!doctype html>the other's", test.get(address("$folder/sheet.html")).text)
         }
     }
 
-    @Test fun aSongbooksPageIsServedByItsRecordTheSameWay() {
+    @Test fun aSongbooksPageIsServedWhileItsSongbookIsAtItsDigestTheSameWayAndForgottenOnceSuperseded() {
         val path = "_songbooks/Campfire/songbook.html"
-        val mirror = mirror(Triple(path, "<!doctype html>the computer's book", "songbook/campfire"))
+        val unit = "songbook/campfire"
+        val mirror = Mirror(tmp.newFolder())
         TestApp(tmp.root, mirror = mirror).use { test ->
-            val pages = Pages().also { test.files.pages = it }
+            fun put(name: String, vararg songs: String) = test.database.writeBlocking { db ->
+                SongbookStore.put(db, name, JsonArray(songs.map {
+                    JsonArray(listOf(JsonPrimitive(it), JsonObject(emptyMap())))
+                }))
+            }
+            fun book(folder: String, content: String): ByteArray {
+                val bytes = content.toByteArray()
+                File(test.libraryDir, "_songbooks/$folder/songbook.html").apply { parentFile.mkdirs() }.writeBytes(bytes)
+                test.database.writeBlocking { db ->
+                    WrittenPages.noteSongbook(db, folder, "inputs", mapOf("songbook.html" to bytes))
+                }
+                return bytes
+            }
+            put("Campfire")
+            mirror(Triple(path, "<!doctype html>the computer's book", unit), digests = mapOf(unit to digestOf(test, unit)),
+                   into = mirror)
             assertEquals("<!doctype html>the computer's book", test.get("/$path").text, "the phone wrote none")
-            val bytes = "<!doctype html>the phone's book".toByteArray()
-            File(test.libraryDir, path).apply { parentFile.mkdirs() }.writeBytes(bytes)
-            pages.songbooks["Campfire"] = mapOf("songbook.html" to (sha(bytes) to bytes.size.toLong()),
-                                                "songbook.cho" to ("ab" to 2L))
+            val bytes = book("Campfire", viewer("the phone's book"))
             val page = test.get("/$path")
-            assertEquals("<!doctype html>the phone's book", page.text)
-            assertEquals(policyOf("<!doctype html>the phone's book"), page.header("Content-Security-Policy"))
+            assertContentEquals(bytes, page.bytes, "the phone's, before the mirror's")
+            assertEquals(policyOf(bytes), page.header("Content-Security-Policy"))
             File(test.libraryDir, path).writeText("<!doctype html>THE phone's book")
             assertEquals("<!doctype html>the computer's book", test.get("/$path").text, "changed on disk: the mirror's")
-            pages.songbooks["Other"] = pages.songbooks.getValue("Campfire")
-            File(test.libraryDir, "_songbooks/Other/songbook.html").apply { parentFile.mkdirs() }.writeBytes(bytes)
-            File(test.libraryDir, "_songbooks/Other/x/songbook.html").apply { parentFile.mkdirs() }.writeBytes(bytes)
-            assertEquals("<!doctype html>the phone's book", test.get("/_songbooks/Other/songbook.html").text)
+            File(test.libraryDir, path).writeBytes(bytes)
+            assertContentEquals(bytes, test.get("/$path").bytes)
+
+            // The songbook changes (a take's): the phone's page is of the songbook as it was.
+            put("Campfire", "Soda Stereo - De Música Ligera")
+            assertEquals(409, test.get("/$path").status, "the computer's of the songbook as it was: CHANGED")
+            mirror(into = mirror)
+            val stale = test.get("/$path")
+            assertEquals(409, stale.status)
+            assertTrue("This songbook changed since the phone made its page" in stale.text, stale.text)
+            mirror(Triple(path, "<!doctype html>the computer's book", unit), digests = mapOf(unit to digestOf(test, unit)),
+                   into = mirror)
+            assertEquals("<!doctype html>the computer's book", test.get("/$path").text)
+
+            // Another songbook's page, and one of a folder no songbook has: never current.
+            put("Other")
+            book("Other", "<!doctype html>the other book")
+            assertEquals("<!doctype html>the other book", test.get("/_songbooks/Other/songbook.html").text)
+            book("Nobody", "<!doctype html>nobody's book")
+            val nobody = test.get("/_songbooks/Nobody/songbook.html")
+            assertEquals(409, nobody.status)
+            assertTrue("This songbook changed since the phone made its page" in nobody.text, nobody.text)
+            File(test.libraryDir, "_songbooks/Other/x/songbook.html").apply { parentFile.mkdirs() }.writeText("x")
             assertEquals(404, test.get("/_songbooks/Other/x/songbook.html").status, "a songbook's folder alone")
             assertEquals(404, test.get("/Campfire/songbook.html").status)
-        }
-    }
 
-    /** Phase A guard, waiting on: phone-render (its WrittenPages records the pages; until it merges, none). */
-    @Test fun untilItsRecordsLandThePhoneServesNoPageOfItsOwn() {
-        TestApp(tmp.root).use { test ->
-            song(test.database, "Soda Stereo", "De Música Ligera", key)
-            File(test.libraryDir, "Soda Stereo/De Música Ligera").mkdirs()
-            File(test.libraryDir, "Soda Stereo/De Música Ligera/sheet.html").writeText("<!doctype html>the phone's")
-            assertEquals(PhonePages.NONE, test.files.pages)
-            assertEquals(404, test.get("/Soda Stereo/De Música Ligera/sheet.html").status)
+            // After the take: the page the mirror stands for forgotten, and those of a songbook gone.
+            test.database.writeBlocking { db -> db.execute("DELETE FROM phone_songbooks WHERE name = 'Other'") }
+            File(test.libraryDir, "_songbooks/Other/x/songbook.html").delete()
+            File(test.libraryDir, "_songbooks/Other/x").delete()
+            PhoneRender(test.database, test.libraryDir, mirror, "0.1.0").afterSync()
+            assertFalse(File(test.libraryDir, path).exists())
+            assertFalse(File(test.libraryDir, "_songbooks/Other").exists(), "a songbook gone: its page and folder")
+            assertFalse(File(test.libraryDir, "_songbooks/Nobody").exists())
+            test.database.read { db ->
+                assertNull(db.kvGet("songbook:Other"))
+                assertNull(db.kvGet("songbook:Nobody"))
+                assertTrue(WrittenPages.songbook(db, "Campfire").isEmpty())
+            }
+            assertEquals("<!doctype html>the computer's book", test.get("/$path").text)
         }
     }
 }

@@ -2,23 +2,33 @@ package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.internal.Removal
+import io.github.danielhp95.caracole.core.sync.Take
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.sync.InlineSource
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * A removal on the phone takes the pages the phone wrote for the song, by their records (kv `render:files:<id>`,
- * render.py's `{name: {"sha256", "size"}}` with the unit digest each was made at): the phone makes no PDF, so no
- * render record names its sheet's page or .cho, and only those records say they are caracole's. A record that isn't
- * one, or a page no record names, stays as removal.py leaves any file caracole didn't write.
+ * render.py's `{name: {"sha256", "size"}}` with the unit digest each was made at, `unit`: WrittenPages', which :core
+ * can't call, so its shape is written here as WrittenPages.note writes it): the phone makes no PDF, so no render
+ * record names its sheet's page or .cho, and only those records say they are caracole's. A record that isn't one (a
+ * computer's, which names no unit, among them), or a page no record names, stays as removal.py leaves any file
+ * caracole didn't write. A take that moves or respells the song's folder deletes the phone's pages of it rather than
+ * moving them (Removal.phonesWritten), so a removal after it still empties the folder.
  */
 class RemovalWrittenTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -37,7 +47,7 @@ class RemovalWrittenTest {
         Kept.keepFile(db, store, song, version, name, text.toByteArray(), 0, NOW)
     }
 
-    /** A page the phone wrote beside the song's files, and its record as WrittenPages notes one. */
+    /** A page the phone wrote beside the song's files, and its record as WrittenPages.note writes one. */
     private fun write(db: Db, store: LibraryStore, song: SongRow, name: String, text: String) {
         val bytes = text.toByteArray()
         File(store.folderOf(song), name).apply { parentFile.mkdirs() }.writeBytes(bytes)
@@ -114,12 +124,84 @@ class RemovalWrittenTest {
         }
     }
 
-    @Test fun aTakeThatMovesTheSongsFolderTakesThePhonesPagesWithIt() {
+    @Test fun aComputersRecordNamesNoUnitAndKeepsRemovalPysAnswer() {
+        phone { db, store ->
+            val song = store.add(db, "Soda Stereo", "De Música Ligera", now = NOW)
+            keep(db, store, song, "tab.txt", "e|--0--|")
+            val folder = store.folderOf(song)
+            for (name in listOf("sheet.html", "sheet.cho", "version-39144.html")) File(folder, name).writeText(name)
+            // render.py's record: no kept sheet names sheet.html nor sheet.cho, so they aren't caracole's there.
+            db.kvSet("render:files:${song.id}", """{"sheet.html": {"sha256": "ab", "size": 10}, "sheet.cho": """ +
+                         """{"sha256": "ab", "size": 9}, "version-39144.html": {"sha256": "ab", "size": 18}}""")
+            val plan = Removal.plan(db, store.libraryDir, song)
+            assertEquals(listOf("info.json", "tab.txt", "version-39144.html").filter { File(folder, it).exists() },
+                         plan.delete)
+            assertEquals(emptyList(), Removal.phonesWritten(db, store.libraryDir, song))
+        }
+    }
+
+    @Test fun thePhonesPagesAreThoseOfItsRecordsStillAsWritten() {
         phone { db, store ->
             val song = store.add(db, "Soda Stereo", "De Música Ligera", now = NOW)
             keep(db, store, song, "tab.txt", "e|--0--|")
             write(db, store, song, "sheet.html", "<!doctype html>the phone's")
-            assertEquals(listOf("sheet.html", "tab.txt"), Removal.caracolesFiles(db, store.libraryDir, song))
+            write(db, store, song, "sheet.cho", "{title: De Música Ligera}")
+            write(db, store, song, "harmonica-1.html", "<!doctype html>a tab")
+            File(store.folderOf(song), "harmonica-1.html").writeText("edited")
+            assertEquals(listOf("harmonica-1.html", "sheet.cho", "sheet.html", "tab.txt"),
+                         Removal.caracolesFiles(db, store.libraryDir, song))
+            assertEquals(listOf("sheet.cho", "sheet.html"), Removal.phonesWritten(db, store.libraryDir, song))
+        }
+    }
+
+    /** The phone's [song] as a peer has it under [artist] and [title] (a spelling its key folds alike): its
+     * document, so that a take of it is a take of nothing but its names. */
+    private fun renamed(db: Db, store: LibraryStore, song: SongRow, artist: String, title: String): JsonObject {
+        val doc = Units.document(db, store.libraryDir, "song/${song.key}")!!
+        val names = doc.getValue("names").jsonObject
+        return JsonObject(doc + ("names" to JsonObject(names + mapOf("artist" to JsonPrimitive(artist),
+                                                                        "title" to JsonPrimitive(title),
+                                                                        "artists" to JsonArray(listOf(JsonPrimitive(artist)))))))
+    }
+
+    @Test fun aTakeThatMovesOrRespellsASongsFolderDeletesThePhonesPagesOfItAndARemovalThenEmptiesIt() {
+        phone { db, store ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+            val song = store.add(db, "soda stereo", "De Musica Ligera", now = NOW)
+            val other = store.add(db, "soda stereo", "Persiana Americana", now = LATER)
+            assertEquals(song.key, Normalize.identityKey("Soda Stereo", "De Música Ligera"), "one song by both names")
+            keep(db, store, song, "tab.txt", "e|--0--|")
+            keep(db, store, other, "tab.txt", "e|--3--|")
+            for (each in listOf(song, other)) {
+                for (name in listOf("sheet.html", "sheet.cho", "version-39144.html", "harmonica-1.html")) {
+                    write(db, store, each, name, "<!doctype html>$name of ${each.title}")
+                }
+            }
+            val unit = "song/${song.key}"
+            val doc = renamed(db, store, song, "Soda Stereo", "De Música Ligera")
+            val source = InlineSource(mapOf(unit to doc), emptyList())
+            val digest = Canonical.digest(Units.valueOfDocument(unit, doc)!!)
+            val done = Take.applyUnits(db, store, source, listOf(unit to digest), emptyMap(), LATER)
+            assertEquals(listOf(unit), done.taken, done.toString())
+            assertEquals(listOf("song/${other.key}"), done.respelled, "its artist's other song respelled")
+
+            val library = store.libraryDir
+            assertEquals(listOf("Soda Stereo"), names(library), "the artist's folder respelled once")
+            val moved = Songs.byId(db, song.id)!!
+            val respelled = Songs.byId(db, other.id)!!
+            assertEquals(listOf("De Música Ligera", "Persiana Americana"), names(File(library, "Soda Stereo")),
+                         "the song's old folder emptied and gone")
+            assertEquals(listOf("tab.txt"), names(store.folderOf(moved)), "its kept file moved, the phone's pages gone")
+            assertEquals(listOf("tab.txt"), names(store.folderOf(respelled)), "the respelled song's pages gone too")
+            assertNull(db.kvGet("render:files:${song.id}"))
+            assertNull(db.kvGet("render:files:${other.id}"))
+
+            for (each in listOf(moved, respelled)) {
+                val plan = Removal.plan(db, library, each)
+                assertEquals(listOf("tab.txt"), plan.delete, each.title)
+                assertTrue(Removal.remove(db, library, plan, LATER).folderGone, "${each.title}'s folder empties")
+            }
+            assertEquals(emptyList(), names(library), "and the artist's with them")
         }
     }
 

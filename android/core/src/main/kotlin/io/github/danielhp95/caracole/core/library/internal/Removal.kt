@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.RemovedRow
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.PyUnicode
@@ -20,7 +21,8 @@ import java.nio.file.Path
  * removal.py on the phone, which has no wanted.txt, no Music/ and no audio from YouTube: a song taken out for good,
  * its record deleted with its versions, kept files' rows and per-song kv, its tombstone left
  * ([Upsert.markRemoved]), then the files caracole wrote in its folder ([plan]'s `delete`: the phone's written pages
- * among them, by their records), and the folder, and its artist's, once empty. Files caracole didn't write stay. vectors/library/remove.jsonl holds Python's answers.
+ * among them, by their records), and the folder, and its artist's, once empty. Files caracole didn't write stay.
+ * vectors/library/remove.jsonl holds Python's answers.
  */
 internal object Removal {
     private const val INFO = "info.json"
@@ -106,6 +108,32 @@ internal object Removal {
         return plan.delete
     }
 
+    /**
+     * The phone's own written pages and .cho of [song] (kv `render:files:<id>`'s entries that name the unit digest each
+     * was made at, WrittenPages'), those still as written in the song's folder now (library.holds: its bytes, through
+     * no link): a take that moves or respells the song's folder deletes these rather than moving them, since the take
+     * changed the song (its names are part of its unit), so they were made of the song as it was; its record goes
+     * with them, and the phone's next render makes them again where the song is now. A computer's record (no unit:
+     * render.py's) names none, and neither does a folder caracole won't enter, nor one two songs share.
+     */
+    fun phonesWritten(db: Db, libraryDir: File, song: SongRow): List<String> {
+        val record = kvJson(db, "$FILES_KEY${song.id}") as? JsonObject ?: return emptyList()
+        val parts = SafeName.songFolder(song.artist, song.title).toList()
+        if (songsInFolder(db, parts).any { it.first != song.id }) return emptyList()
+        val folder = try {
+            LibraryFiles.folder(libraryDir.toPath(), parts)
+        } catch (_: LibraryFiles.NoFolder) {
+            return emptyList()
+        } catch (_: LibraryFiles.NotFollowed) {
+            return emptyList()
+        }
+        return record.mapNotNull { (name, entry) ->
+            val (sha, size) = written(entry) ?: return@mapNotNull null
+            if ('/' in name || name.startsWith(".") || '\u0000' in name) return@mapNotNull null
+            name.takeIf { Kept.holds(folder.resolve(it), sha, size) }
+        }.sortedWith(Canonical.KEY_ORDER)
+    }
+
     /** removal._wanted_keys: the song's key, and its wanted.txt source ids. */
     private fun wantedKeys(song: SongRow): List<String> {
         val ids = SongKv.sourceIds(song.sourceIds)[SongKv.WANTED].orEmpty()
@@ -182,8 +210,9 @@ internal object Removal {
         (kvJson(db, "$FILES_KEY${song.id}") as? JsonObject)?.forEach { (name, entry) ->
             val tab = tabOf(name)
             if ((tab != null && name == "version-$tab.html") || isHarmonicaPage(name)) ours += name
-            // The phone's written pages and .cho (WrittenPages' records): it makes no PDF, so no render record names
-            // its sheet's, and a sync carries no such record nor a respell keeps one: each is the phone's own.
+            // The phone's written pages and .cho (WrittenPages' records, each naming the unit it was made at): it
+            // makes no PDF, so no render record names its sheet's; a record of render.py's names no unit, and keeps
+            // removal.py's answer.
             else if (isWritten(entry)) ours += name
         }
         for (key in listOf("render:${song.id}", "render:${song.id}:auto")) {
@@ -205,15 +234,22 @@ internal object Removal {
 
     private fun kvJson(db: Db, key: String) = SongKv.json(db.kvGet(key))
 
-    /** render.written_entry's reading of a file written's record: `{"sha256": <a string>, "size": <an int>}` (a JSON
-     * integer, never a boolean or a float), whatever else it holds. */
-    private fun isWritten(entry: JsonElement): Boolean {
-        val record = entry as? JsonObject ?: return false
+    /** Whether [entry] is the phone's own record of a file it wrote ([written]). */
+    private fun isWritten(entry: JsonElement): Boolean = written(entry) != null
+
+    /** The phone's own record of a file it wrote, WrittenPages': render.written_entry's reading of it, `{"sha256":
+     * <a string>, "size": <an int>}` (a JSON integer, never a boolean or a float), with the `unit` digest it was made
+     * at (a string), whatever else it holds; null for anything else, a record render.py wrote among them, which
+     * names no unit: those keep removal._caracoles' reading (a version's or a tab's page alone). */
+    private fun written(entry: JsonElement): Pair<String, Long>? {
+        val record = entry as? JsonObject ?: return null
         val sha = record["sha256"] as? JsonPrimitive
         val size = record["size"] as? JsonPrimitive
-        if (sha == null || !sha.isString || size == null || size.isString) return false
+        val unit = record["unit"] as? JsonPrimitive
+        if (sha == null || !sha.isString || size == null || size.isString || unit == null || !unit.isString) return null
         val digits = size.content.removePrefix("-")
-        return digits.isNotEmpty() && digits.all { it in '0'..'9' }
+        if (digits.isEmpty() || !digits.all { it in '0'..'9' }) return null
+        return size.content.toLongOrNull()?.let { sha.content to it }
     }
 
     private fun text(e: kotlinx.serialization.json.JsonElement?): String? =

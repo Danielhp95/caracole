@@ -24,6 +24,7 @@ import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.viewer.pages.SheetPage
+import io.github.danielhp95.caracole.viewer.render.RenderNames
 import io.github.danielhp95.caracole.viewer.render.Written
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import java.io.File
@@ -55,67 +56,32 @@ class PhoneGate(val database: Database) : UnitGate {
 }
 
 /**
- * The pages the phone writes into its library, as [LibraryFiles] reads them (lane phone-render's [WrittenPages]): a
- * song's file's record (kv `render:files:<id>`: its bytes' SHA-256 and size, and the song unit's digest it was made
- * at), whether the unit is still at that digest, a songbook's files' records (kv `songbook:<folder>`), and the policy
- * a page is served with (viewer_csp of its very bytes: their own policy, with the viewer's sandbox).
- */
-interface PhonePages {
-    fun written(db: Db, songId: Long, name: String): Written?
-    fun current(db: Db, songId: Long, name: String): Boolean
-    fun songbook(db: Db, folder: String): Map<String, Pair<String, Long>>
-    fun csp(page: ByteArray): String
-
-    companion object {
-        /** WrittenPages' records, and SheetPage.viewerCsp (book.songbook_csp is viewer_csp too). */
-        val WRITTEN: PhonePages = object : PhonePages {
-            override fun written(db: Db, songId: Long, name: String): Written? = WrittenPages.written(db, songId, name)
-            override fun current(db: Db, songId: Long, name: String): Boolean = WrittenPages.current(db, songId, name)
-            override fun songbook(db: Db, folder: String): Map<String, Pair<String, Long>> =
-                WrittenPages.songbook(db, folder)
-            override fun csp(page: ByteArray): String = SheetPage.viewerCsp(page)
-        }
-
-        /** No page of the phone's. A Phase A guard, waiting on: phone-render, whose WrittenPages records the pages it
-         * writes; [LibraryFiles] reads [WRITTEN] once it merges. */
-        val NONE: PhonePages = object : PhonePages {
-            override fun written(db: Db, songId: Long, name: String): Written? = null
-            override fun current(db: Db, songId: Long, name: String): Boolean = false
-            override fun songbook(db: Db, folder: String): Map<String, Pair<String, Long>> = emptyMap()
-            override fun csp(page: ByteArray): String = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
-        }
-    }
-}
-
-/**
  * A library file at a path no route answers (App asks only then), as web/files.py serves one: the parts of the
  * path checked (no empty part, `.`, `..`, hidden name or NUL), then
  *
  * 1. a page caracole writes (app.py's `written_page`: a sheet's viewer, `sheet.html` and `sheet (auto).html`, a kept
  *    version's, `version-<tab>.html`, a harmonica tab's, `harmonica-N.html`, a songbook's, `songbook.html` in
- *    `_songbooks/<folder>/`): the phone's own ([pages]' records, the song's in the songs whose folder it is in, the
- *    songbook's by its folder) while it is the bytes recorded (files.read_written_page: a regular file reached through
- *    no link, of a recorded size and SHA-256, read once and served as read) and its song's unit is still at the
- *    digest it was made at, with its own policy and the viewer's sandbox (web/app.py's `_written_page`); else the
- *    mirror's, as below. One changed on disk, or of a unit moved since, is never served: the mirror's then, or a
- *    message page saying so;
- * 2. else the phone's own folder, [libraryDir]: a file its `files` table records at that path, or one the phone wrote
- *    there while it is current as a page is (a sheet's .cho), of a kind files.py serves ([FileTypes]: never a page),
- *    a regular file under [libraryDir] reached through no link, at most 64 MiB; a download named for its song
+ *    `_songbooks/<folder>/`): the phone's own (WrittenPages' records: a song's, of the songs whose folder it is in,
+ *    kv `render:files:<id>`; a songbook's by its folder, kv `songbook:<folder>`) while it is the bytes recorded
+ *    (files.read_written_page: a regular file reached through no link, of a recorded size and SHA-256, read once and
+ *    served as read) and its unit (the song's, the songbook's) is still at the digest it was made at, with its own
+ *    policy and the viewer's sandbox (web/app.py's `_written_page`: SheetPage.viewerCsp of those very bytes, which
+ *    book.songbook_csp is too); else the mirror's, as below. One changed on disk, or of a unit moved since, is never
+ *    served: the mirror's then, or a message page saying so;
+ * 2. else the phone's own folder, [libraryDir]: a file its `files` table records at that path, or a .cho the phone
+ *    wrote there while it is current as a page is, of a kind files.py serves ([FileTypes]: never a page), a regular
+ *    file under [libraryDir] reached through no link, at most 64 MiB; a download named for its song
  *    (download_names.py);
  * 3. else the [mirror]'s file at that path, with the headers caracole serve listed for it exactly (a page's policy,
  *    sandbox and all), its unit checked by [gate]: a song the phone changed since answers the message page and
  *    links to the phone's sheet.txt when it keeps one; a song it removed says so.
  *
- * Null for none: the App answers 404.
+ * Each check of a file is made on its path, then the file opened with no link followed and its bytes checked: the
+ * library is the app's own folder (filesDir), which nothing but the app writes. Null for none: the App answers 404.
  */
-class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate, val database: Database,
-                   pages: PhonePages = PhonePages.NONE) {
+class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate, val database: Database) {
     /** The library the message pages name, read for each: the App's, which sets it. */
     internal var name: () -> LibraryName = { LibraryName.phone(null) }
-
-    /** The records of the pages the phone wrote (a test sets its own). */
-    internal var pages: PhonePages = pages
 
     fun serve(path: String): Response? {
         if (!path.startsWith("/")) return null
@@ -131,8 +97,9 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         /** Its bytes, as recorded, at the digest of the unit it was made at. */
         class Current(val bytes: ByteArray) : Found
 
-        /** As recorded, of a unit moved since ([unit]: its song's). */
-        class Moved(val unit: String?) : Found
+        /** As recorded, of a unit moved since ([unit]: its song's, or its songbook's, none for a folder no songbook
+         * has now; [songbook]: a songbook's file). */
+        class Moved(val unit: String?, val songbook: Boolean) : Found
 
         /** Recorded, but not as the file is now (changed on disk, gone, a link in its place). */
         data object Changed : Found
@@ -141,24 +108,26 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         data object None : Found
     }
 
-    /** A record of the phone's, with whether its unit is still where it was made, and the unit (a song's). */
-    private class Record(val written: Written, val current: Boolean, val unit: String?)
+    /** A record of the phone's, with whether its unit is still where it was made, and the unit (a song's, or a
+     * songbook's: [songbook]). */
+    private class Record(val written: Written, val current: Boolean, val unit: String?, val songbook: Boolean = false)
 
     /** The page at [relative]: the phone's while it is current, else the mirror's, else why neither. */
     private fun page(relative: String, parts: List<String>): Response? = when (val found = found(parts)) {
         is Found.Current -> Response(200, Body.Bytes(found.bytes), mutableListOf(
-            "Content-Type" to HTML, "Content-Security-Policy" to "${pages.csp(found.bytes)}; ${App.FRAMES}"))
+            "Content-Type" to HTML, "Content-Security-Policy" to "${SheetPage.viewerCsp(found.bytes)}; ${App.FRAMES}"))
         is Found.Moved -> mirrored(relative) ?: MessagePage.page(
-            409, "Changed on the phone", "This song changed on the phone since its page was made.",
+            409, "Changed since", if (found.songbook) MOVED_SONGBOOK else MOVED_SONG,
             sheetOf(found.unit)?.let { it to "The phone's sheet" }, name())
-        Found.Changed -> mirrored(relative) ?: MessagePage.page(404, "Not sent", REFUSED, name = name())
+        Found.Changed -> mirrored(relative) ?: MessagePage.page(404, "Not sent", refused(parts), name = name())
         Found.None -> mirrored(relative)
     }
 
-    /** A file the phone wrote that isn't a page (a sheet's .cho), while it is current as a page is; null otherwise. */
+    /** A .cho the phone wrote beside a page (a sheet's), while it is current as a page is; null otherwise. */
     private fun writtenFile(parts: List<String>): Response? {
         val suffix = PyText.asciiLower(FileTypes.suffix(parts.last()))
-        val type = FileTypes.TYPES[suffix]?.takeIf { suffix !in FileTypes.DOWNLOADS } ?: return null
+        if (suffix != CHO) return null
+        val type = FileTypes.TYPES[suffix] ?: return null
         val found = found(parts) as? Found.Current ?: return null
         return Response(200, Body.Bytes(found.bytes), mutableListOf("Content-Type" to type))
     }
@@ -173,31 +142,48 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         val same = records.filter { it.written.sha256 == sha && it.written.size == bytes.size.toLong() }
         return when {
             same.any { it.current } -> Found.Current(bytes)
-            same.isNotEmpty() -> Found.Moved(same.first().unit)
+            same.isNotEmpty() -> Found.Moved(same.first().unit, same.first().songbook)
             else -> Found.Changed
         }
     }
 
     private fun records(db: Db, parts: List<String>): List<Record> {
         val name = parts.last()
-        if (parts.size == 3 && parts[0] == SONGBOOKS) {
-            val (sha, size) = pages.songbook(db, parts[1])[name] ?: return emptyList()
-            return listOf(Record(Written(sha, size, ""), current = true, unit = null))
-        }
         if (parts.size != 3) return emptyList()
+        if (parts[0] == SONGBOOKS) {
+            WrittenPages.songbookWritten(db, parts[1], name)?.let { written ->
+                return listOf(Record(written, WrittenPages.songbookCurrent(db, parts[1], name),
+                                     WrittenPages.songbookUnit(db, parts[1]), songbook = true))
+            }
+        }
         return songsInFolder(db, parts[0], parts[1]).mapNotNull { (id, key) ->
-            pages.written(db, id, name)?.let { Record(it, pages.current(db, id, name), SONG + key) }
+            WrittenPages.written(db, id, name)?.let { Record(it, WrittenPages.current(db, id, name), SONG + key) }
         }
     }
 
-    /** library.songs_in_folder: the songs whose folder is [artist]/[title], newest first: (id, key). */
+    /** library.songs_in_folder: the songs whose folder is [artist]/[title], newest first, of those the phone wrote
+     * any file of (a record, kv `render:files:<id>`: no other song has a page of its own to give): (id, key). */
     private fun songsInFolder(db: Db, artist: String, title: String): List<Pair<Long, String>> =
-        db.query("SELECT id, key, artist, title FROM songs ORDER BY added_at DESC, id DESC") {
+        db.query("SELECT s.id, s.key, s.artist, s.title FROM songs s JOIN kv ON kv.key = ? || s.id " +
+                     "ORDER BY s.added_at DESC, s.id DESC", RenderNames.FILES_KEY) {
             Triple(it.long(0)!! to it.text(1)!!, it.text(2)!!, it.text(3)!!)
         }.filter { SafeName.songFolder(it.second, it.third) == (artist to title) }.map { it.first }
 
-    /** The bytes of the regular file at [parts], read once through no link, when its size is one of [sizes]; null
-     * otherwise (no such file, a link, a folder, another size, a disk error). */
+    /** What the 404 says of a page by its name that isn't sent (app.py's refusals by their kind, the phone's
+     * words). */
+    private fun refused(parts: List<String>): String {
+        val name = parts.last()
+        return when {
+            name == SONGBOOK_PAGE -> REFUSED_SONGBOOK
+            name in SHEET_PAGES -> REFUSED_VIEWER
+            PyRe.fullmatch(HARMONICA_PAGE, name) != null -> REFUSED_HARMONICA
+            else -> REFUSED_VERSION
+        }
+    }
+
+    /** The bytes of the regular file at [parts] (each folder on the way and the file looked at themselves, then the
+     * file opened with no link followed), read once, when its size is one of [sizes]; null otherwise (no such file, a
+     * link, a folder, another size, a disk error). */
     private fun recordedBytes(parts: List<String>, sizes: Set<Long>): ByteArray? {
         val (path, size) = regular(parts) ?: return null
         if (size !in sizes) return null
@@ -270,7 +256,8 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
             is Looked.Gated -> when (looked.gate) {
                 Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "This song was removed on the phone.", name = name())
                 else -> MessagePage.page(409, "Changed on the phone",
-                                         "This song changed on the phone since the computer made its page.",
+                                         if (looked.entry.unit?.startsWith(SONGBOOK_UNIT) == true) CHANGED_SONGBOOK
+                                         else CHANGED_SONG,
                                          sheetOf(looked.entry.unit)?.let { it to "The phone's sheet" }, name())
             }
             Looked.Missing -> null
@@ -299,14 +286,36 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         /** render.py's HUMAN_OUTPUTS[2] and AUTO_OUTPUTS[2]: a sheet's viewer. */
         val SHEET_PAGES = setOf("sheet.html", "sheet (auto).html")
 
-        /** songbook.FOLDER and HTML_NAME. */
+        /** songbook.FOLDER and HTML_NAME, and a songbook's unit. */
         const val SONGBOOKS = "_songbooks"
+        const val SONGBOOK_UNIT = "songbook/"
         const val SONGBOOK_PAGE = "songbook.html"
 
         /** inbox.HARMONICA_PAGE. */
         val HARMONICA_PAGE by lazy { PyRegex.compile("""harmonica-(\d+)\.html""") }
 
+        /** A sheet's ChordPro, which the phone writes beside its page. */
+        const val CHO = ".cho"
+
         /** What a page of the phone's says when it isn't sent (app.py's refusals, the phone's words). */
-        const val REFUSED = "This page isn't the one the phone made here (it changed since), so it isn't sent."
+        const val REFUSED_VIEWER = "This sheet viewer isn't the page the phone last wrote here, so it isn't sent: " +
+            "the phone writes it again the next time it makes the song's pages."
+        const val REFUSED_VERSION = "This version's viewer isn't the page the phone last wrote here, so it isn't " +
+            "sent: the phone writes it again the next time it makes the song's pages. The song's own sheet.html is " +
+            "beside it."
+        const val REFUSED_HARMONICA = "This harmonica tab's page isn't the page the phone last wrote here, so it " +
+            "isn't sent: the phone writes it again the next time it makes the song's pages. The tab's text is " +
+            "beside it."
+        const val REFUSED_SONGBOOK = "This songbook page isn't the one the phone last wrote here, so it isn't sent: " +
+            "the phone writes it again the next time it makes the songbook's page."
+
+        /** What a page of the phone's says of a unit moved since it was made (a take's, or a change on the phone),
+         * when the computer sent none of it as it is now. */
+        const val MOVED_SONG = "This song changed since the phone made its page, so that page isn't sent."
+        const val MOVED_SONGBOOK = "This songbook changed since the phone made its page, so that page isn't sent."
+
+        /** What the computer's page says of a unit the phone changed since the computer made it. */
+        const val CHANGED_SONG = "This song changed on the phone since the computer made its page."
+        const val CHANGED_SONGBOOK = "This songbook changed on the phone since the computer made its page."
     }
 }

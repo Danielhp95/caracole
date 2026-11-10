@@ -1824,19 +1824,28 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 - `LibraryFiles` serves a page the phone wrote (a sheet's viewer, a kept version's, a harmonica tab's, a songbook's in
   `_songbooks/<folder>/`) as app.py's `_written_page` does, before the mirror's:
-  - while it is the bytes its record holds (`PhonePages`: WrittenPages' `render:files:<id>` among the songs whose
-    folder it is in, `songbook:<folder>`; read once through no link, of a recorded size and SHA-256) and its song's
-    unit is still at the digest it was made at;
-  - with `viewer_csp` of those very bytes and `frame-ancestors 'none'`;
+  - while it is the bytes WrittenPages recorded (`render:files:<id>` among the songs whose folder it is in, of those
+    with a record; `songbook:<folder>`), read once, of a recorded size and SHA-256, and its unit (the song's, or the
+    songbook's, `WrittenPages.songbookUnit`) is still at the digest it was made at (each entry's `unit`);
+  - with `SheetPage.viewerCsp` of those very bytes (its `_NOTHING` sandbox for a page with no policy) and
+    `frame-ancestors 'none'`;
   - otherwise the mirror's through PhoneGate, else a message page: 409 for a unit moved since its page was made (the
-    phone's sheet.txt linked), 404 Not sent for one changed on disk;
+    phone's sheet.txt linked), 404 Not sent, by the page's kind, for one changed on disk;
   - a .cho it wrote the same way, as text (LibraryFilesTest).
-- Until phone-render's WrittenPages lands, it reads `PhonePages.NONE`: no page of the phone's.
-- A removal takes the phone's written pages by their records: every name `render:files:<id>` records with an entry
-  `render.written_entry` reads, as removal.py takes a version's or a tab's page (the phone makes no PDF, so no render
-  record names them; a sync carries none and a respell drops them), and a take that moves the song's folder moves
-  them with it (RemovalWrittenTest).
-- What a take supersedes, forgotten (`PhoneRender.afterSync`), and PagesServedTest: not built yet.
+- Its checks are made on the path, then the file is opened with no link followed and its bytes checked: the library
+  is the app's own folder, which nothing but the app writes.
+- `PhoneRender.afterSync`, after a take: the pages the take superseded forgotten (`forgetSuperseded`: each deleted
+  while it is as written, its record's entry with it), a song's or a songbook's made at a digest its unit has moved
+  from where the mirror now serves it at its digest, and a songbook's whose folder no songbook has any more; a moved
+  song's page the mirror doesn't serve stays, never served, for the render job to make again.
+- A removal takes the phone's written pages by their records: each `render:files:<id>` entry naming the `unit` it was
+  made at, as removal.py takes a version's or a tab's page (the phone makes no PDF, so no render record names them); a
+  record render.py wrote names no unit and keeps removal.py's answer (RemovalWrittenTest).
+- A take that moves or respells a song's folder deletes the phone's pages of it still as written rather than moving
+  them (`Removal.phonesWritten`, SongTake), so no page is left there unrecorded and a removal after it empties the
+  folder (RemovalWrittenTest).
+- PagesServedTest opens one in the WebView: its own policy and an opaque origin, refused once changed on disk or once
+  its song's unit moves.
 
 ##### Songbooks, versions and printing on the phone
 
