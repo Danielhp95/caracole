@@ -52,9 +52,9 @@ ROUTES = (
           page="the tab's page of readings"),
 )
 
-_NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
-_NO_TAB = Refused(404, "Not found", "There's no such harmonica tab in the library.")
-_NOT_A_READING = Refused(400, "Not a reading", "How should it be read? The form names no notation caracole knows.")
+_NOT_AN_ADDRESS = Refused(400, "Not an address", "Can't read that address.")
+_NO_TAB = Refused(404, "Not found", "No such harmonica tab in the book.")
+_NOT_A_READING = Refused(400, "Not a reading", "Read how? The form names no notation we know.")
 
 
 @dataclass(frozen=True)
@@ -93,19 +93,18 @@ def harmonica_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
     asked = _asked(app, form.get("page", ""))
     spec = _reading(form.get("as", "")) if do == "pin" else None
     if do == "pin" and spec == asked.pin:
-        raise Refused(409, "Nothing to do", "It is read so already, as you set it.")
+        raise Refused(409, "Nothing to do", "Read that way already, as you set it.")
     if do == "clear" and asked.pin is None:
-        raise Refused(409, "Nothing to do", "caracole guesses how it is read already: no [harmonica] entry in "
-                                            "overrides.toml pins it.")
+        raise Refused(409, "Nothing to do", "We guess its reading already: no [harmonica] entry pins it.")
     not_ignored(asked.song, app.overrides())
     song, tab = asked.song, asked.tab
     if spec is None:
-        title, label, options = f"Back to caracole's guess: {tab.name} of {song.display}", "Going back to " \
-            "caracole's guess", ("--clear",)
+        title = f"Back to our guess: {tab.name} of {song.display}"
+        label, options = "Going back to our guess", ("--clear",)
     else:
         options = (f"--as={spec}",) if isinstance(spec, str) else (
             f"--as={spec.get('as', 'signs')}", *(f"--symbol={k}={v}" for k, v in spec.items() if k != "as"))
-        title, label = f"Read {tab.name} of {song.display} as you set it", "Reading the harmonica tab as you set it"
+        title, label = f"Read {tab.name} of {song.display} as you set it", "Reading the tab as you set it"
     steps = [(label, (COMMAND, f"--tab={tab.name}", *options, "--", song.artist, song.title))]
     said = "clear" if spec is None else json.dumps(spec, sort_keys=True, ensure_ascii=False)
     job, _ = app.submit(title, f"{READING}{song.key}:{tab.name}:{said}{MINE}", steps, display=song.display,
@@ -178,12 +177,12 @@ def _source(reading: Reading) -> str:
 
 def _button(spec: Any, reading: Reading) -> str:
     if spec == "legend":
-        return "Read it by its own legend"
+        return "Use its legend"
     if spec == "signs":
-        return "As harptabs.com writes it"
+        return "As harptabs writes it"
     if isinstance(spec, str):
-        return f"Read it as {spec}"
-    return f"Read it so: {_said(reading)}"
+        return f"Read as {spec}"
+    return f"Read as: {_said(reading)}"
 
 
 def _form(app: WebApp, asked: _Asked, action: str, button: str, spec: Any = None, *, primary: bool = False) -> str:
@@ -220,16 +219,16 @@ def _body(app: WebApp, asked: _Asked, job: Job | None) -> str:
                                                                 spec)
         items.append(f'<li class="reading{" now" if mine else ""}"><span class="said">{escape(_said(reading))}</span> '
                      f'<span class="q">Q {reading.q:.2f}{" · now" if mine else ""}</span>\n{form}</li>')
-    body = (lede + '<h2 class="sub">The ways caracole weighs, best first</h2>\n<ul class="readings">\n'
+    body = (lede + '<h2 class="sub">Readings, best first</h2>\n<ul class="readings">\n'
             + "\n".join(items) + "\n</ul>\n")
     if asked.pin is not None:
-        body += _form(app, asked, "/harmonica/clear", "Back to caracole's guess")
-    body += ("<p>caracole reads a harmonica tab in each notation it knows and keeps the one that explains the most "
-             "of it as notes a harmonica plays (Q). One you choose here is kept in overrides.toml "
-             "(<code>[harmonica]</code>), and the tab's page is made again.</p>\n")
+        body += _form(app, asked, "/harmonica/clear", "Back to our guess")
+    body += ("<p>We read the tab in every notation we know and keep the one that explains most of it as notes a "
+             "harmonica plays (Q). Your choice goes in overrides.toml (<code>[harmonica]</code>) and the tab's page "
+             "is remade.</p>\n")
     body += _how_it_goes(asked, job)
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
-    back = f'<a class="btn" href="/{asked.folder}/{quote(tab.page)}">Back to the tab</a>'
+    back = f'<a class="btn" href="/{asked.folder}/{quote(tab.page)}">Back to tab</a>'
     return pages.page(f"How it's read · {song.display}", f'{body}<div class="confirm">\n{back}\n</div>', head=head,
                       library_name=app.library_name)
 
@@ -246,19 +245,19 @@ def _how_it_goes(asked: _Asked, job: Job | None) -> str:
         return '<p class="says cancelled">Cancelled before it ran.</p>\n'
     if job.state == INTERRUPTED:  # a restart stopped it before it was over (history.py)
         details = f' <a href="/{escape(details_href(job.id), quote=True)}">Output</a>'
-        return ('<p class="says waiting">Interrupted: caracole serve stopped before it was over.'
+        return ('<p class="says waiting">Interrupted: the server stopped mid-way.'
                 f'{details}</p>\n')
     if job.state != "done":
-        state = ("Queued: it runs after the requests before it." if job.state == "queued"
+        state = ("Queued · runs after those ahead." if job.state == "queued"
                  else "Reading it as you set it…")
         return f'<p class="says {job.state}">{escape(state)}</p>\n'
     clearing = "--clear" in job.steps[0].args
     if clearing:
         if asked.pin is None:
-            return '<p class="says done">Done: caracole guesses how it is read again.</p>\n'
-        return (f'<p class="says failed">Done, but the [harmonica] entry is still there: see the request\'s '
+            return '<p class="says done">Done · we guess its reading again.</p>\n'
+        return (f'<p class="says failed">Done, but the [harmonica] entry remains. See the '
                 f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n')
     if asked.pin is None:
-        return (f'<p class="says failed">Done, but no [harmonica] entry pins it: see the request\'s '
+        return (f'<p class="says failed">Done, but no [harmonica] entry pins it. See the '
                 f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n')
-    return f'<p class="says done">Done: read as {escape(_said(asked.now))}, as you set it.</p>\n'
+    return f'<p class="says done">Done · read as {escape(_said(asked.now))}, as you set it.</p>\n'

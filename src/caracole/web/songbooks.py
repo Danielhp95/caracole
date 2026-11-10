@@ -108,7 +108,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
             raise Refused(409, "Taken", str(e)) from e
         songs = _songs(form, connect)
         count = plural(len(songs), "song")
-        return _job(f'Make the songbook "{name}" ({count})', "Making the songbook", "make", name, *songs)
+        return _job(f'Make songbook "{name}" ({count})', "Making the songbook", "make", name, *songs)
     book = _book(books, name)
     name = book.name
     if action == "add":
@@ -121,8 +121,8 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
             raise Refused(400, "Not a song", "Which song? The form names none.")
         entry = next((s for s in book.texts if same_entry(s, song)), None)
         if entry is None:
-            raise Refused(404, "Not in the songbook", f'"{song}" isn\'t in the songbook "{name}": reload the '
-                                                      "library to see what it holds.")
+            raise Refused(404, "Not in the songbook", f'"{song}" isn\'t in "{name}". Reload the page to see what '
+                                                      "it holds.")
         if action == "remove":
             return _job(f'Take {entry} out of "{name}"', "Taking the song out", "remove", name, entry)
         if action == "set":
@@ -145,7 +145,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         except SongbookError as e:
             raise Refused(409, "Taken", str(e)) from e
         return _job(f'Rename "{name}" to "{new}"', "Renaming the songbook", "rename", name, new)
-    return _job(f'Delete the songbook "{name}"', "Deleting the songbook", "delete", name)
+    return _job(f'Delete songbook "{name}"', "Deleting the songbook", "delete", name)
 
 
 def _named(form: Mapping[str, str], library_dir: Path) -> tuple[str, list[Songbook]]:
@@ -160,8 +160,8 @@ def _named(form: Mapping[str, str], library_dir: Path) -> tuple[str, list[Songbo
     try:
         return name, load_songbooks(songbooks_file(library_dir))
     except SongbookFileError as e:
-        raise Refused(503, "songbooks.toml can't be read",
-                      f"songbooks.toml can't be read: {e}. Fix it, then try again.") from e
+        raise Refused(503, "Can't read songbooks.toml",
+                      f"Can't read songbooks.toml: {e}. Fix it, then try again.") from e
 
 
 def _book(books: list[Songbook], name: str) -> Songbook:
@@ -172,7 +172,7 @@ def _book(books: list[Songbook], name: str) -> Songbook:
     if book is None:
         listed = ", ".join(f'"{b.name}"' for b in books)
         raise Refused(404, "No such songbook", f'No songbook named "{name}"'
-                      + (f": there are {listed}." if listed else ": reload the library."))
+                      + (f": there are {listed}." if listed else ": reload the book."))
     return book
 
 
@@ -245,11 +245,11 @@ def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callab
     if one:  # a set list's Get it: that song alone
         songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)]
         if not songs:
-            raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet already, isn\'t in the '
-                                                 "library, or is ignored in overrides.toml: reload the library.")
+            raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet, isn\'t in the book, or '
+                                                 "is ignored. Reload the book.")
     if not songs:
-        raise Refused(409, "Nothing to get", f'Every song of "{book.name}" that the library has has a sheet '
-                                             "already, or is ignored in overrides.toml: reload the library.")
+        raise Refused(409, "Nothing to get", f'Every song of "{book.name}" in the book has a sheet or is '
+                                             "ignored. Reload the book.")
     return book.name, songs
 
 
@@ -264,7 +264,7 @@ def render_job(name: str, after: int) -> SongbookJob:
     ``after``: its key names that one, so the same tap twice is queued once, and a tap after a newer lookup
     makes the songbook again after it."""
     command = ("songbook", "render", "--", name)
-    return SongbookJob(f'Make "{name}" again, with the songs it got', KEY + "\x1f".join(command) + f"\x1f{after}",
+    return SongbookJob(f'Remake "{name}" with the songs fetched', KEY + "\x1f".join(command) + f"\x1f{after}",
                        [("Making the songbook", command)])
 
 
@@ -307,18 +307,18 @@ def _songs(form: Mapping[str, str], connect: Callable[[], sqlite3.Connection]) -
 
     text = form.get("songs", "").strip()
     if not text:
-        raise Refused(400, "No songs", "Pick a song or more for the songbook first.")
+        raise Refused(400, "No songs", "Pick a song or more first.")
     try:
         ids = list(dict.fromkeys(int(part) for part in text.split(",")))
     except ValueError as e:
-        raise Refused(400, "Not songs", "Which songs? The form's list can't be read: reload the library.") from e
+        raise Refused(400, "Not songs", "Which songs? The form's list can't be read. Reload the page.") from e
     names = []
     with closing(connect()) as conn:
         for song_id in ids:
             try:
                 names.append(get_song(conn, song_id).display)
             except KeyError as e:
-                raise Refused(404, "No such song", "A song you picked isn't in the library any more: reload "
-                                                   "the library and pick again.") from e
+                raise Refused(404, "No such song", "A song you picked left the logbook. Reload the page and "
+                                                   "pick again.") from e
     return names
 

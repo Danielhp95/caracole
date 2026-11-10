@@ -72,8 +72,8 @@ ROUTES = (
             page="the version's page" if do in DOINGS else "the library") for do in POSTS),
 )
 
-_NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
-_NO_SHEET = Refused(404, "Not found", "There's no such sheet in the library.")
+_NOT_AN_ADDRESS = Refused(400, "Not an address", "Can't read that address.")
+_NO_SHEET = Refused(404, "Not found", "No such sheet in the book.")
 _SOURCES = {"lacuerda": "LaCuerda's sheet", "auto": "the auto-chords sheet"}
 
 
@@ -111,8 +111,7 @@ def versions_page(app: WebApp, target: str) -> Response:
         raise _NOT_AN_ADDRESS from None
     do = params.get("do", "")
     if do not in DOINGS:
-        raise Refused(400, "Not a version", "Make this the one, Keep it or Back to caracole's pick? The address "
-                                            "names none.")
+        raise Refused(400, "Not a version", "Make this the one, Keep or Back to our pick? The address names none.")
     job_id = params.get("job")
     if job_id is not None and not (job_id.isascii() and job_id.isdigit() and len(job_id) < 12):
         raise _NOT_AN_ADDRESS
@@ -136,8 +135,8 @@ def versions_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
         raise Refused(409, "Nothing to do", why)
     not_ignored(asked.song, app.overrides())
     song = asked.song
-    titles = {"choose": f"Make a version the one: {song.display}", "keep": f"Keep a version of {song.display}",
-              "clear": f"Back to caracole's pick: {song.display}",
+    titles = {"choose": f"Choose a version: {song.display}", "keep": f"Keep a version of {song.display}",
+              "clear": f"Back to our pick: {song.display}",
               "keep-more": f"Fetch the other versions of {song.display}"}
     job, _ = app.submit(titles[do], song.key, _steps(do, asked), fetching=True, display=song.display)
     if by_song or do not in DOINGS:
@@ -151,7 +150,7 @@ def versions_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
 def _a_tab(tab: str, do: str) -> None:
     """Refused (400) when ``do`` names a version and ``tab`` names no UG tab."""
     if do not in TABLESS and not (tab.isascii() and tab.isdigit() and len(tab) <= MAX_TAB):
-        raise Refused(400, "Not a version", "Which version? The address names no Ultimate Guitar tab.")
+        raise Refused(400, "Not a version", "Which version? The address names no UG tab.")
 
 
 def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
@@ -218,7 +217,7 @@ def _of(conn, app: WebApp, overrides: Overrides, song: Song, tab: str, do: str, 
     if do not in TABLESS:
         version = next((v for v in versions if v.tab_id == tab), None)
         if version is None:
-            raise Refused(404, "No such version", f"Ultimate Guitar lists no such chords version of {song.display}.")
+            raise Refused(404, "No such version", f"UG lists no such chords version of {song.display}.")
     return _Asked(song, sheet, folder, version, versions, the_one, pins, tuple(overrides.pin.get(song.key, ())),
                   overrides.block, back, to_keep)
 
@@ -244,22 +243,20 @@ def _cant(do: str, asked: _Asked) -> str | None:
     """Why ``do`` can't be done for what the page names, in one sentence; None when it can."""
     v = asked.version
     if do == "clear":
-        return None if asked.pinned else (f"caracole picks the sheet of {asked.song.display} already: no version "
-                                          "of yours is pinned in overrides.toml.")
+        return None if asked.pinned else f"We pick {asked.song.display}'s sheet already: none of yours is pinned."
     if do == "keep-more":
-        return None if asked.to_keep else (f"Nothing is left to keep of {asked.song.display}: every Ultimate "
-                                           "Guitar version caracole may keep is kept already, or can't be.")
+        return None if asked.to_keep else (f"Nothing left to keep of {asked.song.display}: every UG version we "
+                                           "may keep is kept, or can't be.")
     assert v is not None
     if v.gone:
-        return "Ultimate Guitar no longer has this version: it stays listed until the next fetch drops it."
+        return "Gone from UG. Listed until the next fetch drops it."
     if int(v.tab_id) in asked.blocked and not v.chosen:
-        return ("This version is under [block] in overrides.toml: caracole never uses it. Take it out of [block] "
-                "first.")
+        return "Under [block] in overrides.toml: we never use it. Take it out of [block] first."
     if do == "choose" and v.chosen:
-        return "This version is the one already: the song's title opens it."
+        return "Already the one: the song's title opens it."
     if do == "keep" and v.kept:
-        return ("This version is the one already: the song's title opens it." if v.chosen
-                else "This version is kept already, beside the song's sheet.")
+        return ("Already the one: the song's title opens it." if v.chosen
+                else "Kept already, beside the sheet.")
     return None
 
 
@@ -296,18 +293,17 @@ def _line(v: SheetVersion, total: int | None = None) -> str:
     return " · ".join(said)
 
 
-_LABELS = {"choose": "Make this the one", "keep": "Keep it", "clear": "Back to caracole's pick"}
+_LABELS = {"choose": "Make this the one", "keep": "Keep", "clear": "Back to our pick"}
 _TELLS = {
-    "choose": ("It becomes the song's sheet: the title opens it, and its PDF and its songbooks use it. caracole looks "
-               "the song up with this tab (<code>caracole versions --choose</code>, as <code>caracole get --tab</code> "
-               "does) and keeps your choice in overrides.toml "
+    "choose": ("It becomes the song's sheet: the title opens it, its PDF and songbooks use it. We fetch the song with "
+               "this tab (<code>caracole versions --choose</code>) and note your choice in overrides.toml "
                "(<code>[pin]</code>)."),
-    "keep": ("caracole fetches its page from Ultimate Guitar now (one request, at the lookup pace) and keeps it "
-             "beside the song's sheet, with a viewer of its own; the song's sheet stays as it is."),
-    "clear": ("caracole takes the song's <code>[pin]</code> out of overrides.toml and looks the song up again: the "
-              "title then opens the version it ranks first."),
+    "keep": ("We fetch its page from UG (one ask) and keep it beside the song's sheet, with its own viewer. The "
+             "sheet stays as it is."),
+    "clear": ("We take the song's <code>[pin]</code> out of overrides.toml and fetch it again: the title then opens "
+              "the version we rank first."),
 }
-_RUNNING = {"choose": "Making it the one…", "keep": "Fetching the version…", "clear": "Going back to caracole's pick…"}
+_RUNNING = {"choose": "Making it the one…", "keep": "Fetching the version…", "clear": "Going back to our pick…"}
 
 
 def _body(app: WebApp, do: str, asked: _Asked, job: Job | None) -> str:
@@ -334,10 +330,10 @@ def _body(app: WebApp, do: str, asked: _Asked, job: Job | None) -> str:
     says, opens = _how_it_goes(app, do, asked, job)
     links = opens
     if v is not None and v.page is not None and v.kept and not v.chosen and not opens:
-        links += f'<a class="btn" href="/{asked.folder}/{quote(v.page)}">Open it</a>\n'
-    links += f'<a class="btn" href="/{escape(quote(asked.back), quote=True)}">Back to the sheet</a>'
+        links += f'<a class="btn" href="/{asked.folder}/{quote(v.page)}">Open</a>\n'
+    links += f'<a class="btn" href="/{escape(quote(asked.back), quote=True)}">Back to sheet</a>'
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
-    title = {"choose": "Make this the one", "keep": "Keep a version", "clear": "Back to caracole's pick"}[do]
+    title = {"choose": "Make this the one", "keep": "Keep a version", "clear": "Back to our pick"}[do]
     return pages.page(f"{title} · {song.display}", f'{lede}{form}{says}<div class="confirm">\n{links}\n</div>',
                       head=head, library_name=app.library_name)
 
@@ -355,20 +351,20 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         return '<p class="says cancelled">Cancelled before it ran.</p>\n', ""
     if job.state == INTERRUPTED:  # a restart stopped it before it was over (history.py)
         details = f' <a href="/{escape(details_href(job.id), quote=True)}">Output</a>'
-        return ('<p class="says waiting">Interrupted: caracole serve stopped before it was over.'
+        return ('<p class="says waiting">Interrupted: the server stopped mid-way.'
                 f'{details}</p>\n'), ""
     if job.state != "done":
-        state = "Queued: it runs after the requests before it." if job.state == "queued" else _RUNNING[do]
+        state = "Queued · runs after those ahead." if job.state == "queued" else _RUNNING[do]
         return f'<p class="says {job.state}">{escape(state)}</p>\n', ""
     if do == "keep":
         assert asked.version is not None
         page = _kept_page(app, asked)
         if page is None:
             why = _stage_detail(job, "version")
-            return (f'<p class="says failed">Done, but it wasn\'t kept{": " + escape(why) if why else ""}. See the '
-                    f'request\'s <a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n', "")
-        return ('<p class="says done">Done: it is kept beside the sheet.</p>\n',
-                f'<a class="btn primary" href="/{asked.folder}/{quote(page)}">Open it</a>\n')
+            return (f'<p class="says failed">Done, not kept{": " + escape(why) if why else ""}. See the '
+                    f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n', "")
+        return ('<p class="says done">Done · kept beside the sheet.</p>\n',
+                f'<a class="btn primary" href="/{asked.folder}/{quote(page)}">Open</a>\n')
     from caracole.sheet_versions import SHEET_PAGE
 
     # caracole get exits 0 on a block, a spent budget or the hour's cap, the sheet as it was: what the job did is
@@ -379,19 +375,19 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         if not asked.version.chosen:
             why = _stage_detail(job, "sheet")
             if int(asked.version.tab_id) in asked.pins:
-                said = ("Done, and your choice is recorded under [pin] in overrides.toml, but it isn't the song's "
-                        "sheet yet: the nightly run, or a later lookup, makes it the one")
+                said = ("Done. Your choice is noted under [pin], but isn't the sheet yet: tonight's run or a later "
+                        "fetch makes it the one")
             else:
-                said = "Done, but it isn't the one"
+                said = "Done, but not the one"
             return (f'<p class="says waiting">{escape(said)}{": " + escape(why) if why else "."} See the '
-                    f"request's {output}.</p>\n", "")
-        said = "Done: it is the one now."
+                    f"{output}.</p>\n", "")
+        said = "Done · the one now."
     elif asked.pinned:
-        return (f'<p class="says failed">Done, but the [pin] is still there: see the request\'s {output}.</p>\n', "")
+        return (f'<p class="says failed">Done, but the [pin] remains. See the {output}.</p>\n', "")
     else:
-        said = "Done: caracole picks the sheet again."
+        said = "Done · we pick the sheet again."
     return (f'<p class="says done">{said}</p>\n',
-            f'<a class="btn primary" href="/{asked.folder}/{quote(SHEET_PAGE)}">Open the sheet</a>\n')
+            f'<a class="btn primary" href="/{asked.folder}/{quote(SHEET_PAGE)}">Open sheet</a>\n')
 
 
 def _stage_detail(job: Job, name: str) -> str:

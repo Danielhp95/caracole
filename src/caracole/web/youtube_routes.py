@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 VIDEO_LIMIT = 600  # characters of a pasted address
-NOT_HERE = "No sheets from YouTube here"  # how the page and a refusal begin, where none can be made
+NOT_HERE = "No YouTube sheets here"  # how the page and a refusal begin, where none can be made
 
 ROUTES = (
     Route("POST", "/youtube", lambda app, asked, form: sheet_from_youtube(app, form)),
@@ -109,9 +109,9 @@ def sheet_from_youtube(app: WebApp, form: dict[str, str]) -> Response:
                     youtube_is_for(conn, known, overrides)
         line, note = wanted_line(app, form)
         display, key = f"{line.artist} - {line.title}", line.identity
-    job, _ = app.submit(f"YouTube sheet {display}", YOUTUBE_SHEET + key, youtube_sheet_steps(display, url),
+    job, _ = app.submit(f"Sheet from YouTube: {display}", YOUTUBE_SHEET + key, youtube_sheet_steps(display, url),
                         display=display, note=note,
-                        full=f"{note} The queue is full, so nothing was queued: ask again once it empties.".strip())
+                        full=f"{note} The queue is full: nothing queued. Ask again once it empties.".strip())
     return app.queued(job)
 
 
@@ -144,7 +144,7 @@ def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
         raise Refused(409, "Has a sheet", f"{song.display} already has a sheet.")
     if song.audio_path and youtube_audio(conn, song) is None:
-        raise Refused(409, "Has its audio", f"{song.display} has bought audio in Music/: auto-chords uses that.")
+        raise Refused(409, "Has its audio", f"{song.display} has bought audio in Music/; auto-chords uses that.")
 
 
 # --- a video suggested for a search ---------------------------------------------------------------------

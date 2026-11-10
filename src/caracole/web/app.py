@@ -103,8 +103,8 @@ _COMMON_HEADERS = [
 ]
 FRAMES = "frame-ancestors 'none'"
 HTML = "text/html; charset=utf-8"
-QUEUE_FULL = "The queue is full: try again once it empties."
-NO_SUCH_SONG = "That song isn't in the library."
+QUEUE_FULL = "The queue is full. Try again once it empties."
+NO_SUCH_SONG = "That song isn't in the logbook."
 
 
 @dataclass(frozen=True)
@@ -223,7 +223,7 @@ def query(request: Request) -> dict[str, list[str]]:
 
 def unreadable(e: Exception) -> Refused:
     """The database can't be read (503): ``e``, an sqlite3.Error (DatabaseTooNew is one) or an OSError."""
-    return Refused(503, "The database can't be read", f"The database can't be read: {e}")
+    return Refused(503, "Can't read the database", f"Can't read the database: {e}")
 
 
 def song_id(text: str, *, where: str = "form") -> int:
@@ -338,8 +338,8 @@ class WebApp:
     def _host_refused(self, request: Request) -> Response | None:
         if answers_to(host_name(request.headers.get("host")), self.allowed):
             return None
-        return Response(421, b"caracole serve doesn't answer to this host name; "
-                             b"start it with --allow-host NAME to add one.\n",
+        return Response(421, b"This server doesn't answer to this host name. "
+                             b"Start it with --allow-host NAME to add it.\n",
                         [("Content-Type", "text/plain; charset=utf-8")])
 
     def _route(self, request: Request) -> Response:
@@ -349,11 +349,11 @@ class WebApp:
         try:
             path = unquote(urlsplit(request.target).path, errors="strict")
         except (UnicodeDecodeError, ValueError):
-            return self.message(400, "Not an address", "That address can't be read.")
+            return self.message(400, "Not an address", "Can't read that address.")
         method = request.method
         if method in ("GET", "HEAD"):
             if path.startswith("/api/") and not own_page_read(request.headers):
-                return json_response(403, {"error": "This came from another site, so caracole refused it."})
+                return json_response(403, {"error": "Another site sent this. Refused."})
             route = route_for("GET", path)
             if route is not None:
                 return (route.script_only and self._script_read_refused(request)) or route.answer(self, request)
@@ -361,7 +361,7 @@ class WebApp:
         if method == "POST":
             route = route_for("POST", path)
             if route is None:
-                return self.message(404, "Not here", "There's nothing to send to at this address.")
+                return self.message(404, "Not here", "Nothing to send to here.")
             if route.body == "form":
                 body = self._form(request, route)
             else:
@@ -383,10 +383,9 @@ class WebApp:
         """Why a read only the page's script makes (/jobs.json, /requests.json) is refused to anything else, as a write would be;
         None for the page's script."""
         if not cross_origin_ok("POST", request.headers, request.headers.get("host")):  # checked as a write
-            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
+            return self.message(403, "Refused", "Another site sent this. Refused.")
         if not same_token(request.headers.get(TOKEN_HEADER), self.csrf):
-            return self.message(403, "Refused", "caracole serve has restarted since this page was opened: "
-                                                "reload it.")
+            return self.message(403, "Refused", "caracole serve restarted since this page opened. Reload it.")
         return None
 
     def _headers_refused(self, request: Request, route: Route) -> Response | None:
@@ -396,18 +395,18 @@ class WebApp:
         None when they pass."""
         headers = request.headers
         if not cross_origin_ok("POST", headers, headers.get("host")):
-            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
+            return self.message(403, "Refused", "Another site sent this. Refused.")
         if route.body == "form":
             if _content_type(headers) != BODY_TYPES["form"]:
-                return self.message(415, "Not a form", "caracole reads only forms sent from its own pages.")
+                return self.message(415, "Not a form", "We read only forms from our own pages.")
             return None
         if not same_token(headers.get(TOKEN_HEADER), self.csrf):
-            refused = self.message(403, "Refused", "This is older than the server, or not from it: read its form "
-                                                   "token again and try again.")
+            refused = self.message(403, "Refused", "Older than the server, or not from it. Read its form token "
+                                                   "again and retry.")
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
         if _content_type(headers) != BODY_TYPES[route.body]:
-            return self.message(415, "Not what it reads", f"caracole reads only {BODY_TYPES[route.body]} here.")
+            return self.message(415, "Not what it reads", f"Only {BODY_TYPES[route.body]} here.")
         return None
 
     def _form(self, request: Request, route: Route) -> dict[str, str] | Response:
@@ -423,11 +422,11 @@ class WebApp:
         try:
             fields = parse_qs(request.body.decode("utf-8"), keep_blank_values=True, max_num_fields=20)
         except (UnicodeDecodeError, ValueError):
-            return self.message(400, "Not a form", "That form can't be read.")
+            return self.message(400, "Not a form", "Can't read that form.")
         form = {name: values[0] for name, values in fields.items()}
         if not same_token(form.get("csrf"), self.csrf):
             refused = self.message(403, "Refused", "This form is older than the server, or not from its "
-                                                   f"pages: reload {page} and try again.")
+                                                   f"pages. Reload {page} and try again.")
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
         return form
@@ -445,7 +444,7 @@ class WebApp:
         try:
             return json.loads(request.body.decode("utf-8"))
         except (UnicodeDecodeError, ValueError, RecursionError):
-            return self.message(400, "Not JSON", "That can't be read as JSON.")
+            return self.message(400, "Not JSON", "Can't read that as JSON.")
 
     # --- what the routes share ---------------------------------------------------------------------
 
@@ -469,7 +468,7 @@ class WebApp:
         try:
             return load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
-            raise Refused(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.{then}") from e
+            raise Refused(503, "Can't read overrides.toml", f"Can't read overrides.toml: {e}.{then}") from e
 
     def submit(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
                full: str = QUEUE_FULL, **options: Any) -> tuple[Job, bool]:
@@ -513,7 +512,7 @@ class WebApp:
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
-            return self.message(404, "Not found", "There's no such page or file in the library.")
+            return self.message(404, "Not found", "No such page or file in the book.")
         headers = [("Content-Type", kind)]
         if download:
             headers.append(("Content-Disposition", self._download_header(path[1:])))
@@ -588,15 +587,12 @@ def written_pages() -> dict[str, WrittenPage]:
                                                 library_page.PAGE_REFUSED)}
 
 
-_VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "
-                   "device, say), so the server won't send it: the next caracole render writes it again. "
-                   "The PDF is beside it.")
-_VERSION_REFUSED = ("This version's viewer isn't the page caracole last wrote here (it was changed on a synced "
-                    "device, say), so the server won't send it: the next caracole render writes it again. "
-                    "The song's own sheet.html is beside it.")
-_HARMONICA_REFUSED = ("This harmonica tab's page isn't the page caracole last wrote here (it was changed on a synced "
-                      "device, say), so the server won't send it: the next caracole render writes it again. "
-                      "The tab's text is beside it.")
+_VIEWER_REFUSED = ("This sheet viewer isn't the page we last wrote here (changed on a synced device, say), so it "
+                   "isn't sent. The next caracole render writes it again; the PDF is beside it.")
+_VERSION_REFUSED = ("This version's viewer isn't the page we last wrote here (changed on a synced device, say), so "
+                    "it isn't sent. The next caracole render writes it again; the song's sheet.html is beside it.")
+_HARMONICA_REFUSED = ("This harmonica tab's page isn't the page we last wrote here (changed on a synced device, say), "
+                      "so it isn't sent. The next caracole render writes it again; the tab's text is beside it.")
 
 
 def written_page(name: str) -> WrittenPage | None:

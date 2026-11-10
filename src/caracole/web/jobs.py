@@ -227,15 +227,15 @@ def add_steps(artist: str, title: str, *, album: str | None = None,
         args.append(f"--duration={format_duration(duration_ms)}")
     if lacuerda:
         args.append(f"--lacuerda={lacuerda}")
-    return [("Adding to the library", (*args, "--", artist, title))]
+    return [("Adding to the book", (*args, "--", artist, title))]
 
 
 def fetch_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     """Fetch one song now: match it (offline), fetch it from UG, render its PDF (offline)."""
     return [
-        ("Looking it up", ("match",)),
-        ("Fetching from Ultimate Guitar", ("fetch", f"--song={display}")),
-        ("Rendering the sheet", ("render", f"--song={display}")),
+        ("Matching", ("match",)),
+        ("Fetching from UG", ("fetch", f"--song={display}")),
+        ("Making the PDF", ("render", f"--song={display}")),
     ]
 
 
@@ -266,7 +266,7 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
         args.append(f"--harptabs={harptabs}")
     if gametabs:
         args.append(f"--gametabs={gametabs}")
-    return [("Look it up now", (*args, "--", artist, title))]
+    return [("Fetching", (*args, "--", artist, title))]
 
 
 VERSIONS = "versions"  # the command that makes a song's version the one, keeps one, or takes its pin out
@@ -275,9 +275,9 @@ VERSIONS = "versions"  # the command that makes a song's version the one, keeps 
 # Keep it's stages, as ``caracole versions --keep --progress`` reports them (versions_cmd.py), and ``--keep-more``'s
 KEEP_STAGES = (
     ("song", "Find the song"),
-    ("version", "The version from Ultimate Guitar"),
-    ("pdf", "The version's page"),
-    ("pages", "The library page"),
+    ("version", "Version from UG"),
+    ("pdf", "Version's page"),
+    ("pages", "The logbook page"),
 )
 
 
@@ -292,12 +292,12 @@ def version_steps(artist: str, title: str, *, keep: str | None = None,
     if choose is not None:
         return [("Making it the one", (VERSIONS, f"--choose={choose}", "--progress", "--", artist, title))]
     if keep is not None:
-        return [("Fetching the version from Ultimate Guitar",
+        return [("Fetching the version from UG",
                  (VERSIONS, f"--keep={keep}", "--progress", "--", artist, title))]
     if keep_more:
-        return [("Fetching versions from Ultimate Guitar",
+        return [("Fetching versions from UG",
                  (VERSIONS, "--keep-more", "--progress", "--", artist, title))]
-    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--progress", "--", artist, title))]
+    return [("Going back to our pick", (VERSIONS, "--clear", "--progress", "--", artist, title))]
 
 
 def _options(args: Sequence[str]) -> Sequence[str]:
@@ -330,23 +330,23 @@ def _reports(args: Sequence[str]) -> bool:
 PEER = "peer"  # the command of a sync with another caracole: ``caracole peer take`` a push, ``peer sync``
 # ``caracole peer take --progress``'s stages (commands/peer.py), a push another caracole sent taken here
 PEER_TAKE_STAGES = (
-    ("check", "What changed since the comparison"),
-    ("take", "Taking what changed there"),
-    ("render", "Rendering what was taken"),
-    ("agree", "What the two agree on"),
+    ("check", "What changed since compared"),
+    ("take", "Taking what they wrote"),
+    ("render", "Making pages of what was taken"),
+    ("agree", "Where the books agree"),
 )
 # ``caracole peer sync --progress``'s
 PEER_SYNC_STAGES = (
-    ("compare", "Comparing"),
-    ("take", "Taking what changed there"),
-    ("give", "Giving what changed here"),
-    ("agree", "What the two agree on"),
+    ("compare", "Comparing books"),
+    ("take", "Taking what they wrote"),
+    ("give", "Giving what we wrote"),
+    ("agree", "Noting where the books agree"),
 )
 
 
 # ``caracole index merge --delete --progress -- FILE``'s: the index pages another caracole's lookups read, merged
 INDEX_MERGE_COMMAND = ("index", "merge")
-INDEX_MERGE_STAGES = (("merge", "Merging the other caracole's index pages"),)
+INDEX_MERGE_STAGES = (("merge", "Merging the other scribe's index pages"),)
 INDEX_MERGE = "index-merge:"  # an index export's merge: its job's key, the staged file's name after it
 
 
@@ -362,9 +362,9 @@ def index_merge_job(path: Path) -> dict[str, Any]:
     """The job that merges the index export staged at ``path`` (``POST /peer/index``, peer_routes.py) and deletes it
     after, as ``JobQueue.submit``'s arguments: ``caracole index merge --delete --progress -- FILE``, a job of no
     song's."""
-    return {"title": "Index pages from another caracole", "song_key": INDEX_MERGE + path.name,
+    return {"title": "Index pages from another scribe", "song_key": INDEX_MERGE + path.name,
             "steps": [(INDEX_MERGE_STAGES[0][1], (*INDEX_MERGE_COMMAND, "--delete", "--progress", "--", str(path)))],
-            "display": "Index pages from another caracole", "join": False}
+            "display": "Index pages from another scribe", "join": False}
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -372,7 +372,7 @@ LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's
 
 def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
     """Read a LaCuerda artist's page into its index now: ``caracole lacuerda --artist``, one request."""
-    return [(f"Reading LaCuerda's page for {name}", ("lacuerda", f"--artist={slug}"))]
+    return [(f"Reading {name}'s page on LaCuerda", ("lacuerda", f"--artist={slug}"))]
 
 
 LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's key, the query's key after it
@@ -381,7 +381,7 @@ YOUTUBE_SEARCH = "youtube-search:"  # a video suggested for a search: its job's 
 # what a site's index reads, and a search's suggestion: jobs of no song's
 INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH)
 SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
-YOUTUBE_SEARCH_STAGES = (("video", "Search YouTube"), ("thumbnail", "Its thumbnail"))  # ``caracole youtube --search``'s
+YOUTUBE_SEARCH_STAGES = (("video", "Search YouTube"), ("thumbnail", "Thumbnail"))  # ``caracole youtube --search``'s
 
 
 def lacuerda_search_steps(query: str, *, auto: bool) -> list[tuple[str, tuple[str, ...]]]:
@@ -404,7 +404,7 @@ def youtube_video_steps(video_id: str) -> list[tuple[str, tuple[str, ...]]]:
 
 def harptabs_artist_steps(path: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
     """Read a harptabs.com artist's page into its index now: ``caracole harptabs --artist``, one request."""
-    return [(f"Reading harptabs.com's page for {name}", ("harptabs", f"--artist={path}"))]
+    return [(f"Reading {name}'s page on harptabs", ("harptabs", f"--artist={path}"))]
 
 
 def _searches(args: Sequence[str]) -> bool:
@@ -532,7 +532,7 @@ READING = "harmonica:"  # a harmonica tab's reading pinned (harmonica_routes.py)
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     """``caracole remove --yes``: the page asked already, and showed what goes."""
-    return [("Removing from caracole", ("remove", "--yes", "--", display))]
+    return [("Removing from the book", ("remove", "--yes", "--", display))]
 
 
 def review_steps(display: str, *, pick: str | None = None,
@@ -542,7 +542,7 @@ def review_steps(display: str, *, pick: str | None = None,
     with an ``[alias]``, its artist's other songs) and rewrites the pages itself, so a fetch after it
     needs no ``caracole match``."""
     answer = (f"--pick={pick}",) if pick is not None else ("--none", *(f"--seen={ref}" for ref in seen))
-    return [("Writing the answer to overrides.toml", ("review", f"--song={display}", *answer))]
+    return [("Noting your answer in overrides.toml", ("review", f"--song={display}", *answer))]
 
 
 class JobQueue:

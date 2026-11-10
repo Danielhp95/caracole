@@ -2,8 +2,8 @@
 it (``GET /requests.json``, jobs_routes.py).
 
 Under **Now**, the request that runs, with how long ago it started, its line and its steps (outcome.py's ``steps``,
-the chips the library page draws under a song's line), and those queued under it in order ("Queued, next",
-"Queued, 2nd"), each with Cancel (``POST /jobs/cancel``); then the finished ones, newest first under **Today** and
+the chips the library page draws under a song's line), and those queued under it in order ("Queued · next",
+"Queued · 2nd"), each with Cancel (``POST /jobs/cancel``); then the finished ones, newest first under **Today** and
 **Earlier** (by when each ended, in the server's local time zone), each with its outcome (outcome.py's
 ``Outcome``: a word in its tone, a reason, its next step and the one beside it) and when it ended. A next step is
 a link (``href``) or a form the tab posts with the form token (``post`` and its ``fields``); the ones that are the
@@ -13,7 +13,7 @@ Every request keeps what it ran (``output``): its title and when it was asked fo
 named), a lookup's stages, each with its state and why, and each command it ran with its state; what each
 command printed (``lines``) only for the requests the tab has opened (``opened``), so the answer the tab asks for
 every second and a half while one runs stays small. A request that stopped only because its song needs a pick
-first says so in its output ("Waits for a pick") rather than failed; its outcome's Pick the match opens the
+first says so in its output ("Waits for a pick") rather than failed; its outcome's Pick opens the
 picker's own page (``/review?song=ID``), and a song not found in the offline index gets what ``caracole search``
 finds for it as a next step when its outcome has none that leads there.
 
@@ -35,16 +35,14 @@ if TYPE_CHECKING:
     from caracole.web.status import Line, SongFacts
 
 STATE_TEXT = {"queued": "Queued", "running": "Running", "done": "Done", "failed": "Failed",
-              "waiting": "Waiting", "skipped": "Skipped", "cancelled": "Cancelled", "interrupted": "Interrupted"}
-# The next steps that are the request's way on; the others (Try again, Request by name…) are plain buttons.
-PRIMARY = frozenset({"Open", "Pick the match", "Get it from there", "Open songbook", "See what caracole search finds"})
-SEARCH = "See what caracole search finds"
+              "waiting": "Waiting", "skipped": "Skipped", "cancelled": "Cancelled", "interrupted": "Cut short"}
+# The next steps that are the request's way on; the others (Try again, Ask by name…) are plain buttons.
+PRIMARY = frozenset({"Open", "Pick", "Fetch from there", "Open songbook", "Search the index"})
+SEARCH = "Search the index"
 # What `caracole fetch --song` says of a song that needs review first (commands/fetch.py).
 _NEEDS_REVIEW = "needs review first"
-PICK_STAGE = ("Not fetched yet: its Ultimate Guitar sheet waits for the match. Pick the match, with Fetch it now "
-              "ticked, and it is fetched then.")
-PICK_STEP = ("Not fetched yet: caracole fetch waits for the match. Pick the match, with Fetch it now ticked, and it "
-             "is fetched then.")
+PICK_STAGE = "Not fetched: its UG sheet waits for the match. Pick it, with Fetch ticked, and we fetch it then."
+PICK_STEP = "Not fetched: caracole fetch waits for the match. Pick it, with Fetch ticked, and we fetch it then."
 
 
 def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, Outcome] | None = None,
@@ -100,10 +98,10 @@ def _running(job: Job, line: Line | None, facts: SongFacts | None, now: datetime
 
 
 def _queued(job: Job, place: int) -> dict[str, Any]:
-    """A request that waits: its place ("Queued, next", "Queued, 3rd") and Cancel, which takes it out of the queue."""
-    shown_job = _head(job, "queued", f"Queued, {_ordinal(place)}")
+    """A request that waits: its place ("Queued · next", "Queued · 3rd") and Cancel, which takes it out of the queue."""
+    shown_job = _head(job, "queued", f"Queued · {_ordinal(place)}")
     shown_job["actions"] = [{"label": "Cancel", "post": "/jobs/cancel", "fields": {"job": str(job.id)},
-                             "aria": f"Cancel the request for {job.display or job.title}", "primary": False}]
+                             "aria": f"Cancel {job.display or job.title}", "primary": False}]
     return shown_job
 
 
@@ -125,7 +123,7 @@ def _finished(job: Job, said: Outcome | None, ended: datetime, pick: Pick | None
     if actions:
         shown_job["actions"] = actions
     shown_job["when"] = {"stamp": stamp(ended),
-                         "text": f"{ended.day} {ended:%b}, {ended:%H:%M}" if day else f"{ended:%H:%M}"}
+                         "text": f"{ended:%d/%m/%y}, {ended:%H:%M}" if day else f"{ended:%H:%M}"}
     return shown_job
 
 
@@ -152,7 +150,7 @@ def _output(job: Job, *, opened: bool, picking: bool = False) -> dict[str, Any]:
     went; with ``opened``, what each printed (``lines``, those before them counted in their first). ``picking``: it
     stopped only because the song needs a pick first (``_waits_for_pick``), so its fetch waits for one rather than
     failed."""
-    meta = f"{job.title} · requested {shown(job.queued_at, '', local=True)}"
+    meta = f"{job.title} · asked {shown(job.queued_at, '', local=True)}"
     if job.note:
         meta += f" · {job.note}"
     if job.seconds_to_sheet is not None:

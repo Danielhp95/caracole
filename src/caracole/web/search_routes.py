@@ -175,7 +175,7 @@ LACUERDA_SONGS = 1000  # a LaCuerda artist's songs /api/artist gives: all of the
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 _SLUG = re.compile(r"[a-z0-9_]{1,200}")  # the slug of a LaCuerda artist's page
 _HARP_ARTIST = re.compile(r"artist/\d{1,9}/[a-z0-9-]{1,200}")  # the path of a harptabs.com artist's page
-UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 4 minutes)."
+UG_EMPTY = "Our copy of UG's index is empty. Run caracole index build once (about 4 minutes)."
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
 _BOX = re.compile(r"[A-Za-z0-9_-]{1,64}")  # a search box's id, as its page makes it
 BOXES = 256  # the search boxes whose newest search the server keeps: those that asked last
@@ -249,7 +249,7 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
     found = _library_song(app, form, ug)
     if found is not None:  # the song as your library has it: no second song, and no new source for it
         artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
-        note, display = f"In your library as {found.display}.", found.display
+        note, display = f"In your book as {found.display}.", found.display
     else:
         line, note = wanted_line(app, form)
         artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
@@ -259,8 +259,8 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
                          gametabs=gametabs)
     request = {"title": f"Fetch {artist} - {title}", "song_key": key, "steps": steps, "fetching": True,
                "note": note, "display": display}
-    full = (f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "
-            "it, or ask again once the queue empties.")
+    full = (f"{note} The queue is full: not fetched now. Tonight's run looks for it, or ask again "
+            "once the queue empties.")
     return request, display, full
 
 
@@ -282,12 +282,12 @@ def _pick(form: dict[str, str]) -> tuple[dict[str, str], tuple[str, str] | None]
             raise Refused(400, "Too long", f"The {name} is too long: {PICK_LIMITS[name]} characters at most.")
     artist_key, sep, song_key = pick["ug"].partition("/")
     if pick["ug"] and (not sep or not artist_key or not song_key or "/" in song_key):
-        raise Refused(400, "Not a pick", f"{pick['ug']!r} isn't an Ultimate Guitar song (artist-key/song-key).")
+        raise Refused(400, "Not a pick", f"{pick['ug']!r} isn't a UG song (artist-key/song-key).")
     if pick["tab"]:
         try:
             tab_id_from_url(pick["tab"])
         except OverridesError as e:
-            raise Refused(400, "Not a pick", f"That isn't an Ultimate Guitar tab: {e}") from e
+            raise Refused(400, "Not a pick", f"Not a UG tab: {e}") from e
     return pick, (artist_key, song_key) if pick["ug"] else None
 
 
@@ -355,9 +355,9 @@ def api_search(app: WebApp, query: str, *, box: str = "") -> Response:
         except sqlite3.OperationalError as e:
             if typed_over():  # interrupted: the newer one reads now
                 return json_response(200, superseded)
-            return json_response(503, {"query": q, "error": f"The database can't be read: {e}"})
+            return json_response(503, {"query": q, "error": f"Can't read the database: {e}"})
         except (sqlite3.Error, OSError) as e:
-            return json_response(503, {"query": q, "error": f"The database can't be read: {e}"})
+            return json_response(503, {"query": q, "error": f"Can't read the database: {e}"})
 
 
 def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
@@ -693,13 +693,13 @@ def _skipped(app: WebApp, conn: sqlite3.Connection) -> tuple[list[dict[str, str]
     for source, name, table in (("gtptabs", "gtptabs.com", "gtptabs_index"),
                                 ("musescore", "MuseScore", "musescore_index")):
         if not app.cfg.provider(source).enabled:
-            why = "turned off in caracole.toml"
+            why = "off in caracole.toml"
         elif conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None:
             continue
         elif source == "musescore" and get_state(conn, source).strikes:
-            why = "MuseScore is blocking caracole, so its index is empty"
+            why = "MuseScore turned us back: its index is empty"
         else:
-            why = "its index is empty: the nightly run reads its sitemaps"
+            why = "its index is empty: tonight's run reads its sitemaps"
         left.append({"source": source, "name": name, "why": why})
     partial: list[dict[str, str]] = []
     lacuerda = lacuerda_left_out(conn)
@@ -720,13 +720,13 @@ def _harptabs_left_out(app: WebApp, conn: sqlite3.Connection) -> tuple[str, str]
     from caracole.harptabs_index import index_state
 
     if not app.cfg.provider("harptabs").enabled:
-        return "off", "turned off in caracole.toml"
+        return "off", "off in caracole.toml"
     if conn.execute("SELECT 1 FROM harptabs_index LIMIT 1").fetchone() is None:
-        return "empty", "its index is empty: the nightly run reads its sitemap"
+        return "empty", "its index is empty: tonight's run reads its sitemap"
     state = index_state(conn)
     if state.read >= state.artists:
         return None
-    return "partial", (f"its artist pages are still being read: {state.read:,} of {state.artists:,} artists so far; "
+    return "partial", (f"its artist pages are being read: {state.read:,} of {state.artists:,} artists so far; "
                        "caracole harptabs --index reads the rest")
 
 
@@ -746,7 +746,7 @@ def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]]
     ug_empty = conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None
     looked.append({"source": "ug", "name": "Ultimate Guitar", "state": "empty" if ug_empty else "done",
                    "label": "UG: empty" if ug_empty else "UG ✓",
-                   "detail": UG_EMPTY if ug_empty else "Ultimate Guitar: caracole's copy of its index, searched whole."})
+                   "detail": UG_EMPTY if ug_empty else "UG: our copy of its index, searched whole."})
     for source, name in (("gtptabs", "gtptabs.com"), ("lacuerda", "LaCuerda"), ("musescore", "MuseScore"),
                          ("harptabs", "harptabs.com")):
         s = said.get(source)
@@ -760,11 +760,11 @@ def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]]
                            "detail": f"{name}'s {why.removeprefix('its ')}."})
             continue
         if s is None:
-            state, label, detail = "done", f"{name} ✓", f"{name}: caracole's copy of its index, searched whole."
+            state, label, detail = "done", f"{name} ✓", f"{name}: our copy of its index, searched whole."
         elif why.startswith("turned off"):
-            state, label, detail = "off", f"{name}: off", f"{name} is turned off in caracole.toml."
+            state, label, detail = "off", f"{name}: off", f"{name} is off in caracole.toml."
         elif "blocking" in why:
-            state, label, detail = "blocked", f"{name} blocked", why[:1].upper() + why[1:] + "."
+            state, label, detail = "blocked", f"{name} turned us back", why[:1].upper() + why[1:] + "."
         elif s in partial:
             read = letters_read(conn)
             run = 0
@@ -790,17 +790,17 @@ def _gametabs_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
     name = "gametabs.net"
     mark = {"source": "gametabs", "name": name}
     if not app.cfg.provider("gametabs").enabled:
-        return {**mark, "state": "off", "label": f"{name}: off", "detail": f"{name} is turned off in caracole.toml."}
+        return {**mark, "state": "off", "label": f"{name}: off", "detail": f"{name} is off in caracole.toml."}
     if conn.execute("SELECT 1 FROM gametabs_index LIMIT 1").fetchone() is None:
         return {**mark, "state": "empty", "label": f"{name}: empty",
-                "detail": f"{name}'s index is empty: the nightly run reads its sitemaps."}
+                "detail": f"{name}'s index is empty: tonight's run reads its sitemaps."}
     state = index_state(conn)
     if state.read < state.pages:
         return {**mark, "state": "partial", "label": f"{name}: {state.read:,} of {state.pages:,} games",
-                "detail": f"{name}'s game pages are still being read: {state.read:,} of {state.pages:,} so far; "
+                "detail": f"{name}'s game pages are being read: {state.read:,} of {state.pages:,} so far; "
                           "caracole gametabs --index reads the rest."}
     return {**mark, "state": "done", "label": f"{name} ✓",
-            "detail": f"{name}: caracole's copy of its index, searched whole."}
+            "detail": f"{name}: our copy of its index, searched whole."}
 
 
 def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],
@@ -880,7 +880,7 @@ def api_artist(app: WebApp, key: str, offset: str) -> Response:
             with closing(app.connect()) as conn:
                 return _artist_songs(app, conn, key, int(offset))
         except (sqlite3.Error, OSError) as e:
-            return json_response(503, {"error": f"The database can't be read: {e}"})
+            return json_response(503, {"error": f"Can't read the database: {e}"})
 
 
 def api_lacuerda_artist(app: WebApp, slug: str, *, name: str = "") -> Response:
@@ -904,7 +904,7 @@ def api_lacuerda_artist(app: WebApp, slug: str, *, name: str = "") -> Response:
                 hits = _lacuerda_rows(app, conn, lacuerda_songs(conn, named.slug)[:LACUERDA_SONGS], songs)
                 gtptabs = _gtptabs_songs(app, conn, named.artist)
         except (sqlite3.Error, OSError) as e:
-            return json_response(503, {"error": f"The database can't be read: {e}"})
+            return json_response(503, {"error": f"Can't read the database: {e}"})
     return json_response(200, {"source": "lacuerda", "slug": named.slug, "artist": named.artist, "url": named.url,
                                "group_key": _group_key(named.artist), "listed": named.songs, "total": named.known,
                                "read": named.known > 0, "gtptabs": gtptabs, "songs": hits, "library": library})
@@ -924,14 +924,14 @@ def api_harptabs_artist(app: WebApp, path: str) -> Response:
             with closing(app.connect()) as conn:
                 named = harptabs_artist(conn, path) if _HARP_ARTIST.fullmatch(path) else None
                 if named is None:
-                    return json_response(404, {"error": "harptabs.com's index has no such artist."})
+                    return json_response(404, {"error": "harptabs' index has no such artist."})
                 read = conn.execute("SELECT 1 FROM harptabs_artists WHERE path = ?", (path,)).fetchone() is not None
                 songs = list_songs(conn)
                 theirs = [LibraryHit(s, 100.0, "artist") for s in library_by_artist(songs, named.artist)]
                 library, _ = _rows(app, conn, theirs, [], songs)
                 hits = _harptabs_rows(app, conn, harptabs_songs(conn, path), songs)
         except (sqlite3.Error, OSError) as e:
-            return json_response(503, {"error": f"The database can't be read: {e}"})
+            return json_response(503, {"error": f"Can't read the database: {e}"})
     return json_response(200, {"source": "harptabs", "path": path, "artist": named.artist, "url": named.url,
                                "group_key": _group_key(named.artist), "listed": named.songs, "total": named.known,
                                "read": read, "songs": hits, "library": library})
@@ -945,13 +945,13 @@ def harptabs_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
 
     path = form.get("path", "").strip()
     if not _HARP_ARTIST.fullmatch(path):
-        raise Refused(400, "Not an artist", "Which artist? The form names no harptabs.com artist page.")
+        raise Refused(400, "Not an artist", "Which artist? The form names no harptabs artist page.")
     with app.db() as conn:
         named = harptabs_artist(conn, path)
     if named is None:
-        raise Refused(404, "No such artist", "harptabs.com's index has no such artist.")
-    job, _ = app.submit(f"Read the page of {named.artist} on harptabs.com", HARPTABS_ARTIST + path,
-                        harptabs_artist_steps(path, named.artist), display=f"{named.artist} on harptabs.com")
+        raise Refused(404, "No such artist", "harptabs' index has no such artist.")
+    job, _ = app.submit(f"Read {named.artist}'s page on harptabs", HARPTABS_ARTIST + path,
+                        harptabs_artist_steps(path, named.artist), display=f"{named.artist} on harptabs")
     with app._searching:
         app._reads.add(job.id)
     if wants_json:
@@ -971,7 +971,7 @@ def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
     slug, name = form.get("slug", "").strip(), " ".join(form.get("name", "").split())
     if name and not slug:
         if len(name) > LIMITS["artist"] or not artist_slug_candidates(name):
-            raise Refused(400, "Not an artist", "That name makes no LaCuerda artist page's address.")
+            raise Refused(400, "Not an artist", "That name makes no LaCuerda artist page.")
         display, key, who = name, LACUERDA_ARTIST + "name:" + name_key(name), name
     else:
         if not _SLUG.fullmatch(slug):
@@ -981,7 +981,7 @@ def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
         if named is None:
             raise Refused(404, "No such artist", "LaCuerda's index has no such artist.")
         display, key, who = named.artist, LACUERDA_ARTIST + slug, slug
-    job, _ = app.submit(f"Read the page of {display} on LaCuerda", key, lacuerda_artist_steps(who, display),
+    job, _ = app.submit(f"Read {display}'s page on LaCuerda", key, lacuerda_artist_steps(who, display),
                         display=f"{display} on LaCuerda")
     with app._searching:
         app._reads.add(job.id)
@@ -1034,27 +1034,26 @@ def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> R
     q = " ".join(form.get("q", "").split())
     by_hand = form.get("by_hand", "") == "1"
     if not q or len(q) > QUERY_LIMIT:
-        raise Refused(400, "Not a query", f"Which query? A search is 1 to {QUERY_LIMIT} characters.")
+        raise Refused(400, "Not a query", f"Which query? 1 to {QUERY_LIMIT} characters.")
     if not query_key(q):
-        raise Refused(400, "Not a query", f"LaCuerda's search reads only words of 4 letters or more: “{q}” has none.")
+        raise Refused(400, "Not a query", f"LaCuerda's search reads words of 4 letters or more: “{q}” has none.")
     with app.db() as conn:
         artists, songs = search_lacuerda(conn, q, songs=SITE_HITS)
         mine = search_library(conn, q, LIBRARY_HITS)
         said = _lacuerda_search_gate(app, conn, q, artists, songs, mine) if app.searches_lacuerda else None
     if said is None:
-        raise Refused(409, "Found already", f"Your library or LaCuerda's index has “{q}” already: no search "
+        raise Refused(409, "Found already", f"Your logbook or LaCuerda's index has “{q}” already: no search "
                                             "needed.")
     if said["state"] == "asked":
-        raise Refused(409, "Searched already", f"LaCuerda was asked for “{q}” within 30 days: what it answered is "
-                                               "in its index.")
+        raise Refused(409, "Searched already", f"LaCuerda was asked for “{q}” within 30 days: its answer is in "
+                                               "the index.")
     if said["state"] == "spent":
-        raise Refused(429, "Not now", "LaCuerda is cooling down after a block, or this hour's lookups to it are "
-                                      "spent: ask again later.")
+        raise Refused(429, "Not now", "LaCuerda turned us back, or no more asks this hour. Ask again later.")
     if said["state"] == "failed" and not by_hand:
-        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}: press Ask LaCuerda to ask anyway.")
+        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}. Ask LaCuerda asks anyway.")
     if said["state"] == "button" and not by_hand:
-        raise Refused(429, "Not by itself", f"This hour's {SEARCHES_PER_HOUR} searches the page sends by itself are "
-                                            "spent: press Ask LaCuerda to ask anyway.")
+        raise Refused(429, "Not by itself", f"This hour's {SEARCHES_PER_HOUR} automatic searches are spent. Ask "
+                                            "LaCuerda asks anyway.")
     job, _ = app.submit(f"Search LaCuerda for “{q}”", LACUERDA_SEARCH + said["key"],
                         lacuerda_search_steps(q, auto=not by_hand), display=f"“{q}” on LaCuerda")
     with app._searching:
@@ -1070,7 +1069,7 @@ def _artist_songs(app: WebApp, conn: sqlite3.Connection, key: str, offset: int) 
 
     named = index_artist(conn, key)
     if named is None:
-        return json_response(404, {"error": "The offline Ultimate Guitar index has no such artist."})
+        return json_response(404, {"error": "UG's index has no such artist."})
     hits, total = artist_songs(conn, key, limit=ARTIST_PAGE, offset=offset)
     songs = list_songs(conn)
     theirs = [LibraryHit(s, 100.0, "artist") for s in library_by_artist(songs, named.artist, key)]

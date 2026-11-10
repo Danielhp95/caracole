@@ -71,7 +71,8 @@ if TYPE_CHECKING:
 
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 SYNC_TAB = "#tab=sync"  # a sync's details: the library page's Sync tab, which follows it
-_AGREED = re.compile(r"^(\d+) units? the two agree on$")  # ``caracole peer sync``'s and ``take``'s agree stage, done
+# ``caracole peer sync``'s and ``take``'s agree stage, done (commands/peer.py: "3 entries the books agree on")
+_AGREED = re.compile(r"^(\d+) (?:units?|entry|entries) the books agree on$")
 
 
 ROUTES = (
@@ -120,11 +121,10 @@ def cancel(app: WebApp, form: dict[str, str]) -> Response:
         job = app.queue.cancel(job_id)
     except JobStarted as e:
         if e.state == "running":
-            raise Refused(409, "Running already", "That request has started, and caracole never stops a command "
-                                                  "halfway: it runs to its end.") from None
-        raise Refused(409, "Over already", "That request is over: there's nothing left to cancel.") from None
+            raise Refused(409, "Running already", "Already running. We never stop a command halfway.") from None
+        raise Refused(409, "Over already", "Already over: nothing to cancel.") from None
     if job is None:
-        raise Refused(404, "No such request", "That request isn't queued any more.")
+        raise Refused(404, "No such request", "No longer queued.")
     response = redirect(f"/{REQUESTS}")
     response.data = {"cancelled": job.id}
     return response
@@ -142,10 +142,10 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     job_id = _form_job(form)
     job = app.queue.job(job_id)
     if job is None:
-        raise Refused(404, "No such request", "caracole serve no longer remembers that request: ask for it again "
-                                              "from the library.")
+        raise Refused(404, "No such request", "caracole serve no longer remembers that entry. Ask again from the "
+                                              "logbook.")
     if job.active:
-        raise Refused(409, "Not over yet", "That request is still queued or running.")
+        raise Refused(409, "Not over yet", "Still queued or running.")
     steps = [(step.label, step.args) for step in job.steps]
     if job.song_key.startswith(LACUERDA_SEARCH):  # you ask for it now: by hand
         steps = [(label, tuple(arg for arg in args if arg != "--auto")) for label, args in steps]
@@ -172,7 +172,7 @@ def _form_job(form: dict[str, str]) -> int:
     """The request a form names (``job``); Refused (400) when it names none."""
     text = form.get("job", "").strip()
     if not (text.isascii() and text.isdigit()) or len(text) > 12:
-        raise Refused(400, "Not a request", "Which request? The form names none.")
+        raise Refused(400, "Not a request", "Which entry? The form names none.")
     return int(text)
 
 
