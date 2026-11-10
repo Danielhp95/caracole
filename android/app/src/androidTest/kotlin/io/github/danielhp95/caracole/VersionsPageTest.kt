@@ -36,8 +36,9 @@ import org.junit.runner.RunWith
  * top-level navigation to `/versions?…` carries the launch's cookie, the page is the server's own with its one form,
  * and the form posts with the form token: the request queued under the song's key, the page following it until it is
  * over, its words read from the song's state. With `-e server`, a sheet viewer of the computer's copy, in its sandbox
- * (an opaque origin), reaches the page by a plain GET of its own, as its versions' links do: the cookie, Lax, goes
- * with a top-level navigation from any page. Without `server` that part is skipped.
+ * (an opaque origin), reaches the page by a plain GET of its own, as its versions' links do (the song's pages made by
+ * the phone too, so the page knows its viewer): the cookie, Lax, goes with a top-level navigation from any page.
+ * Without `server` that part is skipped.
  */
 @RunWith(AndroidJUnit4::class)
 class VersionsPageTest {
@@ -108,15 +109,15 @@ class VersionsPageTest {
         assertTrue(outcome.text, outcome.ok)
         val manifest = Caracole.mirror(context).reload()!!
         val phone = Caracole.phone(context)
-        // A song of the copy with a UG version that is no sheet: its viewer taken for the phone's own (render.py's
-        // record, kv render:files:<id>), so the page knows its song, as it will once the phone writes it.
+        // A song of the copy with a UG version that is no sheet, its pages made by the phone too (PhoneRender: its
+        // viewer recorded, kv render:files:<id>), so the page knows its song; the copy's viewer is the one served.
         val (sheet, tab) = phone.parts.database.writeBlocking { db ->
             Songs.list(db).firstNotNullOf { song ->
                 val path = (SafeName.songFolder(song.artist, song.title).toList() + SheetVersions.SHEET_PAGE).joinToString("/")
                 val other = SheetVersions.inLibrary(db, song.id, phone.parts.config().rank)
                     .firstOrNull { !it.chosen && !it.kept && !it.gone }
                 if (other == null || manifest.entries.none { it.path == path }) return@firstNotNullOf null
-                db.kvSet("render:files:${song.id}", """{"sheet.html": {"sha256": "${"0".repeat(64)}", "size": 1}}""")
+                phone.render.render(db, listOf(song.id), null)
                 path to other.tabId
             }
         }

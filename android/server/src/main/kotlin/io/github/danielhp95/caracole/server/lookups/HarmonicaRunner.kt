@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.inbox.HarmonicaFile
+import io.github.danielhp95.caracole.core.inbox.HarmonicaFiles
 import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesError
@@ -13,7 +14,6 @@ import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
-import io.github.danielhp95.caracole.server.pages.Choices
 import io.github.danielhp95.caracole.server.pages.HarmonicaPage
 import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
 import kotlinx.serialization.json.JsonElement
@@ -149,7 +149,7 @@ class HarmonicaRunner(val parts: PhoneParts, private val readOverrides: (Db) -> 
 
     /** harmonica_cmd._tab: the song's harmonica tab [name], or its only one; a usage error else. */
     private fun tab(db: Db, song: SongRow, name: String?): HarmonicaFile {
-        val tabs = Choices.harmonicaFiles(db, song.id)
+        val tabs = HarmonicaFiles.of(db, song.id)
         if (tabs.isEmpty()) throw CommandExit(2, "${song.display} keeps no harmonica tab")
         if (name == null) {
             if (tabs.size > 1) {
@@ -214,7 +214,7 @@ class HarmonicaRunner(val parts: PhoneParts, private val readOverrides: (Db) -> 
     private fun show(db: Db, display: String, context: JobContext) {
         val overrides = LookupJobs.overrides(db, readOverrides)
         val song = LookupJobs.songNamed(parts, db, display, overrides)
-        val tabs = Choices.harmonicaFiles(db, song.id)
+        val tabs = HarmonicaFiles.of(db, song.id)
         val texts = tabs.map { it to HarmonicaPage.tabText(db, parts.store.libraryDir, song, it) }
         if (tabs.isEmpty()) return context.say("${song.display} keeps no harmonica tab.")
         for ((tab, text) in texts) {

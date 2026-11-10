@@ -1,15 +1,9 @@
 package io.github.danielhp95.caracole.server.pages
 
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.inbox.HarmonicaFile
-import io.github.danielhp95.caracole.core.inbox.HarmonicaFiles
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
-import io.github.danielhp95.caracole.core.py.PyInt
-import io.github.danielhp95.caracole.core.py.PyRe
-import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.server.http.Body
@@ -19,9 +13,6 @@ import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
 import java.math.BigDecimal
@@ -36,11 +27,8 @@ import java.nio.file.attribute.BasicFileAttributes
  * What the versions page and the page of a harmonica tab's readings share (web/versions_routes.py and
  * web/harmonica_routes.py): pages.page with a head of its own (a page that follows a request reloads every
  * [REFRESH] seconds), an address read as parse_qsl reads it, the songs a library folder is, the files the phone wrote
- * for a song, a kept file read, and the job a page shows; each in Python's words.
- *
- * Phase A: waiting on lane phone-render. Its WrittenPages.written and HarmonicaFiles.of and page are the skeleton's
- * TODO until it lands: [written], [harmonicaFiles] and [harmonicaPage] read the same records as Python does here
- * (render.written_file's kv `render:files:<id>`, inbox.harmonica_files' rows); Phase B calls the producers alone.
+ * for a song (WrittenPages, render.written_file's), a kept file read, and the job a page shows; each in Python's
+ * words.
  */
 internal object Choices {
     /** pages.REFRESH: seconds between reloads of a page that follows a request while it waits or runs. */
@@ -120,25 +108,7 @@ internal object Choices {
     }
 
     /** render.written_file: whether the phone recorded writing the file [name] in the song's folder. */
-    fun written(db: Db, songId: Long, name: String): Boolean = try {
-        WrittenPages.written(db, songId, name) != null
-    } catch (_: NotImplementedError) {
-        writtenHere(db, songId, name) // Phase A: waiting on lane phone-render
-    }
-
-    /** inbox.harmonica_files of the song. */
-    fun harmonicaFiles(db: Db, songId: Long): List<HarmonicaFile> = try {
-        HarmonicaFiles.of(db, songId)
-    } catch (_: NotImplementedError) {
-        harmonicaFilesHere(db, songId) // Phase A: waiting on lane phone-render
-    }
-
-    /** inbox.harmonica_page: "harmonica-1.txt" → "harmonica-1.html"; null for a name that is no kept tab's. */
-    fun harmonicaPage(name: String): String? = try {
-        HarmonicaFiles.page(name)
-    } catch (_: NotImplementedError) {
-        PyRe.fullmatch(HARMONICA_FILE, name)?.let { "harmonica-${it.groupValues[1]}.html" } // Phase A: phone-render
-    }
+    fun written(db: Db, songId: Long, name: String): Boolean = WrittenPages.written(db, songId, name) != null
 
     /** library.read_regular of a kept file: its bytes, never through a symbolic link in its place, or null for
      * anything but a regular file (or one that can't be read). */
@@ -191,41 +161,5 @@ internal object Choices {
             out.append(c)
         }
         return (if (n < 0) "-" else "") + out
-    }
-
-    // --- Phase A's readings, Python's own ------------------------------------------------------------------------
-
-    private val HARMONICA_FILE: Regex = PyRegex.compile("""harmonica-(\d+)\.txt""")
-
-    private fun writtenHere(db: Db, songId: Long, name: String): Boolean {
-        val text = db.kvGet("render:files:$songId") ?: return false
-        val record = try {
-            PyJson.loads(text)
-        } catch (_: IllegalArgumentException) {
-            return false
-        } catch (_: IOException) {
-            return false
-        } as? JsonObject ?: return false
-        val entry = record[name] as? JsonObject ?: return false
-        val sha = entry["sha256"] as? JsonPrimitive
-        val size = entry["size"] as? JsonPrimitive
-        return sha != null && sha.isString && size != null && !size.isString && size.longOrNull != null &&
-            size.content.all { it in '0'..'9' || it == '-' }
-    }
-
-    private fun harmonicaFilesHere(db: Db, songId: Long): List<HarmonicaFile> {
-        fun text(name: String) =
-            "CASE WHEN json_valid(v.raw) AND json_type(v.raw, '$.$name') IN ('text', 'object', 'array') " +
-                "THEN json_extract(v.raw, '$.$name') END"
-        val found = db.query("SELECT f.song_id, f.name, f.path, ${text("key")}, ${text("harp")} FROM files f " +
-                                 "JOIN versions v ON v.id = f.version_id WHERE v.kind = ? AND f.song_id = ?",
-                             HarmonicaFiles.KIND, songId) { row ->
-            val name = row.text(1)!!
-            val m = PyRe.fullmatch(HARMONICA_FILE, name) ?: return@query null
-            val n = PyInt.parse(m.groupValues[1]) ?: return@query null
-            n to HarmonicaFile(row.long(0)!!, name, row.text(2)!!, if (n.bitLength() < 32) n.toInt() else Int.MAX_VALUE,
-                               row.text(3), row.text(4))
-        }.filterNotNull()
-        return found.sortedBy { it.first }.map { it.second }
     }
 }

@@ -1,6 +1,16 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.http.HttpAnswer
+import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.Kept
+import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.FakeTransport
+import io.github.danielhp95.caracole.core.ug.SheetVersions
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
+import kotlinx.serialization.json.JsonObject
+import java.io.File
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyUrl
@@ -49,6 +59,9 @@ class VersionsRoutesTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var phone: Phone
 
+    /** The sites the phone reaches: every one refused, unless a test answers one. */
+    @Volatile private var sites: Transport = RefusingTransport
+
     private object NoAddress : SyncSettings {
         override val address: String? = null
         override fun remember(address: String) = Unit
@@ -61,7 +74,7 @@ class VersionsRoutesTest {
             Fixtures.loadRecords(db, ChoicesReplay.scene(ChoicesReplay.VERSIONS, "base"), library)
         }
         phone = Phone(PhoneDeps(database, library, tmp.newFolder("state"), null, scope, NoAddress, TestApp.SECRET,
-                                TestApp.CSRF, transport = { RefusingTransport }, searchesLacuerda = false))
+                                TestApp.CSRF, transport = { sites }, searchesLacuerda = false))
     }
 
     @After fun down() {
@@ -175,6 +188,33 @@ class VersionsRoutesTest {
         assertEquals(emptyList(), pins(), "the sheet's pin out")
         assertTrue("Done: caracole picks the sheet again." in navigate(cleared.header("Location")!!).text)
         assertEquals(409, post("/versions/clear", "sheet" to SHEET).status, "no pin of its sheet to go back from")
+    }
+
+    @Test fun `keep it keeps the version beside the sheet with its page, and the page opens it`() {
+        // UG's version 85053 of the song (tests/fixtures/ug/tab_chords.html, at its own address), not kept yet
+        val url = "https://tabs.ultimate-guitar.com/tab/85053"
+        phone.parts.database.writeBlocking { db ->
+            Versions.upsert(db, "ug", "85053", ligera().id, "sheet", "chords", 4.54038, 7, 6, null, url,
+                            JsonObject(emptyMap()), "2026-11-03T10:00:00Z")
+        }
+        val ug = FakeTransport(mapOf("GET $url" to HttpAnswer(200, listOf("content-type" to "text/html; charset=utf-8"),
+                                                               Corpus.fixture("ug/tab_chords.html"))))
+        sites = ug
+        val posted = post("/versions/keep", "sheet" to SHEET, "tab" to "85053")
+        assertEquals(303, posted.status, posted.text)
+        val job = done(jobOf(posted.header("Location")!!))
+        assertEquals(Job.DONE, job.state, job.output.toString())
+        assertEquals(listOf("GET $url"), ug.said, "one tab page, at the lookup pace")
+        val (txt, data, page) = SheetVersions.versionNames("85053")
+        phone.parts.database.read { db ->
+            val kept = Kept.keptFiles(db, ligera().id).map { it.name }
+            assertTrue(txt in kept && data in kept, "$kept")
+            assertTrue(WrittenPages.written(db, ligera().id, page) != null, "its page written and recorded")
+        }
+        assertTrue(File(phone.parts.store.folderOf(ligera()), page).isFile)
+        val said = navigate(posted.header("Location")!!).text
+        assertTrue("Done: it is kept beside the sheet." in said, said)
+        assertTrue("<a class=\"btn primary\" href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/$page\">Open it</a>" in said)
     }
 
     private companion object {

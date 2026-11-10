@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.server.pages
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.inbox.HarmonicaFile
+import io.github.danielhp95.caracole.core.inbox.HarmonicaFiles
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Kept
@@ -99,7 +100,7 @@ internal object HarmonicaPage {
         val overrides = readOverrides()
         val song = Choices.songsInFolder(db, parts.dropLast(1)).firstOrNull { Choices.written(db, it.id, parts.last()) }
             ?: throw NO_TAB
-        val tab = Choices.harmonicaFiles(db, song.id).firstOrNull { Choices.harmonicaPage(it.name) == parts.last() }
+        val tab = HarmonicaFiles.of(db, song.id).firstOrNull { it.page == parts.last() }
             ?: throw NO_TAB
         val text = tabText(db, libraryDir, song, tab) ?: throw NO_TAB
         val pin = overrides.harmonica[song.key]?.get(tab.name)

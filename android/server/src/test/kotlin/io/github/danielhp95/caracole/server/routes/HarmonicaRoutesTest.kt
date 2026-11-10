@@ -32,6 +32,7 @@ import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.replays.ChoicesReplay
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -131,6 +132,11 @@ class HarmonicaRoutesTest {
         assertEquals(listOf("harmonica", "--tab=harmonica-1.txt", "--as=letters", "--", "Cowboy Bebop", "Spokey Dokey"),
                      job.steps.single().args)
         assertEquals(mapOf("harmonica-1.txt" to JsonPrimitive("letters")), pinned())
+        // the tab's page made again (PhoneRender), read as you set it
+        val tabPage = File(phone.parts.store.folderOf(spokey()), "harmonica-1.html")
+        assertTrue(tabPage.isFile)
+        assertTrue("\"source\":\"pinned\"" in tabPage.readText(), "the page's reading is the pin")
+        database.read { db -> assertTrue(WrittenPages.current(db, spokey().id, "harmonica-1.html")) }
         val after = navigate(location)
         assertTrue("Done: read as b blow · d draw · * bend · - joins, as you set it." in after.text, after.text)
         assertTrue("Back to caracole&#x27;s guess" in after.text)
