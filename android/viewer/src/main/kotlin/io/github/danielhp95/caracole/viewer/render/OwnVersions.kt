@@ -110,6 +110,8 @@ object OwnVersions {
             // a sheet that can't be read (RenderError), an entry or a key that isn't one (Python's ValueError and
             // UnicodeDecodeError), or a sheet the viewer's code can't read (a bug): the entry stays as it is
             null
+        } catch (_: StackOverflowError) { // Python's RecursionError is an Exception
+            null
         }
     }
 

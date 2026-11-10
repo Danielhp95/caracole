@@ -20,19 +20,23 @@ the same library.
 
 The cases (``CASES``) between them reach: a UG sheet and its key; the versions kept beside the sheet (their pages,
 one dropped once it leaves), the song's UG versions listed with the one and a ``[pin]``, a Guitar Pro file linked, an
-auto sheet beside the human one (no export, its shapes and swaps not the song's); harmonica tabs (their pages, the
-harp the sheet's viewer starts on, each page dropped once its tab leaves or its text is gone); an own version kept by
-a major letter alone on a sheet now read minor, rewritten once (kv ``keys:own_versions``), and one moved by
-``[transpose]``; an auto sheet that takes lyrics that came after it (``with_plain_lyrics``, its version's ``raw``
-lyrics "plain"), one made from a YouTube video's audio (the video drawn from the icons, its credit off the viewer);
-Chinese sheets in Simplified and in Traditional characters (the phone's script record); LaCuerda's sheet; a sheet that
-can't be read (the song failed); a song with no sheet, and one ignored.
+auto sheet beside the human one (no export, the song's ``[version]`` there without its shapes and swaps), then retired
+(its .cho and page gone, and the PDF names of it, whatever is there); harmonica tabs (their pages, the harp the
+sheet's viewer starts on, each page dropped once its tab leaves or its text is gone); an own version kept by a major
+letter alone on a sheet now read minor, rewritten once (kv ``keys:own_versions``), and one moved by ``[transpose]``;
+an auto sheet that takes lyrics that came after it (``with_plain_lyrics``, its version's ``raw`` lyrics "plain"), one
+beside a human sheet that takes none, one made from a YouTube video's audio (the video drawn from the icons, its
+credit off the viewer); Chinese sheets in Simplified and in Traditional characters (the phone's script record);
+LaCuerda's sheet; a sheet that can't be read (the song failed); a song with no sheet, and one ignored; a library that
+holds the computer's PDFs and their records (never linked, read or deleted: info.json's ``render`` null), whose human
+sheet then leaves (its .cho and page gone, the PDFs left).
 
 Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -240,9 +244,10 @@ def case_versions(w: World) -> list[dict]:
     _keep(w, song, gtp, "guitar-1.gp5", b"FICHIER GUITAR PRO v5.00 synthetic")
     auto_sheet(w, song, synced=SYNCED)
     w.overrides('[pin]\n"Eagles - Hotel California" = ['
-                f'"{UG}eagles/hotel-california-chords-46190"]\n')
+                f'"{UG}eagles/hotel-california-chords-46190"]\n'
+                '\n[version]\n"Eagles - Hotel California" = "key=Am&capo=2&alt=E7.E&at=Am.x-0-2-2-1-0"\n')
     return [{"render": None}, {"drop": [song.id, "version-46192.txt"]}, {"drop": [song.id, "version-46192.json"]},
-            {"render": [song.id]}]
+            {"render": [song.id]}, {"drop": [song.id, songs.AUTO_SHEET]}, {"render": [song.id]}]
 
 
 def case_harmonica(w: World) -> list[dict]:
@@ -279,6 +284,10 @@ def case_auto_sheets(w: World) -> list[dict]:
     video = add_song(w.conn, "Placeholder Band", "From A Video", added_at="2026-10-02T00:00:00Z")
     auto_sheet(w, video, synced=SYNCED, raw={"youtube": VIDEO},
                source=youtube_credit(VIDEO["title"], VIDEO["channel"], VIDEO["id"]))
+    both = add_song(w.conn, "Placeholder Band", "Both Sheets", added_at="2026-10-03T00:00:00Z")
+    ug_sheet(w, both, SODA, tab=93002, tonality="G")
+    auto_sheet(w, both, synced=None, raw={"lyrics": "none"}, source="Audio from a purchase (synthetic)")
+    store_lyrics(w, both, "words that came later\nbeside a human sheet")
     return [{"render": None}]
 
 
@@ -311,6 +320,19 @@ def case_other_sheets(w: World) -> list[dict]:
     return [{"render": None}]
 
 
+def case_computers_pdfs(w: World) -> list[dict]:
+    song = add_song(w.conn, "Placeholder Band", "Sheets Leave")
+    ug_sheet(w, song, SODA, tab=93001, tonality="G")
+    folder = w.folder(song)
+    (folder / "sheet.pdf").write_bytes(b"%PDF-1.4 the computer's (synthetic)\n")
+    (folder / songs.TRADITIONAL_PDFS[songs.HUMAN_SHEET]).write_bytes(b"%PDF-1.4 the computer's, Traditional\n")
+    record = {"source_sha": "0" * 64, "transpose": 0, "font": None, "fonts": None, "style": "s", "pdf": "sheet.pdf",
+              "pdf_text": 1, "printed_sha": "0" * 64, "pdf_sha256": "0" * 64, "pdf_size": 36}
+    db.kv_set_json(w.conn, f"render:{song.id}", record)
+    db.kv_set_json(w.conn, f"render:{song.id}:trad", {**record, "pdf": songs.TRADITIONAL_PDFS[songs.HUMAN_SHEET]})
+    return [{"render": None}, {"drop": [song.id, "sheet.txt"]}, {"drop": [song.id, "sheet.json"]}, {"render": None}]
+
+
 CASES = {
     "ug_sheet": case_ug_sheet,
     "versions": case_versions,
@@ -319,6 +341,7 @@ CASES = {
     "auto_sheets": case_auto_sheets,
     "chinese": case_chinese,
     "other_sheets": case_other_sheets,
+    "computers_pdfs": case_computers_pdfs,
 }
 
 
@@ -370,9 +393,12 @@ def _out(w: World, made: phone.PhoneRendered) -> dict[str, Any]:
     return {"failed": made.failed, "files": files, "kv": kv, "units": units, "info": info}
 
 
-def _assert_phone_writes(out: dict[str, Any]) -> None:
-    """What the phone never writes: a PDF, a PDF's record, the to-do page's record."""
-    assert not [p for p, _, _ in out["files"] if p.endswith(".pdf")], out["files"]
+def _assert_phone_writes(out: dict[str, Any], fixture: list[dict]) -> None:
+    """What the phone never writes: a PDF (those the fixture held stay as they were), a PDF's record in info.json."""
+    held = {r["file"]: base64.b64decode(r["base64"]) for r in fixture if r.get("file", "").endswith(".pdf")}
+    pdfs = {p: sha for p, sha, _ in out["files"] if p.endswith(".pdf")}
+    assert pdfs == {p: hashlib.sha256(data).hexdigest() for p, data in held.items() if p in pdfs}, out["files"]
+    assert set(pdfs) <= set(held), out["files"]
     for path, text in out["info"].items():
         assert json.loads(text)["render"] is None, path
 
@@ -387,7 +413,7 @@ def run_case(root: Path, name: str) -> dict[str, Any]:
         for step in steps:
             if "render" in step:
                 out = _out(w, phone.phone_render(w.conn, w.cfg, song_ids=step["render"]))
-                _assert_phone_writes(out)
+                _assert_phone_writes(out, fixture)
                 outs.append(out)
             elif "drop" in step:
                 song_id, file = step["drop"]
@@ -420,7 +446,7 @@ def _names(out: dict[str, Any]) -> set[str]:
 
 
 def test_a_version_page_and_a_tab_page_go_once_they_leave(records):
-    first, last = records["versions"]["out"]
+    first, last, _ = records["versions"]["out"]
     assert {"version-46191.html", "version-46192.html", "sheet.html", "sheet (auto).html"} <= _names(first)
     assert "version-46192.html" not in _names(last) and "version-46191.html" in _names(last)
     first, last = records["harmonica"]["out"]
@@ -459,6 +485,28 @@ def test_the_phone_records_each_songs_script_and_skips_what_it_must(records):
     assert out["failed"] == ["Placeholder Band - Unreadable Sheet"]
     assert not [p for p, _, _ in out["files"] if "Ignored Song" in p and not p.endswith((".txt", ".json"))]
     assert [p for p, _, _ in out["files"] if p.endswith("Nothing Kept/info.json")]
+
+
+def test_an_auto_sheet_retires_and_a_human_sheet_leaves_as_on_the_phone(records):
+    *_, retired = records["versions"]["out"]
+    assert not {"sheet (auto).cho", "sheet (auto).html"} & _names(retired) and "sheet.html" in _names(retired)
+    first, gone = records["computers_pdfs"]["out"]
+    pdfs = {"sheet.pdf", "sheet (Traditional).pdf"}
+    assert pdfs | {"sheet.cho", "sheet.html"} <= _names(first)
+    assert pdfs <= _names(gone) and not {"sheet.cho", "sheet.html"} & _names(gone)
+    for out in (first, gone):
+        assert all(json.loads(t)["render"] is None for t in out["info"].values())
+
+
+def test_an_auto_sheet_beside_a_human_one_takes_no_lyrics(records):
+    fixture, _ = records["auto_sheets"]["args"]
+    (out,) = records["auto_sheets"]["out"]
+    before = {r["file"]: base64.b64decode(r["base64"]) for r in fixture if "file" in r}
+    after = {p: sha for p, sha, _ in out["files"]}
+    auto = next(p for p in before if p.endswith("Both Sheets/sheet (auto).txt"))
+    assert after[auto] == hashlib.sha256(before[auto]).hexdigest()
+    raws = [json.loads(r["row"]["raw"]) for r in fixture if r.get("table") == "versions"]
+    assert raws.count({"lyrics": "none"}) == 1  # its version's lyrics stay "none"
 
 
 def test_the_vectors_are_within_reason():

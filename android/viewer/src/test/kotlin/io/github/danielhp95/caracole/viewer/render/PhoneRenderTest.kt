@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.Corpus
@@ -25,7 +26,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -186,12 +186,46 @@ class PhoneRenderTest {
         }
         assertEquals(assets.sorted(), RenderBuild.ASSETS.sorted())
         val data = File(conformance, "data/caracole")
-        val read = listOf("viewer", "hanzi", "pinyin").flatMap { folder ->
+        val read = RenderBuild.FOLDERS.flatMap { folder ->
             File(data, folder).listFiles()!!.filter { it.isFile }.map { "$folder/${it.name}" }
-        }
+        } + listOf("page/empty_library.json", "page/icon.json")
         assertEquals(read.sorted(), RenderBuild.DATA.sorted())
         assertEquals(RenderBuild.of("0.1.0"), RenderBuild.of("0.1.0"))
         assertNotEquals(RenderBuild.of("0.1.0"), RenderBuild.of("0.1.1"))
+    }
+
+    /** An APK's entries, as a zip: each name with its bytes. */
+    private fun apk(vararg entries: Pair<String, String>): File {
+        val file = File(tmp.newFolder(), "base.apk")
+        java.util.zip.ZipOutputStream(file.outputStream()).use { zip ->
+            for ((name, text) in entries) {
+                zip.putNextEntry(java.util.zip.ZipEntry(name))
+                zip.write(text.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        return file
+    }
+
+    @Test
+    fun onThePhoneTheBuildIsTheApksCodeAndDataSoANewApkMakesThePagesAgainAtTheSameVersion() {
+        val one = apk("classes.dex" to "code", "caracole/viewer/viewer.css" to "css", "res/layout.xml" to "x")
+        val fixed = apk("classes.dex" to "code fixed", "caracole/viewer/viewer.css" to "css", "res/layout.xml" to "x")
+        val retabled = apk("classes.dex" to "code", "caracole/viewer/viewer.css" to "css",
+                           "caracole/unicode/case.txt" to "more", "res/layout.xml" to "x")
+        val other = apk("classes.dex" to "code", "caracole/viewer/viewer.css" to "css", "res/layout.xml" to "y")
+        assertEquals(listOf("caracole/viewer/viewer.css 3 ${java.util.zip.CRC32().apply { update("css".toByteArray()) }.value.toString(16)}",
+                            "classes.dex 4 ${java.util.zip.CRC32().apply { update("code".toByteArray()) }.value.toString(16)}"),
+                     RenderBuild.packed(one))
+        assertNotEquals(RenderBuild.of("0.1.0", one), RenderBuild.of("0.1.0", fixed))
+        assertNotEquals(RenderBuild.of("0.1.0", one), RenderBuild.of("0.1.0", retabled))
+        assertEquals(RenderBuild.of("0.1.0", one), RenderBuild.of("0.1.0", other)) // what no page is made from
+        assertNotEquals(RenderBuild.of("0.1.0", one), RenderBuild.of("0.1.1", one))
+        // a jar of classes (a JVM's) is no APK: the files the page builder reads are hashed, as with no archive
+        val jar = apk("io/github/X.class" to "c", "caracole/viewer/viewer.css" to "css")
+        assertNull(RenderBuild.packed(jar))
+        assertEquals(RenderBuild.of("0.1.0", null), RenderBuild.of("0.1.0", jar))
+        assertEquals(RenderBuild.of("0.1.0"), RenderBuild.of("0.1.0", null)) // the tests' classes are in a folder
     }
 
     // --- which songs the phone owes ---------------------------------------------------------------------------------
@@ -219,10 +253,40 @@ class PhoneRenderTest {
         }
     }
 
-    // --- the whole pass, once the page builders have landed -----------------------------------------------------------
+    @Test
+    fun atTheStartThePhoneOwesPagesForASongNoPassOfThisBuildMadeAndATakeFindsThoseThatMoved() = database().use { database ->
+        val library = tmp.newFolder("library")
+        val render = PhoneRender(database, library, null, "0.1.0")
+        assertFalse("a library with no song owes no page", render.stale())
+        load(database, library, "own_versions")
+        assertTrue("songs no pass made", render.stale())
+        assertTrue("a take that brought them owes their pages", render.afterSync())
+        render.renderStale(between = {})
+        assertFalse(render.stale())
+        assertFalse(render.afterSync())
+        // a change to a song moves its unit: the start doesn't read each song's digest, a take's check does, and
+        // owes the pages until a pass ends, an app stopped before it ran included
+        database.writeBlocking { db -> version(db, 1, "5", "chords") }
+        assertFalse(render.stale())
+        assertTrue(render.afterSync())
+        assertTrue(render.stale())
+        assertEquals(listOf(1L), database.read { db -> render.owed(db).map { it.id } })
+        render.renderStale(between = {})
+        assertFalse(render.stale())
+        // owe: a change on the phone that makes no page of its song asks for the next pass
+        database.writeBlocking { db -> render.owe(db) }
+        assertTrue(render.stale())
+        render.renderStale(between = {})
+        assertFalse(render.stale())
+        // a new build owes every page
+        val next = object : PhoneRender(database, library, null, "0.1.0") {
+            override fun build(): String = "another build"
+        }
+        assertTrue(next.stale())
+        assertEquals(3, database.read { db -> next.owed(db).size })
+    }
 
-    /** Phase A guard: waiting on lanes pages, harmonica-page and version-progressions (RenderReplay.landed). */
-    private fun builders() = assumeTrue("waiting on lanes pages, harmonica-page and version-progressions", RenderReplay.landed)
+    // --- the whole pass ---------------------------------------------------------------------------------------------
 
     /** A case's fixture from vectors/viewer/render.jsonl, in [database] and [library]. */
     private fun load(database: Database, library: File, case: String) {
@@ -232,7 +296,6 @@ class PhoneRenderTest {
 
     @Test
     fun aLookupsPdfStageMakesTheSongsPagesAndAgainWritesNothing() = database().use { database ->
-        builders()
         val library = tmp.newFolder("library")
         load(database, library, "ug_sheet")
         val render = PhoneRender(database, library, null, "0.1.0")
@@ -248,7 +311,6 @@ class PhoneRenderTest {
 
     @Test
     fun theRenderJobYieldsBetweenSongsAndPassesOverOneALookupMadeMeanwhile() = database().use { database ->
-        builders()
         val library = tmp.newFolder("library")
         load(database, library, "own_versions")
         val render = PhoneRender(database, library, null, "0.1.0")
@@ -268,18 +330,59 @@ class PhoneRenderTest {
 
     @Test
     fun aSongTheMirrorServesAtItsDigestGetsItsProgressionsAloneAndThePhonesOwnPagesGo() = database().use { database ->
-        builders()
         val library = tmp.newFolder("library")
         load(database, library, "ug_sheet")
-        val render = PhoneRender(database, library, mirror(database), "0.1.0")
-        database.writeBlocking { db -> render.render(db, listOf(1L), null) }
         val folder = File(library, "Soda Stereo/De Música Ligera")
+        // the phone made the song's pages (the mirror didn't serve them yet)
+        database.writeBlocking { db -> PhoneRender(database, library, null, "0.1.0").render(db, listOf(1L), null) }
+        assertTrue(File(folder, "sheet.html").isFile && File(folder, "sheet.cho").isFile)
+        assertEquals(setOf("sheet.cho", "sheet.html"), database.read { db -> WrittenPages.record(db, 1).keys })
+        // a sync brings the computer's pages of the song as the phone holds it: the phone's own go, as written
+        val render = PhoneRender(database, library, mirror(database), "0.1.0")
+        File(folder, "info.json").delete()
+        database.writeBlocking { db -> render.render(db, listOf(1L), null) }
         assertFalse(File(folder, "sheet.html").exists())
+        assertFalse(File(folder, "sheet.cho").exists())
+        assertTrue("its info.json as the phone holds the song now", File(folder, "info.json").isFile)
         database.read { db ->
             assertTrue(WrittenPages.record(db, 1).isEmpty())
             assertTrue(db.kvGet("render:progressions:1") != null)
             assertEquals(Units.digestOf(db, RenderNames.unitOf(Songs.byId(db, 1)!!.key)), WrittenPages.rendered(db, 1)!!.unit)
         }
+    }
+
+    @Test
+    fun aSongWhosePassFailsOnABugCostsTheOthersNothingAndIsStampedAllTheSame() = database().use { database ->
+        val library = tmp.newFolder("library")
+        load(database, library, "own_versions")
+        // the Moved Song's version holds a raw that is no JSON object: reading it is a bug (render.py's would stop)
+        val broken = database.writeBlocking { db ->
+            db.execute("UPDATE versions SET raw = '[]' WHERE tab_id = '85055'")
+            db.one("SELECT song_id FROM versions WHERE tab_id = '85055'") { it.long(0)!! }!!
+        }
+        val render = PhoneRender(database, library, null, "0.1.0")
+        var betweens = 0
+        val made = render.renderStale(between = { betweens++ })
+        assertEquals(2, betweens)
+        assertEquals(setOf(broken), made.failed.keys)
+        val why = made.failed.getValue(broken)
+        assertTrue(why, why.startsWith("Placeholder Band - Moved Song: ${RenderNames.BUG}: "))
+        assertEquals(2, made.written)
+        assertTrue(File(library, "Eagles/Hotel California/sheet.html").isFile)
+        assertTrue("the failed song too: a new build tries again", database.read { db -> render.owed(db).isEmpty() })
+        assertFalse(render.stale())
+    }
+
+    @Test
+    fun theLookupsPdfStageMakesItsSongsPagesThroughTheSeam() = database().use { database ->
+        val library = tmp.newFolder("library")
+        load(database, library, "ug_sheet")
+        val render = PhoneRender(database, library, null, "0.1.0")
+        val pages = render.seam
+        assertTrue(pages === render)
+        val made = database.writeBlocking { db -> pages.render(db, listOf(1L), null) }
+        assertEquals(RenderStats(written = 1), made)
+        assertEquals(RenderStats(unchanged = 1), database.writeBlocking { db -> pages.render(db, listOf(1L), null) })
     }
 
     /** A mirror holding the song's sheet.html at its unit's digest now, as a sync leaves one. */

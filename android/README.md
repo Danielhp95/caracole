@@ -383,9 +383,11 @@ the computer's render does. No page links a PDF: the phone makes none.
 For every song, those the computer's pages serve too, the phone records what the library page finds it by: the
 progressions its sheet plays and whether its words are Chinese.
 
-A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync, and when the
-app starts with a new version, the phone makes the pages it owes in the background, a request of the Requests tab
-("Make the pages again"), which lets a lookup asked for meanwhile go first, between two songs.
+A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync that changed
+songs, and when the app starts as a new build (any APK whose code or tables differ, whatever its version says), the
+phone makes the pages it owes in the background, a request of the Requests tab ("Make the pages again"), which lets a
+lookup asked for meanwhile go first, between two songs. A song whose pages can't be made says why on that request, and
+costs the other songs nothing; it is tried again once the song changes or a new build is installed.
 
 On the emulator: `android/scripts/device-test.sh --area render`.
 

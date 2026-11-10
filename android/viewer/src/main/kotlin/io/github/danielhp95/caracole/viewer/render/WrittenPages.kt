@@ -30,10 +30,10 @@ data class Rendered(val unit: String, val build: String, val script: String?)
  *
  * kv `render:files:<song id>` is render.py's (`_written`, `_note_written`, `_forget_written`): `{name: {"sha256",
  * "size"}}`, each .cho and page in the order first written, an entry that says neither left out (render.written_entry);
- * the phone's entries also name `unit`, the song unit's digest the page was made at (Units.digestOf), the same for
- * every page of a pass over the song ([restamp]). kv `render:<song id>:phone` is the phone's alone ([Rendered]); a
- * songbook's, kv `songbook:<folder>`, is songbook.py's `{"inputs": {file: digest}, "files": {file: {"sha256",
- * "size"}}}`. Every write is the caller's, inside Database.write.
+ * the phone's entries also name `unit`, the song unit's digest the page was made at (Units.digestOf), each page a pass
+ * writes or finds as written noted at it ([note]), one it didn't keeping its own. kv `render:<song id>:phone` is the
+ * phone's alone ([Rendered]); a songbook's, kv `songbook:<folder>`, is songbook.py's `{"inputs": {file: digest},
+ * "files": {file: {"sha256", "size"}}}`. Every write is the caller's, inside Database.write.
  */
 object WrittenPages {
     /** _written: the song's record, its odd entries left out. */
@@ -84,7 +84,9 @@ object WrittenPages {
         save(db, songId, written)
     }
 
-    /** Every entry of the song's record made at [unitDigest]: a pass over the song made each page it keeps at it. */
+    /** Every entry of the song's record made at [unitDigest], for a caller that knows each page it records is of the
+     * song at that digest (a pass over the song notes its pages one by one instead: one it couldn't make keeps the
+     * digest it was made at, so it is never served as the song's now). */
     fun restamp(db: Db, songId: Long, unitDigest: String) {
         val written = record(db, songId)
         if (written.isEmpty()) return

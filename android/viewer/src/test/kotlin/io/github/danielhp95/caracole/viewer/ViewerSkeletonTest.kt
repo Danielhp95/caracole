@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.viewer
 
 import io.github.danielhp95.caracole.core.lookup.RenderStats
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.testing.Replays
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.viewer.chinese.OpenCC
@@ -90,14 +89,14 @@ class ViewerSkeletonTest {
         assertNull(BookSong("T", "A").start)
     }
 
-    @Test fun thePhonesRenderIsNeutralUntilItsLaneLands() {
+    @Test fun thePhonesRenderIsTheLookupsPdfStageAndAnEmptyLibraryOwesNoPage() {
         TestDb.fresh(tmp.root).use { database ->
             val render = PhoneRender(database, File(tmp.root, "library"), null, "0.1.0")
-            assertEquals(RenderStats(), database.read { db -> render.render(db, listOf(1L, 2L), null) })
-            // The lookup's pdf stage is NONE while the render is neutral, so it says get.py's no-PDF words.
-            assertSame(SongPages.NONE, render.seam)
-            assertFalse(render.stale())
-            assertFalse(render.afterSync(), "a take owes no page while the render is neutral")
+            assertEquals(RenderStats(), database.writeBlocking { db -> render.render(db, listOf(1L, 2L), null) })
+            // The lookup's pdf stage is the render itself, once its lane has landed (phone-render).
+            assertSame(render, render.seam)
+            assertFalse(render.stale(), "a library with no song owes no page")
+            assertFalse(render.afterSync(), "nor does a take that brought none")
         }
         assertEquals("x", Written("x", 1, "d").sha256)
     }

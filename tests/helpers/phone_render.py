@@ -7,12 +7,16 @@ with the computer's own pages, which link their PDFs)::
     made = phone_render(conn, cfg, song_ids=[song.id])  # what PhoneRender.render writes for those songs
 
 ``phone_render`` runs ``render.render_all`` as it is, overrides.toml read as the phone reads its own (the phone keeps
-them in its database), with what makes a PDF turned off (``pdfs_off``):
+them in its database), with what makes or reads a PDF turned off (``pdfs_off``), whatever PDFs and PDF records the
+library holds (the computer's copy of the phone's units may hold its own: the phone never has one):
 
-- ``_render_sheet_pdf`` makes none and runs no chordpro: no sheet.pdf, so every viewer gets ``pdf=None`` and
-  ``pdf_traditional=None``, and no PDF's record (kv ``render:<id>``) is written;
+- ``_render_sheet_pdf`` makes none and runs no chordpro, so no PDF's record (kv ``render:<id>``) is written;
 - ``_render_traditional`` makes none (nor its record, kv ``render:<id>:trad``);
-- ``_remake_exports`` makes none: an export is a PDF.
+- ``_remake_exports`` makes none: an export is a PDF;
+- ``_write_viewer`` links none: every viewer gets ``pdf=None`` and ``pdf_traditional=None``, a sheet.pdf beside it
+  or not;
+- ``_drop_human_outputs`` forgets a human sheet's .cho and page alone, as the phone does, never a PDF a record names;
+- ``library.write_info`` reads no PDF's record: info.json's ``render`` is null.
 
 Then what the phone keeps that the computer doesn't (``_phone_records``), for each song the pass rendered:
 
@@ -24,7 +28,7 @@ Then what the phone keeps that the computer doesn't (``_phone_records``), for ea
   characters they are written in (``script``: ``page.written_script`` of the sheet ``progressions.record`` reads, its
   human sheet's, else its auto sheet's), which the library page's cards read for its names in either script: the
   phone makes no PDF, so no PDF's record names it as render.chinese_songs reads one;
-- info.json as ``library.write_info`` writes it, its ``render`` null: no PDF's record;
+- info.json as ``library.write_info`` writes it, its ``render`` null: no PDF's record read;
 - no kv ``render:status``, the to-do page's: the phone has none.
 
 What differs from the computer's own pages by design, then: the PDF (no sheet.pdf, no Traditional PDF, no export, so
@@ -40,7 +44,9 @@ from dataclasses import dataclass
 from typing import Any
 from unittest import mock
 
-from caracole import render
+import re
+
+from caracole import library, render
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.library import write_info
 from caracole.overrides import load_overrides
@@ -67,22 +73,40 @@ def _no_pdf(*args: Any, **kwargs: Any) -> render._Done:
     return render._Done("pages")
 
 
+_PDF_RECORD = re.compile(r"render:\d+")  # kv render:<song id>, a PDF's record (library.write_info reads it)
+
+
+def _no_pdf_record(conn, key, *args, **kwargs):
+    """``library.kv_get_json`` on the phone, which holds no PDF's record: none for one."""
+    return None if _PDF_RECORD.fullmatch(key) else kv_get_json(conn, key, *args, **kwargs)
+
+
 @contextmanager
 def pdfs_off(scripts: dict[int, str | None] | None = None) -> Iterator[None]:
     """render.py with no PDF made (the module's docstring). With ``scripts``, each song's sheet ``progressions.record``
     reads is noted there by its id, ``page.written_script`` of its text, as the phone notes it where it records the
     progressions."""
     note = render._note_progressions
+    write_viewer = render._write_viewer
 
     def noting(conn, song, text, key, key_source=None):
         note(conn, song, text, key, key_source)
         if scripts is not None:
             scripts[song.id] = written_script(text)
 
+    def unlinked(song, text, page, pdf, **kwargs):
+        return write_viewer(song, text, page, None, **{**kwargs, "twin": None})
+
+    def human_outputs_gone(conn, library_dir, song, folder):
+        render._forget_written(conn, song.id, (render.HUMAN_OUTPUTS[0], render.HUMAN_OUTPUTS[2]), folder)
+
     with mock.patch.object(render, "_render_sheet_pdf", _no_pdf), \
             mock.patch.object(render, "_render_traditional", lambda *a, **k: None), \
             mock.patch.object(render, "_remake_exports", lambda *a, **k: None), \
-            mock.patch.object(render, "_note_progressions", noting):
+            mock.patch.object(render, "_note_progressions", noting), \
+            mock.patch.object(render, "_write_viewer", unlinked), \
+            mock.patch.object(render, "_drop_human_outputs", human_outputs_gone), \
+            mock.patch.object(library, "kv_get_json", _no_pdf_record):
         yield
 
 
@@ -125,7 +149,8 @@ def _phone_records(conn, cfg, song: Song, build: str, script: str | None) -> Non
         kv_set_json(conn, key, {name: {"sha256": entry["sha256"], "size": entry["size"], "unit": digest}
                                 for name, entry in written.items()})
     kv_set_json(conn, phone_key(song.id), {"unit": digest, "build": build, **({"script": script} if script else {})})
-    write_info(conn, cfg.library_dir, song)
+    with mock.patch.object(library, "kv_get_json", _no_pdf_record):
+        write_info(conn, cfg.library_dir, song)
 
 
 def phone_key(song_id: int) -> str:

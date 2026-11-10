@@ -19,7 +19,8 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
 /**
  * library.write_info on the phone: a song's info.json, the song, where it came from, and what was kept or picked,
  * byte for byte as the computer writes it of the same library (`json.dumps(info, ensure_ascii=False, indent=2)` and a
- * line end). Its `render` is the PDF's (kv `render:<song id>`), which the phone never makes: null on the phone.
+ * line end). Its `render` is the PDF's (kv `render:<song id>`), which the phone never makes nor reads: null on the
+ * phone, whatever record a library it was made of holds (helpers/phone_render.py writes it so).
  */
 object InfoJson {
     /** The file's bytes for the song as the library holds it now. */
@@ -40,9 +41,6 @@ object InfoJson {
                     "rating" to PyJson.float(v.rating), "votes" to JsonPrimitive(v.votes),
                     "version" to JsonPrimitive(v.version), "label" to text(v.label))
             }
-        val rendered = db.kvGet("render:${song.id}")?.let { runCatching { PyJson.loads(it) }.getOrNull() }
-        val render = (rendered as? JsonObject)?.takeIf { it.isNotEmpty() }
-            ?.let { obj("transpose" to it.getValue("transpose"), "pdf" to it.getValue("pdf")) } ?: JsonNull
         val info = obj(
             "artist" to JsonPrimitive(song.artist),
             "title" to JsonPrimitive(song.title),
@@ -62,7 +60,7 @@ object InfoJson {
                            "artist_key" to text(song.matchArtistKey), "song_key" to text(song.matchSongKey)),
             "files" to JsonArray(files),
             "picks" to JsonArray(picked),
-            "render" to render,
+            "render" to JsonNull,
         )
         return (PyJson.dumps(info, indent = 2) + "\n").toByteArray(Charsets.UTF_8)
     }

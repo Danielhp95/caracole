@@ -1678,19 +1678,31 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
   the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
-  sheets), after `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror
-  serves gets its progressions and script alone, the phone's own pages of it forgotten.
+  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port), after `PlainLyrics`
+  (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its progressions, script
+  and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
-    made at (Units.digestOf, every entry of a pass `restamp`ed); kv `render:<id>:phone` (`unit`, `build`, `script`,
-    which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's kv `songbook:<folder>`.
-  - `InfoJson` is library.write_info, its `render` null; `RenderBuild` hashes the app's version and every viewer
-    asset and runtime data file the pages read, each listed and held to its folder (PhoneRenderTest).
-  - `render` is the lookup's pdf stage (in its write); `renderStale` the render job's, a write a song, `between` two
-    (JobContext.yieldToQueued), passing over a song a lookup made meanwhile, then kv `phone:render-build`.
+    made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`
+    (`unit`, `build`, `script`, which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's
+    kv `songbook:<folder>`.
+  - `InfoJson` is library.write_info, its `render` null whatever kv `render:<id>` holds; `RenderBuild` is the app's
+    version and, on the phone, the APK's `classes*.dex` and `caracole/` entries by name, size and CRC-32, so every
+    APK whose code or tables changed makes the pages again (elsewhere each viewer asset and runtime data file the
+    pages read, hashed, each listed and held to its folder by PhoneRenderTest).
+  - `render` is the lookup's pdf stage (in its write, its `between` never the queue's), its failed detail render.py's
+    log line, the phone's alone; `renderStale` the render job's, a write a song, `between` two
+    (JobContext.yieldToQueued: PhoneRenderJobTest on the real queue), passing over a song a lookup made meanwhile, then
+    kv `phone:render-build`; a song's pass that fails, on a bug too ("a bug in caracole"), costs the others nothing
+    and is stamped all the same.
+  - `stale` is the start's, one query (a song this build never made, or kv `phone:render-build` not this build's);
+    `afterSync` reads every song's digest, inside the sync's job, and `owe`s (that kv forgotten) what moved, as a change
+    on the phone that makes no page of its song does.
   - tests/helpers/phone_render.py is the reference (render_all with `_render_sheet_pdf`, `_render_traditional` and
-    `_remake_exports` making nothing, then the phone's records and info.json); tests/test_conformance_viewer_render.py
-    writes vectors/viewer/render.jsonl (fixture libraries and steps: renders, a file dropped, one deleted), which
-    `RenderReplay` (area `render`) replays: the names, each pass's info.json and units, and every step whole.
+    `_remake_exports` making nothing, `_write_viewer` linking no PDF, `_drop_human_outputs` the phone's and no PDF's
+    record read, whatever PDFs the library holds; then the phone's records and info.json);
+    tests/test_conformance_viewer_render.py writes vectors/viewer/render.jsonl (fixture libraries and steps: renders, a
+    file dropped, one deleted), which `RenderReplay` (area `render`) replays: the names, each pass's info.json and
+    units, and every step whole.
 
 ##### The phone's written pages
 

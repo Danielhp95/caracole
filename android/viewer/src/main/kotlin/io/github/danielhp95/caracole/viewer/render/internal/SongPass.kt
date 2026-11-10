@@ -15,10 +15,8 @@ import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.ug.SheetVersion
 import io.github.danielhp95.caracole.core.ug.SheetVersions
-import io.github.danielhp95.caracole.viewer.chinese.Hanzi
-import io.github.danielhp95.caracole.viewer.chinese.ViewerPinyin
+import io.github.danielhp95.caracole.viewer.harpfit.HarmonicaTab
 import io.github.danielhp95.caracole.viewer.harpfit.HarpFit
-import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
 import io.github.danielhp95.caracole.viewer.pages.HarmonicaPage
 import io.github.danielhp95.caracole.viewer.pages.SheetPage
 import io.github.danielhp95.caracole.viewer.pages.ViewerInputs
@@ -27,8 +25,6 @@ import io.github.danielhp95.caracole.viewer.render.RenderNames
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.sheet.ChordPro
 import io.github.danielhp95.caracole.viewer.sheet.MusicKeys
-import io.github.danielhp95.caracole.viewer.sheet.SheetView
-import io.github.danielhp95.caracole.viewer.sheet.Sheets
 import io.github.danielhp95.caracole.viewer.sheet.SongKey
 import io.github.danielhp95.caracole.viewer.version.Version
 import io.github.danielhp95.caracole.viewer.version.Versions
@@ -50,7 +46,9 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
  *
  * What fails a page is said in render.py's words ([failures], the first the song's why), and costs the song's other
  * pages nothing; a sheet that can't be read is a [RenderError], which stops the song's sheets (its tabs' pages are
- * still made), as render_all's `except (RenderError, OSError)`.
+ * still made), as render_all's `except (RenderError, OSError)`. Where render.py's `except Exception` keeps a bug from
+ * costing the other pages (a viewer built, a tab's harp, a tab's page, the progressions), a StackOverflowError is
+ * caught too: Python's RecursionError is an Exception.
  */
 internal class SongPass(
     private val db: Db,
@@ -201,11 +199,7 @@ internal class SongPass(
     }
 
     /** The song's Guitar Pro files the Guitar Pro page shows (inbox.guitar_files' `in_browser`), each page links. */
-    private fun guitarNames(): List<String> = try {
-        GuitarFiles.of(db, song.id).filter { it.inBrowser }.map { it.name }
-    } catch (_: NotImplementedError) {
-        emptyList() // Phase A: waiting on lane guitar-alphatab, whose GuitarFiles.of this is
-    }
+    private fun guitarNames(): List<String> = GuitarFiles.of(db, song.id).filter { it.inBrowser }.map { it.name }
 
     /** render.export_query: the version as an address that always says its `t`. */
     private fun exportQuery(v: Version): String {
@@ -277,6 +271,9 @@ internal class SongPass(
         } catch (e: Exception) { // a sheet the viewer can't read must never cost the song's other pages
             fail("cannot build $page")
             return null
+        } catch (e: StackOverflowError) {
+            fail("cannot build $page")
+            return null
         }
         return write(page, html.toByteArray(Charsets.UTF_8))
     }
@@ -299,33 +296,29 @@ internal class SongPass(
             Progressions.record(db, song.id, text, key?.key, key?.source)
         } catch (e: Exception) { // a bug in the theory must never cost the pages
             Progressions.forget(db, song.id)
+        } catch (e: StackOverflowError) {
+            Progressions.forget(db, song.id)
         }
-        script = writtenScript(text)
+        script = SheetPage.writtenScript(text)
     }
 
     // --- the harmonica tabs -----------------------------------------------------------------------------------------
 
-    /** render._tab_harps: the harp each harmonica tab is played on, by its file's name, as its page chooses it with the
-     * song's chord sheet [cho] in [key], the tab read as its page reads it ([Choice.tabsHarp]); a tab with neither, or
-     * whose text can't be read, has none. */
+    /** render._tab_harps: the harp each harmonica tab is played on, by its file's name (HarpFit.tabHarps), with the
+     * song's chord sheet [cho] in [key], each kept tab's text read as its page reads it, a regular file decoded with
+     * U+FFFD; one that can't be read has none (its page says why). */
     private fun tabHarps(tabs: List<HarmonicaFile>, files: Map<String, KeptFile>, cho: String,
                          key: SongKey?): Map<String, Int> {
-        val out = LinkedHashMap<String, Int>()
-        for (tab in tabs) {
-            val kept = files[tab.name] ?: continue
-            val found = try {
-                val text = LibraryReads.replaced(LibraryReads.regular(File(libraryDir, kept.path)))
-                val notation = pinOf(tab)?.let { HarpTabs.pinned(it, text) }
-                HarpFit.choose(HarpTabs.parse(text, harp = tab.harp, notation = notation), cho = cho, key = key?.key,
-                               keySource = key?.source, pageKey = tab.key)
+        val read = tabs.mapNotNull { tab ->
+            val kept = files[tab.name] ?: return@mapNotNull null
+            val text = try {
+                LibraryReads.replaced(LibraryReads.regular(File(libraryDir, kept.path)))
             } catch (_: IOException) {
-                continue // its page says why
-            } catch (_: Exception) { // a tab the overlay can't read must never cost the sheet's page
-                continue
+                null
             }
-            found.tabsHarp?.let { out[tab.name] = it }
+            HarmonicaTab(tab.name, text, harp = tab.harp, pageKey = tab.key, pin = pinOf(tab))
         }
-        return out
+        return HarpFit.tabHarps(read, cho, key?.key, key?.source)
     }
 
     /** render._harmonica_pin: how the phone's overrides (`[harmonica]`) have the tab read, or null: as guessed. */
@@ -359,21 +352,14 @@ internal class SongPass(
             } catch (e: Exception) { // a tab the page can't read must never cost the song's other pages
                 fail("cannot build ${tab.page}")
                 continue
+            } catch (e: StackOverflowError) {
+                fail("cannot build ${tab.page}")
+                continue
             }
             val data = write(tab.page, html.toByteArray(Charsets.UTF_8)) ?: continue
             WrittenPages.note(db, song.id, tab.page, data, unit)
         }
         val left = WrittenPages.record(db, song.id).keys.filter { PyRe.fullmatch(HarmonicaFiles.PAGE, it) != null && it !in pages }
         WrittenPages.forget(db, song.id, left, folder)
-    }
-
-    companion object {
-        /** page.written_script: "simplified" or "traditional", the characters a ChordPro sheet's Chinese is written in,
-         * as its page judges them; null for a sheet in no Chinese. */
-        fun writtenScript(cho: String): String? {
-            val sheet = Sheets.parse(cho)
-            if (!ViewerPinyin.isChinese(SheetView.drawnLines(sheet))) return null
-            return if (Hanzi.writtenInTraditional(SheetView.writtenTexts(sheet))) "traditional" else "simplified"
-        }
     }
 }

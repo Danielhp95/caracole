@@ -16,15 +16,11 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.testing.TestDb
-import io.github.danielhp95.caracole.viewer.harpfit.Choice
-import io.github.danielhp95.caracole.viewer.pages.SheetPage
 import io.github.danielhp95.caracole.viewer.render.InfoJson
 import io.github.danielhp95.caracole.viewer.render.OwnVersions
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import io.github.danielhp95.caracole.viewer.render.PlainLyrics
 import io.github.danielhp95.caracole.viewer.render.RenderNames
-import io.github.danielhp95.caracole.viewer.version.Version
-import io.github.danielhp95.caracole.viewer.version.Versions
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -60,23 +56,10 @@ object RenderReplay : AreaReplay {
     /** The build each record's pages were made by (helpers/phone_render.py BUILD). */
     const val BUILD = "corpus-build"
 
-    /** Whether the page builders and the theory the render calls have landed: SheetPage (lane pages), harpfit (lane
-     * harmonica-page) and Versions and Progressions (lane version-progressions). Phase A: waiting on those lanes. */
-    val landed: Boolean by lazy {
-        try {
-            SheetPage.viewerCsp(ByteArray(0))
-            Choice(0, "usual").tabsHarp
-            Versions.query(Version())
-            true
-        } catch (_: NotImplementedError) {
-            false
-        }
-    }
-
     override fun replay(misses: Misses) {
         constants(misses)
         facts(misses)
-        if (landed) passes(misses)
+        passes(misses)
     }
 
     private fun records(fn: String): List<Record> = Corpus.records(VECTOR).filter { it.fn == fn }
@@ -113,11 +96,7 @@ object RenderReplay : AreaReplay {
                 database.writeBlocking { db ->
                     LibraryStore(library).ensureCurrentKeys(db)
                     PlainLyrics.onto(db, library, Overrides.read(db), only = ids(db, first))
-                    try {
-                        OwnVersions.upgraded(db, library, Overrides.read(db))
-                    } catch (_: NotImplementedError) {
-                        return@writeBlocking // Phase A: waiting on lane version-progressions (Versions.keyVersion)
-                    }
+                    OwnVersions.upgraded(db, library, Overrides.read(db))
                     for ((path, text) in out.getValue("info").jsonObject) {
                         val song = Songs.list(db).firstOrNull { infoOf(library, it) == path }
                         misses.check(song != null) { "$case: no song of $path" }

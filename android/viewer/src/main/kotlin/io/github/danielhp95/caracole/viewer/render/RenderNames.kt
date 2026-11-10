@@ -59,6 +59,9 @@ object RenderNames {
     /** A song's status the render passes over (songs.py's). */
     const val IGNORED = "ignored"
 
+    /** What a song's failure that is no RenderError nor a file's says first (the lookup's words for a bug). */
+    const val BUG = "a bug in caracole"
+
     /** The kv of the phone's build its pages were last made by (the render job's). */
     const val BUILD_KEY = "phone:render-build"
 
