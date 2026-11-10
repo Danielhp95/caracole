@@ -20,10 +20,10 @@ URL, quoted>``, with the headers it was sent with (the user agent). The site's U
   lists, as the computer's lists Traditional): gtptabs_site.py's page of the artist, listing none of the scenario's
   songs, so that gtptabs.com has no Guitar Pro file of them.
 
-A URL the scenario has no rule for gets its site's 404 and is logged as unknown (on stderr, ``known`` false), so that
-a caracole asking a URL the computer's wouldn't is seen, never read as the site's miss; one robots.txt closes
-(``caracole.http.robots_disallows``) is never answered either, a 404, logged ``closed``. Every request is counted, in
-order, and its own routes, which no site is, say what was asked:
+``serve`` says each request on stdout as it comes. A URL the scenario has no rule for gets its site's 404 and is
+logged as unknown (on stderr, ``known`` false), so that a caracole asking a URL the computer's wouldn't is seen, never
+read as the site's miss; one robots.txt closes (``caracole.http.robots_disallows``) is never answered either, a 404,
+logged ``closed``. Every request is counted, in order, and its own routes, which no site is, say what was asked:
 
 - ``GET /log`` (``?since=N``: those after the N-th): ``{"requests": [{"n", "url", "provider", "status", "known",
   "closed", "user_agent"}, ...]}``, each as it came;
@@ -412,11 +412,12 @@ class FakeSites:
     """The server of scenario ``name`` on ``address``:``port`` (a free one with 0), in a thread of this process
     until ``stop`` (a context manager too); ``url`` its address, ``requests`` every request it was sent so far."""
 
-    def __init__(self, name: str = "lookups", port: int = 0, address: str = "127.0.0.1"):
+    def __init__(self, name: str = "lookups", port: int = 0, address: str = "127.0.0.1", *, said: bool = False):
         if port == OWNERS_PORT:
             raise ValueError(f"port {OWNERS_PORT} is the owner's caracole-web: the fake sites take another")
         self.name = name
         self.sites = Sites(name)
+        self.said = said  # each request said on stdout as it comes (``serve``'s, for the device tests' log)
         self._requests: list[dict] = []
         self._lock = threading.Lock()
         self._folder = tempfile.TemporaryDirectory(prefix="caracole-fake-sites-")
@@ -499,6 +500,8 @@ class FakeSites:
         if closed or not answer.known:
             print(f"fake sites: {'closed' if closed else 'unknown'} {url} -> {answer.status}", file=sys.stderr,
                   flush=True)
+        elif self.said:
+            print(f"fake sites: {entry['n']} {provider} {answer.status} {url}", flush=True)
         return answer
 
 
@@ -638,7 +641,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.command == "caracole":
         run_caracole(args.sites, args.args[1:] if args.args[:1] == ["--"] else args.args)
         return
-    fake = FakeSites(args.scenario, args.port, args.address)
+    fake = FakeSites(args.scenario, args.port, args.address, said=True)
     fake.document()  # built before it says it is up
     _stop_with_parent()
     print(f"the fake sites of {args.scenario} on {args.address}:{fake.port} (an emulator reaches them at "
