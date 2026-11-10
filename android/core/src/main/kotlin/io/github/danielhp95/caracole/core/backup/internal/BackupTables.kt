@@ -103,16 +103,28 @@ internal object BackupTables {
         }
     }
 
-    /** The SHA-256s a backup's `files` names; none for a copy that can't be read. */
-    fun shasOf(file: File): Set<String> = try {
+    /** The kept files the backup attached by [restore] names, each's path and SHA-256 in path order: for its
+     * `within`, before the copy. */
+    fun keptInCopy(db: Db): List<Pair<String, String>> =
+        db.query("SELECT path, sha256 FROM $ALIAS.files ORDER BY path") { it.text(0)!! to it.text(1)!! }
+
+    /** The kept files the backup at [file] names, each's path and SHA-256 in path order (SQLite's error for a copy
+     * that can't be read; IllegalArgumentException for none there, never made one). */
+    fun keptOf(file: File): List<Pair<String, String>> {
+        require(file.isFile) { "no backup at $file" }
         val connection = BundledSQLiteDriver().open(file.path)
         try {
-            connection.prepare("SELECT DISTINCT sha256 FROM files").use { st ->
-                buildSet { while (st.step()) add(st.getText(0)) }
+            return connection.prepare("SELECT path, sha256 FROM files ORDER BY path").use { st ->
+                buildList { while (st.step()) add(st.getText(0) to st.getText(1)) }
             }
         } finally {
             connection.close()
         }
+    }
+
+    /** The SHA-256s a backup's `files` names; none for a copy that can't be read. */
+    fun shasOf(file: File): Set<String> = try {
+        keptOf(file).mapTo(HashSet()) { it.second }
     } catch (e: Exception) {
         emptySet()
     }

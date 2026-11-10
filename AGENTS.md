@@ -1943,16 +1943,21 @@ Not built yet. (inbox-share.)
   made without twice the room (`freeSpace`), `stateDir/backups/<label>-<UTC time>.sqlite`:
   - the library's tables (`BackupTables.TABLES`: songs, versions, files, removed, kv and the phone's), the index tables
     empty, and the library's kept files by SHA-256 in `stateDir/backups/blobs/`, each read once and checked as it is
-    copied, shared between backups and gone with the last that names it (`sweep`); a file that no longer holds its
-    row's bytes is never kept as them;
-  - `Take.backupBeforeSync(db, stateDir, now, store)` is the `before-sync` one, the sync's take giving its store so the
-    files are kept too;
-  - `exportTo`: one zip of the copy and `blobs/<sha256>`, `exportName` its name;
+    copied, shared between backups and gone with the last that names it (`sweep`); a file that can't be read or no
+    longer holds its row's bytes is never kept as them (`Backup.missing` counts those a backup lacks, its job's line
+    says so), and a blob that can't be written makes no backup;
+  - `Take.backupBeforeSync(db, stateDir, now, store)` is the `before-sync` one, its store required, so every take keeps
+    the files too (an older app's before-sync copies hold the tables alone);
+  - `exportTo`: one zip of the copy and `blobs/<sha256>`, `exportName` its name, refused for a backup that lacks a
+    blob; a backup being exported is never rotated out nor its blobs swept until it ends;
   - `restore(database, lib, file)`: in one write, this side's own records read (`OwnRecords.document`), the tables put
     back exactly, and those records written over them (`OwnRecords.putBack`), one savepoint; then each kept file whose
     bytes its file doesn't hold written from its blob, each kept file of before that the backup doesn't name deleted
-    while it holds its row's bytes, each song's lyrics files as its row has them (`Restored`: written, removed, the
-    paths no blob could give);
+    while it holds its row's bytes, each song's lyrics files as its row has them (`Restored`: written, removed);
+  - refused whole, nothing changed, unless every kept file the backup names is held by its file now or by its blob,
+    checked by its SHA-256 (`NotRestorable`), and every path of the rows is a place in the library (no link); a write
+    that fails after the tables came back is `PartlyRestored` ("restore it again"), so no restore leaves a row naming
+    bytes no file holds;
   - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
     `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
@@ -1966,7 +1971,9 @@ Not built yet. (inbox-share.)
   and restore kinds, their words JobViews'), so on the queue's one worker, never beside a lookup's write; a restore
   owes every page again in its savepoint (`owePages`: each `render:<id>:phone` and `phone:render-build` forgotten),
   and the app then reloads the mirror, forgets the search's answers and queues the render job
-  (`BackupsActivity.afterRestore`). BackupRunnerTest.
+  (`BackupsActivity.afterRestore`; a restore run again from the Requests tab leaves them to the next start's render
+  job). Meanwhile written-pages' gating serves none of the phone's pages whose bytes or unit the restored records no
+  longer match, a songbook's as a song's (BackupRunnerTest).
 - **The app**: `BackupsActivity` (Settings' Backups row): the list, Back up now, Export… through
   `ACTION_CREATE_DOCUMENT` (`application/zip`), Restore… asked first; `BackupWorker`, the daily backup, a periodic
   WorkManager job while the phone is idle and its battery isn't low, which queues the backup and waits for it, kept

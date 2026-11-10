@@ -31,9 +31,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * The phone's backups, from Settings' Backups row: each listed, newest first (its label, when, its size), Back up now
- * (a backup by hand), each one's Export (the document picker's ACTION_CREATE_DOCUMENT, a zip of the copy and the
- * files it keeps: Backups.exportTo) and Restore (asked first). A backup and a restore are the phone's queued jobs
+ * The phone's backups, from Settings' Backups row: each listed, newest first (its label, when, its size, and how many
+ * of its kept files it doesn't hold: a copy of the tables alone, say), Back up now (a backup by hand), each one's
+ * Export (the document picker's ACTION_CREATE_DOCUMENT, a zip of the copy and the files it keeps: Backups.exportTo,
+ * which refuses one that doesn't hold them all) and Restore (asked first; refused, nothing changed, when it can't put
+ * every kept file's bytes back). A backup and a restore are the phone's queued jobs
  * (BackupRunner's), never run beside a lookup's write, each said on the Requests tab too; once a restore is done, the
  * copy of the computer's library is read again, the search's answers forgotten and the phone's pages made again by
  * the render job ([afterRestore]).
@@ -100,8 +102,9 @@ class BackupsActivity : Activity() {
             setPadding(0, dp(8), 0, dp(8))
         }
         row.addView(TextView(this).apply {
-            text = getString(R.string.backup_row, labelOf(this@BackupsActivity, backup.label),
-                             BackupRunner.date(backup.at), Syncs.size(this@BackupsActivity, backup.size))
+            val said = getString(R.string.backup_row, labelOf(this@BackupsActivity, backup.label),
+                                 BackupRunner.date(backup.at), Syncs.size(this@BackupsActivity, backup.size))
+            text = if (backup.missing == 0) said else getString(R.string.backup_row_missing, said, backup.missing)
             setTextColor(getColor(R.color.text))
             textSize = 15f
         })

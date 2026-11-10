@@ -12,7 +12,6 @@ import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.viewer.render.RenderNames
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -26,12 +25,17 @@ import java.util.Locale
  * so never beside a lookup's write or any other job's:
  *
  * - `backup --label LABEL`: a backup of the library made now (core.backup's [Backups.make], in one write), its stage
- *   `backup` saying "Backed up (LABEL)", or why not ("Not backed up: …", no room among the whys);
+ *   `backup` saying "Backed up (LABEL)", or why not ("Not backed up: …", no room among the whys), and a line for the
+ *   kept files it couldn't keep (each no longer the bytes its row names: a restore of it is refused while the library's
+ *   files aren't those bytes either);
  * - `backup --restore NAME`: the backup of that name in `stateDir/backups/` restored ([Backups.restore]: the tables
  *   and the kept files put back, this side's own records kept as they are, [OwnRecords]), and in the same savepoint
  *   the phone's pages owed again (every song's `render:<id>:phone` and `phone:render-build` forgotten, so the render
  *   job makes each again: the files on disk are no longer those the restored records name); its stage `restore`
- *   saying "Restored the library of DATE", or why not. Its outcome is what it did to the files.
+ *   saying "Restored the library of DATE", or why not: a backup that can't put back every kept file's bytes is
+ *   refused, nothing changed ("Not restored: the backup doesn't hold …"), and one whose files failed after its tables
+ *   came back says so ("Not restored: its tables came back but not all its files …: restore it again"). Its outcome
+ *   is what it did to the files.
  *
  * [backup] and [restore] are the jobs the app queues (BackupsActivity, BackupWorker): jobs of the phone's own, whose
  * lines are PhoneKinds' words (JobViews), each run by this runner as its command line says; Try again runs one again
@@ -77,6 +81,8 @@ class BackupRunner(val parts: PhoneParts, private val clock: () -> Instant = { I
             fail(context, kind, said(e))
         } ?: fail(context, kind, NO_ROOM)
         context.say(made.name)
+        val missing = Backups.of(made)?.missing ?: 0
+        if (missing > 0) context.say(PhoneKinds.fill(NOT_KEPT, "n" to missing))
         context.stage(stage, "done", PhoneKinds.fill(kind.done, "label" to label))
     }
 
@@ -95,10 +101,8 @@ class BackupRunner(val parts: PhoneParts, private val clock: () -> Instant = { I
         } catch (e: Exception) {
             fail(context, kind, said(e))
         }
-        for (path in restored.missing) context.say("not kept by the backup, and gone: $path")
         context.outcome(JsonObject(linkedMapOf(
             "written" to JsonPrimitive(restored.written), "removed" to JsonPrimitive(restored.removed),
-            "missing" to JsonArray(restored.missing.map { JsonPrimitive(it) }),
         )))
         context.stage(stage, "done", PhoneKinds.fill(kind.done, "date" to date(backup.at, zone)))
     }
@@ -120,6 +124,9 @@ class BackupRunner(val parts: PhoneParts, private val clock: () -> Instant = { I
 
         /** Why a backup wasn't made when there is no room. */
         const val NO_ROOM = "there isn't room for it on the phone"
+
+        /** A backup's line for the kept files it couldn't keep, {n} of them. */
+        const val NOT_KEPT = "not kept: {n} of the library's files, which no longer hold the bytes their rows name"
 
         private val DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
 

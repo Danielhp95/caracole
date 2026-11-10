@@ -3,7 +3,13 @@ package io.github.danielhp95.caracole.server.lookups
 import io.github.danielhp95.caracole.core.backup.Backups
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.library.Kept
+import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -16,7 +22,12 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.Line
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
+import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.TestParts
+import io.github.danielhp95.caracole.server.testing.bytes
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
+import kotlinx.serialization.json.JsonArray
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +43,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -53,10 +65,9 @@ class BackupRunnerTest {
     private class Phone(val parts: PhoneParts, val queue: JobQueue, val runners: HashMap<String, CommandRunner>,
                         val runner: BackupRunner)
 
-    private fun phone(): Phone {
-        val dir = tmp.newFolder()
-        val database = TestDb.fresh(dir).also { opened += it }
-        database.writeBlocking { Fixtures.load(it, "sync/fixtures/rich.jsonl", File(dir, "library")) }
+    private fun phone(dir: File = tmp.newFolder(), database: Database = TestDb.fresh(dir).also { opened += it },
+                      fixture: String? = "sync/fixtures/rich.jsonl"): Phone {
+        if (fixture != null) database.writeBlocking { Fixtures.load(it, fixture, File(dir, "library")) }
         val runners = HashMap<String, CommandRunner>()
         val queue = JobQueue(scope, commands = Commands(runners))
         val parts = TestParts.of(database, dir, scope, queue)
@@ -125,6 +136,71 @@ class BackupRunnerTest {
             assertTrue(Health.isCooling(db, "ug", now), "the cooldown met since is kept")
             assertNull(db.kvGet("render:${creep.id}:phone"), "the phone's pages owed again")
             assertNull(db.kvGet("phone:render-build"))
+        }
+    }
+
+    @Test fun aBackupSaysWhichFilesItCouldntKeepAndItsRestoreIsRefusedChangingNothing() {
+        val phone = phone()
+        val creep = phone.parts.database.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val tab = phone.parts.database.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "tab.txt" } }
+        val file = File(phone.parts.store.libraryDir, tab.path)
+        file.writeText("changed by hand")
+        val made = run(phone, phone.runner.backup(Backups.BY_HAND))
+        assertEquals(Job.DONE, made.state, made.asJson().toString())
+        assertEquals("not kept: 1 of the library's files, which no longer hold the bytes their rows name", made.said.last())
+        val backup = Backups.list(phone.parts.stateDir).single()
+        assertEquals(1, backup.missing)
+        phone.parts.database.writeBlocking { db -> db.execute("UPDATE songs SET title = 'Changed since' WHERE id = ?", creep.id) }
+        val refused = run(phone, phone.runner.restore(backup))
+        assertEquals(Job.FAILED, refused.state)
+        assertEquals("Not restored: the backup doesn't hold 1 of its files, and the library no longer does: ${tab.path}.",
+                     JobViews.line(refused).text)
+        phone.parts.database.read { db -> assertEquals("Changed since", Songs.byId(db, creep.id)!!.title, "nothing changed") }
+        assertEquals("changed by hand", file.readText())
+    }
+
+    @Test fun afterARestoreAPageWrittenSinceIsNeverServedAndTheRenderJobOwesItsSong() {
+        val dir = tmp.newFolder()
+        TestApp(dir).use { test ->
+            val phone = phone(dir, test.database, fixture = null)
+            val song = test.database.writeBlocking { db ->
+                db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+                phone.parts.store.add(db, "Soda Stereo", "De Música Ligera", now = "2026-11-01T00:00:00Z")
+            }
+            val folder = SafeName.songFolder(song.artist, song.title).toList().joinToString("/")
+            val sheet = "$folder/sheet.html"
+            val book = "_songbooks/Campfire/songbook.html"
+            fun address(path: String) = "/" + path.split('/').joinToString("/") { PyUrl.quote(it, safe = "") }
+            fun page(content: String): ByteArray = content.toByteArray().also { bytes ->
+                File(test.libraryDir, sheet).apply { parentFile.mkdirs() }.writeBytes(bytes)
+                test.database.writeBlocking { db ->
+                    WrittenPages.note(db, song.id, "sheet.html", bytes, Units.digestOf(db, "song/${song.key}")!!)
+                }
+            }
+            fun songbook(content: String): ByteArray = content.toByteArray().also { bytes ->
+                File(test.libraryDir, book).apply { parentFile.mkdirs() }.writeBytes(bytes)
+                test.database.writeBlocking { db -> WrittenPages.noteSongbook(db, "Campfire", "inputs", mapOf("songbook.html" to bytes)) }
+            }
+            test.database.writeBlocking { db -> SongbookStore.put(db, "Campfire", JsonArray(emptyList())) }
+            val backedUp = page("<!doctype html>the page backed up")
+            songbook("<!doctype html>the book backed up")
+            assertEquals(Job.DONE, run(phone, phone.runner.backup(Backups.BY_HAND)).state)
+            val since = page("<!doctype html>the page made since")
+            val bookSince = songbook("<!doctype html>the book made since")
+            assertContentEquals(since, test.get(address(sheet)).bytes)
+            assertContentEquals(bookSince, test.get(address(book)).bytes)
+
+            val restored = run(phone, phone.runner.restore(Backups.list(phone.parts.stateDir).single()))
+            assertEquals(Job.DONE, restored.state, restored.asJson().toString())
+            // The pages on disk are no longer those the restored records name: neither is served.
+            for ((path, bytes) in listOf(sheet to since, book to bookSince)) {
+                val answer = test.get(address(path))
+                assertTrue(answer.status != 200 && !answer.bytes.contentEquals(bytes), "$path: ${answer.status}")
+            }
+            assertTrue(PhoneRender(test.database, test.libraryDir, null, "0.1.0").stale(), "the render job owes them")
+            // The page as it was backed up, there again: served, as the restored record names it.
+            File(test.libraryDir, sheet).writeBytes(backedUp)
+            assertContentEquals(backedUp, test.get(address(sheet)).bytes)
         }
     }
 

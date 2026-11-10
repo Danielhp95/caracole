@@ -17,6 +17,9 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasType
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.core.backup.Backups
 import io.github.danielhp95.caracole.core.health.Health
@@ -48,7 +51,9 @@ import java.util.zip.ZipInputStream
  *
  * Back up now makes a backup by hand, a queued job, listed once it is over; its Export asks the document picker
  * (ACTION_CREATE_DOCUMENT, answered here as the picker would) and writes one zip of the copy and the kept files there;
- * its Restore, asked first, puts the library back and keeps the cooldown the phone met since.
+ * its Restore, asked first, puts the library back, keeps the cooldown the phone met since and has the render job make
+ * the phone's pages again; the daily backup is scheduled (WorkManager's unique periodic work, while the phone is idle)
+ * and, run, queues a backup labelled daily and waits for it.
  */
 @RunWith(AndroidJUnit4::class)
 class BackupsTest {
@@ -161,5 +166,21 @@ class BackupsTest {
         }
         assertTrue("the tab as backed up", Kept.holds(File(phone.parts.store.libraryDir, tab.path).toPath(), tab.sha256))
         assertEquals(Canonical.sha256Hex(bytes), tab.sha256)
+        // The restore owed every page (none is the phone's until made again): the render job, queued after it,
+        // makes them, and nothing else would.
+        waitUntil("the pages made again by the render job", 120_000) { !phone.render.stale() }
+    }
+
+    @Test fun theDailyBackupIsScheduledAndRunQueuesABackupLabelledDaily() {
+        seed("Matador", "e|-0-2-|".toByteArray())
+        val phone = Caracole.phone(context)
+        val work = WorkManager.getInstance(context).getWorkInfosForUniqueWork(BackupWorker.WORK).get()
+        assertEquals(work.toString(), 1, work.size)
+        assertTrue(work.toString(), work.single().state == WorkInfo.State.ENQUEUED || work.single().state == WorkInfo.State.RUNNING)
+        val daily = Backups.list(phone.parts.stateDir).count { it.label == Backups.DAILY }
+        val result = runBlocking { withTimeout(60_000) { BackupWorker.daily(phone) } }
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(minOf(Backups.KEEP, daily + 1), Backups.list(phone.parts.stateDir).count { it.label == Backups.DAILY })
+        assertEquals(Job.DONE, phone.queue.snapshot().first { it.spec.kind == "backup" }.state)
     }
 }

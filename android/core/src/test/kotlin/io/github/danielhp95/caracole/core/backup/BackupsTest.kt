@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
 import org.junit.After
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -161,21 +162,152 @@ class BackupsTest {
         assertEquals(shas - old.sha256 + new, blobs(phone))
     }
 
-    @Test fun aFileThatNoLongerHoldsItsRowsBytesIsNeverKeptAsThem() {
+    @Test fun aFileThatNoLongerHoldsItsRowsBytesIsNeverKeptAsThemAndItsBackupIsNeverRestoredWithout() {
         val phone = phone()
         val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
         val tab = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "tab.txt" } }
+        val tabBytes = File(phone.library, tab.path).readBytes()
         File(phone.library, tab.path).writeText("changed by hand")
-        make(phone, at(1))
+        val made = make(phone, at(1))
         assertFalse(tab.sha256 in blobs(phone))
-        // Restored with the file gone, its bytes can't come back: said, never written as other bytes.
-        File(phone.library, tab.path).delete()
-        val restored = Backups.restore(phone.database, phone.store, Backups.list(phone.state).first().file)
-        assertEquals(listOf(tab.path), restored.missing)
-        assertFalse(File(phone.library, tab.path).exists())
+        assertEquals(1, Backups.of(made)!!.missing, "the backup says it doesn't hold that file")
+        // Restored with the file holding other bytes, or gone: refused, nothing changed, never written as other bytes.
+        val before = phone.read { db -> library(db) }
+        for (gone in listOf(false, true)) {
+            if (gone) File(phone.library, tab.path).delete()
+            val refused = assertFailsWith<NotRestorable> { Backups.restore(phone.database, phone.store, made) }
+            assertEquals(listOf(tab.path), refused.paths)
+            assertEquals("the backup doesn't hold 1 of its files, and the library no longer does: ${tab.path}", refused.message)
+            assertEquals(before, phone.read { db -> library(db) })
+            assertEquals(gone, !File(phone.library, tab.path).exists())
+        }
+        // Its bytes back where they were: the backup is whole again.
+        File(phone.library, tab.path).writeBytes(tabBytes)
+        Backups.restore(phone.database, phone.store, made)
+        assertEquals(emptyList(), filesNotHoldingTheirRows(phone))
+    }
+
+    @Test fun aBackupOfTheTablesAloneIsRestoredOnlyWhileTheLibrarysFilesStillHoldItsBytes() {
+        // A copy of the tables alone, as M1–3's take made before a sync: no blob of any kept file.
+        val phone = phone()
+        val made = make(phone, at(1), Backups.BEFORE_SYNC)
+        File(backups(phone), Backups.BLOBS).deleteRecursively()
+        val shas = phone.read { db -> db.query("SELECT DISTINCT sha256 FROM files") { it.text(0)!! } }
+        assertEquals(shas.size, Backups.of(made)!!.missing)
+        val out = ByteArrayOutputStream()
+        val notExported = assertFailsWith<java.io.IOException> { Backups.exportTo(made, out) }
+        assertTrue(notExported.message!!.startsWith("the backup doesn't hold ${shas.size} of its files: "), notExported.message)
+        assertEquals(0, out.size(), "nothing written")
+        // Every file still its bytes: restored.
+        val before = phone.read { db -> library(db) }
+        phone.write { db -> db.execute("UPDATE versions SET label = 'since'") }
+        Backups.restore(phone.database, phone.store, made)
+        assertEquals(before, phone.read { db -> library(db) })
+        // A sheet kept again since with other bytes: refused, the tables and the sheet as they are.
+        val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val sheet = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "sheet.txt" } }
+        phone.write { db -> Kept.keepFile(db, phone.store, creep, sheet.versionId, "sheet.txt", "[G]since".toByteArray(), 0, "2026-11-05T08:00:00Z") }
+        val since = phone.read { db -> library(db) }
+        val refused = assertFailsWith<NotRestorable> { Backups.restore(phone.database, phone.store, made) }
+        assertEquals(listOf(sheet.path), refused.paths)
+        assertEquals(since, phone.read { db -> library(db) })
+        assertEquals("[G]since", File(phone.library, sheet.path).readText())
+    }
+
+    @Test fun aRestoreWhoseBlobIsGoneOrNoLongerItsBytesChangesNothing() {
+        val phone = phone()
+        val made = make(phone, at(1))
+        val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val sheet = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "sheet.txt" } }
+        phone.write { db ->
+            Kept.keepFile(db, phone.store, creep, sheet.versionId, "sheet.txt", "[G]since".toByteArray(), 0, "2026-11-05T08:00:00Z")
+            Health.recordBlock(db, "ug", at(5), "403")
+            db.kvDelete("provider:lrclib")
+        }
+        val since = phone.read { db -> library(db) }
+        val own = phone.read { db -> OwnRecords.document(db) }
+        val blob = File(File(backups(phone), Backups.BLOBS), sheet.sha256)
+        for (broken in listOf({ blob.writeText("other bytes") }, { blob.delete() })) {
+            broken()
+            assertFailsWith<NotRestorable> { Backups.restore(phone.database, phone.store, made) }
+            assertEquals(since, phone.read { db -> library(db) })
+            assertEquals(own, phone.read { db -> OwnRecords.document(db) })
+            assertEquals("[G]since", File(phone.library, sheet.path).readText())
+        }
+    }
+
+    @Test fun aRestoreWhoseFilesFailAfterItsTablesCameBackSaysSoAndAgainFinishesIt() {
+        val phone = phone()
+        val made = make(phone, at(1))
+        val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val sheet = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "sheet.txt" } }
+        val before = phone.read { db -> library(db) }
+        phone.write { db -> Kept.keepFile(db, phone.store, creep, sheet.versionId, "sheet.txt", "[G]since".toByteArray(), 0, "2026-11-05T08:00:00Z") }
+        val folder = File(phone.library, sheet.path).parentFile
+        assumeTrue("a folder this process can't write to (not root)", folder.setWritable(false) && !folder.canWrite())
+        try {
+            val partly = assertFailsWith<PartlyRestored> { Backups.restore(phone.database, phone.store, made) }
+            assertTrue(partly.message!!.startsWith("its tables came back but not all its files ("), partly.message)
+            assertTrue(partly.message!!.endsWith("): restore it again"), partly.message)
+            assertEquals(before, phone.read { db -> library(db) }, "the tables came back")
+        } finally {
+            folder.setWritable(true)
+        }
+        assertTrue(Backups.restore(phone.database, phone.store, made).written >= 1, "the sheet written at last")
+        assertEquals(emptyList(), filesNotHoldingTheirRows(phone))
+    }
+
+    @Test fun aBlobThatCantBeWrittenMakesNoBackup() {
+        val phone = phone()
+        backups(phone).mkdirs()
+        File(backups(phone), Backups.BLOBS).writeText("a file where the blobs' folder goes")
+        assertFailsWith<java.io.IOException> { phone.write { db -> Backups.make(db, phone.store, phone.state, at(1), Backups.BY_HAND) } }
+        assertEquals(emptyList(), Backups.list(phone.state))
+        assertTrue(backups(phone).list()!!.none { it.endsWith(".part") })
     }
 
     // --- export -----------------------------------------------------------------------------------------------------
+
+    @Test fun aBackupBeingExportedIsNeverRotatedOutNorItsBlobsSwept() {
+        val phone = phone()
+        val exported = make(phone, at(1))
+        val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val sheet = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "sheet.txt" } }
+        // While its zip is written, the sheet changes and three more backups of its label are made (the queue's, say).
+        var made = false
+        fun meanwhile() {
+            if (made) return
+            made = true
+            phone.write { db -> Kept.keepFile(db, phone.store, creep, sheet.versionId, "sheet.txt", "[G]since".toByteArray(), 0, "2026-11-05T08:00:00Z") }
+            for (day in 2..4) make(phone, at(day))
+        }
+        val out = object : ByteArrayOutputStream() {
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                meanwhile()
+                super.write(b, off, len)
+            }
+
+            override fun write(b: Int) {
+                meanwhile()
+                super.write(b)
+            }
+        }
+        Backups.exportTo(exported, out)
+        assertTrue(exported.isFile, "kept while it was exported")
+        val entries = LinkedHashMap<String, ByteArray>()
+        ZipInputStream(out.toByteArray().inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                entries[entry.name] = zip.readBytes()
+            }
+        }
+        assertTrue("blobs/${sheet.sha256}" in entries, entries.keys.toString())
+        assertEquals(sheet.sha256, Canonical.sha256Hex(entries.getValue("blobs/${sheet.sha256}")))
+        // Once the export is over, the next backup rotates it out, and its old sheet's blob with it.
+        make(phone, at(5))
+        assertFalse(exported.exists())
+        assertFalse(sheet.sha256 in blobs(phone))
+    }
 
     @Test fun aBackupIsExportedAsOneZipOfItsCopyAndTheFilesItKeeps() {
         val phone = phone()
@@ -245,7 +377,7 @@ class BackupsTest {
         assertEquals(emptyList(), filesNotHoldingTheirRows(phone), "every kept file holds its row's bytes")
         assertEquals(sheet.sha256, Canonical.sha256Hex(File(phone.library, sheet.path).readBytes()), "the sheet as it was")
         assertFalse(File(phone.library, "Radiohead/Creep/notes.txt").exists(), "a file kept since is gone")
-        assertEquals(emptyList(), restored.missing)
+        assertTrue(restored.written >= 1 && restored.removed >= 1, restored.toString())
         phone.read { db ->
             assertEquals(own, OwnRecords.document(db), "this side's own records as they were before the restore")
             assertTrue(Health.isCooling(db, "ug", later), "a cooldown met since is never forgotten")

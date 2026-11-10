@@ -8,7 +8,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.github.danielhp95.caracole.core.backup.Backups
+import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,19 +23,22 @@ import java.util.concurrent.TimeUnit
  * an alert); WorkManager tries again the next day.
  */
 class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val phone = withContext(Dispatchers.IO) { Caracole.phone(applicationContext) }
-        val job = BackupRunner(phone.parts).backup(Backups.DAILY)
-        val queued = try {
-            phone.queue.submit(job).first
-        } catch (e: Exception) {
-            return Result.success() // the queue is full: tomorrow's
-        }
-        val over = phone.queue.await(queued.id)
-        return if (over.state == Job.DONE || over.state == Job.FAILED) Result.success() else Result.retry()
-    }
+    override suspend fun doWork(): Result = daily(withContext(Dispatchers.IO) { Caracole.phone(applicationContext) })
 
     companion object {
+        /** The daily backup queued on [phone] and awaited: success once it is over, done or failed (a failure says
+         * why on the Requests tab), or with the queue full (tomorrow's); retry for one cancelled or interrupted. */
+        suspend fun daily(phone: Phone): Result {
+            val job = BackupRunner(phone.parts).backup(Backups.DAILY)
+            val queued = try {
+                phone.queue.submit(job).first
+            } catch (_: QueueFull) {
+                return Result.success()
+            }
+            val over = phone.queue.await(queued.id)
+            return if (over.state == Job.DONE || over.state == Job.FAILED) Result.success() else Result.retry()
+        }
+
         /** The unique periodic work's name. */
         const val WORK = "daily-backup"
 

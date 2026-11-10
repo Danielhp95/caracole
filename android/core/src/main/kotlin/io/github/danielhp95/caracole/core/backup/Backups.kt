@@ -28,13 +28,27 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** backup.Backup: a copy in the folder, its file, when it was made (by its name), its label and size (the copy's and
- * the bytes of the library's files it keeps). */
-data class Backup(val file: File, val at: Instant, val label: String?, val size: Long)
+ * the bytes of the library's files it keeps), and how many of the kept files it names it holds no bytes of
+ * ([missing]: a copy of the tables alone, as M1–3's take made before a sync, or one of a file that no longer held its
+ * row's bytes as it was made). A restore of one that misses any is refused unless the library's files still hold
+ * them, and it can't be exported. */
+data class Backup(val file: File, val at: Instant, val label: String?, val size: Long, val missing: Int = 0)
 
 /** What a restore did to the library's files: how many it wrote (a kept file from its blob, the lyrics of a row) and
- * removed (a file kept since the backup, lyrics a row no longer has), and the kept files whose bytes it couldn't put
- * back ([missing], by path: none was kept, and the library's file no longer holds them). */
-data class Restored(val written: Int, val removed: Int, val missing: List<String>)
+ * removed (a file kept since the backup, lyrics a row no longer has). */
+data class Restored(val written: Int, val removed: Int)
+
+/** A restore refused before it changed anything: the backup holds no bytes of the kept files at [paths] its rows
+ * name, and the library's files there no longer hold them either, so the restore would leave rows naming bytes no
+ * file holds. */
+class NotRestorable(val paths: List<String>) : IllegalStateException(
+    "the backup doesn't hold ${Backups.count(paths.size)}, and the library no longer does: ${Backups.some(paths)}")
+
+/** A restore whose tables came back (in one savepoint) but not all of whose files did: a file that couldn't be
+ * written or deleted ([cause]). Restoring the same backup again finishes it. */
+class PartlyRestored(cause: IOException) : IOException(
+    "its tables came back but not all its files (${cause.message ?: cause.javaClass.simpleName}): restore it again",
+    cause)
 
 /**
  * The phone's backups: the library's tables, as a whole openable database (BackupTables: caracole's schema and the
@@ -47,7 +61,10 @@ data class Restored(val written: Int, val removed: Int, val missing: List<String
  * A restore puts the tables and the kept files back but keeps this side's own records as they are now ([OwnRecords]:
  * its cooldowns, its pace, the records that gate a request, its sync records, the computer's settings), so no cooldown
  * met since is forgotten and the restored library is the phone's own change, given to the computer at the next sync.
- * Every method that reads or writes the database is called inside Database.write (or, for [restore], takes it).
+ * One that can't put back every kept file's bytes is refused whole ([NotRestorable]). Every method that reads or writes
+ * the database is called inside Database.write (or, for [restore], takes it).
+ *
+ * A backup being exported ([exportTo]) is never rotated out, nor are the blobs it names swept, until its export ends.
  */
 object Backups {
     const val BY_HAND = "by-hand"
@@ -77,14 +94,20 @@ object Backups {
 
     private val random = SecureRandom()
 
+    /** What [rotate] and [sweep] check under, and the backups being exported meanwhile (their absolute paths). */
+    private val lock = Any()
+    private val exporting = HashSet<String>()
+
     /** A backup of [db]'s library tables and of [lib]'s kept files, labelled [label], made [now]: its file, or null,
      * and none made, without free space of twice what it needs. IllegalArgumentException for a label not in
      * [LABELS]. */
     fun make(db: Db, lib: LibraryStore, stateDir: File, now: Instant, label: String): File? =
         makeAt(db, lib, stateDir, Stamps.of(now), label)
 
-    /** [make] at [stamp] (a stored time); [lib] null: the tables alone (Take.backupBeforeSync given no library). */
-    internal fun makeAt(db: Db, lib: LibraryStore?, stateDir: File, stamp: String, label: String): File? {
+    /** [make] at [stamp] (a stored time): Take.backupBeforeSync's too. A blob that can't be written (no room, a write
+     * that failed) is an IOException, and no backup is made: a file that can't be read, or no longer holds its row's
+     * bytes, is one the backup doesn't hold ([Backup.missing]). */
+    internal fun makeAt(db: Db, lib: LibraryStore, stateDir: File, stamp: String, label: String): File? {
         require(label in LABELS) { "no backup is labelled $label: a backup is ${LABELS.joinToString(", ")}" }
         val folder = File(stateDir, FOLDER)
         folder.mkdirs()
@@ -92,21 +115,28 @@ object Backups {
         val target = File(folder, "$label-${Stamps.stampOf(stamp).replace(":", "")}$SUFFIX")
         val part = File(folder, "${target.name}.${hex(6)}$PART")
         val blobs = File(folder, BLOBS)
-        val kept = if (lib == null) emptyList() else keptRows(db)
+        val kept = keptRows(db)
         try {
             BackupTables.fresh(part)
             val fresh = kept.groupBy { it.second }.filterKeys { !File(blobs, it).isFile }
-            val bytes = fresh.values.sumOf { rows -> rows.firstNotNullOfOrNull { size(lib!!, it.first) } ?: 0L }
+            val bytes = fresh.values.sumOf { rows -> rows.firstNotNullOfOrNull { size(lib, it.first) } ?: 0L }
             if (freeSpace(folder) < 2 * (part.length() + BackupTables.payload(db) + bytes)) return null
             BackupTables.copyInto(db, part)
             check(part)
-            for ((sha, rows) in fresh) keepBlob(lib!!, blobs, sha, rows.map { it.first })
+            for ((sha, rows) in fresh) keepBlob(lib, blobs, sha, rows.map { it.first })
             Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: Throwable) {
+            // The blobs this copy kept are named by no backup now.
+            part.delete()
+            runCatching { synchronized(lock) { sweep(folder) } }
+            throw e
         } finally {
             part.delete()
         }
-        rotate(folder, label, target)
-        sweep(folder)
+        synchronized(lock) {
+            rotate(folder, label, target)
+            sweep(folder)
+        }
         return target
     }
 
@@ -120,33 +150,45 @@ object Backups {
         if (!file.isFile) return null
         val (label, at) = named(file.name) ?: return null
         val blobs = File(file.parentFile, BLOBS)
-        val kept = BackupTables.shasOf(file).sumOf { sha -> File(blobs, sha).takeIf { it.isFile }?.length() ?: 0L }
-        return Backup(file, at, label, file.length() + kept)
+        val shas = BackupTables.shasOf(file)
+        val held = shas.mapNotNull { sha -> File(blobs, sha).takeIf { it.isFile }?.length() }
+        return Backup(file, at, label, file.length() + held.sum(), shas.size - held.size)
     }
 
     /** The name an exported [backup] is offered under: `caracole-<label>-<UTC time>.zip`. */
     fun exportName(backup: Backup): String = "caracole-${backup.file.name.removeSuffix(SUFFIX)}.zip"
 
     /**
-     * The backup [file] written to [out] as one zip: the copy under its own name, then each kept file it names that
-     * its folder holds, as `blobs/<sha256>`, by SHA-256. [out] is left open for its caller to close.
+     * The backup [file] written to [out] as one zip: the copy under its own name, then each kept file it names, as
+     * `blobs/<sha256>`, by SHA-256; an IOException naming them, and nothing written, for a backup that doesn't hold
+     * every one ([Backup.missing]). Meanwhile the backup is never rotated out nor its blobs swept (a backup made
+     * beside it, the daily one or a sync's). [out] is left open for its caller to close.
      */
     fun exportTo(file: File, out: OutputStream) {
-        require(of(file) != null) { "no backup at $file" }
-        val blobs = File(file.parentFile, BLOBS)
-        val zip = ZipOutputStream(out)
-        zip.putNextEntry(ZipEntry(file.name))
-        file.inputStream().use { it.copyTo(zip) }
-        zip.closeEntry()
-        for (sha in BackupTables.shasOf(file).sorted()) {
-            val blob = File(blobs, sha)
-            if (!blob.isFile) continue
-            zip.putNextEntry(ZipEntry("$BLOBS/$sha"))
-            blob.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
+        val key = file.toPath().toAbsolutePath().normalize().toString()
+        synchronized(lock) {
+            require(of(file) != null) { "no backup at $file" }
+            exporting += key
         }
-        zip.finish()
-        zip.flush()
+        try {
+            val blobs = File(file.parentFile, BLOBS)
+            val kept = BackupTables.keptOf(file)
+            val lacking = kept.filter { !File(blobs, it.second).isFile }.map { it.first }
+            if (lacking.isNotEmpty()) throw IOException("the backup doesn't hold ${count(lacking.size)}: ${some(lacking)}")
+            val zip = ZipOutputStream(out)
+            zip.putNextEntry(ZipEntry(file.name))
+            file.inputStream().use { it.copyTo(zip) }
+            zip.closeEntry()
+            for (sha in kept.mapTo(sortedSetOf()) { it.second }) {
+                zip.putNextEntry(ZipEntry("$BLOBS/$sha"))
+                File(blobs, sha).inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
+            zip.finish()
+            zip.flush()
+        } finally {
+            synchronized(lock) { exporting -= key }
+        }
     }
 
     /**
@@ -155,20 +197,37 @@ object Backups {
      * refused and nothing changes) and those records written over them ([putBack]), in one savepoint; then the
      * library's files made the rows': each kept file whose bytes its file doesn't hold written from its blob, each
      * kept file of the rows before that the backup doesn't name deleted while it holds its row's bytes, and each
-     * song's lyrics files written as its row has them. A failure there leaves the tables restored and the files as
-     * far as it got: restoring again finishes it.
+     * song's lyrics files written as its row has them.
+     *
+     * Refused whole, before anything changes, when it couldn't put back every kept file's bytes ([NotRestorable]: one
+     * the backup holds no blob of, checked by its SHA-256, whose file no longer holds them either) or a path of the
+     * rows, the backup's or the library's now, is no place in the library (an IOException: a link on it, say). A write
+     * that fails after the tables came back is a [PartlyRestored]: restoring again finishes it.
      */
     fun restore(database: Database, lib: LibraryStore, file: File,
                 keep: (Db) -> JsonObject = OwnRecords::document,
                 putBack: (Db, JsonObject) -> Unit = OwnRecords::putBack): Restored = database.writeBlocking { db ->
         val before = keptRows(db)
+        val blobs = File(file.parentFile, BLOBS)
         BackupTables.restore(db, file) { copy ->
+            refuseUnlessWhole(lib, blobs, BackupTables.keptInCopy(db), before)
             val own = keep(db)
             copy()
             putBack(db, own)
         }
-        putFiles(db, lib, File(file.parentFile, BLOBS), before)
+        try {
+            putFiles(db, lib, blobs, before)
+        } catch (e: IOException) {
+            throw PartlyRestored(e)
+        }
     }
+
+    /** "1 of its files", "3 of its files". */
+    internal fun count(n: Int): String = if (n == 1) "1 of its files" else "$n of its files"
+
+    /** The first few of [paths], for a line. */
+    internal fun some(paths: List<String>): String =
+        paths.take(3).joinToString(", ") + if (paths.size > 3) ", …" else ""
 
     // --- the kept files ---------------------------------------------------------------------------------------------
 
@@ -201,9 +260,12 @@ object Backups {
         null
     }
 
-    /** The bytes of [sha] kept as `blobs/<sha>` from the first of [paths] whose file holds them, read once and checked
-     * as they are copied; none kept when no file holds them any more. */
-    private fun keepBlob(lib: LibraryStore, blobs: File, sha: String, paths: List<String>) {
+    /**
+     * The bytes of [sha] kept as `blobs/<sha>` from the first of [paths] whose file holds them, read once and checked
+     * as they are copied: true; false, and none kept, when no file holds them any more (gone, a link, unreadable, other
+     * bytes). A blob that can't be written is an IOException.
+     */
+    private fun keepBlob(lib: LibraryStore, blobs: File, sha: String, paths: List<String>): Boolean {
         for (rel in paths) {
             val source = try {
                 place(lib, rel)
@@ -211,47 +273,71 @@ object Backups {
                 continue
             }
             if (LibraryFiles.entry(source)?.isRegularFile != true) continue
+            val from = try {
+                FileChannel.open(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)
+            } catch (_: IOException) {
+                continue // This file can't be read: another of the same bytes may be.
+            }
             blobs.mkdirs()
             val tmp = File(blobs, ".$sha.${hex(4)}$PART").toPath()
             try {
-                val digest = MessageDigest.getInstance("SHA-256")
-                FileChannel.open(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { from ->
-                    FileChannel.open(tmp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { to ->
-                        val buffer = ByteBuffer.allocate(1 shl 16)
-                        while (from.read(buffer) >= 0) {
-                            buffer.flip()
-                            digest.update(buffer.duplicate())
-                            while (buffer.hasRemaining()) to.write(buffer)
-                            buffer.clear()
-                        }
-                        to.force(true)
-                    }
-                }
-                if (JsonText.hex(digest.digest()) == sha) {
+                val held = from.use { copied(it, tmp, sha) }
+                if (held) {
                     Files.move(tmp, File(blobs, sha).toPath(), StandardCopyOption.ATOMIC_MOVE)
-                    return
+                    return true
                 }
-            } catch (_: IOException) {
-                // This file couldn't be read: another of the same bytes may be.
             } finally {
                 Files.deleteIfExists(tmp)
             }
         }
+        return false
+    }
+
+    /** [from] copied into the new file [to], synced: whether what it read was the bytes of [sha]. A read that fails
+     * is false (the file is one the backup doesn't hold); a write that fails, an IOException. */
+    private fun copied(from: FileChannel, to: Path, sha: String): Boolean {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileChannel.open(to, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { out ->
+            val buffer = ByteBuffer.allocate(1 shl 16)
+            while (true) {
+                val n = try {
+                    from.read(buffer)
+                } catch (_: IOException) {
+                    return false
+                }
+                if (n < 0) break
+                buffer.flip()
+                digest.update(buffer.duplicate())
+                while (buffer.hasRemaining()) out.write(buffer)
+                buffer.clear()
+            }
+            out.force(true)
+        }
+        return JsonText.hex(digest.digest()) == sha
+    }
+
+    /** [NotRestorable] unless each of the backup's kept files [rows] is held by its file now or by its blob (checked
+     * by its SHA-256); an IOException for a path of [rows] or [before] that is no place in the library. */
+    private fun refuseUnlessWhole(lib: LibraryStore, blobs: File, rows: List<Pair<String, String>>,
+                                  before: List<Pair<String, String>>) {
+        for ((rel, _) in before) place(lib, rel)
+        val lacking = rows.filter { (rel, sha) ->
+            !Place.holds(place(lib, rel), sha, null) && !Place.holds(File(blobs, sha).toPath(), sha, null)
+        }.map { it.first }
+        if (lacking.isNotEmpty()) throw NotRestorable(lacking)
     }
 
     /** The library's files made the restored rows' (see [restore]). */
     private fun putFiles(db: Db, lib: LibraryStore, blobs: File, before: List<Pair<String, String>>): Restored {
         var written = 0
         var removed = 0
-        val missing = ArrayList<String>()
         val after = keptRows(db)
         for ((rel, sha) in after) {
             val path = place(lib, rel)
             if (Place.holds(path, sha, null)) continue
-            val bytes = File(blobs, sha).takeIf { it.isFile }?.readBytes()
-            if (bytes == null || JsonText.hex(MessageDigest.getInstance("SHA-256").digest(bytes)) != sha) {
-                missing += rel
-                continue
+            val bytes = File(blobs, sha).readBytes()
+            if (JsonText.hex(MessageDigest.getInstance("SHA-256").digest(bytes)) != sha) {
+                throw IOException("the backup's copy of $rel is no longer its bytes")
             }
             Place.writeAtomic(path, bytes)
             written++
@@ -288,7 +374,7 @@ object Backups {
                 }
             }
         }
-        return Restored(written, removed, missing)
+        return Restored(written, removed)
     }
 
     // --- the folder -------------------------------------------------------------------------------------------------
@@ -307,14 +393,16 @@ object Backups {
         }
     }
 
-    /** The copies of [label] beyond its newest [KEEP] deleted, never [made]. */
+    /** The copies of [label] beyond its newest [KEEP] deleted, never [made] nor one being exported (under [lock]). */
     private fun rotate(folder: File, label: String, made: File) {
         val copies = folder.listFiles()?.filter { it.isFile && named(it.name)?.first == label }
             ?.sortedBy { it.name } ?: return
-        copies.filter { it != made }.take(maxOf(0, copies.size - KEEP)).forEach { it.delete() }
+        copies.filter { it != made }.take(maxOf(0, copies.size - KEEP))
+            .filter { it.toPath().toAbsolutePath().normalize().toString() !in exporting }
+            .forEach { it.delete() }
     }
 
-    /** Each kept file's bytes no backup names any more deleted, with what a copy left half made. */
+    /** Each kept file's bytes no backup names any more deleted, with what a copy left half made (under [lock]). */
     private fun sweep(folder: File) {
         val blobs = File(folder, BLOBS)
         val held = blobs.listFiles() ?: return
