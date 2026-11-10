@@ -3,7 +3,6 @@
     <string name="app_name">caracole</string>
     <string name="settings">Settings</string>
     <string name="sync">Sync</string>
-    <string name="sync_now">Sync now</string>
     <string name="no_picker">No app on this phone picks a file.</string>
     <string name="export_gone">That export was sent already, or is too old: export again.</string>
     <string name="export_refused">The phone\'s caracole didn\'t give the export (HTTP %1$d).</string>
@@ -14,14 +13,14 @@
     <string name="address_label">caracole serve\'s address</string>
     <string name="address_hint">http://192.168.1.20:8737</string>
     <string name="test">Test</string>
-    <string name="testing">Asking caracole…</string>
-    <string name="answered">caracole answered: %1$d files, %2$s</string>
-    <string name="answered_skipped">caracole answered: %1$d files, %2$s (%3$d listed wrong, left out)</string>
-    <string name="last_sync">Last sync</string>
-    <string name="never_synced">Never synced.</string>
+    <string name="testing">Asking the computer…</string>
     <string name="storage">Storage used: %1$s</string>
     <string name="wifi_sync">Sync on Wi-Fi by itself</string>
-    <string name="wifi_sync_hint">Every 6 hours on Wi-Fi (an unmetered network), when caracole answers at the address; otherwise it does nothing.</string>
+    <string name="wifi_sync_hint">Every 6 hours on Wi-Fi (an unmetered network), when the computer answers at the address: your songs, songbooks and site indexes synced both ways, and what changed on both sides left for you to choose, with a notification. When nothing answers there, it does nothing.</string>
+    <string name="export">Export</string>
+    <string name="export_hint">This library in one file: to share with another caracole, or to keep</string>
+    <string name="import_file_row">Import a file</string>
+    <string name="import_file_hint">A file another caracole exported: synced as if it were here</string>
     <string name="text_size_label">Text size</string>
     <string name="text_size">%1$d%%</string>
     <string name="text_size_said">Text size %1$d%%</string>
@@ -29,22 +28,8 @@
     <string name="reset_text_size">Reset the text size to 100%</string>
     <string name="text_size_hint">Pinch a page to change it: fingers apart for larger text, together for smaller, from 50% to 250% of the size Android\'s font size gives the pages. A sheet\'s own Aa sizes its text on top of this.</string>
     <string name="open_library">Open the library</string>
-    <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. With the computer\'s indexes imported, the library page\'s search finds songs on the sites too. Fetching sheets, Export and choosing versions need caracole serve, in the browser.</string>
+    <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. With the computer\'s site indexes, which a sync brings, the library page\'s search finds songs on the sites too. Fetching sheets, Export and choosing versions need caracole serve, in the browser.</string>
 
-    <string name="import_label">Import indexes</string>
-    <string name="import_computer">From the computer</string>
-    <string name="import_file">From a file</string>
-    <string name="import_hint">The sites\' indexes the computer built (caracole index export), merged into the phone\'s, so its search finds songs on Ultimate Guitar, LaCuerda and the other sites with the computer off. From the computer: from caracole serve at the address above. From a file: an export you copied to the phone.</string>
-    <string name="never_imported">No index imported yet.</string>
-    <string name="import_title">Importing the computer\'s indexes</string>
-    <string name="import_starting">Getting the index…</string>
-    <string name="import_downloading">Downloading the index: %1$s</string>
-    <string name="import_downloading_of">Downloading the index: %1$s of %2$s</string>
-    <string name="import_copying">Copying the file…</string>
-    <string name="import_merging">Merging the index…</string>
-    <string name="import_no_picker">No app on this phone picks a file.</string>
-    <string name="import_under_way">An import is under way already: wait for it to end.</string>
-    <string name="import_not_started">The import couldn\'t start: %1$s</string>
     <string name="jobs_channel">Work in the background</string>
     <string name="working">Working…</string>
 
@@ -64,7 +49,7 @@
 
     <!-- Milestone 6's hooks (each its lane's: backups and alerts alerts-backups', printing export-print's). -->
     <string name="backups_label">Backups</string>
-    <string name="backups_open">Backups…</string>
+    <string name="backups_open">Open the backups</string>
     <string name="backups_hint">Copies of the phone\'s library, to restore it from: not on the phone yet.</string>
     <string name="backups_not_built">Backups aren\'t on the phone yet.</string>
     <string name="alerts_channel">Alerts</string>

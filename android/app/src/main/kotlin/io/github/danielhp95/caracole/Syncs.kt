@@ -12,11 +12,18 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncEngine
 import io.github.danielhp95.caracole.mirror.SyncError
+import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.http.Refused
+import io.github.danielhp95.caracole.server.routes.SyncRoutes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.util.concurrent.TimeUnit
 
 /** Runs a sync and keeps its outcome; schedules them through WorkManager. */
@@ -98,6 +105,31 @@ object Syncs {
     }
 
     fun size(context: Context, bytes: Long): String = Formatter.formatShortFileSize(context, bytes)
+
+    /**
+     * Settings' Test: the computer at [typed] (the address as typed) asked what it holds, changing nothing
+     * (SyncRoutes.tested, `POST /sync/test`'s answer), said in its words ("studio answered: 96 songs, 3 songbooks,
+     * its indexes read 02/11/26"); or why it can't be, in the words the sheet says it (no address, not an address,
+     * nothing answering, this very phone). Blocks: called off the main thread.
+     */
+    fun tested(context: Context, typed: String): String = try {
+        if (typed.isBlank()) throw SyncError.NoAddress()
+        val answer = routes(Caracole.phone(context)).tested(io.github.danielhp95.caracole.core.sync.SyncEngine.peerAddress(typed))
+        (answer["said"] as? JsonPrimitive)?.contentOrNull ?: answer.toString()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Refused) {
+        e.message.orEmpty()
+    } catch (e: PeerError) {
+        e.message.orEmpty()
+    } catch (e: Exception) {
+        // Anything, the unexpected too: said on the screen, never a crash.
+        SyncError.of(e).let { it.message ?: it.javaClass.simpleName }
+    }
+
+    /** The phone's sync routes: SyncRoutes among the phone's route modules (waiting on sync-phone, whose Phone.sync
+     * names it). */
+    internal fun routes(phone: Phone): SyncRoutes = phone.modules.filterIsInstance<SyncRoutes>().single()
 }
 
 /** A sync, by hand ("Sync now") or on Wi-Fi every 6 hours (input [Syncs.PROBE]). */

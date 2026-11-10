@@ -9,7 +9,7 @@ songs on the sites with the computer off ([below](#search-with-the-computer-off)
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
 changed. It checks each file's size and hash, and it swaps the new list in whole, so a sync cut short leaves the
-copy you had. The copy writes nothing to the computer's library; the Sync tab's two-way sync does, as the computer's
+copy you had. The copy writes nothing to the computer's library; the sync's two-way take and give does, as the computer's
 own request ([Sync from the phone](#sync-from-the-phone)). The app shows the copy through a caracole of its own on
 the phone, a small server on 127.0.0.1 that only the app can use.
 
@@ -38,14 +38,13 @@ settings, a file read from the phone's server for another app, an index fetched 
    - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
      once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
-   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
+   **Test**, then the bar's sync button ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
    pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
    library's name when its caracole.toml gives one (`name`), which the pages then show after caracole's.
-3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
-   indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
-   with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
-   say). It runs in the background and Settings says how it ended ([Search with the computer
-   off](#search-with-the-computer-off)).
+3. **The indexes**, so that its search finds the sites' songs with the computer off, come with a sync (its Site
+   indexes), or from a file: Settings › **Import a file**, one made on the computer with `caracole index export
+   indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`, say) ([Search with the
+   computer off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`). An update must be signed
 with the same key.
@@ -121,20 +120,13 @@ nothing else: a link to another one, another port of 127.0.0.1 included (a Termu
 in the browser, and nothing a page asks for elsewhere leaves the phone. A file another app opens (a PDF, a Guitar
 Pro file) is read from the server inside the app, never downloaded by Android.
 
-**Import the computer's indexes** to search the sites. The computer builds them (the nightly run, `caracole index
-build`); the phone never asks the sites for them. In Settings, under Import indexes:
-
-- **From the computer** fetches them from caracole serve at the address above (`GET /api/peer/index`, which a
-  recent caracole gives).
-- **From a file** takes a file made on the computer with `caracole index export indexes.sqlite` and copied to the
-  phone.
-
-The import runs in the background, with a notification while it lasts, one import at a time: asked for while one
-runs, Settings says so. The phone merges the file as `caracole index merge` does: each site's newer reads win, and
-nothing it holds goes back. It waits for a sync that runs, and a sync waits for it. Settings shows how the last
-import ended, or why it failed, in the computer's words or the merge's ("the file was exported at schema version
-14…": export it again with the computer's caracole). Import again now and then to bring the sites' new songs; a
-sync from the phone brings the newer ones too ([below](#sync-from-the-phone)).
+**Bring the computer's indexes** to search the sites. The computer builds them (the nightly run, `caracole index
+build`); the phone never asks the sites for them. A sync brings each site whose index is newer on the computer (its
+Site indexes, [below](#sync-from-the-phone)), and Settings' **Import a file** takes a file made on the computer with
+`caracole index export indexes.sqlite` and copied to the phone, synced as a file of the indexes alone. The phone
+merges them as `caracole index merge` does: each site's newer reads win, and nothing it holds goes back. A merge
+waits for a sync that runs, and a sync waits for it; a file made by another caracole's schema is refused in the
+merge's words ("the file was exported at schema version 14…": export it again with the computer's caracole).
 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
@@ -172,11 +164,18 @@ phone's library page has no Sync tab.
 A sync already on its way when the page loads (a reload, a notification's tap) is followed to its summary, never
 started again.
 
-**Export and import a file.** The sheet's export makes a `.caracole` file of the phone's library
-(`<library name>-dd-mm-yy.caracole`), which goes to Android's share sheet: send it, or save it to Files. The app
-reads it from its own server in its own process (the launch's cookie and all, never Android's DownloadManager) and
-shares a copy from its cache. The sheet's import picks a file through Android's file picker: a file another caracole
-exported, a phone's or a computer's, or an index from `caracole index export`, synced as if its caracole were here.
+**Export and Import a file**, in Settings, open the sheet at the export or the import.
+
+- **Export**: "Export this library", its name, songs and date; Library and Songbooks ticked, Site indexes not, each
+  with its size. The file, `<library name>-dd-mm-yy.caracole`, goes to Android's share sheet: send it, or save it
+  to Files. The app reads it from its own server in its own process (the launch's cookie and all, never Android's
+  DownloadManager) and shares a copy from its cache.
+- **Import a file**: the sheet's Choose a file opens Android's file picker (a page can't open it without a tap of its
+  own). A file another caracole exported, a phone's or a computer's, or an index from `caracole index export`, is
+  synced as if its caracole were here: the same cards, **File** in the computer's place, a part the file doesn't
+  hold greyed ("Not in this file"), and nothing goes back (a file takes nothing). Refused: this library's own
+  export, and a file no newer than the last sync with its caracole ("Nothing in this file is newer than your sync
+  with studio on 03/11/26").
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.
@@ -254,8 +253,8 @@ To try the app by hand there, install it as on a phone
 at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`
 builds a library of 20 songs in DIR with no request and serves it on the host's loopback alone (caracole serve has
 no sign-in: never on the LAN for a test), which the emulator reaches at `http://10.0.2.2:PORT`. Its
-Settings then imports that computer's indexes (From the computer), or a file pushed to the emulator's Download
-folder (`adb push indexes.sqlite /sdcard/Download/`, then From a file). `adb shell pm clear
+bar's sync button then brings that computer's indexes with the rest, and Settings' Import a file a file pushed to the
+emulator's Download folder (`adb push indexes.sqlite /sdcard/Download/`). `adb shell pm clear
 io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),

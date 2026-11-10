@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 
-/** The settings, the last sync's outcome and the last index import's, in the app's own preferences. */
+/** The settings and the last unattended sync's outcome, in the app's own preferences. */
 class Settings(private val prefs: SharedPreferences) {
     constructor(context: Context) : this(context.applicationContext.getSharedPreferences("caracole", Context.MODE_PRIVATE))
 
@@ -23,15 +23,10 @@ class Settings(private val prefs: SharedPreferences) {
         get() = TextZoom.fitted(prefs.getInt(TEXT_ZOOM, TextZoom.DEFAULT))
         set(value) = prefs.edit { putInt(TEXT_ZOOM, TextZoom.fitted(value)) }
 
-    /** How the last sync of the mirror ended. */
+    /** How the last unattended sync ended (Sync on Wi-Fi by itself: [Syncs.run]). */
     var lastOutcome: Outcome?
         get() = outcome(LAST_AT, LAST_OK, LAST_TEXT)
         set(value) = keep(value, LAST_AT, LAST_OK, LAST_TEXT)
-
-    /** How the last import of the computer's index ended ([IndexImports]). */
-    var lastImport: Outcome?
-        get() = outcome(IMPORT_AT, IMPORT_OK, IMPORT_TEXT)
-        set(value) = keep(value, IMPORT_AT, IMPORT_OK, IMPORT_TEXT)
 
     private fun outcome(at: String, ok: String, text: String): Outcome? =
         if (prefs.contains(at)) Outcome(prefs.getLong(at, 0), prefs.getBoolean(ok, false), prefs.getString(text, "") ?: "")
@@ -49,8 +44,5 @@ class Settings(private val prefs: SharedPreferences) {
         const val LAST_AT = "last_sync_at"
         const val LAST_OK = "last_sync_ok"
         const val LAST_TEXT = "last_sync_text"
-        const val IMPORT_AT = "last_import_at"
-        const val IMPORT_OK = "last_import_ok"
-        const val IMPORT_TEXT = "last_import_text"
     }
 }

@@ -38,7 +38,7 @@ import java.security.MessageDigest
  *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
- * host.) It syncs a fresh copy, runs Settings' Test, opens the library page (the phone's own server's, at its
+ * host.) It syncs a fresh copy, runs Settings' Test (what the computer holds, in its words), opens the library page (the phone's own server's, at its
  * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that each
  * link it shows to caracole serve's own pages (Export PDF) is answered by the phone's stub ("… isn't on the phone
  * yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
@@ -77,7 +77,8 @@ class EndToEndTest {
             var said = ""
             waitUntil("Test's answer") {
                 settings.onActivity { said = it.findViewById<TextView>(R.id.test_result).text.toString() }
-                said.startsWith("caracole answered")
+                // SyncRoutes.tested's words: "<the computer's name> answered: N songs, M songbooks, …".
+                " answered: " in said && " song" in said
             }
             record("test", said)
             shot("settings")
