@@ -123,13 +123,19 @@ class EndToEndTest {
             record("viewer", sandbox)
             // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
             // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
-            // page, 409, "… isn't on the phone yet." (Stubs).
+            // page, 409, "… isn't on the phone yet." (Stubs). The Guitar Pro page is the phone's own (GuitarRoutes): a
+            // file only the copy of the computer's pages holds, as a sync of the copy alone leaves it, is the file itself
+            // (303), which the app hands to another app.
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
                 val (status, text) = stubbed(origin + href)
                 answered.put(href, status)
+                if (href.startsWith("/guitar")) {
+                    assertTrue("$href on the phone: $status", status == 200 || status == 303)
+                    continue
+                }
                 assertEquals("$href on the phone", 409, status)
                 assertTrue("$href: $text", "on the phone yet" in text)
             }
@@ -209,8 +215,8 @@ class EndToEndTest {
                     record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app")
                         .put("at", url(main)))
                     shot("viewer-guitar")
-                    // Served, the link is the Guitar Pro page's (/guitar), which the tap may have opened in the WebView:
-                    // the phone's stub, one page more to go back from.
+                    // Served, the link is the Guitar Pro page's (/guitar): the phone's own page, or, for a file only the
+                    // copy holds, the file itself; a page opened is one more to go back from.
                     instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
                     waitUntil("back from the Guitar Pro link") {
                         val at = url(main).substringBefore('#')
