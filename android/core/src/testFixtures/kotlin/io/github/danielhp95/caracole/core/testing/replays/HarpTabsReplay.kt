@@ -117,8 +117,9 @@ object HarpTabsReplay : AreaReplay {
         misses.check(got == want) { "$fn(${html.toString().take(100)}) = $got, Python's $want" }
     }
 
-    /** What stands on the phone for each exception Python's records name. */
-    private val RAISES = mapOf("ValueError" to "IllegalArgumentException")
+    /** What stands on the phone for each exception Python's records name: its ValueError, and its OverflowError
+     * (sqlite3's, for an int past SQLite's integers). */
+    private val RAISES = mapOf("ValueError" to "IllegalArgumentException", "OverflowError" to "ArithmeticException")
 
     private fun shownAsKotlin(raises: JsonObject): JsonObject {
         val type = text(raises.getValue("type"))
@@ -164,8 +165,9 @@ object HarpTabsReplay : AreaReplay {
 
     /** A scenario record replayed, [pass] its call in the record's world; every request's user agent the record's
      * `agent`, and the pages noted for the next push its `reads`, checked then forgotten. */
-    private fun scenario(misses: Misses, r: JsonObject, pass: (ScenarioWorld) -> Any?) {
-        val now = Instant.parse(text(r.getValue("now")))
+    private fun scenario(misses: Misses, record: JsonObject, pass: (ScenarioWorld) -> Any?) {
+        val now = Instant.parse(text(record.getValue("now")))
+        val r = record["raises"]?.jsonObject?.let { JsonObject(record + ("raises" to shownAsKotlin(it))) } ?: record
         Scenarios.replay(r, misses, eventLog = { db, run -> EventLog(db, run) { now } }) { world ->
             try {
                 pass(world)

@@ -1442,7 +1442,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):
   - its pages read as selectolax reads them (core.html), their JSON-LD by `PyJson.loads` (a value's `str()` as
-    Python's), their counts by `PyFloat` and `PyInt`;
+    Python's), their counts by `PyFloat` and `PyInt`, whole as Python's int: one past SQLite's integers is its
+    OverflowError only where it is written (`HarpTabsPages.sqliteInteger`), never on a page passed over;
   - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
     `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
   - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site

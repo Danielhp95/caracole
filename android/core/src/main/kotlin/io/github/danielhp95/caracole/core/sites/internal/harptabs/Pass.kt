@@ -195,15 +195,18 @@ internal object HarpPass {
         }
     }
 
-    /** _keep: the tab as the song's next `harmonica-N.txt`, with its version; its name. */
+    /** _keep: the tab as the song's next `harmonica-N.txt`, with its version; its name. Its views are the version's
+     * votes, Python's int: past SQLite's integers its OverflowError before anything is written, as upsert_version's
+     * statement raises it. */
     private fun keep(run: Run, song: SongRow, pageId: Long, path: String, tab: HarpTab): String {
+        val votes = HarpTabsPages.sqliteInteger(tab.views)
         val versionId = Versions.upsert(
             run.db, provider = HarpTabsPages.PROVIDER, tabId = pageId.toString(), songId = song.id, slot = "guitar",
-            kind = HARMONICA, rating = tab.rating ?: 0.0, votes = tab.views.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            kind = HARMONICA, rating = tab.rating ?: 0.0, votes = votes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
             version = 1, label = null, url = HarpTabs.pageUrl(path), raw = tab.raw(), now = run.stamp,
         )
-        // votes is the views, Python's int: a count past an Int written as it is
-        if (tab.views > Int.MAX_VALUE) run.db.execute("UPDATE versions SET votes = ? WHERE id = ?", tab.views, versionId)
+        // Versions.upsert takes an Int: a count past one written as it is
+        if (votes > Int.MAX_VALUE) run.db.execute("UPDATE versions SET votes = ? WHERE id = ?", votes, versionId)
         val number = Numbering.harmonica(run.db, run.lib, song)
         val name = "harmonica-$number.txt"
         Kept.keepFile(run.db, run.lib, song, versionId, name, tab.body.toByteArray(Charsets.UTF_8), number, run.stamp)

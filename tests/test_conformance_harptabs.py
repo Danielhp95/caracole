@@ -146,8 +146,11 @@ TITLES = [
     "Mr. Tambourine Man (harp part only) [solo]", "Isn’t She Lovely", "Rock ʼn Roll",
 ]
 
+# HUGE: a finite count past SQLite's integers (and a Long's), which Python's int keeps whole: only SQLite refuses it,
+# where it is written (OverflowError), never a page passed over
+HUGE = "9" * 30 + "M"
 VIEWS = [None, "", "1.1M", "57k", "974", "2.5K", "1,234", "1,1M", " 12k ", "12 k", "0", "0.5k", "1.", ".5k", "1e3",
-         "M", "12x", "١٢k", "9" * 400, "3.3333333m", "２０k"]
+         "M", "12x", "١٢k", "9" * 400, "3.3333333m", "２０k", HUGE, "9223372036854775807", "9223372036854775k"]
 RATINGS = [None, "", "4.0", "5", "5.0001", "0", "-0.0", "-1", " 3.5 ", "nan", "inf", "1e0", "4,5", "x", "١"]
 
 
@@ -247,7 +250,7 @@ def tab_records() -> list[dict[str, Any]]:
         _tab(tab_page("Piano Man (C Harmonica)", "Pharm Gal", views="2.5M", body="6 6 6\npick\n")),
         _tab(tab_page("Yesterday", "Unknown", artist_path="artist/4")),
     ]
-    out += [_tab(mini_tab(views=v)) for v in ("1.1M", "57k", "974", "2,345", "", None, "12x")]
+    out += [_tab(mini_tab(views=v)) for v in ("1.1M", "57k", "974", "2,345", "", None, "12x", HUGE)]
     out += [_tab(mini_tab(artist=a, artist_path=p)) for a, p in (
         ("Unknown", "artist/4"), ("?", "artist/4"), ("unknown", "artist/4"), ("Various Artists", "artist/9/various"),
         ("Traditional", "artist/10/traditional"), ("Anonymous", "artist/11/anonymous"), ("Billy Joel", "artist/1/b"))]
@@ -355,6 +358,8 @@ def artist_records() -> list[dict[str, Any]]:
         _artist(mini_artist("billy joel", [piano], said="1 tab")),
         _artist(mini_artist("billy joel", [piano], said="1234 tabs")),
         _artist(mini_artist("billy joel", [piano], said="1,234 tabs")),
+        _artist(mini_artist("billy joel", [piano], said="99,999,999,999,999,999,999 tabs")),
+        _artist(mini_artist("billy joel", [piano, card(9, "nine", "Nine", views=HUGE)])),
         _artist(mini_artist("billy joel", [piano], said="no count")),
         _artist(mini_artist("billy joel", [piano], said="٣ tabs")),
         _artist(mini_artist("billy joel", [piano], said="3 tab")),
@@ -594,6 +599,9 @@ def stats_of(s) -> dict[str, Any]:
 
 
 KNOCKIN = ("artist/1283/bob-dylan", "tab/1247/knockin-on-heavens-door", "tab/29910/knockin-on-heavens-door")
+# A title longer than a folder's name holds (library.MAX_NAME_BYTES): two songs of it make one folder.
+LONG = ("Concierto de Aranjuez para guitarra y orquesta, segundo movimiento, adagio, en la versión que tocaba la "
+        "banda en sus conciertos de mil novecientos ochenta y siete")
 
 
 class Lookups:
@@ -751,6 +759,13 @@ class Lookups:
         self.tabs(w, "a server error leaves the song for the next run", w.song("Ritchie Valens", "La Bamba"),
                   {bamba: status(530, "<title>Connection Error - Harptabs.com</title>")})
         w = self.world()
+        self.tabs(w, "a count past SQLite's integers on another artist's page is passed over as any",
+                  w.song("Billy Joel", "Piano Man"),
+                  {piano: ok("tab_25_piano-man.html"), other_piano: ok(mini_tab("Piano Man", "Someone Else", views=HUGE))})
+        w = self.world()
+        self.tabs(w, "a tab kept whose count is past SQLite's integers is its OverflowError, nothing kept",
+                  w.song("Ritchie Valens", "La Bamba"), {bamba: ok(mini_tab("La Bamba", "Ritchie Valens", views=HUGE))})
+        w = self.world()
         self.tabs(w, "a tab gone since the sitemap listed it is passed over", w.song("Billy Joel", "Piano Man"),
                   {piano: status(404), other_piano: ok(mini_tab("Piano Man", "Billy Joel"))})
         w = self.world()
@@ -857,7 +872,25 @@ class Lookups:
                                               "last_error": "403", "last_error_at": "2026-11-01T09:00:00Z"}))
         self.stage(w, "the stage: a cooldown over asks again", w.song("Ritchie Valens", "La Bamba"),
                    {bamba: ok("tab_89_la-bamba.html")})
+        self._shared_folder()
         return self.records
+
+    def _shared_folder(self) -> None:
+        """Two songs whose titles agree up to a folder name's length (library.MAX_NAME_BYTES) make one folder, where
+        the first keeps harmonica-1.txt: the second's tab is harmonica-2.txt (harmonica_number takes no number another
+        song keeps there), so keep_file meets no SharedFolder."""
+        from caracole.harptabs import title_keys
+        from caracole.library import song_dir
+
+        first, second = f"{LONG}, part one", f"{LONG}, part two"
+        tab = f"tab/4242/{title_keys(second)[0]}"
+        w = self.world(extra=("artist/4241/joaquin-rodrigo", tab))
+        one = w.song("Joaquín Rodrigo", first)
+        two = w.song("Joaquín Rodrigo", second)
+        assert one.id != two.id and song_dir(w.library, one) == song_dir(w.library, two)
+        w.keep(one, "4240", "harmonica-1.txt", b"part one")
+        self.stage(w, "the stage: a number another song keeps in the folder they share is never taken", two,
+                   {url(tab): ok(mini_tab(second, "Joaquín Rodrigo", body="-4 5\nadagio\n"))})
 
     @staticmethod
     def _joel_page(w: World) -> None:
@@ -887,7 +920,7 @@ def test_the_lookups_cover_each_outcome(lookups):
     assert any(s["kept"] for s in results) and any(s["missing"] for s in results)
     assert any(s["failures"] for s in results) and any(s["budget_exhausted"] for s in results)
     assert any(s["tried"] == 0 for s in results)
-    assert {r["raises"]["type"] for r in passes.values() if "raises" in r} == {"ProviderBlocked"}
+    assert {r["raises"]["type"] for r in passes.values() if "raises" in r} == {"ProviderBlocked", "OverflowError"}
     kept = passes["a song gets the tab by its artist, kept as harmonica-1.txt"]["out"]
     assert [row["name"] for row in kept["rows"]["files"]] == ["harmonica-1.txt"]
     assert kept["requests"] == [f"GET {url('tab/89/la-bamba')}"]
@@ -897,6 +930,9 @@ def test_the_lookups_cover_each_outcome(lookups):
         == 8
     stages = {r["case"]: _done(r).get("result") for r in lookups if r["fn"].endswith("_Lookup.harptabs")}
     assert stages["the stage: a tab kept"] == ["done", "harmonica tab kept"]
+    shared = next(r for r in lookups if r["case"].startswith("the stage: a number another song keeps"))["out"]
+    assert shared["result"] == ["done", "harmonica tab kept"]
+    assert [row["name"] for row in shared["rows"]["files"]] == ["harmonica-1.txt", "harmonica-2.txt"]
     assert {s[0] for s in stages.values()} == {"done", "skipped", "failed"}
 
 
@@ -969,6 +1005,16 @@ class Artists:
         w = self.world()
         Lookups._joel_page(w)
         self.read(w, "a page gone since it was read forgets its tabs", "artist/1178/billy-joel", {joel: status(404)})
+        w = self.world()
+        Lookups._joel_page(w)
+        self.read(w, "a tab's count past SQLite's integers is its OverflowError, the tabs read before kept",
+                  "artist/1178/billy-joel",
+                  {joel: ok(mini_artist("billy joel", [card(25, "piano-man", "piano man"),
+                                                       card(77, "new-one", "New One", views=HUGE)]))})
+        w = self.world()
+        self.read(w, "a count of tabs past SQLite's integers is its OverflowError", "artist/1178/billy-joel",
+                  {joel: ok(mini_artist("billy joel", [card(25, "piano-man", "piano man")],
+                                        said="99999999999999999999 tabs"))})
         self.records.append(self.paths())
         return self.records
 
@@ -1003,7 +1049,7 @@ def test_the_artist_reads_cover_each_outcome(artists):
     assert reads["an artist's page gone keeps no tab"]["reads"] == ["artist/50/the-beatles"]
     assert reads["a page the cache holds from within 30 days is read again with no request"]["out"]["requests"] == []
     assert {r["raises"]["type"] for r in reads.values() if "raises" in r} == {
-        "BudgetExhausted", "HarpTabsParseError", "ProviderBlocked", "ProviderError"}
+        "BudgetExhausted", "HarpTabsParseError", "ProviderBlocked", "ProviderError", "OverflowError"}
     [paths] = [r for r in artists if r["fn"].endswith("artist_paths")]
     assert dict(map(tuple, paths["cases"]))["Billy Joel"] == ["artist/1178/billy-joel"]
     assert dict(map(tuple, paths["cases"]))["The Beatles"] == ["artist/50/the-beatles", "artist/60/the-beatles"]

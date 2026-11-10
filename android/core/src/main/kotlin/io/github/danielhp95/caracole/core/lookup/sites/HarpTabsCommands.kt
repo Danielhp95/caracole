@@ -2,14 +2,14 @@ package io.github.danielhp95.caracole.core.lookup.sites
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.CommandContext
 import io.github.danielhp95.caracole.core.lookup.Pace
 import io.github.danielhp95.caracole.core.sites.HarpArtistPage
 import io.github.danielhp95.caracole.core.sites.HarpTabsFetch
+import java.math.BigInteger
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
 /**
  * `caracole harptabs --artist` on the phone (commands/lyrics.py's `_harptabs_artist`): one artist's page read into
@@ -28,10 +28,13 @@ object HarpTabsCommands {
     /** commands/lyrics.py's NOT_READ. */
     const val NOT_READ = "Not read: "
 
-    private val WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC)
-
-    /** stamps.shown: a time as the pages show it, in UTC; "?" for none. */
-    private fun shown(at: Instant?): String = at?.let(WHEN::format) ?: "?"
+    /** stamps.shown: a time as the pages show it, `strftime("%Y-%m-%d %H:%M UTC")` of stamps' own text, as
+     * LookupWords.until says one; "?" for none. */
+    private fun shown(at: Instant?): String {
+        if (at == null) return "?"
+        val stamp = Stamps.of(at)  // 2026-11-04T14:00:00Z
+        return stamp.substring(0, 10) + " " + stamp.substring(11, 16) + " UTC"
+    }
 
     fun artist(c: CommandContext, artist: String): String {
         val off = "${NOT_READ}harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked."
@@ -71,13 +74,13 @@ object HarpTabsCommands {
         if (page == null) return "Not found: harptabs.com no longer has the page of $artist."
         val listed = page.listed.size
         val lists = when {
-            page.tabs > listed -> "$listed of their ${plural(page.tabs, "tab")}"
-            listed > 0 -> "their ${plural(listed.toLong(), "tab")}"
+            page.tabs > listed.toBigInteger() -> "$listed of their ${plural(page.tabs, "tab")}"
+            listed > 0 -> "their ${plural(listed.toBigInteger(), "tab")}"
             else -> "no tab"
         }
         return "Read: harptabs.com's page of ${page.name} lists $lists, in the index now."
     }
 
     /** report.plural: "1 tab", "98 tabs". */
-    private fun plural(n: Long, word: String): String = "$n $word" + if (n == 1L) "" else "s"
+    private fun plural(n: BigInteger, word: String): String = "$n $word" + if (n == BigInteger.ONE) "" else "s"
 }

@@ -31,8 +31,10 @@ import java.math.BigInteger
  * harptabs.py's docstring. A page without the expected markup is [HarpTabsParseError]: a provider error, never a miss.
  *
  * Numbers are Python's: a chip's count is `float()`'s ([PyFloat]) times its suffix, then `int()`; an artist's count of
- * tabs `int()`'s ([PyInt]), a count that isn't one Python's ValueError ([IllegalArgumentException], its words). A
- * count past a Long (no page writes one) is an [ArithmeticException], where Python would keep it and SQLite refuse it.
+ * tabs `int()`'s ([PyInt]), a count that isn't one Python's ValueError ([IllegalArgumentException], its words). Both
+ * are kept whole ([BigInteger], Python's int), whatever their size: a count past SQLite's integers (no page writes
+ * one) is refused only where Python writes it, by [sqliteInteger], so a page that is passed over (another artist's
+ * tab) reads as Python's does.
  */
 object HarpTabsPages {
     const val PROVIDER = "harptabs"
@@ -86,8 +88,8 @@ object HarpTabsPages {
      * artist, "by Unknown"), the tab ([body], the `<pre>`'s text) and its chips (null, or 0 for the views, when the
      * page shows none). */
     data class HarpTab(val title: String, val artist: String?, val body: String, val key: String? = null,
-                       val harp: String? = null, val difficulty: String? = null, val views: Long = 0,
-                       val rating: Double? = null) {
+                       val harp: String? = null, val difficulty: String? = null,
+                       val views: BigInteger = BigInteger.ZERO, val rating: Double? = null) {
         /** What a kept tab's version records of it, in harptabs.py's order. */
         fun raw(): JsonObject = JsonObject(linkedMapOf(
             "title" to JsonPrimitive(title), "artist" to str(artist), "key" to str(key), "harp" to str(harp),
@@ -176,16 +178,24 @@ object HarpTabsPages {
         return null
     }
 
-    /** _views: "1.1M" is 1,100,000, "57k" 57,000, "974" 974; 0 for none, or one that isn't a count. */
-    fun views(text: String?): Long {
-        val m = PyRe.fullmatch(COUNT, Py.strip((text ?: "").replace(",", ""))) ?: return 0
+    /** _views: "1.1M" is 1,100,000, "57k" 57,000, "974" 974; 0 for none, or one that isn't a count. `int()` of the
+     * float, every digit of it ("9"×30 + "M": a float near 10^36, past a Long); an infinity 0. */
+    fun views(text: String?): BigInteger {
+        val m = PyRe.fullmatch(COUNT, Py.strip((text ?: "").replace(",", ""))) ?: return BigInteger.ZERO
         val n = PyFloat.parse(m.groupValues[1])!! * when (Py.asciiLower(m.groupValues[2])) {
             "k" -> 1_000
             "m" -> 1_000_000
             else -> 1
         }
-        return if (n.isFinite()) BigDecimal(n).toBigInteger().longValueExact() else 0
+        return if (n.isFinite()) BigDecimal(n).toBigInteger() else BigInteger.ZERO
     }
+
+    /** sqlite3's binding of Python's int: within SQLite's 64 bits, else its OverflowError (an
+     * [ArithmeticException], in its words), raised where Python's statement would be, so that nothing it writes is
+     * written. */
+    fun sqliteInteger(n: BigInteger): Long =
+        if (n.bitLength() < Long.SIZE_BITS) n.toLong()
+        else throw ArithmeticException("Python int too large to convert to SQLite INTEGER")
 
     /** _rating: the chip's rating, 0 to 5; null for none, or one that isn't. */
     fun rating(text: String?): Double? {
@@ -234,7 +244,7 @@ object HarpTabsPages {
         }
         val once = LinkedHashMap<Long, HarpListedTab>()
         for (tab in listed) once[tab.tabId] = tab
-        return HarpArtistPage(name, tabs.max(listed.size.toBigInteger()).longValueExact(), once.values.toList())
+        return HarpArtistPage(name, tabs.max(listed.size.toBigInteger()), once.values.toList())
     }
 
     /** _card: a card's tab, or null for one that links to no tab page. */

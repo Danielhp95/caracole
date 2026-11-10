@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.sites.HarpArtistPage
 import io.github.danielhp95.caracole.core.sites.HarpTabs
 import io.github.danielhp95.caracole.core.sites.HarpTabsFetch
 import io.github.danielhp95.caracole.core.sites.SiteKeys
+import java.math.BigInteger
 import java.time.Instant
 
 /** harptabs_index.py's artist pages on the phone: one read now ([read]), stored ([store]), and the pages a name
@@ -36,12 +37,14 @@ internal object Artists {
                                           accept = HarpTabsFetch.ACCEPT) { r ->
             if (r.status == 404) null else HarpTabsPages.parseArtistPage(r.content, r.url)
         }
-        store(db, path, page ?: HarpArtistPage("", 0), now)
+        store(db, path, page ?: HarpArtistPage("", BigInteger.ZERO), now)
         return page
     }
 
     /** store_artist_page (store_gone's with no name and no tab): in place of what the page gave before, in one
-     * savepoint, after harptabs_index.ensure_current_keys; and noted for the next push to the computer. */
+     * savepoint, after harptabs_index.ensure_current_keys; and noted for the next push to the computer. A number past
+     * SQLite's integers (the page's id, its count of tabs, a tab's views) is Python's OverflowError where its statement
+     * binds it ([HarpTabsPages.sqliteInteger]): the savepoint undone, the keys made current kept. */
     fun store(db: Db, path: String, page: HarpArtistPage, now: Instant) {
         SiteKeys.harptabsSongKeys(db)
         val (pageId, key) = rowOf(path)
@@ -49,12 +52,13 @@ internal object Artists {
         db.savepoint("harptabs_artist_page") {
             db.execute("DELETE FROM harptabs_artist_tabs WHERE artist = ?", path)
             db.execute("INSERT OR REPLACE INTO harptabs_artists (path, page_id, key, name, tabs, read_at) " +
-                           "VALUES (?, ?, ?, ?, ?, ?)", path, pageId, key, page.name, page.tabs, stamp)
+                           "VALUES (?, ?, ?, ?, ?, ?)", path, HarpTabsPages.sqliteInteger(pageId), key, page.name,
+                       HarpTabsPages.sqliteInteger(page.tabs), stamp)
             page.listed.forEachIndexed { n, t ->
                 db.execute("INSERT OR REPLACE INTO harptabs_artist_tabs (artist, tab_id, path, title, song_key, " +
                                "harp_key, difficulty, views, rating, place) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                           path, t.tabId, t.path, t.title, HarpTabs.songKey(t.title), t.key, t.difficulty, t.views,
-                           t.rating, n)
+                           path, t.tabId, t.path, t.title, HarpTabs.songKey(t.title), t.key, t.difficulty,
+                           HarpTabsPages.sqliteInteger(t.views), t.rating, n)
             }
             Reads.note(db, HarpTabsPages.PROVIDER, path, stamp)
         }
@@ -62,10 +66,10 @@ internal object Artists {
 
     /** _row_of: an artist page's id and its slug's key, from its path; for a path of no slug (`artist/4`, the site's
      * catch-all), its id alone. */
-    private fun rowOf(path: String): Pair<Long, String> {
-        HarpTabsPages.parsePageUrl(HarpTabs.pageUrl(path))?.let { return it.pageId to it.key }
-        val found = PyRe.match(ARTIST_ID, path) ?: return 0L to ""
-        return PyInt.parse(found.groupValues[1])!!.longValueExact() to ""
+    private fun rowOf(path: String): Pair<BigInteger, String> {
+        HarpTabsPages.parsePageUrl(HarpTabs.pageUrl(path))?.let { return it.pageId.toBigInteger() to it.key }
+        val found = PyRe.match(ARTIST_ID, path) ?: return BigInteger.ZERO to ""
+        return PyInt.parse(found.groupValues[1])!! to ""
     }
 
     fun paths(db: Db, name: String): List<String> {

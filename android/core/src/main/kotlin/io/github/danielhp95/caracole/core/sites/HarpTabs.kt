@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.core.library.PassStats
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.sites.internal.harptabs.Artists
 import io.github.danielhp95.caracole.core.sites.internal.harptabs.HarpPass
+import java.math.BigInteger
 import java.time.Duration
 import java.time.Instant
 
@@ -21,13 +22,16 @@ class HarpTabsStats(var sitemaps: Int = 0, var kept: Int = 0, var missing: Int =
 }
 
 /** harptabs.ListedTab: a tab an artist page lists: the site's id, its page's path (`tab/25/piano-man`), its title as
- * the card writes it, and its chips (null, or 0 for the views, when the card shows none). */
+ * the card writes it, and its chips (null, or 0 for the views, when the card shows none). The views are Python's int,
+ * of any size: SQLite refuses one past its integers only where Python writes it (store_artist_page). */
 data class HarpListedTab(val tabId: Long, val path: String, val title: String, val key: String? = null,
-                         val difficulty: String? = null, val views: Long = 0, val rating: Double? = null)
+                         val difficulty: String? = null, val views: BigInteger = BigInteger.ZERO,
+                         val rating: Double? = null)
 
 /** harptabs.ArtistPage: an artist page read: the name as the page heads it, how many tabs it says the artist has
- * ([tabs]), and the tabs it lists ([listed]: the first 30, the most viewed first). */
-data class HarpArtistPage(val name: String, val tabs: Long, val listed: List<HarpListedTab> = emptyList())
+ * ([tabs], Python's int, of any size, as the views are), and the tabs it lists ([listed]: the first 30, the most viewed
+ * first). */
+data class HarpArtistPage(val name: String, val tabs: BigInteger, val listed: List<HarpListedTab> = emptyList())
 
 /**
  * harptabs.com for a lookup's song (harptabs_fetch.py's `harptabs_tabs` with `only` its song and
@@ -85,7 +89,7 @@ object HarpTabsFetch {
     fun storeArtistPage(db: Db, path: String, page: HarpArtistPage, now: Instant) = Artists.store(db, path, page, now)
 
     /** store_gone: an artist page that answered 404: no tab, no name, and when it answered. */
-    fun storeGone(db: Db, path: String, now: Instant) = Artists.store(db, path, HarpArtistPage("", 0), now)
+    fun storeGone(db: Db, path: String, now: Instant) = Artists.store(db, path, HarpArtistPage("", BigInteger.ZERO), now)
 
     /** artist_paths: the artist pages the sitemap lists for [name]: its page's path or address as it is, else the
      * artists whose slug's key is one of the name's forms, hyphens aside, lowest id first. */

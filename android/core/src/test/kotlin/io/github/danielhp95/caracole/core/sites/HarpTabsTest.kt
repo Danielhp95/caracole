@@ -21,8 +21,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -56,11 +59,14 @@ class HarpTabsTest {
     }
 
     @Test fun viewsAndRatingsAreReadAsPythonsFloatReadsThem() {
-        assertEquals(1_100_000, HarpTabsPages.views("1.1M"))
-        assertEquals(57_000, HarpTabsPages.views("57k"))
-        assertEquals(12_000, HarpTabsPages.views("١٢k"))  // Python's \d and float(): a digit of any script
-        assertEquals(0, HarpTabsPages.views("12x"))
-        assertEquals(0, HarpTabsPages.views(null))
+        assertEquals(1_100_000.toBigInteger(), HarpTabsPages.views("1.1M"))
+        assertEquals(57_000.toBigInteger(), HarpTabsPages.views("57k"))
+        assertEquals(12_000.toBigInteger(), HarpTabsPages.views("١٢k"))  // Python's \d and float(): a digit of any script
+        assertEquals(BigInteger.ZERO, HarpTabsPages.views("12x"))
+        assertEquals(BigInteger.ZERO, HarpTabsPages.views(null))
+        // int() of a float past a Long: every digit, as Python keeps it (only SQLite refuses it, where it is written)
+        assertEquals(BigDecimal(1e30 * 1e6).toBigInteger(), HarpTabsPages.views("9".repeat(30) + "M"))
+        assertEquals(BigInteger.ZERO, HarpTabsPages.views("9".repeat(400)))  // float(): an infinity
         assertEquals(4.0, HarpTabsPages.rating(" 4.0 "))
         assertNull(HarpTabsPages.rating("5.0001"))
         assertNull(HarpTabsPages.rating("nan"))
@@ -149,10 +155,29 @@ class HarpTabsTest {
 
     // --- an artist's page stored, and noted for the next push ------------------------------------------------------
 
+    @Test fun aNumberPastSqlitesIntegersIsPythonsOverflowErrorWhereItIsWrittenAndNothingIsStored() = db { db ->
+        index(db, "artist/1178/billy-joel")
+        val huge = BigInteger.TWO.pow(63)
+        assertEquals(Long.MAX_VALUE, HarpTabsPages.sqliteInteger(huge - BigInteger.ONE))
+        assertEquals(Long.MIN_VALUE, HarpTabsPages.sqliteInteger(-huge))
+        for (page in listOf(
+            HarpArtistPage("billy joel", huge, listOf(HarpListedTab(25, "tab/25/piano-man", "piano man"))),
+            HarpArtistPage("billy joel", 2.toBigInteger(), listOf(
+                HarpListedTab(25, "tab/25/piano-man", "piano man", views = 7.toBigInteger()),
+                HarpListedTab(26, "tab/26/piano-man", "piano man", views = huge))),
+        )) {
+            val e = assertFailsWith<ArithmeticException> { HarpTabsFetch.storeArtistPage(db, "artist/1178/billy-joel", page, now) }
+            assertEquals("Python int too large to convert to SQLite INTEGER", e.message)
+            assertEquals(0, db.one("SELECT COUNT(*) FROM harptabs_artists") { it.long(0)!!.toInt() })
+            assertEquals(0, db.one("SELECT COUNT(*) FROM harptabs_artist_tabs") { it.long(0)!!.toInt() })
+            assertNull(db.kvGet("${Reads.READ}harptabs:artist/1178/billy-joel"))
+        }
+    }
+
     @Test fun anArtistPageStoredIsNotedForTheNextPushToTheComputer() = db { db ->
         index(db, "artist/1178/billy-joel")
-        val page = HarpArtistPage("billy joel", 98, listOf(HarpListedTab(25, "tab/25/piano-man", "piano man", "C",
-                                                                        "Beginner", 1_100_000, 4.0)))
+        val page = HarpArtistPage("billy joel", 98.toBigInteger(), listOf(
+            HarpListedTab(25, "tab/25/piano-man", "piano man", "C", "Beginner", 1_100_000.toBigInteger(), 4.0)))
         HarpTabsFetch.storeArtistPage(db, "artist/1178/billy-joel", page, now)
         assertEquals(stamp, db.kvGet("${Reads.READ}harptabs:artist/1178/billy-joel"))
         assertEquals(mapOf("harptabs" to listOf("artist/1178/billy-joel")), Reads.since(db, "computer"))
