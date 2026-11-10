@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Asked
+import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
 import io.github.danielhp95.caracole.core.lookup.sites.GameTabsStage
@@ -56,6 +57,26 @@ class GameTabsTest {
         }
         val seven = page.replaceFirst("\n            5\n", "\n            ٧\n").toByteArray()
         assertEquals(7, GameTabsPages.parseGamePage(seven).pages.toInt())
+    }
+
+    /** float(int) as Python makes it, worked out whatever the platform's BigInteger.toDouble rounds: the nearest
+     * float, a tie to the even one, OverflowError from the first int that rounds to 2**1024. */
+    @Test fun anIntIsTheFloatPythonMakesOfIt() {
+        val two = java.math.BigInteger.TWO
+        fun f(n: java.math.BigInteger) = io.github.danielhp95.caracole.core.sites.internal.gametabs.Values.asFloat(n)
+        assertEquals(9007199254740992.0, f(two.pow(53).add(java.math.BigInteger.ONE)))
+        assertEquals(9007199254740996.0, f(two.pow(53).add(java.math.BigInteger.valueOf(3))))
+        assertEquals(-9007199254740996.0, f(two.pow(53).add(java.math.BigInteger.valueOf(3)).negate()))
+        assertEquals(1e22, f(java.math.BigInteger.TEN.pow(22).add(java.math.BigInteger.ONE)))
+        assertEquals(0.0, f(java.math.BigInteger.ZERO))
+        assertEquals(-7.0, f(java.math.BigInteger.valueOf(-7)))
+        val edge = two.pow(1024).subtract(two.pow(970))
+        assertEquals(Double.MAX_VALUE, f(edge.subtract(java.math.BigInteger.ONE)))
+        assertEquals(-Double.MAX_VALUE, f(edge.subtract(java.math.BigInteger.ONE).negate()))
+        for (n in listOf(edge, edge.negate(), two.pow(1024), java.math.BigInteger.TEN.pow(400))) {
+            val e = assertFailsWith<ArithmeticException> { f(n) }
+            assertEquals("int too large to convert to float", e.message)
+        }
     }
 
     // --- the stage -----------------------------------------------------------------------------------------------
@@ -138,19 +159,20 @@ class GameTabsTest {
                      stage("the title, by no game or composer of it: nothing asked", client = false))
     }
 
+    /** The envelope's other ends, LookupWords.end's for gametabs.net, its name get.NAMES'. */
     @Test fun theEnvelopesOtherEndsInGetPysWords() {
         val cfg = PhoneConfig.DEFAULTS
         assertEquals(StageEnd("skipped", "gametabs.net is cooling down after a block, until 2026-11-04 14:00 UTC"),
-                     GameTabsStage.end(cfg, Asked.Cooling(Instant.parse("2026-11-04T14:00:30Z"))))
+                     LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Cooling(Instant.parse("2026-11-04T14:00:30Z"))))
         assertEquals(StageEnd("skipped", "gametabs.net is cooling down after a block, until later"),
-                     GameTabsStage.end(cfg, Asked.Cooling(null)))
+                     LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Cooling(null)))
         val block = ProviderBlocked("gametabs", "https://gametabs.net/x", 403)
         val state = ProviderState("gametabs", strikes = java.math.BigInteger.ONE, cooldownUntil = Instant.parse("2026-11-05T02:00:00Z"))
         assertEquals(StageEnd("skipped", "gametabs.net blocked caracole (${block.message}): no more requests to it " +
-            "until 2026-11-05 02:00 UTC. Nothing was marked not found."), GameTabsStage.end(cfg, Asked.Blocked(block, state)))
+            "until 2026-11-05 02:00 UTC. Nothing was marked not found."), LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Blocked(block, state)))
         assertEquals(StageEnd("skipped", "this hour's 60 lookup requests to gametabs.net are spent; the nightly run " +
-            "does the rest"), GameTabsStage.end(cfg, Asked.Spent(hour = true, keptForSheets = false)))
+            "does the rest"), LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Spent(hour = true, keptForSheets = false)))
         assertEquals(StageEnd("skipped", "gametabs.net is off in caracole.toml"),
-                     GameTabsStage.end(cfg, Asked.Off("gametabs.net is off in caracole.toml")))
+                     LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Off("gametabs.net is off in caracole.toml")))
     }
 }

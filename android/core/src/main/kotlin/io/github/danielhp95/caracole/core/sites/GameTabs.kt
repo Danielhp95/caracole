@@ -3,7 +3,6 @@ package io.github.danielhp95.caracole.core.sites
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.PassStats
@@ -70,7 +69,7 @@ data class GamePage(val name: String, val tabs: BigInteger, val listed: List<Gam
  */
 object GameTabsPages {
     const val PROVIDER = "gametabs"
-    const val BASE_URL = "https://gametabs.net"
+    const val BASE_URL = GameTabs.BASE_URL
 
     /** The tabs a game page lists; the rest on its next pages. */
     const val PAGE_TABS = 50
@@ -79,11 +78,13 @@ object GameTabsPages {
      * from its styles by, for a page that doesn't name them. */
     val INSTRUMENTS: List<String> = listOf("Guitar", "Bass", "Mandolin", "Banjo", "Ukulele")
 
-    /** The address of a page, from its path as the index keeps it (`tabs/actraiser/fillmore`). */
-    fun pageUrl(path: String): String = "$BASE_URL/$path"
+    /** The address of a page, from its path as the index keeps it (`tabs/actraiser/fillmore`): the search's
+     * (Sites.kt's GameTabs), one port of page_url. */
+    fun pageUrl(path: String): String = GameTabs.pageUrl(path)
 
-    /** The key a song's title meets the tabs' titles with: its version suffixes go first (clean_title). */
-    fun titleKey(title: String): String = Normalize.slugKey(Normalize.cleanTitle(title))
+    /** The key a song's title meets the tabs' titles with: its version suffixes go first (clean_title). The search's
+     * (Sites.kt's GameTabs), one port of title_key. */
+    fun titleKey(title: String): String = GameTabs.titleKey(title)
 
     /** parse_tab_page: a tab page's tab and what its `data-tab` says of it (its microdata and heading where it says
      * nothing); GameTabsParseError for a page without a tab, a title or a game. [html] is the answer's bytes, read
@@ -112,8 +113,8 @@ object GameTabsFetch {
     const val PICKED = ":pick"
     const val KIND = "gametab"
 
-    /** gametabs_index.KEYS_KEY: the KEY_VERSION the game pages' title keys were made with. */
-    const val KEYS_KEY = "gametabs:games:keys"
+    /** gametabs_index.KEYS_KEY: the KEY_VERSION the game pages' title keys were made with ([SiteKeys]'). */
+    const val KEYS_KEY = SiteKeys.GAMETABS_TITLE_KEYS
 
     /** gametabs_tabs(conn, client, library_dir, now, overrides=, only=, refresh_index=False): see the object's
      * docstring. ProviderBlocked propagates; a spent budget ends the pass (`budgetExhausted`); any other provider
@@ -133,6 +134,7 @@ object GameTabsFetch {
     fun fits(song: SongRow, tab: GameTab): Boolean = Lookups.fits(song, tab)
 
     /** gametabs_index.ensure_current_keys: every game page's tab's title key made again from its title after a
-     * change to caracole's keys, once; how many rows changed. */
-    fun ensureCurrentKeys(db: Db): Int = Lookups.ensureCurrentKeys(db)
+     * change to caracole's keys, once; how many rows changed. [SiteKeys.gametabsEnsureCurrentKeys], which an index
+     * merge runs too. */
+    fun ensureCurrentKeys(db: Db): Int = SiteKeys.gametabsEnsureCurrentKeys(db)
 }

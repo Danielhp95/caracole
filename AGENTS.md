@@ -1441,14 +1441,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - harptabs.com (harptabs), gtptabs.com and MuseScore (tab-files): not built yet.
 - gametabs.net (gametabs): core.sites' `GameTabsPages` (gametabs.py's tab and game pages read through core.html,
   `parseTabPage` and `parseGamePage`) and `GameTabsFetch` (gametabs_fetch.py for a lookup's song alone, no sitemap
-  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words).
+  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words, the envelope's
+  `LookupWords.end`'s).
   - A `data-tab` value as gametabs.py reads it: Python's truth and `str()` of each JSON value, its ints unbounded
-    (`BigInteger`), an int too large for a float an OverflowError as `math.isfinite` raises; a version's votes are
-    the views as SQLite holds them (64 bits).
+    (`BigInteger`), each as the float Python makes of it (the nearest, a tie to the even one, whatever the platform's
+    `BigInteger.toDouble` rounds), one too large for a float an OverflowError as `math.isfinite` raises; a version's
+    votes are the views as SQLite holds them (64 bits, sqlite3's OverflowError past them).
   - Candidates by game (its slug's key, its page's name) or composer, `CANDIDATES` (4) at most, the most viewed
     first, then by path in code points; the most viewed page that fits kept as `gametab-N.txt`, a pick
-    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`; the game pages' title keys made again first
-    (`gametabs:games:keys`), as the computer's pass does.
+    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`, of the lookup's song alone; the game pages'
+    title keys made again first (`SiteKeys.gametabsEnsureCurrentKeys`, kv `gametabs:games:keys`), as the computer's
+    pass does.
   - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
     helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
     vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.

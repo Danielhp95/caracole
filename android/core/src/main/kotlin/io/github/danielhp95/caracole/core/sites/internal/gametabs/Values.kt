@@ -72,14 +72,39 @@ internal object Values {
      * finite; an int too large for a float is Python's OverflowError (math.isfinite converts it first). */
     fun number(e: JsonElement?): Double? {
         if (e !is JsonPrimitive || e.isString || e is JsonNull || bool(e)) return null
-        if (integer(e.content)) {
-            val d = BigInteger(e.content).toDouble()
-            if (d.isInfinite()) throw OverflowError("int too large to convert to float")
-            return d
-        }
+        if (integer(e.content)) return asFloat(BigInteger(e.content))
         val d = float(e.content)
         return if (d.isNaN() || d.isInfinite()) null else d
     }
+
+    /**
+     * `float(n)` of a Python int: the nearest float, a tie to the even one, and OverflowError where that is past the
+     * largest float. Worked out here rather than by `BigInteger.toDouble`, whose rounding is the platform's (the JDK's
+     * on the JVM, libcore's on the device).
+     */
+    fun asFloat(n: BigInteger): Double {
+        val size = n.abs()
+        val bits = size.bitLength()
+        if (bits <= DOUBLE_BITS) return size.toLong().toDouble().let { if (n.signum() < 0) -it else it }
+        var shift = bits - DOUBLE_BITS
+        var top = size.shiftRight(shift)  // the 53 bits a float keeps
+        val rest = size.subtract(top.shiftLeft(shift))
+        val half = BigInteger.ONE.shiftLeft(shift - 1)
+        val past = rest.compareTo(half)
+        if (past > 0 || (past == 0 && top.testBit(0))) top = top.add(BigInteger.ONE)
+        if (top.bitLength() > DOUBLE_BITS) {
+            top = top.shiftRight(1)
+            shift++
+        }
+        // top's highest bit is 2**(shift + 52): a float holds up to 2**1023's.
+        if (shift + DOUBLE_BITS - 1 > MAX_EXPONENT) throw OverflowError("int too large to convert to float")
+        val d = Math.scalb(top.toLong().toDouble(), shift)
+        return if (n.signum() < 0) -d else d
+    }
+
+    /** The bits of a float's significand, its hidden one counted, and its largest power of two's exponent. */
+    private const val DOUBLE_BITS = 53
+    private const val MAX_EXPONENT = 1023
 
     /** `int(x)` of a finite float: toward zero, exactly. */
     fun truncated(x: Double): BigInteger = BigDecimal(x).toBigInteger()

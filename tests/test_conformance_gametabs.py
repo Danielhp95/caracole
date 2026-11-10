@@ -259,6 +259,15 @@ def tab_records() -> list[dict[str, Any]]:
         ("views of a huge float", {"views": 1.5e300}),
         ("views of an int too large for a float", {"views": 10 ** 400}),
         ("views of an int as large as a float", {"views": 2 ** 1000}),
+        ("views of an int a float rounds down, 2**53+1", {"views": 2 ** 53 + 1}),
+        ("views of an int a float rounds, 10**22+1", {"views": 10 ** 22 + 1}),
+        ("views of an int halfway, to the even float", {"views": 2 ** 53 + 3}),
+        ("views of an int that rounds to the largest float", {"views": 2 ** 1024 - 2 ** 970 - 1}),
+        ("views of an int that rounds past the largest float", {"views": 2 ** 1024 - 2 ** 970}),
+        ("a rating of an int a float rounds", {"average_fun_rating": 2 ** 53 + 3}),
+        ("a rating of an int that rounds past the largest float", {"average_fun_rating": 2 ** 1024 - 2 ** 970}),
+        ("ratings of an int that rounds to the largest float", {"num_ratings_fun": 2 ** 1024 - 2 ** 970 - 1}),
+        ("ratings of an int that rounds past the largest float", {"num_ratings_fun": 2 ** 1024 - 2 ** 970}),
         ("a rating of an int", {"average_fun_rating": 4}),
         ("a rating of a string: none", {"average_fun_rating": "4.5"}),
         ("a rating of false: none", {"average_fun_rating": False}),
@@ -841,6 +850,31 @@ def scenarios(tmp: Path) -> list[dict[str, Any]]:
     w = world("budget")
     song = w.song("Hollow Knight", "Resting Grounds")
     made.append(w.run("a spent budget ends the pass, no miss", song, {f"GET {FIRST}": GONE}, budget=1))
+    w.close()
+
+    # A lookup asks about its own song alone: another song with candidates is never asked about, its kv untouched.
+    for name, asked, answers in (
+            ("older", "Resting Grounds", {f"GET {FIRST}": GONE,
+                                          f"GET {RESTING}": ok(fixture("tab_hollow-knight_resting-grounds-2.html"))}),
+            ("newer", "Fillmore", {f"GET {FILLMORE}": ok(fixture("tab_actraiser_fillmore.html"))})):
+        w = world(f"only-{name}", games=("tabs/actraiser",))
+        songs = {"Resting Grounds": w.song("Hollow Knight", "Resting Grounds"),
+                 "Fillmore": w.song("Yuzo Koshiro", "Fillmore", added="2026-10-02T00:00:00Z")}
+        made.append(w.run(f"only the lookup's song is asked about ({name}), the other song with candidates left alone",
+                          songs[asked], answers))
+        w.close()
+
+    # A tab's views are its version's votes, as SQLite holds them: past a 32-bit int kept whole, past 64 bits
+    # sqlite3's OverflowError, before anything is written.
+    w = world("votes")
+    song = w.song("Hollow Knight", "Resting Grounds")
+    made.append(w.run("views past a 32-bit int are the version's votes, whole", song, {
+        f"GET {FIRST}": GONE, f"GET {RESTING}": tab_of("Hollow Knight", "Resting Grounds", views=3_000_000_000)}))
+    w.close()
+    w = world("votes-overflow")
+    song = w.song("Hollow Knight", "Resting Grounds")
+    made.append(w.run("views past 64 bits: sqlite3's OverflowError, nothing kept", song, {
+        f"GET {FIRST}": GONE, f"GET {RESTING}": tab_of("Hollow Knight", "Resting Grounds", views=10 ** 19)}))
     w.close()
 
     # The tabs' title keys made again after a change to caracole's keys.

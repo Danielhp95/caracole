@@ -20,6 +20,7 @@ import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.sites.GameTab
+import io.github.danielhp95.caracole.core.sites.GameTabs
 import io.github.danielhp95.caracole.core.sites.GameTabsFetch
 import io.github.danielhp95.caracole.core.sites.GameTabsPages
 import io.github.danielhp95.caracole.core.sites.GameTabsStats
@@ -43,8 +44,8 @@ internal object Lookups {
     fun gametabsTabs(db: Db, client: Client, lib: LibraryStore, now: Instant, overrides: Overrides,
                      only: Set<Long>): GameTabsStats {
         val stats = GameTabsStats()
-        ensureCurrentKeys(db)
-        val wanting = songsWantingATab(db, now, overrides).filter { it.id in only }
+        GameTabsFetch.ensureCurrentKeys(db)
+        val wanting = songsWantingATab(db, now, overrides, only)
         if (wanting.isEmpty()) return stats
         val index = Index(db)
         val run = Pass(db, client, lib, now)
@@ -85,26 +86,6 @@ internal object Lookups {
         val theirs = named(listOf(tab.game) + tab.composers).toMutableSet()
         if (tab.gameSlug.isNotEmpty()) theirs += Normalize.compact(Normalize.ugSlugKey(tab.gameSlug.replace("_", "-")))
         return songForms(song).any { it in theirs }
-    }
-
-    fun ensureCurrentKeys(db: Db): Int {
-        val version = Normalize.KEY_VERSION.toString()
-        if (db.kvGet(GameTabsFetch.KEYS_KEY) == version) return 0
-        var changed = 0
-        db.savepoint("gametabs_game_keys") {
-            val rows = db.query("SELECT page, path, title, title_key FROM gametabs_game_tabs") {
-                listOf(it.text(0)!!, it.text(1)!!, it.text(2)!!, it.text(3)!!)
-            }
-            for ((page, path, title, old) in rows) {
-                val new = GameTabsPages.titleKey(title)
-                if (new != old) {
-                    db.execute("UPDATE gametabs_game_tabs SET title_key = ? WHERE page = ? AND path = ?", new, page, path)
-                    changed++
-                }
-            }
-            db.kvSet(GameTabsFetch.KEYS_KEY, version)
-        }
-        return changed
     }
 
     // --- the index ---------------------------------------------------------------------------------------------
@@ -151,12 +132,18 @@ internal object Lookups {
 
     // --- which songs -------------------------------------------------------------------------------------------
 
-    /** `_songs_wanting_a_tab`: newest first, not ignored, with no tab from gametabs.net (or not the one you picked),
-     * and not looked up there in the last 30 days (or with a pick not asked for yet). */
-    private fun songsWantingATab(db: Db, now: Instant, overrides: Overrides): List<SongRow> {
+    /** `_songs_wanting_a_tab`, of the songs [only] names: newest first, not ignored, with no tab from gametabs.net
+     * (or not the one you picked), and not looked up there in the last 30 days (or with a pick not asked for yet).
+     * Python filters `only` after; the predicate only reads, so the songs are read by their id first, in list_songs'
+     * order (`added_at DESC, id DESC`, SQLite's text order a code point's), and no other song's kv is read. */
+    private fun songsWantingATab(db: Db, now: Instant, overrides: Overrides, only: Set<Long>): List<SongRow> {
+        val songs = only.mapNotNull { Songs.byId(db, it) }.sortedWith { a, b ->
+            Py.CODE_POINT_ORDER.compare(b.addedAt, a.addedAt).takeIf { it != 0 } ?: b.id.compareTo(a.id)
+        }
+        if (songs.isEmpty()) return emptyList()
         val withTab = songsWithAGametab(db)
         val cutoff = Stamps.micros(now.minus(GameTabsFetch.RECHECK_AFTER))
-        return Songs.list(db).filter { song ->
+        return songs.filter { song ->
             song.status != "ignored" && song.key !in overrides.ignore &&
                 (if (pick(overrides, song) == null) song.id !in withTab else wants(db, song, overrides)) &&
                 (before(db.kvGet("${GameTabsFetch.CHECKED_PREFIX}${song.id}"), cutoff) || newlyPicked(db, song, overrides))
@@ -258,6 +245,6 @@ internal object Lookups {
         return name
     }
 
-    private const val TAB = "tab"
-    private const val GAME = "game"
+    private const val TAB = GameTabs.TAB
+    private const val GAME = GameTabs.GAME
 }
