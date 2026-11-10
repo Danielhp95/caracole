@@ -526,7 +526,7 @@ def phone_kind(job: _Job) -> str:
                          (_songbooks.KEY, "songbook"), (_jobs.LACUERDA_SEARCH, "lacuerda-search"),
                          (_jobs.LACUERDA_ARTIST, "lacuerda-artist"), (_jobs.HARPTABS_ARTIST, "harptabs-artist"),
                          (_jobs.YOUTUBE_SEARCH, "youtube-search"), (_jobs.YOUTUBE_SHEET, "youtube"),
-                         (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync")):
+                         (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync"), ("import:", "sync")):
         if key.startswith(prefix):
             return kind
     return {"versions": "versions", "review": "review"}.get(first, "song")
@@ -924,7 +924,8 @@ PEER_KINDS = ("sync", "peer-push", "index-merge")
 
 
 def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | None, str | None]]:
-    """The syncs, takes and merges caracole serve runs (test_web_sync.peer_job), each in its states."""
+    """The syncs, imports of a file, takes and merges caracole serve runs (test_web_sync.peer_job), each in its
+    states."""
     from test_web_sync import peer_job
 
     took = [("song/oasis/wonderwall", "taken", ""), ("song/muse/hysteria", "given", "")]
@@ -934,7 +935,10 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
                                  "give": ("done", "gave 1"), "agree": ("done", "12 units the two agree on")}),
                        ("peer-push", {"check": ("done", "1 change"), "take": ("done", "took 1"),
                                       "render": ("skipped", ""), "agree": ("done", "12 units the two agree on")}),
-                       ("index-merge", {"merge": ("done", "merged 12 pages: ug, lacuerda")})):
+                       ("index-merge", {"merge": ("done", "merged 12 pages: ug, lacuerda")}),
+                       ("import", {"check": ("done", "2 differences with Desk's file"), "take": ("done", "took 1"),
+                                   "render": ("done", ""), "agree": ("done", "12 units the two agree on, 1 kept here"),
+                                   "index": ("done", "1 index merged")})):
         first = next(iter(done))
         jobs += [
             (f"{kind}, queued", peer_job(kind, "queued"), None, 0, None, None),
@@ -1072,7 +1076,7 @@ def test_job_views_kinds_jsonl_is_what_the_views_say_of_every_kind_caracole_serv
         assert {r["job"]["state"] for r in records if kind in (r["job"]["kind"], r["out"]["kind"])} == every, kind
     running = {s["name"] for r in records if r["job"]["state"] == "running" for s in r["job"]["stages"]
                if s["state"] == "running"}
-    assert set(_status.STAGE_LINES) - running == {"mirror", "index"}  # the phone's own sync's: job_views.jsonl's
+    assert set(_status.STAGE_LINES) - running == {"mirror"}  # the phone's own sync's: job_views.jsonl's
     check(WEB / "job_views_kinds.jsonl", jsonl(records, corpus="web/job_views", made_by=MADE_BY))
 
 
