@@ -67,7 +67,8 @@ internal object Weighing {
 
     fun dotted(lines: List<String>): Boolean = lines.any { B.DOT_BEFORE.find(it) != null }
 
-    private fun playable(hole: Hole, harpChip: String?): Boolean =
+    /** harptab._playable: whether a Richter harp plays [hole] (a slide, unless the chip says Diatonic). */
+    fun playable(hole: Hole, harpChip: String?): Boolean =
         if (hole.button) harpChip != "Diatonic" else Harp.holeNote(0, hole.hole, hole.breath, hole.bend, hole.over) != null
 
     /** harptab._weighed: each candidate scored on the tab's lines, Q = P × T, weighed by the legend's [found]. */

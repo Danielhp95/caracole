@@ -108,7 +108,7 @@ data class Group(val holes: List<Hole>, val kind: String, val col: Int, val digi
  * them), its words standing free ([free]), the share of it that is the tabber's words ([prose]), its longest run of
  * tokens holding holes ([run]) and its tokens. Two scans are equal by everything but [used], as Python's.
  *
- * The seam lane harptab-layout builds on: [isRow], [missed], [holey] and [explained] are Python's properties.
+ * The layout (Layout.kt) reads [isRow], [missed], [holey] and [explained], Python's properties.
  */
 class Scan(val groups: List<Group>, val coverage: Double, val unknown: List<String>, val label: String? = null,
            val used: Map<Used, Int> = emptyMap(), val free: Int = 0, val prose: Double = 0.0, val run: Int = 0,
@@ -155,31 +155,51 @@ class Scan(val groups: List<Group>, val coverage: Double, val unknown: List<Stri
 /** An item of a tab's section (harptab.Item): a row, the tabber's words, prose, a gap, a legend. */
 sealed interface TabItem
 
-/** harptab.Row: a line of holes with its words. */
+/** harptab.Row: a line of holes, with the words sung under it ([lyric], null for a line played alone), cut into
+ * [parts]: each place's groups and the words sung from there to the next place, as a ChordPro line is (the first
+ * part's groups may be none: the words before the first hole). [text] is the line as written (tabs expanded), [line]
+ * its place in the tab; [confidence] its own P × T; a row not [trusted] is shown as written, its words too; [placement]
+ * counts how each group found its place ("snap", "split", "held", "gap"); [above], its words written above it.
+ * Python's `align` sets its parts in place; here [HarpTabs.align] answers the row with them. */
 data class Row(val groups: List<Group>, val lyric: String?, val label: String? = null,
                val unknown: List<String> = emptyList(), val parts: List<Pair<List<Group>, String>> = emptyList(),
                val placement: Map<String, Int> = emptyMap(), val text: String = "", val line: Int = -1,
                val confidence: Double = 1.0, val trusted: Boolean = true, val above: Boolean = false) : TabItem
 
-/** harptab.Words. */
+/** harptab.Words: lines of words with no holes over them, a later verse sung to the same tune. */
 data class Words(val lines: List<String>) : TabItem
 
-/** harptab.Prose. */
+/** harptab.Prose: a line of the tabber's: a note, an address, "next verses the same". */
 data class Prose(val text: String) : TabItem
 
-/** harptab.Gap. */
+/** harptab.Gap: a blank line between two parts of a section. */
 data object Gap : TabItem
 
 /** harptab.Legend: a tab's own legend, its lines as written, what they say ([symbols]: "bare" for a hole written
  * alone, "" where the tab writes it) and where they are ([at], their places in the tab). */
 data class Legend(val lines: List<String>, val symbols: List<Symbol>, val at: List<Int> = emptyList()) : TabItem
 
-/** harptab.Section. */
-data class TabSection(val label: String?, val items: List<TabItem> = emptyList())
+/** harptab.Section: a section of a tab, its name (null for the one before any) and what it holds. */
+data class TabSection(val label: String?, val items: List<TabItem> = emptyList()) {
+    /** Section.chorus: whether its name says it is the chorus. */
+    val chorus: Boolean get() = !label.isNullOrEmpty() && HarptabData.CHORUS.find(label) != null
+}
 
-/** harptab.Tab: a harmonica tab read and laid out (lane harptab-layout). */
+/** harptab.Tab: a tab read: the tabber's notes before its first row, its sections, how it was read ([reading]), the
+ * harp's key its words name ("A", or null), the lines that hold holes but are shown as written ([missed]), whether
+ * it is a chromatic's, its [legend] (its blocks', together) and the page's harp chip ([harp]: "Diatonic",
+ * "Chromatic", or null). */
 data class Tab(val notes: List<String>, val sections: List<TabSection>, val reading: Reading, val key: String?,
-               val missed: List<String>, val chromatic: Boolean, val legend: Legend? = null, val harp: String? = null)
+               val missed: List<String>, val chromatic: Boolean, val legend: Legend? = null, val harp: String? = null) {
+    /** Tab.convention: the notation's name, "signs", "brackets", "letters"… */
+    val convention: String get() = reading.notation.name
+
+    fun rows(): List<Row> = sections.flatMap { s -> s.items.filterIsInstance<Row>() }
+
+    /** Tab.readable: whether its page draws its holes, else its text as written: a confident reading, a row drawn,
+     * no chromatic. */
+    val readable: Boolean get() = reading.confident && rows().any { it.trusted } && !chromatic
+}
 
 /** A tab's text as it is read (harptab._prepared): the page's chip as caracole reads it ("Diatonic", "Chromatic", or
  * null), its lines (tabs expanded, the ends' spaces off), its legends and their lines' places. */
@@ -189,8 +209,9 @@ data class Prepared(val chip: String?, val lines: List<String>, val legends: Lis
 }
 
 /**
- * viewer/harptab.py: a harmonica tab read under each notation (lane harptab-read: the notations, `scan`, the
- * legends, the candidates and their scores, `read`, `readings`, a pin) and laid out (lane harptab-layout: `parse`).
+ * viewer/harptab.py: a harmonica tab read under each notation (the notations, `scan`, the legends, the candidates and
+ * their scores, `read`, `readings`, a pin) and laid out (`parse`: its rows with their words and syllables, Layout.kt
+ * and Align.kt).
  * The notations are harptab.py's data (data/caracole/viewer/harptab.json); each compiles into its tokenizer through
  * core.py.PyRegex, so every pattern means what Python's does.
  */
@@ -231,7 +252,42 @@ object HarpTabs {
     fun read(lines: List<String>, harpChip: String? = null, notation: Notation? = null,
              legends: List<Legend> = emptyList()): Pair<Reading, List<Scan>> = Weighing.read(lines, harpChip, notation, legends)
 
-    fun parse(body: String, harp: String? = null, notation: Notation? = null): Tab = TODO("lane harptab-layout")
+    /** harptab.parse: the tab [body] (a `harmonica-N.txt`) read and laid out; [harp] the page's chip ("Diatonic",
+     * "Chromatic"), [notation] one to read it by, whatever the others score ("pinned"). */
+    fun parse(body: String, harp: String? = null, notation: Notation? = null): Tab = Layout.parse(body, harp, notation)
+
+    /** harptab._line_kinds: each line's kind, "legend", "blank", "holes", "missed" or "text". */
+    fun lineKinds(lines: List<String>, scans: List<Scan>, inLegend: Set<Int>): List<String> =
+        Layout.lineKinds(lines, scans, inLegend)
+
+    /** harptab._above: whether the tab writes each row's words above it. */
+    fun above(lines: List<String>, kinds: List<String>, scans: List<Scan>): Boolean = Layout.above(lines, kinds, scans)
+
+    /** harptab._is_label: whether [line] names a section ([besideRow]: right above or below a row). */
+    fun isLabel(line: String, besideRow: Boolean = false): Boolean = Layout.isLabel(line, besideRow)
+
+    /** harptab._label_text: a section's name as its line writes it, its brackets and colon off. */
+    fun labelText(line: String): String = Layout.labelText(line)
+
+    /** harptab._is_prose: whether a block of text after the first row is the tabber's prose. */
+    fun isProse(block: List<String>): Boolean = Layout.isProse(block)
+
+    /** harptab._syllables: a line's syllables, near enough. */
+    fun syllables(line: String): Int = Layout.syllables(line)
+
+    /** harptab.named_key: the harp's key the tabber's words name ("Bb"), or null. */
+    fun namedKey(lines: List<String>): String? = Layout.namedKey(lines)
+
+    /** harptab.syllable_starts: the code-point columns a syllable of [lyric] starts at. */
+    fun syllableStarts(lyric: String): List<Int> = Align.syllableStarts(lyric)
+
+    /** harptab.align: [row] with each group placed on a column of its words (Python sets them in place). */
+    fun align(row: Row, reach: Int = HarptabData.REACH): Row = Align.align(row, reach)
+
+    /** harptab._cuts: where to cut the word [a] to [b] of [lyric] for the holes at [anchors], [fixed] its ends and the
+     * places already in it; null for a hole it doesn't cut for. */
+    fun cuts(lyric: String, a: Int, b: Int, anchors: List<Int>, fixed: List<Int>): List<Int?> =
+        Align.cuts(lyric, a, b, anchors, fixed)
 
     /** harptab._candidates: the notations a tab's [lines] are read under, the commonest first, each with its source,
      * and its legends' symbols placed (what each candidate's agreement is counted against). */

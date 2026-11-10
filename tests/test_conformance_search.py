@@ -61,11 +61,12 @@ so ``LibraryHit.song`` is the song's key). A record whose ``fn`` is a compositio
 fixture, args: ["GET", path], kw: {}, out: {status, json}}``, each answered by a real ``WebApp`` over the fixture
 replayed into its state folder, with an empty library folder, ``searches_lacuerda=False`` and
 ``searches_youtube=False``: each fixture's queries and artists, over ug the texts and addresses of ``API_TEXTS`` and
-``API_RAW`` (how the route reads a query), and on every fixture ``API_ARTIST``'s. The phone answers ``progression``,
-``lacuerda_search``, ``lacuerda_unlisted`` and ``youtube`` as null, and a progression can add rows to ``library``, so
-the generator patches, for its ``WebApp`` alone, ``progressions.read_progression`` to answer None and
-``search.lacuerda_unlisted`` to answer None: the answers recorded are those the phone computes. The rest of an answer
-is caracole serve's own. What a song's card says of the files of its folder is masked: in every object with a
+``API_RAW`` (how the route reads a query), and on every fixture ``API_ARTIST``'s. The phone answers ``progression``
+and ``youtube`` as null (and ``lacuerda_search``, as ``searches_lacuerda=False`` does: its gate is
+vectors/web/api_search_gate.jsonl's, tests/test_conformance_lookup_routes.py), and a progression can add rows to
+``library``, so the generator patches, for its ``WebApp`` alone, ``progressions.read_progression`` to answer None: the
+answers recorded are those the phone computes, ``lacuerda_unlisted`` among them. The rest of an answer is caracole
+serve's own. What a song's card says of the files of its folder is masked: in every object with a
 ``links`` member (a ``library`` row, a site row's song of yours), ``links``, ``files``, ``source``, ``key`` and
 ``instruments`` are ``"*"``.
 
@@ -862,11 +863,10 @@ def _app(state: Path):
 
 @contextmanager
 def _as_the_phone() -> Iterator[None]:
-    """What the phone answers null in its place: no progression read, no LaCuerda page to offer."""
+    """What the phone answers null in its place: no progression read."""
     from unittest import mock
 
-    with mock.patch("caracole.progressions.read_progression", lambda text: None), \
-            mock.patch("caracole.search.lacuerda_unlisted", lambda *args, **kwargs: None):
+    with mock.patch("caracole.progressions.read_progression", lambda text: None):
         yield
 
 
