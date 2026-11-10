@@ -28,6 +28,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.security.MessageDigest
 
@@ -59,13 +60,13 @@ class EndToEndTest {
 
     @Test
     fun syncsThenShowsTheLibraryAndAViewerOfflineAndHandsFilesOff() {
-        // A fresh copy, synced as Sync now does.
+        // A fresh copy, synced as Sync on Wi-Fi syncs (Syncs.run: the three parts, the computer's pages with them).
         val mirror = Caracole.mirror(context)
         File(context.filesDir, "blobs").deleteRecursively()
         File(context.filesDir, "manifest.json").delete()
         mirror.reload()
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
+        val outcome = runBlocking { Syncs.run(context, probe = false) }!!
         record("sync", outcome.text)
         assertTrue(outcome.text, outcome.ok)
         val manifest = mirror.reload()!!

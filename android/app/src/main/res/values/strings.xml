@@ -31,6 +31,17 @@
     <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. With the computer\'s site indexes, which a sync brings, the library page\'s search finds songs on the sites too. Fetching sheets, Export and choosing versions need caracole serve, in the browser.</string>
 
     <string name="jobs_channel">Work in the background</string>
+    <string name="syncs_channel">Syncs</string>
+    <!-- Sync on Wi-Fi's notification of the conflicts it left (Notifications.conflictsLeft): every one a song's, else
+         any unit's. -->
+    <plurals name="conflicts_left">
+        <item quantity="one">%d song changed on both sides: tap to choose</item>
+        <item quantity="other">%d songs changed on both sides: tap to choose</item>
+    </plurals>
+    <plurals name="conflicts_left_changes">
+        <item quantity="one">%d change on both sides: tap to choose</item>
+        <item quantity="other">%d changes on both sides: tap to choose</item>
+    </plurals>
     <string name="working">Working…</string>
 
     <string name="syncing_asking">Syncing: asking caracole…</string>

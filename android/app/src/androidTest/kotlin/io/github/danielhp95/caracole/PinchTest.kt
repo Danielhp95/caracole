@@ -21,6 +21,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.runBlocking
 import kotlin.math.roundToInt
 
 /**
@@ -177,7 +178,7 @@ class PinchTest {
     /** The copy on the phone, synced from [server]: what changed there since, downloaded. */
     private fun synced(): Manifest {
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
+        val outcome = runBlocking { Syncs.run(context, probe = false) }!!
         assertTrue(outcome.text, outcome.ok)
         return Caracole.mirror(context).reload()!!
     }

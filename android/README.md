@@ -60,9 +60,10 @@ with the same key.
 3. Tap **Test**. It answers "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26", or says what went
    wrong. Then tap the bar's sync button ([below](#sync-from-the-phone)).
 
-**Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers
-at the address. When nothing answers there, or something else does (another network's device, a Wi-Fi login
-page), it does nothing and says nothing ([below](#sync-from-the-phone)). The library screen's bar has the sync
+**Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network, leaving what changed on both sides for you
+to choose ([below](#sync-from-the-phone)). First it checks that caracole answers at the address. When nothing
+answers there, or something else does (another network's device, a Wi-Fi login page), it does nothing and says
+nothing. The library screen's bar has the sync
 button, and its menu (⋮) Library and Settings.
 
 The sync is two-way: what you add, remove or change on the phone goes to the computer too, and the computer's pages
@@ -176,6 +177,15 @@ started again.
   hold greyed ("Not in this file"), and nothing goes back (a file takes nothing). Refused: this library's own
   export, and a file no newer than the last sync with its caracole ("Nothing in this file is newer than your sync
   with studio on 03/11/26").
+**Sync on Wi-Fi by itself** (Settings) is this sync, unattended: every 6 hours on an unmetered network, the three
+parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
+sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
+something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
+the bar's line says so ("Up to date: 1 taken, 2 given" at its end). When it left conflicts, a notification on its
+own channel, Syncs, says so ("2 songs changed on both sides: tap to choose"), and its tap opens the sheet, at the
+cards. A sync with the computer already on its way (one from the sheet) is left to finish, and this one does
+nothing.
+
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.
