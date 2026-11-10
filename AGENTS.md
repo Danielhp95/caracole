@@ -1675,7 +1675,50 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   after its merge job, none from a computer that doesn't count them.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
   `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
-  `PageSource`, none until one is wired).
+  `PageSource`, server/routes/sync/MirrorPages.kt: the mirror's and its layers' pages of each unit at the digest the
+  phone holds, the computer's first, and for its start page the phone's own library page's data, every card it shows,
+  `MirrorPages.startPage`, so that a song taken from a file opens its sheet on a phone the export goes on to).
+- **A file's pages, a layer of the mirror** (mirror/Layers.kt, `Mirror.takeLayer`, the engine's `pagesFromFile`,
+  `SyncFileRoutes.pagesFromFile`): an import keeps the pages its file held of the units it took, and the file's start
+  page, in `mirror/layers/<the file's caracole's id>/` (a list and blobs, each checked by its SHA-256 as it is
+  written; a page the file lacks or holds otherwise than listed leaves the layer as it was), one layer a caracole, the
+  newest taken first; then every layer is cut to what `PhoneGate` still serves (a unit the phone changed or removed
+  since loses its pages, a layer left with none goes).
+  - `pageFor` serves the computer's page while its unit is as the phone holds it, else the newest layer's of that same
+    unit at that path (never a page of another unit at a path the computer gives one), else the computer's answer; a
+    layer's start page is never served, and the computer's mirror sync (`cleanUp`) never touches a layer.
+  - A file is anyone's to make, so a layer serves no header the file gave (`LayerPolicy`): a kind caracole serves alone
+    (a page, a PDF, text, JSON, a download; any other is never kept), caracole serve's Content-Type for it, the
+    phone's `nosniff` and Referrer-Policy, and a page only in a sandbox (the file's policy where its `sandbox` holds
+    `allow-scripts` and `allow-downloads` alone, as viewer_csp's; else `LayerPolicy.NOTHING`, one that runs and loads
+    nothing): never `allow-same-origin`, which would give a file's page the phone server's origin, its form token and
+    every write. An export carries the layer's headers on, never the file's.
+  - MirrorPageData gives a song the computer has no card of the card of the newest layer that keeps a page of it and
+    whose start page holds its identity, read as untrusted (`fromFile`: library_page.py's fields alone, each of its
+    JSON type, every `href` the library's or a site's over https, a kept file's the library's, its Lyrics link the
+    phone's own), else the minimal card.
+  - Layers are kept until a unit changes or the app's data is cleared; `storageBytes` counts them.
+- **Export and Import a file** (server/routes/SyncFileRoutes.kt, web/sync_file_routes.py's routes on the phone:
+  `GET /api/sync/sizes`, `POST /sync/export`, `GET /api/sync/export`, `POST /sync/import/open`, `/part`, `/compare`,
+  `/drop`; vectors/web/sync_file_routes.jsonl, `WebReplay.syncFileRoutes`, area `web`):
+  - an export (`routes/sync/Exports.kt`) is made through the database's writer (its indexes' attached file) into
+    `stateDir/cache/peer/export-<16 hex>.caracole` (0700, 0600), one at a time, and sent once: taken out of the
+    exports' names, its name deleted as the server opens it (`Body.FromFile`'s `once`, `open()`), one never asked for
+    swept an hour after, one taken that no server opened 10 minutes after, and every one an earlier start left cleared
+    as the phone starts (`Exports.clear`); a HEAD is 405;
+  - an import's file (`routes/sync/Imports.kt`, peer_import.py's) is staged part by part in
+    `stateDir/peer/import-<16 hex>/` (0700: `file.caracole`, `open.json`, 0600), one at a time, each hold the job's
+    or a comparison's alone (one process: an in-process hold, no flock), let go as another is opened once whole or
+    stopped, dropped by the page's Cancel, swept an hour after;
+  - its comparison is the engine's `compareFile`, answered as `POST /sync/compare`'s (`peer.kind` `"file"`, its
+    `made`, no address, the indexes it read more recently alone); SyncRoutes' `POST /sync/apply` hands a file's
+    comparison to it (`SyncRoutes.files`, `FileSyncs`), which compares the file again and queues the import: kind
+    `sync` under `import:<id>`, "Sync with a file from <name>", `FILE_STAGES`, the folder deleted once it ends;
+  - the phone's App reads a `json` or `bytes` route's body as web/app.py does (`Route.body`, `DocumentAnswer`: the form
+    token in its header, its content type, its limit, JSON by PyJson.loads); the routes declare Python's kinds and
+    limits (the vectors' `limits`).
+  - Where the phone answers otherwise: `indexes` of `GET /api/sync/sizes` is null, its bundled SQLite having no
+    dbstat (peer_file.indexes_size's None), and an index export's comparison names no index newer in it.
 - What the phone says otherwise: the report leaves out a site whose merge moved its progress records alone (no row
   taken, its count the same), as IndexTransfer's `Merged` says what changed of the merge whole (`SyncEngine.taken`).
 
