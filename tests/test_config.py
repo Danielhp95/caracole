@@ -436,7 +436,7 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
     # (bulk work's delay, a lookup's lookup_delay, the icons') is a quarter of what it was; the budgets, the hour's
     # and the day's caps are as they were.
     from caracole.commands.icons import ICON_POLICY
-    from caracole.config import NO_BUDGET
+    from caracole.config import NO_BUDGET, SHARE_PROVIDERS
 
     cfg = load_config(None, env={"HOME": str(tmp_path)})
     lookup, none = (0.125, 0.375), (0.0, 0.0)
@@ -445,12 +445,15 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
         "azlyrics": (none, none), "lacuerda": ((2.5, 5.0), lookup), "gtptabs": ((2.5, 5.0), lookup),
         "musescore": ((2.5, 5.0), lookup), "harptabs": ((2.5, 5.0), lookup), "gametabs": ((0.25, 0.25), lookup),
         "youtube": ((3.75, 7.5), lookup), "ytimg": (none, none),
+        "itunes": (none, lookup), "spotify": (none, lookup), "tidal": (none, lookup), "youtube-oembed": (none, lookup),
     }
     assert {name: p.budget for name, p in cfg.providers.items()} == {
         "ug": 60, "lrclib": 200, "megalobiz": 60, "azlyrics": NO_BUDGET, "lacuerda": 30, "gtptabs": 20,
         "musescore": 10, "harptabs": 20, "gametabs": 20, "youtube": 6, "ytimg": 20,
+        "itunes": 0, "spotify": 0, "tidal": 0, "youtube-oembed": 0,
     }
-    assert {(p.lookup_requests, p.lookup_per_hour) for p in cfg.providers.values()} == {(6, 60)}
+    assert {(p.lookup_requests, p.lookup_per_hour) for name, p in cfg.providers.items()
+            if name not in SHARE_PROVIDERS} == {(6, 60)}
     assert {name: p.per_day for name, p in cfg.providers.items() if p.per_day is not None} == {"megalobiz": 900}
     assert (ICON_POLICY.budget, ICON_POLICY.delay) == (4, (2.5, 5.0))
 
@@ -477,3 +480,23 @@ def test_youtubes_image_host_is_a_switchable_provider_with_no_pause(tmp_path):
     assert cfg.provider("ytimg") == ProviderPolicy(budget=20, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0))
     p = write(tmp_path, "[providers.ytimg]\nenabled = false\n")
     assert load_config(p, env={"HOME": str(tmp_path)}).provider("ytimg").enabled is False
+
+
+def test_a_shared_links_services_are_switchable_on_and_asked_one_share_at_a_time(tmp_path):
+    # The owner's choice of 2026-11-10: a link shared to the phone that names no song is read by asking its service
+    # once. The phone alone asks them, at the lookup pace (no budget: no bulk work), a share's requests at most: one
+    # lookup of Apple's catalogue, one oEmbed of YouTube's, Spotify's and TIDAL's page and a short link's one hop.
+    from caracole.config import SHARE_PROVIDERS, SWITCHABLE
+
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert SHARE_PROVIDERS == ("itunes", "spotify", "tidal", "youtube-oembed")
+    assert {name: (p.enabled, p.budget, p.lookup_requests, p.lookup_per_hour, p.lookup_delay)
+            for name, p in cfg.providers.items() if name in SHARE_PROVIDERS} == {
+        "itunes": (True, 0, 1, 60, (0.125, 0.375)), "spotify": (True, 0, 2, 60, (0.125, 0.375)),
+        "tidal": (True, 0, 2, 60, (0.125, 0.375)), "youtube-oembed": (True, 0, 1, 60, (0.125, 0.375)),
+    }
+    assert set(SHARE_PROVIDERS) <= SWITCHABLE
+    p = write(tmp_path, "[providers.spotify]\nenabled = false\n[providers.youtube-oembed]\nenabled = false\n")
+    off = load_config(p, env={"HOME": str(tmp_path)})
+    assert [name for name in SHARE_PROVIDERS if not off.provider(name).enabled] == ["spotify", "youtube-oembed"]
+    assert off.provider("youtube").enabled  # yt-dlp's switch is its own

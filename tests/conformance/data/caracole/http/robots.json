@@ -262,6 +262,51 @@
   "i.ytimg.com": [
    "/sb/"
   ],
+  "itunes.apple.com": [
+   "/WebObjects/MZFastFinance.woa",
+   "/WebObjects/MZFinance.woa",
+   "/WebObjects/MZPersonalizer.woa",
+   "/WebObjects/MZStoreElements.woa",
+   "/station/idst.",
+   "/WebObjects/*",
+   "/search*",
+   "/*/rss/*",
+   "/*/lookup?"
+  ],
+  "open.spotify.com": [
+   "/local/",
+   "/download/",
+   "/embed/"
+  ],
+  "spotify.link": [
+   "/_r/"
+  ],
+  "spotify.app.link": [
+   "/_r/"
+  ],
+  "www.youtube.com": [
+   "/api/",
+   "/channel_picker",
+   "/comment",
+   "/feeds/videos.xml",
+   "/file_download",
+   "/get_video",
+   "/get_video_info",
+   "/get_midroll_info",
+   "/live_chat",
+   "/login",
+   "/qr",
+   "/results",
+   "/signup",
+   "/t/terms",
+   "/timedtext_video",
+   "/verify_age",
+   "/watch_ajax",
+   "/watch_fragments_ajax",
+   "/watch_popup",
+   "/watch_queue_ajax",
+   "/youtubei/"
+  ],
   "tabs.ultimate-guitar.com": [
    "/forum/",
    "/tab/print?",

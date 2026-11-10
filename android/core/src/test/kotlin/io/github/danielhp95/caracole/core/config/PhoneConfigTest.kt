@@ -16,6 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -36,8 +37,15 @@ class PhoneConfigTest {
         assertEquals(MatchPolicy(), PhoneConfig.DEFAULTS.match)
         assertEquals(RankPolicy(), PhoneConfig.DEFAULTS.rank)
         assertEquals("caracole/0.1 (personal tab library)", PhoneConfig.DEFAULTS.userAgent)
-        assertEquals(setOf("azlyrics", "gametabs", "gtptabs", "harptabs", "megalobiz", "musescore", "youtube", "ytimg"),
+        assertEquals(setOf("azlyrics", "gametabs", "gtptabs", "harptabs", "itunes", "megalobiz", "musescore", "spotify",
+                           "tidal", "youtube", "youtube-oembed", "ytimg"),
                      PhoneConfig.SWITCHABLE)
+        // A shared link's services (core.share.ShareLinks), on, each a share's requests at most, no bulk work.
+        assertEquals(mapOf("itunes" to 1, "spotify" to 2, "tidal" to 2, "youtube-oembed" to 1),
+                     io.github.danielhp95.caracole.core.share.ShareLinks.PROVIDERS.associateWith { name ->
+                         PhoneConfig.DEFAULTS.provider(name).also { assertTrue(it.enabled, name); assertEquals(0L, it.budget) }
+                             .lookupRequests
+                     })
     }
 
     @Test fun theDefaultsAreConfigJsonsEveryProviderFieldForField() {

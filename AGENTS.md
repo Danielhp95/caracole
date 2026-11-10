@@ -1498,7 +1498,24 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
     helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
     vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.
-- gtptabs.com and MuseScore (tab-files): not built yet.
+- gtptabs.com and MuseScore (tab-files), core.sites' `GtpTabsPages`, `GtpTabsFetch` and `MuseScorePages`: gtptabs.py's,
+  gtptabs_fetch.py's and musescore.py's rules for a lookup's song, every regex PyRegex's.
+  - `GtpTabsPages.parseArtistPage`: an artist page through core.html's tree, its link text collapsed as `split()`
+    does, the size and upload-number regexes Python's.
+  - `GtpTabsFetch.gtptabsFiles`: the pass with `refresh_index=False` (the computer's index, no sitemap read), its
+    candidates (internal `GtpPass`: by the artist keys, "Last, First" and without hyphens; sorted by (-stars,
+    version, id)), artist pages cached 30 days (a stale copy BudgetExhausted), three downloads at most past the
+    cache, the file kept as the lowest free `guitar-N` (Kept, Versions, Numbering), kv `gtptabs:checked:` and
+    `gtptabs:unusable:`, `PagesNotFiles`; never a replace or a delete; no info.json (M5's).
+  - `sniff` reads a Guitar Pro 7 zip's central directory as CPython's zipfile does (internal `ZipNames`: the end
+    records, zip64's, cp437 and UTF-8 names, the Unicode Path field), never java.util.zip's stream; inbox-share
+    reuses it.
+  - `titlePage`, the Requests tab's; `MuseScorePages.songPages`, links from the index alone, with no client.
+  - The lookup's gtptabs stage (core/lookup/sites/GtpTabs.kt, `GtpTabsStage`) in get.py's words, the envelope's
+    `LookupWords.end`.
+  - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
+    lookup/gtptabs.jsonl (its stage records asked through InteractiveAsk with the records' clients):
+    `TabFilesReplay`, area `tab-files`.
 
 ##### The Requests tab on the phone
 
@@ -1807,10 +1824,22 @@ Not built yet. (guitar-alphatab.)
   `/share/cancel`, as `leaveShare`: the history before the share, the sender in front).
 - core.share's `SharedText.read`, the one place that knows each app's words, before read_names: the app (package,
   link host, words), the first link, each app's shape (`SHAPES`: Deezer's, Shazam's, SoundCloud's… as "Artist -
-  Title"), else the text less its links and an app's name. A link alone names no song: never a request to the
-  service. tests/fixtures/share/shares.jsonl holds each app's shapes and where they were found (SharedTextTest).
+  Title"), else the text less its links and an app's name, with no request. tests/fixtures/share/shares.jsonl holds
+  each app's shapes and where they were found (SharedTextTest).
+- A text that names no song but a link of Apple Music's, Spotify's, TIDAL's, YouTube's or YouTube Music's is read by
+  asking its service once, the owner's choice of 2026-11-10 (Politeness, "A shared link read by asking its service
+  once"):
+  - core.share's `ShareLinks.of`: what the link is, with no request (a song's id, a short link, or an album, a
+    playlist, an artist… that names no song, said so); `answer`, what the service's answer names (Apple's lookup,
+    Spotify's and TIDAL's track page, YouTube's oEmbed: a video's title and channel, read by read_names as a pasted
+    video's), a page that won't parse a `ShareParseError`, never a miss;
+  - `ShareAsk`: off, the cache's answer with no request and no write, else one ask through the lookup's envelope
+    (`InteractiveAsk`, run `lookup:share:…`) inside one write (server's `ShareReader`), its words one line;
+  - ShareLinksTest and ShareAskTest, over the services' answers to caracole of 2026-11-10 (tests/fixtures/itunes/,
+    spotify/, tidal/, youtube/).
 - server's `ShareRoutes` is the phone's own page, which caracole serve has none of:
-  - the names through `SongNames.readNames`, searched as `/api/search` searches (`SearchRoutes.answer`);
+  - the names through `SongNames.readNames` (a link's service's, "Read from Spotify's page: …"), searched as
+    `/api/search` searches (`SearchRoutes.answer`);
   - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
   - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
     and policy (`MessagePage.html`: no script).
@@ -2110,6 +2139,32 @@ picks one).
 - Then `BudgetExhausted`: the rest waits for the nightly run.
 - Nothing else is looser for a lookup, and a lookup never runs yt-dlp.
 
+#### A shared link read by asking its service once
+
+- The owner's choice of 2026-11-10: a link shared to the phone whose text names no song (core.share's `SharedText`)
+  is read by asking its service once, one request a shared link, at a lookup's pace and nothing looser (core.share's
+  `ShareLinks`, `ShareAsk`):
+  - Apple Music: `itunes.apple.com/lookup?id=…&country=…`, provider `itunes` (Apple documents about 20 calls a minute
+    for it);
+  - Spotify: the track's page, `open.spotify.com/track/<id>`, provider `spotify`, which names the artist to
+    caracole's own user agent (checked by hand on 2026-11-10; its oEmbed names the title alone, and is unasked);
+  - TIDAL: the track's page, `tidal.com/track/<id>`, provider `tidal`;
+  - YouTube and YouTube Music: YouTube's oEmbed, `www.youtube.com/oembed?url=…&format=json`, provider
+    `youtube-oembed`, never yt-dlp's `youtube`.
+- Each asks the one URL the link's id names: one request, or two for a short link (`spotify.link`,
+  `spotify.app.link`, `tidal.link`), whose redirect, to another site, is its answer (a redirect whose status the
+  caller accepts is never followed: http.py and core.http alike, client.jsonl's session). An album's, a playlist's or
+  an artist's link names no song, said with no request. Deezer's shares carry their names (its API's robots.txt is
+  closed: never asked); a Navidrome or Subsonic server's link is never asked.
+- Their policies (config.py, `SHARE_PROVIDERS`): no budget, no bulk work (no run or command of the computer asks
+  them, pipeline.py and the to-do page's health leave them out), `lookup_requests` what a share needs (1, Spotify's
+  and TIDAL's 2), within `lookup_per_hour` with every lookup's (run `lookup:share:…`), at `lookup_delay`.
+- Each is switchable (`config.SWITCHABLE`, `enabled = false`, which the phone takes from the computer at a sync), on
+  by default.
+- The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
+  counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
+- Nothing is sent to a tab site before Get it.
+
 #### Either pace
 
 - One request at a time per provider (a synchronous client, and the lock below), redirect hops included.
@@ -2136,8 +2191,9 @@ picks one).
 #### Turning a provider off
 
 - Only a provider in `config.SWITCHABLE` (`megalobiz`, `azlyrics`, `gtptabs`, `musescore`, `harptabs`, `gametabs`,
-  `youtube`, `ytimg`) can be turned off (`enabled = false`): then it gets no client and its step is skipped (`ytimg`
-  off: a suggested video's row without its thumbnail).
+  `youtube`, `ytimg`, and a shared link's `itunes`, `spotify`, `tidal`, `youtube-oembed`) can be turned off
+  (`enabled = false`): then it gets no client and its step is skipped (`ytimg` off: a suggested video's row without
+  its thumbnail; a shared link's service off: the phone's share page says so, and asks it nothing).
 
 #### Blocks
 
@@ -2164,11 +2220,16 @@ picks one).
   - nor gametabs.net's `/api/`, `/tabs?*` (its filters) or `/preparing-tab-file-download` (every attachment, behind a
     login);
   - nor azlyrics.com's `/search/`, `/suggest/`, `/song/` or `/lyricsdb/` (tests/fixtures/azlyrics/robots.txt);
-  - nor i.ytimg.com's `/sb/`.
+  - nor i.ytimg.com's `/sb/`;
+  - nor, for a link shared to the phone, itunes.apple.com's `/*/lookup?`, `/search*` and `/WebObjects/*`,
+    open.spotify.com's `/embed/`, `/download/` and `/local/`, spotify.link's and spotify.app.link's `/_r/`, or
+    www.youtube.com's `/results`, `/youtubei/`, `/api/` and the rest of its `User-agent: *` group (tidal.com's and
+    tidal.link's close nothing).
 - A rule's `$` ends it (`/*.php$`).
 - A host's rules are the `User-agent: *` group of its live robots.txt (tests/fixtures/gtptabs/,
   tests/fixtures/musescore/robots.txt, tests/fixtures/harptabs/robots.txt, tests/fixtures/gametabs/robots.txt and
-  tests/fixtures/youtube/ytimg-robots.txt, checked by hand on 2026-10-29).
+  tests/fixtures/youtube/ytimg-robots.txt, checked by hand on 2026-10-29; tests/fixtures/itunes/, spotify/, tidal/
+  and youtube/www-robots.txt on 2026-11-10).
 - LaCuerda's robots.txt is empty, and so are LRCLIB's and Megalobiz's API hosts' (none; megalobiz.com's, whose favicon
   caracole asks, closes only accounts and editors: tests/fixtures/megalobiz/robots.txt).
 
@@ -2231,6 +2292,8 @@ picks one).
   - a stop or Ctrl-C stops its process group too;
   - a bot check, an HTTP 429 or 403, a rate limit or a captcha is `ProviderBlocked`, honoured like any block
     (tests/test_youtube.py).
+- YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
+  yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.
 
 #### The second exception: a site whose terms forbid automated access, where the owner chose it
@@ -2315,6 +2378,20 @@ picks one).
 - An export (`caracole peer export`, the Sync tab's Export, the phone's) holds what this site gave too, to share as the
   owner likes: the owner's choice of 2026-11-03 ("ignore the privacy, share everything"); caracole itself sends it
   nowhere.
+
+##### Spotify and TIDAL, for a link shared to the phone
+
+- Spotify's User Guidelines forbid "crawling" or "scraping", "whether manually or by automated means, or otherwise
+  using any automated means (including bots, scrapers, and spiders), to view, access or collect information", and
+  TIDAL's Content Guidelines, part of its terms, say the same in the same words (both as a web search quoted them on
+  2026-11-10); the owner chose on 2026-11-10 that the phone reads one of their track pages for a link shared to it
+  (A shared link read by asking its service once, above), and, told these terms the same day, kept both on ("don't
+  turn tidal and spotify off").
+- One page a shared link (its short link's hop besides), at a lookup's pace, robots.txt honoured (both open their
+  track pages), cached; only the song's two names are read of it, for the share page and a lookup the owner taps.
+- Apple's lookup is its documented public API and YouTube's oEmbed a public endpoint for any client; YouTube's terms
+  forbid automated access but for search engines by its robots.txt, with its permission or as the law permits, so
+  its oEmbed is asked by the same choice of the owner's, one request a video.
 
 #### The cache
 
