@@ -108,6 +108,18 @@ delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 enabled = true                    # false: suggestions come without thumbnails
 budget = 20
 delay = [0, 0]                    # no wait: right after the search
+[providers.itunes]                # Apple's catalogue: an Apple Music link shared to the phone, one lookup
+enabled = true                    # false: the phone asks Apple nothing; the link is said to name no song it read
+lookup_requests = 1               # a shared link's requests, at most; the phone alone asks it, at a lookup's pace
+[providers.spotify]               # a Spotify link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a spotify.link short link's hop, then the page
+[providers.tidal]                 # a TIDAL link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a tidal.link short link's hop, then the page
+[providers.youtube-oembed]        # a YouTube or YouTube Music link shared to the phone: its oEmbed, never yt-dlp
+enabled = true
+lookup_requests = 1
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -203,7 +215,11 @@ other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
 `harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
-the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
+the library page suggests for a search), and `itunes`, `spotify`, `tidal` and `youtube-oembed`, the
+services the phone asks once about a link shared to it that names no song (your choice of 10 November
+2026; android/README.md, "Sharing a song from a music app"): no run or command of the computer asks
+them, so they have no `budget` and no line in the to-do page's Provider health, and the phone takes
+their switches and lookup settings at a sync. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's and its image host's go unused: a lookup runs no yt-dlp; Megalobiz's `lookup_delay` is
 0.5–0.75 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: caracole's
@@ -234,11 +250,13 @@ robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image 
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
 video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
 two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
-gametabs.net, YouTube and YouTube's image host can be turned
+gametabs.net, YouTube, YouTube's image host and the phone's four services of a shared link can be turned
 off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
+`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
+`[providers.spotify]`, `[providers.tidal]` or `[providers.youtube-oembed]`, caracole sends
 that site nothing, the nightly run skips
-its step, and the to-do page's Provider health says it is off. The other three
+its step, and the to-do page's Provider health says it is off (the phone's services have no step and no line there:
+the phone's share page says it). The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
 [Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
