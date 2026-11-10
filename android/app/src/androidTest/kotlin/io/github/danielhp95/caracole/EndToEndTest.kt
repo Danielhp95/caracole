@@ -123,13 +123,23 @@ class EndToEndTest {
             record("viewer", sandbox)
             // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
             // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
-            // page, 409, "… isn't on the phone yet." (Stubs).
+            // page, 409, "… isn't on the phone yet." (Stubs). The Guitar Pro page is the phone's own (GuitarRoutes): a
+            // file only the copy of the computer's pages holds, as this test's sync of the copy alone leaves it, is the
+            // file itself (303 to the file's own address), which the app hands to another app; the page itself (200)
+            // is GuitarPageTest's.
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
-                val (status, text) = stubbed(origin + href)
+                val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
+                if (href.startsWith("/guitar")) {
+                    assertEquals("$href on the phone", 303, status)
+                    val file = android.net.Uri.parse(href).getQueryParameter("file")
+                    assertTrue("$href names a file", !file.isNullOrEmpty())
+                    assertEquals("$href goes to its file", "/$file", location?.let { android.net.Uri.decode(it) })
+                    continue
+                }
                 assertEquals("$href on the phone", 409, status)
                 assertTrue("$href: $text", "on the phone yet" in text)
             }
@@ -209,8 +219,8 @@ class EndToEndTest {
                     record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app")
                         .put("at", url(main)))
                     shot("viewer-guitar")
-                    // Served, the link is the Guitar Pro page's (/guitar), which the tap may have opened in the WebView:
-                    // the phone's stub, one page more to go back from.
+                    // Served, the link is the Guitar Pro page's (/guitar): the phone's own page, or, for a file only the
+                    // copy holds, the file itself; a page opened is one more to go back from.
                     instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
                     waitUntil("back from the Guitar Pro link") {
                         val at = url(main).substringBefore('#')
@@ -237,22 +247,26 @@ class EndToEndTest {
     }
 
     /** [url]'s status and text, asked of the phone's server with the launch's cookie, as the WebView asks it. */
-    private fun stubbed(url: String): Pair<Int, String> {
+    private fun stubbed(url: String): Triple<Int, String, String?> {
         val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Cookie", "${io.github.danielhp95.caracole.server.http.Security.SECRET_COOKIE}=${Caracole.secret}")
             val status = connection.responseCode
             val body = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
-            return status to body.toString(Charsets.UTF_8)
+            return Triple(status, body.toString(Charsets.UTF_8), connection.getHeaderField("Location"))
         } finally {
             connection.disconnect()
         }
     }
 
-    /** The page at [address] (its fragment aside) once it has loaded. */
+    /** The page at [address] (its fragment aside) once it has loaded: the document shown says so itself, by its own
+     * location. WebView.getUrl names a navigation the app started while it is still pending, and until it commits the
+     * document shown is the blank one before it, complete and of origin null (a slow answer read it so: no sheet, origin
+     * "null"). */
     private fun loadedAt(main: ActivityScenario<MainActivity>, address: String) = waitUntil("$address loaded") {
-        url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete"
+        val shown = evaluate(main, "document.readyState === 'complete' ? location.href : ''") as? String
+        url(main).substringBefore('#') == address && shown?.substringBefore('#') == address
     }
 
     /**

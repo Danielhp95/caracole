@@ -1891,7 +1891,39 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### Guitar Pro on the phone
 
-Not built yet. (guitar-alphatab.)
+- server.guitar's `AlphaTabBundle` is web/alphatab.py (`bundle`, `fontFace`, `load`), `GuitarPage` web/guitar_page.py
+  (`style`, `script`, `policy`, `build`, top.py's header) and routes/GuitarRoutes.kt web/guitar_routes.py: `GET
+  /guitar?file=` and `GET /assets/alphatab/<name>`, caracole serve's answers (its `parse_qs`, strict and four fields at
+  most; a file the phone's `files` records alone; Power Tab; past 8 MiB; a link at any step; the sheet viewer its
+  folder holds), held by vectors/web/guitar.jsonl (tests/test_conformance_guitar.py, `GuitarReplay`, area `guitar`).
+- :core's `GuitarFiles.of` is inbox.guitar_files, phone-render's port, the one the render, the cards, the set lists
+  and the page read: N `int()`'s of any script's digits, ordered and labelled by the whole number (`wholeNumber`; an
+  Int `number`, `Int.MAX_VALUE` past one, a name caracole never writes), past 4300 digits Python's ValueError.
+- **The bundle in the APK**: app/alphatab.gradle.kts makes it from `CARACOLE_ALPHATAB_DIR` (android/flake.nix,
+  ../nix/alphatab.nix) as `bundle` does:
+  - the asset `alphatab/<name>`, beside `alphatab/licenses/` (MPL-2.0, OFL, Apache-2.0);
+  - its name, integrity and CSP sources as the Java resource `caracole/web/alphatab.json`, which
+    `AlphaTabBundle.installed` reads;
+  - one task a variant, wired through the Android Gradle plugin's variant API reached dynamically (a script plugin
+    sees none of its classes);
+  - without the variable the build fails, naming it: never an APK without the bundle.
+- **`AlphaTabAssets.answer`**, MainActivity's `shouldInterceptRequest`'s first: the sandboxed page's request for the
+  bundle carries no launch cookie, so the app answers `GET /assets/alphatab/<name>` of the server's exact origin
+  (127.0.0.1 at its port, once it listens) from its assets, with guitar_routes.asset's headers and app.py's
+  (`Access-Control-Allow-Origin: *`, the script being CORS with its integrity; `text/javascript; charset=utf-8`; kept
+  for good), any other name there 404; the server's own route answers only a bundle whose bytes it holds (the JVM's
+  tests).
+- `ServerControls.guitar` is `GuitarRoutes.available()` (the APK's bundle there), so the served library page opens a
+  card's `guitarPage`; mirror's `Links` routes `/guitar?file=` as a page, a download of it the file.
+- Beyond caracole serve:
+  - a path the phone's library records no Guitar Pro file at, that the mirror lists as a file (a song only the
+    computer's pages copied), is a 303 to the file, which the app hands to another app as before (the mirror reached
+    through `PhoneParts.cards`, PhoneParts naming none);
+  - a file past 8 MiB is refused before it is read, never held whole to be refused.
+- Tests: server.guitar's GuitarPageTest (the vector, the APK's bundle as named, the mirror's 303); the app's
+  AlphaTabAssetsTest (the build's resource is the port's bundle of the same files); androidTest's GuitarPageTest (the
+  APK's bytes Python's, the licences, and the page in the WebView: drawn, the font's stylesheet allowed by its hash, the
+  synthesizer ready, Play and Stop, Download handed off).
 
 ##### A song shared to the app
 
