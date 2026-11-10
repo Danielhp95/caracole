@@ -1010,7 +1010,8 @@ It is rows.js's, shared by both pages:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
 - **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker, the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
+  agreed on with the asker and the answers its imports of the asker's files kept (`kept`), the settings a phone
+  takes (`settings`, politeness.py) and the form token (no wider than a
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`

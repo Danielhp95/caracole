@@ -4757,7 +4757,9 @@ why it can't show one.
 
 **Another caracole's sync.** `GET /api/peer/state` answers what this library
 holds, unit by unit, for another caracole's `caracole peer` (see
-[Two caracoles](#two-caracoles-the-phones-and-the-computers)); `GET
+[Two caracoles](#two-caracoles-the-phones-and-the-computers)), with what the two
+last agreed on and each "keep mine" this library's imports of that caracole's
+files remembered, so that its sync gives this one its version no more; `GET
 /api/peer/unit` a unit whole and `GET /api/peer/file` a song's kept file, while
 it is as kept: reads, with no lock and no request to a site, that another
 site's page can't make. `POST /peer/pull` queues `caracole peer pull` of the
