@@ -551,9 +551,10 @@ def test_a_unit_kept_here_at_an_import_is_given_at_the_next_network_sync(librari
     assert desk.units() == studio.units() and sync.kept_of(studio.conn, desk.id()) == {}
 
 
-def test_a_sync_from_the_tab_after_an_import_kept_a_unit_does_what_the_tab_showed(libraries, tmp_path, monkeypatch):
-    """caracole serve's Sync tab compares without the answers an import remembered (web/sync_routes.py): its Sync,
-    ``peer sync --compared`` with its hash, is the comparison it showed, never refused as stale for them."""
+def test_a_sync_from_the_tab_after_an_import_kept_a_unit_gives_it_there(libraries, tmp_path, monkeypatch):
+    """caracole serve's Sync tab compares with the answers an import remembered, as ``peer sync`` does
+    (web/sync_routes.py): a unit kept here is here's to give, and its Sync, ``peer sync --compared`` with its hash,
+    is the comparison it showed, never refused as stale for them."""
     from caracole.commands import peer as peer_cmd
     from caracole.web import sync_routes
 
@@ -565,15 +566,15 @@ def test_a_sync_from_the_tab_after_an_import_kept_a_unit_does_what_the_tab_showe
     assert out.exit_code == 0, out.output
     monkeypatch.setattr(sync_routes, "transport", peer_cmd.transport_for_peer)
     compared = json.loads(post(studio.app, "/sync/compare", {"address": HOST}, accept="application/json").body)
-    assert [(d["id"], d["proposal"]) for d in compared["differences"]] == [(unit, "conflict")]
-    answer = post(studio.app, "/sync/apply", {"comparison": compared["comparison"], "prefer": "there", "choices": ""},
+    assert [(d["id"], d["proposal"], d["why"]) for d in compared["differences"]] == [(unit, "mine", sync.KEPT_HERE)]
+    answer = post(studio.app, "/sync/apply", {"comparison": compared["comparison"], "prefer": "", "choices": ""},
                   accept="application/json")
     assert answer.status == 200, answer.body
     studio.app.queue.run_pending()
     (job,) = studio.app.queue.snapshot()
     assert job.state == "done", [s.output for s in job.steps]
-    # the conflict the tab showed, settled the way it was preferred: there's taken here
-    assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Am&capo=0"}
+    # the unit the tab showed as kept here, given there: here's as it was
+    assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
     assert studio.units() == desk.units() and sync.kept_of(studio.conn, desk.id()) == {}
     # a hash that names neither comparison is refused all the same
     stale = run(studio, "peer", "sync", HOST, "--push", "--yes", "--compared", "0" * 64)

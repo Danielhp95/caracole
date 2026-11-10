@@ -44,12 +44,13 @@ import java.nio.charset.CodingErrorAction
  * fail at it again: a new build, or a change to the song, makes it again. That why is the lookup's pdf stage's
  * failed detail on the phone, as get.py's "chordpro couldn't make the PDF" is the computer's.
  *
- * It is the lookup's pdf stage ([seam]), what follows a sync's take ([afterSync]), and the render job (PhoneKinds'
- * render kind, keyed by [build]), which the phone queues itself, never this class: at its start when [stale]
- * (Phone.start, once the app has wired the queue), and after a take that owes pages; the job runs [renderStale],
- * which yields between two songs (its `between`, JobContext.yieldToQueued: the lookups queued meanwhile run first),
- * holding no write. [version] is the app's, part of [build] (RenderBuild: the APK's code and data too). Open, so a test
- * of the phone's wiring can stand a stale one in its place.
+ * It is the lookup's pdf stage ([seam]), what follows a sync's take ([afterSync]: the pages the take superseded
+ * forgotten, those owed made by the render job), and the render job (PhoneKinds' render kind, keyed by [build]),
+ * which the phone queues itself, never this class: at its start when [stale] (Phone.start, once the app has wired
+ * the queue), and after a take that owes pages; the job runs [renderStale], which yields between two songs (its
+ * `between`, JobContext.yieldToQueued: the lookups queued meanwhile run first), holding no write. [version] is the
+ * app's, part of [build] (RenderBuild: the APK's code and data too). Open, so a test of the phone's wiring can stand
+ * a stale one in its place.
  */
 open class PhoneRender(val database: Database, val libraryDir: File, val mirror: Mirror?, val version: String) :
     SongPages {
@@ -137,14 +138,50 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
         return tally.stats()
     }
 
-    /** After a sync's take, inside the sync's job, holding no write (lane written-pages forgets there the phone's
-     * pages of the units it moved): whether pages are owed now ([owed], each song's digest read), [owe]d if so, so
-     * that an app stopped before the render job ran makes them at its next start. It makes none itself: the phone
-     * queues the render job for them after the sync, so the sync ends when its stages do and a lookup goes first. */
+    /** After a sync's take, inside the sync's job, holding no write: the phone's pages the take superseded forgotten
+     * ([forgetSuperseded]), then whether pages are owed now ([owed], each song's digest read), [owe]d if so, so that
+     * an app stopped before the render job ran makes them at its next start. It makes none itself: the phone queues
+     * the render job for them after the sync, so the sync ends when its stages do and a lookup goes first. */
     open fun afterSync(): Boolean {
+        database.writeBlocking { db -> forgetSuperseded(db) }
         val owed = database.read { db -> owed(db).isNotEmpty() }
         if (owed) database.writeBlocking { db -> owe(db) }
         return owed
+    }
+
+    /**
+     * The phone's pages a take superseded, forgotten, each deleted while it is still as written (WrittenPages.forget,
+     * render._forget_written(folder=)): a song's page made at a digest its unit has moved from, once the mirror serves
+     * the song at its digest now (the computer made its pages of the song as the phone holds it); a songbook's the
+     * same way by kv `songbook:<folder>`, and every file of a folder no songbook has any more. A song's page that
+     * moved where the mirror serves none stays until the render job makes the song's pages again, never served
+     * meanwhile (LibraryFiles serves the phone's page only while it is current). A song a take moved to another
+     * folder had its pages deleted by the take itself (Removal.phonesWritten), and a song it removed went with them.
+     */
+    fun forgetSuperseded(db: Db) {
+        val served = served()
+        val songs = db.query("SELECT key FROM kv WHERE key GLOB '${RenderNames.FILES_KEY}[0-9]*'") { it.text(0)!! }
+            .mapNotNull { it.removePrefix(RenderNames.FILES_KEY).toLongOrNull() }
+        for (id in songs) {
+            val song = Songs.byId(db, id) ?: continue
+            val unit = RenderNames.unitOf(song.key)
+            val now = Units.digestOf(db, unit) ?: continue
+            if (now !in served[unit].orEmpty()) continue
+            val moved = WrittenPages.record(db, id).keys.filter { WrittenPages.written(db, id, it)?.unitDigest != now }
+            if (moved.isNotEmpty()) WrittenPages.forget(db, id, moved, store.folderOf(song))
+        }
+        for (folder in WrittenPages.songbookFolders(db)) {
+            val names = WrittenPages.songbook(db, folder).keys
+            val unit = WrittenPages.songbookUnit(db, folder)
+            if (unit == null) {
+                WrittenPages.forgetSongbook(db, folder, names, libraryDir, gone = true)
+                continue
+            }
+            val now = WrittenPages.songbookDigest(db, unit) ?: continue
+            if (now !in served[unit].orEmpty()) continue
+            val moved = names.filter { WrittenPages.songbookWritten(db, folder, it)?.unitDigest != now }
+            if (moved.isNotEmpty()) WrittenPages.forgetSongbook(db, folder, moved, libraryDir)
+        }
     }
 
     /** The songs the phone owes a pass over, newest added first: every song not ignored whose record
