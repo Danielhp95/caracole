@@ -1459,8 +1459,42 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     stored and its kv in one savepoint, the count it states Python's int of any size;
   - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
     vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
-- LaCuerda's sheets (lacuerda-sheets): not built yet.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- LaCuerda's sheets (lacuerda-sheets):
+  - `LaCuerdaSheets`, lacuerda_fetch.py for a lookup's songs (`only`): `_to_try` and `mayAsk`, the artist's slugs in
+    `_artist_songs`' order (a slug given first, the listings' `artistSlugs`, then `artistSlugCandidates`; a 404 or
+    "aqui llega:" moving on), each page cached 30 days (a stale copy no answer once the budget is spent), your pick's
+    page, `_record` and `_keep` (`sheet.json` as `json.dumps(indent=2)` and a newline, then `sheet.txt`; no
+    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage` (its `first`, which
+    Python's lacks, asked in place of the name written as a slug). The songs re-keyed first, as `list_songs` does.
+    Each page stored is noted for the next push. Python's nightly parts are left out: the popular artists' pages, the
+    listings pass, the handoffs, info.json;
+  - core.lookup.sites' `LaCuerdaPickStage` and `LaCuerdaStage`: get.py's `lacuerda()` through the stage's asking, its
+    words for what the pass came to, and `LookupWords.end`'s for what asking came to;
+  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (with `progress`, its default, the
+    search's `--progress` lines said; the last returned), the cooldown and the gate checked as Python checks them,
+    the block and the error recorded by the asking, a good run by `LookupWords.lookupRunOf`'s run, which the runner's
+    asking logs under; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and
+    stores no cached page first (`backfill_cached`: the phone stores each page as it reads it);
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
+    page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
+    LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
+- harptabs.com (harptabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- gametabs.net (gametabs): core.sites' `GameTabsPages` (gametabs.py's tab and game pages read through core.html,
+  `parseTabPage` and `parseGamePage`) and `GameTabsFetch` (gametabs_fetch.py for a lookup's song alone, no sitemap
+  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words, the envelope's
+  `LookupWords.end`'s).
+  - A `data-tab` value as gametabs.py reads it: Python's truth and `str()` of each JSON value, its ints unbounded
+    (`BigInteger`), each as the float Python makes of it (the nearest, a tie to the even one, whatever the platform's
+    `BigInteger.toDouble` rounds), one too large for a float an OverflowError as `math.isfinite` raises; a version's
+    votes are the views as SQLite holds them (64 bits, sqlite3's OverflowError past them).
+  - Candidates by game (its slug's key, its page's name) or composer, `CANDIDATES` (4) at most, the most viewed
+    first, then by path in code points; the most viewed page that fits kept as `gametab-N.txt`, a pick
+    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`, of the lookup's song alone; the game pages'
+    title keys made again first (`SiteKeys.gametabsEnsureCurrentKeys`, kv `gametabs:games:keys`), as the computer's
+    pass does.
+  - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
+    helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
+    vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.
 
 ##### The Requests tab on the phone
 
