@@ -3,7 +3,9 @@ package io.github.danielhp95.caracole.viewer.render
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.Kept
+import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.sync.Units
 import kotlinx.serialization.json.JsonElement
@@ -13,6 +15,7 @@ import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 
 /** A page the phone wrote, as kv `render:files:<song id>` records it: its bytes' SHA-256, their size, and the song
  * unit's digest it was made at ("" for an entry that names none: one the phone never made, which is current at no
@@ -33,7 +36,10 @@ data class Rendered(val unit: String, val build: String, val script: String?)
  * the phone's entries also name `unit`, the song unit's digest the page was made at (Units.digestOf), each page a pass
  * writes or finds as written noted at it ([note]), one it didn't keeping its own. kv `render:<song id>:phone` is the
  * phone's alone ([Rendered]); a songbook's, kv `songbook:<folder>`, is songbook.py's `{"inputs": {file: digest},
- * "files": {file: {"sha256", "size"}}}`. Every write is the caller's, inside Database.write.
+ * "files": {file: {"sha256", "size"}}}`, each file's entry naming too, as `unit`, the digest of the songbook's unit
+ * (`songbook/<name key>`, [songbookUnit]) it was made at, when a songbook has that folder. The phone serves a page
+ * while its unit is still at that digest ([current], [songbookCurrent]) and forgets one a take superseded
+ * (PhoneRender.afterSync). Every write is the caller's, inside Database.write.
  */
 object WrittenPages {
     /** _written: the song's record, its odd entries left out. */
@@ -50,7 +56,7 @@ object WrittenPages {
     fun written(db: Db, songId: Long, name: String): Written? {
         val entry = record(db, songId)[name] ?: return null
         val (sha, size) = entryOf(entry)!!
-        return Written(sha, size, (entry["unit"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: "")
+        return Written(sha, size, unitOf(entry))
     }
 
     /** _note_written: the file [name] in the song's folder holds [bytes], made at the unit digest [unitDigest]. */
@@ -115,29 +121,106 @@ object WrittenPages {
 
     /** A songbook's written files, kv `songbook:<folder>`: each name's SHA-256 and size. */
     fun songbook(db: Db, folder: String): Map<String, Pair<String, Long>> {
-        val files = (read(db, "$SONGBOOK$folder") as? JsonObject)?.get("files") as? JsonObject ?: return emptyMap()
         val out = LinkedHashMap<String, Pair<String, Long>>()
-        for ((name, entry) in files) entryOf(entry)?.let { out[name] = it }
+        for ((name, entry) in songbookFiles(db, folder)) entryOf(entry)?.let { out[name] = it }
         return out
     }
 
+    /** What kv `songbook:<folder>` says of its file [name]: its SHA-256, its size and the songbook unit's digest it
+     * was made at ("" for an entry that names none), or null where the phone recorded none. */
+    fun songbookWritten(db: Db, folder: String, name: String): Written? {
+        val entry = songbookFiles(db, folder)[name] as? JsonObject ?: return null
+        val (sha, size) = entryOf(entry) ?: return null
+        return Written(sha, size, unitOf(entry))
+    }
+
+    /** Whether the songbook whose folder is `_songbooks/<folder>/` is still at the digest its file [name] was made
+     * at: false for a file the phone recorded none of, or made at no digest, or a folder no songbook has now. */
+    fun songbookCurrent(db: Db, folder: String, name: String): Boolean {
+        val written = songbookWritten(db, folder, name) ?: return false
+        val unit = songbookUnit(db, folder) ?: return false
+        return written.unitDigest.isNotEmpty() && songbookDigest(db, unit) == written.unitDigest
+    }
+
+    /** A songbook unit's digest now, or null for one that isn't there, or whose songs can't be read (Units'
+     * IllegalStateException: "the songbook Name's songs aren't a list"), which is current at no digest. */
+    fun songbookDigest(db: Db, unit: String): String? = try {
+        Units.digestOf(db, unit)
+    } catch (_: IllegalStateException) {
+        null
+    }
+
+    /** The sync unit of the songbook whose folder is `_songbooks/<folder>/` (offline_routes' `books`: a songbook's
+     * folder is its name's `library.safe_name`, its unit `songbook/<name key>`), or null for a folder no songbook has
+     * now. Only the songbooks' names are read (phone_songbooks, SongbookStore's), so a songbook whose songs can't
+     * be read still has its folder. */
+    fun songbookUnit(db: Db, folder: String): String? =
+        db.query("SELECT name FROM phone_songbooks ORDER BY position, key") { it.text(0)!! }
+            .firstOrNull { SafeName.safeName(it) == folder }?.let { "$SONGBOOK_UNIT${SongbookStore.nameKey(it)}" }
+
+    /** The folders kv `songbook:<folder>` records files of. */
+    fun songbookFolders(db: Db): List<String> =
+        db.query("SELECT key FROM kv WHERE substr(key, 1, ?) = ? ORDER BY key", SONGBOOK.length, SONGBOOK) {
+            it.text(0)!!.substring(SONGBOOK.length)
+        }
+
     /** A songbook's files written ([files], each name's bytes), made of [inputs] (their digest), into kv
      * `songbook:<folder>` as songbook.py records them: each file's entry and its inputs' digest replaced, the
-     * others kept. */
+     * others kept. Each entry names the digest of the folder's songbook's unit now ([songbookUnit]), the one the
+     * files were made at, while a songbook has that folder. */
     fun noteSongbook(db: Db, folder: String, inputs: String, files: Map<String, ByteArray>) {
         val key = "$SONGBOOK$folder"
         val record = read(db, key) as? JsonObject
         val madeOf = LinkedHashMap((record?.get("inputs") as? JsonObject).orEmpty())
         val written = LinkedHashMap((record?.get("files") as? JsonObject).orEmpty())
+        val unit = songbookUnit(db, folder)?.let { songbookDigest(db, it) }
         for ((name, bytes) in files) {
             madeOf[name] = JsonPrimitive(inputs)
-            written[name] = JsonObject(linkedMapOf("sha256" to JsonPrimitive(Canonical.sha256Hex(bytes)),
-                                                   "size" to JsonPrimitive(bytes.size)))
+            val entry = linkedMapOf<String, JsonElement>("sha256" to JsonPrimitive(Canonical.sha256Hex(bytes)),
+                                                         "size" to JsonPrimitive(bytes.size))
+            unit?.let { entry["unit"] = JsonPrimitive(it) }
+            written[name] = JsonObject(entry)
         }
         val out = LinkedHashMap(record.orEmpty())
         out["inputs"] = JsonObject(madeOf)
         out["files"] = JsonObject(written)
         db.kvSetJson(key, JsonObject(out))
+    }
+
+    /** The songbook's files [names] forgotten, each with its inputs' digest; with [library], each first deleted from
+     * `_songbooks/<folder>/` while it is still as written (library.holds: a file of yours by that name stays, and
+     * nothing is deleted through a link in place of either folder), and the folder too once that leaves it empty.
+     * A record left with no file goes ([gone]: a songbook no longer there, as songbook._remove_gone drops its record). */
+    fun forgetSongbook(db: Db, folder: String, names: Collection<String>, library: File? = null, gone: Boolean = false) {
+        val key = "$SONGBOOK$folder"
+        val record = read(db, key) as? JsonObject ?: return
+        val madeOf = LinkedHashMap((record["inputs"] as? JsonObject).orEmpty())
+        val written = LinkedHashMap((record["files"] as? JsonObject).orEmpty())
+        val forgotten = names.filter { it in written || it in madeOf }
+        if (forgotten.isEmpty() && !gone) return
+        val dir = library?.let { songbookDir(it, folder) }
+        for (name in forgotten) {
+            val entry = entryOf(written.remove(name))
+            madeOf.remove(name)
+            if (dir != null && entry != null && isFileName(name)) {
+                val path = dir.resolve(name)
+                if (Kept.holds(path, entry.first, entry.second)) Files.deleteIfExists(path)
+            }
+        }
+        if (dir != null && written.isEmpty()) {
+            try {
+                Files.delete(dir) // only when empty: a file of yours stays, and so does its folder
+            } catch (_: IOException) {
+            }
+        }
+        if (written.isEmpty() && (gone || madeOf.isEmpty())) {
+            db.kvDelete(key)
+        } else {
+            val out = LinkedHashMap(record)
+            out["inputs"] = JsonObject(madeOf)
+            out["files"] = JsonObject(written)
+            db.kvSetJson(key, JsonObject(out))
+        }
     }
 
     /** render.written_entry: the SHA-256 and the length an entry says (a string, and an int that is no bool), or null
@@ -151,6 +234,32 @@ object WrittenPages {
     }
 
     private const val SONGBOOK = "songbook:"
+    private const val SONGBOOK_UNIT = "songbook/"
+
+    /** songbook.FOLDER: where a songbook's files go, a folder a songbook. */
+    private const val SONGBOOKS = "_songbooks"
+
+    /** kv `songbook:<folder>`'s files, or none. */
+    private fun songbookFiles(db: Db, folder: String): JsonObject =
+        (read(db, "$SONGBOOK$folder") as? JsonObject)?.get("files") as? JsonObject ?: JsonObject(emptyMap())
+
+    /** The digest an entry names as `unit`, or "". */
+    private fun unitOf(entry: JsonObject): String =
+        (entry["unit"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
+
+    /** A name one folder holds: no separator, no NUL, never `.`, `..` nor hidden. */
+    private fun isFileName(name: String): Boolean =
+        name.isNotEmpty() && !name.startsWith(".") && '/' !in name && '\\' !in name && '\u0000' !in name
+
+    /** `_songbooks/<folder>/` under [library] while both are folders of their own (no link in place of either), else
+     * null: nothing is deleted through a link (songbook._remove_gone). */
+    private fun songbookDir(library: File, folder: String): java.nio.file.Path? {
+        if (!isFileName(folder)) return null
+        val books = library.toPath().resolve(SONGBOOKS)
+        val dir = books.resolve(folder)
+        return if (Files.isDirectory(books, LinkOption.NOFOLLOW_LINKS) && Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) dir
+        else null
+    }
 
     private fun isInteger(text: String): Boolean = text.isNotEmpty() && text.trimStart('-').all { it in '0'..'9' }
 
