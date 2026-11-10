@@ -339,7 +339,8 @@ The port needs these in the Python caracole:
 
 - `POST /peer/push`: the computer takes units the phone sends, checked against their digests. Built (peer_push.py,
   `caracole peer take`).
-- Version records and lyrics hashed canonicalized, with a sync format bump. Built (canonical.py, format 2).
+- Version records and lyrics hashed canonicalized, with a sync format bump. Built (canonical.py, format 2; format 3
+  hashes UG's raw records without their ratings and votes, which a kept version's JSON leaves out too).
 - `GET /api/peer/index`, and the index merged both ways at a sync. Built from the computer to the phone; the other
   way waits for milestone 4.
 - Cooldowns moved across at a sync (already planned). Milestone 4.
