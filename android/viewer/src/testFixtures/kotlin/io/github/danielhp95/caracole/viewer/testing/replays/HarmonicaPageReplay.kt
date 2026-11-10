@@ -36,10 +36,6 @@ import kotlinx.serialization.json.jsonPrimitive
  * each record's shape. A value is compared as the text `json.dumps` writes of it, its members sorted (so a float is
  * Python's repr, to the bit); a digest is the first 8 hex digits of the SHA-256 of a value's compact `json.dumps`, or
  * the first 16 of an HTML text's UTF-8.
- *
- * Phase A: a record that reads a tab (HarpTabs.parse, lane harptab-layout's) or writes a page (SheetPage's frame,
- * lane pages') is counted in [waiting] while its producer hasn't merged (its NotImplementedError); the JVM tests
- * assume none is.
  */
 object HarmonicaPageReplay : AreaReplay {
     override val area = "harmonica-page"
@@ -47,10 +43,6 @@ object HarmonicaPageReplay : AreaReplay {
     private const val H = "test_conformance_viewer_harmonica."
     private const val F = "caracole.viewer.harpfit."
     private const val P = "caracole.viewer.harptab_page."
-
-    /** Phase A: the records whose producer hasn't merged (waiting on lanes harptab-layout and pages). */
-    @Volatile var waiting = 0
-        private set
 
     override fun replay(misses: Misses) {
         data(misses)
@@ -103,7 +95,7 @@ object HarmonicaPageReplay : AreaReplay {
                     }
                 } else same(misses, "_sheet_lines(${record.args[0]})", want, lines)
             }
-            H + "fit_of" -> waitingOn(misses) {
+            H + "fit_of" -> {
                 val tab = tab(record.args[0])
                 val cho = textOrNull(record.args[1])
                 val fitted = if (cho != null) HarpFit.recordFit(tab, cho) else emptyList()
@@ -114,7 +106,7 @@ object HarmonicaPageReplay : AreaReplay {
                 same(misses, "fit_of(${record.args.toString().take(160)})", record.out!!,
                      JsonObject(mapOf("record_fit" to fitsJson(fitted), "choices" to JsonArray(choices))))
             }
-            "caracole.render._tab_harps" -> waitingOn(misses) {
+            "caracole.render._tab_harps" -> {
                 val tabs = record.args[0].jsonArray.map { e ->
                     val (name, ref, chip, pageKey, pin) = e.jsonArray
                     HarmonicaTab(name.jsonPrimitive.content, textOrNull(ref), string(chip), string(pageKey),
@@ -155,7 +147,7 @@ object HarmonicaPageReplay : AreaReplay {
                 JsonPrimitive(HarmonicaPage.footer(file.jsonPrimitive.content, string(url), placed.jsonPrimitive.boolean,
                                                    change.jsonPrimitive.boolean))
             }
-            P + "_read_as" -> waitingOn(misses) {
+            P + "_read_as" -> {
                 val (tabRow, pin, facts) = record.args
                 val body = text(tabRow.jsonArray[0])
                 val notation = if (pin is JsonNull) null else runCatching { HarpTabs.pinned(pin, body) }
@@ -175,7 +167,7 @@ object HarmonicaPageReplay : AreaReplay {
                 same(misses, "_overlay_data(${record.args.toString().take(160)})", record.out!!,
                      JsonObject(found.mapValues { JsonPrimitive(members(it.value)) }))
             }
-            P + "build_harmonica_viewer" -> waitingOn(misses) {
+            P + "build_harmonica_viewer" -> {
                 val html = build(record)
                 same(misses, "build_harmonica_viewer(${record.args[0]}, ${record.kw.toString().take(200)})", record.out!!,
                      pageOut(html))
@@ -186,16 +178,14 @@ object HarmonicaPageReplay : AreaReplay {
 
     /** A page kept whole: its pieces, the assets read as ViewerAssets reads them, are the page. */
     fun whole() = replay("viewer/harmonica_pages_whole.jsonl", 1) { record, misses ->
-        waitingOn(misses) {
-            val want = record.extra.getValue("pieces").jsonArray.joinToString("") { piece ->
-                if (piece is JsonObject) ViewerAssets.text(piece.getValue("asset").jsonPrimitive.content) else piece.jsonPrimitive.content
-            }
-            val got = build(record)
-            val at = got.zip(want).indexOfFirst { (a, b) -> a != b }.let { if (it < 0) minOf(got.length, want.length) else it }
-            misses.check(got == want) {
-                "the whole page differs from Python's at character $at: …${got.substring(maxOf(0, at - 80), minOf(got.length, at + 80))}…, " +
-                    "Python's …${want.substring(maxOf(0, at - 80), minOf(want.length, at + 80))}…"
-            }
+        val want = record.extra.getValue("pieces").jsonArray.joinToString("") { piece ->
+            if (piece is JsonObject) ViewerAssets.text(piece.getValue("asset").jsonPrimitive.content) else piece.jsonPrimitive.content
+        }
+        val got = build(record)
+        val at = got.zip(want).indexOfFirst { (a, b) -> a != b }.let { if (it < 0) minOf(got.length, want.length) else it }
+        misses.check(got == want) {
+            "the whole page differs from Python's at character $at: …${got.substring(maxOf(0, at - 80), minOf(got.length, at + 80))}…, " +
+                "Python's …${want.substring(maxOf(0, at - 80), minOf(want.length, at + 80))}…"
         }
     }
 
@@ -264,17 +254,6 @@ object HarmonicaPageReplay : AreaReplay {
         }
         misses.check(counts.size == kinds) { "$name: the kinds of record, $counts" }
         misses.assertNone()
-    }
-
-    /** Phase A: [block], or a record counted in [waiting] where its producer (HarpTabs.parse, lane harptab-layout;
-     * SheetPage's frame, lane pages) hasn't merged. */
-    private fun waitingOn(misses: Misses, block: () -> Unit) {
-        try {
-            block()
-        } catch (e: NotImplementedError) {
-            waiting++
-            misses.check(true) { "" }
-        }
     }
 
     /** Each item of the record's batch (its first argument): its answer, and Python's. */

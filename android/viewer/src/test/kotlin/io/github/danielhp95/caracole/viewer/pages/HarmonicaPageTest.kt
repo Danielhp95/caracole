@@ -1,13 +1,15 @@
 package io.github.danielhp95.caracole.viewer.pages
 
+import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.viewer.harpfit.Choice
 import io.github.danielhp95.caracole.viewer.harpfit.Fit
 import io.github.danielhp95.caracole.viewer.testing.replays.HarmonicaPageReplay
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import org.junit.Assume
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -18,18 +20,9 @@ import kotlin.test.assertTrue
 class HarmonicaPageTest {
     @Test fun theDataIsTheModules() = Misses("harmonica_page.json").let { HarmonicaPageReplay.data(it); it.assertNone() }
 
-    @Test fun everyPageRecordIsHarptabPagePys() = waiting { HarmonicaPageReplay.pages() }
+    @Test fun everyPageRecordIsHarptabPagePys() = HarmonicaPageReplay.pages()
 
-    @Test fun aSmallPageIsPythonsByteForByte() = waiting { HarmonicaPageReplay.whole() }
-
-    /** Phase A: [block], then the test skipped where a record waited on lane harptab-layout (HarpTabs.parse) or lane
-     * pages (SheetPage's frame). */
-    private fun waiting(block: () -> Unit) {
-        val before = HarmonicaPageReplay.waiting
-        block()
-        Assume.assumeTrue("waiting on lanes harptab-layout and pages: ${HarmonicaPageReplay.waiting - before} records",
-                          HarmonicaPageReplay.waiting == before)
-    }
+    @Test fun aSmallPageIsPythonsByteForByte() = HarmonicaPageReplay.whole()
 
     @Test fun aHarpsArticle() =
         assertEquals(listOf("a C harp", "an A harp", "an F harp", "an Eb harp", "a Db harp"),
@@ -66,5 +59,36 @@ class HarmonicaPageTest {
         assertEquals(12, harp.getValue("holes").jsonArray.size)
         val keyless = HarmonicaPage.overlayData(Choice(0, "usual"), "{title: X}\nwords alone\n", null, null)
         assertTrue(keyless.getValue("harp").jsonObject.getValue("none").toString().contains("no key in its chord sheet"))
+    }
+
+    private val hotel = String(Corpus.fixture("harptabs/tabs/588_hotel-california.txt"), Charsets.UTF_8)
+
+    private fun page(text: String = hotel, facts: JsonObject? = null, cho: String? = null, pageKey: String? = null,
+                     back: String? = null): String =
+        HarmonicaPage.build(text, title = "Synthetic Song", artist = "Placeholder Band", tabFile = "harmonica-1.txt",
+                            pageKey = pageKey, facts = facts, cho = cho, back = back)
+
+    private fun data(html: String): JsonObject {
+        val at = html.indexOf("<script type=\"application/json\" id=\"harp-data\">")
+        val from = html.indexOf('>', at) + 1
+        return Json.parseToJsonElement(html.substring(from, html.indexOf("</script>", from))).jsonObject
+    }
+
+    @Test fun aTabInHarptabsComsOwnNotationHasItsLegendAndWhatHarptabsComSaysOfIt() {
+        val facts = Json.parseToJsonElement("""{"difficulty": "Beginner", "views": 224000, "rating": 3.3}""").jsonObject
+        val html = page(facts = facts, pageKey = "Bb", back = "sheet (auto).html")
+        assertTrue("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>Bb harp</b>, as harptabs.com's key says</p>" in html)
+        assertTrue("(<span class=\"b\">4</span> <span class=\"b\">5</span>)</span> together · Beginner · 224k views · 3.3★</p>" in html)
+        assertTrue("<a class=\"back\" href=\"sheet%20%28auto%29.html\" data-sheet>‹ Chord sheet</a>" in html)
+        assertTrue("<p class=\"reading\" id=\"reading-foot\" hidden>" in html)
+        assertEquals(JsonPrimitive(10), data(html)["start"])
+        assertEquals("""{"10":"harptabs.com's key"}""", data(html)["why"].toString())
+    }
+
+    @Test fun aTabCaracoleCantReadIsItsTextAsWrittenWithTheBarOfOne() {
+        val html = page("ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n", pageKey = "C")
+        assertTrue("<pre class=\"tab\">ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6</pre>" in html)
+        assertTrue("caracole can't read its notation." in html && HarmonicaPage.BAR_RAW in html && "\"groups\"" !in html)
+        assertTrue("<a class=\"back\" href=\"../../index.html\">‹ Library</a>" in html)
     }
 }

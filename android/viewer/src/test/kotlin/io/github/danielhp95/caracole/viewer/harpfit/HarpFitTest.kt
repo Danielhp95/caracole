@@ -5,7 +5,6 @@ import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
 import io.github.danielhp95.caracole.viewer.harptab.Tab
 import io.github.danielhp95.caracole.viewer.testing.replays.HarmonicaPageReplay
 import kotlinx.serialization.json.JsonPrimitive
-import org.junit.Assume
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -14,13 +13,7 @@ import kotlin.test.assertTrue
 /** viewer.harpfit chooses a harmonica tab's harp as viewer/harpfit.py does: every record of vectors/viewer/harpfit.jsonl
  * (HarmonicaPageReplay), and test_viewer_harpfit.py's own cases, by hand. */
 class HarpFitTest {
-    @Test fun everyHarpfitRecordIsHarpfitPys() {
-        val before = HarmonicaPageReplay.waiting
-        HarmonicaPageReplay.harpfit()
-        // Phase A: waiting on lane harptab-layout (HarpTabs.parse)
-        Assume.assumeTrue("waiting on lane harptab-layout: ${HarmonicaPageReplay.waiting - before} records",
-                          HarmonicaPageReplay.waiting == before)
-    }
+    @Test fun everyHarpfitRecordIsHarpfitPys() = HarmonicaPageReplay.harpfit()
 
     private val lines = listOf("made up words for row one", "made up words for row two", "made up words for row three",
                                "made up words for row four", "made up words for row five")
@@ -42,13 +35,7 @@ class HarpFitTest {
         "{title: Synthetic}\n{artist: Placeholder Band}\n{key: $key}\n" + (if (capo != 0) "{capo: $capo}\n" else "") +
             lines.joinToString("") { "[$chord]$it\n" }
 
-    /** Phase A: the tab read, or the test skipped while lane harptab-layout's HarpTabs.parse hasn't merged. */
-    private fun parse(text: String): Tab = try {
-        HarpTabs.parse(text)
-    } catch (e: NotImplementedError) {
-        Assume.assumeTrue("waiting on lane harptab-layout: HarpTabs.parse", false)
-        throw e
-    }
+    private fun parse(text: String): Tab = HarpTabs.parse(text)
 
     @Test fun theHarpThatPutsTheTabsNotesOnTheRecordsChords() {
         val fits = HarpFit.recordFit(parse(aTab()), aSheet("D"))
@@ -145,7 +132,6 @@ class HarpFitTest {
                           HarmonicaTab("harmonica-3.txt", aTab(3, before = "I use an A harp\n\n")),
                           HarmonicaTab("harmonica-4.txt", aTab(), pin = JsonPrimitive("nope")),
                           HarmonicaTab("harmonica-5.txt", aTab(), pageKey = "Bb"))
-        parse(aTab())
         assertEquals(mapOf("harmonica-1.txt" to 2, "harmonica-3.txt" to 9, "harmonica-5.txt" to 2),
                      HarpFit.tabHarps(tabs, aSheet("D")))
     }

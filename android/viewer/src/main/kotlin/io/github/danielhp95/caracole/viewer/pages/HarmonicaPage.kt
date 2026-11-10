@@ -16,7 +16,6 @@ import io.github.danielhp95.caracole.viewer.harpfit.HarpFit
 import io.github.danielhp95.caracole.viewer.harptab.Gap
 import io.github.danielhp95.caracole.viewer.harptab.Group
 import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
-import io.github.danielhp95.caracole.viewer.harptab.HarptabData
 import io.github.danielhp95.caracole.viewer.harptab.Hole
 import io.github.danielhp95.caracole.viewer.harptab.Legend
 import io.github.danielhp95.caracole.viewer.harptab.Notation
@@ -83,7 +82,8 @@ object HarmonicaPage {
     val PILL: String by lazy { text("_PILL") }
 
     /**
-     * build_harmonica_viewer: the page of the harmonica tab [text] (a `harmonica-N.txt`'s body) of the song [title] by
+     * build_harmonica_viewer: the page of the harmonica tab [text] (a `harmonica-N.txt`'s body, its bytes decoded as
+     * render.py's `.decode("utf-8", errors="replace")`, core.py.PyCodec.utf8Replace) of the song [title] by
      * [artist]. [tabFile] names the text beside the page, which its foot links; [url] is the tab's page on
      * harptabs.com, [pageKey] the key it names, [harp] the harp ("Diatonic", "Chromatic": HarpTabs.parse reads the tab
      * for it), [pin] how the owner has it read (overrides.toml's `[harmonica]`: a preset's name, "legend" or a table;
@@ -102,11 +102,11 @@ object HarmonicaPage {
         val named = title.ifEmpty { "Untitled" }
         val pageTitle = "$named · harmonica tab"
         // The song's names in the characters its viewer shows its Chinese in, for a song whose sheet is Chinese
-        val names = Frame.namesTable(cho != null && Frame.isChinese(cho), listOf(named, artist, pageTitle))
-        val readable = readable(tab)
+        val names = SheetPage.namesTable(cho != null && SheetPage.isChinese(cho), listOf(named, artist, pageTitle))
+        val readable = tab.readable
         val head = header(title, artist, tab, choice, facts ?: JsonObject(emptyMap()), back, names)
         val article = if (readable) tabHtml(tab, data) else rawHtml(text)
-        val placed = readable && rows(tab).any { it.trusted && !it.lyric.isNullOrEmpty() }
+        val placed = readable && tab.rows().any { it.trusted && !it.lyric.isNullOrEmpty() }
         val body = StringBuilder()
             .append("<aside class=\"necks\" id=\"necks\" hidden aria-label=\"Chord necks\"></aside>\n")
             .append("<div class=\"page\">\n")
@@ -119,7 +119,7 @@ object HarmonicaPage {
             .append(Inline.jsonBlock("harp-data", data.json()))
             .append(if (!names.isNullOrEmpty()) Inline.jsonBlock("song-names", namesJson(names)) else "")
             .toString()
-        return Frame.page(pageTitle, body, ViewerAssets.styles(ViewerAssets.Page.HARMONICA),
+        return SheetPage.page(pageTitle, body, ViewerAssets.styles(ViewerAssets.Page.HARMONICA),
                           ViewerAssets.scripts(ViewerAssets.Page.HARMONICA), names)
     }
 
@@ -128,8 +128,8 @@ object HarmonicaPage {
     /** The page's `harp-data`, its members in Python's order; [groups] and [rows] filled as the tab is written. */
     private class Data(tab: Tab, choice: Choice) {
         val head = LinkedHashMap<String, JsonElement>()
-        val groups: MutableList<JsonElement>? = if (readable(tab)) ArrayList() else null
-        val rows: MutableList<JsonElement>? = if (readable(tab)) ArrayList() else null
+        val groups: MutableList<JsonElement>? = if (tab.readable) ArrayList() else null
+        val rows: MutableList<JsonElement>? = if (tab.readable) ArrayList() else null
         var overlay: JsonElement = JsonNull
 
         init {
@@ -254,13 +254,13 @@ object HarmonicaPage {
         val link = if (!back.isNullOrEmpty()) {
             "<a class=\"back\" href=\"${PyText.escape(PyUrl.quote(back))}\" data-sheet>‹ Chord sheet</a>\n"
         } else {
-            "<a class=\"back\" href=\"${Frame.LIBRARY_PAGE}\">‹ Library</a>\n"
+            "<a class=\"back\" href=\"${SheetPage.LIBRARY_PAGE}\">‹ Library</a>\n"
         }
         val named = title.ifEmpty { "Untitled" }
-        val readable = readable(tab)
+        val readable = tab.readable
         return "<header class=\"head\">\n" + link +
-            "<h1${Frame.zhAttr(named, names)}>${PyText.escape(named)}</h1>\n" +
-            Frame.artistLine(artist, names) +
+            "<h1${SheetPage.zhAttr(named, names)}>${PyText.escape(named)}</h1>\n" +
+            SheetPage.artistLine(artist, names) +
             (if (readable) harpLines(choice) else
                 "<p class=\"facts\" id=\"facts\">Harmonica tab, as its tabber wrote it: caracole can't read its notation.</p>\n") +
             (if (readable) readAs(tab.reading, facts) else "") +
@@ -373,7 +373,7 @@ object HarmonicaPage {
 
     private fun sectionHtml(n: Int, section: TabSection, data: Data): String {
         val out = ArrayList<String>()
-        out += "<section class=\"sec${if (chorus(section)) " chorus" else ""}\" id=\"sec-$n\">"
+        out += "<section class=\"sec${if (section.chorus) " chorus" else ""}\" id=\"sec-$n\">"
         if (!section.label.isNullOrEmpty()) out += "<h2 class=\"lbl\">${PyText.escape(section.label)}</h2>"
         for (item in section.items) {
             when (item) {
@@ -408,7 +408,7 @@ object HarmonicaPage {
         } else {
             val out = StringBuilder()
             for ((partGroups, text) in row.parts) {
-                val words = Frame.words(text).toMutableList()
+                val words = SheetPage.words(text).toMutableList()
                 if (partGroups.isNotEmpty()) {
                     val top = "<span class=\"hg\">" + cells(partGroups, data, "") + "</span>"
                     val lead = if (words.isNotEmpty()) PyText.escape(words.removeAt(0)) else ""
@@ -534,27 +534,4 @@ object HarmonicaPage {
         JsonObject(names.mapValuesTo(LinkedHashMap()) { (_, table) ->
             JsonObject(table.mapValuesTo(LinkedHashMap()) { (_, v) -> JsonPrimitive(v) })
         })
-
-    // Phase A: harptab.Tab's rows() and readable and Section.chorus, Python's one-liners, until lane
-    // harptab-layout's Tab and TabSection have them (waiting on lane harptab-layout).
-    private fun rows(tab: Tab): List<Row> = HarpFit.rows(tab)
-    private fun readable(tab: Tab): Boolean = HarpFit.readable(tab)
-    private fun chorus(section: TabSection): Boolean =
-        !section.label.isNullOrEmpty() && HarptabData.CHORUS.find(section.label) != null
-
-    /** The page frame page.py gives harptab_page.py: lane pages' SheetPage (`_page`, `names_table`, `zh_attr`,
-     * `artist_line`, `_words`, `is_chinese`, `LIBRARY_PAGE`). Phase A: waiting on lane pages. */
-    private object Frame {
-        val LIBRARY_PAGE: String get() = TODO("waiting on lane pages: SheetPage.LIBRARY_PAGE")
-        fun page(title: String, body: String, styles: List<String>, scripts: List<String>,
-                 names: Map<String, Map<String, String>>?): String = TODO("waiting on lane pages: SheetPage.page")
-        fun namesTable(chinese: Boolean, texts: List<String>): Map<String, Map<String, String>>? =
-            TODO("waiting on lane pages: SheetPage.namesTable")
-        fun isChinese(cho: String): Boolean = TODO("waiting on lane pages: SheetPage.isChinese")
-        fun zhAttr(text: String, names: Map<String, Map<String, String>>?): String =
-            TODO("waiting on lane pages: SheetPage.zhAttr")
-        fun artistLine(artist: String, names: Map<String, Map<String, String>>?): String =
-            TODO("waiting on lane pages: SheetPage.artistLine")
-        fun words(text: String): List<String> = TODO("waiting on lane pages: SheetPage.words")
-    }
 }

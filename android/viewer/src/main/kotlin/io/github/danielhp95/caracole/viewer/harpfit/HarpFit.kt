@@ -9,7 +9,6 @@ import io.github.danielhp95.caracole.viewer.ViewerData
 import io.github.danielhp95.caracole.viewer.harp.Harp
 import io.github.danielhp95.caracole.viewer.harptab.Group
 import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
-import io.github.danielhp95.caracole.viewer.harptab.Row
 import io.github.danielhp95.caracole.viewer.harptab.Tab
 import io.github.danielhp95.caracole.viewer.sheet.Item
 import io.github.danielhp95.caracole.viewer.sheet.Lyrics
@@ -43,7 +42,8 @@ data class Choice(val harp: Int, val why: String, val fits: List<Fit> = emptyLis
 }
 
 /** One harmonica tab a song keeps, as render.py's `_tab_harps` reads it: its file's [name] ("harmonica-1.txt"), its
- * [text] (the file's bytes as UTF-8 with replacement; null where it can't be read: no harp then), the page's harp chip
+ * [text] (the file's bytes decoded as render.py's `.decode("utf-8", errors="replace")`, core.py.PyCodec.utf8Replace;
+ * null where it can't be read: no harp then), the page's harp chip
  * ([harp], harptab.py `parse`'s), the key its page names ([pageKey]) and how overrides.toml's `[harmonica]` has it read
  * ([pin], or null). */
 data class HarmonicaTab(val name: String, val text: String?, val harp: String? = null, val pageKey: String? = null,
@@ -123,7 +123,7 @@ object HarpFit {
         val lines = sheetLines(cho)
         if (lines.isEmpty()) return emptyList()
         val pairs = ArrayList<Pair<Int, Set<Int>>>()  // each note on a C harp, and the chord sounding there
-        for (row in rows(tab)) {
+        for (row in tab.rows()) {
             if (row.lyric == null) continue
             val sung = ArrayList<Pair<String, MutableList<Int>>>()
             for ((groups, text) in row.parts) {
@@ -184,7 +184,7 @@ object HarpFit {
         val page = pitch(pageKey)
         val (song, chords) = if (!cho.isNullOrEmpty()) songKey(cho, key, keySource) else null to emptyList()
         val tonic = song?.tonic
-        val fits = if (!cho.isNullOrEmpty() && readable(tab)) recordFit(tab, cho) else emptyList()
+        val fits = if (!cho.isNullOrEmpty() && tab.readable) recordFit(tab, cho) else emptyList()
         if (fits.isNotEmpty() && fits[0].notes >= MIN_NOTES) return Choice(fits[0].harp, "record", fits, named, page, tonic)
         if (named != null) return Choice(named, "tab", fits, named, page, tonic)
         if (page != null) return Choice(page, "page", fits, named, page, tonic)
@@ -200,7 +200,8 @@ object HarpFit {
      * chooses it with the song's chord sheet [cho] (in [key], keys.py's, and where it came from), the tab read as its
      * page reads it (its pin: HarpTabs.pinned): [Choice.tabsHarp]. A tab with neither, whose text can't be read, or
      * that can't be read at all (a pin overrides.toml would refuse among them, as render.py's `except Exception`
-     * skips it), has none: its sheet's overlay starts on Harp.choices' first harp.
+     * skips it, a RecursionError too: here a StackOverflowError), has none: its sheet's overlay starts on
+     * Harp.choices' first harp.
      */
     fun tabHarps(tabs: List<HarmonicaTab>, cho: String, key: String? = null, keySource: String? = null): Map<String, Int> {
         val out = LinkedHashMap<String, Int>()
@@ -211,15 +212,11 @@ object HarpFit {
                 choose(HarpTabs.parse(text, harp = tab.harp, notation = notation), cho, key, keySource, tab.pageKey)
             } catch (e: Exception) {  // a tab the overlay can't read must never cost the sheet's viewer
                 continue
+            } catch (e: StackOverflowError) {  // Python's RecursionError is an Exception
+                continue
             }
             found.tabsHarp?.let { out[tab.name] = it }
         }
         return out
     }
-
-    // Phase A: harptab.Tab's rows() and readable, Python's one-liners, until lane harptab-layout's Tab has them
-    // (waiting on lane harptab-layout).
-    internal fun rows(tab: Tab): List<Row> = tab.sections.flatMap { s -> s.items.filterIsInstance<Row>() }
-
-    internal fun readable(tab: Tab): Boolean = tab.reading.confident && rows(tab).any { it.trusted } && !tab.chromatic
 }

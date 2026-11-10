@@ -419,14 +419,16 @@ def tab_harps_records(rng: random.Random) -> list[dict[str, Any]]:
     import tempfile
 
     every = tabs()
+    chipped = [tab for tab in every if tab[2] is not None]
     out = []
     with tempfile.TemporaryDirectory() as tmp:
         for n in range(8):
-            picked = rng.sample(every, 3)
+            # every other song keeps a tab whose page names its harp, and about half its tabs have no pin
+            picked = rng.sample(every, 2) + [rng.choice(chipped if n % 2 else every)]
             given: list[list[Any]] = []
             for k, (name, ref, chip) in enumerate(picked):
                 given.append([f"harmonica-{k + 1}.txt", ref if k or n % 4 else None, chip,
-                              rng.choice((None, "C", "Bb", "A")), rng.choice(PINS)])
+                              rng.choice((None, "C", "Bb", "A")), rng.choice(PINS) if rng.random() < 0.5 else None])
             sheet = _sheet_for(picked[0][0]) or rng.choice(("other:0", "chinese", "keyless"))
             key, source, _ = rng.choice(CASES)
             folder = Path(tmp) / str(n)
@@ -444,8 +446,12 @@ def test_harpfit_is_harpfit_pys():
 def test_the_fits_cover_every_choice():
     whys = {c[1] for r in harpfit_records() if r["fn"] == HELPER + "fit_of" for c in r["out"]["choices"]}
     assert whys == set(harpfit.WHY)
-    harps = [r["out"] for r in harpfit_records() if r["fn"] == "caracole.render._tab_harps"]
-    assert any(harps) and not all(harps)
+    harps = [r for r in harpfit_records() if r["fn"] == "caracole.render._tab_harps"]
+    assert any(r["out"] for r in harps) and not all(r["out"] for r in harps)
+    given = [(tab, r["out"]) for r in harps for tab in r["args"][0]]
+    # a kept tab with no [harmonica] pin that gives a harp, and tabs whose page names their harp, either kind
+    assert any(tab[4] is None and tab[0] in out for tab, out in given)
+    assert {tab[2] for tab, _ in given} == {None, "Diatonic", "Chromatic"}
 
 
 # --- the page -------------------------------------------------------------------------------------------------
