@@ -212,7 +212,7 @@ def route_records(corpus: FileCorpus) -> list[dict[str, Any]]:
         answers.append([status, said])
     add("POST /sync/import/part", "two parts, one again (not the next), one past the size, the last", here, None,
         answers, parts=[{"at": at, "bytes": size} for at, size in sent])
-    answers = [list(here.json("POST", f"/sync/import/part?import=0123456789abcdef&at=0", data=b"x")),
+    answers = [list(here.json("POST", "/sync/import/part?import=0123456789abcdef&at=0", data=b"x")),
                list(here.json("POST", f"/sync/import/part?import={opened['import']}&at=", data=b"x")),
                list(here.json("POST", "/sync/import/part?import=../x&at=0", data=b"x"))]
     add("POST /sync/import/part", "refused: no such import, no at, an id that isn't one", here, None, answers,
