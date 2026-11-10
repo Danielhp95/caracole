@@ -372,7 +372,24 @@ never in a page) times each step.
 
 ## Pages built on the phone
 
-Not built yet.
+The phone makes a song's pages itself, as the computer's render does them but with no PDF, whenever the computer's
+pages in the copy aren't of the song as the phone holds it: a song added or looked up on the phone, or changed there
+since the last sync. The song's sheet page (`sheet.html`, and an auto sheet's beside it), the page of each version kept
+beside the sheet (`version-<tab>.html`) and of each harmonica tab (`harmonica-N.html`), with the sheet's `.cho` and its
+`info.json`, go into the song's folder in the app's library, each written only when its bytes change; a version's or a
+tab's page goes once the song keeps it no longer. An auto sheet made before its song had lyrics takes them first, as
+the computer's render does. No page links a PDF: the phone makes none.
+
+For every song, those the computer's pages serve too, the phone records what the library page finds it by: the
+progressions its sheet plays and whether its words are Chinese.
+
+A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync that changed
+songs, and when the app starts as a new build (any APK whose code or tables differ, whatever its version says), the
+phone makes the pages it owes in the background, a request of the Requests tab ("Make the pages again"), which lets a
+lookup asked for meanwhile go first, between two songs. A song whose pages can't be made says why on that request, and
+costs the other songs nothing; it is tried again once the song changes or a new build is installed.
+
+On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
