@@ -21,7 +21,10 @@ overrides.toml as the phone holds it (``test_conformance_overrides.rows_of``):
 - Estopa - Tu Calorro: a sheet under ``[transpose]``;
 - Nadie - Sin Acordes: a sheet with no chord, so no key;
 - Café Tacvba - Eres: a sheet, ignored;
-- Fito Páez - Mariposa Tecknicolor: a viewer recorded, its sheet no longer kept.
+- Fito Páez - Mariposa Tecknicolor: a viewer recorded, its sheet no longer kept;
+- Los Fabulosos Cadillacs - Matador: a sheet whose ``[version]`` is a move with no key, as caracole wrote one before
+  (``t=2&mode=dorian``);
+- Los Rotos: kept sheets whose sheet.json can't be read (``BROKEN``): none there, not UTF-8, not JSON, no content.
 
 Dumped whole into the vector's first record (``helpers.corpus.dump_fixture``), which the replay loads into a fresh
 database.
@@ -33,14 +36,17 @@ database.
   sends it (``method`` GET, or HEAD, which changes nothing), to a fresh queue that runs nothing (``full``: one with no
   room); ``out`` a refusal, ``{status, title, message}``, or the answer, ``{status, name, label, job}``: ``name`` the
   download name, ``label`` the version's, and ``job`` what ``mine=1`` queued (``{title, key, steps: [[label, [args]]],
-  display, song}``, ``song`` its id), else null;
+  display, song}``, ``song`` its id), else null. A message names the library's folder ``{library}``; with
+  ``"prefix": true`` it is the start of the message alone, up to the reader's own words on a file it couldn't read
+  (Python's OSError, UnicodeDecodeError or JSONDecodeError, which no other reader words alike);
 - ``{"fn": "render.ExportSheet", "case", "song", "query", "out"}``: the song's export sheet (``export_sheet``) and the
   version ``query`` holds (``export_version`` over ``ExportSheet.own``): ``{own, version, label, traditional, entry,
   kept}``, the own version and the version as ``export_query`` writes them, the version's label and its label asked
   in Traditional characters, ``ExportSheet.entry`` and ``ExportSheet.kept`` (null: the song follows its sheet);
 - ``{"fn": "render --mine", "case", "args", "out"}``: commands/render.py's ``_make_mine`` for the command line
   ``args`` (``render --song=… --version=… --mine``) over the library's overrides: ``{said, version}``, the line it says
-  and the song's ``[version]`` after it (null: none), or ``{exit, error}`` for a refusal.
+  and the song's ``[version]`` after it (null: none), or ``{exit, error}`` for a refusal (``{library}`` and
+  ``prefix`` as above).
 
 Regenerate with ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_export.py``.
 """
@@ -54,7 +60,7 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 from unittest import mock
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import typer
 from helpers.corpus import VECTORS, check, dump_fixture, jsonl, phone_schema
@@ -75,6 +81,18 @@ TRANSPOSED = ("Estopa", "Tu Calorro")
 NO_KEY = ("Nadie", "Sin Acordes")
 IGNORED = ("Café Tacvba", "Eres")
 GONE = ("Fito Páez", "Mariposa Tecknicolor")
+OLD_MOVE = ("Los Fabulosos Cadillacs", "Matador")
+NO_DOC = ("Los Rotos", "Sin Documento")
+NOT_UTF8 = ("Los Rotos", "Bytes Sueltos")
+NOT_JSON = ("Los Rotos", "Sin JSON")
+NO_CONTENT = ("Los Rotos", "Hoja Vacía")
+BROKEN = {  # a kept sheet whose sheet.json can't be read: its bytes (None: there is none)
+    NO_DOC: None,
+    NOT_UTF8: b"\xff\xfe{}",
+    NOT_JSON: b"{not json",
+    NO_CONTENT: b'{"content": "  \\r\\n", "meta": []}',
+}
+LIBRARY = "{library}"  # the library's folder in a message, wherever the generator's and the replay's are
 
 SHEET = (  # a UG chords sheet in G, as wiki_tab.content holds it (helpers/rendered.py's)
     "[Verse]\r\n"
@@ -106,6 +124,7 @@ OVERRIDES = """\
 
 [version]
 "Héroes del Silencio - Entre Dos Tierras" = "key=Bm&capo=0"
+"Los Fabulosos Cadillacs - Matador" = "t=2&mode=dorian"
 
 [ignore]
 songs = ["Café Tacvba - Eres"]
@@ -169,11 +188,13 @@ def build_library(conn, cfg) -> dict[tuple[str, str], Any]:
     from conftest import add_song
     from test_conformance_overrides import rows_of
 
+    from caracole.library import song_dir
     from caracole.songs import get_song
 
     phone_schema(conn)
     songs = {}
-    for n, names in enumerate((SODA, BESIDE, AUTO, CHINESE, CAPO, TRANSPOSED, NO_KEY, IGNORED, GONE)):
+    for n, names in enumerate((SODA, BESIDE, AUTO, CHINESE, CAPO, TRANSPOSED, NO_KEY, IGNORED, GONE, OLD_MOVE,
+                               *BROKEN)):
         songs[names] = add_song(conn, *names, added_at=f"2026-10-02T00:{n:02d}:00Z")
     _ug_sheet(conn, cfg, songs[SODA], SHEET, tab=85001, key="G")
     _record_written(conn, songs[SODA], "sheet.cho", "sheet.html", "version-85002.html", "harmonica-1.html")
@@ -193,6 +214,16 @@ def build_library(conn, cfg) -> dict[tuple[str, str], Any]:
     _ug_sheet(conn, cfg, songs[IGNORED], SHEET, tab=85008, key="G")
     _record_written(conn, songs[IGNORED], "sheet.html")
     _record_written(conn, songs[GONE], "sheet.html")
+    _ug_sheet(conn, cfg, songs[OLD_MOVE], SHEET, tab=85009, key="G")
+    _record_written(conn, songs[OLD_MOVE], "sheet.html")
+    for n, (names, doc) in enumerate(BROKEN.items()):
+        _ug_sheet(conn, cfg, songs[names], SHEET, tab=85010 + n, key="G")
+        _record_written(conn, songs[names], "sheet.html")
+        path = song_dir(cfg.library_dir, songs[names]) / "sheet.json"
+        if doc is None:
+            path.unlink()
+        else:
+            path.write_bytes(doc)
     conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", (FETCHED, FETCHED))
     conn.execute("UPDATE files SET created_at = ?", (FETCHED,))
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
@@ -258,7 +289,7 @@ def _asked(cfg, case: str, target: str, *, method: str = "GET", full: bool = Fal
         with _labels_alone():
             response = export_pdf(app, target, change=method == "GET")
     except Refused as e:
-        out: dict[str, Any] = {"status": e.status, "title": e.title, "message": e.message}
+        out: dict[str, Any] = {"status": e.status, "title": e.title, **_said(cfg, e.message)}
     else:
         disposition = next(v for k, v in response.headers if k == "Content-Disposition")
         name = unquote(disposition.split("filename*=UTF-8''", 1)[1])
@@ -272,6 +303,18 @@ def _asked(cfg, case: str, target: str, *, method: str = "GET", full: bool = Fal
                    "display": j.display, "song": j.song_id}
         out = {"status": response.status, "name": name, "label": label, "job": job}
     return {"fn": "GET /export.pdf", "case": case, "target": target, "method": method, "full": full, "out": out}
+
+
+def _said(cfg, message: str, name: str = "message") -> dict[str, Any]:
+    """A refusal's ``message`` as a record holds it: the library's folder named ``{library}``, and a file that couldn't
+    be read named up to the reader's own words (``prefix``), which only caracole's own words before them match."""
+    message = message.replace(str(cfg.library_dir), LIBRARY)
+    for read in ("cannot read ",):
+        at = message.find(read + LIBRARY)
+        end = message.find(": ", at + len(read)) if at >= 0 else -1
+        if end >= 0 and message[end - len(".json"):end] == ".json":
+            return {name: message[:end + 2], "prefix": True}
+    return {name: message}
 
 
 def _target(sheet: str | None, query: str = "", *, encode: bool = True) -> str:
@@ -382,6 +425,19 @@ def requests(cfg, songs) -> list[dict[str, Any]]:
     a(_asked(cfg, "sixty-one fields", _target(soda, "&".join(f"f{n}=1" for n in range(60)))))
     a(_asked(cfg, "a field with no value and no =", _target(soda, "t=2&necks")))
     a(_asked(cfg, "a plus for a space", _target(soda.replace(" ", "+"), "t=2", encode=False)))
+    a(_asked(cfg, "its path as the viewer's URLSearchParams writes it, '/' as %2F",
+             "/export.pdf?" + urlencode([("sheet", soda)]) + "&t=2&capo=0"))
+    # a [version] written before, a move with no key
+    old_move = "/".join((*_folder(OLD_MOVE), "sheet.html"))
+    a(_asked(cfg, "a [version] that is a move: an address naming none", _target(old_move)))
+    a(_asked(cfg, "a [version] that is a move: another instrument", _target(old_move, "inst=piano")))
+    a(_asked(cfg, "a [version] that is a move: a capo, no t", _target(old_move, "capo=2")))
+    a(_asked(cfg, "a [version] that is a move: mine", _target(old_move, "t=1&mine=1")))
+    # a kept sheet whose sheet.json can't be read
+    for names in BROKEN:
+        broken = "/".join((*_folder(names), "sheet.html"))
+        a(_asked(cfg, f"a sheet.json that can't be read: {names[1]}", _target(broken, "t=2")))
+        a(_asked(cfg, f"a sheet.json that can't be read, mine: {names[1]}", _target(broken, "t=2&mine=1")))
     return out
 
 
@@ -422,6 +478,9 @@ SHEETS = (  # (song, case, query)
     (NO_KEY, "a sheet with no key", "t=2"),
     (NO_KEY, "a sheet with no key: as written", ""),
     (IGNORED, "an ignored song's sheet", "t=2&capo=0"),
+    (OLD_MOVE, "a [version] that is a move: its own", ""),
+    (OLD_MOVE, "a [version] that is a move: the sheet as written", "t=0"),
+    (OLD_MOVE, "a [version] that is a move: a mode, no t", "mode=aeolian"),
 )
 
 
@@ -464,6 +523,9 @@ MINE = (  # (case, song's name as given, query)
     ("no such song", "Nobody - Nothing", "t=2"),
     ("not a song's name", "Nothing", "t=2"),
     ("a song whose sheet is no longer kept", "Fito Páez - Mariposa Tecknicolor", "t=2"),
+    ("a [version] that is a move, another: kept by its key", "Los Fabulosos Cadillacs - Matador", "t=4&capo=0"),
+    ("a [version] that is a move, as written: it goes", "Los Fabulosos Cadillacs - Matador", "t=0"),
+    *((f"a sheet.json that can't be read: {names[1]}", " - ".join(names), "t=2") for names in BROKEN),
 )
 
 
@@ -484,7 +546,7 @@ def mines(cfg, conn) -> list[dict[str, Any]]:
             try:
                 render_cmd._make_mine(conn, cfg, load_overrides(cfg.overrides_file), name, query)
             except _Failed as e:
-                result: dict[str, Any] = {"exit": e.code, "error": str(e)}
+                result: dict[str, Any] = {"exit": e.code, **_said(cfg, str(e), "error")}
             else:
                 versions = load_overrides(cfg.overrides_file).version
                 result = {"said": said, "version": versions.get(override_key(name))}

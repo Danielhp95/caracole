@@ -58,6 +58,9 @@ import java.nio.file.Files
  *   (Exports.version) as Exports.query writes them, the version's labels, ExportSheet.entry and ExportSheet.kept;
  * - `render --mine`: the render runner over the library's overrides as the fixture holds them: the line it says
  *   first and the song's `[version]` after it, or its exit and its `error:` words.
+ *
+ * A refusal's words name the library's folder `{library}`, and a record of `"prefix": true` holds their start alone
+ * ([said]).
  */
 object ExportReplay : AreaReplay {
     override val area = "export"
@@ -124,8 +127,8 @@ object ExportReplay : AreaReplay {
             ))
         } catch (e: Refused) {
             if (queue.snapshot().isNotEmpty()) return misses.check(false) { "$case: refused, yet a job queued" }
-            JsonObject(linkedMapOf("status" to JsonPrimitive(e.status), "title" to JsonPrimitive(e.title),
-                                   "message" to JsonPrimitive(e.message)))
+            JsonObject(linkedMapOf("status" to JsonPrimitive(e.status), "title" to JsonPrimitive(e.title)) +
+                       said(out, "message", e.message.orEmpty(), dir))
         }
         WebJson.difference(out, got).let { at -> misses.check(at == null) { "$case: at $at: $got" } }
     }
@@ -170,10 +173,27 @@ object ExportReplay : AreaReplay {
             JsonObject(linkedMapOf("said" to JsonArray(said.take(1).map(::JsonPrimitive)),
                                    "version" to (version?.let(::JsonPrimitive) ?: JsonNull)))
         } catch (e: CommandExit) {
-            JsonObject(linkedMapOf("exit" to JsonPrimitive(e.code), "error" to JsonPrimitive(e.message)))
+            JsonObject(linkedMapOf<String, JsonElement>("exit" to JsonPrimitive(e.code)) +
+                       said(out, "error", e.message.orEmpty(), dir))
         }
         WebJson.difference(out, got).let { at -> misses.check(at == null) { "$case: at $at: $got" } }
     }
+
+    /**
+     * A refusal's words [message] as the record holds them under [name]: the library's folder (under [dir]) named
+     * `{library}`; for a record of `"prefix": true`, the start of the message alone, which ends with the reader's own
+     * words on a file it couldn't read (Python's OSError, UnicodeDecodeError or JSONDecodeError's).
+     */
+    private fun said(out: JsonObject, name: String, message: String, dir: File): Map<String, JsonElement> {
+        val words = message.replace(File(dir, "library").path, LIBRARY)
+        val expected = (out[name] as? JsonPrimitive)?.content
+        if (out["prefix"] != JsonPrimitive(true)) return mapOf(name to JsonPrimitive(words))
+        val start = if (expected != null && words.startsWith(expected)) expected else words
+        return linkedMapOf(name to JsonPrimitive(start), "prefix" to JsonPrimitive(true))
+    }
+
+    /** The library's folder in a record's message. */
+    private const val LIBRARY = "{library}"
 
     /** The parts of a phone over [database], with no mirror and no pages of its own. */
     private fun parts(database: Database, dir: File, queue: JobQueue): PhoneParts {

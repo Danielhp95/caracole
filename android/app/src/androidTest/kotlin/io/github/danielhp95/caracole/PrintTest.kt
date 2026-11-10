@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.graphics.pdf.PdfRenderer
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.print.PrintAttributes
 import android.print.PrintDocumentInfo
@@ -14,10 +15,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
@@ -27,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,10 +47,15 @@ import java.util.concurrent.TimeUnit
  *
  * The viewer's `/export.pdf?…` link is named by the phone's server (the download name caracole serve gives the PDF)
  * and the screen's WebView printed through Android's print framework: a print job of that name, its page A4, for this
- * app, and nothing written into the library. With `mine=1` Make this my version is queued too, and its run makes the
- * version the song's own. A refusal prints nothing. The system's print dialog can't be driven from a test, so what it
- * would print is the WebView's own print adapter run as the spooler runs it ([PrintedPdf]): an A4 PDF of the page.
- * Each print job is cancelled and the print spooler stopped after each test.
+ * app, and nothing written into the library; a link the page follows reaches it through the screen's own hook
+ * (MainActivity's `follow`, Links.Route.Print). With `mine=1` Make this my version is queued too, and its run makes
+ * the version the song's own and the song's pages again (the phone's own render). A refusal prints nothing. The
+ * system's print dialog can't be driven from a test, so what it would print is the WebView's own print adapter run as
+ * the spooler runs it ([PrintedPdf]): an A4 PDF of the page.
+ *
+ * On an emulator alone: it opens the system's print dialog, and after each test cancels this app's print jobs and
+ * stops the print spooler, which on a phone of the owner's would be their spooler and their jobs (skipped there).
+ * The phone's own jobs (its render job at its start) are waited for before any snapshot of the library or the queue.
  */
 @RunWith(AndroidJUnit4::class)
 class PrintTest {
@@ -55,20 +64,26 @@ class PrintTest {
     private val jobs = ArrayList<PrintJob>()
 
     @Before
-    fun aComputerIsNamed() {
+    fun anEmulatorWithAComputerNamed() {
+        assumeTrue("an emulator's print spooler alone", onAnEmulator())
         // A first start with no computer named opens Settings over the library screen: name one, never asked here.
         Settings(context).server = "http://10.0.2.2:9"
     }
 
     @After
     fun noPrintLeft() {
-        instrumentation.runOnMainSync { for (job in jobs) if (!job.isCancelled && !job.isCompleted) job.cancel() }
+        if (!onAnEmulator()) return
+        instrumentation.runOnMainSync {
+            val left = jobs + context.getSystemService(PrintManager::class.java).printJobs
+            for (job in left) if (!job.isCancelled && !job.isCompleted) job.cancel()
+        }
         instrumentation.uiAutomation.executeShellCommand("am force-stop com.android.printspooler").close()
     }
 
     @Test
     fun exportPdfPrintsTheViewerShownNamedForTheVersion() {
         song()
+        idle()
         val before = libraryFiles()
         val queued = jobIds()
         launched { main ->
@@ -86,8 +101,35 @@ class PrintTest {
     }
 
     @Test
+    fun aLinkThePageFollowsPrintsThroughTheScreensHook() {
+        song()
+        idle()
+        val queued = jobIds()
+        launched { main ->
+            val url = export("t=2&capo=0")
+            val clicked = Pages.evaluate(main, "(function () { const a = document.createElement('a'); " +
+                "a.href = ${org.json.JSONObject.quote(url)}; document.body.appendChild(a); a.click(); " +
+                "return 'clicked'; })()")
+            assertEquals("clicked", clicked)
+            var job: PrintJob? = null
+            Pages.waitUntil("a print job named for the version", 30_000) {
+                main.onActivity { activity ->
+                    job = activity.getSystemService(PrintManager::class.java).printJobs
+                        .firstOrNull { it.info.label == NAME && !it.isCancelled }
+                }
+                job != null
+            }
+            jobs += job!!
+            assertEquals(PrintAttributes.MediaSize.ISO_A4.id, job!!.info.attributes.mediaSize?.id)
+            assertTrue("the screen stays where it was", Pages.url(main).startsWith(Pages.address("")))
+        }
+        assertEquals("no job queued", queued, jobIds())
+    }
+
+    @Test
     fun mineQueuesMakeThisMyVersionAndStillPrints() {
         val song = song()
+        idle()
         val queued = jobIds()
         launched { main ->
             assertNotNull(printed(main, export("t=2&capo=0&mine=1")))
@@ -97,11 +139,16 @@ class PrintTest {
         val ended = runBlocking { withTimeout(60_000) { phone().queue.await(job.id) } }
         assertEquals(ended.output.toString(), Job.DONE, ended.state)
         assertEquals("key=A&capo=0", phone().parts.database.read { db -> Overrides.read(db).version[song.key] })
+        // the song's viewer made again by the phone's own render, starting where the song plays now
+        val viewer = phone().parts.database.read { db -> WrittenPages.written(db, song.id, "sheet.html") }
+        assertNotNull("the phone's own viewer", viewer)
+        assertTrue("made again", viewer!!.sha256 != viewerBefore)
     }
 
     @Test
     fun aRefusalPrintsNothing() {
         song()
+        idle()
         val queued = jobIds()
         launched { main ->
             assertNull(printed(main, Pages.origin() + "/export.pdf?sheet=Nobody/Nothing/sheet.html&t=2"))
@@ -155,6 +202,20 @@ class PrintTest {
     /** The jobs the phone's queue holds: the class's tests share its process, and so its queue. */
     private fun jobIds(): Set<Int> = phone().queue.snapshot().map { it.id }.toSet()
 
+    /** Every job that waits or runs over, the phone's own among them (the render job Phone.start queues when pages
+     * are owed, which would make the test's song's pages beside it). */
+    private fun idle() {
+        val active = phone().queue.snapshot().filter { it.state == "queued" || it.state == "running" }
+        runBlocking { withTimeout(120_000) { for (job in active) phone().queue.await(job.id) } }
+    }
+
+    /** Whether this runs on an emulator (its virtual hardware), never a phone adb also lists. */
+    private fun onAnEmulator(): Boolean = Build.HARDWARE in setOf("ranchu", "goldfish") ||
+        Build.PRODUCT.startsWith("sdk_gphone") || Build.FINGERPRINT.startsWith("generic")
+
+    /** The song's viewer as [song] last made it, to tell it made again. */
+    private var viewerBefore: String? = null
+
     /** The viewer's Export PDF link for the song's sheet, its version [query]. */
     private fun export(query: String): String = Pages.origin() + "/export.pdf?sheet=" +
         URLEncoder.encode(SHEET, "UTF-8").replace("+", "%20") + "&" + query
@@ -185,7 +246,8 @@ class PrintTest {
         return job
     }
 
-    /** A song in G, its UG sheet kept as the fetch keeps one, its viewer recorded as the phone records one. */
+    /** A song in G, its UG sheet kept as the fetch keeps one, played as written (no `[version]`), its pages made by
+     * the phone's own render (PhoneRender: its viewer recorded as the phone records one). */
     private fun song(): SongRow {
         val phone = phone()
         val library = phone.parts.store.libraryDir
@@ -198,7 +260,11 @@ class PrintTest {
             val folder = SafeName.songFolder(ARTIST, TITLE)
             File(library, "${folder.first}/${folder.second}/sheet.json").writeText(
                 """{"content": "[tab][ch]G[/ch]           [ch]D[/ch]\r\nPalabras de prueba[/tab]\r\n", "meta": []}""")
-            db.kvSet("render:files:${song.id}", """{"sheet.html": {"sha256": "${"0".repeat(64)}", "size": 1}}""")
+            OverrideWriters.addVersion(db, song.display, null) { null }  // as written, whatever a test before made it
+            val made = phone.render.render(db, listOf(song.id), null)
+            assertTrue("its pages made: ${made.failed}", made.failed.isEmpty())
+            viewerBefore = WrittenPages.written(db, song.id, "sheet.html")?.sha256
+            assertNotNull("its viewer recorded", viewerBefore)
             song
         }
     }

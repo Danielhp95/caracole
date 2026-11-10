@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
@@ -26,10 +27,13 @@ import io.github.danielhp95.caracole.viewer.version.Versions
  * `_common.song_named` refuses (2 for a name of another shape, 1 for none or an ignored one); no sheet to make a
  * version of (1); overrides that can't be read or written (2); then "N rendered, M up to date, F failed" and the
  * songbooks' line, and 1 when a song's pages couldn't be made. `--version` without `--mine`, an export to a PDF beside
- * the sheet, is the computer's alone: on the phone, Export PDF prints the viewer (2). All of it in one write, as
- * caracole's lock holds it on the computer; the version is written (its own savepoint) before the pages are made, so
- * a page that fails keeps it. vectors/web/export.jsonl's `render --mine` records hold what it says and writes
- * (ExportReplay). [readOverrides] stands in for the phone's overrides, a test's.
+ * the sheet, is the computer's alone: on the phone, Export PDF prints the viewer (2).
+ *
+ * With `--song`, the version, the song's pages and the songbooks in one write, as caracole's lock holds them on the
+ * computer; the version is written (its own savepoint) before the pages are made, so a page that fails keeps it.
+ * Every song's ([everySong]) each in a write of its own, the lookups queued meanwhile let go first between two, as
+ * render_all hands the lock over, then the songbooks in a write of theirs. vectors/web/export.jsonl's `render --mine`
+ * records hold what it says and writes (ExportReplay). [readOverrides] stands in for the phone's overrides, a test's.
  */
 class RenderRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Overrides = Overrides::read) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
@@ -45,28 +49,53 @@ class RenderRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Ove
         if (version != null && song.isNullOrEmpty()) throw CommandExit(2, "--version needs --song: the version is one song's.")
         if (mine && version == null) throw CommandExit(2, "--mine needs --version: the version to make the song's own.")
         if (version != null && !mine) throw CommandExit(2, NO_PDF)
-        parts.database.writeBlocking { db ->
-            var overrides = LookupJobs.overrides(db, readOverrides)
-            if (mine) {
-                makeMine(db, overrides, song!!, version!!, context)
-                overrides = LookupJobs.overrides(db, readOverrides)
+        val (stats, books) = if (!song.isNullOrEmpty()) {
+            parts.database.writeBlocking { db ->
+                var overrides = LookupJobs.overrides(db, readOverrides)
+                if (mine) {
+                    makeMine(db, overrides, song, version!!, context)
+                    overrides = LookupJobs.overrides(db, readOverrides)
+                }
+                val id = LookupJobs.songNamed(parts, db, song, overrides).id
+                parts.pages.render(db, listOf(id), null) to parts.songbooks.render(db, null)
             }
-            val ids = if (!song.isNullOrEmpty()) listOf(LookupJobs.songNamed(parts, db, song, overrides).id)
-                      else Songs.list(db).map { it.id }
-            val stats = parts.pages.render(db, ids, null)
-            val books = parts.songbooks.render(db, null)
-            context.say("${stats.written} rendered, ${stats.unchanged} up to date, ${stats.failed.size} failed")
-            if (books.error != null) {
-                context.say("Songbooks: songbooks.toml can't be read: ${books.error}")
-            } else if (books.rendered > 0 || books.skipped > 0 || books.failed.isNotEmpty()) {
-                context.say("Songbooks: ${books.rendered} rendered, ${books.skipped} up to date, ${books.failed.size} failed")
-            }
-            if (stats.failed.isNotEmpty()) throw CommandExit(1, stats.failed.values.joinToString("; "))
-            if (song.isNullOrEmpty() && (books.failed.isNotEmpty() || books.error != null)) {
-                throw CommandExit(1, books.error?.let { "songbooks.toml can't be read: $it" }
-                    ?: "songbooks not made: ${books.failed.joinToString(", ")}")
-            }
+        } else {
+            val stats = everySong(context)
+            stats to parts.database.writeBlocking { db -> parts.songbooks.render(db, null) }
         }
+        context.say("${stats.written} rendered, ${stats.unchanged} up to date, ${stats.failed.size} failed")
+        if (books.error != null) {
+            context.say("Songbooks: songbooks.toml can't be read: ${books.error}")
+        } else if (books.rendered > 0 || books.skipped > 0 || books.failed.isNotEmpty()) {
+            context.say("Songbooks: ${books.rendered} rendered, ${books.skipped} up to date, ${books.failed.size} failed")
+        }
+        if (stats.failed.isNotEmpty()) throw CommandExit(1, stats.failed.values.joinToString("; "))
+        if (song.isNullOrEmpty() && (books.failed.isNotEmpty() || books.error != null)) {
+            throw CommandExit(1, books.error?.let { "songbooks.toml can't be read: $it" }
+                ?: "songbooks not made: ${books.failed.joinToString(", ")}")
+        }
+    }
+
+    /**
+     * render_all over every song, as `caracole render` hands caracole's lock over between two songs
+     * (`between=…hand_over`): each song's pages made in a write of its own, the lookups queued meanwhile run between
+     * two songs (JobContext.yieldToQueued, holding no write), a song gone meanwhile passed over.
+     */
+    private fun everySong(context: JobContext): RenderStats {
+        val ids = parts.database.read { db -> Songs.list(db).map { it.id } }
+        var written = 0
+        var unchanged = 0
+        val failed = LinkedHashMap<Long, String>()
+        for ((n, id) in ids.withIndex()) {
+            if (n > 0) context.yieldToQueued()
+            val one = parts.database.writeBlocking { db ->
+                if (Songs.byId(db, id) == null) RenderStats() else parts.pages.render(db, listOf(id), null)
+            }
+            written += one.written
+            unchanged += one.unchanged
+            failed += one.failed
+        }
+        return RenderStats(written, unchanged, failed)
     }
 
     /**

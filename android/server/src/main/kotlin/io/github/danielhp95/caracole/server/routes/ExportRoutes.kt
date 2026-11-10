@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -32,9 +31,6 @@ import io.github.danielhp95.caracole.viewer.version.Version
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** What an export names: its song, and the version its address holds. */
-class Asked(val song: SongRow, val version: Version)
-
 /**
  * Export PDF on the phone (web/export_routes.py), which prints the viewer it shows (the app's Printer, Android's print
  * framework) and makes no PDF:
@@ -50,7 +46,10 @@ class Asked(val song: SongRow, val version: Version)
  * sheet's of the library where caracole wrote it ([written]): the phone's own page, as render.written_file reads its
  * record, or the computer's the mirror holds for the song. An address naming no version is the song's own (render.py
  * `export_version`); the label is the PDF's (`ExportSheet.label`), in Traditional characters where the address says
- * `trad=1` of a Chinese sheet.
+ * `trad=1` of a Chinese sheet. Making no PDF, the phone names any version the viewer's code can read: where caracole
+ * serve refuses one whose PDF can't be made (500, "No PDF": chordpro failing, a CJK font missing, the version's text
+ * that `_export_text` can't make), the phone, which prints the page, answers it; its own 500 is a label that can't be
+ * made.
  *
  * With `mine=1` (a GET; a HEAD changes nothing) it queues `caracole render --song=… --version=… --mine` under
  * `export:<key>:<version>:mine` (jobs.EXPORTING, jobs.MINE), never the song's own key, which the render runner runs:
@@ -62,6 +61,9 @@ class Asked(val song: SongRow, val version: Version)
  * computer's pages, the cards' (PhonePageData's), whose viewers are the library's as the phone's own are.
  */
 class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { mirrorOf(parts.cards) }) : RouteModule {
+    /** What an export names: its song, and the version its address holds. */
+    class Exported(val song: SongRow, val version: Version)
+
     override val routes: List<Route> = listOf(
         Route("GET", "/export.pdf", "a sheet's version named for its print (sheet, its address; mine)",
               get = GetAnswer { export(it) }),
@@ -104,7 +106,7 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
      * export_routes._version: the song a viewer's path names and the version [query] holds, with the sheet its
      * exports are made from; refused as caracole serve refuses it.
      */
-    fun asked(db: Db, sheet: String, query: String): Pair<Asked, ExportSheet> {
+    fun asked(db: Db, sheet: String, query: String): Pair<Exported, ExportSheet> {
         val pieces = sheet.split('/')
         if (pieces.size < 2 || sheet.isEmpty() || pieces.any { it == "" || it == "." || it == ".." } ||
             !writtenPage(pieces.last())) {
@@ -123,7 +125,7 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
         }
         return try {
             val export = Exports.sheet(db, parts.store.libraryDir, song)
-            Asked(song, Exports.version(query, export.own(overrides))) to export
+            Exported(song, Exports.version(query, export.own(overrides))) to export
         } catch (e: ExportError) {
             throw Refused(404, "No sheet to export", e.message ?: "")
         }
@@ -134,33 +136,9 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
      * (its record, kv `render:files:<id>`) or the computer (the mirror's page of it, listed under the song's unit).
      */
     private fun written(db: Db, song: SongRow, folder: List<String>, name: String): Boolean {
-        if (writtenHere(db, song.id, name)) return true
+        if (WrittenPages.written(db, song.id, name) != null) return true
         val served = mirror()?.lookup((folder + name).joinToString("/")) ?: return false
         return served.entry.unit == "song/${song.key}"
-    }
-
-    /** The phone's record of the page [name] (WrittenPages.written, lane phone-render's); Phase A: waiting on lane
-     * phone-render, its record read as render.written_file reads it until it lands. */
-    private fun writtenHere(db: Db, songId: Long, name: String): Boolean = try {
-        WrittenPages.written(db, songId, name) != null
-    } catch (_: NotImplementedError) {
-        recorded(db, songId, name)  // waiting on lane phone-render
-    }
-
-    private fun recorded(db: Db, songId: Long, name: String): Boolean {
-        val record = db.kvGet("$FILES_KEY$songId")?.let { text ->
-            try {
-                PyJson.loads(text) as? JsonObject
-            } catch (e: Exception) {
-                null
-            }
-        } ?: return false
-        val entry = record[name] as? JsonObject ?: return false
-        val sha = entry["sha256"] as? JsonPrimitive
-        val size = entry["size"] as? JsonPrimitive
-        // render.written_entry: a text SHA-256, and a size that is a JSON integer (Python's `type(size) is int`)
-        return sha != null && sha.isString && size != null && !size.isString && size.content.isNotEmpty() &&
-            size.content.all { it in '0'..'9' || it == '-' }
     }
 
     /** The job Make this my version queues: `caracole render --song=… --version=… --mine` under the song's export key. */
@@ -183,9 +161,6 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
 
         /** The file name an export's download name is made from (download_names.download_name's). */
         private const val PDF_NAME = "sheet.pdf"
-
-        /** render.FILES_KEY. */
-        private const val FILES_KEY = "render:files:"
 
         private val NOT_AN_ADDRESS get() = Refused(400, "Not an address", "That address can't be read.")
         private val NOT_A_VERSION get() = Refused(400, "Not a version", "That version can't be read.")
