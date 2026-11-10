@@ -288,9 +288,11 @@ class LookupRunnersTest {
     }
 
     @Test fun eachLookupCommandIsItsRunnersAndSaysItsLastLine() {
+        val noIndex = "Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole " +
+            "harptabs --index now."  // lane harptabs': nothing asked of a phone with no index
         for ((args, said) in listOf(
             listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no artist page for soda stereo.",
-            listOf("harptabs", "--artist=Billy Joel") to "Not on the phone yet.",  // harptabs' until
+            listOf("harptabs", "--artist=Billy Joel") to noIndex,
             listOf("lacuerda", "--search=de musica ligera", "--progress") to
                 "Not searched: LaCuerda failed (lacuerda: 500: $lacuerdaSearch: HTTP 500); nothing changed: try again later.",
         )) {
