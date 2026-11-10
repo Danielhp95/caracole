@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.lacuerda.internal.pages
 
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyNumbers
 import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
@@ -50,24 +51,18 @@ internal object PyBits {
 
     /**
      * `int(c, 36)` of one code point: an ASCII digit or letter its value (a–z and A–Z 10 to 35), a decimal digit of
-     * any script its digit (as int() reads one, _PyUnicode_TransformDecimalAndSpaceToASCII); null where Python raises
-     * ValueError (a space, an underscore, a sign, any other character).
+     * any script its digit, read to ASCII as int() reads it (_PyUnicode_TransformDecimalAndSpaceToASCII, int()'s and
+     * float()'s own [PyNumbers.ascii]); null where Python raises ValueError (a space, an underscore, a sign, any other
+     * character).
      */
-    fun base36(cp: Int): Int? = when {
-        cp in '0'.code..'9'.code -> cp - '0'.code
-        cp in 'a'.code..'z'.code -> cp - 'a'.code + 10
-        cp in 'A'.code..'Z'.code -> cp - 'A'.code + 10
-        cp < 0x7F -> null
-        PyUnicode.isSpace(cp) -> null
-        PyUnicode.isDecimal(cp) -> decimal(cp)
-        else -> null
-    }
-
-    /** A decimal digit's value: its place in its run of ten, as Unicode encodes each script's 0–9. */
-    private fun decimal(cp: Int): Int {
-        var start = cp
-        while (PyUnicode.isDecimal(start - 1)) start--
-        return (cp - start) % 10
+    fun base36(cp: Int): Int? {
+        val c = PyNumbers.ascii(String(Character.toChars(cp)))?.singleOrNull() ?: return null
+        return when (c) {
+            in '0'..'9' -> c - '0'
+            in 'a'..'z' -> c - 'a' + 10
+            in 'A'..'Z' -> c - 'A' + 10
+            else -> null
+        }
     }
 
     /** urlsplit(href).path; ValueError's words as [PyUrl.Invalid]. */

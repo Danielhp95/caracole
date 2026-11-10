@@ -6,7 +6,6 @@ import io.github.danielhp95.caracole.core.config.RankPolicy
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.EventLog
 import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.LaCuerdaParseError
@@ -41,7 +40,6 @@ import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
-import io.github.danielhp95.caracole.core.ug.UgPage
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -54,6 +52,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.math.BigInteger
 import java.nio.file.Files
 import java.time.Instant
 
@@ -70,10 +69,6 @@ import java.time.Instant
  */
 object LaCuerdaReplay : AreaReplay {
     override val area = "lacuerda"
-
-    /** Phase A guard: core.html is lane html-tree's, and until it merges a page can't be parsed; the records that
-     * parse a page wait on it (waiting on html-tree). */
-    val htmlReady: Boolean by lazy { runCatching { Html.parse("<p>") }.isSuccess }
 
     override fun replay(misses: Misses) {
         pages(misses)
@@ -121,7 +116,7 @@ object LaCuerdaReplay : AreaReplay {
             LaCuerdaArtist(f.getValue("slug").jsonPrimitive.content, f.getValue("name").jsonPrimitive.content,
                            f.getValue("songs").jsonPrimitive.long)
         },
-        stated = o.getValue("stated").jsonPrimitive.long,
+        stated = BigInteger(o.getValue("stated").jsonPrimitive.content),
     )
 
     /** A page's text, as the parsers are handed it: `resp.text`. */
@@ -144,7 +139,7 @@ object LaCuerdaReplay : AreaReplay {
 
     private const val PAGES = "sites/lacuerda_pages.jsonl"
 
-    /** Every record of sites/lacuerda_pages.jsonl; the parsers' records only once core.html is there. */
+    /** Every record of sites/lacuerda_pages.jsonl, at least a hundred of them pages parsed (the vectors hold 119). */
     fun pages(misses: Misses = Misses(PAGES)) {
         var parsed = 0
         for (r in Corpus.records(PAGES)) {
@@ -154,12 +149,7 @@ object LaCuerdaReplay : AreaReplay {
             if (fn in PARSERS) {
                 val html = text(inputs!!)
                 val url = r.kw["url"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
-                val got = try {
-                    answered { parse(fn, html, url) }
-                } catch (e: NotImplementedError) {
-                    if (htmlReady) throw e
-                    continue  // waiting on html-tree
-                }
+                val got = answered { parse(fn, html, url) }
                 parsed++
                 misses.check(got == want(r)) { "$fn, $case: ${got.toString().take(400)}, Python's ${want(r).toString().take(400)}" }
                 continue
@@ -179,7 +169,7 @@ object LaCuerdaReplay : AreaReplay {
                 misses.check(got == outs.getOrNull(i)) { "$fn, $case, ${xs.getOrNull(i) ?: r.args[1].jsonArray[i]}: $got, Python's ${outs.getOrNull(i)}" }
             }
         }
-        if (htmlReady) misses.check(parsed >= 100) { "$PAGES: $parsed pages parsed" }
+        misses.check(parsed >= 100) { "$PAGES: $parsed pages parsed" }
     }
 
     private val PARSERS = setOf("parse_artist_page", "parse_popularity", "parse_artist_name", "is_missing_artist_page",
@@ -222,8 +212,7 @@ object LaCuerdaReplay : AreaReplay {
 
     private const val STORE = "sites/lacuerda_store.jsonl"
 
-    /** Every record of sites/lacuerda_store.jsonl, each op in turn on its database; until core.html is there, a
-     * record's ops up to the first that parses a page. */
+    /** Every record of sites/lacuerda_store.jsonl, each op in turn on its database. */
     fun store(misses: Misses = Misses(STORE)) {
         for (r in Corpus.records(STORE)) {
             val case = r.extra.getValue("case").jsonPrimitive.content
@@ -235,35 +224,30 @@ object LaCuerdaReplay : AreaReplay {
                     val kind = op.getValue("op").jsonPrimitive.content
                     val at = op.getValue("at").jsonPrimitive.content
                     val kvBefore = kv(db)
-                    val result: JsonElement = try {
-                        when (kind) {
-                            "store_songs" -> {
-                                val popular = op["popular"]?.takeUnless { it is JsonNull }?.jsonObject
-                                    ?.mapValues { it.value.jsonPrimitive.int }
-                                LaCuerda.storeSongs(db, op.getValue("slug").jsonPrimitive.content,
-                                                    op["name"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content,
-                                                    op.getValue("songs").jsonArray.map { songOf(it) }, popular, at)
-                                noted["${op.getValue("slug").jsonPrimitive.content}/"] = at
-                                JsonNull
-                            }
-                            "store_artist_page" -> {
-                                val slug = op.getValue("slug").jsonPrimitive.content
-                                val stored = LaCuerda.storeArtistPage(db, slug, text(op.getValue("body")), at)
-                                if (stored) noted["$slug/"] = at
-                                JsonPrimitive(stored)
-                            }
-                            "store_search" -> {
-                                val given = op["answer"]?.jsonObject?.let { answerOf(it) }
-                                    ?: LaCuerdaPages.parseSearch(text(op.getValue("body")))
-                                val n = LaCuerda.storeSearch(db, given, at)
-                                if (n > 0) noted[LaCuerda.SEARCH_PAGE] = at
-                                JsonPrimitive(n)
-                            }
-                            else -> throw AssertionError(kind)
+                    val result: JsonElement = when (kind) {
+                        "store_songs" -> {
+                            val popular = op["popular"]?.takeUnless { it is JsonNull }?.jsonObject
+                                ?.mapValues { it.value.jsonPrimitive.int }
+                            LaCuerda.storeSongs(db, op.getValue("slug").jsonPrimitive.content,
+                                                op["name"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content,
+                                                op.getValue("songs").jsonArray.map { songOf(it) }, popular, at)
+                            noted["${op.getValue("slug").jsonPrimitive.content}/"] = at
+                            JsonNull
                         }
-                    } catch (e: NotImplementedError) {
-                        if (htmlReady) throw e
-                        return@withDb  // waiting on html-tree: the ops after this one stand on it
+                        "store_artist_page" -> {
+                            val slug = op.getValue("slug").jsonPrimitive.content
+                            val stored = LaCuerda.storeArtistPage(db, slug, text(op.getValue("body")), at)
+                            if (stored) noted["$slug/"] = at
+                            JsonPrimitive(stored)
+                        }
+                        "store_search" -> {
+                            val given = op["answer"]?.jsonObject?.let { answerOf(it) }
+                                ?: LaCuerdaPages.parseSearch(text(op.getValue("body")))
+                            val n = LaCuerda.storeSearch(db, given, at)
+                            if (n > 0) noted[LaCuerda.SEARCH_PAGE] = at
+                            JsonPrimitive(n)
+                        }
+                        else -> throw AssertionError(kind)
                     }
                     val want = outs[i].jsonObject
                     val what = "$case, op ${i + 1} ($kind)"
@@ -370,23 +354,19 @@ object LaCuerdaReplay : AreaReplay {
 
     private const val SEARCH = "lookup/lacuerda_search.jsonl"
 
-    /** Every scenario of lookup/lacuerda_search.jsonl; those that parse a page only once core.html is there. */
+    /** Every scenario of lookup/lacuerda_search.jsonl. */
     fun search(misses: Misses = Misses(SEARCH)) {
         for (line in Corpus.lines(SEARCH)) {
             if (line["header"] == JsonPrimitive(true)) continue
             val q = line.getValue("kw").jsonObject.getValue("query").jsonPrimitive.content
-            try {
-                Scenarios.replay(line, misses) { world ->
-                    val got = LaCuerdaSearch.search(world.db, world.clients.getValue("lacuerda"), q, world.now)
-                    val wanted = if (got.songs.isNotEmpty() || got.artists.isNotEmpty()) {
-                        mapOf(LaCuerda.SEARCH_PAGE to Stamps.of(world.now))
-                    } else emptyMap()
-                    misses.check(notes(world.db) == wanted) { "${line["case"]}: the pages noted ${notes(world.db)}, $wanted" }
-                    world.db.execute("DELETE FROM kv WHERE key >= ? AND key < ?", Reads.READ, Reads.READ.dropLast(1) + ";")
-                    answer(got)
-                }
-            } catch (e: NotImplementedError) {
-                if (htmlReady) throw e  // waiting on html-tree otherwise
+            Scenarios.replay(line, misses) { world ->
+                val got = LaCuerdaSearch.search(world.db, world.clients.getValue("lacuerda"), q, world.now)
+                val wanted = if (got.songs.isNotEmpty() || got.artists.isNotEmpty()) {
+                    mapOf(LaCuerda.SEARCH_PAGE to Stamps.of(world.now))
+                } else emptyMap()
+                misses.check(notes(world.db) == wanted) { "${line["case"]}: the pages noted ${notes(world.db)}, $wanted" }
+                world.db.execute("DELETE FROM kv WHERE key >= ? AND key < ?", Reads.READ, Reads.READ.dropLast(1) + ";")
+                answer(got)
             }
         }
     }
@@ -395,11 +375,6 @@ object LaCuerdaReplay : AreaReplay {
 
     private const val SHEETS = "lookup/lacuerda_sheets.jsonl"
     private const val COMMANDS = "lookup/commands_lacuerda.jsonl"
-
-    /** Phase A guard: UG's strip_markup, with which a kept sheet's `sheet.txt` is written, is lane ug-pages'; until
-     * it merges, a record that keeps a sheet waits on it (waiting on ug-pages), as one that parses a page waits on
-     * html-tree. */
-    val ugPagesReady: Boolean by lazy { runCatching { UgPage.stripMarkup("[ch]A[/ch]") }.isSuccess }
 
     /**
      * Every scenario of lookup/lacuerda_sheets.jsonl: `lacuerda_sheets` of the record's songs (`kw.only`, the rank
@@ -411,19 +386,17 @@ object LaCuerdaReplay : AreaReplay {
         for (line in Corpus.lines(SHEETS)) {
             if (line["header"] == JsonPrimitive(true)) continue
             val kw = line.getValue("kw").jsonObject
-            waitingOnPages {
-                Scenarios.replay(line, misses, events(line)) { world ->
-                    val client = world.clients.getValue(LaCuerdaSheets.PROVIDER)
-                    noting(world, line, misses) {
-                        when (val fn = line.getValue("fn").jsonPrimitive.content) {
-                            "caracole.lacuerda_fetch.lacuerda_sheets" -> stats(LaCuerdaSheets.lacuerdaSheets(
-                                world.db, client, LibraryStore(world.library), rank(kw["rank"]), world.now,
-                                Overrides.read(world.db), kw.getValue("only").jsonArray.map { it.jsonPrimitive.long }.toSet()))
-                            "caracole.lacuerda_fetch.read_artist_page" ->
-                                LaCuerdaSheets.readArtistPage(world.db, client, kw.getValue("artist").jsonPrimitive.content,
-                                                              world.now)
-                            else -> throw AssertionError("no sheets record $fn")
-                        }
+            Scenarios.replay(line, misses, events(line)) { world ->
+                val client = world.clients.getValue(LaCuerdaSheets.PROVIDER)
+                noting(world, line, misses) {
+                    when (val fn = line.getValue("fn").jsonPrimitive.content) {
+                        "caracole.lacuerda_fetch.lacuerda_sheets" -> stats(LaCuerdaSheets.lacuerdaSheets(
+                            world.db, client, LibraryStore(world.library), rank(kw["rank"]), world.now,
+                            Overrides.read(world.db), kw.getValue("only").jsonArray.map { it.jsonPrimitive.long }.toSet()))
+                        "caracole.lacuerda_fetch.read_artist_page" ->
+                            LaCuerdaSheets.readArtistPage(world.db, client, kw.getValue("artist").jsonPrimitive.content,
+                                                          world.now)
+                        else -> throw AssertionError("no sheets record $fn")
                     }
                 }
             }
@@ -439,53 +412,36 @@ object LaCuerdaReplay : AreaReplay {
         for (line in Corpus.lines(COMMANDS)) {
             if (line["header"] == JsonPrimitive(true)) continue
             val kw = line.getValue("kw").jsonObject
-            waitingOnPages {
-                Scenarios.replay(line, misses, events(line)) { world ->
-                    val said = ArrayList<String>()
-                    val c = object : CommandContext {
-                        override val db: Db = world.db
-                        override val asking: Asking =
-                            CommandAsking(world.db, world.clients.getValue(LaCuerdaSheets.PROVIDER), world.now)
-                        override val now: Instant = world.now
-                        override fun say(line: String) {
-                            said += line
-                        }
+            Scenarios.replay(line, misses, events(line)) { world ->
+                val said = ArrayList<String>()
+                val c = object : CommandContext {
+                    override val db: Db = world.db
+                    override val asking: Asking =
+                        CommandAsking(world.db, world.clients.getValue(LaCuerdaSheets.PROVIDER), world.now)
+                    override val now: Instant = world.now
+                    override fun say(line: String) {
+                        said += line
                     }
-                    noting(world, line, misses) {
-                        said += when (val command = kw.getValue("command").jsonPrimitive.content) {
-                            "artist" -> LaCuerdaCommands.artist(c, kw.getValue("artist").jsonPrimitive.content, null)
-                            "search" -> LaCuerdaCommands.search(c, kw.getValue("query").jsonPrimitive.content,
-                                                                kw.getValue("auto").jsonPrimitive.boolean)
-                            else -> throw AssertionError("no command $command")
-                        }
-                    }
-                    mapOf("lines" to said)
                 }
+                noting(world, line, misses) {
+                    said += when (val command = kw.getValue("command").jsonPrimitive.content) {
+                        "artist" -> LaCuerdaCommands.artist(c, kw.getValue("artist").jsonPrimitive.content, null)
+                        "search" -> LaCuerdaCommands.search(c, kw.getValue("query").jsonPrimitive.content,
+                                                            kw.getValue("auto").jsonPrimitive.boolean)
+                        else -> throw AssertionError("no command $command")
+                    }
+                }
+                mapOf("lines" to said)
             }
         }
     }
 
-    /** [block], which waits on html-tree and ug-pages while either is missing (a page that can't be parsed, or a
-     * sheet that can't be written yet: their stubs' NotImplementedError). */
-    private fun waitingOnPages(block: () -> Unit) {
-        try {
-            block()
-        } catch (e: NotImplementedError) {
-            if (htmlReady && ugPagesReady) throw e
-        }
-    }
-
-    /** [pass], then the pages it noted for the next push checked ([noted]), whatever it came to but a wait on a lane
-     * still to merge. */
+    /** [pass], then the pages it noted for the next push checked ([noted]), whatever it came to. */
     private fun <T> noting(world: ScenarioWorld, line: JsonObject, misses: Misses, pass: () -> T): T {
-        var waiting = false
         try {
             return pass()
-        } catch (e: NotImplementedError) {
-            waiting = true
-            throw e
         } finally {
-            if (!waiting) noted(world, line, misses)
+            noted(world, line, misses)
         }
     }
 

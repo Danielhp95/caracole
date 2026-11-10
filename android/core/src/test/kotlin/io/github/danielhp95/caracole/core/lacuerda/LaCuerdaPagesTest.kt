@@ -5,10 +5,10 @@ import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.LaCuerdaReplay
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -76,14 +76,12 @@ class LaCuerdaPagesTest {
     }
 
     @Test fun aChordsPaddingMovesOutsideAndItsLinesStayAsWritten() {
-        assumeTrue("waiting on html-tree", LaCuerdaReplay.htmlReady)
         val page = "<html><body><div id=t_body><PRE><A> Am </A>|<A></A>|\nla&nbsp;luz<br>del bar\n</PRE></div></body></html>"
         assertEquals(" [ch]Am[/ch] ||\nla luz\ndel bar\n", LaCuerdaPages.parseVersionPage(page))
         assertFailsWith<LaCuerdaParseError> { LaCuerdaPages.parseVersionPage("<div id=t_body><pre> \n</pre></div>") }
     }
 
     @Test fun aSearchPageCutShortIsAParseErrorNeverNoResults() {
-        assumeTrue("waiting on html-tree", LaCuerdaReplay.htmlReady)
         val e = assertFailsWith<LaCuerdaParseError> {
             LaCuerdaPages.parseSearch("<div class=s_res>Buscando <b>\"x\"</b>. 1 resultados.</div><ul id=i_main class=s_blist>")
         }
@@ -98,7 +96,7 @@ class LaCuerdaPagesTest {
                 LaCuerda.storeSearch(db, LaCuerdaSearchAnswer(), "2026-11-03T12:01:00Z")
                 assertEquals(mapOf("lacuerda" to listOf("estopa/")), Reads.since(db, "computer"))
                 LaCuerda.storeSearch(db, LaCuerdaSearchAnswer(artists = listOf(LaCuerdaArtist("gaviota", "Gaviota", 3)),
-                                                              stated = 1), "2026-11-03T12:02:00Z")
+                                                              stated = BigInteger.ONE), "2026-11-03T12:02:00Z")
                 assertEquals(mapOf("lacuerda" to listOf("busca.php", "estopa/")), Reads.since(db, "computer"))
                 assertEquals("2026-11-03T12:02:00Z", db.kvGet("${Reads.READ}lacuerda:busca.php"))
                 val row = db.one("SELECT artist, artist_key, title_key, versions, CAST(acordes AS TEXT), page FROM lacuerda_index " +

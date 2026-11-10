@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.math.BigInteger
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -141,7 +142,7 @@ object LaCuerdaCommands {
         recordOk(c, Pace.LOOKUP_RUN + LaCuerdaSearch.RUN + Stamps.of(now))
         return when {
             answer.songs.isNotEmpty() -> {
-                val some = if (answer.stated > answer.songs.size) {
+                val some = if (answer.stated > BigInteger.valueOf(answer.songs.size.toLong())) {
                     "${plural(answer.stated, "song")} for $shownQuery: the first ${answer.songs.size} are"
                 } else {
                     "${plural(answer.songs.size.toLong(), "song")} for $shownQuery,"
@@ -176,8 +177,10 @@ object LaCuerdaCommands {
     /** stamps.shown: a time in UTC, "2026-11-03 12:30 UTC"; "?" for none. */
     private fun shown(at: Instant?): String = at?.let(WHEN::format) ?: "?"
 
-    /** logs.plural: "1 song", "2 songs". */
-    private fun plural(n: Long, noun: String): String = "$n ${if (n == 1L) noun else noun + "s"}"
+    /** logs.plural: "1 song", "2 songs", a count of any size (LaCuerda's search may state one past a Long). */
+    private fun plural(n: BigInteger, noun: String): String = "$n ${if (n == BigInteger.ONE) noun else noun + "s"}"
+
+    private fun plural(n: Long, noun: String): String = plural(BigInteger.valueOf(n), noun)
 
     private fun plural(n: Int, noun: String): String = plural(n.toLong(), noun)
 

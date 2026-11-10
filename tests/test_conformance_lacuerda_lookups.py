@@ -392,8 +392,14 @@ def parse_search_records() -> list[dict[str, Any]]:
         ("a maintenance page", "<html><body>Mantenimiento</body></html>"),
         ("titles with entities and markup", whole.replace(">Tiza</a>", ">Ti&ntilde;a <b>de</b> tiza</a>")),
         ("an lcd in lower case", whole.replace("lcd='TB-12'", "lcd='tb-21'")),
+        ("a count past a 64-bit integer, on its only page", search_page(one_row, stated=PAST_A_LONG)),
+        ("a count past a 64-bit integer, and a link to another page", search_page(one_row, stated=PAST_A_LONG, pages=2)),
     ]
     return [parsed(p, parse_search, case, page, url if n == 0 else None) for n, (case, page) in enumerate(cases)]
+
+
+#: A count no 64-bit integer holds: Python's int reads it whole, and so must the phone's.
+PAST_A_LONG = 2 ** 64 + 1
 
 
 LCDS = ["RHRTTTDTB-314865972", "RTRTRTRTRTR-a1b23456789", "RTRTRTRTRTR-A1B23456789", "RTRTRTRTRTR-1011123456789",
@@ -480,6 +486,8 @@ def test_the_pages_cover_each_outcome():
         assert any(words in e for e in errors), words
     assert any("out" in r and r["out"]["artists"] for r in searched)
     assert any("out" in r and r["out"]["stated"] == 0 for r in searched)
+    assert any("out" in r and r["out"]["stated"] == PAST_A_LONG for r in searched)
+    assert any(f"of the {PAST_A_LONG} results it counts" in r.get("err", "") for r in searched)
     pages = artist_page_records()
     assert any(r.get("err", "").startswith("ValueError: ") for r in pages)
     assert sum("err" in r for r in version_records()) >= 6
@@ -918,6 +926,8 @@ def search_records(directory: Path) -> list[dict[str, Any]]:
         search_scenario(directory, "a server's error", "corazón de tiza", answer=_page("x", 500)),
         search_scenario(directory, "a 404 is no answer", "corazón de tiza", answer=_page("x", 404)),
         search_scenario(directory, "no budget", "corazón de tiza", budget=0),
+        search_scenario(directory, "a count past a 64-bit integer kept whole", "corazon tiza", answer=_page(
+            search_page(("uno", "Uno", [("tiza", "Tiza", "R-1")]), query="corazon tiza", stated=PAST_A_LONG, pages=2))),
     ]
 
 

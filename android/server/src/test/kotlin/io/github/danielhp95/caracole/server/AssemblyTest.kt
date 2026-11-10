@@ -82,10 +82,10 @@ class AssemblyTest {
                            "GET /api/youtube/video"), stubbed)
         assertEquals(emptySet(), stubbed intersect owners.map { it.first }.toSet())
         val moved = mapOf(
-            "LookupRoutes" to listOf("POST /fetch", "POST /lacuerda/artist", "POST /lacuerda/search",
+            "LookupRoutes" to listOf("POST /lookup", "POST /fetch", "POST /lacuerda/artist", "POST /lacuerda/search",
                                      "POST /harptabs/artist", "POST /versions/keep-more"),
             "RequestsRoutes" to listOf("GET /requests.json", "POST /jobs/again"),
-            "LibraryRoutes" to listOf("POST /lookup", "POST /request", "POST /remove"),
+            "LibraryRoutes" to listOf("POST /request", "POST /remove"),
             "SongbookRoutes" to listOf("make", "add", "add-song", "get", "remove", "move", "set", "rename", "delete")
                 .map { "POST /songbook/$it" },
             "VersionsRoutes" to listOf("GET /versions", "POST /versions/choose", "POST /versions/keep",

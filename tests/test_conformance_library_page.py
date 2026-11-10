@@ -19,7 +19,8 @@
   ``LibraryPage.withServer`` writes; and ``minimal_cards``: songs only the phone has (``song``: their rows, ``files``:
   their ``files`` rows' name and path, ``ignored``: whether the phone's overrides ignore them), each with the card the
   phone gives it (``card``, ``minimal_card``: library_page.py's ``_song`` of a song with no key, no site, no
-  file's origin, of its kept files alone); and ``routes``, caracole serve's status and headers for ``GET /``,
+  file's origin, of its kept files alone, with where its lyrics link back to, ``lyricsFrom``: Megalobiz's and
+  AZLyrics' page, ``library.lyrics_from``); and ``routes``, caracole serve's status and headers for ``GET /``,
   ``/index.html`` and ``/favicon.ico`` (``WebApp.finish``'s among them), and the icon (``svg``).
 - ``data/caracole/page/empty_library.json``: what the page's data holds of a library with no song that is no
   song's (``fold``, ``icons`` with no icon kept, ``catalogue``, ``songbooks`` with no songbooks.toml), as
@@ -50,7 +51,7 @@ import pytest
 from caracole import library_page
 from caracole.icons import page_icons, source_of
 from caracole.inline import sha256_source
-from caracole.library import keep_file
+from caracole.library import keep_file, lyrics_from
 from caracole.library_page import (
     _TRANSLITERATED,
     SCRIPTS,
@@ -203,7 +204,20 @@ MINIMAL_SONGS = (
     ("宋冬野", "斑马斑马", None, "found", True, False, ("sheet (auto).pdf", "sheet (auto).txt", "sheet (auto).html")),
     ("Guns N' Roses", "Sweet Child O' Mine", None, "found", True, True, ("sheet.txt",)),
     ("AC/DC", "T.N.T.", [], "wanted", False, False, ()),  # its row's artists empty, as an older row's may be
+    ("Estopa", "Como Camarón", None, "found", False, False, ("sheet.txt", "lyrics.txt")),
+    ("Gloria Trevi", "Pelo Suelto", None, "found", False, False, ("lyrics.txt",)),
+    ("Ella Baila Sola", "Lo Echamos a Suertes", None, "found", False, False, ("lyrics.lrc",)),
 )
+# The lyrics each of them has (lyrics_status, lyrics_json) where it has some: Megalobiz's and AZLyrics', whose card
+# links back to their page (library.lyrics_from, its Lyrics tile's), and LRCLIB's, which asks none.
+MINIMAL_LYRICS = {
+    "Como Camarón": ("found", json.dumps({"provider": "megalobiz", "plain": "Como camarón",
+                                          "url": "https://megalobiz.com/lrc/maker/estopa-como-camaron.123"})),
+    "Pelo Suelto": ("found", json.dumps({"provider": "azlyrics", "plain": "Pelo suelto",
+                                         "url": "https://www.azlyrics.com/lyrics/gloriatrevi/pelosuelto.html"})),
+    "Lo Echamos a Suertes": ("found", json.dumps({"provider": "lrclib", "plain": "Lo echamos",
+                                                  "url": "https://lrclib.net/api/get/1"})),
+}
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 
 
@@ -216,6 +230,9 @@ def keep_minimal_songs(conn, cfg) -> list[tuple[Any, dict[str, str], bool]]:
         conn.execute("UPDATE songs SET status = ?, review = ? WHERE id = ?", (status, int(review), song.id))
         if artists == []:
             conn.execute("UPDATE songs SET artists = '[]' WHERE id = ?", (song.id,))
+        if title in MINIMAL_LYRICS:
+            conn.execute("UPDATE songs SET lyrics_status = ?, lyrics_json = ? WHERE id = ?",
+                         (*MINIMAL_LYRICS[title], song.id))
         version = upsert_version(conn, provider="ug", tab_id=str(100 + song.id), song_id=song.id, slot="sheet",
                                  kind="chords", rating=4, votes=1, version=1, label=None, url="u", raw={},
                                  now="2026-10-01T00:00:00Z")
@@ -245,7 +262,8 @@ def minimal_card(song: Any, files: dict[str, str], ignored: bool) -> dict[str, A
     return {
         "id": song.id, "artist": song.artist, "artists": song.artists or [song.artist], "title": title,
         "display": song.display, "status": "ignored" if ignored else song.status,
-        "review": bool(song.review) and not ignored, "added": song.added_at, "key": None, "files": entries,
+        "review": bool(song.review) and not ignored, "added": song.added_at, "key": None,
+        "lyricsFrom": lyrics_from(song), "files": entries,
         "source": next((f["source"] for f in entries if f["primary"]), None), "identity": song.key,
         "sortArtist": sort_artist, "sortTitle": sort_title, "artistLetter": _letter(sort_artist),
         "titleLetter": _letter(sort_title), "search": _haystack([song.artist, *song.artists, title, song.display]),
@@ -255,7 +273,8 @@ def minimal_card(song: Any, files: dict[str, str], ignored: bool) -> dict[str, A
 
 def minimal_cards(conn, cfg) -> list[dict[str, Any]]:
     return [{"song": {"key": song.key, "artist": song.artist, "title": song.title, "artists": song.artists,
-                      "added_at": song.added_at, "status": song.status, "review": bool(song.review)},
+                      "added_at": song.added_at, "status": song.status, "review": bool(song.review),
+                      "lyrics_status": song.lyrics_status, "lyrics_json": song.lyrics_json},
              "files": sorted([name, path] for name, path in files.items()),
              "ignored": ignored, "card": minimal_card(song, files, ignored)}
             for song, files, ignored in keep_minimal_songs(conn, cfg)]
