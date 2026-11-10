@@ -360,8 +360,9 @@ object WebReplay : AreaReplay {
 
     private const val MASKED = "<comparison>"
 
-    /** The phone's sync's stages the computer's hasn't (§5.3). */
-    private val PHONE_ALONE = setOf("mirror", "index")
+    /** The phone's sync's stages the computer's hasn't (§5.3): its mirror; the index stage both have
+     * (jobs.PEER_SYNC_STAGES' index, `caracole peer sync`'s indexes both ways). */
+    private val PHONE_ALONE = setOf("mirror")
 
     /** The six routes of the Sync tab sync_routes.jsonl asks (the sync redesign's §3.4.1). */
     val SYNC_ROUTES = setOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",

@@ -883,7 +883,12 @@ STATE_PATH = "/api/peer/state"
 UNIT_PATH = "/api/peer/unit"
 FILE_PATH = "/api/peer/file"
 PULL_PATH = "/peer/pull"
+INDEX_PATH = "/api/peer/index"
+INDEXES_PATH = "/api/sync/indexes"
 PEER_TIMEOUT = 60.0  # seconds: a phone's caracole reads every song of its library to answer
+INDEX_MAX = 8 * 1024 ** 3  # the bytes of another caracole's indexes read at most (peer_file.IMPORT_MAX's)
+INDEX_WAIT = 600.0  # seconds its first byte may take: it copies its indexes whole before it sends one
+_CHUNK = 1024 * 1024  # what its indexes are written by, never whole in memory
 
 
 class PeerError(Exception):
@@ -923,8 +928,8 @@ def peer_address(text: str) -> str:
 
 class Peer:
     """Another ``caracole serve``, asked over HTTP, one request at a time: its state, a unit, a file (a
-    ``UnitSource``), and a pull of this side's units (``ask_to_pull``, a form posted as its pages post one).
-    ``transport`` is httpx's, for tests."""
+    ``UnitSource``), its site indexes (``index``) and what they hold (``indexes``), and a pull of this side's units
+    (``ask_to_pull``, a form posted as its pages post one). ``transport`` is httpx's, for tests."""
 
     def __init__(self, address: str, *, transport=None):
         import httpx
@@ -997,6 +1002,52 @@ class Peer:
             raise PeerError(f"The caracole at {self.address} sent {name} other than it said it is: it changed "
                             "there since, so the song is left as it was here.")
         return response.content
+
+    def index(self, to: Path, sites: Sequence[str]) -> None:
+        """``GET /api/peer/index``: its site indexes of ``sites`` (every one with none), as ``caracole index export``
+        writes them, streamed into a new file at ``to`` (0600), ``INDEX_MAX`` at most; PeerError when it can't be
+        asked, answers otherwise or sends more, nothing left at ``to``."""
+        import httpx
+
+        params = {"sites": ",".join(sites)} if sites else None
+        fd = os.open(to, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with open(fd, "wb") as out, self._client.stream(
+                    "GET", self.address + INDEX_PATH, params=params, headers={"Accept": "application/json"},
+                    timeout=httpx.Timeout(PEER_TIMEOUT, read=INDEX_WAIT)) as got:
+                if got.status_code != 200:
+                    got.read()
+                    raise self._refused(got)
+                written = 0
+                for chunk in got.iter_bytes(_CHUNK):
+                    written += len(chunk)
+                    if written > INDEX_MAX:
+                        raise PeerError(f"The caracole at {self.address} sent more than 8 GiB of indexes.")
+                    out.write(chunk)
+        except httpx.HTTPError as e:
+            Path(to).unlink(missing_ok=True)
+            raise PeerError(f"The caracole at {self.address} stopped sending its indexes: {e}") from None
+        except BaseException:
+            Path(to).unlink(missing_ok=True)
+            raise
+
+    def indexes(self) -> dict[str, dict[str, Any]]:
+        """``GET /api/sync/indexes``: each site's index there, ``{site: {"read", "tabs"}}`` (its newest read, None for
+        never, and the tabs it tracks), the sites it names that aren't a time's or a count's left out; PeerError when
+        it can't be asked or answers otherwise (an older caracole serve, 404)."""
+        response = self._get(INDEXES_PATH)
+        if response.status_code != 200:
+            raise self._refused(response)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        found = data.get("indexes") if isinstance(data, Mapping) else None
+        if not isinstance(found, Mapping):
+            raise PeerError(f"The caracole at {self.address} answered its indexes with something it can't read.")
+        return {site: {"read": entry.get("read"), "tabs": entry["tabs"]} for site, entry in found.items()
+                if isinstance(site, str) and isinstance(entry, Mapping) and type(entry.get("tabs")) is int
+                and (entry.get("read") is None or isinstance(entry.get("read"), str))}
 
     def ask_to_pull(self, here: str, units: Sequence[str], token: str) -> int:
         """Ask it to take ``units`` from this side, at ``here`` (an address it can reach): its form posted with its

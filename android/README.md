@@ -273,9 +273,10 @@ DIR PORT --address 127.0.0.1`):
 Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
 app send no request to a site: every test's sites refuse, unless the test names the fake sites server.
 
-`android/scripts/device-test.sh` does all of it, one caller at a time (it builds first, then holds the emulator's
-lock, `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`), starting the emulator if none is
-up and leaving it up:
+`android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the
+first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-5554, -5556 and -5558, holding its lock,
+`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
+port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
@@ -415,7 +416,17 @@ viewer's print style (a light page, the margins).
 
 ## Guitar Pro
 
-Not built yet.
+A song's Guitar Pro file (filed from the inbox or downloaded from gtptabs.com) opens on a page of its own in the app,
+as it does in caracole serve: the score drawn by alphaTab and played by its synthesizer (Play, Stop, Tempo), Tab only
+or Score and tab, each track shown or muted. **Download** gives the file to another app. A Power Tab file is a
+download alone.
+
+alphaTab (MPL-2.0), its Bravura music font (SIL OFL 1.1) and the Sonivox SoundFont (Apache-2.0) are in the app, their
+licences beside them in its assets (`alphatab/licenses/`): nothing is downloaded. A Guitar Pro file of a song only the
+copy of the computer's pages has (not in the phone's own library yet) opens in another app instead, as before.
+
+Building the app needs `CARACOLE_ALPHATAB_DIR` (alphaTab's files, nix/alphatab.nix), which `nix develop ./android`
+sets; without it the build stops and says so.
 
 ## Sharing a song from a music app
 

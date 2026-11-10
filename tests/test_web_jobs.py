@@ -676,3 +676,71 @@ def test_a_sheet_from_youtube_never_joins_the_songs_lookup_nor_a_lookup_it():
     after, new = queue.submit("Fetch Nick Cani - Vikingos veganos", "nick cani/vikingos veganos",
                               lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
     assert not new and after.id == lookup.id
+
+
+# --- a sync's report, and an import's stages ------------------------------------------------------------------------
+
+REPORT = {"with": {"name": "Studio", "kind": "server", "address": "http://192.168.1.20:8737"},
+          "at": "2026-11-03T18:40:00Z", "parts": ["library", "songbooks", "indexes"],
+          "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
+                       "after": 1515576, "read": "2026-11-03T02:10:00Z"}]}
+SYNC = ("peer", "sync", "--push", "--yes", "--progress", "--", "http://192.168.1.20:8737")
+
+
+def sync_lines(report=REPORT):
+    from caracole.get import PROGRESS_PREFIX
+
+    return [PROGRESS_PREFIX + json.dumps({"stage": "compare", "state": "done", "detail": "1 difference"}),
+            PROGRESS_PREFIX + json.dumps({"event": "unit", "id": "song/oasis/wonderwall", "outcome": "taken",
+                                          "why": ""}),
+            PROGRESS_PREFIX + json.dumps({"event": "report", "report": report}),
+            "Took 1 change."]
+
+
+def test_a_syncs_report_event_is_kept_on_its_job_and_never_in_its_history(tmp_path):
+    from caracole.web.history import History
+
+    path = tmp_path / "requests.jsonl"
+    queue = JobQueue(FakeRunner(lines={"peer": sync_lines()}), history=History(path))
+    job, _ = queue.submit("Sync with Studio", "sync:http://192.168.1.20:8737", [("Sync with Studio", SYNC)],
+                          display="Sync with Studio", join=False)
+    assert job.report is None  # nothing said yet
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.report == REPORT and done.units == [("song/oasis/wonderwall", "taken", "")]
+    assert done.steps[0].output == ["Took 1 change."]  # data, never output
+    assert "report" not in done.as_json() and "Ultimate Guitar" not in path.read_text(encoding="utf-8")
+    again = JobQueue(FakeRunner(), history=History(path)).job(job.id)  # the next caracole serve
+    assert again.report is None and again.units == done.units
+    # a report that isn't an object is none
+    queue = JobQueue(FakeRunner(lines={"peer": sync_lines(["not", "one"])}))
+    job, _ = queue.submit("Sync with Studio", "sync:http://192.168.1.20:8737", [("Sync with Studio", SYNC)])
+    queue.run_pending()
+    assert queue.job(job.id).report is None
+
+
+def test_a_syncs_view_carries_its_report_once_over_and_none_while_it_runs():
+    from caracole.web.jobs_routes import peer_outcome, view
+
+    from test_web_sync import peer_job
+
+    running = peer_job("sync", "running", {"compare": ("done", "4 differences"), "take": ("running", "2 changes")})
+    running.report = REPORT  # said, while its job is not over yet: nothing is shown of it
+    assert view(running, [running], None, None)["outcome"] is None
+    done = peer_job("sync", "done", {"compare": ("done", "4 differences"), "agree": ("done", "12 units the two agree "
+                                                                                     "on")})
+    before = view(done, [done], None, None)["outcome"]
+    assert "report" not in before  # a job with none: its view as it was
+    done.report = REPORT
+    assert view(done, [done], None, None)["outcome"] == before | {"report": REPORT}
+    assert peer_outcome(done)["report"] == REPORT
+
+
+def test_an_import_of_a_staged_file_is_followed_by_its_stages():
+    from caracole.commands.peer import PEER_IMPORT_STAGES
+
+    steps = [("Sync with a file from Desk", ("peer", "import", "--yes", "--progress", "--",
+                                             "/state/peer/import-0123456789abcdef"))]
+    job, _ = JobQueue(FakeRunner()).submit("Sync with a file from Desk", "import:0123456789abcdef", steps)
+    assert [(s.name, s.label) for s in job.stages] == list(PEER_IMPORT_STAGES)
+    assert [s.name for s in job.stages] == ["check", "take", "render", "agree", "index"]

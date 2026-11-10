@@ -262,7 +262,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         val busy = active.filter { it.spec.kind != "remove" }.mapNotNull { it.spec.songId }.toSet()
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, removing = removing,
-            jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = false,
+            jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
         )
     }
 
