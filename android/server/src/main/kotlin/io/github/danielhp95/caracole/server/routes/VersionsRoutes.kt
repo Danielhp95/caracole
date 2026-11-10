@@ -19,7 +19,7 @@ class VersionsRoutes(val parts: PhoneParts) : RouteModule {
               post = PostAnswer { _, _ -> notYet("Choosing a sheet's version") }),
         Route("POST", "/versions/keep", "Keeping a sheet's version: not on the phone yet", page = "the version's page",
               post = PostAnswer { _, _ -> notYet("Keeping a sheet's version") }),
-        Route("POST", "/versions/clear", "Going back to caracole's version: not on the phone yet",
-              page = "the version's page", post = PostAnswer { _, _ -> notYet("Going back to caracole's version") }),
+        Route("POST", "/versions/clear", "Going back to our pick: not on the phone yet",
+              page = "the version's page", post = PostAnswer { _, _ -> notYet("Going back to our pick") }),
     )
 }

@@ -228,7 +228,7 @@ internal object HarmonyChords {
         var tokens = tokens(numeral.extension)
         val triad = if ((sign == "ø" || sign == "°") && tokens.take(1) == listOf("7")) {
             tokens = tokens.drop(1)
-            if (sign == "ø") "half-diminished (ø7: a diminished chord with a minor 7th)" else "diminished seventh (°7)"
+            if (sign == "ø") "half-diminished (ø7: diminished with a minor 7th)" else "diminished 7th (°7)"
         } else if (sign == "°") {
             "diminished (°)"
         } else if (sign == "+") {
@@ -268,8 +268,8 @@ internal object HarmonyChords {
             reading.kind == "leading" -> "the leading-tone chord of ${found.of} in $words"
             reading.kind == "in" -> "the $ordinal chord of $words"
             accidental.isNotEmpty() ->
-                "built on the ${if (accidental == "♭") "lowered" else "raised"} $ordinal degree of $words"
-            else -> "built on the $ordinal degree of $words"
+                "on the ${if (accidental == "♭") "lowered" else "raised"} $ordinal degree of $words"
+            else -> "on the $ordinal degree of $words"
         }
         val line = StringBuilder("${found.text}: $where")
         val quality = qualityWords(chord, found)
@@ -281,7 +281,7 @@ internal object HarmonyChords {
             if (interval in chord.intervals) {
                 line.append("; $name in the bass, its ${ordinal(number(toneNames(chord).getValue(interval)))}")
             } else {
-                line.append("; $name in the bass, the ${degreeWords(found.bass)} above its root, not a note of the chord")
+                line.append("; $name in the bass, the ${degreeWords(found.bass)} above its root, outside the chord")
             }
         }
         val target = reading.target?.let { target(it, key)!!.second }

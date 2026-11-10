@@ -14,14 +14,14 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** What a route not on the phone yet answers: the message page, 409, "… isn't on the phone yet." (a neutral route
+/** What a route not on the phone yet answers: the message page, 409, "…: not on the phone yet." (a neutral route
  * module's until its lane lands, and every stub's). */
-fun notYet(what: String): Nothing = throw Refused(409, "Not on the phone yet", "$what isn't on the phone yet.")
+fun notYet(what: String): Nothing = throw Refused(409, "Not on the phone yet", "$what: not on the phone yet.")
 
 /**
  * The routes of caracole serve the phone answers with no module of its own, for good (the plan's §5.4): YouTube's,
  * since the phone never runs yt-dlp, and `GET /lookup`, the computer's lookup page, whose work the library page's
- * search does on the phone. `GET /lookup` is the message page, 409, "… isn't on the phone yet."; YouTube's forms are
+ * search does on the phone. `GET /lookup` is the message page, 409, "…: not on the phone yet."; YouTube's forms are
  * refused, 409, once the form's own checks pass, which the library page says on the line; `GET /api/youtube/video`
  * answers as caracole serve does where YouTube is off: the video's id and address, "off", and no guess. Every other
  * route a lane will answer is its module's, neutral until then (LookupRoutes, RequestsRoutes, SongbookRoutes,
@@ -101,9 +101,9 @@ class Stubs : RouteModule {
 
         /** YouTube's forms, and the page each comes from (its refusals'). */
         val FORMS = listOf(
-            Triple("/youtube", "A sheet from a YouTube video", "the library"),
-            Triple("/youtube/search", "YouTube's search", "the library"),
-            Triple("/youtube/video", "Reading a YouTube video", "the library"),
+            Triple("/youtube", "A sheet from a YouTube video", "the logbook"),
+            Triple("/youtube/search", "YouTube's search", "the logbook"),
+            Triple("/youtube/video", "Reading a YouTube video", "the logbook"),
         )
     }
 }

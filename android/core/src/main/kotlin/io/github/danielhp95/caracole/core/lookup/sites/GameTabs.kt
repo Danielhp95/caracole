@@ -19,7 +19,7 @@ import io.github.danielhp95.caracole.core.sites.GameTabsPages
  */
 object GameTabsStage : SiteStage {
     const val NONE_THERE = "no tab there of its game or composer"
-    const val NOT_ASKED = "no tab wanted, or gametabs.net's index has no tab of the title of its game or composer"
+    const val NOT_ASKED = "no tab wanted, or gametabs lists none of this title for its game or composer"
 
     override fun run(ctx: StageContext): StageEnd {
         val asked = ctx.asking.ask(GameTabsPages.PROVIDER) { client ->

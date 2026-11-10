@@ -45,25 +45,25 @@ object JobCommands {
     /** get.py's STAGES: a lookup's stages, in order. */
     val GET_STAGES: List<Pair<String, String>> = listOf(
         "song" to "Find the song",
-        "match" to "Match it against the offline index",
-        "sheet" to "The sheet",
-        "pdf" to "The PDF",
-        "lyrics" to "Lyrics from LRCLIB",
-        "ug" to "Ultimate Guitar: the sheets scored, the tab",
+        "match" to "Match on UG's index",
+        "sheet" to "Sheet",
+        "pdf" to "PDF",
+        "lyrics" to "Lyrics",
+        "ug" to "UG: versions scored, tab",
         "lacuerda" to "LaCuerda",
-        "gtptabs" to "A Guitar Pro file from gtptabs.com",
-        "harptabs" to "A harmonica tab from harptabs.com",
-        "gametabs" to "A tab of game music from gametabs.net",
-        "pages" to "The library page",
-        "songbooks" to "The songbooks it is in",
+        "gtptabs" to "Guitar Pro file from gtptabs",
+        "harptabs" to "Harmonica tab from harptabs",
+        "gametabs" to "Game music tab from gametabs",
+        "pages" to "The logbook page",
+        "songbooks" to "Its songbooks",
     )
 
     /** Keep it's stages, as `caracole versions --keep --progress` reports them, and `--keep-more`'s. */
     val KEEP_STAGES: List<Pair<String, String>> = listOf(
         "song" to "Find the song",
-        "version" to "The version from Ultimate Guitar",
-        "pdf" to "The version's page",
-        "pages" to "The library page",
+        "version" to "Version from UG",
+        "pdf" to "Version's page",
+        "pages" to "The logbook page",
     )
 
     /** `caracole lacuerda --search --progress`'s one stage. */
@@ -71,37 +71,37 @@ object JobCommands {
 
     /** `caracole youtube --search` and `--video`'s (caracole serve's alone: the phone never runs yt-dlp). */
     val YOUTUBE_SEARCH_STAGES: List<Pair<String, String>> = listOf("video" to "Search YouTube",
-                                                                    "thumbnail" to "Its thumbnail")
+                                                                    "thumbnail" to "Thumbnail")
 
     /** youtube_sheet.py's STAGES, `caracole youtube --sheet --progress`'s (caracole serve's alone). */
     val YOUTUBE_SHEET_STAGES: List<Pair<String, String>> = listOf(
         "song" to "Find the song",
-        "audio" to "The audio from YouTube",
-        "lyrics" to "Lyrics from LRCLIB",
-        "chords" to "The chords, from the audio",
-        "pdf" to "The PDF",
-        "pages" to "The library page",
+        "audio" to "Audio from YouTube",
+        "lyrics" to "Lyrics",
+        "chords" to "Chords from the audio",
+        "pdf" to "PDF",
+        "pages" to "The logbook page",
     )
 
     /** `caracole peer take --progress`'s stages, a push another caracole sent taken here. */
     val PEER_TAKE_STAGES: List<Pair<String, String>> = listOf(
-        "check" to "What changed since the comparison",
-        "take" to "Taking what changed there",
-        "render" to "Rendering what was taken",
-        "agree" to "What the two agree on",
+        "check" to "What changed since compared",
+        "take" to "Taking their entries",
+        "render" to "Making pages of what was taken",
+        "agree" to "Where the books agree",
     )
 
     /** `caracole peer sync --progress`'s. */
     val PEER_SYNC_STAGES: List<Pair<String, String>> = listOf(
-        "compare" to "Comparing",
-        "take" to "Taking what changed there",
-        "give" to "Giving what changed here",
-        "agree" to "What the two agree on",
+        "compare" to "Comparing books",
+        "take" to "Taking their entries",
+        "give" to "Sharing our entries",
+        "agree" to "Where the books agree",
     )
 
     /** `caracole index merge --delete --progress -- FILE`'s, the index pages another caracole's lookups read. */
     val INDEX_MERGE_COMMAND: List<String> = listOf("index", "merge")
-    val INDEX_MERGE_STAGES: List<Pair<String, String>> = listOf("merge" to "Merging the other caracole's index pages")
+    val INDEX_MERGE_STAGES: List<Pair<String, String>> = listOf("merge" to "Merging the other scribe's index pages")
 
     // The job keys' prefixes, what follows each a song's or a query's key.
     const val REMOVING = "remove:"  // a removal's: never joins the song's add or fetch
@@ -129,14 +129,14 @@ object JobCommands {
         if (!album.isNullOrEmpty()) args += "--album=$album"
         if (durationMs != null) args += "--duration=${formatDuration(durationMs)}"
         if (!lacuerda.isNullOrEmpty()) args += "--lacuerda=$lacuerda"
-        return listOf(Command("Adding to the library", args + listOf("--", artist, title)))
+        return listOf(Command("Adding to the book", args + listOf("--", artist, title)))
     }
 
     /** Fetch one song now: match it (offline), fetch it from UG, render its PDF (offline). */
     fun fetchSteps(display: String): List<Command> = listOf(
-        Command("Looking it up", listOf("match")),
-        Command("Fetching from Ultimate Guitar", listOf("fetch", "--song=$display")),
-        Command("Rendering the sheet", listOf("render", "--song=$display")),
+        Command("Matching", listOf("match")),
+        Command("Fetching from UG", listOf("fetch", "--song=$display")),
+        Command("Making the PDF", listOf("render", "--song=$display")),
     )
 
     /** Look one song up now: `caracole get --progress`, one process for every stage (get.py). */
@@ -152,7 +152,7 @@ object JobCommands {
         if (!lacuerda.isNullOrEmpty()) args += "--lacuerda=$lacuerda"
         if (!harptabs.isNullOrEmpty()) args += "--harptabs=$harptabs"
         if (!gametabs.isNullOrEmpty()) args += "--gametabs=$gametabs"
-        return listOf(Command("Look it up now", args + listOf("--", artist, title)))
+        return listOf(Command("Fetching", args + listOf("--", artist, title)))
     }
 
     /** `caracole versions --progress`: the tab [choose] made the song's sheet (`--choose`, a lookup's stages), the tab
@@ -162,16 +162,16 @@ object JobCommands {
                      keepMore: Boolean = false): List<Command> = listOf(when {
         choose != null -> Command("Making it the one",
                                   listOf(VERSIONS, "--choose=$choose", "--progress", "--", artist, title))
-        keep != null -> Command("Fetching the version from Ultimate Guitar",
+        keep != null -> Command("Fetching the version from UG",
                                 listOf(VERSIONS, "--keep=$keep", "--progress", "--", artist, title))
-        keepMore -> Command("Fetching versions from Ultimate Guitar",
+        keepMore -> Command("Fetching versions from UG",
                             listOf(VERSIONS, "--keep-more", "--progress", "--", artist, title))
-        else -> Command("Going back to caracole's pick", listOf(VERSIONS, "--clear", "--progress", "--", artist, title))
+        else -> Command("Going back to our pick", listOf(VERSIONS, "--clear", "--progress", "--", artist, title))
     })
 
     /** Read a LaCuerda artist's page into its index now: `caracole lacuerda --artist`, one request. */
     fun lacuerdaArtistSteps(slug: String, name: String): List<Command> =
-        listOf(Command("Reading LaCuerda's page for $name", listOf("lacuerda", "--artist=$slug")))
+        listOf(Command("Reading $name's page on LaCuerda", listOf("lacuerda", "--artist=$slug")))
 
     /** Ask LaCuerda's search for a query's songs now: `caracole lacuerda --search --progress`, one request; [auto],
      * sent by the page by itself (`--auto`). */
@@ -181,17 +181,17 @@ object JobCommands {
 
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
-        listOf(Command("Reading harptabs.com's page for $name", listOf("harptabs", "--artist=$path")))
+        listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))
 
     /** `caracole remove --yes`: the page asked already, and showed what goes. */
     fun removeSteps(display: String): List<Command> =
-        listOf(Command("Removing from caracole", listOf("remove", "--yes", "--", display)))
+        listOf(Command("Removing from the book", listOf("remove", "--yes", "--", display)))
 
     /** Answer a song's review as `caracole review` does, with no question: [pick] (a candidate's ARTIST/SONG), or,
      * without it, none of the candidates [seen]. */
     fun reviewSteps(display: String, pick: String? = null, seen: List<String> = emptyList()): List<Command> {
         val answer = if (pick != null) listOf("--pick=$pick") else listOf("--none") + seen.map { "--seen=$it" }
-        return listOf(Command("Writing the answer to overrides.toml", listOf("review", "--song=$display") + answer))
+        return listOf(Command("Noting your answer in overrides.toml", listOf("review", "--song=$display") + answer))
     }
 
     /** get.py's PROGRESS_PREFIX: a line of `caracole get --progress` (and the other commands' `--progress`). */

@@ -45,13 +45,13 @@ object MatchStage : SiteStage {
         val target = if (!r.artistKey.isNullOrEmpty() && !r.songKey.isNullOrEmpty()) "${r.artistKey}/${r.songKey}" else ""
         val words = mapOf(
             "accept" to "matched to $target", "pinned" to "pinned to ${target.ifEmpty { "your tab" }}",
-            "review" to "not sure which Ultimate Guitar song: $target is the nearest", "not_found" to MATCH_NOT_FOUND,
+            "review" to "not sure which UG song: nearest is $target", "not_found" to MATCH_NOT_FOUND,
             "ignored" to "ignored in overrides.toml",
         )
         var said = words[decision.takeUnless { it.isNullOrEmpty() } ?: "not_found"] ?: decision.orEmpty()
         if (state != "complete" && r.step != "override" && r.step != "pin") {
-            said += if (state == "empty") " (the offline index is empty: run caracole index build once)"
-                    else " (the offline index is incomplete)"
+            said += if (state == "empty") " (UG's index is empty: run caracole index build once)"
+                    else " (UG's index is incomplete)"
         }
         return said
     }

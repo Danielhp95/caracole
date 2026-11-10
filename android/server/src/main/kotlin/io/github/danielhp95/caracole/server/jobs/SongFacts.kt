@@ -43,7 +43,7 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
      * facts), worked out once, since a job over doesn't change, and kept while the queue remembers the job
      * ([forget]). One a queue ([ended]), shared by every route that says a job's line: /jobs.json's views
      * (JobsRoutes) and the Requests tab's feed, so a finished request never ends "Not fetched yet" on the song's line
-     * and "Not found" in the tab once a later fetch checked its song, as Python's one cache keeps them alike.
+     * and "Not on the sites" in the tab once a later fetch checked its song, as Python's one cache keeps them alike.
      */
     class Ended internal constructor() {
         private val kept = HashMap<Int, Pair<Long?, SongFacts?>>()

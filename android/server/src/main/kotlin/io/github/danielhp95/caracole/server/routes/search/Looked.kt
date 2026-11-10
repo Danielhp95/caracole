@@ -28,10 +28,10 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
         for ((source, name, table) in listOf(Triple("gtptabs", "gtptabs.com", "gtptabs_index"),
                                              Triple("musescore", "MuseScore", "musescore_index"))) {
             val why = when {
-                source !in enabled -> "turned off in caracole.toml"
+                source !in enabled -> "off in caracole.toml"
                 holds(table) -> continue
-                source == "musescore" && strikes(source) != 0L -> "MuseScore is blocking caracole, so its index is empty"
-                else -> "its index is empty: the nightly run reads its sitemaps"
+                source == "musescore" && strikes(source) != 0L -> "MuseScore turned us back: its index is empty"
+                else -> "its index is empty: tonight's run reads its sitemaps"
             }
             left.add(Left(source, name, why))
         }
@@ -48,11 +48,11 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
     /** search_routes._harptabs_left_out: ("off", …), ("empty", …) before its sitemap is read, ("partial", …) while
      * its artist pages aren't all read; null once every one is. */
     private fun harptabsLeftOut(): Pair<String, String>? {
-        if ("harptabs" !in enabled) return "off" to "turned off in caracole.toml"
+        if ("harptabs" !in enabled) return "off" to "off in caracole.toml"
         if (!holds("harptabs_index")) return "empty" to "its index is empty: the nightly run reads its sitemap"
         val (read, artists) = harptabsState()
         if (read >= artists) return null
-        return "partial" to ("its artist pages are still being read: ${grouped(read)} of ${grouped(artists)} artists " +
+        return "partial" to ("its artist pages are being read: ${grouped(read)} of ${grouped(artists)} artists " +
             "so far; caracole harptabs --index reads the rest")
     }
 
@@ -65,7 +65,7 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
         val looked = ArrayList<JsonObject>()
         val ugEmpty = !holds("ug_index")
         looked.add(mark("ug", "Ultimate Guitar", if (ugEmpty) "empty" else "done", if (ugEmpty) "UG: empty" else "UG ✓",
-                        if (ugEmpty) UG_EMPTY else "Ultimate Guitar: caracole's copy of its index, searched whole."))
+                        if (ugEmpty) UG_EMPTY else "UG: our copy of its index, searched whole."))
         for ((source, name) in listOf("gtptabs" to "gtptabs.com", "lacuerda" to "LaCuerda", "musescore" to "MuseScore",
                                       "harptabs" to "harptabs.com")) {
             val s = said[source]
@@ -77,9 +77,9 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
                 continue
             }
             looked.add(when {
-                s == null -> mark(source, name, "done", "$name ✓", "$name: caracole's copy of its index, searched whole.")
-                why.startsWith("turned off") -> mark(source, name, "off", "$name: off", "$name is turned off in caracole.toml.")
-                "blocking" in why -> mark(source, name, "blocked", "$name blocked", upperFirst(why) + ".")
+                s == null -> mark(source, name, "done", "$name ✓", "$name: our copy of its index, searched whole.")
+                why.startsWith("off ") -> mark(source, name, "off", "$name: off", "$name is off in caracole.toml.")
+                "turned us back" in why -> mark(source, name, "blocked", "$name turned us back", upperFirst(why) + ".")
                 s in inPart -> {
                     val read = LaCuerda.letters(db)
                     val letters = LaCuerda.LETTERS
@@ -104,21 +104,21 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
     private fun gametabs(): JsonObject {
         val name = "gametabs.net"
         if ("gametabs" !in enabled) {
-            return mark("gametabs", name, "off", "$name: off", "$name is turned off in caracole.toml.")
+            return mark("gametabs", name, "off", "$name: off", "$name is off in caracole.toml.")
         }
         if (!holds("gametabs_index")) {
             return mark("gametabs", name, "empty", "$name: empty",
-                        "$name's index is empty: the nightly run reads its sitemaps.")
+                        "$name's index is empty: tonight's run reads its sitemaps.")
         }
         val state = SiteKeys.gametabsIndexState(db)
         val read = state.number("read")
         val pages = state.number("pages")
         if (read < pages) {
             return mark("gametabs", name, "partial", "$name: ${grouped(read)} of ${grouped(pages)} games",
-                        "$name's game pages are still being read: ${grouped(read)} of ${grouped(pages)} so far; " +
+                        "$name's game pages are being read: ${grouped(read)} of ${grouped(pages)} so far; " +
                             "caracole gametabs --index reads the rest.")
         }
-        return mark("gametabs", name, "done", "$name ✓", "$name: caracole's copy of its index, searched whole.")
+        return mark("gametabs", name, "done", "$name ✓", "$name: our copy of its index, searched whole.")
     }
 
     private fun mark(source: String, name: String, state: String, label: String, detail: String): JsonObject =
@@ -139,7 +139,7 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
         (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.intOrNull?.toLong() } ?: 0L
 
     companion object {
-        const val UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 4 minutes)."
+        const val UG_EMPTY = "Our copy of UG's index is empty. Run caracole index build once (about 4 minutes)."
 
         /** `f"{n:,}"`: thousands by commas. */
         fun grouped(n: Long): String {

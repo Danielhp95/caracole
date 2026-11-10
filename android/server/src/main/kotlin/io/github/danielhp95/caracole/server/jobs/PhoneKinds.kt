@@ -13,15 +13,15 @@ object PhoneKinds {
                     val stage: Pair<String, String>, val running: String, val done: String, val failed: String,
                     val otherwise: String? = null)
 
-    val RENDER = Kind("render", "render:", "Make the pages again", "The phone's pages", "render" to "Making the pages",
-                      "Making the pages again: {done} of {total}", "Pages made again for {n} songs",
+    val RENDER = Kind("render", "render:", "Remake the pages", "The phone's pages", "render" to "Making the pages",
+                      "Remaking pages · {done} of {total}", "Pages remade · {n} songs",
                       "Pages not made: {why}")
-    val INBOX = Kind("inbox", "inbox:", "File {name}", "{name}", "file" to "Filing the file", "Filing {name}…",
-                     "Filed as {name} of {song}", "Not filed: {why}", otherwise = "Waiting for a song that fits: {name}")
-    val BACKUP = Kind("backup", "backup:", "Back up the library", "A backup ({label})", "backup" to "Backing up",
-                      "Backing up the library…", "Backed up ({label})", "Not backed up: {why}")
-    val RESTORE = Kind("restore", "restore:", "Restore the library of {date}", "The library of {date}",
-                       "restore" to "Restoring", "Restoring the library…", "Restored the library of {date}",
+    val INBOX = Kind("inbox", "inbox:", "File {name}", "{name}", "file" to "Filing", "Filing {name}…",
+                     "Filed · {name} of {song}", "Not filed: {why}", otherwise = "Waiting for its song: {name}")
+    val BACKUP = Kind("backup", "backup:", "Back up the book", "A backup ({label})", "backup" to "Backing up",
+                      "Backing up the book…", "Backed up ({label})", "Not backed up: {why}")
+    val RESTORE = Kind("restore", "restore:", "Restore the book of {date}", "The book of {date}",
+                       "restore" to "Restoring", "Restoring the book…", "Restored the book of {date}",
                        "Not restored: {why}")
 
     val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE).associateBy { it.kind }

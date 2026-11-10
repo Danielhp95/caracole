@@ -21,7 +21,7 @@ class HarmonicaRoutes(val parts: PhoneParts) : RouteModule {
     )
 
     private companion object {
-        const val WHAT = "Choosing how a harmonica tab is read"
+        const val WHAT = "Choosing a harmonica tab's reading"
         const val PAGE = "the tab's page of readings"
     }
 }

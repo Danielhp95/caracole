@@ -41,8 +41,7 @@ object UgStage : SiteStage {
 /** What the two UG stages share: `_ug_ready`, `_fetch_context`, and get.py's words for what a pass did. */
 internal object UgStages {
     /** `_ug_ready`'s words for a review of other UG songs. */
-    const val REVIEW = "caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, or run " +
-        "caracole review"
+    const val REVIEW = "not sure which UG song this is: pick it on the lookup page, or run caracole review"
 
     /** get._FIRST_PAGES and _FIRST_SCORED: the first pass's versions pages and sheets fetched. */
     private const val FIRST_PAGES = 1
@@ -63,9 +62,9 @@ internal object UgStages {
         return LookupWords.NOT_IN_INDEX
     }
 
-    /** The sheet stage's words for what its pass kept: "tab N from Ultimate Guitar", or that it kept none. */
+    /** The sheet stage's words for what its pass kept: "tab N from UG", or that it kept none. */
     fun sheetSaid(out: SongFetchOutcome): String =
-        if (out.sheet != null) "tab ${out.sheet} from Ultimate Guitar" else "Ultimate Guitar has no sheet to keep"
+        if (out.sheet != null) "tab ${out.sheet} from UG" else "UG has no sheet to keep"
 
     /** The ug stage's words for what its pass kept: "sheet N · tab M · kept beside it: tab A, tab B". */
     fun restSaid(out: SongFetchOutcome): String {

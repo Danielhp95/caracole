@@ -132,7 +132,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
 
     // --- routing --------------------------------------------------------------------------------------------------
 
-    private fun notThisApp(): Response = Response(403, Body.Bytes("Not this app's caracole.\n".toByteArray()),
+    private fun notThisApp(): Response = Response(403, Body.Bytes("Not this app's scribe.\n".toByteArray()),
                                                   mutableListOf("Content-Type" to TEXT))
 
     private fun route(request: Request): Response {
@@ -142,7 +142,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         val path = try {
             PyUrl.unquote(PyUrl.urlsplit(request.target).path, strict = true)
         } catch (e: PyUrl.Invalid) {
-            return message(400, "Not an address", "That address can't be read.")
+            return message(400, "Not an address", "Can't read that address.")
         }
         return when (request.method) {
             "GET", "HEAD" -> {
@@ -155,7 +155,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             }
             "POST" -> {
                 val route = routeFor("POST", path)
-                    ?: return message(404, "Not here", "There's nothing to send to at this address.")
+                    ?: return message(404, "Not here", "Nothing to send to here.")
                 when (val form = form(request, route)) {
                     is Response -> form
                     else -> {
@@ -174,7 +174,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             return message(403, "Refused", ANOTHER_SITE)
         }
         if (!Security.sameToken(request.headers[TOKEN_HEADER], config.csrf)) {
-            return message(403, "Refused", "caracole serve has restarted since this page was opened: reload it.")
+            return message(403, "Refused", "caracole serve restarted since this page opened. Reload it.")
         }
         return null
     }
@@ -185,20 +185,20 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         if (!Security.crossOriginOk("POST", headers, headers["host"])) return message(403, "Refused", ANOTHER_SITE)
         val kind = PyText.lower(PyText.strip((headers["content-type"] ?: "").substringBefore(';')))
         if (kind != "application/x-www-form-urlencoded") {
-            return message(415, "Not a form", "caracole reads only forms sent from its own pages.")
+            return message(415, "Not a form", "We read only forms from our own pages.")
         }
         if (request.body.size > route.limit) return message(413, "Too long", "That form is too long.")
-        val text = PyText.utf8(request.body) ?: return message(400, "Not a form", "That form can't be read.")
+        val text = PyText.utf8(request.body) ?: return message(400, "Not a form", "Can't read that form.")
         val fields = try {
             PyUrl.parseQs(text, keepBlank = true, maxFields = MAX_FIELDS)
         } catch (e: PyUrl.Invalid) {
-            return message(400, "Not a form", "That form can't be read.")
+            return message(400, "Not a form", "Can't read that form.")
         }
         val form = LinkedHashMap<String, String>()
         for ((name, values) in fields) form[name] = values.first()
         if (!Security.sameToken(form["csrf"], config.csrf)) {
-            val refused = message(403, "Refused", "This form is older than the server, or not from its pages: " +
-                                                  "reload ${route.page} and try again.")
+            val refused = message(403, "Refused", "This form is older than the server, or not from its pages. " +
+                                                  "Reload ${route.page} and try again.")
             refused.data = JsonObject(refused.data.orEmpty() + ("reload" to JsonPrimitive(true)))
             return refused
         }
@@ -207,7 +207,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
 
     /** A library file (LibraryFiles: the phone's folder, then the mirror), else 404. */
     private fun file(path: String): Response =
-        files.serve(path) ?: message(404, "Not found", "There's no such page or file in the library.")
+        files.serve(path) ?: message(404, "Not found", "No such page or file in the book.")
 
     private fun wantsJson(request: Request): Boolean =
         "application/json" in PyText.lower(request.headers["accept"] ?: "")
@@ -219,9 +219,9 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         const val FRAMES = "frame-ancestors 'none'"
         const val JSON = "application/json; charset=utf-8"
         const val TEXT = "text/plain; charset=utf-8"
-        private const val ANOTHER_SITE = "This came from another site, so caracole refused it."
-        private const val MISDIRECTED = "caracole serve doesn't answer to this host name; " +
-            "start it with --allow-host NAME to add one.\n"
+        private const val ANOTHER_SITE = "Another site sent this. Refused."
+        private const val MISDIRECTED = "This server doesn't answer to this host name. " +
+            "Start it with --allow-host NAME to add it.\n"
         val COMMON_HEADERS = listOf(
             "X-Content-Type-Options" to "nosniff",
             "X-Frame-Options" to "DENY",

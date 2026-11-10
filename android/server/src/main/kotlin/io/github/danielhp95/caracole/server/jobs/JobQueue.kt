@@ -446,7 +446,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     /** The songs a job that waits or runs will fetch (their keys). */
     fun fetchingKeys(): Set<String> = synchronized(lock) { jobs.filter { it.active && it.fetching }.map { it.key }.toSet() }
 
-    /** How many jobs wait or run before [job], queued as it waits ("Queued behind 2 requests…"). */
+    /** How many jobs wait or run before [job], queued as it waits ("Queued · 2 requests ahead…"). */
     fun ahead(job: Job): Int = synchronized(lock) { jobs.count { it.active && it.id < job.id } }
 
     /**
@@ -835,6 +835,6 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         const val LIMIT = 20  // jobs waiting or running
         const val KEEP = 100  // jobs over remembered, as the history keeps them
         const val MAX_LINES = 400  // a command's output kept: its last lines
-        const val QUEUE_FULL = "The queue is full: try again once it empties."  // app.py's
+        const val QUEUE_FULL = "The queue is full. Try again once it empties."  // app.py's
     }
 }

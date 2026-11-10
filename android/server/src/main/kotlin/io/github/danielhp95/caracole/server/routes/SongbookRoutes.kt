@@ -19,10 +19,10 @@ class SongbookRoutes(val parts: PhoneParts) : RouteModule {
             "/songbook/make" to "Making a songbook",
             "/songbook/add" to "Adding to a songbook",
             "/songbook/add-song" to "Adding to a songbook",
-            "/songbook/get" to "Getting a songbook's songs",
+            "/songbook/get" to "Fetching a songbook's songs",
             "/songbook/remove" to "Taking a song out of a songbook",
             "/songbook/move" to "Moving a song in a songbook",
-            "/songbook/set" to "Setting a song's key in a songbook",
+            "/songbook/set" to "Changing where a songbook plays a song",
             "/songbook/rename" to "Renaming a songbook",
             "/songbook/delete" to "Deleting a songbook",
         )
