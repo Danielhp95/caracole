@@ -1780,7 +1780,24 @@ Not built yet. (written-pages.)
 
 ##### Songbooks, versions and printing on the phone
 
-- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
+- Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes):
+  - core.songbooks' `Songbooks`: songbook.py's names, entries and writers over phone_songbooks
+    (vectors/songbook/writers*.jsonl);
+  - the Songbooks tab's forms, server/routes/SongbookRoutes.kt: each `/songbook/*` form queued as its `caracole
+    songbook` command under web/songbooks.py's key (`songbook\u001f` and the command's words; a setting's, its songbook
+    and song first; Get the missing songs' render, the last lookup it follows), refused in songbook_routes.py's words
+    before anything is queued (a mirror's card, a negative id: "isn't in the library any more");
+    - Get the missing songs: one lookup a song (`get --no-songbooks`, SongbookEntries.songsToGet) with room left for
+      the songbook's `songbook render` after them;
+    - Add a song: a song of the library's add alone, else its lookup (LookupForms.lookupRequest, whose `caracole get`
+      adds it) and the add, `JobQueue.submitAll`, both or neither;
+    - vectors/songbook/routes.jsonl (tests/test_conformance_songbook_routes.py, SongbookRoutesReplay): each form's
+      answer and the queue's jobs, scenario by scenario;
+  - the songbook runner, server/songbooks/SongbookRunner.kt: commands/songbook.py's make, add, remove, move, set,
+    rename, delete and render through Songbooks in one write, its words and exit statuses, a song found as the command
+    finds one (its "Artist - Title", else a search one song answers well), then the songbook made again through
+    `PhoneParts.songbooks` (nothing, and nothing said of it, while that is `SongbookPages.NONE`);
+  - a songbook's entries, its settings (`set`'s runner) and its page (songbook-entries): not built yet.
 - A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
 - Export PDF and Make this my version (export-print): not built yet.
 

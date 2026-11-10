@@ -376,7 +376,16 @@ Not built yet.
 
 ## Songbooks, versions and printing
 
-Not built yet.
+The Songbooks tab's forms and the Select bar's songbook are the phone's own, as `caracole songbook` is on the
+computer: **Make** a songbook of the songs picked, **Add** to it (a song you have at once; one new to the library, from
+the tab's search, looked up first, the two queued together or not at all), **Move** a song, **Take it out**,
+**Rename** and **Delete** a songbook. Each is a request of the Requests tab, one at a time behind any other, its line
+saying how it goes ("Making the songbook…", then "Made"); a form that can't be done (a name taken, a songbook or a
+song that isn't there, a song of the computer the phone hasn't got) is refused at once, in caracole serve's words, and
+queues nothing. The songbooks are the phone's (`phone_songbooks`), which a sync gives the computer.
+
+Not built yet: a song's chip (where a songbook plays it), **Get the missing songs**, and the songbook's own page on the
+phone (songbook-entries).
 
 ## Guitar Pro
 
