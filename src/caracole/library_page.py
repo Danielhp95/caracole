@@ -595,7 +595,7 @@ def _add_sites(conn: sqlite3.Connection, cfg: Config, library: list[Song], cards
                origins: Mapping[int, Mapping[str, str]], lacuerda: Mapping[int, list[Any]],
                musescore: Mapping[int, list[Any]], youtube: Mapping[int, SongState]) -> None:
     """Give each song's data its ``sites``: which sites have it, which had nothing and which weren't asked yet, its
-    line's marks in place of a "Not found" that named no site (song_sites.py)."""
+    card's marks in place of a "Not found" that named no site (song_sites.py)."""
     from caracole.song_sites import checked, musescore_read, shown, song_sites
 
     sites = shown(cfg)
@@ -897,7 +897,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "lyricsFrom": lyrics_from(song),  # the page its lyrics' site asks a link to: its card's Lyrics tile has it
         "auto": not human and auto,
         "files": files,
-        "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument, its line's marks
+        "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument: its line's buttons
         "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # UG's: kept, and counted
         "autoSheet": _auto_sheet(library_dir, song, names),
         "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
