@@ -235,8 +235,8 @@ def step_error(error: Any, step: str) -> Problem:
 
 def shared_folder(error: object) -> Problem:
     """A song that waits, as a file of its would go where another song keeps one (``library.SharedFolder``)."""
-    return Problem(f"{error}. Nothing is written over it, and the song waits until the folder is its own: remove "
-                   "one of the two (caracole remove), and ask for it again under a shorter title.")
+    return Problem(f"{error}. Nothing written over it. The song waits for a folder of its own: remove "
+                   "one of the two (caracole remove), then ask again under a shorter title.")
 
 
 def bug(error: BaseException, step: str) -> Problem:

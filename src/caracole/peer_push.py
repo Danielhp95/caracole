@@ -177,8 +177,8 @@ def needed(conn: sqlite3.Connection | None, library_dir: Path, files: Sequence[s
 
 def _not_from_here(sender: str, own: str | None) -> None:
     if own is not None and sender == own:
-        raise PushError("That push comes from this caracole itself (the same id): its database is a copy of this "
-                        "one's. Give one of them another: caracole peer new-id.")
+        raise PushError("That push comes from this same scribe (same id): its database is a copy of ours. "
+                        "Give one a new id: caracole peer new-id.")
 
 
 def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequence[str], own: str | None,
@@ -193,7 +193,7 @@ def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequen
     with _lock:
         root = state_dir / FOLDER
         if len(_pushes(root)) >= OPEN:
-            raise PushError("Two pushes are here already, waiting to be taken: try again once one is, or in an "
+            raise PushError("Two pushes wait here already. Try again once one is taken, or in an "
                             "hour.", 409)
         state_dir.mkdir(parents=True, exist_ok=True)
         _private_dir(root)
@@ -233,7 +233,7 @@ def stage_file(state_dir: Path, push_id: str, digest: str, data: bytes) -> None:
         if target.exists():
             return
         if _staged_bytes(folder) + len(data) > PUSH_MAX:
-            raise PushError("That push's files would pass 2 GiB: push fewer changes at a time.")
+            raise PushError("That push's files pass 2 GiB. Push fewer changes at a time.")
         _write_private(target, data)
 
 
@@ -379,11 +379,11 @@ def held(folder: Path) -> Iterator[None]:
     try:
         fd = os.open(folder / DOCUMENT, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
-        raise PushError("That push is gone: it was never sent, or was left over an hour. Sync again.") from None
+        raise PushError("That push is gone: never sent, or left over an hour. Share again.") from None
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         if not (folder / DOCUMENT).exists():  # a sweep deleted it as the take came
-            raise PushError("That push is gone: it was left over an hour. Sync again.")
+            raise PushError("That push is gone: left over an hour. Share again.")
         yield
     finally:
         os.close(fd)
@@ -541,8 +541,8 @@ def send(state_dir: Path, push_id: str, push: Push, document: Mapping[str, Any],
             raise PushError("That push was opened by another caracole.")
         missing = sorted(files - _staged(folder) - kept)
         if missing:
-            raise PushError(f"{len(missing)} {'file' if len(missing) == 1 else 'files'} the push keeps "
-                            f"{'was' if len(missing) == 1 else 'were'} never sent, nor kept here: "
+            raise PushError(f"{len(missing)} {'file' if len(missing) == 1 else 'files'} of the push never came, "
+                            f"nor {'is' if len(missing) == 1 else 'are'} kept here: "
                             + ", ".join(missing[:3]) + ("…" if len(missing) > 3 else "") + ".")
         _write_private(folder / DOCUMENT, json.dumps(document, ensure_ascii=False).encode("utf-8"))
     return folder

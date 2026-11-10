@@ -57,14 +57,14 @@ if TYPE_CHECKING:
 PROVIDER = "ug"
 # What ``ug.fetch.keep_version`` came to, in words.
 KEPT_WORDS = {
-    "same": "its text is the very text of {page}, which shows it",
-    "held": "its text is the very text of another file kept in the song's folder, so it isn't kept again",
+    "same": "same text as {page}, which shows it",
+    "held": "same text as another file in the song's folder; not kept twice",
     "sheet": "it is the sheet already",
-    "gone": "Ultimate Guitar no longer has it",
-    "unreadable": "its page can't be read now; it waits",
-    "closed": "Ultimate Guitar moved its page where robots.txt keeps caracole out; nothing kept",
-    "no text": "its page has no sheet caracole can keep",
-    "unknown": "it isn't one of the song's chords versions caracole may use",
+    "gone": "gone from UG",
+    "unreadable": "couldn't read its page; it waits",
+    "closed": "UG moved its page behind robots.txt; nothing kept",
+    "no text": "its page has no sheet we can keep",
+    "unknown": "not one of the song's chords versions we may use",
 }
 
 
@@ -177,8 +177,8 @@ def _cooling(conn: sqlite3.Connection, now: datetime) -> str | None:
     if not is_cooling(conn, PROVIDER, now):
         return None
     until = get_state(conn, PROVIDER).cooldown_until
-    return (f"Ultimate Guitar is cooling down after a block, until "
-            f"{until.strftime('%Y-%m-%d %H:%M UTC') if until else 'later'}; nothing kept.")
+    return (f"Waiting out UG until "
+            f"{until.strftime('%Y-%m-%d %H:%M UTC') if until else 'later'}. Nothing kept.")
 
 
 def _stopped(cfg: Config, conn: sqlite3.Connection, e: Exception, now: datetime) -> tuple[str, str, bool]:
@@ -191,17 +191,17 @@ def _stopped(cfg: Config, conn: sqlite3.Connection, e: Exception, now: datetime)
     if isinstance(e, ProviderBlocked):
         state = record_block(conn, e.provider, now, str(e))
         until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-        return "skipped", f"Ultimate Guitar blocked caracole ({e}): no more requests to it until {until}", False
+        return "skipped", f"UG turned us back ({e}). No more asks until {until}", False
     if isinstance(e, ProviderError):
         record_error(conn, e.provider, now, str(e))
-        return "failed", f"Ultimate Guitar failed ({e})", True
+        return "failed", f"UG failed ({e})", True
     p = cfg.provider(PROVIDER)  # BudgetExhausted
-    return ("skipped", f"The lookup requests to Ultimate Guitar are spent ({p.lookup_requests} a lookup, "
+    return ("skipped", f"No more asks of UG ({p.lookup_requests} a fetch, "
                        f"{p.lookup_per_hour} an hour)", True)
 
 
 def _nothing_kept(why: str, again: bool) -> str:
-    return f"{why}; nothing kept." + (" Ask again later." if again else "")
+    return f"{why}. Nothing kept." + (" Ask again later." if again else "")
 
 
 def _came_to(cfg: Config, conn: sqlite3.Connection, song: Song, tab: str, outcome: str) -> str:
@@ -215,7 +215,7 @@ def _came_to(cfg: Config, conn: sqlite3.Connection, song: Song, tab: str, outcom
         note_unkeepable(conn, song.id, tab)
     if outcome == "kept":
         txt = song_dir(cfg.library_dir, song) / version_names(tab)[0]
-        return f"Kept tab {tab} beside the sheet of {song.display}: {txt}"
+        return f"Kept tab {tab} beside {song.display}'s sheet: {txt}"
     page = same_pages(conn, song.id).get(tab, "another kept version") if outcome == "same" else "another kept version"
     return f"Tab {tab} of {song.display}: " + KEPT_WORDS.get(outcome, outcome).format(page=page) + "."
 
@@ -247,16 +247,16 @@ def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None
         if tab in overrides.block:
             fail(f"Tab {tab} is under [block] in overrides.toml: caracole never uses it.")
         events({"song": {"id": song.id, "display": song.display}})
-        events.stage("song", "done", "in the library")
+        events.stage("song", "done", "in the book")
         events.stage("version", "running")
         if v.chosen:
-            said = f"Tab {tab} is the sheet of {song.display} already."
+            said = f"Tab {tab} is {song.display}'s sheet already."
             events.stage("version", "skipped", said)
             typer.echo(said)
             return done()
         if v.kept and v.page != "sheet.html":
             note_kept_by_you(conn, song.id, v.tab_id)
-            said = f"Tab {tab} is kept beside the sheet of {song.display} already; it stays kept now."
+            said = f"Tab {tab} is kept beside {song.display}'s sheet already. It stays."
             events.stage("version", "done", said)
             typer.echo(said)
             return done()
@@ -326,12 +326,12 @@ def keep_more(cfg: Config, display: str, *, progress: bool = False) -> None:
     with exclusive(cfg, f"versions {display} --keep-more", interactive=True), closing(open_db(cfg)) as conn:
         song = song_named(conn, display, overrides)
         events({"song": {"id": song.id, "display": song.display}})
-        events.stage("song", "done", "in the library")
+        events.stage("song", "done", "in the book")
         events.stage("version", "running")
         todo = may_keep(conn, song.id, in_library(conn, song.id, cfg.rank), overrides.block)
         if not todo:
-            said = (f"Nothing more to keep of {song.display}: every Ultimate Guitar version caracole may keep is "
-                    "kept already, or can't be.")
+            said = (f"Nothing more to keep of {song.display}: every UG version we may keep is "
+                    "kept, or can't be.")
             events.stage("version", "skipped", said)
             typer.echo(said)
             return done()

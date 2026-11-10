@@ -378,7 +378,7 @@ def _checked_line(
 ) -> tuple[str, WantedLine]:
     """The text of a song's line and what it parses back to; ValueError if that's another song."""
     if _SEPARATOR.search(_clean(artist)):
-        raise ValueError(f"wanted.txt can't hold an artist name with ' - ' in it: {artist!r}")
+        raise ValueError(f"an artist name can't hold ' - ': {artist!r}")
     text = format_line(artist, title, album, duration_ms)
     lines, errors = parse_wanted(text)
     seconds = None if duration_ms is None else (duration_ms + 500) // 1000 * 1000

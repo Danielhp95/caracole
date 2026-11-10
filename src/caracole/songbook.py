@@ -198,7 +198,7 @@ def check_name(name: str) -> str:
     if len(text) > MAX_NAME:
         raise SongbookError(f"A songbook's name is {MAX_NAME} characters at most: {text[:MAX_NAME]!r}…")
     if text.startswith("."):
-        raise SongbookError(f"A songbook's name can't start with a dot (its folder would be hidden): {text!r}")
+        raise SongbookError(f"A songbook's name can't start with a dot (its folder would hide): {text!r}")
     if not any(c.isalnum() for c in safe_name(text)):
         raise SongbookError(f"A songbook's name needs a letter or a digit: {text!r}")
     return text
@@ -487,11 +487,11 @@ def check_free(books: Sequence[Songbook], name: str, *, but: Songbook | None = N
         if book is but:
             continue
         if name_key(book.name) == name_key(name):
-            raise SongbookError(f'A songbook named "{book.name}" is there already: pick another name, or add '
-                                "songs to it with caracole songbook add")
+            raise SongbookError(f'A songbook named "{book.name}" is there already. Pick another name, or add '
+                                "songs to it with caracole songbook add.")
         if _folder_key(book.name) == _folder_key(name):
-            raise SongbookError(f'"{name}" would share the folder {FOLDER}/{safe_name(name)} with the songbook '
-                                f'"{book.name}": pick another name')
+            raise SongbookError(f'"{name}" would share the folder {FOLDER}/{safe_name(name)} with '
+                                f'"{book.name}". Pick another name.')
 
 
 def make_songbook(path: Path, name: str, entries: Sequence[str]) -> Songbook:
@@ -635,7 +635,7 @@ RECORD_KEY = "songbook:"  # kv, then the songbook's folder name: what its files 
 CONTENTS_TEMPLATE = "contents.cho"  # the title page, then the contents' heading (chordpro's ToC template)
 BOOK_CONFIG_NAME = "songbook.json"
 MISSING_SHEET = "no sheet yet"
-MISSING_SONG = "not in the library"
+MISSING_SONG = "not in the logbook"
 PER_SONG_TIMEOUT = 10  # seconds of chordpro's time per song, on top of render.TIMEOUT
 
 # What chordpro adds to caracole's look (render.STYLE_FILE) for a songbook: one table of contents, in
@@ -702,7 +702,7 @@ def songbook_entries(conn: sqlite3.Connection, library_dir: Path, overrides: Ove
 def songs_to_get(entries: Iterable[Entry], overrides: Overrides) -> list[Song]:
     """The songs of a songbook's entries a lookup could get a sheet for now (caracole serve's Get the missing
     songs now): those the library has with no sheet yet, in the songbook's order, once each, but those
-    overrides.toml ignores. A song "not in the library" is no one's to look up."""
+    overrides.toml ignores. A song "not in the logbook" is no one's to look up."""
     songs: dict[int, Song] = {}
     for e in entries:
         song = e.song
@@ -1081,9 +1081,9 @@ def pages_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str,
 
 
 # What a server says for a songbook page it won't send: index.html links it whatever is there.
-PAGE_REFUSED = ("This songbook page isn't the one caracole last wrote here (it was changed on a synced device, "
-                "say, or caracole has no record of it), so the server won't send it: caracole songbook render "
-                "writes it again. The songbook's PDF is beside it.")
+PAGE_REFUSED = ("This songbook page isn't the one we last wrote here (changed on a synced device, "
+                "or not recorded), so it isn't sent. caracole songbook render "
+                "writes it again; its PDF is beside it.")
 
 
 def _book_folder(library_dir: Path, book: Songbook) -> Path:
