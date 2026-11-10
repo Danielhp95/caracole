@@ -2734,6 +2734,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   muted, two lines of it; **More** opens the rest, and works without
   JavaScript too. Printed, all of it prints. Chords or a verse before the
   first section are the song, and nothing is folded then.
+- **Printed** (the browser's Print), a sheet, a songbook's song and a
+  harmonica tab's page print in the light colours, even from a screen in dark
+  mode, with a 15 mm margin on every side of the paper, and without the bar,
+  the settings or the links.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
   window to show it whole in two columns is shown in two, side by side; a
