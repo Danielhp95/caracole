@@ -1,19 +1,16 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
-import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.http.BudgetExhausted
-import io.github.danielhp95.caracole.core.http.Client
-import io.github.danielhp95.caracole.core.http.ProviderBlocked
 import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
-import io.github.danielhp95.caracole.core.lookup.Asked
-import io.github.danielhp95.caracole.core.lookup.Asking
+import io.github.danielhp95.caracole.core.lookup.Clients
+import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.sites.GtpTabsStage
 import io.github.danielhp95.caracole.core.py.Py
@@ -28,6 +25,8 @@ import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
+import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
 import kotlinx.serialization.json.JsonArray
@@ -52,8 +51,8 @@ import java.time.Instant
  * - [museScore]: vectors/sites/musescore.jsonl, musescore.py's URLs and keys and `song_pages` over its fixture;
  * - [lookups]: vectors/lookup/gtptabs.jsonl, scenario records (Scenarios.replay) of gtptabs_files for one song and of
  *   get.py's gtptabs stage, each request carrying the record's user agent, caracole's own. The stage asks through
- *   [RecordAsking], get.py's `_usable` and `asking` as the records were made (a site off, cooling, a block and an
- *   error recorded in `provider:gtptabs` by Health), so a record's kv is compared whole.
+ *   the phone's InteractiveAsk with the record's clients (a site off, cooling, a block and an error recorded in
+ *   `provider:gtptabs` by Health), so a record's kv is compared whole.
  */
 object TabFilesReplay : AreaReplay {
     override val area = "tab-files"
@@ -68,20 +67,6 @@ object TabFilesReplay : AreaReplay {
         titlePages(misses)
         museScore(misses)
         lookups(misses)
-    }
-
-    /** Phase A's guard, waiting on html-tree: while core.html's tree is a TODO, a record whose answer needs a page
-     * parsed is passed over and counted here. Lane tab-files removes it in its Phase B. */
-    var passedOver = 0
-        private set
-
-    private inline fun whileHtmlTreeIsMissing(block: () -> Unit) {
-        try {
-            block()
-        } catch (e: NotImplementedError) {
-            if (e.message?.endsWith("lane html-tree") != true) throw e
-            passedOver++
-        }
     }
 
     private fun lines(name: String): List<JsonObject> = Corpus.lines(name).filter { it["header"] != JsonPrimitive(true) }
@@ -113,7 +98,7 @@ object TabFilesReplay : AreaReplay {
                     val (title, version) = GtpTabsPages.title(text(args[0])!!)
                     JsonArray(listOf(JsonPrimitive(title), JsonPrimitive(version)))
                 }
-                "parse_artist_page" -> whileHtmlTreeIsMissing { artistPage(misses, r) }
+                "parse_artist_page" -> artistPage(misses, r)
                 "sniff" -> sniff(misses, r)
                 else -> misses.check(false) { "$SITES: a record of $fn, which the replay doesn't know" }
             }
@@ -245,31 +230,42 @@ object TabFilesReplay : AreaReplay {
             val only = r.getValue("kw").jsonObject.getValue("only").jsonArray.map { it.jsonPrimitive.long }.toSet()
             val agent = text(r["agent"])
             misses.check(agent == PhoneConfig.DEFAULTS.userAgent) { "${r["case"]}: the phone's user agent isn't $agent" }
-            whileHtmlTreeIsMissing {
-                Scenarios.replay(r, misses) { world ->
-                    val db = world.db
-                    val lib = LibraryStore(world.library)
-                    val overrides = Overrides.read(db)
-                    val result: Any = when (val fn = r.getValue("fn").jsonPrimitive.content) {
-                        "caracole.gtptabs_fetch.gtptabs_files" ->
-                            stats(GtpTabsFetch.gtptabsFiles(db, world.clients.getValue(GtpTabsFetch.PROVIDER), lib,
-                                                            world.now, overrides, only))
-                        "caracole.get._Lookup.gtptabs" -> {
-                            val config = PhoneConfig.read(db)
-                            val song = Songs.byId(db, only.single())!!
-                            val asking = RecordAsking(db, config, world.now, world.clients)
-                            val end = GtpTabsStage.run(StageContext(db, song, overrides, config, lib, asking, world.now))
-                            listOf(end.state, end.detail)
-                        }
-                        else -> throw AssertionError("$LOOKUP: a record of $fn, which the replay doesn't know")
+            Scenarios.replay(r, misses) { world ->
+                val db = world.db
+                val lib = LibraryStore(world.library)
+                val overrides = Overrides.read(db)
+                val result: Any = when (val fn = r.getValue("fn").jsonPrimitive.content) {
+                    "caracole.gtptabs_fetch.gtptabs_files" ->
+                        stats(GtpTabsFetch.gtptabsFiles(db, world.clients.getValue(GtpTabsFetch.PROVIDER), lib,
+                                                        world.now, overrides, only))
+                    "caracole.get._Lookup.gtptabs" -> {
+                        val config = PhoneConfig.read(db)
+                        val song = Songs.byId(db, only.single())!!
+                        val asking = asking(world, config)
+                        val end = GtpTabsStage.run(StageContext(db, song, overrides, config, lib, asking, world.now,
+                                                                world.cacheDir))
+                        listOf(end.state, end.detail)
                     }
-                    val agents = world.transport.requests.map { req ->
-                        req.headers.firstOrNull { Py.asciiLower(it.first) == "user-agent" }?.second
-                    }
-                    misses.check(agents.all { it == agent }) { "${r["case"]}: requests sent as $agents, Python's $agent" }
-                    result
+                    else -> throw AssertionError("$LOOKUP: a record of $fn, which the replay doesn't know")
                 }
+                val agents = world.transport.requests.map { req ->
+                    req.headers.firstOrNull { Py.asciiLower(it.first) == "user-agent" }?.second
+                }
+                misses.check(agents.all { it == agent }) { "${r["case"]}: requests sent as $agents, Python's $agent" }
+                result
             }
+        }
+    }
+
+    /** The phone's envelope (InteractiveAsk) handing out the record's clients, as the records' `_Lookup` was given
+     * them (`lk.clients`): get.py's `_usable` and `asking` over [config], each block and error recorded in
+     * `provider:gtptabs` by Health. */
+    private fun asking(world: ScenarioWorld, config: PhoneConfig): InteractiveAsk {
+        val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { world.now.epochSecond.toDouble() },
+                            monotonic = { 0.0 }, clock = { world.now })
+        return InteractiveAsk(Clients(config, world.cacheDir, { RefusingTransport }, pacing), world.db,
+                              Pace.lookupRunId(world.now), world.now, config = config) { provider, policy ->
+            world.clients.getValue(provider).also { client -> if (policy != null) client.policy = policy }
         }
     }
 
@@ -282,34 +278,4 @@ object TabFilesReplay : AreaReplay {
         }),
         "sitemaps" to JsonPrimitive(s.sitemaps), "kept" to JsonPrimitive(s.kept), "missing" to JsonPrimitive(s.missing),
     ))
-
-    /**
-     * get.py's `_usable` and `asking` as the stage records were made, with the record's clients: a provider turned
-     * off in the settings, cooling down (Health), else its work, a block recorded (`record_block`) and an error
-     * (`record_error`); a spent budget the hour's when the client's budget is under the lookup's requests, as get.py
-     * tells them apart. Lane lookup's InteractiveAsk is the phone's; this is the records' own.
-     */
-    class RecordAsking(private val db: Db, private val config: PhoneConfig, private val now: Instant,
-                       private val clients: Map<String, Client>) : Asking {
-        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
-            val p = config.provider(provider)
-            val name = if (provider == GtpTabsFetch.PROVIDER) "gtptabs.com" else provider
-            if (!p.enabled) return Asked.Off("$name is off in caracole.toml")
-            if (Health.isCooling(db, provider, now)) return Asked.Cooling(Health.state(db, provider).cooldownUntil)
-            val client = clients.getValue(provider)
-            if (policy != null) client.policy = policy
-            return try {
-                Asked.Done(work(client))
-            } catch (e: ProviderBlocked) {
-                Asked.Blocked(e, Health.recordBlock(db, e.provider, now, e.message!!))
-            } catch (e: BudgetExhausted) {
-                Asked.Spent(hour = client.policy.budget < p.lookupRequests, keptForSheets = false)
-            } catch (e: ProviderError) {
-                Health.recordError(db, e.provider, now, e.message!!)
-                Asked.Failed(e)
-            }
-        }
-
-        override val requests: Map<String, Int> get() = clients.mapValues { it.value.requestsMade }
-    }
 }

@@ -1441,16 +1441,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - harptabs.com (harptabs) and gametabs.net (gametabs): not built yet.
 - gtptabs.com and MuseScore (tab-files), core.sites' `GtpTabsPages`, `GtpTabsFetch` and `MuseScorePages`: gtptabs.py's,
   gtptabs_fetch.py's and musescore.py's rules for a lookup's song, every regex PyRegex's.
+  - `GtpTabsPages.parseArtistPage`: an artist page through core.html's tree, its link text collapsed as `split()`
+    does, the size and upload-number regexes Python's.
   - `GtpTabsFetch.gtptabsFiles`: the pass with `refresh_index=False` (the computer's index, no sitemap read), its
-    candidates (internal `GtpPass`), three downloads at most, the file kept as the lowest free `guitar-N` (Kept,
-    Versions, Numbering), kv `gtptabs:checked:` and `gtptabs:unusable:`, `PagesNotFiles`; no info.json (M5's).
+    candidates (internal `GtpPass`: by the artist keys, "Last, First" and without hyphens; sorted by (-stars,
+    version, id)), artist pages cached 30 days (a stale copy BudgetExhausted), three downloads at most past the
+    cache, the file kept as the lowest free `guitar-N` (Kept, Versions, Numbering), kv `gtptabs:checked:` and
+    `gtptabs:unusable:`, `PagesNotFiles`; never a replace or a delete; no info.json (M5's).
   - `sniff` reads a Guitar Pro 7 zip's central directory as CPython's zipfile does (internal `ZipNames`: the end
     records, zip64's, cp437 and UTF-8 names, the Unicode Path field), never java.util.zip's stream; inbox-share
     reuses it.
   - `titlePage`, the Requests tab's; `MuseScorePages.songPages`, links from the index alone, with no client.
-  - The lookup's gtptabs stage (core/lookup/sites/GtpTabs.kt) in get.py's words, the envelope's as LookupWords'.
+  - The lookup's gtptabs stage (core/lookup/sites/GtpTabs.kt, `GtpTabsStage`) in get.py's words, the envelope's
+    `LookupWords.end`.
   - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
-    lookup/gtptabs.jsonl (its stage records asked as get.py asks): `TabFilesReplay`.
+    lookup/gtptabs.jsonl (its stage records asked through InteractiveAsk with the records' clients):
+    `TabFilesReplay`, area `tab-files`.
 
 ##### The Requests tab on the phone
 

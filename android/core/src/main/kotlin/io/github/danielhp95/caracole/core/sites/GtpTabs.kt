@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.html.Html
 import io.github.danielhp95.caracole.core.html.HtmlNode
 import io.github.danielhp95.caracole.core.http.Client
+import io.github.danielhp95.caracole.core.inbox.GuitarFiles
 import io.github.danielhp95.caracole.core.http.GtpTabsParseError
 import io.github.danielhp95.caracole.core.http.PagesNotFiles
 import io.github.danielhp95.caracole.core.http.Robots
@@ -237,10 +238,13 @@ object GtpTabsFetch {
     private fun startsWith(data: ByteArray, prefix: String): Boolean =
         data.size >= prefix.length && prefix.indices.all { data[it] == prefix[it].code.toByte() }
 
-    /** gtptabs_fetch.songs_with_a_guitar_file: the songs the files table holds a Guitar Pro or Power Tab file for. */
+    /** gtptabs_fetch.songs_with_a_guitar_file: the songs the files table holds a Guitar Pro or Power Tab file for
+     * (a version of a kind of inbox.GUITAR_FILE_KINDS, [GuitarFiles.KINDS]), whoever kept it. */
     fun songsWithAGuitarFile(db: Db): Set<Long> =
         db.query("SELECT DISTINCT f.song_id FROM files f JOIN versions v ON v.id = f.version_id " +
-                     "WHERE v.kind IN ('guitar-pro', 'power')") { it.long(0)!! }.toSet()
+                     "WHERE v.kind IN ($KIND_MARKS)", *GuitarFiles.KINDS.toTypedArray()) { it.long(0)!! }.toSet()
+
+    private val KIND_MARKS = GuitarFiles.KINDS.joinToString(",") { "?" }
 
     /**
      * gtptabs_fetch.title_page: the gtptabs.com page whose sitemaps list the song's title under one of its artists,
@@ -249,7 +253,7 @@ object GtpTabsFetch {
      */
     fun titlePage(db: Db, song: SongRow, now: Instant): String? {
         val kept = db.one("SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? " +
-                              "AND v.kind IN ('guitar-pro', 'power') LIMIT 1", song.id) { true }
+                              "AND v.kind IN ($KIND_MARKS) LIMIT 1", song.id, *GuitarFiles.KINDS.toTypedArray()) { true }
         if (kept == true) return null
         if (!GtpPass.before(db.kvGet("$CHECKED_PREFIX${song.id}"), GtpPass.cutoff(now))) return null
         val keys = song.artists.ifEmpty { listOf(song.artist) }.flatMap(GtpTabsPages::artistKeys).distinct()

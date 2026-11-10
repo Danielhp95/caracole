@@ -17,7 +17,6 @@ import io.github.danielhp95.caracole.core.testing.FakeTransport
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.TabFilesReplay
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -207,7 +206,6 @@ class GtpTabsTest {
     }
 
     @Test fun aFileKeptIsTheStagesWords() {
-        assumeTrue("waiting on html-tree: core.html's tree", htmlTree())
         val page = """<html><body><div class="autorInfo"><h1>Artist "Elton John"</h1></div><div class="autorSongs">
             <div class="autorSong gp5"><div class="title"><a href="/tabs/10/john-elton/crocodile-rock.html">Crocodile
             Rock</a><div class="ratingSmall" data-item="1"><a class="active">1</a></div></div>
@@ -219,11 +217,4 @@ class GtpTabsTest {
         }
     }
 
-    /** Phase A's guard, waiting on html-tree. */
-    private fun htmlTree(): Boolean = try {
-        io.github.danielhp95.caracole.core.html.Html.parse("")
-        true
-    } catch (_: NotImplementedError) {
-        false
-    }
 }
