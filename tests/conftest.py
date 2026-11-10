@@ -20,6 +20,9 @@ MEMORY_FREE = 1 << 30
 # Workers for -n auto. Each imports and collects the whole suite before its first test, and past
 # a dozen they cost more than they save: on 24 cores, the suite takes 6.5 s on 12, 8 s on 24.
 MAX_WORKERS = 12
+# On a machine already busy (several suites at once, a build's lanes) -n auto takes the cores the load leaves, so
+# that suites share the machine rather than crowd it: this many at least.
+FEWEST_WORKERS = 2
 
 
 @pytest.hookimpl(tryfirst=True)  # before pytest-xdist's own, which reads -n and --dist
@@ -47,7 +50,9 @@ def pytest_cmdline_main(config):
 def pytest_xdist_auto_num_workers(config):
     if os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
         return None  # pytest-xdist's own hook reads it
-    return min(len(os.sched_getaffinity(0)), MAX_WORKERS)
+    cores = len(os.sched_getaffinity(0))
+    idle = int(cores - os.getloadavg()[0])
+    return max(min(FEWEST_WORKERS, cores), min(cores, MAX_WORKERS, idle))
 
 
 def pytest_configure(config):
