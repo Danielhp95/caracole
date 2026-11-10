@@ -15,12 +15,25 @@ package io.github.danielhp95.caracole.core.fuzz
  *   then the suffixes; the first strictly better wins and 100 returns at once; two strings of one length are tried
  *   both ways.
  * - [extract]: `process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=…, limit=…)`.
+ * - [osaDistance]: `rapidfuzz.distance.OSA.distance` (OSA_impl.hpp): the common prefix and suffix taken off, then the
+ *   optimal string alignment distance (insertions, deletions, substitutions, and two adjacent characters swapped as
+ *   one edit, never edited again), by its dynamic programme, which Hyyrö's bit-parallel one rapidfuzz runs equals; a
+ *   distance past [osaDistance]'s cutoff is the cutoff plus one.
+ * - [extractDistance]: `process.extract(query, choices, scorer=OSA.distance, score_cutoff=d, limit=None)`, as
+ *   match.py's typo route asks it: every choice within the distance, the nearest first, then by index.
+ * - [tokenSetRatio]: `fuzz.token_set_ratio` (fuzz_impl.hpp): each string's words sorted and deduplicated, split into
+ *   what both hold and what each holds alone; 100 when one's words are all the other's, else the best of the two
+ *   rests' ratio and each of them beside the shared words, as rapidfuzz-cpp's arithmetic computes it; 0 when either
+ *   has no word.
  *
  * No JDK or ICU text API: a string is read as its UTF-16 units joined into code points by arithmetic alone.
  */
 object Fuzz {
     data class Alignment(val score: Double, val srcStart: Int, val srcEnd: Int, val destStart: Int, val destEnd: Int)
     data class Extracted(val choice: String, val score: Double, val index: Int)
+
+    /** One choice [extractDistance] keeps: its [distance] to the query and its [index] among the choices. */
+    data class ExtractedDistance(val choice: String, val distance: Int, val index: Int)
 
     fun ratio(a: String, b: String): Double = ratio(codePoints(a), codePoints(b))
 
@@ -43,6 +56,27 @@ object Fuzz {
         found.sortWith(compareByDescending<Extracted> { it.score }.thenBy { it.index })
         return if (limit == null || limit >= found.size) found else found.subList(0, maxOf(limit, 0)).toList()
     }
+
+    /** OSA.distance(a, b, score_cutoff=[scoreCutoff]): the distance, or the cutoff plus one past it (none given:
+     * the distance always). */
+    fun osaDistance(a: String, b: String, scoreCutoff: Int? = null): Int =
+        osa(codePoints(a), codePoints(b), scoreCutoff ?: Int.MAX_VALUE - 1)
+
+    /** process.extract(query, choices, scorer=OSA.distance, score_cutoff=[maxDistance], limit=None): each choice at
+     * most [maxDistance] from the query, the nearest first, then by index. */
+    fun extractDistance(query: String, choices: List<String>, maxDistance: Int): List<ExtractedDistance> {
+        val q = codePoints(query)
+        val found = ArrayList<ExtractedDistance>()
+        choices.forEachIndexed { index, choice ->
+            val d = osa(q, codePoints(choice), maxDistance)
+            if (d <= maxDistance) found += ExtractedDistance(choice, d, index)
+        }
+        found.sortWith(compareBy<ExtractedDistance> { it.distance }.thenBy { it.index })
+        return found
+    }
+
+    /** fuzz.token_set_ratio(a, b). */
+    fun tokenSetRatio(a: String, b: String): Double = tokenSet(sortedWords(codePoints(a)), sortedWords(codePoints(b)))
 
     // --- code points ------------------------------------------------------------------------------------------
 
@@ -136,7 +170,10 @@ object Fuzz {
     }
 
     /** `sorted_split(s).join()`: the words, none empty, sorted by code point, one space between. */
-    private fun sortedSplit(s: IntArray): IntArray {
+    private fun sortedSplit(s: IntArray): IntArray = joined(sortedWords(s))
+
+    /** `sorted_split(s)`'s words: none empty, sorted by code point. */
+    private fun sortedWords(s: IntArray): List<IntArray> {
         val wide = s.any { it > 0xFF }
         val words = ArrayList<IntArray>()
         var start = 0
@@ -147,7 +184,12 @@ object Fuzz {
             }
         }
         words.sortWith(CODE_POINTS)
-        val out = IntArray(if (words.isEmpty()) 0 else words.sumOf { it.size } + words.size - 1)
+        return words
+    }
+
+    /** SplittedSentenceView's `join()`: the words, one space between. */
+    private fun joined(words: List<IntArray>): IntArray {
+        val out = IntArray(length(words))
         var n = 0
         for ((i, word) in words.withIndex()) {
             if (i > 0) out[n++] = 0x20
@@ -157,11 +199,112 @@ object Fuzz {
         return out
     }
 
+    /** SplittedSentenceView's `length()`: its words' code points and a space between each two. */
+    private fun length(words: List<IntArray>): Int = if (words.isEmpty()) 0 else words.sumOf { it.size } + words.size - 1
+
     private val CODE_POINTS = Comparator<IntArray> { x, y ->
         val n = minOf(x.size, y.size)
         var i = 0
         while (i < n && x[i] == y[i]) i++
         if (i < n) x[i].compareTo(y[i]) else x.size.compareTo(y.size)
+    }
+
+    // --- token set ------------------------------------------------------------------------------------------
+
+    /** fuzz_impl.hpp's `token_set_ratio` over two `sorted_split`s, score_cutoff 0. */
+    private fun tokenSet(a: List<IntArray>, b: List<IntArray>): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        // set_decomposition: each deduplicated (std::unique on the sorted words), then a's words found in b's.
+        val wordsA = deduped(a)
+        val diffBa = ArrayList(deduped(b))
+        val intersection = ArrayList<IntArray>()
+        val diffAb = ArrayList<IntArray>()
+        for (word in wordsA) {
+            val at = diffBa.indexOfFirst { it.contentEquals(word) }
+            if (at >= 0) {
+                diffBa.removeAt(at)
+                intersection += word
+            } else {
+                diffAb += word
+            }
+        }
+        if (intersection.isNotEmpty() && (diffAb.isEmpty() || diffBa.isEmpty())) return 100.0
+        val abJoined = joined(diffAb)
+        val baJoined = joined(diffBa)
+        val abLen = abJoined.size.toLong()
+        val baLen = baJoined.size.toLong()
+        val sectLen = length(intersection).toLong()
+        val sect = if (sectLen != 0L) 1L else 0L
+        val sectAbLen = sectLen + sect + abLen
+        val sectBaLen = sectLen + sect + baLen
+        val cutoffDistance = kotlin.math.ceil((sectAbLen + sectBaLen).toDouble() * (1.0 - 0.0 / 100)).toLong()
+        val dist = (abJoined.size + baJoined.size - 2 * lcs(Pattern(abJoined), baJoined)).toLong()
+        var result = 0.0
+        if (dist <= cutoffDistance) result = normDistance(dist, sectAbLen + sectBaLen)
+        if (sectLen == 0L) return result
+        val sectAbRatio = normDistance(sect + abLen, sectLen + sectAbLen)
+        val sectBaRatio = normDistance(sect + baLen, sectLen + sectBaLen)
+        return maxOf(result, sectAbRatio, sectBaRatio)
+    }
+
+    /** fuzz_impl.hpp's `norm_distance` with score_cutoff 0: `100.0 - 100.0 * dist / lensum`, 100 for no length. */
+    private fun normDistance(dist: Long, lensum: Long): Double =
+        if (lensum > 0) 100.0 - 100.0 * dist.toDouble() / lensum.toDouble() else 100.0
+
+    /** std::unique over sorted words: each run of equal words kept once. */
+    private fun deduped(words: List<IntArray>): List<IntArray> {
+        val out = ArrayList<IntArray>(words.size)
+        for (w in words) if (out.isEmpty() || !out.last().contentEquals(w)) out += w
+        return out
+    }
+
+    // --- OSA --------------------------------------------------------------------------------------------------
+
+    /** OSA_impl.hpp's `_distance`: the shorter first, the common affix off, then the distance, the cutoff plus one
+     * past [cutoff]. */
+    private fun osa(x: IntArray, y: IntArray, cutoff: Int): Int {
+        val (s1, s2) = if (y.size < x.size) y to x else x to y
+        var start = 0
+        while (start < s1.size && s1[start] == s2[start]) start++
+        var end1 = s1.size
+        var end2 = s2.size
+        while (end1 > start && end2 > start && s1[end1 - 1] == s2[end2 - 1]) {
+            end1--
+            end2--
+        }
+        val n = end1 - start
+        val m = end2 - start
+        if (n == 0) return if (m <= cutoff) m else cutoff + 1
+        // The length difference alone is more than the cutoff: no alignment is within it.
+        if (m - n > cutoff) return cutoff + 1
+        val d = osaTable(s1, start, n, s2, start, m)
+        return if (d <= cutoff) d else cutoff + 1
+    }
+
+    /** The optimal string alignment distance of `a[from1, from1 + n)` and `b[from2, from2 + m)`: the Levenshtein
+     * table, and a swap of two adjacent characters one edit from the cell two back on both. */
+    private fun osaTable(a: IntArray, from1: Int, n: Int, b: IntArray, from2: Int, m: Int): Int {
+        var twoBack = IntArray(m + 1)
+        var previous = IntArray(m + 1) { it }
+        var current = IntArray(m + 1)
+        for (i in 1..n) {
+            current[0] = i
+            val ai = a[from1 + i - 1]
+            for (j in 1..m) {
+                val bj = b[from2 + j - 1]
+                val cost = if (ai == bj) 0 else 1
+                var d = minOf(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+                if (i > 1 && j > 1 && ai == b[from2 + j - 2] && a[from1 + i - 2] == bj) {
+                    d = minOf(d, twoBack[j - 2] + 1)
+                }
+                current[j] = d
+            }
+            val spare = twoBack
+            twoBack = previous
+            previous = current
+            current = spare
+        }
+        return previous[m]
     }
 
     // --- partial ratio ----------------------------------------------------------------------------------------

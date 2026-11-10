@@ -13,12 +13,15 @@ import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.files.FileTypes
 import io.github.danielhp95.caracole.server.http.Security
+import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.SongFacts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import java.security.SecureRandom
+import java.time.Instant
 import java.util.Locale
 
 /**
@@ -27,8 +30,11 @@ import java.util.Locale
  * the mirror's sync stands ([status]).
  *
  * The app's files (the plan's §5.4): `caracole.sqlite` (caracole's schema and the phone's tables: the indexes
- * imported, the songs taken or added), `library/` (the phone's kept files), `state/` (`backups/`, and `cache/`, the
- * index files fetched or picked until they are merged), and the mirror's `blobs/` and `manifest.json`.
+ * imported, the songs taken or added), `library/` (the phone's kept files), `state/` (`backups/`, and `cache/`: the
+ * index files fetched or picked until they are merged, and `cache/http/<provider>/`, the sites' answers a lookup keeps
+ * for ever, as http.py keeps them: under the files folder, never Android's cacheDir, which the system may clear), and
+ * the mirror's `blobs/` and `manifest.json`. A lookup reaches the sites through [transport], [RealTransport] in the
+ * app, read on every request.
  */
 object Caracole {
     /** The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. */
@@ -103,9 +109,11 @@ object Caracole {
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests,
             ))
-            // A job the queue gets (a sync from the Sync tab, an add, a removal) keeps the process going in the
-            // foreground until none waits or runs: the queue tells, the service follows.
-            val working = Working(phone.queue::snapshot, background, start = { SyncService.start(context) })
+            // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
+            // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the
+            // library page's, read with what the library knows of its song (jobs_routes.song_of's facts).
+            val working = Working(phone.queue::snapshot, background, start = { SyncService.start(context) },
+                                  facts = { job -> songFacts(phone, job) })
             phone.queue.onBusy = working::busy
             phone.server.start(PORT)
             this.working = working
@@ -135,6 +143,14 @@ object Caracole {
     fun cookie(): String = "${Security.SECRET_COOKIE}=$secret; Path=/; HttpOnly; SameSite=Lax"
 
     /** Where an index waits to be merged: `files/state/cache/`. */
+    /** What the library knows of [job]'s song now (SongFacts.songOf, as /jobs.json reads it); null for none, or when
+     * the database can't be read (the line then says what a new song's says). */
+    private fun songFacts(phone: Phone, job: Job): SongFacts? = try {
+        phone.parts.database.read { db -> SongFacts.songOf(db, job, phone.parts.cards, Instant.now()).second }
+    } catch (e: Exception) {
+        null
+    }
+
     fun cacheDir(context: Context): File = File(context.applicationContext.filesDir, "state/cache")
 
     /**
