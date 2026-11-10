@@ -36,7 +36,9 @@ a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS`
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
 ``YOUTUBE_SEARCH`` and ``video:<id>``). A push another caracole sent is taken by ``caracole peer take --progress``
 (peer_routes.py), and a sync with another caracole is ``caracole peer sync --progress``: their JSON lines are their
-stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``) and each unit taken, given or left (``Job.units``). The index
+stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``; an import's of a file staged here, ``caracole peer import
+--progress``, commands/peer.py's ``PEER_IMPORT_STAGES``), each unit taken, given or left (``Job.units``) and, at the
+end, what it did (``Job.report``, in memory alone, for the Sync tab's summary). The index
 pages another caracole's lookups read, posted to ``/peer/index``, are merged by ``caracole index merge --delete
 --progress -- FILE`` (``index_merge_job``): a job of no song's, one stage (``INDEX_MERGE_STAGES``). Each command
 takes caracole's lock (a
@@ -149,6 +151,10 @@ class Job:
     # A sync's units (``caracole peer take`` and ``peer sync --progress``), each (its id, "taken", "given" or
     # "left", why), as it said them
     units: list[tuple[str, str, str]] = field(default_factory=list)
+    # What a sync or an import did, as its command says it at its end (``{"event": "report"}``, commands/peer.py),
+    # for the Sync tab's summary (jobs_routes.py ``peer_outcome``): in memory alone, never in ``as_json`` nor the
+    # history, so a job read back after a restart has none
+    report: dict[str, Any] | None = field(default=None, compare=False)
 
     @property
     def active(self) -> bool:
@@ -191,10 +197,14 @@ class Job:
 
     def heard(self, event: Mapping[str, Any]) -> None:
         """Take in one event of ``caracole get --progress`` (get.py), or of a sync's (``{"event": "unit", "id",
-        "outcome", "why"}``, commands/peer.py)."""
+        "outcome", "why"}`` and, at its end, ``{"event": "report", "report"}``, commands/peer.py)."""
         if event.get("event") == "unit":
             if isinstance(event.get("id"), str) and event.get("outcome") in ("taken", "given", "left"):
                 self.units.append((event["id"], event["outcome"], str(event.get("why") or "")))
+            return
+        if event.get("event") == "report":
+            report = event.get("report")
+            self.report = dict(report) if isinstance(report, Mapping) else None
             return
         if isinstance(event.get("stage"), str):
             stage = next((s for s in self.stages if s.name == event["stage"]), None)
@@ -355,6 +365,10 @@ def _peer_stages(args: Sequence[str]) -> tuple[tuple[str, str], ...]:
         return INDEX_MERGE_STAGES
     if args[:1] != (PEER,) or "--progress" not in _options(args):
         return ()
+    if args[1:2] == ("import",):  # a file staged by sync_file_routes.py, synced with
+        from caracole.commands.peer import PEER_IMPORT_STAGES
+
+        return PEER_IMPORT_STAGES
     return {"take": PEER_TAKE_STAGES, "sync": PEER_SYNC_STAGES}.get(args[1] if len(args) > 1 else "", ())
 
 
