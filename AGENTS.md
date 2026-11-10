@@ -2024,7 +2024,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
   io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner`.
 
-- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, `--dist worksteal`).
+- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
+  the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
 - `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and `-m autochords` do.
 - `slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro or the models
   (`@pytest.mark.chordpro` and `autochords` add `slow`) or another process: mark a new one too.
