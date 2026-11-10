@@ -151,15 +151,4 @@ internal object Choices {
             rounded.stripTrailingZeros().toPlainString()
         }
     }
-
-    /** `format(n, ",")`: an int with its thousands parted by commas. */
-    fun grouped(n: Long): String {
-        val digits = Math.abs(n).toString()
-        val out = StringBuilder()
-        for ((i, c) in digits.withIndex()) {
-            if (i > 0 && (digits.length - i) % 3 == 0) out.append(',')
-            out.append(c)
-        }
-        return (if (n < 0) "-" else "") + out
-    }
 }

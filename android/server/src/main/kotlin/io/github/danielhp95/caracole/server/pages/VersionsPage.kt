@@ -20,6 +20,8 @@ import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.Status
 import io.github.danielhp95.caracole.server.pages.Choices.esc
 import io.github.danielhp95.caracole.server.pages.Choices.quote
+import io.github.danielhp95.caracole.server.routes.search.Looked
+import io.github.danielhp95.caracole.viewer.render.RenderNames
 
 /**
  * What a versions page or post names (versions_routes._Asked): the song, the viewer it came from (its library path;
@@ -57,11 +59,9 @@ internal object VersionsPage {
     private val NO_SHEET get() = Refused(404, "Not found", "There's no such sheet in the library.")
 
     /** songs.SHEET_OUTPUTS' viewers: render.HUMAN_OUTPUTS[2] and AUTO_OUTPUTS[2]. */
-    private val VIEWERS = setOf("sheet.html", "sheet (auto).html")
+    private val VIEWERS = setOf(RenderNames.HUMAN_OUTPUTS[2], RenderNames.AUTO_OUTPUTS[2])
 
     private val SOURCES = mapOf("lacuerda" to "LaCuerda's sheet", "auto" to "the auto-chords sheet")
-    private const val HUMAN_SHEET = "sheet.txt"
-    private const val AUTO_SHEET = "sheet (auto).txt"
 
     // --- what a page or a post names ------------------------------------------------------------------------------
 
@@ -131,11 +131,11 @@ internal object VersionsPage {
     private fun theOne(db: Db, songId: Long, versions: List<SheetVersion>): String? {
         versions.firstOrNull { it.chosen }?.let { return line(it) }
         val files = Kept.keptFiles(db, songId).associateBy { it.name }
-        files[HUMAN_SHEET]?.let { file ->
+        files[RenderNames.HUMAN_SHEET]?.let { file ->
             val provider = Versions.get(db, file.versionId)?.provider.orEmpty()
             return SOURCES[provider] ?: "$provider's sheet"
         }
-        return if (AUTO_SHEET in files) SOURCES.getValue("auto") else null
+        return if (RenderNames.AUTO_SHEET in files) SOURCES.getValue("auto") else null
     }
 
     private fun tabNumber(v: SheetVersion): Long? = v.tabId.toLongOrNull()
@@ -200,7 +200,7 @@ internal object VersionsPage {
         val first = (if (v.number != null && v.number != 0) "Ver ${v.number}" else "Tab ${v.tabId}") +
             (if (total != null && total != 0) " of $total" else "")
         val said = mutableListOf(first)
-        v.rating?.let { rating -> said += "${Choices.g(rating)}★" + (v.votes?.let { " (${Choices.grouped(it.toLong())})" } ?: "") }
+        v.rating?.let { rating -> said += "${Choices.g(rating)}★" + (v.votes?.let { " (${Looked.grouped(it.toLong())})" } ?: "") }
         return said.joinToString(" · ")
     }
 

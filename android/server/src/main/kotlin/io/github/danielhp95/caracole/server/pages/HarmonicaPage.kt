@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.py.PyRe
-import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.Refused
@@ -53,9 +52,6 @@ internal object HarmonicaPage {
     private val NOT_A_READING get() =
         Refused(400, "Not a reading", "How should it be read? The form names no notation caracole knows.")
 
-    /** inbox.HARMONICA_PAGE: a harmonica tab's page (`\d` Python's: any decimal digit). */
-    private val HARMONICA_PAGE: Regex = PyRegex.compile("""harmonica-(\d+)\.html""")
-
     /** harmonica_cmd.SOURCES: where a reading came from, in words. */
     val SOURCES = mapOf("legend" to "from the tab's own legend", "pinned" to "as you set it", "guessed" to "guessed")
 
@@ -94,7 +90,7 @@ internal object HarmonicaPage {
     fun asked(db: Db, readOverrides: () -> Overrides, libraryDir: File, page: String): HarmonicaAsked {
         val parts = page.split('/')
         if (parts.size != 3 || parts.any { it == "" || it == "." || it == ".." } ||
-            PyRe.fullmatch(HARMONICA_PAGE, parts.last()) == null) {
+            PyRe.fullmatch(HarmonicaFiles.PAGE, parts.last()) == null) {
             throw NO_TAB
         }
         val overrides = readOverrides()

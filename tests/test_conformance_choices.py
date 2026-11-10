@@ -838,7 +838,11 @@ def harmonica_commands(scene: str, cfg) -> list[dict[str, Any]]:
                                                                   "Cowboy Bebop", "Tank!"]))
         a(harmonica_command(scene, cfg, "an ignored song", ["--as=letters", "--", "Café Tacvba", "Eres"]))
         a(harmonica_command(scene, cfg, "a song that is no name", ["--as=letters", "--", "Cowboy Bebop"]))
+        a(harmonica_command(scene, cfg, "the readings listed", SONG))
+        a(harmonica_command(scene, cfg, "the readings listed, a tab named", ["--tab=harmonica-2.txt", *SONG]))
+        a(harmonica_command(scene, cfg, "the readings of an ignored song", ["--", "Café Tacvba", "Eres"]))
     else:
+        a(harmonica_command(scene, cfg, "the readings listed", SONG))
         a(harmonica_command(scene, cfg, "clear", ["--tab=harmonica-1.txt", "--clear", *SONG]))
         a(harmonica_command(scene, cfg, "pin another", ["--tab=harmonica-1.txt", "--as=brackets", *SONG]))
         a(harmonica_command(scene, cfg, "pin another tab", ["--tab=harmonica-2.txt", "--as=letters", *SONG]))
