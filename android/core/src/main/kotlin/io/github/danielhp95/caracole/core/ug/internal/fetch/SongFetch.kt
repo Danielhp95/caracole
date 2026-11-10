@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.match.Match
+import io.github.danielhp95.caracole.core.ug.ArtistRoute
 import io.github.danielhp95.caracole.core.ug.FetchContext
 import io.github.danielhp95.caracole.core.ug.IndexTab
 import io.github.danielhp95.caracole.core.ug.SheetVersions
@@ -47,7 +48,7 @@ internal object SongFetch {
         } else if (song.matchDecision !in setOf("accept", "pinned")) {
             dropUndone(run)
             return unfinished()
-        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ARTIST_PAGE_KINDS)) {
+        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ArtistRoute.ARTIST_PAGE_KINDS)) {
             return unfinished()
         }
         val tabs = songIndexTabs(ctx.db, song, ctx.overrides.block)
@@ -90,9 +91,6 @@ internal object SongFetch {
         return SongFetchOutcome(given.id, sheet, tab, ctx.client.requestsMade - start, settled = true,
                                 keptVersions = run.keptVersions)
     }
-
-    /** ARTIST_PAGE_KINDS: the artist page's lists read, the sheet's first. */
-    private val ARTIST_PAGE_KINDS = listOf("chords", "tabs")
 
     /**
      * `_finish`: every slot is done: the status refreshed and the song marked checked. A song with a page that

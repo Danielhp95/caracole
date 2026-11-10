@@ -1384,18 +1384,36 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
     answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
-  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's (it replaces the skeleton's `ArtistRoute.find`,
-    which nothing calls), `artist_is_known` whole; until it lands its route and lists answer as Python's list cut short
-    does: no request, the song marked dirty and left unchecked, never clean.
+  - `ArtistPages`: the artist-page route (ug-fetch-artist's, below).
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
-  beside it: …"), `_ug_ready`'s skips ("not on the phone yet" where Python reads the artist's page), and what asking
-  came to in `LookupWords.end`'s words; the envelope (InteractiveAsk) marks the song owed a fetch (`_owed`), and the
-  frame (LookupRun) asks the ug stage within `after_the_sheet`, and LaCuerda after a sheet stage that kept none.
+  beside it: …"), `_ug_ready`'s skips (none for a song the index can't settle whose artist's page is known,
+  `ArtistRoute.artistIsKnown`), and what asking came to in `LookupWords.end`'s words; the envelope (InteractiveAsk)
+  marks the song owed a fetch (`_owed`), and the frame (LookupRun) asks the ug stage within `after_the_sheet`, and
+  LaCuerda after a sheet stage that kept none.
 - tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario records, and
   ug_sheet_stages.jsonl, get.py's words for the two stages and `_ug_ready`'s answers (`UgFetchReplay`, area
   `ug-fetch`).
-- UG's artist pages (ug-fetch-artist): not built yet.
+- UG's artist pages (ug-fetch-artist): a song the index can't place looked up on its artist's UG page, ug/fetch.py's
+  route, in internal/fetch/`ArtistPages` (`processSong` calls it, as `process_song` calls `_artist_page_route`):
+  - the page's address: `[artist_url]`, a tab page there read once for the page it links to (kv
+    `ug:pasted_tab:<tab>`, or what is wrong with it: `ArtistRoute.pastedPageProblem`), a learned one (kv
+    `ug:artist_url:<artist key>`), else `LEARN_TRIES` slugged tabs of the artist read for it;
+  - the chords list, then those its filter bar offers (the unfiltered page when a list answers 404, a 404 there a
+    page gone), `artistPagesPerKind` pages a kind, 30 days from the cache (a stale copy no answer: BudgetExhausted
+    once the budget is spent), every page stored for searches (`ArtistTabs.store`, `Reads.note`d for the computer);
+    a block, an error or a page that won't parse raised, never a miss (no `ug:artist_page_checked:`);
+  - titles as `_best_title` takes them (`TITLE_MATCH` 90, `TITLE_MARGIN` 8), a `[reject]`ed song out first, the
+    match written with step `artist_page`; the lists of a song matched there, or of one whose index tabs hold no
+    chords, read as its versions; `ArtistRoute.artistIsKnown` what the UG stages ask first.
+- `versions --keep` and `--keep-more` (ug-fetch-artist): core/lookup/sites/`VersionsCommands`, versions_cmd.py's
+  `keep` and `keep_more` through a `CommandContext` and the song's `LibraryStore` (the `[block]`, gone and "the
+  sheet already" checks, `KeepRefused` its `fail`, exit 1; `keepVersion`; `_stopped`'s words; `Health.recordOk` only
+  after a request; keep-more in `SheetVersions.mayKeep`'s rank order through one client, `noteUnkeepable`, "kept N of
+  M"), saying its `pdf` and `pages` stages where versions_cmd.py makes the song's pages, its last line returned, which
+  lane lookup's VersionsRunner says after them.
+- tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_artist.jsonl and commands_versions.jsonl too (the
+  same `UgFetchReplay`).
 - core.match's `Matcher`: match.py for a lookup's song (`matchAll`, `candidatesOf`; the ladder, `Ladder`; the index
   as it reads it, `IndexView`), each answer Python's for the same index and overrides.
   - Its scores are core.fuzz's: `ratio` and `extract`, `osaDistance` and `extractDistance` (rapidfuzz's OSA, the typo
