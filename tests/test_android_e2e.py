@@ -163,7 +163,7 @@ def served(tmp_path_factory):
 def test_serve_builds_the_library_exports_its_index_and_serves_it_on_every_address(served):
     computer, port, log = served
     state = read(f"http://127.0.0.1:{port}/api/peer/state")
-    assert state["format"] == 2 and state["name"] == "Computer"
+    assert state["format"] == 3 and state["name"] == "Computer"
     assert sum(unit.startswith("song/") for unit in state["units"]) == len(SONGS) == 20
     # 0.0.0.0, for an emulator: another address of this machine's than 127.0.0.1 answers too.
     assert read(f"http://127.0.0.2:{port}/api/peer/state")["units"] == state["units"]

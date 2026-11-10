@@ -108,6 +108,18 @@ delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 enabled = true                    # false: suggestions come without thumbnails
 budget = 20
 delay = [0, 0]                    # no wait: right after the search
+[providers.itunes]                # Apple's catalogue: an Apple Music link shared to the phone, one lookup
+enabled = true                    # false: the phone asks Apple nothing; the link is said to name no song it read
+lookup_requests = 1               # a shared link's requests, at most; the phone alone asks it, at a lookup's pace
+[providers.spotify]               # a Spotify link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a spotify.link short link's hop, then the page
+[providers.tidal]                 # a TIDAL link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a tidal.link short link's hop, then the page
+[providers.youtube-oembed]        # a YouTube or YouTube Music link shared to the phone: its oEmbed, never yt-dlp
+enabled = true
+lookup_requests = 1
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -203,7 +215,11 @@ other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
 `harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
-the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
+the library page suggests for a search), and `itunes`, `spotify`, `tidal` and `youtube-oembed`, the
+services the phone asks once about a link shared to it that names no song (your choice of 10 November
+2026; android/README.md, "Sharing a song from a music app"): no run or command of the computer asks
+them, so they have no `budget` and no line in the to-do page's Provider health, and the phone takes
+their switches and lookup settings at a sync. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's and its image host's go unused: a lookup runs no yt-dlp; Megalobiz's `lookup_delay` is
 0.5–0.75 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: caracole's
@@ -234,11 +250,13 @@ robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image 
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
 video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
 two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
-gametabs.net, YouTube and YouTube's image host can be turned
+gametabs.net, YouTube, YouTube's image host and the phone's four services of a shared link can be turned
 off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
+`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
+`[providers.spotify]`, `[providers.tidal]` or `[providers.youtube-oembed]`, caracole sends
 that site nothing, the nightly run skips
-its step, and the to-do page's Provider health says it is off. The other three
+its step, and the to-do page's Provider health says it is off (the phone's services have no step and no line there:
+the phone's share page says it). The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
 [Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
@@ -5381,7 +5399,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
-      sheet.json            the same version as the source gave it
+      sheet.json            the same version as the source gave it (Ultimate Guitar's without its rating and votes)
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
       sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
@@ -5817,7 +5835,7 @@ different things, is a conflict for you to settle. Before then, a unit on one si
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
 
-Two caracoles sync in one format, format 2, which every answer of theirs names: a caracole of another format is
+Two caracoles sync in one format, format 3, which every answer of theirs names: a caracole of another format is
 refused, and says so. What each remembers it agreed on is kept in that format too, and a caracole of an earlier
 format remembered it in its own, which this one doesn't read: the first sync after the upgrade compares as a first
 sync, a unit on one side alone that side's and one both hold differently a conflict, with no history to say which
@@ -5825,7 +5843,10 @@ side changed it. A song one side removed since the two last synced then shows as
 here's for it. Each answer also says the time on its side's clock, which both sides stamp what they agree on with,
 and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
 they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
-other spaces, `4.50` for `4.5`) agree on it.
+other spaces, `4.50` for `4.5`) agree on it; and a version from Ultimate Guitar without its rating and votes, which
+change from one day to the next (format 3: format 2 counted them). Nor does the `sheet.json`, `tab.json` or
+`version-<tab>.json` caracole keeps of a version from Ultimate Guitar hold them, so a tab both caracoles read on two
+days is the same on both; one kept before holds them until caracole keeps it again.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what
@@ -5983,9 +6004,8 @@ commas, all three by default. A difference outside them is neither taken nor giv
 lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
 
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
---compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
-`--prefer`.
+chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+is given there, with no question asked.
 
 ### The Sync tab
 
@@ -6013,6 +6033,32 @@ change left as it was"), then offers **Reload**. The sync is a request like any,
 sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
 comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
 two agree on, and the other side's address and name, which `GET /api/sync` lists.
+
+What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
+is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
+
+- `GET /api/sync`: this caracole's id and library's name, `device` (`computer`; the phone's says `phone`), its songs
+  and songbooks counted (`songbooks` is null while songbooks.toml can't be read: that stops the songbooks alone), the
+  address it last synced with and every caracole it synced with before.
+- `POST /sync/test` (`address`): asks the other caracole for its state, one request, and changes nothing on either
+  side. It answers its songs, its songbooks, the newest read of its site indexes, when this one last synced with it,
+  and says it: "Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26" (the day in the server's zone), or
+  "…, no indexes". Refused as Compare is: not an address (400), nothing answering (502), this very caracole (409).
+- `POST /sync/compare` also gives each song's artist and title, what each side did to each unit since the two last
+  agreed (new, changed, gone, or nothing), its part (library or songbooks), the songbooks either side has that list
+  it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
+  whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
+- `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
+  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
+  page's own script may ask it (the form token in its header).
+- `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
+  it gives the computer its index pages.
+- `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and
+  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
+  `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
+
+The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 

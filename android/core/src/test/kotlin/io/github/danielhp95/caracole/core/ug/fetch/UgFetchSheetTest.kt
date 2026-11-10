@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.core.ug.fetch
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
-import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.ProviderState
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.ProviderBlocked
@@ -11,7 +10,6 @@ import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
-import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.Asking
 import io.github.danielhp95.caracole.core.lookup.Clients
@@ -25,7 +23,6 @@ import io.github.danielhp95.caracole.core.lookup.StageEnd
 import io.github.danielhp95.caracole.core.lookup.sites.UgSheetStage
 import io.github.danielhp95.caracole.core.lookup.sites.UgStage
 import io.github.danielhp95.caracole.core.lookup.sites.UgStages
-import io.github.danielhp95.caracole.core.match.Match
 import io.github.danielhp95.caracole.core.testing.FakeAsking
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
@@ -33,12 +30,9 @@ import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.UgFetchReplay
-import io.github.danielhp95.caracole.core.ug.FetchContext
-import io.github.danielhp95.caracole.core.ug.SongFetchOutcome
 import io.github.danielhp95.caracole.core.ug.UgFetch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -55,8 +49,8 @@ import java.time.Instant
  * pages, the versions kept beside the sheet and beside a pin, yours, unreadable pages and their doubling retry,
  * robots.txt, a 404, a block, a spent budget, another site's sheet, a variant, links of another shape, a folder two
  * songs share, a pin robots.txt closes); the lookup's UG stages ask through a StageContext's asking and say what it
- * came to as get.py says it (ug_sheet_stages.jsonl, and LookupWords for the envelope's ends); and a song whose
- * versions come from its artist's UG page waits for ug-fetch-artist's route, never checked.
+ * came to as get.py says it (ug_sheet_stages.jsonl, and LookupWords for the envelope's ends); a song the index can't
+ * settle is asked of UG once its artist's page is known (the route itself ArtistRouteTest's).
  */
 class UgFetchSheetTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -137,45 +131,6 @@ class UgFetchSheetTest {
         misses.assertNone()
     }
 
-    /** [check] run in the world of the record of the lookup's two passes, its song [prepare]d first; nothing compared
-     * with the record, which is of another pass. */
-    private fun inTheTwoPassesWorld(prepare: (Db, Long) -> Unit, check: (ScenarioWorld, SongRow, FetchContext) -> Unit) {
-        val record = record("a lookup's sheet pass, then the rest")
-        val kw = record.getValue("kw").jsonObject
-        val id = kw.getValue("song").jsonPrimitive.long
-        val rest = kw.getValue("passes").jsonArray[1].jsonObject
-        Scenarios.replay(record, Misses("not compared")) { world ->
-            prepare(world.db, id)
-            check(world, Songs.byId(world.db, id)!!, UgFetchReplay.context(world, rest))
-            null
-        }
-    }
-
-    /** What the phone answers for a song whose versions come from its artist's UG lists (until ug-fetch-artist reads
-     * them): Python's answer for a list the page cap cut short. No request, the song marked dirty, neither checked
-     * nor clean, nothing kept; so a sync never tells the computer UG was asked. */
-    private fun waitsForItsArtistsPage(world: ScenarioWorld, song: SongRow, ctx: FetchContext) {
-        val out = UgFetch.processSong(ctx, song, guitar = true)
-        assertEquals(SongFetchOutcome(song.id, null, null, 0), out)
-        assertEquals(emptyList<String>(), world.transport.said)
-        val after = Songs.byId(world.db, song.id)!!
-        assertTrue(after.ugDirty)
-        assertEquals(null, after.ugCheckedAt)
-        assertEquals(null, world.db.kvGet("ug:artist_page_checked:${song.id}"))
-        assertFalse(UgFetch.checkedSince(world.db, after, NOW))
-    }
-
-    @Test fun aSongFoundOnItsArtistsPageWaitsForItsListsNeverCheckedOrClean() = inTheTwoPassesWorld(
-        { db, id -> Versions.updateSong(db, id, mapOf("match_step" to Match.ARTIST_PAGE, "ug_dirty" to false)) },
-        ::waitsForItsArtistsPage)
-
-    @Test fun aSongWhoseIndexTabsHoldNoChordsWaitsForItsArtistsChordsList() = inTheTwoPassesWorld(
-        { db, id ->
-            db.execute("DELETE FROM ug_index WHERE type = 'chords'")
-            Versions.updateSong(db, id, mapOf("ug_dirty" to false))
-        },
-        ::waitsForItsArtistsPage)
-
     /** [check] given a stage's context of [song] in a library of no song, with no client. */
     private fun withContext(song: SongRow, check: (StageContext) -> Unit) {
         TestDb.fresh(tmp.newFolder()).use { database ->
@@ -214,12 +169,23 @@ class UgFetchSheetTest {
         }
     }
 
-    @Test fun aSongTheIndexCantSettleWhoseArtistIsKnownIsNotLookedUpOnThePhoneYet() {
+    @Test fun aSongTheIndexCantSettleWhoseArtistIsKnownIsAskedOfUltimateGuitar() {
         withContext(song(decision = "not_found")) { ctx ->
+            assertEquals(LookupWords.NOT_IN_INDEX, UgStages.notReady(ctx))
             ctx.db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
                                "VALUES (7, 'soda-stereo', 'a-song', 'chords', 'last', '2026-10-01T00:00:00Z', '')")
-            assertEquals(StageEnd("skipped", "not on the phone yet"), UgSheetStage.run(ctx))
-            assertEquals(StageEnd("skipped", "not on the phone yet"), UgStage.run(ctx))
+            assertEquals(null, UgStages.notReady(ctx))  // its artist's UG page may list it (A6)
+            val asked = ArrayList<String>()
+            val ask = object : Asking {
+                override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
+                    asked += provider
+                    return Asked.Off("off")
+                }
+                override val requests: Map<String, Int> get() = emptyMap()
+            }
+            UgSheetStage.run(ctx.copy(asking = ask))
+            UgStage.run(ctx.copy(asking = ask))
+            assertEquals(listOf("ug", "ug"), asked)
         }
     }
 

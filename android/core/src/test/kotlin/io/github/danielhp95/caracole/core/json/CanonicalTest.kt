@@ -65,6 +65,32 @@ class CanonicalTest {
         }
     }
 
+    @Test fun hashStoredJsonWithoutMembersIsPythonsForEveryVector() {
+        val records = Corpus.records("canonical/stored_hash_without.jsonl")
+        assertTrue(records.size > 150)
+        for (r in records) {
+            val text = r.args[0].textOrNull()
+            val without = r.kw.getValue("without").jsonArray.map { it.jsonPrimitive.content }.toSet()
+            assertEquals(r.out.textOrNull(), Canonical.hashStoredJson(text, without), "stored_hash of ${text?.take(60)} without $without")
+        }
+    }
+
+    @Test fun aLoneSurrogateInAMemberTakenOutIsNoPartOfTheHashAndOneLeftInIs() {
+        val without = setOf("votes")
+        val one = Canonical.digest(Canonical.parse("""{"a": 1}"""))
+        // Escaped, raw, and a raw high surrogate beside an escaped low one (two lone surrogates to Python).
+        for (lone in listOf("\\ud800", "\uDC00", "\uD83C\\udfb8")) {
+            val taken = "{\"votes\": \"$lone\", \"a\": 1}"
+            assertEquals(one, Canonical.hashStoredJson(taken, without), taken)
+            val kept = "{\"a\": 1, \"b\": \"$lone\", \"votes\": 2}"
+            assertEquals(Canonical.hashStoredJson(kept), Canonical.hashStoredJson(kept, without), "$kept: its own bytes")
+            assertEquals(Canonical.sha256Hex(JsonText.utf8(kept)), Canonical.hashStoredJson(kept, without))
+        }
+        // A repeated key keeps its last value: a lone surrogate in the first is gone with it.
+        assertEquals(Canonical.digest(Canonical.parse("""{"a": "x"}""")),
+                     Canonical.hashStoredJson("""{"a": "\ud800", "a": "x"}""", setOf("votes")))
+    }
+
     @Test fun aTextWithARawLoneSurrogateHashesAsPythonsSurrogatepassBytes() {
         val records = Corpus.records("canonical/stored_hash_utf16.jsonl")
         assertTrue(records.size > 10)

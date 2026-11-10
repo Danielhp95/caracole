@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -45,7 +46,7 @@ import java.util.concurrent.TimeUnit
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
  * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks, its [settings] (politeness.settings_document: none while null, as a
+ *   it agreed on with the phone that asks and the answers its imports of that phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a
  *   caracole older than them answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
@@ -61,6 +62,9 @@ import java.util.concurrent.TimeUnit
  * - `GET /api/jobs/<id>`: the request as Job.as_json gives it; it answers "running" to [runningPolls] polls first,
  *   then (without [holdTakes]) as it is once over.
  * - `GET /api/peer/index?sites=`: [index]'s bytes for the sites asked, recorded in [indexAsked].
+ * - `GET /api/sync/indexes`: each site's newest read (IndexTransfer.newest, [indexes] over it) and its tabs
+ *   (TabCounts), as web/sync_routes.py answers it (the sync redesign's §3.4.1); 404 while [countsIndexes] is false,
+ *   as a caracole older than the route answers.
  * - `POST /peer/index`: the phone's index pages, as peer_routes.push_index takes them: the token in its header (403
  *   with `reload` else), `application/octet-stream` (415), at most [INDEX_MAX] bytes (413), a SQLite file's (400),
  *   at most [INDEX_OPEN] waiting (409); each kept in [indexPushes], then `caracole index merge --delete --progress`
@@ -87,6 +91,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     @Volatile var runningPolls: Int = 0
     @Volatile var onUnit: ((String) -> Unit)? = null
     @Volatile var onPoll: ((Int) -> Unit)? = null
+    @Volatile var countsIndexes: Boolean = true
 
     val requests = CopyOnWriteArrayList<String>()
     val answers = ConcurrentHashMap<String, (HttpExchange) -> Unit>()
@@ -232,14 +237,25 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push/file" -> if (tokenOk(exchange)) pushFile(exchange, query["push"].orEmpty(), query["sha256"].orEmpty())
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
             "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
+            "GET /api/sync/indexes" -> if (countsIndexes) json(exchange, 200, indexCounts())
+                                       else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
             else -> if (method == "GET" && path.startsWith("/api/jobs/")) job(exchange, path.removePrefix("/api/jobs/"))
                     else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
         }
     }
 
+    /** `GET /api/sync/indexes`'s answer: every site of IndexTransfer's, its newest read and its tabs. */
+    fun indexCounts(): JsonObject {
+        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes) to TabCounts.of(db) }
+        return obj("indexes" to JsonObject(tabs.mapValues { (site, count) ->
+            obj("read" to JsonPrimitive(newest[site]), "tabs" to JsonPrimitive(count))
+        }))
+    }
+
     /** peer_sync.state_document, with the settings and the form token (web/peer_routes.state). */
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
+        val kept = peer?.let { asker -> database.read { db -> Compare.keptOf(db, asker) } }
         return JsonObject(linkedMapOf(
             "format" to JsonPrimitive(Units.FORMAT),
             "server" to JsonPrimitive(id),
@@ -255,7 +271,14 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-        ).also { doc -> settings?.let { doc["settings"] = it } } + ("token" to JsonPrimitive(token)))
+        ).also { doc ->
+            kept?.let { k ->
+                doc["kept"] = JsonObject(k.toSortedMap(Py.CODE_POINT_ORDER).mapValues { (_, e) ->
+                    JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))
+                })
+            }
+            settings?.let { doc["settings"] = it }
+        } + ("token" to JsonPrimitive(token)))
     }
 
     private fun unit(exchange: HttpExchange, unitId: String) {

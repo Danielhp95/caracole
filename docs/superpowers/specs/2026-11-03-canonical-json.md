@@ -82,6 +82,19 @@ keeping a `JsonObject`'s order, so every kv record either side writes is byte-id
 base, which Python builds in `sorted()` key order. `PyJson.dumps(value, sortKeys = true, compact = true)` is
 `json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))`, the corpus's line format.
 
+## FORMAT 3
+
+FORMAT 3 (the owner's choice of 2026-11-03, "Don't count them for the sync", the M4–6 plan's Q2) changes one thing of
+FORMAT 2, below: a version's `raw` is `H(raw)` without what `peer_sync.VOLATILE_RAW` names for its provider, UG's
+`rating` and `votes`, which UG's tab page gives as they are the day it is read. `stored_hash(text, without)` (Kotlin's
+`Canonical.hashStoredJson(text, without)`) takes those members out of the object the text holds, its own members
+alone, before `D`; a text that holds no object, or isn't JSON, is hashed as `H(text)`. `vectors/canonical/
+stored_hash_without.jsonl` holds the two to the byte. The state, unit and push documents and the base carry
+`"format": 3`, and a base of FORMAT 2 reads as none: the first sync after the upgrade compares as a first sync.
+A song unit's `files` still hash each kept file's bytes, so the version's JSON kept beside a UG sheet or tab
+(`sheet.json`, `tab.json`, `version-<tab>.json`) leaves the same two members out of the raw record it holds
+(ug/fetch.py `KEPT_WITHOUT`, Kotlin's `Slots.keepText`): one tab read on two days is kept in the same bytes.
+
 ## FORMAT 2
 
 - `peer_sync.FORMAT = 2`. The state, unit and push documents carry `"format": 2`, and a side refuses any other
