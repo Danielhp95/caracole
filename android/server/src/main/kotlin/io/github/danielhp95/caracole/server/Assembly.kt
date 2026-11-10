@@ -52,6 +52,7 @@ import io.github.danielhp95.caracole.server.routes.RequestsRoutes
 import io.github.danielhp95.caracole.server.routes.ReviewRoutes
 import io.github.danielhp95.caracole.server.routes.SearchRoutes
 import io.github.danielhp95.caracole.server.routes.ShareRoutes
+import io.github.danielhp95.caracole.server.routes.share.ShareReader
 import io.github.danielhp95.caracole.server.routes.SongbookRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
@@ -89,7 +90,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
  * RequestsRoutes, SyncRoutes, LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
- * the app), then Stubs for every route no module answers; the
+ * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
@@ -170,7 +171,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ReviewRoutes(parts),
         ExportRoutes(parts),
         GuitarRoutes(parts),
-        ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() }),
+        ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
+                    links = ShareReader(parts)),
     )
 
     val app: App = App(
