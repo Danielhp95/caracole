@@ -74,6 +74,9 @@ class MainActivity : Activity() {
     private val screen: CoroutineScope = MainScope()
     private var hiding: Job? = null
     private var shown = false
+    /** The page an intent asked the screen to show (a song shared to the app: ShareLinkActivity's), until the server
+     * has started. */
+    private var asked: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -151,12 +154,28 @@ class MainActivity : Activity() {
             say(getString(R.string.no_cookie))
             return
         }
-        if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) && web.restoreState(saved) != null) {
+        val page = asked ?: if (saved == null) SharedLink.shown(intent?.getStringExtra(SharedLink.PAGE)) else null
+        asked = null
+        if (page != null) {
+            showPage(page)
+        } else if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) &&
+            web.restoreState(saved) != null) {
             shown = true
         } else {
             showLibrary()
         }
-        if (saved == null && settings.server.isBlank() && Caracole.mirror(this).manifest() == null) openSettings()
+        if (saved == null && page == null && settings.server.isBlank() && Caracole.mirror(this).manifest() == null) {
+            openSettings()
+        }
+    }
+
+    /** A song shared to the app while the screen was open (MainActivity is single-task): its page, once the server
+     * has started. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val page = SharedLink.shown(intent.getStringExtra(SharedLink.PAGE)) ?: return
+        if (origin != null) showPage(page) else asked = page
     }
 
     /** The launch's cookie, set for [origin] before the WebView asks it for anything; false when it can't be. */
@@ -198,6 +217,25 @@ class MainActivity : Activity() {
         screen.cancel()
         web.destroy()
         super.onDestroy()
+    }
+
+    /** A page of the phone's server by its path and query ("/share?text=…", already encoded), once it has started. */
+    private fun showPage(page: String) {
+        val origin = origin ?: return
+        web.loadUrl(origin + page)
+        shown = true
+    }
+
+    /**
+     * The share page's Cancel: the screen back where it was before the share (the WebView's history before its first
+     * share page, else the library page), and the app that shared in front again.
+     */
+    private fun leaveShare() {
+        val history = web.copyBackForwardList()
+        var at = history.currentIndex
+        while (at >= 0 && SharedLink.isSharePage(history.getItemAtIndex(at)?.url, origin)) at--
+        if (at >= 0 && at < history.currentIndex) web.goBackOrForward(at - history.currentIndex) else showLibrary()
+        moveTaskToBack(true)
     }
 
     /** Opens the library page, the server's own, once it has started. */
@@ -289,6 +327,10 @@ class MainActivity : Activity() {
      */
     private fun follow(url: String, download: Boolean = false): Boolean {
         val links = links ?: return true
+        if (!download && SharedLink.isCancel(url, origin)) {
+            leaveShare()
+            return true
+        }
         return when (val route = links.route(url, download)) {
             Route.Page -> false
             is Route.File -> { handOff(route.path); true }

@@ -54,9 +54,6 @@
     return names && typeof names === "object" && own.call(names, String(text)) ? String(names[String(text)]) : text;
   };
   const listOf = (value) => (Array.isArray(value) ? value : []);
-  // The sites' column of a line (rows.js siteMarks), as wide as the most marks a song has, so that the lines line up.
-  document.documentElement.style.setProperty("--sites",
-    String(songs.reduce((most, s) => Math.max(most, listOf(s && s.sites).length), 0)));
   // Served by caracole serve: its forms' token, and the songs it is fetching already. The one place the page tells
   // the two apart: the file on disk has no ``server``, and nor has caracole's Android app's offline copy, which is
   // that file (web/offline_routes.py), so both ask nothing of anyone, wherever they are opened.
@@ -286,25 +283,10 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS);
-  const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine,
-    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine, countMarks,
-    countsSaid } = rowKit;
+  const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, fetchIcon, many,
+    indexLine, titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine,
+    countMarks, countsSaid } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
-  // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
-  // (the data marks it primary).
-  const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
-  // A line's button for it, its main action unless the server's control has its place (a wanted song's Fetch
-  // now): "Open" for the viewer, "Open PDF" and "Open text" for the others. An auto sheet's says so in its name, as a
-  // touch screen shows no title and YouTube's mark says only where the audio came from.
-  const openButton = (s, f) => {
-    const kind = /\.html$/i.test(String(f.name || "")) ? "" : /\.pdf$/i.test(String(f.name || "")) ? "PDF" : "text";
-    const text = kind ? "Open " + kind : "Open";
-    const open = link({ label: text, href: f.href }, "btn small primary", false);
-    open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist) +
-      (s.auto === true ? ", an auto sheet" : ""));
-    open.title = String(f.label || "");  // "Sheet viewer", "Auto sheet PDF"
-    return open;
-  };
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
   // that stands, and the video its audio came from.
@@ -369,13 +351,12 @@
       });
     });
   };
-  // A wanted song's "Fetch now": caracole serve queues a fetch of this song alone.
+  // A wanted song's Fetch now, the download icon on its line (rows.js fetchIcon): caracole serve queues a fetch of this
+  // song alone. Nothing is sent before it is pressed.
   const fetchForm = (s) => {
     const form = songForm("fetch", "/fetch", s);
-    const go = el("button", "btn primary", "Fetch now");
-    go.type = "submit";
-    go.setAttribute("aria-label", "Fetch " + String(s.title) + " by " + String(s.artist) + " now");
-    go.title = "Ask Ultimate Guitar for this song now, politely";
+    const go = fetchIcon("Fetch " + String(s.title) + " by " + String(s.artist) + " now");
+    go.title = "Fetch now: ask Ultimate Guitar for this song now, politely";
     form.appendChild(go);
     postInPlace(form, go, s);
     return form;
@@ -712,15 +693,15 @@
   };
   // How a song's request goes on its line, a result's row or a line under the bar: its request line, with the count of
   // its lookup's steps over, and the steps under it. Ended Ready, the steps fold away and the line's words are for a
-  // screen reader alone (rows.css), which hears the request end: the line is the song's, its title and its Open
-  // opening the sheet. The focus, if the request line had it (Fetch now hands it there), goes to that Open, where
-  // Fetch now was.
+  // screen reader alone (rows.css), which hears the request end: the line is the song's, its buttons opening what it
+  // holds now. The focus, if the request line had it (Fetch now hands it there), goes to the first of them (a row's,
+  // a line's action that is a link: its Open).
   const showRequest = (item, view) => {
     const p = progressIn(item);
     showLine(p, view, true);
     drawSteps(p, view);
     if (p.dataset.tone === "ready" && p === document.activeElement) {
-      const open = item.querySelector(".line-action a, .row-action a");
+      const open = item.querySelector(".line-plays a") || item.querySelector(".line-action a, .row-action a");
       if (open) open.focus({ preventScroll: true });
     }
     return p;
@@ -976,9 +957,10 @@
   // Lines: a song a line (resultRow's dense form, from ROWS_SCRIPT: the seam the module docstring describes), in
   // its artist's group. A line is an article titled by its h3; the A-Z strip moves the focus to its group.
   // A song's main action on its line when the server's control holds the line's button (``held``): a wanted
-  // song's fetch, or the button that opens its picker; Removing… while caracole removes it; no button at all
-  // (``action`` null) while its request, or its removal, waits or runs, as the line's request line then says
-  // how it goes. Not held, the line's button opens its sheet (openButton), as it does on the file.
+  // song's fetch (Fetch now's download icon), or the button that opens its picker; Removing… while caracole removes
+  // it; no button at all (``action`` null) while its request, or its removal, waits or runs, as the line's request
+  // line then says how it goes. Not held, none: what the song holds has a button each after its title (card.js
+  // plays), on the file too.
   const serverAction = (s, picker) => {
     const held = (action) => ({ held: true, action });
     if (server && removing.has(Number(s.id))) {
@@ -1129,14 +1111,15 @@
         "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", String(x.href)) : null),
     };
   };
-  // A song's line: its title (which opens its sheet), its status when it needs something, what it holds, its key, its
-  // main action; and under its chevron, its card (card.js): its facts, then what needs you (its picker or what to do
-  // about its match, where its audio comes from, a LaCuerda pick, Look in the index), what you play from it as tiles
-  // and their versions' drawer, its progressions, where else to find it, and its foot (Fetch again, Use LaCuerda's
-  // sheet, Add to a songbook…, info.json, Remove).
+  // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
+  // Pro file, its tab, its harmonica tab..., each opening it at once, none first), its status when it needs
+  // something, its key, its main action (Fetch now's download icon, where it has one); and under its chevron, which
+  // its title opens too, its card (card.js): its facts, then what needs you (its picker or what to do about its
+  // match, where its audio comes from, a LaCuerda pick, Look in the index), what you play from it as tiles and their
+  // versions' drawer, which sites have it, its progressions, where else to find it, and its foot (Fetch again, Use
+  // LaCuerda's sheet, Add to a songbook…, info.json, Remove).
   const lineFor = (s) => {
     const id = Number(s.id);
-    const primary = primaryOf(s);
     const more = [];
     const facts = factsOf(s);
     if (facts) more.push(facts);
@@ -1167,6 +1150,8 @@
     const claimed = new Set();
     const shown = card.tiles(s, { guitar: Boolean(server && server.guitar), acts: drawerActs(s), claimed });
     if (shown) more.push(shown);
+    const sites = card.sites(listOf(s.sites));  // which sites have it, had nothing, or weren't asked yet
+    if (sites) more.push(sites);
     const info = listOf(s.files).find((f) => f && f.name === "info.json") || null;
     const others = listOf(s.files).filter((f) => f && !claimed.has(f) && f !== info);
     if (others.length) more.push({ heading: "Files", links: others });
@@ -1179,10 +1164,8 @@
     const elsewhere = card.findElsewhere([{ heading: "Find the chords", links: s.links },
       { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track for an auto sheet", links: s.buy }]);
     if (elsewhere) more.push(elsewhere);
-    // The sheet is the line's button unless the server's control has its place (Fetch now beside an auto
-    // sheet): its tile opens it all the same, as the title does.
     const control = serverAction(s, picker);
-    const action = control.held ? control.action : primary ? openButton(s, primary) : null;
+    const action = control.held ? control.action : null;
     const asked = server ? jobOfSong(id) : null;
     const again = server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked)) ? againActions(s) : null;
     const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
@@ -1194,10 +1177,8 @@
     const line = resultRow({
       dense: true,
       title: shownName(s, s.title),
-      href: primary ? primary.href : "",
+      plays: card.plays(s, { guitar: Boolean(server && server.guitar) }),  // a button each, right after the title
       artist: artists.length > 1 ? artists.join(", ") : shownName(s, s.artist),  // shown where no group names it
-      sites: listOf(s.sites),  // which sites have it, had nothing, or weren't asked yet (song_sites.py)
-      holds: holdingsOf(s),  // its glyphs, in place of where each came from: the card says that
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
@@ -1211,6 +1192,15 @@
       onSearch: server ? () => searchFor(String(s.artist)) : null,  // served, the name searches; the funnel filters
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
+    // Its title opens its card as its chevron does, a tap's convenience (the chevron is the keyboard's); never one of
+    // its buttons, which open what they hold. The line it is in by then (refill moves it into the line drawn before).
+    const named = line.querySelector(":scope > .line-title");
+    named.classList.add("opens-card");
+    named.addEventListener("click", (e) => {
+      if (e.target.closest("a, button")) return;
+      const more = e.currentTarget.parentNode && e.currentTarget.parentNode.querySelector(":scope > .line-more");
+      if (more) more.click();
+    });
     if (s.status === "found") line.classList.add("have");  // set apart among a search's results (rows.css)
     // How the song's request goes, on a line of its own, and its lookup's steps under it.
     const job = server ? jobOfSong(id) : null;

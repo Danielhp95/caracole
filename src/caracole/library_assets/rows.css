@@ -94,25 +94,50 @@ button.artist-only:hover { background: color-mix(in srgb, currentColor 14%, tran
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
 }
-/* A dense list's line (resultRow's ``dense``): on a phone the title, its key, its action (its column as wide on every
-   line but for a long word, so that the keys line up) and its chevron, then its status and marks (and its artist,
-   where no group names it) under the title, a row a found song of yours has none of; from 720px all of it on one
-   line, 25 px tall with a mouse, every column but the title's as wide on every line, so that the lines of a list
-   line up. Its action is a word in the accent's colour, as a link of the list's own, so that a column of them reads
-   quietly. */
-.line { --line-more: 30px; display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 5.5rem) var(--line-more);
-  grid-template-areas: "title key act more" "meta meta meta meta"; align-items: center; gap: 0 8px; min-width: 0;
+/* A dense list's line (resultRow's ``dense``): one row, its title and right after it a button for each thing a song of
+   yours holds to play from (card.js plays), then its action, its key and its chevron; on a phone under it its status
+   and a site's song's marks (and its artist, where no group names it), a row a found song of yours has none of. From
+   720px all of it on one row, every column but the title's as wide on every line (the action's as wide as it is,
+   before the key), so that the keys and the chevrons line up. Its action is a word or a glyph in the accent's colour,
+   as a link of the list's own, so that a column of them reads quietly. */
+.line { --line-more: 30px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto var(--line-more);
+  grid-template-areas: "title act key more" "meta meta meta meta"; align-items: center; gap: 0 6px; min-width: 0;
   padding: 3px 4px 4px 12px; border-top: 1px solid var(--border); }
 .line:first-child { border-top: 0; }
 .line[data-status="ignored"] { opacity: .7; }
-.line-title { grid-area: title; display: flex; align-items: center; align-self: stretch; min-width: 0; color: inherit;
-  text-decoration: none; }
-.line-title h3 { min-width: 0; margin: 0; overflow: hidden; font-size: .95rem; font-weight: 600; line-height: 1.3;
-  white-space: nowrap; text-overflow: ellipsis; }
+.line-title { grid-area: title; display: flex; align-items: center; align-self: stretch; gap: 8px; min-width: 0;
+  color: inherit; text-decoration: none; }
+.line-title h3 { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; font-size: .95rem; font-weight: 600;
+  line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+/* A song of yours: its title opens its card, as its chevron does. */
+.line-title.opens-card { cursor: pointer; }
+/* What a song of yours holds to play from, a button each right after its title (card.js plays): its instrument's glyph
+   in the accent (an auto sheet's in its own colour) on a sunk square, the marks of the sites its versions came from
+   at its foot, how many versions at its corner, each overhanging the square a little, inside the row's padding. The
+   buttons take what the title needs of the row but 5rem, and wrap to a second row of their own where more won't fit:
+   a long title is cut short first. */
+.line-plays { --over: 2px; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 7px;
+  max-width: calc(100% - 5rem); padding: var(--over) var(--over) var(--over) 0; }
+.play { --mark-size: 12px; position: relative; flex: none; display: inline-grid; place-items: center; width: 30px;
+  height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--sunk);
+  color: var(--accent); text-decoration: none; }
+.play:hover { border-color: var(--control-edge); background: var(--raised); }
+.play svg.glyph { width: 17px; height: 17px; }
+.play.auto { color: var(--auto); }
+.play .n { position: absolute; top: calc(-1 * var(--over)); right: calc(-1 * var(--over)); min-width: var(--mark-size);
+  height: var(--mark-size); padding: 0 3px; border-radius: calc(var(--mark-size) / 2); background: var(--raised);
+  box-shadow: 0 0 0 1px var(--border-strong); color: var(--text); font-size: 9px; font-weight: 700;
+  line-height: var(--mark-size); text-align: center; font-variant-numeric: tabular-nums; }
+.play .marks { position: absolute; right: calc(-1 * var(--over)); bottom: calc(-1 * var(--over)); display: flex;
+  gap: 2px; }
+.play .marks > .source { width: var(--mark-size); height: var(--mark-size); border: 0; border-radius: 3px;
+  background: var(--raised); box-shadow: 0 0 0 2px var(--surface); font-size: 6px; line-height: var(--mark-size);
+  vertical-align: 0; }
+.play .marks > img.source { padding: 1px; }
 .line-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0;
   color: var(--muted); font-size: .8rem; line-height: 1.3; }
+.line-meta:empty { display: none; }
 .line-by { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .82rem; white-space: nowrap; text-overflow: ellipsis; }
 .line-by .artist-name { overflow: hidden; text-overflow: ellipsis; }
@@ -125,25 +150,15 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
    never as a state of the song. */
 .badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .line-facts { flex: 1 1 0; min-width: 3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* The key, a small chip; what a song of yours holds, a glyph each in a quiet colour, the auto sheet's in its own (a
-   phone leaves them out: its files are under its chevron); where a site's song came from, its sites' marks. */
+/* The key, a small chip; where a site's song came from, its sites' marks. */
 .line-key { grid-area: key; justify-self: center; min-width: 2.25rem; padding: 1px 6px; border: 1px solid
   var(--border-strong); border-radius: 7px; color: var(--text); font-size: .8rem; font-weight: 700; line-height: 1.3;
   text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.line-holds { display: none; align-items: center; gap: 5px; min-width: 0; overflow: hidden; color: var(--faint); }
-.line-holds svg.glyph { flex: none; width: 16px; height: 16px; }
-.line-holds svg.glyph.auto { color: var(--auto); }
-/* A line's marks, which sites have a song of yours (rows.js siteMarks) or where a site's song is (``sources``): a little
-   smaller than a link's, each a square of --mark, --mark-gap apart, drawn within it (an icon a pixel inside its edge,
-   a dashed edge on it), so that a cell as wide as its marks shows each whole; one narrower wraps them, never cuts one.
-   A site's mark is in its colours where it has the song, grey where it had nothing, fainter on a dashed edge where it
-   wasn't asked yet. From 720px the sites' column is as wide as the most marks a line has (library.js's --sites:
-   --sites-w), so the lines line up: four a row below 900px, where eight in one would leave the title no room. */
-.line { --mark: 16px; --mark-gap: 4px; --site-cols: var(--sites, 0);
-  --sites-w: max(0px, calc(var(--site-cols) * (var(--mark) + var(--mark-gap)) - var(--mark-gap))); }
-@media (min-width: 720px) and (max-width: 899px) {
-  .line { --site-cols: min(var(--sites, 0), 4); }
-}
+/* Marks of sites, each a square of --mark, --mark-gap apart, drawn within it (an icon a pixel inside its edge, a dashed
+   edge on it), so that a cell as wide as its marks shows each whole; one narrower wraps them, never cuts one: where a
+   site's song is (``sources``), and in a song's card which sites have it (rows.js siteMarks), in its colours where it
+   has the song, grey where it had nothing, fainter on a dashed edge where it wasn't asked yet. */
+.line, .card-sites { --mark: 16px; --mark-gap: 4px; }
 .line-sites, .line-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--mark-gap);
   min-width: 0; }
 .line-sites .source, .line-sources .source { width: var(--mark); height: var(--mark); border-radius: 4px;
@@ -161,6 +176,9 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-action .btn.line-pick { color: var(--review); }
 .line-action .btn:hover { border-color: var(--border); background: var(--raised); }
 .line-action .btn:disabled { border-color: var(--border); background: transparent; color: var(--muted); }
+/* Fetch now, Get it: the download glyph alone (rows.js fetchIcon), as wide as a play button. */
+.line-action .btn.line-fetch { width: 32px; min-height: 24px; padding: 0; }
+.line-fetch svg.glyph { width: 20px; height: 20px; }
 .line-busy { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; color: var(--wanted);
   font-size: .85rem; font-weight: 650; text-underline-offset: 2px; }
 .line-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--line-more);
@@ -181,20 +199,19 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
 .line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }
-/* From 720px: the status, which sites have a song of yours, then what it holds where a site's song has its marks, then
-   the key. A site's song has no key: its status and counts take most of that room, its marks the rest (--sources-w,
-   as wide as the five sites a search names), beside its action, the columns around them where yours are. */
+/* From 720px one row: the title and its buttons, the artist (where no group names it), the status, the action (as wide
+   as it is), the key and the chevron. A site's song has no key: its status and counts take most of that room, its
+   marks the rest (--sources-w, as wide as the five sites a search names), then its action, which ends where a song of
+   yours' does, before the key's column, empty. */
 @media (min-width: 720px) {
   .line { --sources-w: calc(5 * (var(--mark) + var(--mark-gap)) - var(--mark-gap));
-    grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem var(--sites-w) 6.5rem 2.75rem 7.5rem var(--line-more);
-    grid-template-areas: "title by status sites src key act more"; padding: 0 4px 0 12px; }
-  .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) calc(16.25rem - var(--sources-w)) var(--sources-w)
-    7.5rem var(--line-more); grid-template-areas: "title by status src act more"; }
+    grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem auto 2.75rem var(--line-more);
+    grid-template-areas: "title by status act key more"; padding: 0 4px 0 12px; }
+  .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) calc(16.5rem - var(--sources-w)) var(--sources-w)
+    4.5rem 2.75rem var(--line-more); grid-template-areas: "title by status src act key more"; }
   .line-meta { display: contents; }
   .line-by { grid-area: by; justify-self: start; max-width: 100%; }
   .line-status { grid-area: status; }
-  .line-sites { grid-area: sites; padding: 2px 0; }  /* two rows of them clear of the line's edges */
-  .line-holds { display: flex; grid-area: src; }
   .line-sources { grid-area: src; }
   .line-action .btn, .line-busy { min-height: 24px; }
   .line-more { height: 24px; }
@@ -208,9 +225,16 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
   .row .btn { min-height: 44px; }
   .row-more { height: 44px; }
-  .line { --line-more: 44px; padding-top: 2px; padding-bottom: 2px; }
+  .line { --line-more: 44px; padding-top: 0; padding-bottom: 0; }
   .line-action .btn, .line-busy { min-height: 44px; }
+  .line-action .btn.line-fetch { width: 44px; min-height: 44px; }
   .line-more { height: 44px; }
+  /* A play button a thumb's 44 px square, its marks and its count bigger, overhanging it 4 px. */
+  .line-plays { --over: 4px; gap: 6px; }
+  .play { --mark-size: 15px; width: 44px; height: 44px; border-radius: 9px; }
+  .play svg.glyph { width: 23px; height: 23px; }
+  .play .n { font-size: 10px; }
+  .play .marks > .source { border-radius: 4px; font-size: 7px; }
   button.artist, button.artist-only { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
