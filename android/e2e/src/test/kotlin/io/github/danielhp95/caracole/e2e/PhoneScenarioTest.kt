@@ -8,7 +8,6 @@ import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.PhoneGate
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
-import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
@@ -54,7 +53,9 @@ import kotlin.test.fail
  *    songs and each index table's rows are written for the Python side to check.
  * 2. With the computer off: an indexed song found and added by its row's Get it, two asked for by name (Request with
  *    Fetch now, and without), each line in caracole's words, R and C1 removed (C1's card gone from the page, its sheet
- *    "removed on the phone"); not one request sent, and the computer's port refusing.
+ *    "removed on the phone"); not one request sent, and the computer's port refusing. Get it and Fetch now are
+ *    lookups, `caracole get`, every site refused (the phone's transport): each adds its song, its sites' stages
+ *    failed or skipped (a lane's port still neutral), never a miss.
  * 3. The comparison lists the phone's three adds and R's units as the phone's, the computer's three adds and C2 as
  *    the computer's, and C1 a conflict (its tombstone the phone's); applied with C1 kept as the phone has it: every
  *    stage done (the index's, done or skipped), the computer's adds and C2 taken, the phone's adds, C1's and R's units
@@ -137,12 +138,15 @@ class PhoneScenarioTest {
         val lookup = phone.post("/lookup", "artist" to hit.text("artist"), "title" to hit.text("title"),
                                 "ug" to hit.text("ug"))
         assertEquals(202, lookup.status, lookup.text.take(1000))
-        assertEquals(LibraryRoutes.FETCH_LATER, JobViews.line(done(phone.await(phone.jobOf(lookup)))).text)
+        refusedLookup(phone, done(phone.await(phone.jobOf(lookup))))
         for ((song, fetch) in scenario.requests) {
             val asked = phone.post("/request", "artist" to song.artist, "title" to song.title, "fetch" to fetch)
-            // Fetch now's words, as the phone says them; without it, status.py's for an add.
-            val said = if (fetch == "1") LibraryRoutes.FETCH_LATER else "Added: the nightly run looks for it"
-            assertEquals(said, JobViews.line(done(phone.await(phone.jobOf(asked)))).text, "${song.key}, fetch=$fetch")
+            val job = done(phone.await(phone.jobOf(asked)))
+            if (fetch == "1") {
+                refusedLookup(phone, job)
+            } else {  // an add asks no site: status.py's line for one, as the page shows it
+                assertEquals(ADDED, shownLine(phone, job.id).text("text"), "${song.key}, fetch=$fetch")
+            }
         }
         val added = phone.database.read { db ->
             db.query("SELECT key, artist, title FROM songs ORDER BY id") { Song(it.text(1)!!, it.text(2)!!, it.text(0)!!) }
@@ -264,6 +268,29 @@ class PhoneScenarioTest {
         return done(phone.await(phone.jobOf(answer)))
     }
 
+    /** The line the library page shows for request [id]: /jobs.json's view, its song's facts read (jobs_routes.view
+     * on the phone), `{tone, text, link, details}`. */
+    private fun shownLine(phone: ScenarioPhone, id: Int): JsonObject =
+        phone.answer(phone.script("/jobs.json?jobs=$id"))["jobs"]!!.jsonArray.single().jsonObject["line"]!!.jsonObject
+
+    /** A lookup whose every site refused (phase 2: the computer off, the phone's transport refusing them): its song
+     * added, LRCLIB's stage failed, every site's failed or skipped (a lane's port still neutral), none a miss, and its
+     * line the library page's, status.py's for a lookup no site answered ([NOT_FETCHED], never "Not found"). */
+    private fun refusedLookup(phone: ScenarioPhone, job: Job) {
+        assertEquals(listOf("get"), job.steps.map { it.args.first() }, job.spec.title)
+        val stages = job.stages.associate { it.name to it }
+        assertEquals(DONE, stages.getValue("song").state, "${job.spec.title}: ${job.asJson()}")
+        assertEquals("failed", stages.getValue("lyrics").state, "${job.spec.title}: LRCLIB refused")
+        for (site in listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")) {
+            assertTrue(stages.getValue(site).state in setOf("failed", SKIPPED), "${job.spec.title}: $site ${job.asJson()}")
+        }
+        assertFalse(job.stages.any { "not found" in it.detail.lowercase() || "missing" in it.detail.lowercase() },
+                    "a refused site is never a miss: ${job.asJson()}")
+        val line = shownLine(phone, job.id)
+        assertEquals(NOT_FETCHED, line.text("text"), "${job.spec.title}: $line")
+        assertEquals("waiting", line.text("tone"), "${job.spec.title}: $line")
+    }
+
     private fun done(job: Job): Job {
         assertEquals(DONE, job.state, "${job.spec.title}: ${job.asJson()}")
         return job
@@ -315,5 +342,11 @@ class PhoneScenarioTest {
     private companion object {
         const val DONE = "done"
         const val SKIPPED = "skipped"
+
+        /** status.py's line for a song added, no site asked (phase 2's add). */
+        const val ADDED = "Added: the nightly run looks for it"
+
+        /** status.py's line for a lookup over that found no sheet and checked nothing (phase 2's, every site refused). */
+        const val NOT_FETCHED = "Not fetched yet"
     }
 }
