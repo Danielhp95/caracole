@@ -382,6 +382,37 @@ Not built yet.
 
 Not built yet.
 
+## Sharing a song from a music app
+
+In a music app, **Share** a song and pick **caracole** in Android's share sheet: caracole opens on a page of its own
+for that song.
+
+1. **What it read**: "caracole read Queen – Bohemian Rhapsody." It reads the artist and the title from the text the
+   app shared, the way caracole reads what you type in a search box. It sends no request to the music app or to any
+   site. "What Spotify sent" shows the text as it came.
+2. **The best match**: the song the phone's search finds for those names, in your library or in the indexes, with
+   what each site has of it ("Ultimate Guitar: chords ×12 · tabs ×3 · LaCuerda ×2"), and "In your library" when the
+   song is yours. Up to three other songs the search found come under it, each with its own Get it.
+3. **Your choice**:
+   - **Get it** looks the song up now, like a search line's Get it, and the Requests tab shows how the lookup goes.
+   - **Open** shows your song, when the library has it.
+   - **Edit** takes the artist and the title as you type them, then searches again.
+   - **Cancel** takes you back to the app you shared from.
+
+Nothing is sent to any site until you tap Get it. With no index imported, the page says so, and Get it still looks
+the song up by its names.
+
+What each app shares (tests/fixtures/share/shares.jsonl lists them, each with where it was found):
+
+APPS_PLACEHOLDER
+
+Some apps share a link alone, with no names in the text. caracole says so and offers Edit. It never asks the music
+service what a link is.
+
+**To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
+Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
+as they came.
+
 ## Sharing files to caracole
 
 Not built yet.
