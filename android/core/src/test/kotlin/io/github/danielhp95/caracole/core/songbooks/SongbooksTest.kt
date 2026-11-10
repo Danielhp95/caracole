@@ -160,6 +160,59 @@ class SongbooksTest {
         assertEquals(emptyList(), rows())
     }
 
+    @Test fun aSettingIsCheckedFirstThenGivenToTheFirstSongOfThatEntryInItsPlace() {
+        write { db -> Songbooks.make(db, "Gig", listOf("Radiohead - Creep", "Oasis - Wonderwall")) }
+        val asked = ArrayList<Setting>()
+        val problem = { s: Setting -> asked += s; if (s.capo == 99) "capo must be a fret from 0 to 11, got 99" else null }
+        val refused = assertFailsWith<SongbookError> {
+            write { db -> Songbooks.set(db, "Nowhere", "Oasis - Wonderwall", Setting(capo = 99), problem) }
+        }
+        assertEquals("a setting: capo must be a fret from 0 to 11, got 99", refused.message) // before the songbook
+        val missing = assertFailsWith<SongbookError> {
+            write { db -> Songbooks.set(db, "gig", "Muse - Hysteria", Setting(key = "G"), problem) }
+        }
+        assertEquals("\"Muse - Hysteria\" isn't in the songbook \"Gig\": caracole songbook show lists its songs",
+                     missing.message)
+        write { db -> Songbooks.set(db, "GIG", "oasis - WONDERWALL", Setting("G", "dorian", 0, "ukulele"), problem) }
+        assertEquals(listOf(Setting(capo = 99), Setting(key = "G"), Setting("G", "dorian", 0, "ukulele")), asked)
+        val gig = database.read { db -> Songbooks.find(Songbooks.all(db), "Gig")!! }
+        assertEquals(listOf(SongbookSong("Radiohead - Creep"), SongbookSong("Oasis - Wonderwall",
+                                                                            Setting("G", "dorian", 0, "ukulele"))),
+                     gig.songs)  // as written, its setting's parts in songbook_value's order
+        assertEquals(Canonical.write(Json.parseToJsonElement(
+            """{"name": "Gig", "songs": [["Radiohead - Creep", {}], ["Oasis - Wonderwall", {"capo": 0,
+               "instrument": "ukulele", "key": "G", "mode": "dorian"}]]}""")), Canonical.write(Songbooks.value(gig)))
+        // None, or an empty setting, takes it off: the song says nothing again
+        write { db -> Songbooks.set(db, "Gig", "Oasis - Wonderwall", Setting(), problem) }
+        assertEquals(listOf(null, null), database.read { db -> Songbooks.all(db).single().songs.map { it.setting } })
+        write { db -> Songbooks.set(db, "Gig", "Radiohead - Creep", Setting(capo = 2), problem) }
+        write { db -> Songbooks.set(db, "Gig", "Radiohead - Creep", null, problem) }
+        assertEquals(listOf(null, null), database.read { db -> Songbooks.all(db).single().songs.map { it.setting } })
+    }
+
+    @Test fun theSongbooksThatListASongAreFoundByItsEntryAloneItsKeysMadeCurrentFirst() {
+        val store = LibraryStore(tmp.newFolder("library"))
+        val (creep, police) = write { db ->
+            store.add(db, "Radiohead", "Creep", now = NOW) to store.add(db, "Radiohead", "Karma Police", now = NOW)
+        }
+        write { db ->
+            Songbooks.make(db, "Gig", listOf("radiohead - CREEP", "Radiohead - Karma Police Live"))
+            Songbooks.make(db, "Picnic", listOf("Radiohead - Karma Police"))
+            Songbooks.make(db, "Empty", emptyList())
+            // a song keyed a KEY_VERSION behind: found once the library is re-keyed, in the same write
+            db.execute("UPDATE songs SET key = ? WHERE id = ?", "stale/creep", creep.id)
+            db.kvSet("songs:key_version", "0")
+        }
+        val (gig, picnic) = write { db ->
+            val books = Songbooks.all(db)
+            Songbooks.listing(db, books, creep).map { it.name } to Songbooks.listing(db, books, police).map { it.name }
+        }
+        assertEquals(listOf("Gig"), gig)
+        assertEquals(listOf("Picnic"), picnic)  // "Karma Police Live" names no song: never by a search
+        assertEquals("radiohead/creep", database.read { db -> db.one("SELECT key FROM songs WHERE id = ?", creep.id) {
+            it.text(0) } })
+    }
+
     private fun obj(text: String): JsonObject = Json.parseToJsonElement(text).jsonObject
 
     private companion object {
