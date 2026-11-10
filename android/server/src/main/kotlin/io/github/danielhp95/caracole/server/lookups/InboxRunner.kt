@@ -52,8 +52,14 @@ class InboxRunner(val parts: PhoneParts, private val clock: () -> Instant = Inst
                 val filed = Inbox.file(db, parts.store, name, data, now)
                 val (line, songs) = said(db, filed, name, data)
                 if (songs.isNotEmpty()) {
-                    val made = parts.pages.render(db, songs.map { it.id }, null)
-                    for (why in made.failed.values) context.say("pages not made: $why")
+                    // The file is kept whatever its pages come to: a page not made is said, never the filing's failure.
+                    try {
+                        val made = parts.pages.render(db, songs.map { it.id }, null)
+                        for (why in made.failed.values) context.say("pages not made: $why")
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        context.say("pages not made: ${e.message ?: e::class.simpleName}")
+                    }
                 }
                 Triple(filed, line, songs.firstOrNull())
             }

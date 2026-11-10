@@ -181,6 +181,19 @@ class InboxRunnerTest {
                      database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
     }
 
+    @Test fun aFileKeptIsFiledThoughItsPagesFail() {
+        val song = add("Oasis", "Wonderwall")
+        val failing = PhoneParts(parts.database, parts.store, parts.stateDir, parts.config, parts.queue, parts.cards,
+                                 parts.clients, SongPages { _, _, _ -> throw IllegalStateException("no font") },
+                                 parts.songbooks, parts.alerts, parts.pacing, parts.searchesLacuerda)
+        val shared = InboxShare.share(failing, "Oasis - Wonderwall.gp5", null, "GP".toByteArray(), now)
+        val over = await(shared.job!!)
+        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(over))
+        assertTrue("pages not made: no font" in over.output)
+        assertEquals(listOf("guitar-1.gp5"), database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
+        assertEquals(emptyList(), folder.waiting())
+    }
+
     @Test fun aFileGoneBeforeItsJobRunsFailsItInItsWords() {
         val job = queue.submit(InboxShare.spec(parts, "gone.gp5")).first
         val over = await(job)
