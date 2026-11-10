@@ -100,6 +100,11 @@ object Search {
      * theirs. */
     fun indexArtist(db: Db, artistKey: String): ArtistHit? = UgHits.artistHit(db, artistKey, 100.0)
 
+    /** index_song: one UG song of the index as a hit, as a search shows it (its tabs per type, a sample page, its
+     * names as UG writes them); null when the index has no tab of it. The library page's review picker reads it. */
+    fun indexSong(db: Db, artistKey: String, songKey: String, score: Double = 0.0): IndexHit? =
+        UgHits.indexHit(db, artistKey, songKey, score)
+
     /** library_by_artist: your songs by an artist, as [name] or UG's [artistKey] writes them, or matched to that
      * artist's songs; by title. */
     fun libraryByArtist(songs: List<SongRow>, name: String, artistKey: String? = null): List<SongRow> {

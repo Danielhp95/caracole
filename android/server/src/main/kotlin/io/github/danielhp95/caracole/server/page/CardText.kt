@@ -1,11 +1,16 @@
 package io.github.danielhp95.caracole.server.page
 
-import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyUnicode
+import io.github.danielhp95.caracole.core.py.PyUrl
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigInteger
 
 /**
@@ -106,10 +111,10 @@ internal object CardText {
     const val LYRICS = "lrclib"
     const val AUTO = "auto"
 
-    /** _in_line_order with no exports: the kept files of [names] a song's line lists, in its order; a name of none of
-     * its groups is left out, as the computer's page leaves it. */
-    fun inLineOrder(names: Set<String>): List<String> =
-        SHEET_PAGES.filter { it in names } + FIRST.filter { it in names && it !in SHEET_PAGES } +
+    /** _in_line_order: the kept files of [names] a song's line lists, in its order, the sheet's [exports] (as given)
+     * after its viewers and PDFs; a name of none of its groups is left out, as the computer's page leaves it. */
+    fun inLineOrder(names: Set<String>, exports: List<String> = emptyList()): List<String> =
+        SHEET_PAGES.filter { it in names } + exports + FIRST.filter { it in names && it !in SHEET_PAGES } +
             numbered(GUITAR, names) + scores(names) + numbered(HARMONICA, names) + numbered(GAMETAB, names) +
             LAST.filter { it in names }
 
@@ -159,16 +164,56 @@ internal object CardText {
         return BigInteger(ascii.toString())
     }
 
-    /** _label of a file caracole kept, with no source: "Sheet text", "Guitar Pro 2", "Score 1 (MusicXML)". */
-    fun label(name: String): String {
+    /** _label of a file caracole kept: "Sheet text", "Guitar Pro 2", "Score 1 (MusicXML)"; a Guitar Pro, harmonica or
+     * game music tab with the site it came from after it ([source]: "Guitar Pro 1 · gtptabs.com"). */
+    fun label(name: String, source: String? = null): String {
+        val from = if (source.isNullOrEmpty()) "" else " · $source"
         PyRe.fullmatch(GUITAR, name)?.let { m ->
-            return (if (PyUnicode.lower(m.groupValues[2]) == ".ptb") "Power Tab" else "Guitar Pro") + " " + m.groupValues[1]
+            return (if (PyUnicode.lower(m.groupValues[2]) == ".ptb") "Power Tab" else "Guitar Pro") + " " +
+                m.groupValues[1] + from
         }
         PyRe.fullmatch(SCORE, name)?.let { m -> SCORE_FORMATS[m.groupValues[2]]?.let { return "Score ${m.groupValues[1]} ($it)" } }
-        PyRe.fullmatch(HARMONICA, name)?.let { return "Harmonica tab ${it.groupValues[1]}" }
-        PyRe.fullmatch(GAMETAB, name)?.let { return "Game music tab ${it.groupValues[1]}" }
+        PyRe.fullmatch(HARMONICA, name)?.let { return "Harmonica tab ${it.groupValues[1]}$from" }
+        PyRe.fullmatch(GAMETAB, name)?.let { return "Game music tab ${it.groupValues[1]}$from" }
         return LABELS[name] ?: name
     }
+
+    /** library_page._LABELS' label of a sheet's own file ([UKULELE_LABELLED]'s), for its Ukulele Chords label. */
+    fun ownLabel(name: String): String = LABELS.getValue(name)
+
+    /** library_page._UKULELE_LABELLED: the human sheet's files, which a sheet of UG's Ukulele Chords labels so. */
+    val UKULELE_LABELLED: List<String> = listOf("sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho")
+
+    /** library_page.UKULELE_SHEET: what a sheet from UG's Ukulele Chords type is called on the page. */
+    const val UKULELE_SHEET = "Ukulele Chords"
+
+    /** Whether [name] is a kept Guitar Pro or Power Tab file's name (library_page._GUITAR). */
+    fun isGuitar(name: String): Boolean = PyRe.fullmatch(GUITAR, name) != null
+
+    /** Whether [name] is a kept harmonica tab's name (library_page._HARMONICA). */
+    fun isHarmonica(name: String): Boolean = PyRe.fullmatch(HARMONICA, name) != null
+
+    /** Whether [name] is a score filed from the inbox of a format the line lists (library_page._SCORE and
+     * inbox.SCORE_EXTENSIONS). */
+    fun isScore(name: String): Boolean = PyRe.fullmatch(SCORE, name)?.groupValues?.get(2) in SCORE_EXTENSIONS
+
+    /**
+     * library.lyrics_from: where a song's lyrics link back to, `{source, href}`, for a site of [LYRICS_PAGES] and a
+     * page on it alone (its card's Lyrics tile links it); null for any other, or lyrics that can't be read. Read from
+     * the stored JSON alone, as json.loads reads it.
+     */
+    fun lyricsFrom(lyricsStatus: String, lyricsJson: String?): JsonElement {
+        val stored = lyricsJson?.let { runCatching { PyJson.loads(it) }.getOrNull() } as? JsonObject ?: return JsonNull
+        if (lyricsStatus != "found") return JsonNull
+        val provider = (stored["provider"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val url = (stored["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val site = provider?.let { LYRICS_PAGES[it] }
+        if (site == null || url == null || !url.startsWith(site)) return JsonNull
+        return JsonObject(linkedMapOf("source" to JsonPrimitive(provider), "href" to JsonPrimitive(url)))
+    }
+
+    /** library.LYRICS_PAGES: the lyrics sites whose fair use asks a link back, by provider, and where their pages are. */
+    val LYRICS_PAGES = mapOf("megalobiz" to "https://megalobiz.com/", "azlyrics" to "https://www.azlyrics.com/")
 
     /** A path in the library as the page links it, relative to `/`: each part percent-encoded as urllib's
      * quote(part, safe="") encodes it. */

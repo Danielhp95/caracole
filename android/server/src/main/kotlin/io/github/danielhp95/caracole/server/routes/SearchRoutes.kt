@@ -31,8 +31,9 @@ import java.time.Instant
  *     GET /api/search?q=&box=  your library and the offline indexes, as JSON, for a search box (`box`, the id its
  *                              page made): search_routes.py's answer, key for key, with the LaCuerda page to read
  *                              (`lacuerda_unlisted`) and whether LaCuerda's own search may be sent (`lacuerda_search`,
- *                              its gate at [clock]'s time; null with [searchesLacuerda] false), and `progression`
- *                              and `youtube` null (no progressions on the phone yet, and no yt-dlp ever)
+ *                              its gate at [clock]'s time; null with [searchesLacuerda] false), the `progression`
+ *                              the query types or names (the songs' progressions' records), and `youtube` null (no
+ *                              yt-dlp ever)
  *     GET /api/artist?key=     an artist of the offline index: their songs, most tabbed first, 50 from `offset`, and
  *                              yours by them; `?lacuerda=SLUG` (`?lacuerda_name=NAME`), a LaCuerda artist's songs the
  *                              index holds; `?harptabs=PATH`, a harptabs.com artist's
