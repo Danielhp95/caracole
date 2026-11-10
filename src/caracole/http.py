@@ -408,7 +408,9 @@ class PoliteClient:
       request like any other (budget, pause, event) and must stay on the site
       asked for, or ``ProviderError``. A hop robots.txt closes isn't followed:
       ``RobotsClosed``, which the error breaker doesn't count (the site
-      answered). The final answer is cached under the URL asked for.
+      answered). The final answer is cached under the URL asked for. A redirect whose
+      status the caller accepts is its answer, never followed (a short link's one hop:
+      its ``location`` kept with it), and, as any status but 200 and 404, not cached.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - A 503 the caller rejects, from a host of ``RETRY_AFTER_503`` (LRCLIB), with a
@@ -508,7 +510,7 @@ class PoliteClient:
             if modified:
                 headers["If-Modified-Since"] = modified
 
-        at, resp = self._answer(full, headers)
+        at, resp = self._answer(full, headers, accept)
         wait = self._retry_wait(at, resp, accept)
         if wait is not None:  # the host is busy, and said when to ask again: once
             said = _header(resp.headers, "retry-after")
@@ -517,7 +519,7 @@ class PoliteClient:
             self._event(at, resp.status_code, "error",
                         f"HTTP {resp.status_code}, asked again in {wait:.1f} s (Retry-After: {said})")
             self._wait(wait)
-            at, resp = self._answer(full, headers)
+            at, resp = self._answer(full, headers, accept)
 
         status, body = resp.status_code, resp.content
         if status == 304 and cached is not None:  # the copy is current: it is as old as this answer
@@ -568,13 +570,14 @@ class PoliteClient:
 
     # -- internals ---------------------------------------------------------
 
-    def _answer(self, full: str, headers: Mapping[str, str]) -> tuple[str, httpx.Response]:
-        """GET ``full`` with ``headers``, its redirects followed one checked hop at a time; the URL that answered
-        (the one asked for, or the last hop) and its answer."""
+    def _answer(self, full: str, headers: Mapping[str, str], accept: Collection[int]) -> tuple[str, httpx.Response]:
+        """GET ``full`` with ``headers``, its redirects followed one checked hop at a time, but one whose status the
+        caller accepts (``accept``), which is the answer; the URL that answered (the one asked for, or the last hop)
+        and its answer."""
         at = full
         resp = self._send(at, self._http.build_request("GET", full, headers=headers))
         hops = 0
-        while resp.next_request is not None:  # a redirect; its hop is a request like any other
+        while resp.next_request is not None and resp.status_code not in accept:  # a hop is a request like any other
             hops += 1
             target = str(resp.next_request.url)
             problem = _redirect_problem(full, target, hops)

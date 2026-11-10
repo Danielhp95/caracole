@@ -447,6 +447,21 @@ def test_a_redirect_between_the_hosts_of_one_site_is_followed(tmp_path):
     assert [str(r.url) for r in rec.requests] == [OLD, WWW + "/artist/a_1"]
 
 
+def test_a_redirect_the_caller_accepts_is_its_answer_never_followed(tmp_path):
+    # A short link's one hop (the phone's spotify.link, whose redirect is to another site): its Location is the
+    # answer, kept with it; a 3xx is never cached, so the next get asks again.
+    events = []
+    client, rec = make_client(tmp_path, moved("https://open.spotify.com/track/x", status=307), events=events)
+    for _ in range(2):
+        answer = client.get(OLD, accept=(200, 307))
+        assert (answer.status, answer.headers["location"], answer.from_cache) == (307, "https://open.spotify.com/track/x",
+                                                                                  False)
+    assert [str(r.url) for r in rec.requests] == [OLD, OLD] and client.requests_made == 2
+    assert [(e.url, e.status, e.decision) for e in events] == [(OLD, 307, "ok"), (OLD, 307, "ok")]
+    with pytest.raises(ProviderError, match="redirect to another site"):
+        client.get(OLD)  # not accepted: followed as ever, and refused off the site
+
+
 def test_500_is_error_and_not_cached(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=500))
     with pytest.raises(ProviderError) as e:
