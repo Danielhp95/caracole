@@ -1,6 +1,5 @@
 package io.github.danielhp95.caracole.viewer.version
 
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.Py
@@ -17,11 +16,7 @@ import io.github.danielhp95.caracole.viewer.theory.Chord
 import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
 import java.math.BigInteger
 
 /**
@@ -251,66 +246,23 @@ object Versions {
      * as a form or a file gives it: a String, an Int, a Long or a BigInteger, a Boolean, a Double, a JsonElement
      * (JsonNull is none), a List or a Map of those, or null; a message quotes it as Python's `{value!r}` does. */
     fun settingProblem(key: Any? = null, mode: Any? = null, capo: Any? = null, instrument: Any? = null): String? {
-        val k = plain(key)
-        val m = plain(mode)
-        val c = plain(capo)
-        val i = plain(instrument)
+        val k = PyRepr.plain(key)
+        val m = PyRepr.plain(mode)
+        val c = PyRepr.plain(capo)
+        val i = PyRepr.plain(instrument)
         if (k != null && !(k is String && PyRe.fullmatch(TONIC, k) != null)) {
-            return "key must be a tonic such as \"G\", \"F#\" or \"Bb\", got ${repr(k)}"
+            return "key must be a tonic such as \"G\", \"F#\" or \"Bb\", got ${PyRepr.repr(k)}"
         }
         if (m != null && !(m is String && m in Theory.MODES)) {
-            return "mode must be one of ${Theory.MODES.joinToString(", ")}, got ${repr(m)}"
+            return "mode must be one of ${Theory.MODES.joinToString(", ")}, got ${PyRepr.repr(m)}"
         }
         if (c != null && !(c is BigInteger && c >= BigInteger.ZERO && c <= BigInteger.valueOf(CAPO_MAX.toLong()))) {
-            return "capo must be a fret from 0 to $CAPO_MAX, got ${repr(c)}"
+            return "capo must be a fret from 0 to $CAPO_MAX, got ${PyRepr.repr(c)}"
         }
         if (i != null && !(i is String && instrumentOf(i) != null)) {
-            return "instrument must be one of ${instrumentIds().joinToString(", ")}, got ${repr(i)}"
+            return "instrument must be one of ${instrumentIds().joinToString(", ")}, got ${PyRepr.repr(i)}"
         }
         return null
-    }
-
-    /** A part as Python holds it: null for none, a String, a BigInteger for any int, a Boolean, a Double, a List, a
-     * Map; anything else as it is. */
-    private fun plain(value: Any?): Any? = when (value) {
-        null, JsonNull -> null
-        is JsonPrimitive -> when {
-            value.isString -> value.content
-            value.content == "true" -> true
-            value.content == "false" -> false
-            isInteger(value.content) -> BigInteger(value.content)
-            else -> value.doubleOrNull ?: value.content
-        }
-        is JsonArray -> value.map(::plain)
-        is JsonObject -> value.mapValues { plain(it.value) }
-        is Int -> BigInteger.valueOf(value.toLong())
-        is Long -> BigInteger.valueOf(value)
-        is Short -> BigInteger.valueOf(value.toLong())
-        is Byte -> BigInteger.valueOf(value.toLong())
-        is Float -> value.toDouble()
-        is List<*> -> value.map(::plain)
-        is Map<*, *> -> value.entries.associate { (k, v) -> plain(k) to plain(v) }
-        else -> value
-    }
-
-    private fun isInteger(literal: String): Boolean =
-        literal.removePrefix("-").let { d -> d.isNotEmpty() && d.all { it in '0'..'9' } }
-
-    /** Python's repr of a part [plain] made. */
-    private fun repr(value: Any?): String = when (value) {
-        null -> "None"
-        is String -> PyStr.repr(value)
-        is Boolean -> if (value) "True" else "False"
-        is BigInteger -> value.toString()
-        is Double -> when {
-            value.isNaN() -> "nan"
-            value.isInfinite() -> if (value > 0) "inf" else "-inf"
-            else -> PyJson.floatText(value)
-        }
-        is List<*> -> value.joinToString(", ", "[", "]") { repr(it) }
-        is Map<*, *> -> value.entries.joinToString(", ", "{", "}") { (k, v) -> "${repr(k)}: ${repr(v)}" }
-        is JsonElement -> value.toString()
-        else -> value.toString()
     }
 
     /**
@@ -600,6 +552,10 @@ object Versions {
      * else the sheet as written. One kept by its key plays in that key on whatever sheet the song has (as written on
      * a sheet with no key, or one the viewer's code can't read); one without a key is a move from the sheet, at the
      * song's `[transpose]` when it names no `t`. An entry whose key can't be read raises, as key_version does.
+     *
+     * The fallback for a sheet the viewer's code can't read holds for whatever Python's `except Exception` holds, a
+     * stack overflow (RecursionError) too; render.own_version's warning, with its traceback, is the caller's to log
+     * (phone-render), the phone's viewer having no log.
      */
     fun ownVersion(overrides: Overrides, song: SongRow, cho: String, key: String?, keySource: String? = null): Version {
         val transpose = overrides.transpose[song.key] ?: 0
@@ -612,6 +568,8 @@ object Versions {
         return try {
             inKey(kept, cho, SheetView.viewerKey(cho, key, keySource), Sheets.parse(cho).capo)
         } catch (e: Exception) {  // a sheet the viewer's code can't read (a bug) never stops the song's other files
+            Version()
+        } catch (e: StackOverflowError) {  // Python's RecursionError, which its `except Exception` holds too
             Version()
         }
     }

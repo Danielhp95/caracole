@@ -7,7 +7,6 @@ import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
-import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.viewer.harmony.Harmony
 import io.github.danielhp95.caracole.viewer.shapes.Voicings
@@ -19,13 +18,13 @@ import io.github.danielhp95.caracole.viewer.sheet.Sheets
 import io.github.danielhp95.caracole.viewer.theory.Chord
 import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
+import io.github.danielhp95.caracole.viewer.version.PyRepr
 import io.github.danielhp95.caracole.viewer.version.VersionData
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
 
 /** progressions.Wanted: a progression asked for, its own key, every key a song may play it as, its catalogue name and
  * how it is said. */
@@ -269,7 +268,12 @@ object Progressions {
 
     /** songs_with: your songs that play [w] (any of its keys, or its name within a section), by name (casefolded,
      * then by id). A section is named by its heading, [UNNAMED] for none, as Python's `str` writes what a record
-     * holds. */
+     * holds.
+     *
+     * It reads the library's keys as they are and re-keys none, where Python's list_songs runs ensure_current_keys
+     * first: its caller (library-cards' Found.kt, /api/search's `progression`) runs LibraryStore.ensureCurrentKeys
+     * in its own write first, as Songbooks.kt's callers of find_song do, so that after a KEY_VERSION bump each
+     * [Playing.song] and the order are the computer's. */
     fun songsWith(db: Db, w: Wanted): List<Playing> {
         val records = records(db)
         val order = compareBy<SongRow, String>(Py.CODE_POINT_ORDER) { PyUnicode.casefold(it.display) }.thenBy { it.id }
@@ -278,47 +282,12 @@ object Progressions {
             val record = records[song.id] ?: continue
             val sections = searchable(record).filter { plays(it, w) }.map { s ->
                 val named = s["section"]
-                if (named == null || falsy(named)) UNNAMED else pyStr(named)
+                if (PyRepr.falsy(named)) UNNAMED else PyRepr.str(named)
             }
             if (sections.isNotEmpty()) {
                 found += Playing(song, sections.distinct(), text(record["key"]) ?: "")
             }
         }
         return found
-    }
-
-    /** Whether Python reads the JSON value as false: None, "", 0, 0.0, False, [], {}. */
-    private fun falsy(e: JsonElement): Boolean = when (e) {
-        is JsonNull -> true
-        is JsonArray -> e.isEmpty()
-        is JsonObject -> e.isEmpty()
-        is JsonPrimitive -> when {
-            e.isString -> e.content.isEmpty()
-            e.content == "true" -> false
-            e.content == "false" -> true
-            else -> e.doubleOrNull == 0.0
-        }
-    }
-
-    /** Python's `str` of what json.loads made of [e]: a text itself, anything else its repr. */
-    private fun pyStr(e: JsonElement): String = text(e) ?: repr(e)
-
-    private fun repr(e: JsonElement): String = when (e) {
-        is JsonNull -> "None"
-        is JsonArray -> e.joinToString(", ", "[", "]") { repr(it) }
-        is JsonObject -> e.entries.joinToString(", ", "{", "}") { (k, v) -> "${PyStr.repr(k)}: ${repr(v)}" }
-        is JsonPrimitive -> when {
-            e.isString -> PyStr.repr(e.content)
-            e.content == "true" -> "True"
-            e.content == "false" -> "False"
-            e.content.removePrefix("-").let { d -> d.isNotEmpty() && d.all { it in '0'..'9' } } -> e.content.toBigInteger().toString()
-            else -> e.doubleOrNull?.let { d ->
-                when {
-                    d.isNaN() -> "nan"
-                    d.isInfinite() -> if (d > 0) "inf" else "-inf"
-                    else -> PyJson.floatText(d)
-                }
-            } ?: e.content
-        }
     }
 }
