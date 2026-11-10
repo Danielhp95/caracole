@@ -4,7 +4,7 @@ The page is one self-contained file. It opens from the synced library folder wit
 no server: it loads nothing (a Content-Security-Policy with the hashes of its five
 scripts, strum.js, overlay.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce
 that)
-and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Logbook, and the
+and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
 A server may serve it too, only while it is the page caracole wrote, with
@@ -669,7 +669,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
     pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
-        f'<a class="back" href="{LIBRARY_PAGE}">‹ Logbook</a>\n'
+        f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
         + artist_line(sheet.artist, names)
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'

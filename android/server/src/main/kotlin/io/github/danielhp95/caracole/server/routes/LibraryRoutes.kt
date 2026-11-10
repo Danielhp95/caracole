@@ -138,7 +138,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         val back = back(form["back"].orEmpty())
         val (song, question) = database.read { db ->
             val song = Songs.byId(db, id)
-                ?: throw Refused(404, "No such song", "That song isn't in the book: removed already, maybe.")
+                ?: throw Refused(404, "No such song", "That song isn't in the logbook. Removed already?")
             song to if (confirmed) null else RemovalQuestion.data(db, song)
         }
         if (question != null) {

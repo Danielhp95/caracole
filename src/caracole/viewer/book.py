@@ -138,7 +138,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
                       ((pdf, "PDF", pdf_traditional), (cho, "ChordPro file", None)) if f])
     body = (
         '<div class="page">\n<header class="head book-head">\n'
-        f'<a class="back" href="{LIBRARY_PAGE}">‹ Logbook</a>\n'
+        f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(name)}</h1>\n<p class=\"artist\">Songbook · {count}</p>\n</header>\n"
         + _contents(songs, about, files, names)
         + "".join(sections)

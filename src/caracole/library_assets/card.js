@@ -286,7 +286,7 @@ const caracoleCard = (icons, rows) => {
   // { kind, glyph, name, open, said, from, lead, chips, downloads, opener, auto, sources, count, unit }: ``sources``,
   // where its versions came from, the one in use first; ``count``, how many versions of it the card lists (in its
   // drawers, or as files), in ``unit``s. ``opts``: ``guitar``, caracole serve shows Guitar Pro files (alphaTab);
-  // ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to caracole's pick, LaCuerda's Use this one:
+  // ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to our pick, LaCuerda's Use this one:
   // each makes its control; or, from the file, ``keepMoreCommand``, the command that fetches them). ``claimed``,
   // given, gets every file a tile shows.
   const things = (s, opts) => {

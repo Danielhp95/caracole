@@ -451,8 +451,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         /** The stages a sync job shows, in order, as (name, label): `caracole peer sync --progress`'s
          * (jobs.PEER_SYNC_STAGES), and the phone's mirror and index between and after them. */
         val STAGES = listOf(
-            COMPARE to "Comparing books", TAKE to "Taking their entries", GIVE to "Sharing our entries",
-            MIRROR to "Copying the computer's pages", AGREE to "Where the books agree",
+            COMPARE to "Comparing", TAKE to "Taking what they wrote", GIVE to "Giving what we wrote",
+            MIRROR to "Copying the computer's pages", AGREE to "Noting where the books agree",
             INDEX to "Updating the indexes",
         )
 
@@ -490,7 +490,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** sync_routes.STALE (and commands/peer.py's): the two changed since the comparison. */
         const val STALE = "Both books changed since that comparison. Compare again, then choose again."
-        const val NO_BACKUP = "Nothing taken: no room to back up the database first."
+        const val NO_BACKUP = "Nothing taken: no backup first (not enough room)."
 
         /** sync_routes.apply's refusal of a conflict settled neither way. */
         fun unsettled(n: Int) = "Choose a book for every conflict: $n ${if (n == 1) "has" else "have"} none."

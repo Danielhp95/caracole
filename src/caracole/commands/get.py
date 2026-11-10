@@ -241,9 +241,9 @@ def _totals(result: LookupResult) -> str:
 
     sent = {p: n for p, n in result.requests.items() if n}
     total = sum(sent.values())
-    words = f"{total} request" + ("" if total == 1 else "s")
+    words = f"{total} ask" + ("" if total == 1 else "s")
     if sent:
         words += " (" + ", ".join(f"{NAMES.get(p, p)} {n}" for p, n in sent.items()) + ")"
     if result.refused:
-        return f"Nothing looked up: {result.refused}."
+        return f"Nothing fetched: {result.refused}."
     return f"Done in {result.seconds:.1f} s: {words}."

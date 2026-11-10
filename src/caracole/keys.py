@@ -63,7 +63,7 @@ log = logging.getLogger(__name__)
 INFO_VERSION = 4
 INFO_VERSION_KEY = "keys:info_version"  # kv
 SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
-SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
+SOURCES = {"tab": "from the tab", "chords": "guessed from the chords", "audio": "from the audio"}
 
 _LETTERS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _SOLFEGE = {"do": "C", "re": "D", "mi": "E", "fa": "F", "sol": "G", "la": "A", "si": "B"}
@@ -236,7 +236,7 @@ class SongKey:
     source: str
 
     def describe(self) -> str:
-        """For people: "A minor (from the tab)", "C major (estimated from the chords)"."""
+        """For people: "A minor (from the tab)", "C major (guessed from the chords)"."""
         return f"{key_name(self.key)} ({SOURCES[self.source]})"
 
 

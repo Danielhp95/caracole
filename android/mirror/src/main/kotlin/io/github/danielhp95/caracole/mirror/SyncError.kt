@@ -9,7 +9,7 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
     val noCaracole: Boolean get() = this is NoAddress || this is BadAddress || this is NoAnswer || this is NotCaracole
 
     /** No address typed yet. */
-    class NoAddress : SyncError("No camp address yet: type caracole serve's address in Settings.")
+    class NoAddress : SyncError("No computer's address yet. Type it in Settings.")
 
     /** The address typed isn't one the app can ask. */
     class BadAddress(text: String) :

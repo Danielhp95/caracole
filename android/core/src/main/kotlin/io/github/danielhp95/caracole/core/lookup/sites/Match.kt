@@ -27,8 +27,8 @@ import io.github.danielhp95.caracole.core.ug.ArtistTabs
  */
 object MatchStage : SiteStage {
     /** get.MATCH_NOT_FOUND: how the stage ends for a song the offline index lacks, which the phone's Match step
-     * reads ("Match: not on UG"). */
-    const val MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
+     * reads ("Match · not on UG"). */
+    const val MATCH_NOT_FOUND = "not in UG's index"
 
     override fun run(ctx: StageContext): StageEnd {
         val dir = ctx.cacheDir

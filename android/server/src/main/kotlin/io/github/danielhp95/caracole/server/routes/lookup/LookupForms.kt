@@ -204,7 +204,9 @@ internal object LookupForms {
         val value = Py.strip(form[name].orEmpty())
         if (value.isEmpty()) return null
         val limit = SongForm.PICK_LIMITS.getValue(name)
-        if (Py.len(value) > limit) throw Refused(400, "Too long", "The $name is too long: $limit characters at most.")
+        if (Py.len(value) > limit) {
+            throw Refused(400, "Too long", "The $name pick is too long: $limit characters at most.")
+        }
         return try {
             url(value)
         } catch (e: OverridesError) {

@@ -63,7 +63,8 @@ object HarmonicaPage {
     /** A line played: a hole a beat. */
     val BPM: Int by lazy { json.getValue("BPM").jsonPrimitive.int }
     val SITE: String by lazy { text("SITE") }
-    /** What the header and the bar say of the harp the page starts on, by why it was chosen (HarpFit.WHY). */
+    /** What the bar says of the harp the page starts on, by why it was chosen (HarpFit.WHY): the header says it in
+     * words of its own ([harpLines]). */
     private val SAID: Map<String, String> by lazy { texts("_SAID") }
     private val BRACKETS: Map<String, Pair<String, String>> by lazy {
         json.getValue("_BRACKETS").jsonObject.mapValuesTo(LinkedHashMap()) { (_, v) ->
@@ -78,7 +79,7 @@ object HarmonicaPage {
     /** The bar, hidden until the script runs; a tab shown as written has the overlay's buttons, Aa and ▶ alone. */
     val BAR: String by lazy { text("_BAR") }
     val BAR_RAW: String by lazy { text("_BAR_RAW") }
-    /** Scrolling by itself, as the viewer's: the pill that steers it, above the bar's place. */
+    /** Auto-scroll, as the viewer's: the pill that steers it, above the bar's place. */
     val PILL: String by lazy { text("_PILL") }
 
     /**
@@ -254,7 +255,7 @@ object HarmonicaPage {
         val link = if (!back.isNullOrEmpty()) {
             "<a class=\"back\" href=\"${PyText.escape(PyUrl.quote(back))}\" data-sheet>‹ Chord sheet</a>\n"
         } else {
-            "<a class=\"back\" href=\"${SheetPage.LIBRARY_PAGE}\">‹ Logbook</a>\n"
+            "<a class=\"back\" href=\"${SheetPage.LIBRARY_PAGE}\">‹ Library</a>\n"
         }
         val named = title.ifEmpty { "Untitled" }
         val readable = tab.readable

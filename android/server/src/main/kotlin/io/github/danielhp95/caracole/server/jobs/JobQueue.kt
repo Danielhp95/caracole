@@ -26,8 +26,8 @@ import java.time.Instant
  * queued under ([key]: a song's identity key, or a prefix of JobCommands' and what follows it), what it is about
  * ([kind]: add, remove, sync, index, song, versions, lacuerda-search…), its stages (name, label) as the page shows
  * them, the song it is about when that is known before it runs ([songId]: a removal's), and what it runs, on the
- * queue's one worker. [doneLine]: what its line says once it is done, in place of its kind's words ("Added: the
- * computer's next run fetches it.").
+ * queue's one worker. [doneLine]: what its line says once it is done, in place of its kind's words ("Added ·
+ * fetched tonight").
  *
  * A job of caracole serve's is its [commands]: Python's command lines as data, spelled exactly as web/jobs.py spells
  * them (JobCommands' builders), each run by the queue's runner of its first word ([Commands]), one after another; their

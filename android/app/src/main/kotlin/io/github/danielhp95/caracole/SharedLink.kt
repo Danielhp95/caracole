@@ -6,7 +6,7 @@ import java.net.URLEncoder
 
 /**
  * A song's link shared to the app as text (ShareLinkActivity): the page of the phone's server that shows it (the
- * server's `/share`, ShareRoutes', which reads the song it names and offers Get it), handed to the library screen as
+ * server's `/share`, ShareRoutes', which reads the song it names and offers Fetch), handed to the library screen as
  * [PAGE], and the line [TAG] logs of what the app sent, for the owner to read what each music app sends.
  */
 internal object SharedLink {

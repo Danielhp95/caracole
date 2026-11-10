@@ -823,7 +823,7 @@ def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: 
     ``total`` every version listed (gone ones too), ``sheet``, the provider of the sheet the title
     opens ("ug", "lacuerda", "auto"; None when it keeps none), and ``pinned``, whether a ``[pin]`` of yours
     chooses it (``sheet_versions.sheet_pins``: what ``caracole versions --clear`` takes out, so the viewer
-    offers Back to caracole's pick). None when UG lists no chords version of the song: then no viewer has a
+    offers Back to our pick). None when UG lists no chords version of the song: then no viewer has a
     ``versions`` (and shows no switcher)."""
     if not versions:
         return None

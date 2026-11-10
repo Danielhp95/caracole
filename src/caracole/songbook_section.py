@@ -109,7 +109,7 @@ def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any
     newest = max(made.values(), default=None)
     return {
         "name": book.name, "songs": len(entries), "missing": sum(1 for e in entries if e.missing),
-        "changed": datetime.fromtimestamp(newest, UTC).strftime("%d/%m/%y") if newest is not None else None,
+        "changed": datetime.fromtimestamp(newest, UTC).strftime("%Y-%m-%d") if newest is not None else None,
         "files": [{"name": name, "label": label, "href": f"{base}/{quote(name)}"}
                   for name, label in FILES if name in made],
         "set": songs,

@@ -169,8 +169,8 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         return text.toLong().takeIf { it <= Int.MAX_VALUE }?.toInt()
     }
 
-    private fun gone() = Refused(404, "No such request", "We no longer remember that request. Ask again from the " +
-                                                         "logbook.")
+    private fun gone() = Refused(404, "No such request", "caracole serve no longer remembers that entry. Ask again " +
+                                                         "from the logbook.")
 
     private fun notOver() = Refused(409, "Not over yet", "Still queued or running.")
 

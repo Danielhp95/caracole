@@ -151,9 +151,10 @@ object Feed {
         }
         if (actions.isNotEmpty()) shown["actions"] = JsonArray(actions)
         val clock = "${two(ended.hour)}:${two(ended.minute)}"
+        val date = "${two(ended.dayOfMonth)}/${two(ended.monthValue)}/${two(ended.year % 100)}"  // %d/%m/%y
         shown["when"] = JsonObject(linkedMapOf(
             "stamp" to JsonPrimitive(Stamps.of(ended.toInstant())),
-            "text" to JsonPrimitive(if (day) "${ended.dayOfMonth} ${MONTHS[ended.monthValue - 1]}, $clock" else clock),
+            "text" to JsonPrimitive(if (day) "$date, $clock" else clock),
         ))
         return JsonObject(shown)
     }
@@ -187,7 +188,7 @@ object Feed {
     /** What the request ran: its title and when it was asked for, a lookup's stages, and each command with how it
      * went; [opened], what each printed. [picking]: it stopped only because the song needs a pick first. */
     private fun output(job: Job, opened: Boolean, zone: ZoneId, names: ZoneNames, picking: Boolean = false): JsonObject {
-        val meta = StringBuilder("${job.title} · requested ${shown(job.queuedAt, zone, names)}")
+        val meta = StringBuilder("${job.title} · asked ${shown(job.queuedAt, zone, names)}")
         if (job.note.isNotEmpty()) meta.append(" · ${job.note}")
         job.secondsToSheet?.let { meta.append(" · sheet readable after ${PyFormat.fixed(it, 1)} s") }
         return JsonObject(linkedMapOf(
@@ -281,9 +282,6 @@ object Feed {
         JsonObject(LinkedHashMap(shown).apply { put(member.first, member.second) })
 
     private fun two(n: Int): String = n.toString().padStart(2, '0')
-
-    /** `%b` in the C locale, as caracole serve runs. */
-    private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 }
 
 /**

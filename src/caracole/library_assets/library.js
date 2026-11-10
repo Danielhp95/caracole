@@ -1079,7 +1079,7 @@
   };
   // What a card's drawers do with a song's versions (card.js ``acts``), each made when its drawer opens. Served,
   // while no request of the song waits or runs (its line says how that goes) and it isn't ignored: Use this one
-  // (``caracole versions --choose``, a [pin]), Back to caracole's pick (``--clear``), Fetch them (``--keep-more``,
+  // (``caracole versions --choose``, a [pin]), Back to our pick (``--clear``), Fetch them (``--keep-more``,
   // "Fetch 6 more" when more are left than one lookup keeps), and LaCuerda's Use this one, the lookup that keeps
   // that LaCuerda sheet. From the file, which can ask nothing, the command that fetches the versions not kept.
   const drawerActs = (s) => {

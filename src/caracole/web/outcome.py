@@ -392,7 +392,7 @@ def _joined(head: str, rest: str) -> str:
 
 
 def _in_library(song_id: int | None) -> Action | None:
-    return Action("Open in the book", href=f"/#song={song_id}") if song_id is not None else None
+    return Action("Open in the library", href=f"/#song={song_id}") if song_id is not None else None
 
 
 def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:

@@ -22,7 +22,7 @@ Notes, each hole's note on that harp in its place. The song's title and its arti
 Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a ``song-names`` block), read from
 the browser's storage or ``trad=1`` in the address, with no row of the page's own. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
 end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
-song's viewer (‹ Logbook for a song with none), and the tab's text is a tap away at the foot.
+song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
 
 From 1200 px, the sheet viewer's overlay (overlay.js) is on the left, Harmonica first and shown: the harps round the
 circle of fifths for the song as its chord sheet sounds, the one chosen the page's own harp both ways (a harp tapped
@@ -130,7 +130,7 @@ def build_harmonica_viewer(
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
-    ‹ Chord sheet opens; with none, ‹ Logbook."""
+    ‹ Chord sheet opens; with none, ‹ Library."""
     tab = parse(text, harp=harp, notation=_pinned(pin, text))
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
@@ -256,7 +256,7 @@ def _a(name: str) -> str:
 def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Mapping[str, Any],
             back: str | None, names: dict[str, dict[str, str]] | None = None) -> str:
     link = (f'<a class="back" href="{escape(quote(back))}" data-sheet>‹ Chord sheet</a>\n' if back
-            else f'<a class="back" href="{LIBRARY_PAGE}">‹ Logbook</a>\n')
+            else f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n')
     return (
         '<header class="head">\n'
         + link
@@ -507,7 +507,7 @@ _BAR_RAW = (_BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<butt
                          "", 1)
             .replace(_BAR[_BAR.index('<button type="button" class="tool notes"'):_BAR.index('<span class="size-box"')], "", 1))
 
-# Scrolling by itself, as the viewer's (page.py's _CONTROLS): the pill that steers it, above the bar's place.
+# Auto-scroll, as the viewer's (page.py's _CONTROLS): the pill that steers it, above the bar's place.
 _PILL = """<div class="pill" id="pill" role="group" aria-label="Auto-scroll" hidden>
 <button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
 <button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>

@@ -70,7 +70,7 @@ internal class Working(
         /** The kind of job whose worker shows its own notification. */
         private const val INDEX = "index"
 
-        /** Whether [job] is a lookup (JobCommands.isLookup's commands: a song's, Get it and Fetch now; its versions
+        /** Whether [job] is a lookup (JobCommands.isLookup's commands: a song's, Fetch and Fetch again; its versions
          * kept; a site's index read, an artist's page or LaCuerda's own search). */
         fun isLookup(job: Job): Boolean = job.spec.commands.any { JobCommands.isLookup(it.args) }
 

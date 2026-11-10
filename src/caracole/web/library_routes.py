@@ -179,7 +179,7 @@ def wanted_line(app: WebApp, form: dict[str, str]) -> tuple[WantedLine, str]:
         try:
             duration_ms = parse_duration(values["duration"])
         except ValueError as e:
-            raise Refused(400, "Not a length", f"The length is {e}.") from e
+            raise Refused(400, "Not a length", f"The length is a {e}.") from e
         if duration_ms is None:
             raise Refused(400, "Not a length", (f"The length {values['duration']!r} isn't a duration. "
                                                 "Write m:ss, h:mm:ss or seconds."))

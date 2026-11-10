@@ -100,7 +100,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /** request.html, with the form's token, and no YouTube video field: the line that says why there is none. */
     private fun requestForm(controls: ServerControls): String =
         assets.template("request.html").replace("__CSRF__", PyText.escape(controls.csrf)).replace("__YOUTUBE__", "")
-            .replace("__YOUTUBEHINT__", "<p class=\"hint\">No YouTube sheets here: ${PyText.escape(YOUTUBE_PROBLEM)}.</p>")
+            .replace("__YOUTUBEHINT__", "<p class=\"hint\">No sheets from YouTube here: ${PyText.escape(YOUTUBE_PROBLEM)}.</p>")
 
     companion object {
         /** Why the phone makes no sheet from a YouTube video, as youtube_fetch.route_reason says why a caracole makes

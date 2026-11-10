@@ -4,7 +4,7 @@
     <string name="settings">Settings</string>
     <string name="sync_now">Copy pages</string>
     <string name="sync_with_computer">Share logs</string>
-    <string name="library">Logbook</string>
+    <string name="library">Library</string>
     <string name="more">More</string>
 
     <string name="address_label">Computer\'s address</string>
@@ -24,7 +24,7 @@
     <string name="reset">Reset</string>
     <string name="reset_text_size">Reset text size to 100%</string>
     <string name="text_size_hint">Pinch a page: apart for larger, together for smaller, 50% to 250% of Android\'s font size. A sheet\'s Aa adds to it.</string>
-    <string name="open_library">Open logbook</string>
+    <string name="open_library">Open Library</string>
     <string name="offline_note">Offline, the phone shows the computer\'s pages: the logbook, each sheet\'s viewer (key, capo, diagrams, harmony), songbooks, and PDFs and Guitar Pro files, which open in another app. With the computer\'s indexes imported, search finds the sites\' songs too. Export PDF and choosing versions need the computer, in a browser.</string>
 
     <string name="import_label">Import indexes</string>

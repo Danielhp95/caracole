@@ -65,7 +65,7 @@ import typer
 from caracole.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow, write_pages
 
 # How a difference's proposal reads, in the list.
-WORDS = {"mine": "ours goes there", "theirs": "take there's", "conflict": "CONFLICT"}
+WORDS = {"mine": "ours goes there", "theirs": "theirs comes here", "conflict": "CONFLICT"}
 FILE_WORDS = {"mine": "keep here's", "theirs": "take the file's", "conflict": "CONFLICT"}
 KINDS = {"song": "Songs", "removed": "Removed", "songbook": "Songbooks", "alias": "Artists' aliases",
          "artist_url": "Artists' UG pages", "block": "Blocked tabs"}
@@ -77,8 +77,8 @@ UNSETTLED = "both books changed it: choose one"
 SKIPPED = "skipped, as you chose"
 NOT_A_PART = "parts are library, songbooks or indexes, by commas."
 # ``caracole peer import --progress``'s stages, which caracole serve's jobs name (§3.5 of the sync redesign's plan).
-PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what changed there"),
-                      ("render", "Rendering what was taken"), ("agree", "What the two agree on"),
+PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what they wrote"),
+                      ("render", "Rendering what was taken"), ("agree", "Noting where the books agree"),
                       ("index", "Merging the indexes"))
 
 
@@ -244,7 +244,7 @@ def register(app: typer.Typer) -> None:
                         fail(f"There couldn't be asked to take its {len(ids)}: {e}")
                 said.stage("give", "done", f"asked them to take {len(ids)}")
                 typer.echo(f"Asked {address} to take {len(ids)} from {here}"
-                           + (f": its request {job}, in its Requests tab." if job else "."))
+                           + (f": its Journal entry {job}." if job else "."))
         said.stage("agree", "running")
         agreed = _agree(cfg, address)
         said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on")
@@ -489,8 +489,8 @@ def _compare(cfg, address: str, parts: tuple[str, ...] | None = None) -> _Compar
         except sync.PeerError as e:
             fail(str(e))
         if me is not None and me == state.server:
-            fail(f"The caracole at {address} is this one (the same id, {me}): its database is a copy of this "
-                 "one's. Give one of them another: caracole peer new-id.")
+            fail(f"The scribe at {address} is this one (same id, {me}): its database is a copy of ours. Give one a "
+                 "new id: caracole peer new-id.")
         mine = sync.library_state(conn, overrides, books)
         here_base = sync.base_of(conn, state.server) if state.server else None
         base = sync.merged_base(here_base, state.base)
@@ -525,8 +525,8 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
             with sync.Peer(address, transport=transport_for_peer()) as peer:
                 state = peer.state(me)
                 if state.server == me:
-                    fail(f"The caracole at {address} is this one: nothing to take. caracole peer new-id gives one "
-                         "of them another id.")
+                    fail(f"The scribe at {address} is this one: nothing to take. caracole peer new-id gives one a new "
+                         "id.")
                 wanted = [(u, compared[u] if compared is not None and u in compared
                            else state.units[u].digest if u in state.units else None) for u in unit_ids]
                 now = utcnow()
@@ -993,5 +993,5 @@ def _report(address: str, state, synced_before: bool, here: int, found: list) ->
         if unit_kind != kind:
             kind = unit_kind
             lines.append(f"  {KINDS.get(kind, kind)}:")
-        lines.append(f"    {WORDS[d.proposal]:<15} {d.label}  ({d.why})")
+        lines.append(f"    {WORDS[d.proposal]:<17} {d.label}  ({d.why})")
     return "\n".join(lines)

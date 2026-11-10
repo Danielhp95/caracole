@@ -25,7 +25,7 @@ import java.nio.file.attribute.BasicFileAttributes
 
 /** keys.SongKey: a song's key ("A minor", "C") and where it came from: one of [MusicKeys.SOURCES]. */
 data class SongKey(val key: String, val source: String) {
-    /** For people: "A minor (from the tab)", "C major (estimated from the chords)". */
+    /** For people: "A minor (from the tab)", "C major (guessed from the chords)". */
     fun describe(): String = "${MusicKeys.keyName(key)} (${MusicKeys.SOURCES.getValue(source)})"
 }
 

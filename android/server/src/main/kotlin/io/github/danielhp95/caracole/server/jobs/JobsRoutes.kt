@@ -107,7 +107,7 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
     private fun cancel(form: Map<String, String>): Response {
         val text = PyText.strip(form["job"] ?: "")
         if (!digits(text) || text.length > 12) {
-            throw Refused(400, "Not a request", "Which request? The form names none.")
+            throw Refused(400, "Not a request", "Which entry? The form names none.")
         }
         val job = try {
             idOf(text)?.let(queue::cancel)

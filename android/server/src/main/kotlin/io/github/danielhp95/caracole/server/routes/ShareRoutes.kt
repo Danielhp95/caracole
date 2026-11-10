@@ -32,14 +32,14 @@ import kotlinx.serialization.json.JsonPrimitive
  * Nothing is asked of any site, nor of the music app: the names come of the text alone (SharedText, then
  * SongNames.readNames, the one parser of a free text), and the search is /api/search's (SearchRoutes.answer: your
  * library and the offline indexes). The page ([SharePage]) offers the best match, its sites and your song when the
- * library has it, and Get it posts the library page's own `POST /lookup`, the one that asks the sites, at a lookup's
+ * library has it, and Fetch posts the library page's own `POST /lookup`, the one that asks the sites, at a lookup's
  * pace, once the owner taps it.
  */
 class ShareRoutes(private val database: Database, private val search: SearchRoutes, private val csrf: String,
                   private val libraryName: () -> String = { "" }) : RouteModule {
     override val routes: List<Route> = listOf(
         Route("GET", "/share", "a song shared to the app (text, subject, extra_title, from; or artist, title, app): " +
-                  "what it names, searched in your library and the offline indexes, and Get it", get = GetAnswer {
+                  "what it names, searched in your library and the offline indexes, and Fetch", get = GetAnswer {
             SharePage.page(view(PyUrl.query(it.target)), csrf, LibraryName.phone(libraryName()))
         }),
         Route("GET", SharePage.CANCEL, "the share left: the library page",
@@ -103,7 +103,6 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         const val LIMIT = 2000
 
         /** The search's answer with no Ultimate Guitar index (Looked.UG_EMPTY, the computer's words), the phone's. */
-        const val NO_INDEX = "The phone has no Ultimate Guitar index yet: Settings › Import indexes brings the " +
-            "computer's, so that a search finds the sites' songs."
+        const val NO_INDEX = "No UG index on the phone yet. Settings › Import indexes brings the computer's."
     }
 }

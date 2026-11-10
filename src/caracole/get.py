@@ -120,10 +120,10 @@ NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 # song stage for a song new to it, its pdf stage while it makes no page of the song (skipped) and once it makes them,
 # and its pages stage, whose library page is made as it is asked for. Used by nothing here but the conformance corpus
 # (tests/test_conformance_lookup.py).
-ADDED = "added to the library"
-NO_PDFS = "this caracole makes no PDF"
-PAGES_MADE = "its pages made; this caracole makes no PDF"
-LIBRARY_PAGE = "the library page shows it as it is now"
+ADDED = "added to the book"
+NO_PDFS = "no PDFs on this scribe"
+PAGES_MADE = "pages made; no PDFs on this scribe"
+LIBRARY_PAGE = "the logbook shows it as it is now"
 
 
 @dataclass(frozen=True)

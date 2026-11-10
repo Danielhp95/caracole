@@ -161,7 +161,7 @@ object SheetPage {
         val pdfLink = if (!pdf.isNullOrEmpty()) pdfLine(listOf(Triple(pdf, "PDF", pdfTraditional))) else ""
         val controls = if (export) PageConstants.SHEET_CONTROLS else PageConstants.CONTROLS
         return "<div class=\"page\">\n<header class=\"head\">\n" +
-            "<a class=\"back\" href=\"${PageConstants.LIBRARY_PAGE}\">‹ Logbook</a>\n" +
+            "<a class=\"back\" href=\"${PageConstants.LIBRARY_PAGE}\">‹ Library</a>\n" +
             "<h1${zhAttr(title, names)}>${PyText.escape(title)}</h1>\n" +
             artistLine(sheet.artist, names) +
             "<p class=\"facts\" id=\"facts\">${facts(key, origin, sheet.capo ?: 0)}</p>\n" +

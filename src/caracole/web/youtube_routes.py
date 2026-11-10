@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 VIDEO_LIMIT = 600  # characters of a pasted address
-NOT_HERE = "No YouTube sheets here"  # how the page and a refusal begin, where none can be made
+NOT_HERE = "No sheets from YouTube here"  # how the page and a refusal begin, where none can be made
 
 ROUTES = (
     Route("POST", "/youtube", lambda app, asked, form: sheet_from_youtube(app, form)),

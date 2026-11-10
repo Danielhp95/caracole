@@ -101,9 +101,9 @@ class Stubs : RouteModule {
 
         /** YouTube's forms, and the page each comes from (its refusals'). */
         val FORMS = listOf(
-            Triple("/youtube", "A sheet from a YouTube video", "the logbook"),
-            Triple("/youtube/search", "YouTube's search", "the logbook"),
-            Triple("/youtube/video", "Reading a YouTube video", "the logbook"),
+            Triple("/youtube", "A sheet from a YouTube video", "the library"),
+            Triple("/youtube/search", "YouTube's search", "the library"),
+            Triple("/youtube/video", "Reading a YouTube video", "the library"),
         )
     }
 }

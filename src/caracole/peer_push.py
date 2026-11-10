@@ -561,7 +561,7 @@ def read_sent(folder: Path) -> Push:
     """The push sent in ``folder`` (``sent_folder``), as ``send`` kept it; PushError when it can't be read."""
     data = _read_json(folder / DOCUMENT)
     if data is None:
-        raise PushError("That push can't be read: sync again.")
+        raise PushError("That push can't be read. Share again.")
     push = read_push_document(data)
     check_digests(push)
     return push
@@ -603,8 +603,8 @@ class StagedSource:
         except (OSError, ValueError):
             data = None
         if data is None or hashlib.sha256(data).hexdigest() != sha256:
-            raise sync.PeerError(f"{name} wasn't sent with the push, nor is it kept here as it was: the song is "
-                                 "left as it was here.")
+            raise sync.PeerError(f"{name} wasn't sent with the push, nor kept here as it was: the song stays as it "
+                                 "was here.")
         return data
 
 
@@ -644,7 +644,7 @@ class Pusher(sync.Peer):
                 response = self._client.post(self.address + path, params=params, content=content, headers={
                     "Content-Type": kind, "Accept": "application/json", "X-Caracole-Form-Token": self.token or ""})
             except httpx.HTTPError as e:
-                raise sync.PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+                raise sync.PeerError(f"{self.address} stopped answering: {e}") from None
             if response.status_code == 403 and not again and _says_reload(response):
                 self.token = None  # older than the server: its state gives the token again
                 continue
@@ -653,8 +653,7 @@ class Pusher(sync.Peer):
             try:
                 return response.json()
             except ValueError:
-                raise sync.PeerError(f"The caracole at {self.address} answered {path} with something it can't "
-                                     "read.") from None
+                raise sync.PeerError(f"{self.address} answered {path} in a form we can't read.") from None
         raise AssertionError("unreachable")
 
     def push_new(self, sender: str, files: Sequence[str]) -> tuple[str, list[str]]:
@@ -665,7 +664,7 @@ class Pusher(sync.Peer):
         push, need = answer.get("push"), answer.get("need")
         if not (isinstance(push, str) and ID.fullmatch(push) and isinstance(need, list)
                 and all(isinstance(f, str) and SHA256.fullmatch(f) for f in need)):
-            raise sync.PeerError(f"The caracole at {self.address} opened a push it can't name.")
+            raise sync.PeerError(f"{self.address} opened a push it can't name.")
         return push, list(need)
 
     def push_file(self, push: str, sha256: str, data: bytes) -> None:
@@ -677,7 +676,7 @@ class Pusher(sync.Peer):
         answer = self._post(PUSH_PATH, _json(document), "application/json", {"push": push})
         job = answer.get("job") if isinstance(answer, dict) else None
         if not (isinstance(job, dict) and type(job.get("id")) is int):
-            raise sync.PeerError(f"The caracole at {self.address} took the push, but named no job for it.")
+            raise sync.PeerError(f"{self.address} took the push but named no Journal entry for it.")
         return job["id"]
 
     def job(self, job_id: int) -> dict[str, Any]:
@@ -690,8 +689,7 @@ class Pusher(sync.Peer):
         except ValueError:
             data = None
         if not (isinstance(data, dict) and isinstance(data.get("state"), str)):
-            raise sync.PeerError(f"The caracole at {self.address} answered its job {job_id} with something it "
-                                 "can't read.")
+            raise sync.PeerError(f"{self.address} answered about entry {job_id} in a form we can't read.")
         return data
 
 
@@ -754,7 +752,7 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: 
     if unreadable:
         for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
             take.remove(entry)
-            left.append((entry["id"], "a file it keeps changed here since caracole kept it"))
+            left.append((entry["id"], "a file it keeps changed here since we kept it"))
     document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version, "at": at,
                 "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": take}
     return Pushed(pusher.push(push_id, document), tuple(e["id"] for e in take), tuple(left))
@@ -771,8 +769,7 @@ def wait_for(pusher: Pusher, job_id: int, *, timeout: float = WAIT, every: float
         if job["state"] not in ("queued", "running"):
             return job
         if clock() >= end:
-            raise sync.PeerError(f"The caracole at {pusher.address} hasn't taken the push yet: its request "
-                                 f"{job_id}, in its Requests tab, goes on.")
+            raise sync.PeerError(f"{pusher.address} hasn't taken the push yet: its Journal entry {job_id} goes on.")
         sleep(every)
 
 

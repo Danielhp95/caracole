@@ -16,7 +16,7 @@ from caracole.page_icon import mark
 if TYPE_CHECKING:
     from caracole.library_name import LibraryName
 
-LIBRARY = '<a class="navlink" href="/">Logbook</a>'
+LIBRARY = '<a class="navlink" href="/">Library</a>'
 
 
 def top(title: str, links: str = LIBRARY, *, label: str = "Pages", sub: str = "",

@@ -761,9 +761,9 @@ def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]]
             continue
         if s is None:
             state, label, detail = "done", f"{name} ✓", f"{name}: our copy of its index, searched whole."
-        elif why.startswith("turned off"):
+        elif why.startswith("off "):
             state, label, detail = "off", f"{name}: off", f"{name} is off in caracole.toml."
-        elif "blocking" in why:
+        elif "turned us back" in why:
             state, label, detail = "blocked", f"{name} turned us back", why[:1].upper() + why[1:] + "."
         elif s in partial:
             read = letters_read(conn)

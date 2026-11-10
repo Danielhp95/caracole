@@ -68,8 +68,9 @@ internal object SongForm {
             try {
                 parseDuration(duration)
             } catch (e: IllegalArgumentException) {
-                throw Refused(400, "Not a length", "The length is ${e.message}.")
-            } ?: throw Refused(400, "Not a length", "'$duration' isn't a length: write m:ss, h:mm:ss or seconds.")
+                throw Refused(400, "Not a length", "The length is a ${e.message}.")
+            } ?: throw Refused(400, "Not a length", "The length '$duration' isn't a duration. Write m:ss, h:mm:ss or " +
+                                                     "seconds.")
         }
         if (SEPARATOR.containsMatchIn(clean(artist))) {
             throw Refused(400, "Not added", "Can't add this song: an artist name can't hold ' - ': " +

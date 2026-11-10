@@ -49,7 +49,7 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
      * its artist pages aren't all read; null once every one is. */
     private fun harptabsLeftOut(): Pair<String, String>? {
         if ("harptabs" !in enabled) return "off" to "off in caracole.toml"
-        if (!holds("harptabs_index")) return "empty" to "its index is empty: the nightly run reads its sitemap"
+        if (!holds("harptabs_index")) return "empty" to "its index is empty: tonight's run reads its sitemap"
         val (read, artists) = harptabsState()
         if (read >= artists) return null
         return "partial" to ("its artist pages are being read: ${grouped(read)} of ${grouped(artists)} artists " +

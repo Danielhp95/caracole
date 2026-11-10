@@ -997,7 +997,7 @@ class Peer:
                 self.address + PULL_PATH, data={"csrf": token, "from": here, "units": "\n".join(units)},
                 headers={"Origin": self.address, "Sec-Fetch-Site": "same-origin", "Accept": "application/json"})
         except httpx.HTTPError as e:
-            raise PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+            raise PeerError(f"{self.address} stopped answering: {e}") from None
         if response.status_code not in (200, 202):
             raise self._refused(response)
         try:

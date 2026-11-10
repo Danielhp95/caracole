@@ -86,17 +86,17 @@ object JobCommands {
     /** `caracole peer take --progress`'s stages, a push another caracole sent taken here. */
     val PEER_TAKE_STAGES: List<Pair<String, String>> = listOf(
         "check" to "What changed since compared",
-        "take" to "Taking their entries",
-        "render" to "Making pages of what was taken",
-        "agree" to "Where the books agree",
+        "take" to "Taking what they wrote",
+        "render" to "Rendering what was taken",
+        "agree" to "Noting where the books agree",
     )
 
     /** `caracole peer sync --progress`'s. */
     val PEER_SYNC_STAGES: List<Pair<String, String>> = listOf(
-        "compare" to "Comparing books",
-        "take" to "Taking their entries",
-        "give" to "Sharing our entries",
-        "agree" to "Where the books agree",
+        "compare" to "Comparing",
+        "take" to "Taking what they wrote",
+        "give" to "Giving what we wrote",
+        "agree" to "Noting where the books agree",
     )
 
     /** `caracole index merge --delete --progress -- FILE`'s, the index pages another caracole's lookups read. */

@@ -156,11 +156,11 @@
       const name = String(tab.name || tab.href);
       if (typeof tab.page === "string" && tab.page) {
         const number = /^harmonica-(\d+)\.txt$/.exec(name);  // "harmonica-1.txt": Tab 1
-        el("a", "link", item, number ? "Tab " + number[1] : name.replace(/\.txt$/, "")).href = tab.page
-          + String(view.carry || "");
+        const label = number ? "Tab " + number[1] : name.replace(/\.txt$/, "");
+        el("a", "link", item, label).href = tab.page + String(view.carry || "");
         const text = el("a", "wd-text", item, "text");
         text.href = tab.href;
-        text.setAttribute("aria-label", name + ", as text");
+        text.setAttribute("aria-label", label + ", as text");  // "Tab 1, as text"
       } else {
         el("a", "link", item, name).href = tab.href;
       }

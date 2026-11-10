@@ -172,7 +172,7 @@ def _book(books: list[Songbook], name: str) -> Songbook:
     if book is None:
         listed = ", ".join(f'"{b.name}"' for b in books)
         raise Refused(404, "No such songbook", f'No songbook named "{name}"'
-                      + (f": there are {listed}." if listed else ": reload the book."))
+                      + (f": there are {listed}." if listed else ": reload the page."))
     return book
 
 
@@ -246,10 +246,10 @@ def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callab
         songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)]
         if not songs:
             raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet, isn\'t in the book, or '
-                                                 "is ignored. Reload the book.")
+                                                 "is ignored. Reload the page.")
     if not songs:
         raise Refused(409, "Nothing to get", f'Every song of "{book.name}" in the book has a sheet or is '
-                                             "ignored. Reload the book.")
+                                             "ignored. Reload the page.")
     return book.name, songs
 
 

@@ -22,7 +22,7 @@ file, and none of it loads anything from the network.
   ``lineFor`` puts its parts in the line's panel): what you play from it as tiles, each source's versions of each as
   chips that open one drawer under the row of tiles that holds its tile, its progressions, where else to find it, and
   its foot, Remove at its end. Drawn from the page's data alone: a chip or a drawer asks nothing of anyone; what a
-  drawer's versions do (Use this one, Fetch them, Back to caracole's pick) library.js makes, served.
+  drawer's versions do (Use this one, Fetch them, Back to our pick) library.js makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
   after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then

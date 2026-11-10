@@ -198,7 +198,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         val unit = doc?.get("unit")
         if (doc == null || !Documents.isNumber(doc["format"], Units.FORMAT) || Documents.text(doc["id"]) != id ||
             Documents.text(doc["digest"]) == null || unit !is JsonObject) {
-            throw PeerError("$address answered $id with something we can't read.", 200)
+            throw PeerError("$address sent $id in a form we can't read.", 200)
         }
         return unit
     }

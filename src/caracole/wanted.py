@@ -148,7 +148,7 @@ def format_line(
     """The wanted.txt line for a song, escaped so that it parses back to the same song."""
     artist, title = _clean(artist), _clean(title)
     if not artist or not title:
-        raise ValueError("a song needs an artist and a title")
+        raise ValueError("it needs an artist and a title")
     album = _clean(album) if album else ""
     parts = [f"{_escape(artist)} - {_escape(title)}"]
     if album:

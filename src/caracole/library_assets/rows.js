@@ -1054,7 +1054,7 @@ const caracoleRows = (icons, does) => {
     return { show, typed, enter, leave, ask };
   };
   // A read that left no songs to list: what the site answered (LaCuerda's, or harptabs.com's: ``harp``), as its
-  // request's line says it ("Not read: LaCuerda is cooling down…", "Not found: …"), and its output in the library
+  // request's line says it ("Not read: waiting out LaCuerda until…", "Not found: …"), and its output in the library
   // page's Requests tab.
   const readOutcome = (job, harp) => {
     const j = job && typeof job === "object" ? job : {};

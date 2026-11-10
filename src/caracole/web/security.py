@@ -11,7 +11,7 @@
   and, where a browser sends no such header (plain HTTP to a LAN address),
   ``Origin`` against ``Host``. Every form also carries a token the server made
   when it started, which another site can't read. The one exception, the
-  owner's explicit choice: Export PDF's Download and make it mine, a plain link
+  owner's explicit choice: Export PDF's Make mine, a plain link
   the sandboxed viewer follows (``GET /export.pdf?…&mine=1``, export_routes.py),
   queues the song's version saved with neither check. A site could change a
   song's saved version so; nothing is lost, and Reset or another version

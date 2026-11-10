@@ -94,7 +94,7 @@
   };
   // ‹ Chord sheet takes the screen's choices back with it (the rail hidden, and as they came in the address, a sheet's
   // viewer's link here having taken them on: the pinyin, the Chinese characters, the instrument), so that where the
-  // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Logbook takes none.
+  // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
   function backToSheet() {

@@ -56,7 +56,7 @@ object MessagePage {
      */
     fun page(status: Int, title: String, message: String, link: Pair<String, String>? = null,
              name: LibraryName = LibraryName.phone(null)): Response {
-        val back = "<a class=\"btn\" href=\"/\">Back to the book</a>"
+        val back = "<a class=\"btn\" href=\"/\">Back to the library</a>"
         val links = if (link != null) {
             "<a class=\"btn\" href=\"${PyText.escape(link.first)}\">${PyText.escape(link.second)}</a> $back"
         } else {
@@ -87,5 +87,5 @@ object MessagePage {
             "  ${name.markup()}\n" +
             "  <span class=\"sep\" aria-hidden=\"true\">›</span>\n" +
             "  <h1>${PyText.escape(title)}</h1>\n" +
-            "  <nav class=\"links\" aria-label=\"Pages\"><a class=\"navlink\" href=\"/\">Logbook</a></nav>\n</header>\n"
+            "  <nav class=\"links\" aria-label=\"Pages\"><a class=\"navlink\" href=\"/\">Library</a></nav>\n</header>\n"
 }

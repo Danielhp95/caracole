@@ -84,7 +84,7 @@
 
         <!-- A song's link shared from a music app (Spotify, Deezer, Apple Music, TIDAL, a Navidrome client, Audile…):
              SEND of text/plain alone, shown on the library screen as the phone's page of the song it names (the
-             server's /share), where Get it asks the sites. Text alone: the files are ShareActivity's. -->
+             server's /share), where Fetch asks the sites. Text alone: the files are ShareActivity's. -->
         <activity
             android:name=".ShareLinkActivity"
             android:excludeFromRecents="true"

@@ -332,12 +332,12 @@ PEER = "peer"  # the command of a sync with another caracole: ``caracole peer ta
 PEER_TAKE_STAGES = (
     ("check", "What changed since compared"),
     ("take", "Taking what they wrote"),
-    ("render", "Making pages of what was taken"),
-    ("agree", "Where the books agree"),
+    ("render", "Rendering what was taken"),
+    ("agree", "Noting where the books agree"),
 )
 # ``caracole peer sync --progress``'s
 PEER_SYNC_STAGES = (
-    ("compare", "Comparing books"),
+    ("compare", "Comparing"),
     ("take", "Taking what they wrote"),
     ("give", "Giving what we wrote"),
     ("agree", "Noting where the books agree"),

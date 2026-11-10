@@ -192,4 +192,4 @@ class Refused(Exception):
 def message_page(title: str, message: str, *, library_name: LibraryName | None = None) -> str:
     """An error, said plainly, and the way back."""
     return page(title, f'<p class="message">{escape(message)}</p>\n'
-                       '<p><a class="btn" href="/">Back to the book</a></p>', library_name=library_name)
+                       '<p><a class="btn" href="/">Back to the library</a></p>', library_name=library_name)

@@ -248,7 +248,8 @@ object Outcomes {
         if (tone == "waiting") {
             return Outcome("waiting", text, waits(job.stages).ifEmpty { if (job.stages.isNotEmpty()) "" else NOT_ASKED }, again)
         }
-        val (word, rest) = partition(text, " · ")  // "Added · fetched tonight"
+        // "Added · fetched tonight": the word, then the reason; any other line ("Ignored · overrides.toml") whole
+        val (word, rest) = if (text.startsWith("Added · ")) partition(text, " · ") else text to ""
         return Outcome(tone, word, if (rest.isNotEmpty()) sentence(capitalFirst(rest)) else "")
     }
 
@@ -269,7 +270,7 @@ object Outcomes {
         val parts = ArrayList<String>()
         if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
         if (given > 0) parts += "${Status.plural(given, "change")} given"
-        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(" and ")) + "." else "Nothing changed in either book."
+        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else "Nothing changed in either book."
         if (line.tone == "ready") return Outcome("ready", line.text, said)
         val word = if (left > 0) partition(line.text, " · ").first else "Not taken"
         val reason = if (left > 0) "$said ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
@@ -302,9 +303,10 @@ object Outcomes {
 
     private fun joined(head: String, rest: String): String = sentence(if (head.isNotEmpty()) "$head. $rest" else rest)
 
-    private fun inLibrary(songId: Long?): Action? = songId?.let { Action("Open in the book", href = "/#song=$it") }
+    private fun inLibrary(songId: Long?): Action? = songId?.let { Action("Open in the library", href = "/#song=$it") }
 
-    /** The first stage's wait or error, in one sentence; "" for none; [afterSheet], the stages after the sheet. */
+    /** The first stage's wait or error, in two short sentences ("LRCLIB answered 503. The lyrics wait until
+     * tonight."); "" for none; [afterSheet], the stages after the sheet. */
     private fun waits(stages: List<Stage>, afterSheet: Boolean = false): String {
         val names = LOOKUP_STEPS.drop(if (afterSheet) 3 else 2).flatMap { it.second }
         val byName = stages.associateBy { it.name }
@@ -344,23 +346,24 @@ object Outcomes {
             return if (stage.state == Job.FAILED && detail.isNotEmpty()) sentence(detail) else ""
         }
         val (what, verb) = WHAT[stage.name] ?: return ""
+        val waits = "${capitalFirst(what)} $verb"  // the second sentence's start
         if (stage.state == Job.FAILED) {
             FAILED.find(detail)?.let { m ->
                 val status = STATUS.find(m.groupValues[2])
                 val answered = if (status != null) "answered ${status.groupValues[1]}" else "failed"
-                return "${m.groupValues[1]} $answered. $what $verb until tonight."
+                return "${m.groupValues[1]} $answered. $waits until tonight."
             }
         }
         if (stage.state != Job.SKIPPED) return ""
         BLOCKED.find(detail)?.let { m ->
             val until = m.groups[2]?.value?.takeIf { it.isNotEmpty() } ?: "it cools down"
-            return "${m.groupValues[1]} turned us back. $what $verb until $until."
+            return "${m.groupValues[1]} turned us back. $waits until $until."
         }
         COOLING.find(detail)?.let { m ->
-            return "Waiting out ${m.groupValues[1]} until ${m.groupValues[2]}. $what $verb."
+            return "Waiting out ${m.groupValues[1]} until ${m.groupValues[2]}. $waits."
         }
         SPENT.find(detail)?.let { m ->
-            return "${capitalFirst(m.groupValues[1])}. $what $verb until tonight."
+            return "${capitalFirst(m.groupValues[1])}. $waits until tonight."
         }
         return ""
     }

@@ -2344,7 +2344,7 @@
   // they take the text size and the scroll speed along (the key and the rest are this sheet's chords'). In
   // the list a kept version opens; one not kept is kept by caracole serve's /versions page, which reads it
   // on UG now, or, from a file, links to UG's page and shows the command that keeps it, with Copy; a version
-  // gone from UG opens nothing. Make it the one, and Back to our pick (while your [pin] chooses the sheet),
+  // gone from UG opens nothing. Make this the one, and Back to our pick (while your [pin] chooses the sheet),
   // the same way.
   const vSource = data.versions && typeof data.versions === "object" ? data.versions : {};
   const vRows = (Array.isArray(vSource.list) ? vSource.list : [])
@@ -2470,7 +2470,7 @@
     $("version-list-title").textContent = vCount(vTotal) + " on UG";
     const acts = $("ver-acts");
     acts.textContent = "";
-    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make it the one", "choose", vHere.tab, true);
+    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make this the one", "choose", vHere.tab, true);
     // While a [pin] of yours chooses the sheet (the data's ``pinned``, the pin caracole versions --clear takes
     // out); on a page whose data has no ``pinned`` (written before it), while your choice isn't caracole's first.
     const pick = vRows.find((v) => !v.gone);

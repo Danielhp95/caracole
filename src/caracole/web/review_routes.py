@@ -74,8 +74,8 @@ def review(app: WebApp, form: dict[str, str]) -> Response:
         offered = _offer(conn, song, overrides, search=True)
     not_ignored(song, overrides)
     if offered is None:
-        raise Refused(409, "Nothing to pick", f"{song.display} needs no review now. Reload the book to see "
-                                              "where it stands.")
+        raise Refused(409, "Nothing to pick", f"{song.display} needs no review now. Reload to see where it "
+                                              "stands.")
     refs = [str(c["ref"]) for c in offered.choices]
     if not pick:
         raise Refused(400, "No answer", "Pick a candidate, or None of these.")
