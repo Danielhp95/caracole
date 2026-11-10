@@ -1658,7 +1658,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
     the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
     Chromium's print emulation).
-- A harmonica tab's page (harmonica-page): not built yet.
+- A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
+  `build` writes `build_harmonica_viewer`'s page on SheetPage's frame (`page`, `namesTable`, `isChinese`, `zhAttr`,
+  `artistLine`, `words`, `LIBRARY_PAGE`; `ViewerAssets.Page.HARMONICA`), its data's members in Python's order (`groups` and `rows` filled as the tab
+  is written), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
+  `viewer.harpfit.HarpFit`, harpfit.py: `pitch`, `words`, `sheetLines`, `recordFit` (PySequence.SequenceMatcher, the
+  fits by share then harp), `choose` and `Choice.tabsHarp`, and render.py's `_tab_harps` as `tabHarps` (each
+  `HarmonicaTab` a kept tab as render.py reads it; one it can't read, a refused pin among them, gives no harp), the
+  harps a sheet's viewers start on (`harpTabs`).
+  - Its constants are data/caracole/viewer/harmonica_page.json (harpfit.py's, and harptab_page.py's `_BAR`,
+    `_BAR_RAW`, `_PILL`, `_SAID`…), written by tests/test_conformance_viewer_harmonica.py; its numbers as Python
+    writes them (`round(q, 2)` a PyJson float; `{share:.0%}`, `{views/1000:.0f}k`, `{views/1e6:.1f}M`,
+    `{rating:.1f}★` and `({q:.2f})` through PyFormat), a fact counted only where Python's `isinstance` takes it.
+  - `HarmonicaPageReplay` (area `harmonica-page`): vectors/viewer/harpfit.jsonl (pitch, words, a sheet's sung lines,
+    each tab's fit and choices, `_tab_harps`), harmonica_pages.jsonl (the parts, and every page as digests: the page,
+    its header, tab, foot and bar, each data member, the overlay's two) and harmonica_pages_whole.jsonl (a small page
+    whole, the files it inlines by name); the texts that are no fixture in harpfit_texts.jsonl.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 
 ##### The phone's written pages
@@ -1674,6 +1689,23 @@ Not built yet. (written-pages.)
 ##### Guitar Pro on the phone
 
 Not built yet. (guitar-alphatab.)
+
+##### A song shared to the app
+
+- A music app's Share of a song is `ShareLinkActivity`'s (SEND of text/plain alone, its own intent filter; files are
+  ShareActivity's): its extras logged under `caracole-share` (`SharedLink.said`), then the library screen loads
+  `GET /share` with them (`SharedLink.page`; MainActivity takes a share page alone from an intent, and Cancel,
+  `/share/cancel`, as `leaveShare`: the history before the share, the sender in front).
+- core.share's `SharedText.read`, the one place that knows each app's words, before read_names: the app (package,
+  link host, words), the first link, each app's shape (`SHAPES`: Deezer's, Shazam's, SoundCloud's… as "Artist -
+  Title"), else the text less its links and an app's name. A link alone names no song: never a request to the
+  service. tests/fixtures/share/shares.jsonl holds each app's shapes and where they were found (SharedTextTest).
+- server's `ShareRoutes` is the phone's own page, which caracole serve has none of:
+  - the names through `SongNames.readNames`, searched as `/api/search` searches (`SearchRoutes.answer`);
+  - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
+  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+    and policy (`MessagePage.html`: no script).
+- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
 
 ##### Files shared to the app
 
