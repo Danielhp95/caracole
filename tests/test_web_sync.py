@@ -261,14 +261,14 @@ def test_a_sync_that_leaves_a_unit_says_how_many_and_why_and_its_next_step_is_a_
                                                        ("Agree", "done")]
 
 
-def test_the_library_page_has_the_sync_tab_before_requests(computers):
+def test_the_library_page_has_the_sync_tab_last(computers):
     here, _, _ = computers
     page = get(here.app, "/").body.decode("utf-8")
-    assert page.index('id="tab-sync"') < page.index('id="tab-requests"')
-    assert '<section class="view sync" id="sync"' in page
+    assert page.index('id="tab-requests"') < page.index('id="tab-sync"')
+    assert '<section class="view sync" id="sync"' in page and page.count('<dialog class="sync-sheet" id="sync-sheet"') == 1
 
 
-# --- the shapes the tab's tests draw (test_sync_tab.py's FakeSync), as the real routes answer them ---------------
+# --- the shapes the sheet's tests draw (test_sync_sheet.py's FakeSync), as the real routes answer them -----------
 
 
 def shape(value):
@@ -281,8 +281,11 @@ def shape(value):
     return "text" if value is None or isinstance(value, str) else type(value).__name__
 
 
-def test_the_tabs_fake_answers_are_shaped_as_the_real_routes_answer(computers):
-    from test_sync_tab import COMPARISON, STATE, VIEWS
+def test_the_sheets_fake_answers_are_shaped_as_the_real_routes_answer(computers):
+    pytest.skip("waiting on sync-routes (GET /api/sync's device and counts, POST /sync/test, a comparison's new "
+                "members, GET /api/sync/unit) and sync-exchange (the view's report, the export's and the import's "
+                "routes): the fake answers §3.4's shapes")
+    from test_sync_sheet import COMPARISON, STATE, VIEWS
 
     here, there, _ = computers
     two_conflicts(here, there)

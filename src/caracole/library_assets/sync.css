@@ -1,107 +1,184 @@
-/* The Sync tab (sync.js): the other caracole's address and Compare, the caracoles synced with before, then the two
-   libraries' differences grouped by kind, a line each in one box a group, as the Sites tab's are: its label, what the
-   sync proposes (a word in a colour, never a colour alone), why, and its choice of three, a segmented control; a
-   conflict not chosen yet marked at its edge. Then the sync itself: its line, its stages as a lookup's chips, and once
-   over what it took, gave and left, and Reload. From 640px a difference's choice sits beside its words. */
-.sync { max-width: 920px; padding-top: 10px; }
-.sync-head h2 { margin: 6px 0 4px; font-size: 1.25rem; letter-spacing: -0.01em; }
-.sync-intro { margin: 0 0 14px; color: var(--muted); font-size: .92rem; }
-.sync-with { display: grid; gap: 4px; margin: 0 0 12px; }
-.sync-field { color: var(--muted); font-size: .85rem; font-weight: 600; }
-.sync-field em { font-style: normal; font-weight: 500; }
+/* The sync (sync.js): on caracole serve's page the Sync tab, the last, its three panels side by side from 960px
+   (Sync with a server, Export, Import a file), and on both devices the sheet it runs in, a dialog over the page dimmed:
+   from 720px a box in the middle, on a phone a sheet from the bottom. The sheet's four views: what to sync (three
+   parts, each with what waits in it), a card for each conflict (each side's version, the two buttons named for the
+   sides), the sync on its way, and what it did, a section a kind of change, each closed, a coloured arrow the way it
+   went. Its colours: green taken, blue given, orange both, yellow songbooks, purple indexes; a number up green, down
+   red, each with its sign, never a colour alone. */
+:root {
+  --sync-take: #1d6b43; --sync-give: #1f5fbf; --sync-both: #9a5300; --sync-book: #7a6200; --sync-index: #6b3fb5;
+  --sync-take-bg: #e3f2e8; --sync-give-bg: #e2ecfb; --sync-both-bg: #fbecd9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sync-take: #8fd18f; --sync-give: #8fb8ef; --sync-both: #f0b061; --sync-book: #e7d27a; --sync-index: #c9a7ef;
+    --sync-take-bg: #1d2a1d; --sync-give-bg: #1a2230; --sync-both-bg: #2a2113;
+  }
+}
+/* The tab bar, from 720px: Library and Songbooks on the left, Sites, Requests and Sync on the right. */
+@media (min-width: 720px) {
+  .masthead.lib { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .masthead.lib .tabs #tab-sites { margin-inline-start: auto; }
+}
+[data-icon] { display: inline-flex; flex: none; }
+[data-icon] svg, .sync-lane svg, .sync-pair svg, .sync-side-head svg, .sync-dev svg { width: 100%; height: 100%;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+[data-icon] .dot, .sync-side-head .dot, .sync-pair .dot, .sync-dev .dot { fill: currentColor; stroke: none; }
+
+/* --- the tab's three panels ---------------------------------------------------------------------------------- */
+.sync { padding-top: 12px; }
+.sync-panels { display: grid; gap: 12px; }
+@media (min-width: 960px) {
+  .sync-panels { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+}
+.sync-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.sync-panel-head { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1rem; }
+.sync-panel-head [data-icon] { width: 22px; height: 22px; color: var(--accent); }
+.sync-panel-said, .sync-last { margin: 0; color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.sync-last:empty, .sync-tested:empty { display: none; }
+.sync-panel-go { display: flex; margin-top: auto; padding-top: 4px; }
+.sync-with { margin: 0; }
 .sync-row { display: flex; gap: 8px; min-width: 0; }
 .sync-row input { flex: 1 1 auto; min-width: 0; height: 44px; padding: 0 12px; border-radius: 10px;
-  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: .95rem; }
 .sync-row input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
-.sync-row .btn { flex: none; }
-/* Compare and Sync, while they can't be pressed (a comparison or a sync on its way, a conflict to choose): no fill. */
-.sync .btn.primary:disabled { border-color: var(--control-edge); background: var(--raised); color: var(--muted); }
-.sync-sub, .sync-group-head { margin: 16px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700;
-  letter-spacing: .08em; text-transform: uppercase; }
-.sync-peer-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.sync-peer { display: grid; justify-items: start; gap: 1px; min-height: 44px; padding: 6px 12px; border-radius: 11px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left;
-  cursor: pointer; }
-.sync-peer:hover { border-color: var(--border-strong); }
-.sync-peer:disabled { color: var(--muted); border-style: dashed; cursor: default; }
-.sync-peer-name { font-weight: 650; font-size: .92rem; overflow-wrap: anywhere; }
-.sync-peer-where { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
-.sync-status { margin: 10px 0; font-weight: 600; overflow-wrap: anywhere; }
+.sync-row .btn { flex: none; min-height: 44px; }
+.sync-tested { margin: 0; font-size: .88rem; font-weight: 600; overflow-wrap: anywhere; }
+.sync-tested[data-tone="done"] { color: var(--found); }
+.sync-tested[data-tone="failed"] { color: var(--failed); }
+.sync-tested[data-tone="running"] { color: var(--muted); }
+label.btn { cursor: pointer; }
+.sync .btn.primary:disabled, .sync-sheet .btn.primary:disabled { border-color: var(--control-edge);
+  background: var(--raised); color: var(--muted); }
+
+/* --- the sheet ---------------------------------------------------------------------------------------------- */
+.sync-sheet { width: min(580px, calc(100vw - 32px)); max-width: none; max-height: calc(100% - 48px); margin: auto;
+  padding: 18px 20px 16px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-strong);
+  border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: var(--card-shadow); }
+.sync-sheet[open] { display: flex; flex-direction: column; gap: 12px; }
+.sync-sheet::backdrop { background: rgb(0 0 0 / 45%); }
+.sync-sheet .grab { display: none; }
+@media (max-width: 719px) {
+  .sync-sheet { position: fixed; inset: auto 0 0; width: 100%; max-height: calc(100% - 24px); margin: 0;
+    padding: 8px 16px calc(14px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 20px 20px 0 0;
+    box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }
+  .sync-sheet .grab { display: block; flex: none; width: 40px; height: 4px; margin: 0 auto 2px; border-radius: 4px;
+    background: var(--border-strong); }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 719px) {
+  .sync-sheet[open] { animation: sheet-up .22s ease-out; }
+}
+.sync-top { display: flex; align-items: flex-start; gap: 10px; }
+.sync-check { width: 24px; height: 24px; margin-top: 2px; color: var(--sync-take); }
+.sync-heads { min-width: 0; }
+.sync-title { margin: 0; font-size: 1.12rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.sync-title .sync-name { color: var(--accent); }
+.sync-sub { margin: 2px 0 0; color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+.sync-sub:empty { display: none; }
+.sync-sheet[data-view="done"] .sync-title { font-weight: 450; }
+.sync-sheet[data-view="done"] .sync-title .sync-name { font-weight: 700; }
+/* Where it is: Compared, Your choice, then each part synced. */
+.sync-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sync-chips li { padding: 2px 10px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--muted);
+  font-size: .78rem; font-weight: 600; }
+.sync-chips li[data-state="done"] { border-color: color-mix(in srgb, var(--sync-take) 55%, transparent);
+  background: var(--sync-take-bg); color: var(--sync-take); }
+.sync-chips li[data-state="now"] { border-color: var(--accent); color: var(--accent); }
+/* What it does, as git's status would count it: ↓ to take, ↑ to give, ⚠ changed on both. */
+.sync-counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sync-counts li { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid;
+  border-radius: 9px; font-size: .86rem; font-variant-numeric: tabular-nums; }
+.sync-counts li [data-icon] { width: 15px; height: 15px; }
+.sync-counts li .what { color: var(--muted); font-weight: 500; }
+.sync-counts .take { color: var(--sync-take); background: var(--sync-take-bg); }
+.sync-counts .give { color: var(--sync-give); background: var(--sync-give-bg); }
+.sync-counts .both { color: var(--sync-both); background: var(--sync-both-bg); }
+.sync-counts li[data-n="0"] { opacity: .6; }
+/* What to sync: a line a part, its box, its name and what it holds and waits. */
+.sync-parts { display: grid; margin: 0; padding: 0; border: 0; min-width: 0; }
+.sync-part { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 9px 0; cursor: pointer; }
+.sync-part + .sync-part { border-top: 1px solid var(--border); }
+.sync-part input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); }
+.sync-part-words { display: grid; gap: 1px; min-width: 0; }
+.sync-part-name { font-weight: 650; }
+.sync-part-said { color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+.sync-part:has(input:disabled) { cursor: default; }
+.sync-part:has(input:disabled) .sync-part-name { color: var(--muted); }
+.sync-part:has(input:disabled) input { opacity: .45; }
+.sync-status { margin: 0; font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
 .sync-status:empty { display: none; }
 .sync-status[data-tone="failed"] { color: var(--failed); }
-.sync-status[data-tone="running"] { color: var(--auto); }
+.sync-status[data-tone="running"] { color: var(--muted); }
 .sync-status[data-tone="done"] { color: var(--found); }
-.sync-sides { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
-.sync-sides b { color: var(--text); font-weight: 650; }
-.sync-side-name { overflow-wrap: anywhere; }
-.sync-bulk { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
-.sync-group-head { display: flex; align-items: center; gap: 8px; }
-.sync-group-head .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised);
-  color: var(--muted); font-size: .75rem; line-height: 20px; letter-spacing: normal; text-align: center;
-  font-variant-numeric: tabular-nums; }
-.sync-group-conflicts { color: var(--failed); letter-spacing: normal; text-transform: none; font-weight: 650; }
-.sync-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 14px;
-  background: var(--surface); overflow: hidden; }
-.sync-diff { display: grid; gap: 6px 14px; padding: 9px 14px; border-left: 4px solid transparent; }
-.sync-diff + .sync-diff { border-top: 1px solid var(--border); }
-.sync-diff.unchosen { border-left-color: var(--failed);
-  background: color-mix(in srgb, var(--failed-bg) 45%, var(--surface)); }
-.sync-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
-.sync-label { font-weight: 650; overflow-wrap: anywhere; }
-.sync-proposal { padding: 1px 9px; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
-.sync-proposal[data-proposal="mine"] { color: var(--auto); background: var(--auto-bg); }
-.sync-proposal[data-proposal="theirs"] { color: var(--found); background: var(--found-bg); }
-.sync-proposal[data-proposal="conflict"] { color: var(--failed); background: var(--failed-bg); letter-spacing: .04em; }
-.sync-why { flex-basis: 100%; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
-/* Here, There, Skip: one segmented control, the side chosen filled; a choice that isn't the proposal's in the review
-   colour. */
-.sync-choice { display: inline-flex; justify-self: start; border: 1px solid var(--control-edge); border-radius: 10px;
-  background: var(--bg); overflow: hidden; }
-.sync-side { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 64px;
-  min-height: 36px; padding: 0 12px; color: var(--muted); font-size: .88rem; font-weight: 650; cursor: pointer; }
-.sync-side + .sync-side { border-left: 1px solid var(--control-edge); }
-.sync-side input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.sync-side:has(input:checked) { background: var(--accent); color: var(--on-accent); }
-.sync-diff.flipped .sync-side:has(input:checked) { background: var(--review); color: var(--surface); }
-.sync-side:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
-.sync-go { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
-  gap: 8px 14px; margin: 14px 0 0; padding: 10px 0; background: var(--bg); }
-.sync-plan { flex: 1 1 14rem; margin: 0; color: var(--muted); font-size: .9rem; }
-/* The sync, once sent: a card as the Requests tab's running one. */
-.sync-job { display: grid; gap: 8px; margin: 12px 0 0; padding: 14px 16px; border: 1px solid var(--border);
-  border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
-.sync-job-name { margin: 0; font-size: 1.1rem; font-weight: 650; overflow-wrap: anywhere; }
-.sync-job-line { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
-.sync-job-line:focus { outline: none; }
-.sync-job-line[data-tone="ready"], .sync-job-line[data-tone="done"] { color: var(--found); }
-.sync-job-line[data-tone="running"], .sync-job-line[data-tone="queued"] { color: var(--auto); }
-.sync-job-line:is([data-tone="waiting"], [data-tone="missing"]) { color: var(--wanted); }
-.sync-job-line:is([data-tone="failed"], [data-tone="cancelled"]) { color: var(--failed); }
-.sync-job-line .dot { color: var(--muted); }
-.sync-job .step-chip { padding: 4px 9px; font-size: .8rem; }
-.sync-job-detail { margin: 0; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
-.sync-job-detail:empty { display: none; }
-.sync-outcome { display: grid; gap: 10px; }
-.sync-done h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--muted); font-size: .78rem;
-  font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.sync-done h3 .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised);
-  font-size: .75rem; line-height: 20px; letter-spacing: normal; text-align: center; }
-.sync-done ul { margin: 0; padding-left: 1.2em; font-size: .92rem; }
-.sync-done li { overflow-wrap: anywhere; }
-.sync-done .sync-why { display: inline; }
-.sync-none, .sync-note { margin: 0; color: var(--muted); font-size: .9rem; }
-#sync-reload { justify-self: start; }
-@media (min-width: 640px) {
-  .sync-diff { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-  .sync-choice { justify-self: end; }
-}
-@media (pointer: coarse) {
-  .sync-side { min-height: 44px; }
-}
-/* Five tabs on a phone (Library, Songbooks, Sites, Sync, Requests): a little closer than four, and never wider than
-   the page: past its width, the row of tabs scrolls by itself, the page never does. Below 380px (a small phone) they
-   take a row of their own under the mark, whose summary goes beside it. */
+.sync-status a { font-weight: 650; }
+.sync-ends { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  padding-top: 4px; }
+.sync-ends .btn { min-width: 96px; min-height: 44px; }
+.sync-ends #sync-go { margin-inline-start: auto; }
+/* A conflict: the song, "1 of 2", each side's version, and which to keep. */
+.sync-card { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 14px;
+  background: var(--card); }
+.sync-card-name { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.sync-card-at { margin: -6px 0 0; color: var(--muted); font-size: .84rem; }
+.sync-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sync-side { min-width: 0; padding: 10px; border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); }
+.sync-side-head { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: .9rem; }
+.sync-side-head [data-icon] { width: 18px; height: 18px; }
+.sync-lines { display: grid; gap: 6px; margin: 0; font-size: .88rem; }
+.sync-lines dt { color: var(--muted); font-size: .78rem; font-weight: 600; }
+.sync-lines dd { margin: 0; overflow-wrap: anywhere; }
+.sync-lines[data-state="reading"] { color: var(--muted); }
+.sync-ask { margin: 4px 0 0; font-weight: 700; text-align: center; }
+.sync-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sync-pair .btn { gap: 8px; min-width: 0; }
+.sync-pair [data-icon] { width: 18px; height: 18px; }
+.sync-same { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+  color: var(--muted); font-size: .88rem; cursor: pointer; }
+.sync-same input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+/* On its way. */
+.sync-going-line { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.sync-going-line:focus { outline: none; }
+.sync-going-line[data-tone="failed"] { color: var(--failed); }
+.sync-going-line:is([data-tone="running"], [data-tone="queued"]) { color: var(--auto); }
+.sync-going-detail { margin: 0; color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+.sync-going-detail:empty { display: none; }
+/* What it did: the two sides, this device on the left, and a lane a kind of change between them. */
+.sync-devs { display: flex; justify-content: space-between; gap: 12px; padding: 0 2px; }
+.sync-dev { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 120px; color: var(--muted);
+  font-size: .8rem; text-align: center; overflow-wrap: anywhere; }
+.sync-dev [data-icon] { width: 40px; height: 40px; color: var(--text); }
+.sync-sections { display: grid; }
+.sync-section { --lane: var(--muted); border-top: 1px solid var(--border); color: var(--lane); }
+.sync-section[data-kind="taken"] { --lane: var(--sync-take); }
+.sync-section[data-kind="given"] { --lane: var(--sync-give); }
+.sync-section[data-kind="conflicts"] { --lane: var(--sync-both); }
+.sync-section[data-kind="songbooks"] { --lane: var(--sync-book); }
+.sync-section[data-kind="indexes"] { --lane: var(--sync-index); }
+.sync-lane { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; padding: 6px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left;
+  cursor: pointer; }
+.sync-lane-words { display: grid; justify-items: center; gap: 2px; min-width: 0; }
+.sync-lane-said { font-size: .9rem; font-weight: 500; text-align: center; overflow-wrap: anywhere; }
+.sync-arrow { display: block; width: 100%; height: 14px; }
+.sync-arrow svg { stroke-width: 2.5; stroke-linecap: butt; vector-effect: non-scaling-stroke; }
+.sync-arrow .head { display: none; }
+.sync-arrow[data-way~="left"] .head.left, .sync-arrow[data-way~="right"] .head.right { display: inline; }
+.sync-section[data-kind="conflicts"] .sync-arrow .shaft { stroke-dasharray: 6 4; }
+.sync-chev { width: 20px; height: 20px; color: var(--muted); transition: transform .15s; }
+.sync-lane[aria-expanded="true"] .sync-chev { transform: rotate(180deg); }
+.sync-rows { display: grid; gap: 4px; margin: 0; padding: 0 0 10px 6px; list-style: none; font-size: .88rem; }
+.sync-rows li { padding: 3px 0 3px 10px; border-left: 2px solid currentColor; overflow-wrap: anywhere; }
+.sync-row-name { color: var(--text); }
+.sync-row-said { display: block; color: var(--muted); font-size: .82rem; }
+.sync-up { color: var(--found); }
+.sync-down { color: var(--failed); }
+.sync-note { margin: 0; color: var(--muted); font-size: .86rem; }
+/* Five tabs on a phone's width (Library, Songbooks, Sites, Requests, Sync: caracole serve's page): a little closer
+   than four, and never wider than the page: past its width, the row of tabs scrolls by itself, the page never does.
+   Below 380px (a small phone) they take a row of their own under the mark, whose summary goes beside it. */
 @media (max-width: 719px) {
   .masthead.lib .tabs:has(#tab-sync) { overflow: auto hidden; overscroll-behavior-x: contain; scrollbar-width: none;
     padding-bottom: 1px; }  /* room for the chosen tab's line, which hangs 1px below the row */
@@ -112,4 +189,7 @@
   .masthead.lib:has(#tab-sync) { grid-template-areas: "app sum" "tabs tabs"; }
   .masthead.lib:has(#tab-sync):has(.scratch) { grid-template-areas: "app name" "tabs tabs" "sum sum"; }
   .masthead.lib:has(#tab-sync) .tabs { justify-content: space-between; }
+}
+@media (pointer: coarse) {
+  .sync-ends .btn, .sync-pair .btn, .sync-row .btn, .sync-panel-go .btn { min-height: 44px; }
 }

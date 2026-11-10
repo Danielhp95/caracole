@@ -31,6 +31,7 @@
   "request.html",
   "requested.html",
   "sync-tab.html",
-  "sync-panel.html"
+  "sync-panel.html",
+  "sync-sheet.html"
  ]
 }
