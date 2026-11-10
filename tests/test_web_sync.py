@@ -538,6 +538,36 @@ def test_a_conflict_of_a_part_asked_for_still_needs_a_side(computers):
     assert status == 200, answer
 
 
+def test_a_comparison_kept_without_its_differences_still_needs_a_side_for_every_conflict(computers):
+    # One kept by another route with its proposals alone (``found`` left out): every conflict needs a side, whatever
+    # the parts, rather than none.
+    import dataclasses
+
+    here, there, _ = computers
+    two_conflicts(here, there)
+    found = compared(here)
+    kept = sync_routes._kept_one(here.app, found["comparison"])
+    sync_routes._keep(here.app, dataclasses.replace(kept, found=()))
+    made = list(sync_routes._kept[here.app])[-1]
+    status, said = script(here.app, "/sync/apply", {"comparison": made, "prefer": "", "choices": "",
+                                                     "parts": "indexes"})
+    assert status == 409 and said["error"] == "Choose a side for every conflict first: 2 have none.", said
+
+
+def test_a_units_two_documents_are_refused_for_a_comparison_of_a_file(computers):
+    import dataclasses
+
+    here, there, asked = computers
+    two_conflicts(here, there)
+    found = compared(here)
+    kept = sync_routes._kept_one(here.app, found["comparison"])
+    sync_routes._keep(here.app, dataclasses.replace(kept, source="file", kind="file"))
+    made = list(sync_routes._kept[here.app])[-1]
+    asked.clear()
+    status, said = script(here.app, f"/api/sync/unit?comparison={made}&id={CREEP}")
+    assert status == 409 and "is of a file" in said["error"] and asked == []
+
+
 def test_two_computers_sync_songbooks_alone_through_the_routes(computers):
     here, there, _ = computers
     two_conflicts(here, there)
@@ -602,7 +632,10 @@ def shape(value):
 
 def within(fake, real) -> bool:
     """Whether the shape ``fake`` is the shape ``real`` has where it says anything: each member of an object's (the
-    real one may hold more, which the fake's page doesn't read), each list's first item's, else the same."""
+    real one may hold more, which the fake's page doesn't read), each list's first item's, else the same. The page's
+    fakes (test_sync_tab.py, lane sync-page's) predate the redesign's members (``device``, ``songs``, ``songbooks``;
+    a comparison's ``holds``, ``names``, ``change``, ``part``, ``with``, ``songbooks`` and ``indexes``): once its
+    sheet's fakes carry them, sync-page makes this an equality of shapes again."""
     if isinstance(fake, dict):
         return isinstance(real, dict) and all(k in real and within(v, real[k]) for k, v in fake.items())
     if isinstance(fake, list):

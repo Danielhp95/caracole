@@ -1036,16 +1036,19 @@ It is rows.js's, shared by both pages:
     the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
     difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
     `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
-    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope);
-  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now;
+    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
+    conflict it proposes chosen first);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
+    of another `source` than a peer's, a file's, refused);
   - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
     phone, a client, reads;
   - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)
     with no side refused, then `caracole peer sync --push [--parts=…] --compared HASH --choose=…` queued, a job of
     kind `sync`.
-  - The phone answers `GET /api/sync`, `POST /sync/compare` and `POST /sync/apply` with M1–3's shapes
-    (vectors/web/sync_routes.jsonl); the new routes and members, and the vectors with them, wait on sync-core
-    (test_conformance_sync_routes.py's guard).
+  - The phone's server/routes/SyncRoutes.kt answers the six alike (SyncJson; vectors/web/sync_routes.jsonl, under
+    UTC, which `WebReplay.syncRoutes` replays with the other side's `peer_units`), but its `device` `phone` and the
+    computer's `kind` `computer`; `tested` is Settings' Test too, and `alone(address)` the unattended sync (the three
+    parts, `Conflicts.LEAVE`, none queued while one with that address waits or runs).
 
 ##### The router
 

@@ -96,7 +96,9 @@ class Compared:
     ``peer_sync.compared_hash``), each difference's proposal by its unit, and when (``time.monotonic``); with whom
     (``source``: ``"peer"``, a caracole serve asked; ``kind``, as the page says it), the parts the other side holds
     (``holds``), the songs either side's songbooks list (``listed``, ``peer_sync.listed_songs``') and the differences
-    themselves (``found``), whose scope a Sync of some parts reads."""
+    themselves (``found``), whose scope a Sync of some parts reads: a comparison kept without them (``found`` empty
+    while ``proposals`` isn't) has every conflict it proposes chosen first, whatever the parts. ``GET /api/sync/unit``
+    asks the other side of a comparison of ``source`` ``"peer"`` alone: another source's units are its own to read."""
 
     address: str
     name: str
@@ -413,8 +415,8 @@ def compare(app: WebApp, form: dict[str, str]) -> Response:
 def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     """``GET /api/sync/unit``: a unit of a comparison kept (``comparison``, ``id``), its two documents, ``{id, here,
     there}``: this side's now (``peer_sync.unit_document``'s ``"unit"``) and the other caracole's, asked of it now
-    (``GET /api/peer/unit``), None for a side that hasn't got it. Refused 409 for a comparison past, 404 for a unit
-    it didn't find, 502 for the other caracole not answering."""
+    (``GET /api/peer/unit``), None for a side that hasn't got it. Refused 409 for a comparison past or of a file,
+    404 for a unit it didn't find, 502 for the other caracole not answering."""
     from caracole import peer_sync as sync
     from caracole.web.peer_routes import _library
 
@@ -426,6 +428,9 @@ def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     if unit_id not in kept.proposals:
         raise Refused(404, "Not compared", f"{unit_id[:200]!r} isn't one that comparison found: it is no unit the "
                                            "two hold differently.")
+    if kept.source != "peer":  # an import's comparison: its other side is the file, which no caracole serve answers
+        raise Refused(409, "Not a network sync", "That comparison is of a file, not of another caracole: its units "
+                                                 "are read from the file.")
     overrides, books = _library(app)
     with app.db() as conn:
         here = sync.unit_document(conn, app.cfg, overrides, books, unit_id)
@@ -496,8 +501,11 @@ def apply(app: WebApp, form: dict[str, str]) -> Response:
     choices = choices_of(form.get("choices", ""), kept.proposals)
     from caracole import peer_sync as sync
 
-    scoped = sync.in_scope(kept.found, parts or PARTS, listed=kept.listed)
-    open_ = [d.id for d in scoped if d.proposal == sync.CONFLICT and d.id not in choices]
+    if kept.found or not kept.proposals:
+        scoped = [(d.id, d.proposal) for d in sync.in_scope(kept.found, parts or PARTS, listed=kept.listed)]
+    else:  # a comparison kept with no differences of its own (``found``): every conflict it proposes, whatever part
+        scoped = list(kept.proposals.items())
+    open_ = [unit_id for unit_id, proposal in scoped if proposal == sync.CONFLICT and unit_id not in choices]
     if open_ and not prefer:
         raise Refused(409, "Choose first", f"Choose a side for every conflict first: {len(open_)} "
                                            f"{'has' if len(open_) == 1 else 'have'} none.")

@@ -6016,8 +6016,8 @@ sync that left something or failed offers **Compare again**, never Try again, as
 comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
 two agree on, and the other side's address and name, which `GET /api/sync` lists.
 
-What the tab's routes answer (the phone's server answers the first, Compare and Sync as before; the rest, waiting on
-sync-core, come with its next round):
+What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
+is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
 
 - `GET /api/sync`: this caracole's id and library's name, `device` (`computer`; the phone's says `phone`), its songs
   and songbooks counted (`songbooks` is null while songbooks.toml can't be read: that stops the songbooks alone), the
@@ -6036,8 +6036,11 @@ sync-core, come with its next round):
 - `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
   it gives the computer its index pages.
 - `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and
-  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know is
-  refused (400, "parts are library, songbooks or indexes, by commas.").
+  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
+  `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
+
+The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 

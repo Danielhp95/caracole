@@ -479,12 +479,6 @@ def corpus(tmp_path_factory):
     made.close()
 
 
-# Phase A guard (lane sync-routes): its records are made, but checked against the committed file, and written,
-# only once the phone's SyncRoutes answers them too, in the same commit (Task 19), after sync-core.
-WAITING_ON_SYNC_CORE = ("waiting on sync-core: the phone's SyncRoutes answers the new routes and members only with "
-                        "its Comparison's (Tasks 12, 14), so sync_routes.jsonl is regenerated with it (Task 19)")
-
-
 @pytest.fixture
 def in_utc(monkeypatch):
     """The server's zone UTC, as the vectors' (a day is said in it)."""
@@ -499,8 +493,6 @@ def test_sync_routes_jsonl_is_what_the_tabs_routes_answer(corpus, monkeypatch, i
     records = route_records(corpus, monkeypatch)
     assert {r["fn"] for r in records} == {"GET /api/sync", "POST /sync/test", "POST /sync/compare",
                                           "GET /api/sync/unit", "GET /api/sync/indexes", "POST /sync/apply"}
-    if WAITING_ON_SYNC_CORE:
-        pytest.skip(WAITING_ON_SYNC_CORE)
     check(WEB / "sync_routes.jsonl", jsonl(records, corpus="web/sync_routes", made_by=MADE_BY))
 
 
