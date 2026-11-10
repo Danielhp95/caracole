@@ -430,8 +430,11 @@ Below the table, a section for each step whose modules have more to say.
 - Each unit's `digest` is its canonical JSON's SHA-256 (canonical.py's `digest`), a version's raw record and a song's
   lyrics hashed canonicalized (`stored_hash`), so the phone's Kotlin gets the same digest of the same record.
   - A version's raw record is hashed without what `VOLATILE_RAW` names for its provider (`stored_hash`'s `without`):
-    UG's ratings and votes, the owner's choice of 2026-11-03 ("Don't count them for the sync"), so a tab read on
-    both sides on two days is no conflict.
+    UG's ratings and votes, the owner's choice of 2026-11-03 ("Don't count them for the sync"); the version's JSON
+    kept beside a UG sheet or tab (`sheet.json`, `tab.json`, `version-<tab>.json`) holds neither
+    (ug/fetch.py `KEPT_WITHOUT`, the phone's `Slots.keepText` alike), so a tab read on both sides on two days is no
+    conflict (`test_fetch.py::test_a_tab_read_on_two_days_is_kept_alike_and_is_one_song_to_a_sync`). A JSON kept
+    before that holds them until the fetch keeps it again.
 - **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
   (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
   compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
@@ -1519,8 +1522,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,
   `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
-  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents and
-  `tested` what the computer holds (its state read once, nothing changed).
+  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents (a
+  file's none of a unit it left out or of a part it doesn't hold, `FileSource.says`) and `tested` what the computer
+  holds (its state read once, nothing changed).
 - **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
   (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
@@ -1530,16 +1534,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
   `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
   format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
-  whole: each member's CRC-32 and size checked as java.util.zip checks neither), compared within the parts it holds
+  whole), compared within the parts it holds
   (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
   `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
   "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
+  - Its zip is read by `Zip`, CPython 3.14's zipfile by hand (the end records, zip64's too, the central directory,
+    names in UTF-8 or cp437, each member's local header, its data stored or inflated, its CRC-32 at its end), never
+    java.util.zip.ZipFile, which Android refuses at open for a name with `..` or a name twice (ZipPathValidator),
+    where peer_file says which member is wrong: file.jsonl's zips made by hand hold it to Python's, on the device too.
+  - Its JSON members are read as `json.loads(bytes)` reads them (`SyncFiles.json`: json.detect_encoding's UTF-8,
+    UTF-16 or UTF-32, lone surrogates passed).
 - **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
   its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
   its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
   after its merge job, none from a computer that doesn't count them.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
-  `caracole index export` writes them; its pages through a `PageSource`, none until one is wired).
+  `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
+  `PageSource`, none until one is wired).
+- What the phone says otherwise: the report leaves out a site whose merge moved its progress records alone (no row
+  taken, its count the same), as IndexTransfer's `Merged` says what changed of the merge whole (`SyncEngine.taken`).
 
 ##### :viewer
 

@@ -131,6 +131,17 @@ class ImportTest {
         assertTrue("song/${own.key}" !in base, "$base")
     }
 
+    @Test fun aFilesUnitItDoesntHoldShowsNoDocumentThereNeverAnError() {
+        val there = Caracole("sync/fixtures/rich.jsonl")
+        val here = Caracole()
+        val own = here.add("Muse", "Hysteria")
+        val c = here.engine.compareFile(there.export(parts = listOf(Scope.SONGBOOKS)))
+        val (mine, theirs) = here.engine.documents(c, "song/${own.key}")
+        assertTrue(mine != null && theirs == null, "the file holds no library: nothing of it there")
+        assertTrue(here.engine.documents(c, "songbook/campfire").second != null, "a songbook it holds is shown")
+        assertEquals(null to null, here.engine.documents(c, "songbook/not-here"))
+    }
+
     @Test fun theSameFileTwiceThePhonesOwnExportOrAnOlderFileIsRefusedAndChangesNothing() {
         val there = Caracole("sync/fixtures/rich.jsonl")
         val here = Caracole()

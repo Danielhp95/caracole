@@ -47,6 +47,12 @@ class UnitsTest {
 
     @After fun close() = opened.values.forEach { it.first.close() }
 
+    @Test fun whatAUgRawRecordIsHashedWithoutIsWhatItsKeptJsonLeavesOut() {
+        // A unit hashes each kept file's bytes: the version's JSON kept beside a UG sheet (Slots.keepText) leaves out
+        // what the raw record's hash does, or a tab read on two days would differ still.
+        assertEquals(io.github.danielhp95.caracole.core.ug.UgFetch.KEPT_WITHOUT, Units.VOLATILE_RAW.getValue("ug"))
+    }
+
     /** The fixture [name] (sync/fixtures/<name>.jsonl) in a database of its own, and its library folder. */
     private fun fixture(name: String): Pair<Database, File> = opened.getOrPut(name) {
         val dir = tmp.newFolder(name)

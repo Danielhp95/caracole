@@ -115,7 +115,7 @@ def stored_records() -> list[str]:
 
 RECORD = '{"id": 85053, "rating": 4.54038, "votes": 7, "song_name": "De M\\u00fasica Ligera", "tags": [], "x": null}'
 LONE = ['"\\ud800"', '"\\udfff"', '"\\udfb8\\ud83c"', '"\\ud83c\\u0041"', '"\\ud83cx"', '{"\\ud800": 1}',
-        '["ok", {"k": "\\udc00"}]']
+        '["ok", {"k": "\\udc00"}]', '{"a": "\\ud800", "a": "x"}', '[{"k": "\\udc00", "k": 1}, {"j": ["\\udc00"]}]']
 ESCAPES = ['"\\ud83c\\udfb8"', '"\\uD83C\\uDFB8"', '"\\u00E9\\u00e9"', '"\\/\\b\\f\\n\\r\\t\\"\\\\"', '"\\u0000"',
            '"\\u001F\\u007F\\u2028"', '"a\\tb"', '{"\\u00e9": 1, "\\u00c9": 2, "e\\u0301": 3}']
 NOT_JSON = [
@@ -187,7 +187,9 @@ def test_stored_hash_vectors():
 WITHOUT = ["rating", "votes"]
 WITHOUT_EDGES = ['{"rating": 1e1001, "a": 1}', '{"votes": "\\ud800", "a": 1}', '{"a": {"rating": 1}, "votes": 2}',
                  '[{"rating": 1}]', '{"rating": 1, "rating": 2, "b": 3}', '{"Rating": 1, "VOTES": 2}', '{"rating": 1}',
-                 '{"votes": 1, "a": "\\udfff"}', '"rating"', '{"rating": [1, 2.50], "a": 4.50}']
+                 '{"votes": 1, "a": "\\udfff"}', '"rating"', '{"rating": [1, 2.50], "a": 4.50}',
+                 '{"n": {"a": "\\ud800", "a": 1}, "rating": 2}', '{"votes": "\\ud800", "votes": 1, "a": 1}',
+                 '{"a": "\\ud800", "a": 1, "rating": "\\udfff"}']
 
 
 @needs_the_spec
@@ -211,13 +213,13 @@ def utf16(text: str) -> list[int]:
 # surrogates in Python, never as the pair their UTF-16 units look like in Kotlin.
 RAW_SURROGATES = ['"a\ud800b"', '"\udfff"', "\ud800", "x\udc00", '{"k": "\udfff"}', '{"\ud83c": 1}',
                   '"\ud83c\\udfb8"', '"\\ud83c\udfb8"', '"\\ud83c\udfb8\\ud83c\\udfb8"', '"\udfb8\ud83c"',
-                  '"\U0001F3B8"', '["\ud800", 1e1001]', '"\ud800']
+                  '"\U0001F3B8"', '["\ud800", 1e1001]', '"\ud800', '{"a": "\\ud83c\udfb8", "a": 1}']
 
 
 def test_stored_hash_utf16_vectors():
     records = [{"fn": "caracole.canonical.stored_hash", "args": [], "kw": {}, "utf16": utf16(text), **stored(text)}
                for text in RAW_SURROGATES]
-    assert [r["canonical"] for r in records if r["canonical"] is not None] == ['"\U0001F3B8"']
+    assert [r["canonical"] for r in records if r["canonical"] is not None] == ['"\U0001F3B8"', '{"a":1}']
     write("stored_hash_utf16", records)
 
 

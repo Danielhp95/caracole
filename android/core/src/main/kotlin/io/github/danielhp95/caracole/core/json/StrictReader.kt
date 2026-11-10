@@ -21,34 +21,48 @@ import kotlinx.serialization.json.JsonUnquotedLiteral
  * - When an object repeats a key, the last value wins, in the first one's place, as in a Python dict.
  *
  * It reads by a loop and a stack of the containers open, never recursion, so no depth overflows it (Python's own
- * limit is its C stack). [lone] says whether a string read holds a lone surrogate as Python reads the text: a raw
+ * limit is its C stack). [lone] says whether the value read holds a lone surrogate as Python reads the text: a raw
  * one, an escaped one, or an escaped high surrogate beside a raw low one (or the other way round), which are two
- * lone surrogates in Python even though their UTF-16 units look like a pair.
+ * lone surrogates in Python even though their UTF-16 units look like a pair. It is the value's, as Python's dict
+ * keeps it: a string a repeated key's later value replaced, at any depth, is no part of it.
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class StrictReader(private val text: String) {
     private var i = 0
     private val n = text.length
 
-    /** Whether a string read holds a lone surrogate, as Python reads it: such a text is not canonicalizable. */
-    val lone: Boolean get() = lones > 0
+    /** Whether the value read holds a lone surrogate, as Python reads it: such a text is not canonicalizable. */
+    val lone: Boolean get() = rootLone
 
-    /** The members of a text's top-level object a lone surrogate was read in (its key or its value), as the member
-     * a repeated key keeps: one taken out of the object (Canonical.hashStoredJson's `without`) takes it away. */
+    /** The members of a text's top-level object that hold a lone surrogate (in its key or its value), as the object
+     * keeps them: one taken out of the object (Canonical.hashStoredJson's `without`) takes it away. */
     val loneKeys: Set<String> get() = loneMembers
 
     private var lones = 0
-    private var memberStart = 0
-    private val loneMembers = LinkedHashSet<String>()
+    private var rootLone = false
+    private var loneMembers: Set<String> = emptySet()
 
+    /** A container open: an array's items, or an object's members and, for each, whether its key or its value holds
+     * a lone surrogate (a repeated key's the last value's, as its member is). */
     private class Open(val members: LinkedHashMap<String, JsonElement>?) {
         val items = ArrayList<JsonElement>()
+        var anyLone = false
+        val memberLone = LinkedHashMap<String, Boolean>()
         var key = ""
+        var keyLone = false
+    }
+
+    /** [key] read into [open], with whether it holds a lone surrogate. */
+    private fun keyInto(open: Open) {
+        val before = lones
+        open.key = key()
+        open.keyLone = lones > before
     }
 
     fun read(): JsonElement {
         val stack = ArrayList<Open>()
         var value: JsonElement = JsonNull
+        var valueLone = false  // whether the value just read holds a lone surrogate
         skipSpace()
         values@ while (true) {
             when (peek()) {
@@ -58,6 +72,7 @@ internal class StrictReader(private val text: String) {
                     if (peek() == ']') {
                         i++
                         value = JsonArray(emptyList())
+                        valueLone = false
                     } else {
                         stack.add(Open(null))
                         continue@values
@@ -69,15 +84,19 @@ internal class StrictReader(private val text: String) {
                     if (peek() == '}') {
                         i++
                         value = JsonObject(emptyMap())
+                        valueLone = false
                     } else {
                         val open = Open(LinkedHashMap())
-                        if (stack.isEmpty()) memberStart = lones
-                        open.key = key()
+                        keyInto(open)
                         stack.add(open)
                         continue@values
                     }
                 }
-                else -> value = scalar()
+                else -> {
+                    val before = lones
+                    value = scalar()
+                    valueLone = lones > before
+                }
             }
             // The value is whole: it goes in the container open around it, which may then close too.
             while (true) {
@@ -86,24 +105,31 @@ internal class StrictReader(private val text: String) {
                 val members = open.members
                 if (members == null) {
                     open.items.add(value)
+                    open.anyLone = open.anyLone || valueLone
                     when (next()) {
                         ',' -> { skipSpace(); continue@values }
-                        ']' -> { value = JsonArray(open.items); stack.removeAt(stack.size - 1) }
+                        ']' -> {
+                            value = JsonArray(open.items)
+                            valueLone = open.anyLone
+                            stack.removeAt(stack.size - 1)
+                        }
                         else -> fail("Expecting ',' delimiter")
                     }
                 } else {
                     members[open.key] = value
-                    if (stack.size == 1) {
-                        if (lones > memberStart) loneMembers.add(open.key) else loneMembers.remove(open.key)
-                    }
+                    open.memberLone[open.key] = open.keyLone || valueLone
                     when (next()) {
                         ',' -> {
                             skipSpace()
-                            if (stack.size == 1) memberStart = lones
-                            open.key = key()
+                            keyInto(open)
                             continue@values
                         }
-                        '}' -> { value = JsonObject(members); stack.removeAt(stack.size - 1) }
+                        '}' -> {
+                            value = JsonObject(members)
+                            valueLone = open.memberLone.values.any { it }
+                            if (stack.size == 1) loneMembers = open.memberLone.filterValues { it }.keys
+                            stack.removeAt(stack.size - 1)
+                        }
                         else -> fail("Expecting ',' delimiter")
                     }
                 }
@@ -111,6 +137,7 @@ internal class StrictReader(private val text: String) {
         }
         skipSpace()
         if (i != n) fail("Extra data")
+        rootLone = valueLone
         return value
     }
 

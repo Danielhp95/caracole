@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.JsonText
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.json.PyJsonBytes
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -33,9 +34,6 @@ import java.io.IOException
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.math.BigInteger
-import java.nio.ByteBuffer
-import java.nio.charset.CharacterCodingException
-import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
@@ -517,8 +515,8 @@ object SyncFiles {
     }
 
     /** peer_file._check_layout: every member a name of the layout, once, of a size it may be, stored or deflated,
-     * the whole within [IMPORT_MAX]. */
-    private fun checkLayout(members: List<ZipEntry>) {
+     * nothing encrypted, the whole within [IMPORT_MAX]. */
+    private fun checkLayout(members: List<Zip.Member>) {
         val seen = HashSet<String>()
         var total = BigInteger.ZERO
         for (member in members) {
@@ -527,7 +525,7 @@ object SyncFiles {
             val blob = (name.startsWith(FILES) || name.startsWith(PAGE_BLOBS)) && SHA256.matches(name.substringAfter('/'))
             if (name !in NAMED && !blob) throw unreadable("a member outside its layout: $shown")
             if (!seen.add(name)) throw unreadable("$shown twice")
-            if (member.method != ZipEntry.STORED && member.method != ZipEntry.DEFLATED) {
+            if (member.encrypted || (member.method != Zip.STORED && member.method != Zip.DEFLATED)) {
                 throw unreadable("$shown is encrypted, or compressed as caracole doesn't")
             }
             val most = if (blob) FILE_MAX else if (name in JSON_MEMBERS) JSON_MAX else IMPORT_MAX
@@ -548,14 +546,14 @@ object SyncFiles {
     }
 
     /** peer_file._json_member: a JSON member read whole (at most [JSON_MAX]) and parsed as json.loads would. */
-    internal fun jsonMember(zip: Zip, member: ZipEntry): JsonElement {
+    internal fun jsonMember(zip: Zip, member: Zip.Member): JsonElement {
         val data = try {
             zip.read(member, JSON_MAX)
         } catch (e: Zip.Damaged) {
             throw unreadable(if (e.tooBig) "${member.name} is bigger than it may be" else "${member.name} is damaged or cut short")
         }
         return try {
-            Canonical.parse(utf8(data) ?: throw CanonicalError("not UTF-8"))
+            json(data)
         } catch (e: CanonicalError) {
             throw unreadable("${member.name} is no JSON")
         }
@@ -723,7 +721,7 @@ object SyncFiles {
         for ((index, line) in lines(data).withIndex()) {
             val number = index + 1
             val doc = try {
-                Canonical.parse(utf8(line) ?: throw CanonicalError("not UTF-8"))
+                json(line)
             } catch (e: CanonicalError) {
                 throw unreadable("$UNITS's line $number is no JSON")
             }
@@ -931,10 +929,15 @@ object SyncFiles {
     private fun hexOf(bytes: ByteArray) = JsonText.hex(bytes)
 
     /** [data] as UTF-8, strictly (bytes.decode("utf-8")); null for bytes that aren't. */
-    private fun utf8(data: ByteArray): String? = try {
-        Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(data)).toString()
-    } catch (e: CharacterCodingException) {
-        null
+    /** json.loads(bytes) as peer_file reads a member: the bytes decoded as json.detect_encoding says (UTF-8 by
+     * default, its BOM dropped; UTF-16 or UTF-32 by a BOM or the first bytes' zeros), lone surrogates passed, then
+     * parsed; a CanonicalError where Python raises a ValueError. */
+    internal fun json(data: ByteArray): JsonElement {
+        val text = try {
+            PyJsonBytes.decode(data)
+        } catch (e: IllegalArgumentException) {
+            throw CanonicalError("not ${e.message ?: "its encoding"}")
+        }
+        return Canonical.parse(text)
     }
 }

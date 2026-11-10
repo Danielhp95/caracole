@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongbookStore
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.Base
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Difference
@@ -628,6 +629,53 @@ object SyncReplay : AreaReplay {
             "left" to JsonArray(made.left.map { (u, why) -> JsonArray(listOf(JsonPrimitive(u), JsonPrimitive(why))) }),
         ))
         want.keys.firstNotNullOfOrNull { key -> differs(r, key, canonical(want[key]), canonical(mine[key])) }
+            ?: got[SyncFiles.INDEXES]?.let { indexes ->
+                // Its indexes as data: a Python caracole merges the phone's indexes.sqlite as it merges its own.
+                val theirs = Corpus.open("sync/" + text(r.extra.getValue("file")))!!.use { member(it.readBytes(), SyncFiles.INDEXES) }
+                differs(r, SyncFiles.INDEXES, canonical(sqliteData(theirs, out.parentFile)),
+                        canonical(sqliteData(indexes, out.parentFile)))
+            }
+    }
+
+    /** The zip member [name] of [zip]'s bytes. */
+    private fun member(zip: ByteArray, name: String): ByteArray =
+        java.util.zip.ZipInputStream(ByteArrayInputStream(zip)).use { z ->
+            generateSequence { z.nextEntry }.first { it.name == name }.let { z.readBytes() }
+        }
+
+    /** An SQLite file's tables as data, by name: each one's columns and its rows (in their canonical JSON's order),
+     * the export's META without its `source` (the path of the database it was made from). */
+    private fun sqliteData(bytes: ByteArray, dir: File): JsonObject {
+        val file = File(dir, "data-${System.nanoTime()}.sqlite").apply { writeBytes(bytes) }
+        val c = androidx.sqlite.driver.bundled.BundledSQLiteDriver()
+            .open(file.path, androidx.sqlite.driver.bundled.SQLITE_OPEN_READONLY)
+        try {
+            val tables = c.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").use { st ->
+                buildList { while (st.step()) add(st.getText(0)) }
+            }
+            return JsonObject(tables.associateWith { table ->
+                c.prepare("SELECT * FROM \"$table\"").use { st ->
+                    val columns = (0 until st.getColumnCount()).map { st.getColumnName(it) }
+                    val rows = buildList {
+                        while (st.step()) add(JsonArray(columns.indices.map { i ->
+                            when (st.getColumnType(i)) {
+                                androidx.sqlite.SQLITE_DATA_NULL -> JsonNull
+                                androidx.sqlite.SQLITE_DATA_INTEGER -> JsonPrimitive(st.getLong(i))
+                                androidx.sqlite.SQLITE_DATA_FLOAT -> PyJson.float(st.getDouble(i))
+                                androidx.sqlite.SQLITE_DATA_TEXT -> JsonPrimitive(st.getText(i))
+                                else -> JsonPrimitive("blob:" + Base64.getEncoder().encodeToString(st.getBlob(i)))
+                            }
+                        }))
+                    }.filter { row -> table != io.github.danielhp95.caracole.core.index.IndexTransfer.META ||
+                        (row[0] as? JsonPrimitive)?.content != "source" }
+                    JsonObject(mapOf("columns" to JsonArray(columns.map(::JsonPrimitive)),
+                                     "rows" to JsonArray(rows.sortedWith(compareBy(Py.CODE_POINT_ORDER) { canonical(it) ?: "" }))))
+                }
+            })
+        } finally {
+            c.close()
+            file.delete()
+        }
     }
 
     /** A record's pages (`{"manifest", "bytes": {path: base64}}`) as the export's PageSource: each page by its bytes'

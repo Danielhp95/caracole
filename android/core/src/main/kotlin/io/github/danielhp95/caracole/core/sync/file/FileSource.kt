@@ -62,6 +62,11 @@ class FileSource(val syncFile: SyncFile, private val database: Database?, privat
      * state doesn't name (its caracole hasn't got it: a song it removed); a PeerError for a unit its state names that
      * it holds no document of (left out as it was exported) and for one of a part it doesn't hold, which a take must
      * leave as it is, never take as gone. */
+    /** Whether [unit] answers [id] (its document, or none for a unit its library hasn't got), never a PeerError:
+     * false for a unit the file names but left out as it was exported, or of a part it doesn't hold. */
+    fun says(id: String): Boolean =
+        id in documents() || (syncFile.state?.units?.containsKey(id) != true && Scope.partOf(id) in syncFile.holds)
+
     override fun unit(id: String): JsonObject? {
         documents()[id]?.let { return it["unit"] as JsonObject }
         val state = syncFile.state
@@ -118,7 +123,7 @@ class FileSource(val syncFile: SyncFile, private val database: Database?, privat
         if (syncFile.indexOnly) return null
         val data = bytes(SyncFiles.PAGES, SyncFiles.JSON_MAX) ?: return null
         val found = try {
-            Canonical.parse(data.toString(Charsets.UTF_8))
+            SyncFiles.json(data)
         } catch (e: CanonicalError) {
             throw PeerError(FileError.unreadable("${SyncFiles.PAGES} is no JSON"))
         }

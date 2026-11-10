@@ -173,11 +173,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     private fun reread(file: SyncFile): SyncFile = SyncFiles.read(file.file, file.name.takeIf { file.indexOnly })
 
     /** A unit's two documents in [c] (`GET /api/sync/unit`): this side's now, and the other's (the computer's, asked
-     * now; a file's, from it); null for a side that hasn't got it. */
+     * now; a file's, from it); null for a side that hasn't got it, and for a file's unit it names but left out as it
+     * was exported, or of a part it doesn't hold (the PeerError a take leaves such a unit by: nothing of it to show). */
     fun documents(c: Comparison, unitId: String): Pair<JsonObject?, JsonObject?> {
         val here = database.read { db -> Units.document(db, store.libraryDir, unitId) }
-        val there = if (c.kind == FILE) FileSource(c.file!!, database, store.libraryDir).use { it.unit(unitId) }
-                    else client(c.address).unit(unitId)
+        val there = if (c.kind == FILE) {
+            FileSource(c.file!!, database, store.libraryDir).use { if (it.says(unitId)) it.unit(unitId) else null }
+        } else client(c.address).unit(unitId)
         return here to there
     }
 
@@ -841,7 +843,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             ))
 
         /** A report's entries of the sites a merge changed (its rows, or its first table's count), in caracole's
-         * order, each counted [before] and [after] the merge, [read] the site's newest read merged. */
+         * order, each counted [before] and [after] the merge, [read] the site's newest read merged. Python's
+         * `_merge_indexes` reports every site whose own merge changed anything, its progress records alone too;
+         * IndexTransfer's Merged says that of the merge as a whole, so a site whose progress alone moved (no row
+         * taken, its count the same) is left out here until Merged says it of each site (index-push's). */
         internal fun taken(merged: Merged, before: Map<String, Long>, after: Map<String, Long>, sites: List<String>,
                            read: (String) -> String?): List<JsonObject> =
             Sites.ALL.map { it.name }.filter { it in sites }.mapNotNull { site ->

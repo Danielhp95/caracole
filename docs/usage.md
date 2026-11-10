@@ -5365,7 +5365,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
-      sheet.json            the same version as the source gave it
+      sheet.json            the same version as the source gave it (Ultimate Guitar's without its rating and votes)
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
       sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
@@ -5810,8 +5810,9 @@ here's for it. Each answer also says the time on its side's clock, which both si
 and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
 they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
 other spaces, `4.50` for `4.5`) agree on it; and a version from Ultimate Guitar without its rating and votes, which
-change from one day to the next, so a tab both caracoles read on two days is the same on both (format 3: format 2
-counted them).
+change from one day to the next (format 3: format 2 counted them). Nor does the `sheet.json`, `tab.json` or
+`version-<tab>.json` caracole keeps of a version from Ultimate Guitar hold them, so a tab both caracoles read on two
+days is the same on both; one kept before holds them until caracole keeps it again.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what

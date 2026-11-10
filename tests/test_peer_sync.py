@@ -304,6 +304,14 @@ def test_a_ug_versions_ratings_and_votes_are_no_part_of_its_unit_and_another_sit
         lib.close()
 
 
+def test_what_a_ugs_raw_record_hashes_without_is_what_its_kept_json_leaves_out():
+    # A unit hashes each kept file's bytes: the version's JSON kept beside a UG sheet leaves out what the raw record's
+    # hash does, or a tab read on two days would differ still (test_fetch.py's two days).
+    from caracole.ug.fetch import KEPT_WITHOUT
+
+    assert tuple(sync.VOLATILE_RAW["ug"]) == KEPT_WITHOUT
+
+
 # --- a unit's value, from the library and from its document alone ------------------------------------------------
 
 

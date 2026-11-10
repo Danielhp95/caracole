@@ -135,6 +135,8 @@
 {"args":["\"\\ud83cx\""],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"549b13f5231ec1d6c85e542899ec276b1d377f44d25aa26b016698038fd765e3"}
 {"args":["{\"\\ud800\": 1}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"fce0fe1513e3d1e350d6ecd81da61f2fe5393a52340df0a898242996e38a159a"}
 {"args":["[\"ok\", {\"k\": \"\\udc00\"}]"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"f6659bf0ffab5559079035b797932afcb74c3f60a6c1ce978df91266dcf1d250"}
+{"args":["{\"a\": \"\\ud800\", \"a\": \"x\"}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"bac82bcae3ff0e486fd02d6dce53dc6444bcbd21f6ab5dea0a69e86e8b723b7f"}
+{"args":["[{\"k\": \"\\udc00\", \"k\": 1}, {\"j\": [\"\\udc00\"]}]"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"67d7da6b1b17a5f67a26a0235aeacd9c5c59a6c028c4157b1e936890eb938380"}
 {"args":["\"\\uD83C\\uDFB8\""],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"a9aa6b507f6596044f6802fa633af74d4998b8950c1938bb54e6d63ec053d416"}
 {"args":["\"\\u00E9\\u00e9\""],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"13015f1993773af1c05a6e0cf1e90a159760dc222bc9f0f59d68e79edb90f71f"}
 {"args":["\"\\/\\b\\f\\n\\r\\t\\\"\\\\\""],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"04d3b75c75fdf0a662faa36356ff4b75a89b875b93ed893753cfad7b0cf890c7"}
@@ -203,3 +205,6 @@
 {"args":["{\"votes\": 1, \"a\": \"\\udfff\"}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"e3273507dc0030d47bd921225b25de18dd76170b9fccd4cf9226d2b82fa3ca79"}
 {"args":["\"rating\""],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"da972dd86b690fbcdbc033e9425144ed4d31d5214f727a740681e628b9a36931"}
 {"args":["{\"rating\": [1, 2.50], \"a\": 4.50}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"01ffa833002ecce40a00fd19356e46c3e71d5ea29231880b1303f8aa7f6ca929"}
+{"args":["{\"n\": {\"a\": \"\\ud800\", \"a\": 1}, \"rating\": 2}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"3958afa7aae63ddde3d595fcf6625cae234f793932ffbd68663db8bd7348dd71"}
+{"args":["{\"votes\": \"\\ud800\", \"votes\": 1, \"a\": 1}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"}
+{"args":["{\"a\": \"\\ud800\", \"a\": 1, \"rating\": \"\\udfff\"}"],"fn":"caracole.canonical.stored_hash","kw":{"without":["rating","votes"]},"out":"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"}

@@ -91,6 +91,9 @@ FORMAT 2, below: a version's `raw` is `H(raw)` without what `peer_sync.VOLATILE_
 alone, before `D`; a text that holds no object, or isn't JSON, is hashed as `H(text)`. `vectors/canonical/
 stored_hash_without.jsonl` holds the two to the byte. The state, unit and push documents and the base carry
 `"format": 3`, and a base of FORMAT 2 reads as none: the first sync after the upgrade compares as a first sync.
+A song unit's `files` still hash each kept file's bytes, so the version's JSON kept beside a UG sheet or tab
+(`sheet.json`, `tab.json`, `version-<tab>.json`) leaves the same two members out of the raw record it holds
+(ug/fetch.py `KEPT_WITHOUT`, Kotlin's `Slots.keepText`): one tab read on two days is kept in the same bytes.
 
 ## FORMAT 2
 
