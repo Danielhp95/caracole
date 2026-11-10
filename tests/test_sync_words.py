@@ -146,9 +146,9 @@ def test_each_side_is_named_for_its_device_and_the_other_for_its_kind(words):
       })""")
     assert said == [
         ["This computer", "On this computer", "tower", "Studio", "On Studio", "Studio", "Studio's", "Studio's",
-         "server"],
+         "rack"],
         ["This computer", "On this computer", "tower", "http://10.0.0.7:8737", "On http://10.0.0.7:8737",
-         "http://10.0.0.7:8737", "http://10.0.0.7:8737's", "http://10.0.0.7:8737's", "server"],
+         "http://10.0.0.7:8737", "http://10.0.0.7:8737's", "http://10.0.0.7:8737's", "rack"],
         ["Phone", "On the phone", "phone", "Computer", "On the computer", "the computer", "the computer's",
          "computer's", "tower"],
         ["Phone", "On the phone", "phone", "File", "In the file", "the file", "the file's", "file's", "file"],

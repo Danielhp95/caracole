@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from helpers import browser
 from helpers.browser import Browser, in_chromium
-from helpers.targets import noted, noting, small_targets
+from helpers.targets import noted, noting, small_targets, weak_edges
 
 from caracole.web.app import WebApp, json_response
 from caracole.web.jobs import JobQueue
@@ -166,6 +166,9 @@ VIEWS = [
                        "agree": ("done", "312 units the two agree on"), "index": ("done", "2 indexes")},
               TAKEN_GIVEN, REPORT),
 ]
+# The phone's: the computer it syncs with, by its library's name.
+PHONE_REPORT = dict(REPORT, **{"with": {"name": "Studio", "kind": "computer", "address": ADDRESS}})
+PHONE_VIEWS = VIEWS[:-1] + [dict(VIEWS[-1], outcome=dict(VIEWS[-1]["outcome"], report=PHONE_REPORT))]
 SIZES = {"name": "Laptop", "songs": 111, "songbooks": 2, "made": "2026-11-03T18:42:00Z", "library": 34_000_000,
          "indexes": 207_000_000, "tabs": 1515576}
 EXPORTED = {"export": "0123456789abcdef", "name": "Laptop-03-11-26.caracole", "size": 34_200_000}
@@ -208,6 +211,16 @@ class FakeSync:
         with self.lock:
             return [body for where, body in self.posts if where == path]
 
+    def awaited(self, path: str, n: int = 1, timeout: float = 10.0) -> list:
+        """What the page posted to ``path``, once it has posted ``n`` times there (a view may change before its
+        request reaches the server)."""
+        import time
+
+        deadline = time.monotonic() + timeout
+        while len(self.posted(path)) < n and time.monotonic() < deadline:
+            time.sleep(0.02)
+        return self.posted(path)
+
     def gets(self, path: str) -> list[str]:
         with self.lock:
             return [a for a in self.asked if urlsplit(a).path == path]
@@ -248,7 +261,9 @@ class FakeSync:
                 if path == "/jobs.json":
                     view = self.view()
                     return answer(200, {"active": int(view["state"] in ("queued", "running")), "jobs": [view]})
-                if path == "/api/sync/unit":
+                if path == "/api/sync/unit":  # the page's own script's alone: the token in its header
+                    if request.headers.get("x-caracole-form-token") != "tok":
+                        return answer(403, {"error": "Refused", "reload": True})
                     unit = query.get("id", [""])[0]
                     if unit not in self.units:
                         return answer(404, {"error": "Not compared."})
@@ -317,10 +332,9 @@ def served(cfg, monkeypatch):
     import caracole.library_page as library_page
 
     started = []
+    real = library_page.build_library_page  # each start's page its own, the last start's settings
 
     def start(fake: FakeSync, script: str = "", *, sync: str = "tab", jobs: tuple[dict, ...] = ()) -> str:
-        real = library_page.build_library_page
-
         def build(*args, controls=None, **kwargs):
             if controls is not None:
                 controls = dataclasses.replace(controls, sync=sync, jobs=tuple(controls.jobs) + tuple(jobs),
@@ -416,3 +430,633 @@ def test_the_sheet_never_puts_markup_in_from_a_text_and_asks_nothing_of_another_
         for call in re.findall(r"\b(?:ask|post|send)\(\s*([^,)]*)", script):
             if call.strip().startswith('"'):
                 assert re.fullmatch(r'"[a-z][a-z/.]*(\?[a-z=&]*)?"( \+ .*)?', call.strip()), (name, call)
+
+
+# --- the Sync tab's panels -------------------------------------------------------------------------------------
+
+@in_chromium
+def test_the_tab_tests_a_server_and_says_when_it_last_synced_with_it(served, tmp_path):
+    fake = FakeSync()
+    with opened(tmp_path, served(fake)) as page:
+        assert fake.gets("/api/sync") == []  # the library first: the tab asks nothing until it is shown
+        page.click("#tab-sync")
+        assert page.wait(f"document.getElementById('sync-address').value === '{ADDRESS}'")
+        assert len(fake.gets("/api/sync")) == 1 and page.js("location.hash") == "#tab=sync"
+        assert page.js("document.getElementById('sync-last').textContent") == "Last synced with Studio 02/11/26, 22:04"
+        assert page.js("Array.from(document.querySelectorAll('#sync-peers option')).map((o) => o.value)") == [
+            ADDRESS, "http://192.168.1.20:8737"]
+        assert page.js("Array.from(document.querySelectorAll('#sync .sync-panel-head')).map((h) => h.textContent)") == [
+            "Sync with a server", "Export", "Import a file"]
+        page.click("#sync-test")
+        assert page.wait("document.getElementById('sync-tested').dataset.tone === 'done'")
+        assert page.js("document.getElementById('sync-tested').textContent") == (
+            "✓ Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26")
+        assert fake.posted("/sync/test") == [{"csrf": ["tok"], "address": [ADDRESS]}]
+        assert fake.posted("/sync/compare") == []  # Test changes nothing, compares nothing
+        # Another address: never synced with it; none: neither Test nor Sync.
+        page.js("document.getElementById('sync-address').select()")
+        page.type("http://10.0.0.9:8737")
+        assert page.wait("document.getElementById('sync-last').textContent === 'Never synced with it'")
+        assert page.js("document.getElementById('sync-tested').textContent") == ""
+        fake.refuse["/sync/test"] = [(502, "Nothing answered at http://10.0.0.9:8737.")]
+        page.click("#sync-test")
+        assert page.wait("document.getElementById('sync-tested').dataset.tone === 'failed'")
+        assert page.js("document.getElementById('sync-tested').textContent") == "Nothing answered at http://10.0.0.9:8737."
+        page.js("const a = document.getElementById('sync-address'); a.value = ''; a.dispatchEvent(new Event('input'))")
+        assert page.js("[document.getElementById('sync-test').disabled, document.getElementById('sync-start').disabled]") == [
+            True, True]
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@in_chromium
+def test_the_tabs_panels_fit_a_phone_and_a_laptop_in_light_and_dark(served, width):
+    phone = width < 500
+    panels = ":not(#sync *)"
+    url = served(FakeSync(), noting("data-short", small_targets(panels)) + noting("data-weak", weak_edges(panels))
+                 + noting("data-wide", "document.documentElement.scrollWidth")
+                 + noting("data-tops", "Array.from(document.querySelectorAll('.sync-panel')).map((p) => "
+                                       "Math.round(p.getBoundingClientRect().top))"))
+    for scheme in ("light", "dark"):
+        dom = browser.dump_dom(url + "#tab=sync", (width, 900), mobile=phone, touch=phone,
+                               media={"prefers-color-scheme": scheme})
+        assert noted(dom, "data-wide") <= width, scheme
+        assert noted(dom, "data-weak") == [], scheme
+        if phone:
+            assert noted(dom, "data-short") == [], scheme
+        tops = noted(dom, "data-tops")
+        assert len(set(tops)) == (3 if phone else 1), tops  # stacked on a phone, side by side on a laptop
+
+
+# --- the flow, driven as the owner drives it --------------------------------------------------------------------
+
+SHEET = "document.getElementById('sync-sheet')"
+PARTS_SAID = """Array.from(document.querySelectorAll('#sync-parts .sync-part')).map((p) => [
+  p.querySelector('.sync-part-name').textContent + ' · ' + p.querySelector('.sync-part-said').textContent,
+  p.querySelector('input').checked, p.querySelector('input').disabled])"""
+COUNTS = ("Array.from(document.querySelectorAll('#sync-counts li')).filter((li) => !li.hidden)"
+          ".map((li) => [li.className, li.textContent.trim().replace(/\\s+/g, ' ')])")
+CHIPS = "Array.from(document.querySelectorAll('#sync-chips li')).map((li) => [li.textContent, li.dataset.state || ''])"
+CARD = """(() => {
+  const lines = (id) => Array.from(document.querySelectorAll('#' + id + ' .sync-lines > *')).map((n) => n.textContent);
+  const head = (id) => document.querySelector('#' + id + ' .sync-side-head').textContent;
+  return {name: document.getElementById('sync-card-name').textContent,
+          at: document.getElementById('sync-card-at').textContent,
+          heads: [head('sync-card-here'), head('sync-card-there')],
+          here: lines('sync-card-here'), there: lines('sync-card-there'),
+          keep: [document.getElementById('sync-keep-here').textContent,
+                 document.getElementById('sync-keep-there').textContent],
+          same: document.getElementById('sync-same-row').hidden ? null
+            : document.getElementById('sync-same-said').textContent};
+})()"""
+SUMMARY = """Array.from(document.querySelectorAll('#sync-done .sync-section')).map((s) => ({
+  kind: s.dataset.kind, said: s.querySelector('.sync-lane-said').textContent,
+  open: s.querySelector('.sync-lane').getAttribute('aria-expanded'), hidden: s.querySelector('.sync-rows').hidden,
+  way: s.querySelector('.sync-arrow').dataset.way,
+  rows: Array.from(s.querySelectorAll('.sync-rows li')).map((li) => Array.from(li.children).map((c) => c.textContent))}))"""
+STATUS = "document.getElementById('sync-status').textContent"
+
+
+def at_view(page: Browser, view: str, timeout: float = 10.0) -> None:
+    assert page.wait(f"{SHEET}.open && {SHEET}.dataset.view === '{view}'", timeout), (
+        page.js(f"[{SHEET}.open, {SHEET}.dataset.view, {STATUS}]"))
+
+
+def at_card(page: Browser) -> None:
+    """A conflict's card, its two versions read: nothing on it moves any more under a click."""
+    at_view(page, "conflict")
+    assert page.wait("document.querySelector('#sync-card-here .sync-lines').dataset.state !== 'reading'")
+
+
+def opened(tmp_path, url: str, *, width=1280, height=900, mobile=False) -> Browser:
+    page = Browser(tmp_path / "chrome", width=width, height=height, mobile=mobile)
+    page.send("Emulation.setTimezoneOverride", timezoneId="Europe/Madrid")
+    # No sheet sliding up while a test clicks in it: a click lands where its button is.
+    page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
+    page.open(url)
+    return page
+
+
+def fresh(fake: FakeSync) -> FakeSync:
+    """The comparison's indexes read now, so that what waits says "today"."""
+    from datetime import UTC, datetime, timedelta
+
+    now = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fake.comparison["indexes"][0]["there"] = now
+    return fake
+
+
+def start_on_the_laptop(page: Browser) -> None:
+    """The Sync tab, its address the one it synced with last, then Sync: the sheet, compared."""
+    assert page.wait(f"document.getElementById('sync-address').value === '{ADDRESS}'")
+    assert page.wait("document.getElementById('sync-last').textContent.startsWith('Last synced with Studio ')")
+    page.click("#sync-start")
+    at_view(page, "what")
+    assert page.wait("!document.getElementById('sync-counts').hidden")
+
+
+@in_chromium
+def test_the_sheet_asks_what_to_sync_with_every_part_ticked_and_says_whats_waiting(served, tmp_path):
+    fake = fresh(FakeSync())
+    with opened(tmp_path, served(fake) + "#tab=sync") as page:
+        assert fake.gets("/api/sync/unit") == [] and fake.posted("/sync/compare") == []  # nothing until asked
+        start_on_the_laptop(page)
+        assert fake.posted("/sync/compare") == [{"csrf": ["tok"], "address": [ADDRESS]}]
+        assert page.js("document.getElementById('sync-title').textContent") == "Sync with Studio"
+        assert page.js("document.getElementById('sync-sub').textContent").startswith(ADDRESS + " · last synced 02/11/26,")
+        assert page.js(PARTS_SAID) == [
+            ["Library · Your songs, their sheets and pages, both ways · 5 changed on Studio, 4 changed on this "
+             "computer", True, False],
+            ["Songbooks · Your songbooks and their set lists, both ways · 2 changed on Studio", True, False],
+            ["Site indexes · For searching offline · newer on Studio: Ultimate Guitar (read today) and 1 more",
+             True, False]]
+        assert page.js(COUNTS) == [["take", "5 to take"], ["give", "2 to give"], ["both", "2 changed on both"]]
+        assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", ""], ["Library", ""], ["Songbooks", ""],
+                                  ["Indexes", ""]]
+        assert page.js("[document.getElementById('sync-cancel').textContent, "
+                       "document.getElementById('sync-go').textContent]") == ["Cancel", "Sync"]
+        # Escape before Sync is Cancel: nothing sent.
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open")
+        assert fake.posted("/sync/apply") == []
+    # On the phone: the sheet from its address, the computer by its name, the word taken out of the address.
+    fake = fresh(FakeSync(state=PHONE_STATE))
+    with opened(tmp_path, served(fake, sync="sheet") + "#sheet=sync", width=390, height=844, mobile=True) as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-counts').hidden")
+        assert page.js("location.hash") in ("", "#")
+        assert page.js("document.getElementById('sync-title').textContent") == "Sync with Studio"
+        assert [said for said, *_ in page.js(PARTS_SAID)] == [
+            "Library · Your songs, their sheets and pages, both ways · 5 changed on the computer, 4 changed on the "
+            "phone",
+            "Songbooks · Your songbooks and their set lists, both ways · 2 changed on the computer",
+            "Site indexes · For searching offline · newer on the computer: Ultimate Guitar (read today) and 1 more"]
+        assert fake.posted("/sync/compare") == [{"csrf": ["tok"], "address": [ADDRESS]}]
+
+
+@in_chromium
+@pytest.mark.parametrize("device", ["computer", "phone"])
+def test_a_conflict_stops_it_card_by_card_with_each_sides_lines_and_the_sides_named(served, tmp_path, device):
+    fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE)
+    url = served(fake, sync="sheet" if device == "phone" else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, **({"width": 390, "height": 844, "mobile": True} if device == "phone" else {})) as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        here, there = ("This computer", "Studio") if device == "computer" else ("Phone", "Computer")
+        on = ("On this computer", "On Studio") if device == "computer" else ("On the phone", "On the computer")
+        assert page.js(CARD) == {
+            "name": "Eagles · Hotel California", "at": "1 of 2", "heads": list(on),
+            "here": ["Its own key", "A minor, capo 2", "Its sheet", "Ultimate Guitar · tab 1234567"],
+            "there": ["Its own key", "as the sheet's", "Its sheet", "Ultimate Guitar · tab 7654321"],
+            "keep": [here, there], "same": "Same for the other 1"}
+        assert fake.gets("/api/sync/unit") == ["/api/sync/unit?comparison=5a1c0ffee0ddba11&id=song%2Feagles%2Fhotel%20"
+                                               "california"]
+        assert page.js(CHIPS)[:2] == [["Compared", "done"], ["Your choice", "now"]]
+        assert page.js("document.querySelector('#sync-conflict').textContent").count("Skip") == 0  # no Skip
+        page.click("#sync-keep-here")
+        assert page.wait("document.getElementById('sync-card-at').textContent === '2 of 2'")
+        assert page.wait("document.querySelector('#sync-card-here .sync-lines').dataset.state === ''")
+        card = page.js(CARD)
+        assert (card["name"], card["here"], card["there"], card["same"]) == (
+            "Oasis · Wonderwall", ["Its lyrics", "missing"], ["Its lyrics", "found"], None)
+        assert fake.posted("/sync/apply") == []  # nothing sent until the last card is answered
+
+
+@in_chromium
+def test_same_for_the_other_n_settles_every_conflict_left_and_sync_posts_one_field_of_choices(served, tmp_path):
+    fake = FakeSync()
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        page.click("#sync-same")
+        page.click("#sync-keep-here")
+        at_view(page, "going")
+        [form] = fake.awaited("/sync/apply")
+        assert form == {"csrf": ["tok"], "comparison": ["5a1c0ffee0ddba11"], "prefer": [""],
+                        "choices": ["here\tsong/eagles/hotel california\nhere\tsong/oasis/wonderwall"],
+                        "parts": ["library,songbooks,indexes"]}
+        assert len(fake.gets("/api/sync/unit")) == 1  # the one card shown
+        assert page.js("document.getElementById('sync-title').textContent") == "Syncing with Studio"
+        assert page.wait("document.activeElement.id === 'sync-going-line'")
+
+
+@in_chromium
+def test_cancel_on_a_card_queues_nothing(served, tmp_path):
+    fake = FakeSync()
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        page.click("#sync-keep-there")
+        assert page.wait("document.getElementById('sync-card-at').textContent === '2 of 2'")
+        page.click("#sync-cancel")
+        assert page.wait(f"!{SHEET}.open")
+        assert fake.posted("/sync/apply") == []
+        assert page.js("document.documentElement.classList.contains('sheet-open')") is False
+        # Opened again, it compares afresh and starts at the beginning: nothing was kept but the choice itself.
+        page.js("location.hash = '#sheet=sync'")
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        assert len(fake.posted("/sync/compare")) == 2
+        page.click("#sync-go")
+        at_card(page)
+        assert page.js("document.getElementById('sync-card-name').textContent") == "Oasis · Wonderwall"
+        page.press("Escape")  # Escape on a card is Cancel too
+        assert page.wait(f"!{SHEET}.open")
+        assert fake.posted("/sync/apply") == []
+
+
+@in_chromium
+def test_unticked_parts_are_sent_and_their_differences_counted_out(served, tmp_path):
+    fake = FakeSync()
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click(".sync-part[data-part=library] input")
+        page.click(".sync-part[data-part=indexes] input")
+        # Songbooks alone: its two songbooks, and the songs they list, which come along with them.
+        assert page.js(COUNTS) == [["take", "3 to take"], ["give", "0 to give"], ["both", "1 changed on both"]]
+        assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", ""], ["Songbooks", ""]]
+        page.click(".sync-part[data-part=songbooks] input")
+        assert page.js("document.getElementById('sync-go').disabled") is True  # nothing ticked, nothing to sync
+        page.click(".sync-part[data-part=songbooks] input")
+        page.click("#sync-go")
+        at_card(page)
+        assert page.js("document.getElementById('sync-card-at').textContent") == "1 of 1"
+        page.click("#sync-keep-there")
+        at_view(page, "going")
+        [form] = fake.awaited("/sync/apply")
+        assert form["parts"] == ["songbooks"] and form["choices"] == ["there\tsong/eagles/hotel california"]
+
+
+@in_chromium
+def test_a_refusal_says_the_servers_words_and_compares_again(served, tmp_path):
+    from caracole.web import sync_routes
+
+    fake = FakeSync()
+    fake.refuse["/sync/apply"] = [(409, sync_routes.STALE)]
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        page.click("#sync-same")
+        page.click("#sync-keep-there")
+        at_view(page, "what")
+        assert page.wait(f"{STATUS} === {json.dumps(sync_routes.STALE)} && "
+                         "!document.getElementById('sync-go').disabled")
+        assert page.js("document.getElementById('sync-status').dataset.tone") == "failed"
+        assert len(fake.posted("/sync/compare")) == 2 and len(fake.posted("/sync/apply")) == 1
+        # Compared again, the conflicts as they were keep their choices: Sync sends them, no card asked again.
+        page.click("#sync-go")
+        at_view(page, "going")
+        assert fake.awaited("/sync/apply", 2)[1]["choices"] == [
+            "there\tsong/eagles/hotel california\nthere\tsong/oasis/wonderwall"]
+    # A refusal of the comparison itself: its words, and Compare again.
+    fake = FakeSync()
+    fake.refuse["/sync/compare"] = [(502, "The caracole at http://10.0.0.7:8737 can't be reached.")]
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait(f"{STATUS} === \"The caracole at http://10.0.0.7:8737 can't be reached.\"")
+        assert page.js("document.getElementById('sync-go').textContent") == "Compare again"
+        page.click("#sync-go")
+        assert page.wait("!document.getElementById('sync-counts').hidden")
+        assert page.js("document.getElementById('sync-go').textContent") == "Sync"
+
+
+# --- following it, and what it did ------------------------------------------------------------------------------
+
+def sync_through(page: Browser, fake: FakeSync, sides=("here", "there")) -> None:
+    """Sync, each conflict answered in turn, and the job followed to its end."""
+    at_view(page, "what")
+    assert page.wait("!document.getElementById('sync-go').disabled")
+    fake.auto = True
+    page.click("#sync-go")
+    for side in sides:
+        at_card(page)
+        before = page.js("document.getElementById('sync-card-at').textContent")
+        assert page.wait("document.querySelector('#sync-card-here .sync-lines').dataset.state === ''")
+        page.click(f"#sync-keep-{side}")
+        assert page.wait(f"document.getElementById('sync-card-at').textContent !== {json.dumps(before)} || "
+                         f"{SHEET}.dataset.view !== 'conflict'")
+    at_view(page, "done", timeout=15)
+
+
+@in_chromium
+def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(served, tmp_path):
+    fake = FakeSync()
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        assert page.js("document.getElementById('sync-sub').textContent") == "03/11/26, 19:42"
+        assert page.js("Array.from(document.querySelectorAll('#sync-devs .sync-dev')).map((d) => d.textContent)") == [
+            "This computer", "Studio"]
+        summary = page.js(SUMMARY)
+        assert [(s["kind"], s["said"], s["way"]) for s in summary] == [
+            ("taken", "3 songs taken", "left"), ("given", "1 song and 1 other change given", "right"),
+            ("conflicts", "2 conflicts · mixed", "left right"), ("songbooks", "2 songbooks taken", "left"),
+            ("indexes", "2 indexes taken · +12,130 tabs", "left")]
+        assert all(s["open"] == "false" and s["hidden"] for s in summary)  # each starts closed
+        assert [s["rows"] for s in summary] == [
+            [["Let It Be – The Beatles"], ["Mononoke – Pomme"], ["Creep – Radiohead"]],
+            [["Barbara Allen – Traditional", "added on this computer"],
+             ["the alias of soda-stereo", "changed on this computer"]],
+            [["Hotel California – Eagles", "this computer's version kept: its own key, A minor, capo 2; its sheet, "
+                                           "Ultimate Guitar · tab 1234567"],
+             ["Wonderwall – Oasis", "Studio's version kept: its lyrics, found"]],
+            [["Campfire", "3 songs added"], ["Wedding set", "12 songs"]],
+            [["Ultimate Guitar · ", "+12,340 tabs", "1,503,236 → 1,515,576 tabs tracked · read by Studio on 03/11/26"],
+             ["LaCuerda · ", "−210 tabs", "23,105 → 22,895 tabs tracked · its listings no longer name them, so they "
+                                         "would not have opened · read by Studio on 02/11/26"]]]
+        page.click(".sync-section[data-kind=indexes] .sync-lane")
+        assert page.js(SUMMARY)[4]["open"] == "true" and page.js(SUMMARY)[4]["hidden"] is False
+        assert page.js("document.querySelector('.sync-section[data-kind=taken] .sync-rows').hidden") is True
+        # The name the only bold text of the summary (Done, a button, aside).
+        bold = page.js("""Array.from(document.querySelectorAll('#sync-sheet .sync-top *, #sync-done *'))
+          .filter((n) => n.checkVisibility() && Array.from(n.childNodes).some((c) => c.nodeType === 3 && c.textContent.trim())
+            && Number(getComputedStyle(n).fontWeight) >= 600).map((n) => n.textContent)""")
+        assert bold == ["Studio"]
+        assert page.js("document.getElementById('sync-go').textContent") == "Done"
+        assert page.js("document.getElementById('sync-file-note').hidden") is True
+        page.click("#sync-go")
+        assert page.wait(f"!{SHEET}.open")
+
+
+@in_chromium
+def test_an_index_that_fell_is_red_and_says_why(served, tmp_path):
+    fake = FakeSync(state=PHONE_STATE, views=PHONE_VIEWS)
+    with opened(tmp_path, served(fake, sync="sheet") + "#sheet=sync", width=390, height=844, mobile=True) as page:
+        sync_through(page, fake)
+        page.click(".sync-section[data-kind=indexes] .sync-lane")
+        rows = page.js(SUMMARY)[4]["rows"]
+        assert rows[1] == ["LaCuerda · ", "−210 tabs", "23,105 → 22,895 tabs tracked · its listings no longer name them, "
+                                                      "so they would not have opened · read by the computer on 02/11/26"]
+        colours = page.js("""['.sync-up', '.sync-down', '.sync-section[data-kind=indexes]'].map((s) =>
+          getComputedStyle(document.querySelector('#sync-done ' + s)).color)""")
+        found, failed = page.js("['--found', '--failed'].map((v) => { const p = document.createElement('p');"
+                                " p.style.color = 'var(' + v + ')'; document.body.append(p);"
+                                " const c = getComputedStyle(p).color; p.remove(); return c; })")
+        assert colours[:2] == [found, failed] and colours[2] not in (found, failed)
+        assert page.js("Array.from(document.querySelectorAll('#sync-devs .sync-dev')).map((d) => d.textContent)") == [
+            "Phone", "Computer"]
+
+
+@in_chromium
+def test_a_sync_on_its_way_as_the_page_loads_is_followed_to_its_summary(served, tmp_path):
+    fake = FakeSync(state=PHONE_STATE, views=PHONE_VIEWS)
+    fake.at = 1
+    url = served(fake, sync="sheet", jobs=(VIEWS[1],)) + "#sheet=sync"
+    with opened(tmp_path, url, width=390, height=844, mobile=True) as page:
+        at_view(page, "going")
+        assert page.js("document.getElementById('sync-going-line').textContent") == "Taking what changed there…"
+        assert page.js("document.getElementById('sync-title').textContent") == "Syncing with Studio"
+        assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", "done"], ["Library", "now"],
+                                  ["Songbooks", "now"], ["Indexes", ""]]
+        # Hidden, it goes on; opened again, it is that sync, never another.
+        page.click("#sync-go")
+        assert page.wait(f"!{SHEET}.open")
+        page.js("location.hash = '#sheet=sync'")
+        at_view(page, "going")
+        fake.at = 3
+        at_view(page, "done", timeout=15)
+        assert fake.posted("/sync/compare") == [] and fake.posted("/sync/apply") == []
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        summary = page.js(SUMMARY)
+        assert [(s["kind"], s["said"]) for s in summary] == [
+            ("taken", "4 songs taken"), ("given", "2 songs and 1 other change given"), ("songbooks", "2 songbooks taken"),
+            ("indexes", "2 indexes taken · +12,130 tabs")]
+        # Names from the library's own cards where it has them, else the song's key.
+        assert summary[0]["rows"][0] == ["let it be – the beatles"]
+
+
+@in_chromium
+def test_a_report_missing_draws_the_summary_from_the_outcome_alone(served, tmp_path):
+    over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
+                              "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on")}, TAKEN_GIVEN)
+    assert "report" not in over["outcome"]
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        assert [s["kind"] for s in page.js(SUMMARY)] == ["taken", "given", "conflicts", "songbooks"]  # no indexes
+        assert re.fullmatch(r"\d\d/\d\d/\d\d, \d\d:\d\d", page.js("document.getElementById('sync-sub').textContent"))
+
+
+# What the sheet shows at a width: what to sync, a card, then what it did, every section open; how wide it got and
+# its controls short of a thumb's size, at each.
+DRIVEN = """
+(() => {
+  const later = (test, then) => (test() ? then() : setTimeout(() => later(test, then), 50));
+  const sheet = document.getElementById("sync-sheet");
+  const measure = (name) => document.body.setAttribute("data-" + name, JSON.stringify({
+    wide: document.documentElement.scrollWidth, sheet: Math.round(sheet.getBoundingClientRect().right),
+    short: __SHORT__, weak: __WEAK__ }));
+  later(() => document.readyState === "complete", () => {
+    location.hash = "#sheet=sync";
+    later(() => sheet.open && !document.getElementById("sync-counts").hidden, () => {
+      measure("what");
+      document.getElementById("sync-go").click();
+      later(() => sheet.dataset.view === "conflict" && document.querySelector("#sync-card-here .sync-lines")
+        .dataset.state === "", () => {
+        measure("card");
+        document.getElementById("sync-same").click();
+        document.getElementById("sync-keep-here").click();
+        later(() => sheet.dataset.view === "done", () => {
+          for (const b of document.querySelectorAll(".sync-lane")) b.click();
+          measure("done");
+        });
+      });
+    });
+  });
+})();
+"""
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@in_chromium
+def test_the_sheet_fits_a_phone_and_a_laptop_in_light_and_dark(served, width):
+    fake = FakeSync()
+    fake.auto = True
+    phone = width < 500
+    behind = ":not(#sync-sheet *)"  # the page under the sheet, which a modal sheet leaves out of reach
+    url = served(fake, DRIVEN.replace("__SHORT__", small_targets(behind)).replace("__WEAK__", weak_edges(behind)),
+                 sync="sheet" if phone else "tab")
+    for scheme in ("light", "dark"):
+        fake.at = 0
+        dom = browser.dump_dom(url, (width, 844), mobile=phone, touch=phone, media={"prefers-color-scheme": scheme},
+                               budget_ms=20000)
+        for step in ("what", "card", "done"):
+            seen = noted(dom, "data-" + step)
+            assert seen["wide"] <= width and seen["sheet"] <= width, (scheme, step, seen)
+            assert seen["weak"] == [], (scheme, step, seen["weak"])
+            if phone:  # on a touch screen every control is a thumb's size
+                assert seen["short"] == [], (scheme, step, seen["short"])
+
+
+# --- export and import ------------------------------------------------------------------------------------------
+
+@in_chromium
+def test_export_offers_the_parts_with_their_sizes_indexes_unticked_and_downloads_the_file(served, tmp_path):
+    fake = FakeSync()
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    with opened(tmp_path, served(fake) + "#tab=sync") as page:
+        page._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(downloads))
+        page.click("#sync-export")
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        assert page.js("[document.getElementById('sync-title').textContent, "
+                       "document.getElementById('sync-sub').textContent]") == ["Export this library",
+                                                                               "Laptop · 111 songs · 03/11/26"]
+        assert page.js(PARTS_SAID) == [["Library · Your songs, their sheets and pages · 34 MB", True, False],
+                                       ["Songbooks · 2 songbooks", True, False],
+                                       ["Site indexes · For searching offline · 207 MB", False, False]]
+        assert page.js("document.getElementById('sync-counts').hidden && document.getElementById('sync-chips').hidden")
+        assert page.js("document.getElementById('sync-go').textContent") == "Export"
+        page.click("#sync-go")
+        link = "document.querySelector('#sync-status a[download]')"
+        assert page.wait(f"{link} !== null")
+        assert fake.posted("/sync/export") == [{"parts": ["library", "songbooks"]}]
+        assert page.js(f"[{link}.getAttribute('href'), {link}.getAttribute('download')]") == [
+            "api/sync/export?export=0123456789abcdef", "Laptop-03-11-26.caracole"]
+        assert page.js(STATUS) == "Made Laptop-03-11-26.caracole · 34 MB"
+        assert _saved(downloads) == ["Laptop-03-11-26.caracole"]
+        assert fake.gets("/api/sync/export") == ["/api/sync/export?export=0123456789abcdef"]  # once
+        assert page.js("document.getElementById('sync-go').textContent") == "Done"
+        page.click("#sync-go")
+        assert page.wait(f"!{SHEET}.open")
+        # The indexes' size unknown: their tabs instead; neither library nor songbooks: no export.
+        fake.sizes["indexes"] = None
+        page.click("#sync-export")
+        assert page.wait("document.querySelector('.sync-part[data-part=indexes] .sync-part-said').textContent === "
+                         "'For searching offline · 1,515,576 tabs'")
+        page.click(".sync-part[data-part=library] input")
+        page.click(".sync-part[data-part=songbooks] input")
+        page.click(".sync-part[data-part=indexes] input")
+        assert page.js("document.getElementById('sync-go').disabled") is True
+
+
+def _saved(folder, timeout: float = 10.0) -> list[str]:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        names = sorted(p.name for p in folder.iterdir() if not p.name.endswith(".crdownload"))
+        if names:
+            return names
+        time.sleep(0.05)
+    return []
+
+
+def choose_file(page: Browser, path) -> None:
+    """A file picked in #sync-file, as the browser's chooser picks one."""
+    root = page.send("DOM.getDocument")["root"]["nodeId"]
+    node = page.send("DOM.querySelector", nodeId=root, selector="#sync-file")["nodeId"]
+    page.send("DOM.setFileInputFiles", files=[str(path)], nodeId=node)
+
+
+@in_chromium
+def test_import_sends_the_file_in_parts_then_syncs_as_with_a_file_with_no_arrow_out(served, tmp_path):
+    file_views = [sync_view(v["state"], {s["name"]: (s["state"], s["detail"]) for s in v.get("steps", [])}, name="a file "
+                            "from Phone") for v in VIEWS[:-1]]
+    file_views.append(sync_view("done", {"compare": ("done", "6 differences"), "take": ("done", "took 6"),
+                                         "agree": ("done", "300 units the two agree on")},
+                                [u for u in TAKEN_GIVEN if u[1] == "taken"] + [("song/eagles/hotel california", "left",
+                                                                                "kept here")], FILE_REPORT))
+    fake = FakeSync(views=file_views)
+    picked = tmp_path / "Phone-03-11-26.caracole"
+    picked.write_bytes(bytes(range(256)) * (20 * MIB // 256))
+    with opened(tmp_path, served(fake) + "#tab=sync") as page:
+        assert page.wait("document.getElementById('sync-address').value !== ''")
+        choose_file(page, picked)
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-counts').hidden", 20)
+        assert fake.posted("/sync/import/open") == [{"size": 20 * MIB, "name": "Phone-03-11-26.caracole"}]
+        assert fake.posted("/sync/import/part") == [{"at": 0, "size": 8 * MIB, "import": "fedcba9876543210"},
+                                                    {"at": 8 * MIB, "size": 8 * MIB, "import": "fedcba9876543210"},
+                                                    {"at": 16 * MIB, "size": 4 * MIB, "import": "fedcba9876543210"}]
+        assert bytes(fake.received) == picked.read_bytes()
+        assert fake.posted("/sync/import/compare") == [{"csrf": ["tok"], "import": ["fedcba9876543210"]}]
+        assert page.js("document.getElementById('sync-title').textContent") == "Sync with a file from Phone"
+        assert page.js("document.querySelector('#sync-title .sync-name').textContent") == "Phone"
+        assert page.js("document.getElementById('sync-sub').textContent").startswith(
+            "Phone-03-11-26.caracole · exported 03/11/26, 21:10")
+        assert page.js(PARTS_SAID) == [
+            ["Library · Its songs, sheets and pages · it takes nothing back · 5 changed in the file", True, False],
+            ["Songbooks · Its songbooks and their set lists · 2 changed in the file", True, False],
+            ["Site indexes · Not in this file", False, True]]
+        assert page.js(COUNTS) == [["take", "5 to take"], ["both", "2 changed on both"]]  # no arrow out
+        assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", ""], ["Library", ""], ["Songbooks", ""]]
+        fake.auto = True
+        page.click("#sync-go")
+        at_card(page)
+        assert page.js(CARD)["heads"] == ["On this computer", "In the file"]
+        assert page.js(CARD)["keep"] == ["This computer", "File"]
+        page.click("#sync-same")
+        page.click("#sync-keep-here")
+        at_view(page, "done", timeout=15)
+        assert fake.posted("/sync/apply")[0]["parts"] == ["library,songbooks"]
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Phone"
+        summary = page.js(SUMMARY)
+        assert [s["kind"] for s in summary] == ["taken", "conflicts", "songbooks", "left"]  # nothing given
+        # A conflict it left as it was (changed since) is no conflict settled: said with why, apart.
+        assert (summary[1]["said"], summary[1]["way"]) == ("1 conflict · this computer's kept", "left")
+        assert summary[3]["said"] == "1 change left as it was"
+        assert summary[3]["rows"] == [["Hotel California – Eagles", "kept here"]]
+        assert page.js("Array.from(document.querySelectorAll('#sync-devs .sync-dev')).map((d) => d.textContent)") == [
+            "This computer", "File"]
+        assert page.js("document.getElementById('sync-file-note').hidden") is False
+        assert page.js("document.getElementById('sync-file-note').textContent").split() == (
+            'A file takes nothing back: no "given" arrow. To give your changes, export a file of your own.'.split())
+
+
+@in_chromium
+def test_a_file_refused_says_its_words(served, tmp_path):
+    older = "Nothing in this file is newer than your sync with horde_logbook on 03/11/26."
+    fake = FakeSync()
+    fake.refuse["/sync/import/compare"] = [(409, older)]
+    picked = tmp_path / "horde_logbook-01-11-26.caracole"
+    picked.write_bytes(b"PK\x03\x04 an old file")
+    with opened(tmp_path, served(fake, sync="sheet") + "#sheet=import", width=390, height=844, mobile=True) as page:
+        at_view(page, "what")
+        assert page.js("[document.getElementById('sync-title').textContent, document.getElementById('sync-sub')"
+                       ".textContent, document.getElementById('sync-go').textContent]") == [
+            "Import a file", "A file a phone or a server exported, synced as if its caracole were here", "Choose a file"]
+        assert page.js("document.getElementById('sync-parts').hidden") is True
+        choose_file(page, picked)
+        assert page.wait(f"{STATUS} === {json.dumps(older)}")
+        assert page.js("document.getElementById('sync-status').dataset.tone") == "failed"
+        assert page.js("document.getElementById('sync-go').textContent") == "Choose a file"
+        assert fake.posted("/sync/apply") == []
+
+
+@in_chromium
+def test_the_phones_settings_open_the_sheet_at_export_and_import_by_its_address(served, tmp_path):
+    fake = FakeSync(state=PHONE_STATE)
+    fake.sizes = dict(SIZES, name="Phone")
+    url = served(fake, sync="sheet")
+    with opened(tmp_path, url + "#sheet=export", width=390, height=844, mobile=True) as page:
+        at_view(page, "what")
+        assert page.wait("document.getElementById('sync-sub').textContent === 'Phone · 111 songs · 03/11/26'")
+        assert page.js("document.getElementById('sync-title').textContent") == "Export this library"
+        assert page.js("location.hash") in ("", "#")
+        page.click("#sync-cancel")
+        # The Settings' Import a file loads the page at its address: the sheet at Import.
+        page.js("location.hash = '#sheet=import'")
+        assert page.wait("document.getElementById('sync-title').textContent === 'Import a file'")
+        assert page.js("location.hash") in ("", "#")
+        page.click("#sync-cancel")
+        # Compare again in the Requests tab leads to #tab=sync, which on the phone is the sheet.
+        page.js("(() => { const a = document.createElement('a'); a.id = 'again'; a.href = '/#tab=sync';"
+                " a.textContent = 'Compare again'; document.getElementById('list').prepend(a); })()")
+        page.click("#again")
+        at_view(page, "what")
+        assert page.wait("document.getElementById('sync-title').textContent === 'Sync with Studio'")
+    # Loaded at #tab=sync (the phone has no Sync tab): the sheet all the same.
+    with opened(tmp_path, url + "#tab=sync", width=390, height=844, mobile=True) as page:
+        at_view(page, "what")
+        assert page.js("document.querySelector('[role=tab][aria-selected=true]').id") == "tab-library"

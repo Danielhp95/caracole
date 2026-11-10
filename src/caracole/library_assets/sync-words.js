@@ -90,11 +90,11 @@
     let there;
     if (p.kind === "file") {
       there = side("file", "File", "In the file", "the file", "file's");
-    } else if (p.kind === "computer" || (device === "phone" && p.kind !== "server")) {
+    } else if (p.kind === "computer" || device === "phone") {
       there = side("tower", "Computer", "On the computer", "the computer", "computer's");
-    } else {
+    } else {  // another caracole serve, by its library's name
       const name = text(p.name).trim() || text(p.address).trim() || "the other caracole";
-      there = side("server", name, "On " + name, name, name + "'s");
+      there = side("rack", name, "On " + name, name, name + "'s");
     }
     return Object.freeze({ here, there });
   };
