@@ -1867,7 +1867,8 @@ Not built yet. (written-pages.)
     sees none of its classes);
   - without the variable the build fails, naming it: never an APK without the bundle.
 - **`AlphaTabAssets.answer`**, MainActivity's `shouldInterceptRequest`'s first: the sandboxed page's request for the
-  bundle carries no launch cookie, so the app answers `GET /assets/alphatab/<name>` of 127.0.0.1 from its assets
+  bundle carries no launch cookie, so the app answers `GET /assets/alphatab/<name>` of the server's exact origin
+  (127.0.0.1 at its port, once it listens) from its assets, with guitar_routes.asset's headers and app.py's
   (`Access-Control-Allow-Origin: *`, the script being CORS with its integrity; `text/javascript; charset=utf-8`; kept
   for good), any other name there 404; the server's own route answers only a bundle whose bytes it holds (the JVM's
   tests).

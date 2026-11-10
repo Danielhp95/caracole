@@ -35,31 +35,52 @@ class AlphaTabAssetsTest {
         assertTrue(GuitarRoutes.available())
     }
 
+    private val port = 8738
+
+    private fun at(path: String, method: String = "GET", scheme: String = "http", host: String = "127.0.0.1",
+                   port: Int = this.port, bundle: String? = name, server: Int? = this.port) =
+        AlphaTabAssets.answerFor(method, scheme, host, port, path, bundle, server)
+
     @Test
     fun `the bundle at the phone's server's address is the asset, with its headers`() {
-        val answer = assertNotNull(AlphaTabAssets.answerFor("GET", "http", "127.0.0.1", "/assets/alphatab/$name", name))
+        val answer = assertNotNull(at("/assets/alphatab/$name"))
         assertEquals(200, answer.status)
         assertEquals("text/javascript" to "utf-8", answer.mimeType to answer.encoding)
         assertEquals("alphatab/$name", answer.asset)
-        assertEquals("*", answer.headers["Access-Control-Allow-Origin"])
-        assertEquals("public, max-age=31536000, immutable", answer.headers["Cache-Control"])
-        // Unquoted first, as caracole serve reads the address; any port of 127.0.0.1's.
-        assertEquals(200, AlphaTabAssets.answerFor("GET", "http", "127.0.0.1", "/assets/alphatab/%61" + name.drop(1), name)?.status)
+        // guitar_routes.asset's headers and app.py's, in vectors/web/guitar.jsonl's order, the content type aside.
+        assertEquals(listOf("Access-Control-Allow-Origin" to "*", "Cross-Origin-Resource-Policy" to "cross-origin",
+                            "Cache-Control" to "public, max-age=31536000, immutable",
+                            "Content-Security-Policy" to "default-src 'none'; frame-ancestors 'none'",
+                            "X-Content-Type-Options" to "nosniff", "X-Frame-Options" to "DENY",
+                            "Referrer-Policy" to "same-origin", "Cross-Origin-Opener-Policy" to "same-origin"),
+                     answer.headers.toList())
+        // Unquoted first, as caracole serve reads the address.
+        assertEquals(200, at("/assets/alphatab/%61" + name.drop(1))?.status)
+        // A server that listens on 80 is asked with no port.
+        assertEquals(200, at("/assets/alphatab/$name", port = -1, server = 80)?.status)
     }
 
     @Test
     fun `any other name there is not found, and anything elsewhere is the server's`() {
         for (path in listOf("/assets/alphatab/", "/assets/alphatab/alphaTab.min.js", "/assets/alphatab/$name/",
                             "/assets/alphatab/../$name", "/assets/alphatab/%ff", "/assets/alphatab/${name.uppercase()}")) {
-            assertEquals(AlphaTabAssets.NOT_FOUND, AlphaTabAssets.answerFor("GET", "http", "127.0.0.1", path, name), path)
+            assertEquals(AlphaTabAssets.NOT_FOUND, at(path), path)
         }
-        assertEquals(AlphaTabAssets.NOT_FOUND, AlphaTabAssets.answerFor("POST", "http", "127.0.0.1", "/assets/alphatab/$name", name))
-        assertEquals(AlphaTabAssets.NOT_FOUND, AlphaTabAssets.answerFor("GET", "http", "127.0.0.1", "/assets/alphatab/$name", null))
+        assertEquals(AlphaTabAssets.NOT_FOUND, at("/assets/alphatab/$name", method = "POST"))
+        assertEquals(AlphaTabAssets.NOT_FOUND, at("/assets/alphatab/$name", bundle = null))
         for ((scheme, host, path) in listOf(Triple("http", "127.0.0.1", "/guitar"), Triple("http", "127.0.0.1", "/assets/alphatab"),
                                             Triple("https", "127.0.0.1", "/assets/alphatab/$name"),
                                             Triple("http", "localhost", "/assets/alphatab/$name"),
                                             Triple("http", "evil.example", "/assets/alphatab/$name"))) {
-            assertNull(AlphaTabAssets.answerFor("GET", scheme, host, path, name), "$scheme://$host$path")
+            assertNull(at(path, scheme = scheme, host = host), "$scheme://$host$path")
         }
+    }
+
+    @Test
+    fun `only the phone's server's exact origin is answered, and nothing before it listens`() {
+        assertNull(at("/assets/alphatab/$name", port = port + 1), "another port of 127.0.0.1")
+        assertNull(at("/assets/alphatab/", port = port + 1), "another port's other names")
+        assertNull(at("/assets/alphatab/$name", port = -1), "no port, 80")
+        assertNull(at("/assets/alphatab/$name", server = null), "a server not listening yet")
     }
 }

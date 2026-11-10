@@ -206,7 +206,12 @@ class RoutingTest {
                     assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
                 }
-                // The Guitar Pro page is GuitarRoutes' own now (server.guitar's GuitarPageTest).
+                // The Guitar Pro page and alphaTab's bundle are GuitarRoutes' own now (server.guitar's GuitarPageTest),
+                // and no stub stands in for either.
+                for (path in listOf("/guitar", "/assets/alphatab/", "/assets/alphatab/alphaTab.min.js")) {
+                    assertTrue(path !in stubbed, "$path is its module's now")
+                }
+                assertTrue(stubbed.none { it.startsWith("/assets/alphatab") || it == "/guitar" }, stubbed.toString())
                 for (path in listOf("/review", "/versions", "/harmonica", "/export.pdf")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")

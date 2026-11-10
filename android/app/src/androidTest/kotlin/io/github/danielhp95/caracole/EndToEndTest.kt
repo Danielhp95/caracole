@@ -124,16 +124,20 @@ class EndToEndTest {
             // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
             // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
             // page, 409, "… isn't on the phone yet." (Stubs). The Guitar Pro page is the phone's own (GuitarRoutes): a
-            // file only the copy of the computer's pages holds, as a sync of the copy alone leaves it, is the file itself
-            // (303), which the app hands to another app.
+            // file only the copy of the computer's pages holds, as this test's sync of the copy alone leaves it, is the
+            // file itself (303 to the file's own address), which the app hands to another app; the page itself (200)
+            // is GuitarPageTest's.
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
-                val (status, text) = stubbed(origin + href)
+                val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
                 if (href.startsWith("/guitar")) {
-                    assertTrue("$href on the phone: $status", status == 200 || status == 303)
+                    assertEquals("$href on the phone", 303, status)
+                    val file = android.net.Uri.parse(href).getQueryParameter("file")
+                    assertTrue("$href names a file", !file.isNullOrEmpty())
+                    assertEquals("$href goes to its file", "/$file", location?.let { android.net.Uri.decode(it) })
                     continue
                 }
                 assertEquals("$href on the phone", 409, status)
@@ -243,14 +247,14 @@ class EndToEndTest {
     }
 
     /** [url]'s status and text, asked of the phone's server with the launch's cookie, as the WebView asks it. */
-    private fun stubbed(url: String): Pair<Int, String> {
+    private fun stubbed(url: String): Triple<Int, String, String?> {
         val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Cookie", "${io.github.danielhp95.caracole.server.http.Security.SECRET_COOKIE}=${Caracole.secret}")
             val status = connection.responseCode
             val body = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
-            return status to body.toString(Charsets.UTF_8)
+            return Triple(status, body.toString(Charsets.UTF_8), connection.getHeaderField("Location"))
         } finally {
             connection.disconnect()
         }

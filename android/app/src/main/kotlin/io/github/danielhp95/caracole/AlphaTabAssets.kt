@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.server.guitar.AlphaTabBundle
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.net.URI
 
 /**
  * alphaTab's bundle as the APK's asset (app/alphatab.gradle.kts builds it from nix/alphatab.nix's files exactly as
@@ -17,8 +18,10 @@ import java.io.IOException
  *
  * The answer is guitar_routes.asset's: `text/javascript; charset=utf-8`, kept for good, to any origin
  * (`Access-Control-Allow-Origin: *`: the script is loaded in CORS mode with its integrity, from an opaque origin, and
- * without the header the load fails). Any other name there is 404, answered here too, so that nothing under the
- * address reaches the server; a request anywhere else is the server's (null).
+ * without the header the load fails), with the headers every answer of caracole serve's carries. Any other name there
+ * is 404, answered here too, so that nothing under the address reaches the server. Only the phone's server's exact
+ * origin is answered (`http://127.0.0.1:<its port>`, once it has started, [Caracole.started]): a request anywhere
+ * else, another port of 127.0.0.1 among them, is the WebView client's to refuse (null).
  */
 class AlphaTabAssets(private val context: Context) {
     /** The bundle's name, as the build recorded it (AlphaTabBundle.installed). */
@@ -26,7 +29,8 @@ class AlphaTabAssets(private val context: Context) {
 
     fun answer(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url
-        val answer = answerFor(request.method, url.scheme, url.host, url.encodedPath, name) ?: return null
+        val answer = answerFor(request.method, url.scheme, url.host, url.port, url.encodedPath, name, serverPort())
+            ?: return null
         val body = answer.asset?.let { asset ->
             try {
                 context.assets.open(asset)
@@ -35,6 +39,13 @@ class AlphaTabAssets(private val context: Context) {
             }
         }
         return response(answer, body)
+    }
+
+    /** The phone's server's port, once it listens; null before. */
+    private fun serverPort(): Int? = try {
+        Caracole.started()?.server?.origin?.let { URI(it).port }
+    } catch (e: IllegalStateException) {
+        null
     }
 
     private fun response(answer: Answer, body: java.io.InputStream? = null): WebResourceResponse =
@@ -49,27 +60,40 @@ class AlphaTabAssets(private val context: Context) {
         /** Where the bundle is among the APK's assets: `alphatab/<name>`, its licences in `alphatab/licenses/`. */
         const val FOLDER = "alphatab"
 
-        /** guitar_routes.asset's headers, but the content type, which the WebView takes from the answer's own. */
+        /** guitar_routes.asset's headers, then those app.py adds to every answer (vectors/web/guitar.jsonl's, in their
+         * order), but the content type, which the WebView takes from the answer's own. */
         val HEADERS: Map<String, String> = linkedMapOf(
             "Access-Control-Allow-Origin" to "*",
             "Cross-Origin-Resource-Policy" to "cross-origin",
             "Cache-Control" to "public, max-age=31536000, immutable",
             "Content-Security-Policy" to "default-src 'none'; frame-ancestors 'none'",
             "X-Content-Type-Options" to "nosniff",
+            "X-Frame-Options" to "DENY",
+            "Referrer-Policy" to "same-origin",
+            "Cross-Origin-Opener-Policy" to "same-origin",
         )
 
+        /** Any other name there: caracole serve's refusal says it in a message page; this, in a line. */
         val NOT_FOUND = Answer(404, "Not Found", "text/plain", "utf-8",
                                linkedMapOf("Content-Security-Policy" to "default-src 'none'; frame-ancestors 'none'",
-                                           "X-Content-Type-Options" to "nosniff"),
+                                           "X-Content-Type-Options" to "nosniff",
+                                           "X-Frame-Options" to "DENY",
+                                           "Referrer-Policy" to "same-origin",
+                                           "Cross-Origin-Resource-Policy" to "same-origin",
+                                           "Cross-Origin-Opener-Policy" to "same-origin",
+                                           "Cache-Control" to "no-store"),
                                text = "There's no such file of alphaTab's here.\n")
 
         /**
-         * The answer to a request of [method] for [scheme]://[host][encodedPath]: the bundle for `GET
-         * /assets/alphatab/<name>` of the phone's server (any port of 127.0.0.1, where it listens) when its path, once
-         * unquoted, names the bundle [name]; [NOT_FOUND] for any other there; null for anything else.
+         * The answer to a request of [method] for [scheme]://[host]:[port][encodedPath] ([port] -1 for none, 80): the
+         * bundle for `GET /assets/alphatab/<name>` of the phone's server (127.0.0.1 at its port, [server]) when its
+         * path, once unquoted, names the bundle [name]; [NOT_FOUND] for any other there; null for anything else, and
+         * for anything at all before the server listens ([server] null).
          */
-        fun answerFor(method: String?, scheme: String?, host: String?, encodedPath: String?, name: String?): Answer? {
+        fun answerFor(method: String?, scheme: String?, host: String?, port: Int, encodedPath: String?, name: String?,
+                      server: Int?): Answer? {
             if (scheme?.lowercase() != "http" || host != HOST || encodedPath == null) return null
+            if (server == null || (if (port == -1) 80 else port) != server) return null
             val path = try {
                 PyUrl.unquote(encodedPath, strict = true)
             } catch (e: PyUrl.Invalid) {
