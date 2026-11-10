@@ -5,34 +5,73 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.IndexExport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Merged
+import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.sync.file.FileError
+import io.github.danielhp95.caracole.core.sync.file.FileSource
+import io.github.danielhp95.caracole.core.sync.file.SyncFiles
+import io.github.danielhp95.caracole.core.sync.file.SyncFile
 import io.github.danielhp95.caracole.core.sync.internal.client.Address
 import io.github.danielhp95.caracole.core.sync.internal.client.Give
-import io.github.danielhp95.caracole.core.sync.internal.client.Kept
+import io.github.danielhp95.caracole.core.sync.internal.client.Documents
+import io.github.danielhp95.caracole.core.sync.internal.client.Kept as KeptById
 import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.time.Instant
+import java.time.ZoneId
 
 enum class Side { HERE, THERE, SKIP }
 
-/** A comparison with the computer, kept by [id] for 10 minutes: [syncedBefore], when the two last agreed (the latest
- * time either side's base records; null: never), as sync_routes.py's `synced_before`. */
-data class Comparison(val id: String, val address: String, val peer: PeerState, val syncedBefore: String?,
-                      val differences: List<Difference>, val hash: String)
+/** How a sync settles a conflict no choice and no preference settles: [ASK] refuses the sync before any change (the
+ * Sync sheet asks the owner first); [LEAVE] leaves it as it is on both sides ([SyncEngine.UNSETTLED]) and goes on, the
+ * unattended sync's way, which never settles one. */
+enum class Conflicts { ASK, LEAVE }
 
+/** A site whose newest read differs on the two sides (a comparison's `indexes`): each side's stamp (null: never
+ * read), and which is [newer], `"here"` or `"there"`. */
+data class IndexWaiting(val site: String, val title: String, val here: String?, val there: String?, val newer: String)
+
+/**
+ * A comparison with the computer (or, [kind] `"file"`, with a file: [file]), kept by [id] for 10 minutes:
+ * [syncedBefore], when the two last agreed (the latest time either side's base records; null: never), as
+ * sync_routes.py's `synced_before`; [differences], every one the two hold (within [holds], the parts the other side
+ * holds: all three for a computer), and [hash] (Compare.comparedHash) of those; [base] and [kept], the merged base and
+ * the kept answers they were compared against (Compare.mergedBase, mergedKept); [listed], the songs either side's
+ * songbooks list (Scope.listedSongs); [songbooks], each songbook difference's two documents; [indexes], each site
+ * whose newest read differs.
+ */
+data class Comparison(val id: String, val address: String, val peer: PeerState, val syncedBefore: String?,
+                      val differences: List<Difference>, val hash: String,
+                      val kind: String = SyncEngine.COMPUTER, val file: SyncFile? = null,
+                      val holds: List<String> = Scope.PARTS, val listed: Map<String, List<String>> = emptyMap(),
+                      val songbooks: Map<String, Pair<JsonObject?, JsonObject?>> = emptyMap(),
+                      val indexes: List<IndexWaiting> = emptyList(), val base: Map<String, String?>? = null,
+                      val kept: Map<String, KeptPair> = emptyMap())
+
+/** What a sync did: the units taken here, given there, and left (with why), how many the two agree on after, the
+ * sites merged; and [report], the sync's report (the sync redesign's §3.5: with whom, when, its parts, each index
+ * taken or given counted before and after), null for a sync that stopped. */
 data class SyncOutcome(val taken: List<String>, val given: List<String>, val left: List<Pair<String, String>>,
-                       val agreed: Int, val indexed: List<String>)
+                       val agreed: Int, val indexed: List<String>, val report: JsonObject? = null)
+
+/** What `POST /sync/test` says of the computer at [address] ([SyncEngine.tested]): its state, how many songs and
+ * songbooks it holds, its indexes' newest read (null: none), and when the phone last synced with it (null: never). */
+data class Tested(val peer: PeerState, val address: String, val songs: Int, val songbooks: Int, val indexes: String?,
+                  val syncedAt: String?)
 
 /** A sync that couldn't go on, or was refused before it began: why, as one sentence ([message]), and what it had done
  * by then ([outcome]; null when it changed nothing yet). */
@@ -93,22 +132,27 @@ class SameCaracole(message: String) : Exception(message)
  */
 class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: File,
                  val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String) -> Unit)?,
-                 val name: String = PHONE_NAME, val version: String = CARACOLE) {
+                 val name: String = PHONE_NAME, val version: String = CARACOLE,
+                 val pagesFromFile: ((SyncFile, List<String>) -> Unit)? = null) {
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
+
+    /** The zone a refusal says a day in (an older file's "on 03/11/26"): the phone's; a test's own. */
+    internal var zone: ZoneId = ZoneId.systemDefault()
 
     /** How often give asks the computer how its request goes, and how many times at most (10 minutes). */
     internal var pollEveryMs: Long = POLL_EVERY_MS
     internal var polls: Int = POLLS
 
-    private val kept = Kept<Comparison>(KEPT_SECONDS)
+    private val kept = KeptById<Comparison>(KEPT_SECONDS)
 
     /** The phone and the computer at [address] (a [peerAddress]), compared; kept by its id for 10 minutes. A
      * [PeerError] (or mirror's SyncError) when the computer can't be asked; [SameCaracole] when it is this phone. */
     fun compare(address: String): Comparison {
         val compared = compared(client(address), address)
-        val comparison = Comparison(Kept.newId(), address, compared.peer, compared.syncedBefore, compared.differences,
-                                    compared.hash)
+        val comparison = Comparison(KeptById.newId(), address, compared.peer, compared.syncedBefore, compared.differences,
+                                    compared.hash, COMPUTER, null, Scope.PARTS, compared.listed, compared.songbooks,
+                                    compared.indexes, compared.base, compared.kept)
         kept.put(comparison.id, comparison, clock())
         return comparison
     }
@@ -119,14 +163,54 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The comparison of [id] forgotten (its Sync queued, or refused for the two changed since). */
     fun forget(id: String) = kept.remove(id)
 
-    /** Whether the two compare now as they did in [c] (the same hash), the computer's state read again; what
-     * [compare] throws else. */
-    fun stillAsCompared(c: Comparison): Boolean = compared(client(c.address), c.address).hash == c.hash
+    /** Whether the two compare now as they did in [c] (the same hash), the computer's state (or the file) read
+     * again; what [compare] throws else. */
+    fun stillAsCompared(c: Comparison): Boolean =
+        if (c.kind == FILE) compareFile(reread(c.file!!)).hash == c.hash
+        else compared(client(c.address), c.address).hash == c.hash
 
-    suspend fun apply(c: Comparison, choices: Map<String, Side>, prefer: Side?,
+    /** A comparison's file read again, as it is now (an index export by the name it was read by). */
+    private fun reread(file: SyncFile): SyncFile = SyncFiles.read(file.file, file.name.takeIf { file.indexOnly })
+
+    /** A unit's two documents in [c] (`GET /api/sync/unit`): this side's now, and the other's (the computer's, asked
+     * now; a file's, from it); null for a side that hasn't got it, and for a file's unit it names but left out as it
+     * was exported, or of a part it doesn't hold (the PeerError a take leaves such a unit by: nothing of it to show). */
+    fun documents(c: Comparison, unitId: String): Pair<JsonObject?, JsonObject?> {
+        val here = database.read { db -> Units.document(db, store.libraryDir, unitId) }
+        val there = if (c.kind == FILE) {
+            FileSource(c.file!!, database, store.libraryDir).use { if (it.says(unitId)) it.unit(unitId) else null }
+        } else client(c.address).unit(unitId)
+        return here to there
+    }
+
+    /** What the computer at [address] holds (`POST /sync/test`): its songs, songbooks, its indexes' newest read and
+     * when the phone last synced with it, its state read once; it changes nothing. What [compare] throws else. */
+    fun tested(address: String): Tested {
+        val me = database.read { Compare.ownId(it) }
+        val peer = client(address).state(me)
+        val server = peer.server
+            ?: throw PeerError("The caracole at $address has no id to sync by: it may be older than the app.")
+        if (server == me) throw sameCaracole(address, me)
+        val syncedAt = database.read { db -> Documents.text((db.kvGetJson(PEER_KEY + server) as? JsonObject)?.get("synced_at")) }
+        return Tested(peer, address, peer.units.keys.count { it.startsWith("song/") },
+                      peer.units.keys.count { it.startsWith("songbook/") },
+                      peer.indexes.values.maxWithOrNull { a, b -> newer(a, b) }, syncedAt)
+    }
+
+    /**
+     * [c] applied: what the owner chose ([choices], else each difference's proposal, else [prefer] for a conflict)
+     * within [parts] (Scope.inScope: a part left out is never read as a removal), in six stages (the class's), or,
+     * for a file's comparison, [FILE_STAGES]. With [Conflicts.ASK] a conflict settled neither way refuses the sync
+     * before any change; with [Conflicts.LEAVE] it is left ([UNSETTLED]) and the sync goes on.
+     */
+    suspend fun apply(c: Comparison, choices: Map<String, Side>, prefer: Side?, parts: List<String> = Scope.PARTS,
+                      conflicts: Conflicts = Conflicts.ASK,
                       stage: (name: String, state: String, detail: String) -> Unit): SyncOutcome {
-        val unsettled = c.differences.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
-        if (unsettled > 0) throw SyncFailed(unsettled(unsettled))
+        val asked = checkedParts(parts)
+        if (c.kind == FILE) return applyFile(c, choices, prefer, asked, conflicts, stage)
+        val scoped = Scope.inScope(c.differences, asked, c.listed)
+        val unsettled = scoped.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
+        if (unsettled > 0 && conflicts == Conflicts.ASK) throw SyncFailed(unsettled(unsettled))
         val client = client(c.address)
         val done = Done()
 
@@ -137,13 +221,14 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(COMPARE, FAILED, STALE)
             throw SyncFailed(STALE)
         }
-        stage(COMPARE, DONE, plural(fresh.differences.size, "difference"))
+        val inScope = Scope.inScope(fresh.differences, asked, fresh.listed)
+        stage(COMPARE, DONE, plural(inScope.size, "difference"))
         val me = database.read { Compare.ownId(it) }
         val computer = fresh.peer.server!!
 
         val toTake = ArrayList<Difference>()
         val toGive = ArrayList<Difference>()
-        for (d in fresh.differences) {
+        for (d in inScope) {
             when (choices[d.id] ?: when (d.proposal) { MINE -> Side.HERE; THEIRS -> Side.THERE; else -> prefer }) {
                 Side.THERE -> toTake.add(d)
                 Side.HERE -> toGive.add(d)
@@ -153,37 +238,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         }
 
         // 2. take
-        if (toTake.isEmpty()) {
-            stage(TAKE, SKIPPED_STATE, "")
-        } else {
-            stage(TAKE, RUNNING, plural(toTake.size, "change"))
-            val now = Stamps.of(clock())
-            val wanted = toTake.map { it.id to it.theirs?.digest }
-            val expectedHere = toTake.associate { it.id to it.mine?.digest }
-            var seen = 0
-            val applied = step(stage, TAKE, done) {
-                io {
-                    database.write { db ->
-                        Take.backupBeforeSync(db, stateDir, now)
-                            ?: throw SyncFailed(NO_BACKUP, done.outcome())
-                        Take.applyUnits(db, store, client, wanted, expectedHere, now) { _, _ ->
-                            seen++
-                            stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
-                        }
-                    }
-                }
-            }
-            done.taken.addAll(applied.taken)
-            done.left.addAll(applied.left)
-            stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
-        }
+        if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "") else take(client, stage, done, toTake)
 
         // 3. give
         if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
 
         // 4. mirror
         val refresh = mirrorRefresh
-        if (refresh == null) {
+        if (Scope.LIBRARY !in asked) {
+            stage(MIRROR, SKIPPED_STATE, LIBRARY_LEFT_OUT)
+        } else if (refresh == null) {
             stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages on this phone")
         } else {
             stage(MIRROR, RUNNING, "")
@@ -212,13 +276,189 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                     agreed
                 }
             }
+            done.at = at
             after
         }
         stage(AGREE, DONE, "${plural(done.agreed, "unit")} the two agree on")
 
         // 6. index
-        index(client, stage, done, computer, after.indexes, after.token)
-        return done.outcome()
+        if (Scope.INDEXES !in asked) stage(INDEX, SKIPPED_STATE, INDEXES_LEFT_OUT)
+        else index(client, stage, done, computer, after.indexes, after.token)
+        return done.outcome(report(after.name, COMPUTER, c.address, done.at ?: Stamps.of(clock()), asked, done.reported))
+    }
+
+    // --- an import: a sync with a file ---------------------------------------------------------------------------
+
+    /**
+     * This library and the `.caracole` file at [file] (or an index export; [name], its own name when [file] is a
+     * staged copy) compared, as a sync compares two sides (peer_file.compare_file): against this side's base for the
+     * file's caracole merged with the one the file keeps for this side, with the answers both remembered, within the
+     * parts the file holds (Scope.inScope with its `holds`: a part it lacks is never read as removed); kept by its id
+     * for 10 minutes. A [FileError] in the owner's words for a file refused (SyncFiles.read, checkImportable and
+     * checkWhole: another format, this library's own export, one older than the last sync with its caracole, one
+     * that can't be read whole), before anything is changed; an index export compares as no difference.
+     */
+    fun compareFile(file: File, name: String? = null): Comparison {
+        val read = SyncFiles.read(file, name)
+        val c = compareFile(read)
+        kept.put(c.id, c, clock())
+        return c
+    }
+
+    private fun compareFile(sf: SyncFile): Comparison {
+        val me = database.read { Compare.ownId(it) }
+        database.read { db -> SyncFiles.checkImportable(sf, db, me, zone) }
+        SyncFiles.checkWhole(sf)
+        val state = sf.state ?: PeerState(Units.FORMAT, null, Documents.text(sf.manifest["caracole"]) ?: "?", sf.name,
+                                          sf.made, emptyMap(), null, "")
+        val compared = try {
+            FileSource(sf, database, store.libraryDir).use { source ->
+                database.read { db -> SyncFiles.compareFile(db, sf, source, me) to source.documents() }
+            }
+        } catch (e: PeerError) {
+            throw FileError(e.message ?: "")
+        }
+        val (found, documents) = compared
+        val songbooks = found.found.filter { it.id.startsWith(SONGBOOK) }.associateTo(LinkedHashMap()) { d ->
+            d.id to (database.read { db -> Units.document(db, store.libraryDir, d.id) } to
+                     (documents[d.id]?.get("unit") as? JsonObject))
+        }
+        val newest = database.read { db -> IndexTransfer.newest(db) }
+        return Comparison(KeptById.newId(), "", state, found.syncedBefore, found.found, Compare.comparedHash(found.found),
+                          FILE, sf, sf.holds, found.listed, songbooks, waiting(newest, state.indexes), found.base,
+                          found.kept)
+    }
+
+    /**
+     * An import of [c]'s file, as `caracole peer import` makes one (commands/peer.py), in [FILE_STAGES]:
+     * 1. **check**: the file read and compared again; a hash other than the comparison's refuses it before any
+     *    change ([STALE]), as does a refusal of the file's (its words); then each difference within [parts] decided.
+     * 2. **take**: a backup first (none: nothing taken), then each unit the file gives, from it (FileSource), as a
+     *    pull takes one.
+     * 3. **mirror**: the units taken handed to the pages hook ([pagesFromFile]), which keeps the file's pages of them;
+     *    skipped with no hook or nothing taken; its failure stops nothing.
+     * 4. **agree**: what the two now agree on recorded as agreed with the file's caracole at its `made`, of the units
+     *    the file speaks for, and each conflict answered "keep mine" remembered (SyncFiles.recordImport); skipped for
+     *    an index export, or a file of neither the library nor the songbooks.
+     * 5. **index**: its indexes merged (IndexTransfer.merge), each site counted before and after.
+     * A file takes nothing back: nothing is given. The report's `with` is the file's library, of kind `"file"`.
+     */
+    private suspend fun applyFile(c: Comparison, choices: Map<String, Side>, prefer: Side?, parts: List<String>,
+                                  conflicts: Conflicts, stage: (String, String, String) -> Unit): SyncOutcome {
+        val done = Done()
+        val now = Stamps.of(clock())
+
+        // 1. check
+        stage(CHECK, RUNNING, "")
+        val fresh = step(stage, CHECK, null) {
+            io {
+                try {
+                    compareFile(reread(c.file!!))
+                } catch (e: FileError) {
+                    throw SyncFailed(e.message ?: "", null, e)
+                }
+            }
+        }
+        if (fresh.hash != c.hash) {
+            stage(CHECK, FAILED, STALE)
+            throw SyncFailed(STALE)
+        }
+        val sf = fresh.file!!
+        val held = parts.filter { it in sf.holds }
+        val scoped = Scope.inScope(fresh.differences, parts, fresh.listed)
+        val unsettled = scoped.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
+        if (unsettled > 0 && conflicts == Conflicts.ASK) {
+            stage(CHECK, FAILED, unsettled(unsettled))
+            throw SyncFailed(unsettled(unsettled))
+        }
+        val toTake = ArrayList<Difference>()
+        val toKeep = ArrayList<Difference>()
+        for (d in scoped) {
+            when (choices[d.id] ?: when (d.proposal) { MINE -> Side.HERE; THEIRS -> Side.THERE; else -> prefer }) {
+                Side.THERE -> toTake.add(d)
+                Side.HERE -> toKeep.add(d)
+                Side.SKIP -> done.left.add(d.id to SKIPPED)
+                null -> done.left.add(d.id to UNSETTLED)
+            }
+        }
+        val keptHere = SyncFiles.keptAnswers(scoped, toKeep)
+        stage(CHECK, DONE, "${plural(scoped.size, "difference")} with ${Py.strip(sf.name).ifEmpty { "a file" }}'s file")
+
+        // 2. take
+        val taken = if (toTake.isEmpty()) {
+            stage(TAKE, SKIPPED_STATE, "")
+            emptyList()
+        } else {
+            FileSource(sf, database, store.libraryDir).use { source -> take(source, stage, done, toTake).taken }
+        }
+
+        // 3. mirror
+        val hook = pagesFromFile
+        when {
+            hook == null -> stage(MIRROR, SKIPPED_STATE, "no copy of the file's pages on this phone")
+            taken.isEmpty() -> stage(MIRROR, SKIPPED_STATE, "nothing taken")
+            else -> {
+                stage(MIRROR, RUNNING, "")
+                try {
+                    io { hook(sf, taken) }
+                    stage(MIRROR, DONE, plural(taken.size, "unit"))
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    stage(MIRROR, FAILED, said(e))
+                }
+            }
+        }
+
+        // 4. agree
+        if (sf.indexOnly || held.none { it == Scope.LIBRARY || it == Scope.SONGBOOKS }) {
+            stage(AGREE, SKIPPED_STATE, "")
+        } else {
+            stage(AGREE, RUNNING, "")
+            done.agreed = step(stage, AGREE, done) {
+                io { database.write { db -> SyncFiles.recordImport(db, sf, Units.libraryState(db), keptHere) } }
+            }
+            stage(AGREE, DONE, "${plural(done.agreed, "unit")} the two agree on" +
+                if (keptHere.isEmpty()) "" else ", ${keptHere.size} kept here")
+        }
+
+        // 5. index
+        if (Scope.INDEXES !in parts || Scope.INDEXES !in sf.holds) {
+            stage(INDEX, SKIPPED_STATE, "")
+        } else {
+            stage(INDEX, RUNNING, "")
+            try {
+                val entries = io { mergeFile(sf) }
+                done.reported.addAll(entries)
+                done.indexed.addAll(entries.map { Documents.text(it["site"])!! })
+                stage(INDEX, DONE, if (entries.isEmpty()) "nothing read more recently"
+                                   else "${entries.size} ${if (entries.size == 1) "index" else "indexes"} merged")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                stage(INDEX, FAILED, said(e))
+            }
+        }
+        return done.outcome(report(sf.name, FILE, null, now, held, done.reported))
+    }
+
+    /** A file's indexes merged into the database: an index export where it is, a `.caracole` file's copied out to
+     * `stateDir/cache/` first and deleted after. The report's entries of the sites it changed. */
+    private fun mergeFile(sf: SyncFile): List<JsonObject> {
+        val copy = if (sf.indexOnly) null else File(cache(), "import-indexes-${KeptById.newId()}.sqlite")
+        try {
+            if (copy != null) FileSource(sf, database, store.libraryDir).use { it.indexes(copy) }
+            val from = copy ?: sf.file
+            val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
+            val counted = database.writeBlocking { db ->
+                val before = TabCounts.of(db)
+                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()))
+                val newest = IndexTransfer.newest(db)
+                taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
+            }
+            database.checkpoint()
+            return counted
+        } finally {
+            copy?.delete()
+        }
     }
 
     // --- the stages' parts ------------------------------------------------------------------------------------------
@@ -230,27 +470,101 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val left = ArrayList<Pair<String, String>>()
         var agreed = 0
         val indexed = ArrayList<String>()
+        val reported = ArrayList<JsonObject>()  // the report's indexes, each taken or given
+        var at: String? = null
 
-        fun outcome() = SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList())
+        fun outcome(report: JsonObject? = null) =
+            SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList(), report)
     }
 
     private class Compared(val peer: PeerState, val differences: List<Difference>, val syncedBefore: String?,
-                           val hash: String)
+                           val hash: String, val base: Map<String, String?>?, val kept: Map<String, KeptPair>,
+                           val listed: Map<String, List<String>>, val songbooks: Map<String, Pair<JsonObject?, JsonObject?>>,
+                           val indexes: List<IndexWaiting>)
 
-    /** The computer's state, the phone's units and base, and what the two hold differently (sync_routes._compared). */
+    /** The computer's state, the phone's units, base and kept answers, and what the two hold differently
+     * (sync_routes._compared), with the songs either side's songbooks list (each songbook the two hold differently
+     * asked of the computer once) and the indexes newer on either side. */
     private fun compared(client: PeerClient, address: String): Compared {
         val me = database.read { Compare.ownId(it) }
         val peer = client.state(me)
         val server = peer.server
             ?: throw PeerError("The caracole at $address has no id to sync by: it may be older than the app.")
-        if (server == me) {
-            throw SameCaracole("The caracole at $address is this one (the same id, $me): its database is a copy of " +
-                               "this one's. Give one of them another: caracole peer new-id.")
+        if (server == me) throw sameCaracole(address, me)
+        val read = database.read { db ->
+            val ours = Compare.baseOf(db, server)
+            val mine = Units.libraryState(db)
+            val books = mine.keys.filter { it.startsWith(SONGBOOK) }.associateWith { Units.value(db, it) }
+            Read(mine, ours, Compare.keptOf(db, server), books, IndexTransfer.newest(db))
         }
-        val (mine, ours) = database.read { db -> Units.libraryState(db) to Compare.baseOf(db, server) }
-        val found = Compare.order(Compare.compare(mine, peer.units, Compare.mergedBase(ours, peer.base)))
-        val agreed = listOfNotNull(ours, peer.base).flatMap { base -> base.values.map { it.second } }
-        return Compared(peer, found, agreed.maxWithOrNull(Py.CODE_POINT_ORDER), Compare.comparedHash(found))
+        val base = Compare.mergedBase(read.base, peer.base)
+        val keptAnswers = Compare.mergedKept(read.base, read.keptHere, peer.base, peer.kept)
+        val found = Compare.order(Compare.compare(read.mine, peer.units, base, keptAnswers))
+        val songbooks = found.filter { it.id.startsWith(SONGBOOK) }.associateTo(LinkedHashMap()) { d ->
+            d.id to (database.read { db -> Units.document(db, store.libraryDir, d.id) } to client.unit(d.id))
+        }
+        val listed = listed(read.books, songbooks.mapValues { it.value.second }, read.mine.keys + peer.units.keys)
+        val agreed = listOfNotNull(read.base, peer.base).flatMap { b -> b.values.map { it.second } }
+        return Compared(peer, found, agreed.maxWithOrNull(Py.CODE_POINT_ORDER), Compare.comparedHash(found), base,
+                        keptAnswers, listed, songbooks, waiting(read.newest, peer.indexes))
+    }
+
+    /** What [compared] reads of the phone, in one read. */
+    private class Read(val mine: Map<String, SyncUnit>, val base: Base?, val keptHere: Kept,
+                       val books: Map<String, kotlinx.serialization.json.JsonElement?>, val newest: Map<String, String>)
+
+    /** The songs songbooks list (Scope.listedOn), of this side's songbooks and of the other's [theirs] (those the
+     * two hold differently: of the others, the two hold the same). */
+    private fun listed(mine: Map<String, kotlinx.serialization.json.JsonElement?>, theirs: Map<String, JsonObject?>,
+                       units: Set<String>): Map<String, List<String>> =
+        Scope.listedOn(listOf(mine, theirs.filterValues { it != null }), units)
+
+    /** Each site whose newest read differs on the two sides, in caracole's order (IndexTransfer's sites), with which
+     * is newer. */
+    private fun waiting(here: Map<String, String>, there: Map<String, String>): List<IndexWaiting> =
+        Sites.ALL.mapNotNull { site ->
+            val a = here[site.name]
+            val b = there[site.name]
+            if (a == b) return@mapNotNull null
+            val newer = when {
+                a == null -> THERE_SIDE
+                b == null -> HERE_SIDE
+                IndexStamps.newer(b, a) -> THERE_SIDE
+                else -> HERE_SIDE
+            }
+            IndexWaiting(site.name, site.title, a, b, newer)
+        }
+
+    /** The comparison with the computer refused: it is this phone (the same id). */
+    private fun sameCaracole(address: String, me: String) =
+        SameCaracole("The caracole at $address is this one (the same id, $me): its database is a copy of " +
+                     "this one's. Give one of them another: caracole peer new-id.")
+
+    /** The take stage: a backup of the phone's database, then each unit of [toTake] taken from [source], each left
+     * that changed on either side since the comparison. */
+    private suspend fun take(source: UnitSource, stage: (String, String, String) -> Unit, done: Done,
+                             toTake: List<Difference>): Applied {
+        stage(TAKE, RUNNING, plural(toTake.size, "change"))
+        val now = Stamps.of(clock())
+        val wanted = toTake.map { it.id to it.theirs?.digest }
+        val expectedHere = toTake.associate { it.id to it.mine?.digest }
+        var seen = 0
+        val applied = step(stage, TAKE, done) {
+            io {
+                database.write { db ->
+                    Take.backupBeforeSync(db, stateDir, now)
+                        ?: throw SyncFailed(NO_BACKUP, done.outcome())
+                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { _, _ ->
+                        seen++
+                        stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
+                    }
+                }
+            }
+        }
+        done.taken.addAll(applied.taken)
+        done.left.addAll(applied.left)
+        stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
+        return applied
     }
 
     /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit
@@ -327,7 +641,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     }
 
     /** The computer's newer indexes merged, then the pages the phone's lookups read pushed, merged or not; each
-     * part's failure said on the stage, leaving the rest as it is. */
+     * part's failure said on the stage, leaving the rest as it is. Each site merged or given is counted for the
+     * report, before and after. */
     private suspend fun index(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, computer: String,
                               indexes: Map<String, String>, token: String) {
         val (had, noted) = database.read { db ->
@@ -345,7 +660,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         var failed = false
         if (newer.isNotEmpty()) {
             try {
-                merge(client, computer, had, newer, indexes)
+                done.reported.addAll(merge(client, computer, had, newer, indexes))
                 done.indexed.addAll(newer)
                 parts.add("merged ${newer.joinToString(", ")}")
             } catch (e: Exception) {
@@ -357,7 +672,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         if (noted.isNotEmpty()) {
             if (newer.isNotEmpty()) stage(INDEX, RUNNING, sending(noted))
             try {
-                pushReads(client, computer, token)?.let(parts::add)
+                pushReads(client, computer, token, done)?.let(parts::add)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 failed = true
@@ -368,18 +683,22 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     }
 
     /** The computer's indexes of [newer] fetched into `stateDir/cache/` and merged, the kv's stamps brought up to
-     * date, the WAL checkpointed; the file gone after, whatever came of it. */
+     * date, the WAL checkpointed; the file gone after, whatever came of it. The report's entries of the sites the
+     * merge changed, each site's tabs counted before and after (TabCounts). */
     private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
-                              indexes: Map<String, String>) {
-        val file = File(cache(), "index-${Kept.newId()}.sqlite")
+                              indexes: Map<String, String>): List<JsonObject> {
+        val file = File(cache(), "index-${KeptById.newId()}.sqlite")
         try {
             io { client.index(file, newer) }
-            io {
-                database.write { db ->
-                    IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
+            return io {
+                val counted = database.write { db ->
+                    val before = TabCounts.of(db)
+                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
+                    taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
+                counted
             }
         } finally {
             file.delete()
@@ -391,26 +710,54 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * that the file holds every page noted and those alone, and pushed (`POST /peer/index`); once the computer answers
      * 202, the notes forgotten up to the newest of them. What it did, in the stage's words; null when nothing is noted
      * by then. A PeerError (or mirror's SyncError) when the push fails, the notes kept; the file gone after either way.
+     * Each site given is counted on the computer (`GET /api/sync/indexes`) before the push and after its merge job, for
+     * the report; a computer that can't count them (one older than the app) gives no count, and the report none.
      */
-    private suspend fun pushReads(client: PeerClient, computer: String, token: String): String? {
-        val file = File(cache(), "reads-${Kept.newId()}.sqlite")
+    private suspend fun pushReads(client: PeerClient, computer: String, token: String, done: Done): String? {
+        val file = File(cache(), "reads-${KeptById.newId()}.sqlite")
         try {
-            val (pages, upTo) = io {
+            val noted = io {
                 database.write { db ->
                     val pages = sendable(Reads.since(db, computer))
                     if (pages.isEmpty()) return@write null
-                    val newest = pages.flatMap { (site, named) -> named.mapNotNull { db.kvGet("${Reads.READ}$site:$it") } }
-                        .maxWithOrNull(Py.CODE_POINT_ORDER) ?: return@write null
+                    val read = pages.mapValues { (site, named) ->
+                        named.mapNotNull { db.kvGet("${Reads.READ}$site:$it") }.maxWithOrNull(Py.CODE_POINT_ORDER)
+                    }
+                    val newest = read.values.filterNotNull().maxWithOrNull(Py.CODE_POINT_ORDER) ?: return@write null
                     IndexExport.export(db, file, pages, Stamps.of(clock()), version)
-                    pages to newest
+                    Triple(pages, newest, read)
                 }
             } ?: return null
+            val (pages, upTo, read) = noted
+            val before = io { counts(client) }
             val job = io { client.pushIndex(token, file) }
             io { database.write { db -> Reads.forget(db, computer, upTo) } }
+            if (before != null) {
+                val after = try {
+                    val ended = awaitJob(client, job)
+                    if (Give.text(ended["state"]) == "done") io { counts(client) } else null
+                } catch (e: PeerError) {
+                    null
+                }
+                if (after != null) {
+                    for (site in Sites.ALL.map { it.name }.filter { it in pages }) {
+                        val was = before[site] ?: continue
+                        val now = after[site] ?: continue
+                        done.reported.add(entry(site, GIVEN, was.tabs, now.tabs, read[site]))
+                    }
+                }
+            }
             return "sent ${pagesRead(pages)}, none left to send: its request $job merges them"
         } finally {
             file.delete()
         }
+    }
+
+    /** The computer's indexes counted (PeerClient.indexes), or null for a computer that can't count them. */
+    private fun counts(client: PeerClient): Map<String, IndexCount>? = try {
+        client.indexes()
+    } catch (e: PeerError) {
+        null
     }
 
     /** `stateDir/cache/`, made when missing; a PeerError in the phone's words when it can't be. */
@@ -442,6 +789,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     }
 
     companion object {
+        /** A comparison's other side, as §3.4.1's `peer.kind` and the report's `with.kind` name it. */
+        const val COMPUTER = "computer"
+        const val FILE = "file"
+
+        const val CHECK = "check"
         const val COMPARE = "compare"
         const val TAKE = "take"
         const val GIVE = "give"
@@ -455,6 +807,73 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             COMPARE to "Comparing", TAKE to "Taking what changed there", GIVE to "Giving what changed here",
             MIRROR to "Copying the computer's pages", AGREE to "What the two agree on",
             INDEX to "Bringing the indexes up to date",
+        )
+
+        /** The mirror stage's words with Library unticked, and the index stage's with Site indexes unticked. */
+        const val LIBRARY_LEFT_OUT = "Library isn't synced this time"
+        const val INDEXES_LEFT_OUT = "Site indexes aren't synced this time"
+
+        /** The parts named, each once, in Scope.PARTS' order; an IllegalArgumentException in commands/peer.py's
+         * words for one that isn't a part. */
+        fun checkedParts(parts: Collection<String>): List<String> {
+            parts.firstOrNull { it !in Scope.PARTS }?.let {
+                throw IllegalArgumentException("'$it' isn't a part: parts are library, songbooks or indexes, by commas.")
+            }
+            return Scope.PARTS.filter { it in parts }
+        }
+
+        /** The report of a sync (the sync redesign's §3.5): with whom, of which kind and at which address (null for a
+         * file), when, its parts, each index taken or given. */
+        fun report(name: String, kind: String, address: String?, at: String, parts: List<String>,
+                   indexes: List<JsonObject>): JsonObject = JsonObject(linkedMapOf(
+            "with" to JsonObject(linkedMapOf("name" to JsonPrimitive(name), "kind" to JsonPrimitive(kind),
+                                             "address" to JsonPrimitive(address))),
+            "at" to JsonPrimitive(at),
+            "parts" to JsonArray(parts.map(::JsonPrimitive)),
+            "indexes" to JsonArray(indexes),
+        ))
+
+        /** One index of a report: its site, its title, taken or given, its first table's rows before and after, and
+         * its newest read. */
+        fun entry(site: String, direction: String, before: Long, after: Long, read: String?): JsonObject =
+            JsonObject(linkedMapOf(
+                "site" to JsonPrimitive(site), "title" to JsonPrimitive(Sites.named(site)?.title ?: site),
+                "direction" to JsonPrimitive(direction), "before" to JsonPrimitive(before),
+                "after" to JsonPrimitive(after), "read" to JsonPrimitive(read),
+            ))
+
+        /** A report's entries of the sites a merge changed (its rows, or its first table's count), in caracole's
+         * order, each counted [before] and [after] the merge, [read] the site's newest read merged. Python's
+         * `_merge_indexes` reports every site whose own merge changed anything, its progress records alone too;
+         * IndexTransfer's Merged says that of the merge as a whole, so a site whose progress alone moved (no row
+         * taken, its count the same) is left out here until Merged says it of each site (index-push's). */
+        internal fun taken(merged: Merged, before: Map<String, Long>, after: Map<String, Long>, sites: List<String>,
+                           read: (String) -> String?): List<JsonObject> =
+            Sites.ALL.map { it.name }.filter { it in sites }.mapNotNull { site ->
+                val was = before[site] ?: 0L
+                val now = after[site] ?: 0L
+                val changed = merged.changed && (merged.sites[site]?.values?.any { it != 0 } == true || was != now)
+                if (changed) entry(site, TAKEN, was, now, read(site)) else null
+            }
+
+        const val TAKEN = "taken"
+        const val GIVEN = "given"
+        private const val HERE_SIDE = "here"
+        private const val THERE_SIDE = "there"
+        private const val SONGBOOK = "songbook/"
+
+        /** Whether stamp [a] is a later time than [b], for the newest of a computer's indexes. */
+        private fun newer(a: String, b: String): Int = when {
+            IndexStamps.newer(a, b) -> 1
+            IndexStamps.newer(b, a) -> -1
+            else -> Py.CODE_POINT_ORDER.compare(a, b)
+        }
+
+        /** The stages an import of a file shows, in order, as (name, label): `caracole peer import --progress`'s
+         * (jobs.PEER_IMPORT_STAGES), the phone's mirror of the file's pages in place of its render. */
+        val FILE_STAGES = listOf(
+            CHECK to "Reading the file", TAKE to "Taking what changed there", MIRROR to "Keeping the file's pages",
+            AGREE to "What the two agree on", INDEX to "Merging the indexes",
         )
 
         /** kv: a computer synced with, by its id: {address, name, synced_at}. */

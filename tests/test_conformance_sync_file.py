@@ -52,6 +52,7 @@ with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import io
 import json
@@ -298,19 +299,61 @@ def _read_out(path: Path, name: str | None = None) -> dict[str, Any]:
             "documents": documents}
 
 
-def _zip(members: list[tuple[str, bytes]]) -> bytes:
-    """A zip of ``members``, in order, each dated as the files are and deflated, as the corpus writes one."""
+def _zip(members: list[tuple[str, bytes]], *, comment: bytes = b"", zip64: bool = False,
+         methods: dict[str, int] | None = None) -> bytes:
+    """A zip of ``members``, in order, each dated as the files are and deflated (or as ``methods`` names), as the
+    corpus writes one; with ``comment`` after its end record; with ``zip64``, in zip64's records whole (each member's
+    sizes and offset in its extra field, the zip64 end record and its locator), as zipfile writes a big one."""
     import warnings
+    from unittest import mock
 
     out = io.BytesIO()
-    with warnings.catch_warnings(), zipfile.ZipFile(out, "w") as z:
+    limits = (mock.patch.object(zipfile, "ZIP64_LIMIT", 0), mock.patch.object(zipfile, "ZIP_FILECOUNT_LIMIT", 0)) \
+        if zip64 else ()
+    with warnings.catch_warnings(), contextlib.ExitStack() as stack:
         warnings.simplefilter("ignore")  # a member named twice, which zipfile warns of
-        for name, data in members:
-            info = zipfile.ZipInfo(name, date_time=ZIP_DATE)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o644 << 16
-            z.writestr(info, data)
+        for limit in limits:
+            stack.enter_context(limit)
+        with zipfile.ZipFile(out, "w") as z:
+            z.comment = comment
+            for name, data in members:
+                info = zipfile.ZipInfo(name, date_time=ZIP_DATE)
+                info.compress_type = (methods or {}).get(name, zipfile.ZIP_DEFLATED)
+                info.external_attr = 0o644 << 16
+                z.writestr(info, data)
     return out.getvalue()
+
+
+def _entries(data: bytes) -> list[tuple[int, int]]:
+    """Where each member's central directory entry and local header begin in the zip ``data``."""
+    at = data.rfind(b"PK\x05\x06")
+    count, start = int.from_bytes(data[at + 10:at + 12], "little"), int.from_bytes(data[at + 16:at + 20], "little")
+    found = []
+    for _ in range(count):
+        n, m, k = (int.from_bytes(data[start + o:start + o + 2], "little") for o in (28, 30, 32))
+        found.append((start, int.from_bytes(data[start + 42:start + 46], "little")))
+        start += 46 + n + m + k
+    return found
+
+
+def _renamed_locally(data: bytes, index: int, name: bytes) -> bytes:
+    """The zip ``data`` with its ``index``-th member's local header naming it ``name``, of its name's length."""
+    data = bytearray(data)
+    _, header = _entries(bytes(data))[index]
+    assert int.from_bytes(data[header + 26:header + 28], "little") == len(name)
+    data[header + 30:header + 30 + len(name)] = name
+    return bytes(data)
+
+
+def _flagged(data: bytes, index: int, *, set_bits: int = 0, clear_bits: int = 0) -> bytes:
+    """The zip ``data`` with its ``index``-th member's general purpose flags changed in its central directory entry
+    and its local header."""
+    data = bytearray(data)
+    central, header = _entries(bytes(data))[index]
+    for at in (central + 8, header + 6):
+        flags = (int.from_bytes(data[at:at + 2], "little") | set_bits) & ~clear_bits
+        data[at:at + 2] = flags.to_bytes(2, "little")
+    return bytes(data)
 
 
 def _declaring(data: bytes, sizes: dict[str, int]) -> bytes:
@@ -331,7 +374,7 @@ def blob_named(n: int) -> str:
 
 
 def _refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
-    """Files that aren't read, each by why: their bytes."""
+    """Files made by hand, most of them refused, each by why: their bytes."""
     from caracole import peer_file
 
     full = _members(corpus.file_path("full"))
@@ -356,6 +399,19 @@ def _refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
                                                                                        for i in range(65))]),
                                               {"indexes.sqlite": 2 ** 32 - 1}
                                               | {blob_named(i): peer_file.FILE_MAX for i in range(65)})),
+        # How the zip itself is read, as zipfile reads it: a reader of its own on the phone, whose Android ZipFile
+        # refuses at open a name with a ".." or a name twice.
+        ("an encrypted member", _flagged(_zip(small), 1, set_bits=0x1)),
+        ("a member compressed as caracole doesn't", _zip(small, methods={"bases.json": zipfile.ZIP_BZIP2})),
+        ("a member's name in cp437", _flagged(_zip([*small, ("é", b"x")]), 4, clear_bits=0x800)),
+        ("a member its local header names otherwise", _renamed_locally(_zip(small), 1, b"state.jsoX")),
+        ("a member's name cut at a NUL", _zip([*small[:3], ("units.jsonlZx", dict(small)["units.jsonl"])])
+         .replace(b"units.jsonlZx", b"units.jsonl\x00x")),
+        ("a file with a comment after it", _zip(small, comment=b"made by hand")),
+        ("a file whose comment holds an end record's signature", _zip(small, comment=b"by hand, PK\x05\x06 and all")),
+        ("a file in zip64's records", _zip(small, zip64=True)),
+        ("a file in zip64's records, its zip64 end record gone", _zip(small, zip64=True).replace(b"PK\x06\x06",
+                                                                                                 b"PK\x06\x00")),
     ]
 
 
@@ -384,6 +440,24 @@ def other_schema(corpus: FileCorpus) -> bytes:
     from caracole import db
 
     return _index_export_of_schema(corpus.workdir / "files" / "old-schema.sqlite", db.SCHEMA_VERSION + 1)
+
+
+def _sqlite_refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
+    """SQLite files that are no index export, each by why: one with no export's table (sqlite3's OperationalError),
+    and SQLite's header with no database after it (its DatabaseError), which a reader tells apart."""
+    import sqlite3
+
+    path = corpus.workdir / "files" / "no-export.sqlite"
+    path.unlink(missing_ok=True)
+    file = sqlite3.connect(path)
+    try:
+        file.execute("PRAGMA page_size = 512")
+        file.execute("CREATE TABLE photos (name TEXT)")
+        file.commit()
+    finally:
+        file.close()
+    return [("an SQLite file with no export's table", path.read_bytes()),
+            ("SQLite's header and no database after it", b"SQLite format 3\x00" + bytes(range(256)) * 2)]
 
 
 def _indexes_at_another_schema(corpus: FileCorpus) -> bytes:
@@ -415,6 +489,11 @@ def read_records(corpus: FileCorpus) -> list[dict]:
     records.append({"fn": "read", "case": "an index export of another schema holds nothing",
                     "bytes": base64.b64encode(old).decode("ascii"), "name": "old.sqlite",
                     "out": _read_out(corpus.workdir / "files" / "old-schema.sqlite", "old.sqlite")})
+    for case, data in _sqlite_refused(corpus):
+        path = corpus.workdir / "files" / "refused.sqlite"
+        path.write_bytes(data)
+        records.append({"fn": "read", "case": case, "bytes": base64.b64encode(data).decode("ascii"),
+                        "name": "refused.sqlite", "out": _read_out(path, "refused.sqlite")})
     other = corpus.workdir / "files" / "other-schema.caracole"
     other.write_bytes(_indexes_at_another_schema(corpus))
     records.append({"fn": "read", "case": "a file made at another schema holds its units but not its indexes",

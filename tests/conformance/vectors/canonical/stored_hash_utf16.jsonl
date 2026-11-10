@@ -12,3 +12,4 @@
 {"args":[],"canonical":"\"🎸\"","fn":"caracole.canonical.stored_hash","kw":{},"out":"a9aa6b507f6596044f6802fa633af74d4998b8950c1938bb54e6d63ec053d416","reads":true,"utf16":[34,55356,57272,34]}
 {"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"eb1c7b7fe2576cb24c3b825d8de35d2318fd7f41ce98261684eab614c05f5dd4","reads":true,"utf16":[91,34,55296,34,44,32,49,101,49,48,48,49,93]}
 {"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"821851b345013a53f29b6aece2d7da6393c7275050032ab3df7c10317464833a","reads":false,"utf16":[34,55296]}
+{"args":[],"canonical":"{\"a\":1}","fn":"caracole.canonical.stored_hash","kw":{},"out":"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862","reads":true,"utf16":[123,34,97,34,58,32,34,92,117,100,56,51,99,57272,34,44,32,34,97,34,58,32,49,125]}
