@@ -106,7 +106,7 @@ val Response.bytes: ByteArray
     get() = when (val b = body) {
         Body.Empty -> ByteArray(0)
         is Body.Bytes -> b.bytes
-        is Body.FromFile -> b.file.readBytes()
+        is Body.FromFile -> b.open().use { it.readBytes() }
     }
 
 val Response.text: String get() = bytes.toString(Charsets.UTF_8)

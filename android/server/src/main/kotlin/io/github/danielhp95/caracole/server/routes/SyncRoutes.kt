@@ -87,6 +87,10 @@ interface SyncSettings {
  *
  * [alone] queues the unattended sync (Sync on Wi-Fi by itself): the three parts, each one-sided change taken or
  * given, each conflict left (Conflicts.LEAVE). A day is said in [zone]'s (the phone's; the corpus's replay, UTC's).
+ *
+ * Sync on a file's comparison (one SyncFileRoutes' `POST /sync/import/compare` made, kind `"file"`) is read as any
+ * other, its choices, parts and conflicts, then handed to [files] (SyncFileRoutes: sync_routes._apply_import), which
+ * queues its import; with none, it is refused as a comparison past.
  */
 class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: SyncSettings, val database: Database,
                  val afterSync: () -> Unit, val name: String = AppConfig.PHONE,
@@ -103,6 +107,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         Route("POST", "/sync/apply", "take and give what a comparison found", limit = APPLY_LIMIT,
               post = PostAnswer { _, form -> apply(form) }),
     )
+
+    /** Who queues Sync on a file's comparison (the phone's SyncFileRoutes, which the assembly sets). */
+    @Volatile var files: FileSyncs? = null
 
     private fun state(): Response {
         val read = database.read { db ->
@@ -206,6 +213,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         val open = Scope.inScope(kept.differences, parts ?: Scope.PARTS, kept.listed)
             .count { it.proposal == CONFLICT && it.id !in choices }
         if (open > 0 && prefer == null) throw Refused(409, "Choose first", SyncEngine.unsettled(open))
+        if (kept.kind == SyncEngine.FILE) {
+            return (files ?: throw Refused(409, "Compare again", GONE)).apply(made, kept, choices, prefer, parts)
+        }
         // Afresh: refused now, before anything is queued, once the two are past the comparison.
         if (!asking { engine.stillAsCompared(kept) }) {
             engine.forget(made)

@@ -39,9 +39,9 @@ import java.security.MessageDigest
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test, opens the library page (the phone's own server's, at its
- * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that each
- * link it shows to caracole serve's own pages (Export PDF) is answered by the phone's stub ("… isn't on the phone
- * yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
+ * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
+ * Export PDF is the phone's own route (here, a copy of pages with no song, its 404) and each other link it shows to
+ * caracole serve's own pages is answered by the phone's stub ("… isn't on the phone yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
  * the phone's server with the launch's cookie. Every ACTION_VIEW is stubbed: nothing outside the app opens. Without
  * `server` it is skipped.
  */
@@ -122,17 +122,24 @@ class EndToEndTest {
                 exportShown: (() => { const e = document.getElementById('export'); return !!e && !e.hidden; })()})""") as String)
             record("viewer", sandbox)
             // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
-            // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
-            // page, 409, "… isn't on the phone yet." (Stubs). The Guitar Pro page is the phone's own (GuitarRoutes): a
-            // file only the copy of the computer's pages holds, as this test's sync of the copy alone leaves it, is the
-            // file itself (303 to the file's own address), which the app hands to another app; the page itself (200)
-            // is GuitarPageTest's.
+            // the Guitar Pro page) as it does on the computer. Export PDF is the phone's own route (ExportRoutes: the
+            // version named, {name, label}, which the app prints, for a song of the phone's library): this sync took
+            // the computer's pages alone, no song, so it says the library has no such sheet (404). The Guitar Pro page
+            // is the phone's own too (GuitarRoutes): a file only the copy of the computer's pages holds, as this test's
+            // sync of the copy alone leaves it, is the file itself (303 to the file's own address), which the app hands
+            // to another app; the page itself (200) is GuitarPageTest's. The phone answers each other with its stub:
+            // the message page, 409, "… isn't on the phone yet." (Stubs).
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
                 val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
+                if (href.startsWith("/export.pdf?")) {
+                    assertEquals("$href on the phone: $text", 404, status)
+                    assertTrue("$href: $text", "no such sheet in the library" in text)
+                    continue
+                }
                 if (href.startsWith("/guitar")) {
                     assertEquals("$href on the phone", 303, status)
                     val file = android.net.Uri.parse(href).getQueryParameter("file")
