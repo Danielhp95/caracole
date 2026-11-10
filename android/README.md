@@ -172,6 +172,11 @@ phone's library page has no Sync tab.
 A sync already on its way when the page loads (a reload, a notification's tap) is followed to its summary, never
 started again.
 
+**Export and import a file.** The sheet's export makes a `.caracole` file of the phone's library
+(`<library name>-dd-mm-yy.caracole`), which goes to Android's share sheet: send it, or save it to Files. The app
+reads it from its own server in its own process (the launch's cookie and all, never Android's DownloadManager) and
+shares a copy from its cache. The sheet's import picks a file through Android's file picker: a file another caracole
+exported, a phone's or a computer's, or an index from `caracole index export`, synced as if its caracole were here.
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.

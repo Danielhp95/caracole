@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
@@ -14,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -67,6 +69,8 @@ class MainActivity : Activity() {
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
     private lateinit var label: SizeLabel
+    /** The page's file input to Android's picker (the sync sheet's Import a file). */
+    private lateinit var chooser: FileChooser
     /** alphaTab's bundle from the APK's assets, which the sandboxed Guitar Pro page asks for with no cookie. */
     private lateinit var alphaTab: AlphaTabAssets
     /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
@@ -93,6 +97,7 @@ class MainActivity : Activity() {
         title = findViewById(R.id.title)
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
+        chooser = FileChooser(this)
         fitInsets()
 
         ownTextZoom = web.settings.textZoom
@@ -124,10 +129,17 @@ class MainActivity : Activity() {
             override fun onReceivedTitle(view: WebView, text: String?) {
                 title.text = text?.takeIf { it.isNotBlank() } ?: getString(R.string.app_name)
             }
+
+            // The page's file input (the sync sheet's Choose a file): Android's picker, its answer back to the page.
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>,
+                                           params: FileChooserParams?): Boolean = chooser.open(callback, params)
         }
-        // A link with `download` (a Guitar Pro file on the library page, the viewer's Export PDF), or a file the
-        // WebView can't show, comes here, not as a navigation.
-        web.setDownloadListener { url, _, _, _, _ -> follow(url, download = true) }
+        // A link with `download` (a Guitar Pro file on the library page, the viewer's Export PDF, the sync sheet's
+        // export), or a file the WebView can't show, comes here, not as a navigation: an export to the share sheet
+        // ([Exports]), anything else where [follow] sends it.
+        web.setDownloadListener { url, _, disposition, _, _ ->
+            if (Exports.isExport(url, origin)) shareExport(url, disposition) else follow(url, download = true)
+        }
 
         findViewById<ImageButton>(R.id.sync).setOnClickListener { showSheet(SYNC) }
         findViewById<ImageButton>(R.id.more).setOnClickListener { menu(it) }
@@ -327,6 +339,22 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The picker's answer, for the page's file input ([chooser]). */
+    @Deprecated("Activity's own: the app has no ActivityResult registry")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!chooser.result(requestCode, resultCode, data)) {
+            @Suppress("DEPRECATION")
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+
+    /** The sync sheet's export at [url], read from the phone's server in this process and handed to Android's share
+     * sheet ([Exports]). */
+    private fun shareExport(url: String, disposition: String?) {
+        val files = files ?: return
+        screen.launch { Exports.share(this@MainActivity, files, url, disposition) }
+    }
+
     /** A line in the status bar, kept until the next sync's. */
     private fun say(text: String) {
         hiding?.cancel()
@@ -382,10 +410,40 @@ class MainActivity : Activity() {
 
     private inner class Client : WebViewClient() {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-            // alphaTab's bundle first, from the APK ([AlphaTabAssets]). Then the phone's server, at its exact origin,
-            // is all the WebView loads: anything else (another port of 127.0.0.1 among them, which the launch's
-            // cookie would reach, cookies ignoring the port) is a 404 here and reaches no socket.
-            alphaTab.answer(request) ?: if (links?.loads(request.url.toString()) == true) null else notFound()
+            // alphaTab's bundle first, from the APK ([AlphaTabAssets]); an export, read here once ([exportAnswer]).
+            // Then the phone's server, at its exact origin, is all the WebView loads: anything else (another port of
+            // 127.0.0.1 among them, which the launch's cookie would reach, cookies ignoring the port) is a 404 here
+            // and reaches no socket.
+            alphaTab.answer(request) ?: exportAnswer(request)
+                ?: if (links?.loads(request.url.toString()) == true) null else notFound()
+
+        /**
+         * An export's address, should the WebView ask it itself before its download listener hears it: the phone's
+         * server sends an export once, so the file is read here, in this process, and copied for the share sheet
+         * ([Exports.copy]), and the WebView gets an empty attachment of the same name, which its download listener
+         * then shares from that copy. Null for any other request.
+         */
+        private fun exportAnswer(request: WebResourceRequest): WebResourceResponse? {
+            val url = request.url.toString()
+            if (request.method != "GET" || !Exports.isExport(url, origin)) return null
+            val files = files ?: return notFound()
+            return try {
+                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER))) {
+                    is Exports.Copied.File -> WebResourceResponse(Exports.TYPE, null, 200, "OK",
+                        mapOf("Content-Disposition" to got.disposition), ByteArrayInputStream(ByteArray(0)))
+                    // The listener hears no download, and says nothing: the refusal is said here.
+                    is Exports.Copied.Refused -> {
+                        runOnUiThread { Handoff.toast(this@MainActivity, got.message ?: getString(R.string.export_gone)) }
+                        notFound()
+                    }
+                }
+            } catch (e: IOException) {
+                runOnUiThread {
+                    Handoff.toast(this@MainActivity, getString(R.string.export_failed, e.message ?: e.javaClass.simpleName))
+                }
+                notFound()
+            }
+        }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             if (request.isForMainFrame) follow(request.url.toString()) else false
