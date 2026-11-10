@@ -103,10 +103,13 @@ class InboxFolder(val dir: File) {
     /** Filing the file waiting as [name] failed at [now] (a shared folder, a full disk): remembered until it is
      * filed, dropped or failed again. */
     fun failed(name: String, now: Instant) {
-        val marker = marker(name) ?: return
-        if (attributes(dir.toPath().resolve(name))?.isRegularFile != true) return
-        Files.createDirectories(marker.parent)
-        Files.write(marker, ByteArray(0))
+        val file = at(name) ?: return
+        if (attributes(file)?.isRegularFile != true) return
+        val folder = dir.toPath().resolve(FAILED)
+        if (attributes(folder) == null) Files.createDirectory(folder)
+        val marker = marker(name) ?: return  // a link or a file in the folder's place: never followed, nothing kept
+        Files.write(marker, ByteArray(0), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)
         Files.setLastModifiedTime(marker, FileTime.from(now))
     }
 
@@ -135,16 +138,19 @@ class InboxFolder(val dir: File) {
             }
         } catch (_: NoSuchFileException) {
         }
-        try {  // the failures of files no longer waiting forgotten
-            Files.newDirectoryStream(dir.toPath().resolve(FAILED)).use { entries ->
-                for (entry in entries) {
-                    if (attributes(dir.toPath().resolve(entry.fileName.toString()))?.isRegularFile != true) {
-                        Files.deleteIfExists(entry)
+        val failures = failures()
+        if (failures != null) {
+            try {  // the failures of files no longer waiting forgotten
+                Files.newDirectoryStream(failures).use { entries ->
+                    for (entry in entries) {
+                        if (attributes(dir.toPath().resolve(entry.fileName.toString()))?.isRegularFile != true) {
+                            Files.deleteIfExists(entry)
+                        }
                     }
                 }
+            } catch (_: NoSuchFileException) {
+            } catch (_: NotDirectoryException) {
             }
-        } catch (_: NoSuchFileException) {
-        } catch (_: NotDirectoryException) {
         }
         return dropped.sortedWith(Py.CODE_POINT_ORDER)
     }
@@ -153,8 +159,13 @@ class InboxFolder(val dir: File) {
     private fun at(name: String): Path? =
         if (name.isEmpty() || '/' in name || name.startsWith(".") || '\u0000' in name) null else dir.toPath().resolve(name)
 
-    /** Where a failure to file the file waiting as [name] is remembered; null for a name that can't be one. */
-    private fun marker(name: String): Path? = at(name)?.let { dir.toPath().resolve(FAILED).resolve(name) }
+    /** The folder of the failures remembered, when it is one (never a link to one); null else. */
+    private fun failures(): Path? =
+        dir.toPath().resolve(FAILED).takeIf { attributes(it)?.isDirectory == true }
+
+    /** Where a failure to file the file waiting as [name] is remembered; null for a name that can't be one, or with
+     * no folder of the failures. */
+    private fun marker(name: String): Path? = at(name)?.let { failures()?.resolve(name) }
 
     /** [name], or "<stem> (2)<ext>", " (3)"… : the first no file of the folder has. */
     private fun free(name: String): String {

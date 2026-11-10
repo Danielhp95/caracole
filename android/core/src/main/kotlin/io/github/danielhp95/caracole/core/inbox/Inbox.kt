@@ -150,9 +150,10 @@ object Inbox {
      */
     fun changed(db: Db, lib: LibraryStore, name: String, data: ByteArray): KeptFile? {
         if (!keeps(name)) return null
-        val found = downloadSong(db, name)
         val copies = copies(db, Canonical.sha256Hex(data))
-        if (copies.isEmpty() || (found != null && copies.none { it.songId == found.id })) return null
+        if (copies.isEmpty()) return null  // no copy's bytes: no song's names read
+        val found = downloadSong(db, name)
+        if (found != null && copies.none { it.songId == found.id }) return null
         val mine = copies.filter { found == null || it.songId == found.id }
         if (mine.any { Kept.holds(Place.under(lib, it.path), it.sha256, data.size.toLong()) }) return null  // held
         val taken = mine.map { copy ->

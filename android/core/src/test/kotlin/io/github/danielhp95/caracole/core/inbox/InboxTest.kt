@@ -185,6 +185,17 @@ class InboxTest {
         assertTrue(File(dir, "Blur - Song 2.gp5").delete())
         folder.sweep(now)
         assertFalse(File(File(dir, InboxFolder.FAILED), "Blur - Song 2.gp5").exists())
+        // A link in the failures' folder's place is never followed: nothing remembered there, nothing swept there.
+        val elsewhere = tmp.newFolder("elsewhere").apply { File(this, "keep.gp5").writeText("mine") }
+        assertTrue(File(dir, InboxFolder.FAILED).deleteRecursively())
+        Files.createSymbolicLink(File(dir, InboxFolder.FAILED).toPath(), elsewhere.toPath())
+        folder.stage("Radiohead - Creep.gp5", "four".toByteArray(), now)
+        folder.failed("Radiohead - Creep.gp5", now)
+        assertNull(folder.failedAt("Radiohead - Creep.gp5"))
+        folder.sweep(now)
+        folder.drop("keep.gp5")
+        assertEquals(listOf("keep.gp5"), elsewhere.list()!!.toList())
+        assertEquals(listOf("Radiohead - Creep.gp5"), folder.waiting())
     }
 
     @Test fun aSharedFileIsNamedByItsNameItsBytesOrItsType() {
