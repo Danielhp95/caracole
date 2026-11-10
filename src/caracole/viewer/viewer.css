@@ -34,7 +34,8 @@
   --off-bg: #fbe1dd;
   --kb-lit: #8a8378;  /* a key lit for a chord from outside the key: apart from the white keys and the black */
 }
-@media (prefers-color-scheme: dark) {
+/* The dark palette is the screen's alone: printed, a page keeps the light one, whatever the screen's scheme. */
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --bg: #131312;
     --surface: #1d1c1b;
@@ -70,6 +71,11 @@
     --kb-lit: #7d786f;
   }
 }
+/* On paper: the light palette's colour scheme for the browser's own parts too, and a margin on every side, which
+   Android's print framework gives a WebView's page none of (a sheet, a songbook and a harmonica tab's page alike:
+   each inlines this stylesheet first). */
+@media print { :root { color-scheme: light; } }
+@page { margin: 15mm; }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
