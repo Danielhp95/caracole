@@ -404,10 +404,18 @@ the song up by its names.
 
 What each app shares (tests/fixtures/share/shares.jsonl lists them, each with where it was found):
 
-APPS_PLACEHOLDER
+- **Names in the text**, read as they come: Deezer ("I've found a song for you... Hotel California by Eagles 🔥
+  Listen now on #Deezer"), Shazam ("I used Shazam to discover … by …"), SoundCloud ("Listen to … by … on
+  #SoundCloud"), SoundHound, Musixmatch, YouTube (its subject, the video's title), Audile ("Hotel California -
+  Eagles", title first), and Ultrasonic with Share on server off (its "Title:" and "Artist:" lines, in any of its
+  languages).
+- **A link alone**: Spotify, Apple Music, TIDAL and YouTube Music, as far as anyone has written down what they
+  send; Navic, DSub and Ultrasonic's server shares send a link to your Navidrome or Subsonic server. Tempo copies its
+  share's link instead of sharing it. Symfonium's text isn't known yet: share from it once and read the log (below).
+- Any other app's text is read as you'd type it in the search box, less its links and the app's name at its end
+  ("… | Spotify").
 
-Some apps share a link alone, with no names in the text. caracole says so and offers Edit. It never asks the music
-service what a link is.
+For a link alone, caracole says so and offers Edit. It never asks the music service what a link is.
 
 **To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
 Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
