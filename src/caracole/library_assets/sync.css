@@ -15,13 +15,13 @@
     --sync-take-bg: #1d2a1d; --sync-give-bg: #1a2230; --sync-both-bg: #2a2113;
   }
 }
-/* The tab bar, from 720px: Library and Songbooks on the left, Sites, Requests and Sync on the right. The Requests
-   count, which comes and goes as requests wait or run, keeps its room, so that no tab beside it moves with it: Sites
-   and Requests, aligned on the right, and on a phone's width Sync, after it. */
+/* caracole serve's tab bar, the one with a Sync tab (the phone's and a page written to the library stay one row,
+   unsplit, at any width), from 720px: Library and Songbooks on the left, Sites, Requests and Sync on the right. The
+   Requests count, which comes and goes as requests wait or run, keeps its room, so that no tab beside it moves with
+   it: Sites and Requests, aligned on the right, and on a phone's width Sync, after it. */
 @media (min-width: 720px) {
-  .masthead.lib { grid-template-columns: auto auto minmax(0, 1fr) auto; }
-  .masthead.lib .tabs #tab-sites { margin-inline-start: auto; }
-  .masthead.lib .tabs #tab-requests .n:empty { display: inline-block; visibility: hidden; }
+  .masthead.lib:has(#tab-sync) { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .masthead.lib .tabs:has(#tab-sync) #tab-sites { margin-inline-start: auto; }
 }
 .masthead.lib .tabs:has(#tab-sync) #tab-requests .n:empty { display: inline-block; visibility: hidden; }
 [data-icon] { display: inline-flex; flex: none; }

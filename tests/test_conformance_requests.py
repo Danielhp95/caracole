@@ -504,7 +504,7 @@ def test_the_tab_is_requests_tab_for_every_count():
         filled = data["tab"].replace(data["count"], str(n) if n else "")
         assert filled == library_page._requests_tab(WebControls("tok", active=n)), n
     assert data["tab"].count(data["count"]) == 1
-    assert data["panel"] == library_page._requests_panel(WebControls("tok", sync=True))
+    assert data["panel"] == library_page._requests_panel(WebControls("tok", sync="tab"))
     assert library_page._requests_tab(None) == library_page._requests_panel(None) == ""
 
 

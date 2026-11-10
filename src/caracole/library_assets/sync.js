@@ -129,10 +129,14 @@
   let view = "what";
   let turn = 0;  // each opening and each Cancel a turn of its own: an answer for an earlier one is dropped
   let busy = false;  // a comparison, an upload, an export or a sync's post on its way
+  // POST /sync/apply on its way: whatever the sheet does meanwhile (Escape, Hide), its answer is followed.
+  let posting = false;
   let compared = null;  // the comparison: POST /sync/compare's answer, or /sync/import/compare's
-  let source = null;  // whom it compares with: {address} or {import, file}
+  let source = null;  // whom it compares with: {address} or {import, file} (``import`` once the file is opened)
   const choices = new Map();  // a conflict's unit id -> "here" or "there"
-  const kept = new Map();  // a conflict as compared (id, both digests) -> its side, for a comparison again
+  // A conflict as compared (id, both digests) -> its side: kept across a comparison again within one opening (a 409),
+  // never past a Cancel.
+  const kept = new Map();
   const docs = new Map();  // a unit id -> GET /api/sync/unit's {here, there}, or {error}
   let conflicts = [];  // the conflicts the cards ask, in order
   let at = 0;  // the card shown
@@ -169,9 +173,14 @@
     return found ? found[1] : null;
   };
   const ticked = () => boxes.filter((b) => b.checked && !b.disabled).map((b) => b.value);
-  // peer_sync.in_scope: a difference of a part ticked, or a song a songbook lists while Songbooks is.
+  const none = (v) => v === null || v === undefined;
+  // peer_sync._removes: whether the sync may remove the unit on a side, one side lacking it and the proposal not to
+  // bring it there.
+  const removes = (d) => (none(d.here) && d.proposal !== "theirs") || (none(d.there) && d.proposal !== "mine");
+  // peer_sync.in_scope, as POST /sync/apply reads it: a difference of a part ticked, or a song a songbook lists while
+  // Songbooks is, which comes along to the side that lacks it, never removed (a removal is the library's alone).
   const inScope = (d, parts) => parts.indexOf(partOf(d)) >= 0
-    || (kindOf(d) === "song" && parts.indexOf("songbooks") >= 0 && listOf(d.with).length > 0);
+    || (kindOf(d) === "song" && parts.indexOf("songbooks") >= 0 && listOf(d.with).length > 0 && !removes(d));
   const scoped = () => differences().filter((d) => inScope(d, ticked()));
   const keyOf = (d) => [d.id, d.here || "", d.there || ""].join("\n");
   const nameIn = (d) => {
@@ -363,6 +372,7 @@
     sizes = null;
     busy = false;
     choices.clear();
+    kept.clear();
     docs.clear();
     conflicts = [];
     at = 0;
@@ -371,6 +381,18 @@
       box.checked = true;
     }
     say("");
+  };
+  // A file sent for an import that no Sync took (a Cancel, a sheet closed after the comparison, an upload that
+  // failed), dropped at once (POST /sync/import/drop), so that another may be imported right after: caracole serve
+  // stages one at a time.
+  const dropFile = (id) => {
+    send("sync/import/drop", JSON.stringify({ import: id }), "application/json").catch(() => null);
+  };
+  const letGo = () => {
+    const id = source && source.import;
+    if (!id || posting || following !== null || ended) return;
+    source.import = null;
+    dropFile(id);
   };
   const close = () => {
     turn += 1;
@@ -381,18 +403,20 @@
       ended = null;
       sent = null;
     }
-    if (following === null) reset();
+    letGo();
+    if (following === null && !posting) reset();
   };
   // ``to``: the flow (sync, export, import); ``how``: ``address`` (sync), ``file`` (import).
   const open = (to, how) => {
     const opts = how || {};
-    if (following !== null || ended) {  // a sync on its way, or over while the sheet was shut: that one
+    if (following !== null || ended || posting) {  // a sync on its way, or over while the sheet was shut: that one
       show();
       if (ended) drawDone();
       else drawGoing(sent ? sent.view : null);
       return;
     }
     turn += 1;
+    letGo();
     reset();
     flow = to;
     setView("what");
@@ -581,47 +605,58 @@
     if (conflicts.length) showCard();
     else apply();
   };
+  const syncingWith = () => (isFile() ? "Syncing with a file from " : "Syncing with ") + nameOf();
   const apply = () => {
     const mine = turn;
     const parts = ticked();
     const chosen = scoped().filter((d) => d.proposal === "conflict" && choices.has(d.id))
       .map((d) => choices.get(d.id) + "\t" + d.id);
     busy = true;
+    posting = true;
     setView("going");
-    title.textContent = "Syncing with " + nameOf();
+    title.textContent = syncingWith();
     goingLine.textContent = "Sending the sync…";
     goingLine.dataset.tone = "running";
     goingDetail.textContent = "";
     cancel.hidden = true;
     go.hidden = true;
     say("");
-    sent = { compared, choices: new Map(choices), parts, flow, sides: sidesNow(), view: null };
+    sent = { compared, choices: new Map(choices), docs: new Map(docs), parts, flow, sides: sidesNow(),
+             title: syncingWith(), view: null };
     drawChips(null);
     drawCounts();
+    // Its answer is never dropped: once posted, a sync queued is followed, the sheet shut meanwhile or not (Escape
+    // on its way, as Hide, only hides it). A refusal queued nothing: the sheet still open says it and compares again;
+    // shut, the next opening compares afresh.
+    const refused = (said, again) => {
+      sent = null;
+      if (!sheet.open) {
+        letGo();
+        reset();
+        return;
+      }
+      setView("what");
+      if (again) compareAgain(said);  // the two changed since, or it is gone: afresh
+      else {
+        say(said, "failed");
+        drawWhat();
+      }
+    };
     post("sync/apply", [["comparison", String(compared.comparison || "")], ["prefer", ""],
                         ["choices", chosen.join("\n")], ["parts", parts.join(",")]]).then((answer) => {
-      if (mine !== turn) return;
+      posting = false;
       busy = false;
       const job = answer.ok && answer.body && objOf(answer.body.job);
       if (!job) {
-        sent = null;
-        setView("what");
-        if (answer.status === 409) compareAgain(refusal(answer));  // the two changed since, or it is gone: afresh
-        else {
-          say(refusal(answer), "failed");
-          drawWhat();
-        }
+        refused(refusal(answer), answer.status === 409);
         return;
       }
       follow(job);
-      goingLine.focus({ preventScroll: true });
+      if (sheet.open && mine === turn) goingLine.focus({ preventScroll: true });
     }, () => {
-      if (mine !== turn) return;
+      posting = false;
       busy = false;
-      sent = null;
-      setView("what");
-      say(UNREACHABLE, "failed");
-      drawWhat();
+      refused(UNREACHABLE, false);
     });
   };
   go.addEventListener("click", () => {
@@ -639,9 +674,10 @@
   const drawGoing = (job) => {
     setView("going");
     check.hidden = true;
-    const shownName = sent && sent.sides ? sent.sides.there.name : String(job && job.display || "")
-      .replace(/^Sync with (a file from )?/, "");
-    title.textContent = "Syncing with " + (sent && sent.compared ? nameOf() : shownName || "another caracole");
+    // The sheet's own sync by the name it compared with; one it didn't start by its request's name ("Sync with a
+    // file from Phone").
+    const shown = String(job && job.display || "").replace(/^Sync with /, "");
+    title.textContent = sent && sent.title ? sent.title : "Syncing with " + (shown || "another caracole");
     sub.textContent = sent && sent.compared && source && source.address ? source.address : "";
     const line = job && objOf(job.line) ? job.line : {};
     goingLine.textContent = String(line.text || (job ? job.state : "") || "Sending the sync…");
@@ -772,7 +808,8 @@
     const leftIds = new Set(listOf(outcome.left).map((e) => String(Array.isArray(e) ? e[0] : e)));
     // The conflicts it settled: those of the parts it synced, each with a side, and none it left as it was.
     const conflictIds = new Set(Array.from(found.values()).filter((d) => d.proposal === "conflict"
-      && chosen.has(d.id) && inScope(d, was.parts) && !leftIds.has(d.id)).map((d) => d.id));
+      && chosen.has(d.id) && inScope(d, was ? was.parts : PARTS) && !leftIds.has(d.id)).map((d) => d.id));
+    const read = was && was.docs ? was.docs : new Map();  // each card's two documents, as it showed them
     const books = objOf(was && was.compared && was.compared.songbooks) || {};
     const out = [];
     // Songs (and the library's other units) taken, then given.
@@ -803,9 +840,9 @@
       out.push(section("conflicts", W.counted(ids.length, "conflict") + " · " + short, way, ids.map((u) => {
         const which = chosen.get(u);
         const side = which === "here" ? sides.here : sides.there;
-        const shown = docs.get(u);
+        const shown = read.get(u);
         const lines = shown && !shown.error ? W.differ(u.split("/")[0], shown.here, shown.there) : [];
-        const how = lines.map((l) => lowered(l.what) + ", " + l[which]).join("; ");
+        const how = lines.map((l) => lowered(l.what) + ", " + l[which]).join(", ");
         return row(rowName(u, found.get(u)), side.whose + " version kept" + (how ? ": " + how : ""));
       })));
     }
@@ -889,7 +926,19 @@
       const link = el("a", "sync-download", String(made.name || "caracole.caracole"));
       link.href = "api/sync/export?export=" + encodeURIComponent(made.export);
       link.download = String(made.name || "caracole.caracole");
-      say(["Made ", link, typeof made.size === "number" ? " · " + W.size(made.size) : ""], "done");
+      const once = el("span", "sync-once");
+      // caracole serve sends the file once (GET /api/sync/export, then 404): the link after its first click says so,
+      // never a download of nothing.
+      let clicked = false;
+      link.addEventListener("click", (e) => {
+        if (!clicked) {
+          clicked = true;
+          return;
+        }
+        e.preventDefault();
+        once.textContent = " · sent once already: Export again for another copy";
+      });
+      say(["Made ", link, typeof made.size === "number" ? " · " + W.size(made.size) : "", once], "done");
       partsBox.disabled = true;
       go.textContent = "Done";
       go.disabled = false;
@@ -915,8 +964,11 @@
     say(sending(0, file.size), "running");
     send("sync/import/open", JSON.stringify({ size: file.size, name: file.name }), "application/json")
       .then((answer) => {
-        if (mine !== turn) return null;
         const opened = answer.ok && objOf(answer.body) && typeof answer.body.import === "string" ? answer.body : null;
+        if (mine !== turn) {  // cancelled while it was opened: let it go at once
+          if (opened) dropFile(opened.import);
+          return null;
+        }
         if (!opened) {
           busy = false;
           say(refusal(answer), "failed");
@@ -924,6 +976,7 @@
           return null;
         }
         const id = opened.import;
+        source.import = id;  // a Cancel from here drops it (letGo)
         const part = Math.max(1, Math.min(Number(opened.part) || PART_SIZE, PART_SIZE));
         let have = 0;
         const next = () => {
@@ -938,6 +991,7 @@
             if (mine !== turn) return null;
             if (!sent_.ok || !objOf(sent_.body) || typeof sent_.body.have !== "number") {
               busy = false;
+              letGo();  // what it has of the file is of no use: dropped, so the file may be chosen again at once
               say(refusal(sent_), "failed");
               drawWhat();
               return null;
@@ -951,6 +1005,7 @@
       }).catch(() => {
         if (mine !== turn) return;
         busy = false;
+        letGo();
         say(UNREACHABLE, "failed");
         drawWhat();
       });

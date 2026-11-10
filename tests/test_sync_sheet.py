@@ -185,8 +185,10 @@ class FakeSync:
     """The sync's routes, faked in front of a real WebApp (§3.4's shapes): ``state`` for GET /api/sync, ``tested``
     for POST /sync/test, ``comparison`` for POST /sync/compare, ``units`` for GET /api/sync/unit, a job of ``views``
     for POST /sync/apply, whose view /jobs.json gives is ``views[at]`` (``auto``: the next one at each ask); and the
-    export's and the import's (``sizes``, ``exported``, ``file_comparison``, ``file_views``). ``refuse[path]`` holds
-    refusals (status, words), each answered once in its turn. It records what the page asked (``asked``: each GET's
+    export's and the import's (``sizes``, ``exported``, ``file_comparison``), one import open at a time, as caracole
+    serve stages them (409 for another until it is dropped, or refused at its comparison, which deletes it).
+    ``refuse[path]`` holds refusals (status, words), each answered once in its turn; ``hold_on(path)`` holds the next
+    answer to a post there until the event it gives is set. It records what the page asked (``asked``: each GET's
     path and query) and posted (``posts``: each form's fields, each JSON document, each part's place and size)."""
 
     def __init__(self, *, state=None, comparison=None, views=None):
@@ -205,7 +207,17 @@ class FakeSync:
         self.posts: list[tuple[str, object]] = []
         self.received = bytearray()
         self.size = 0
+        self.opened: str | None = None  # the import open now
+        self.imports = 0
+        self.held: dict[str, threading.Event] = {}
         self.lock = threading.Lock()
+
+    def hold_on(self, path: str) -> threading.Event:
+        """The next post to ``path`` answered only once the event this gives is set."""
+        event = threading.Event()
+        with self.lock:
+            self.held[path] = event
+        return event
 
     def posted(self, path: str) -> list:
         with self.lock:
@@ -291,10 +303,16 @@ class FakeSync:
                     token = request.headers.get("x-caracole-form-token", "")
                 with self.lock:
                     self.posts.append((path, body))
+                    held = self.held.pop(path, None)
+                if held is not None:
+                    held.wait(20)
                 if token != "tok":
                     return answer(403, {"error": "Refused", "reload": True})
                 refused = self._refused(path)
                 if refused is not None:
+                    if path == "/sync/import/compare":  # a file refused is deleted: another may be opened
+                        with self.lock:
+                            self.opened = None
                     return answer(refused[0], {"error": refused[1]})
                 if path == "/sync/test":
                     return answer(200, self.tested)
@@ -308,15 +326,30 @@ class FakeSync:
                     return answer(200, self.exported)
                 if path == "/sync/import/open":
                     with self.lock:
+                        if self.opened is not None:
+                            return answer(409, {"error": "A file is being sent here already: try again once it is "
+                                                         "taken, or in an hour."})
+                        self.opened = format(0xfedcba9876543210 - self.imports, "016x")
+                        self.imports += 1
                         self.size = int(body["size"])
-                    return answer(200, {"import": "fedcba9876543210", "part": 8 * MIB})
+                        self.received = bytearray()
+                        opened_ = self.opened
+                    return answer(200, {"import": opened_, "part": 8 * MIB})
                 if path == "/sync/import/part":
                     with self.lock:
+                        if body["import"] != self.opened:
+                            return answer(404, {"error": "No such import is open here: choose the file again."})
                         if body["at"] != len(self.received):
                             return answer(400, {"error": "That part isn't the next one."})
                         self.received.extend(request.body)
                         have = len(self.received)
                     return answer(200, {"have": have})
+                if path == "/sync/import/drop":
+                    with self.lock:
+                        if body.get("import") != self.opened:
+                            return answer(404, {"error": "No such import is open here: choose the file again."})
+                        self.opened = None
+                    return answer(200, {"dropped": body["import"]})
                 return answer(404, {"error": "No such route."})
             return real(request)
 
@@ -381,17 +414,19 @@ def test_the_laptops_tab_bar_splits_library_and_songbooks_from_sites_requests_an
 
 
 @in_chromium
-@pytest.mark.parametrize("sync", ["tab", "sheet"])
-def test_on_a_phone_the_tabs_stay_one_row_unsplit(served, sync):
+@pytest.mark.parametrize(("sync", "width"), [("tab", 390), ("sheet", 390), ("sheet", 800)])
+def test_on_a_phone_the_tabs_stay_one_row_unsplit(served, sync, width):
+    """A phone's width, and the phone's page at any (in landscape, or a tablet's 800 px): one row, none pushed
+    aside; only caracole serve's page, the one with a Sync tab, splits from 720 px."""
     url = served(FakeSync(), noting("data-tabs", TABS) + noting("data-wide", "document.documentElement.scrollWidth"),
                  sync=sync)
-    dom = browser.dump_dom(url, (390, 844), mobile=True, touch=True)
+    dom = browser.dump_dom(url, (width, 844), mobile=True, touch=True)
     tabs = noted(dom, "data-tabs")
     names = ["tab-library", "tab-songbooks", "tab-sites", "tab-requests"] + (["tab-sync"] if sync == "tab" else [])
     assert [t[0] for t in tabs] == names
     assert len({top for *_, top in tabs}) == 1, tabs
     assert all(0 <= b[1] - a[2] <= 8 for a, b in zip(tabs, tabs[1:])), tabs  # one row, none pushed aside
-    assert noted(dom, "data-wide") <= 390
+    assert noted(dom, "data-wide") <= width
 
 
 def test_the_phones_page_has_the_sheet_and_no_sync_tab(conn, cfg):
@@ -657,14 +692,14 @@ def test_cancel_on_a_card_queues_nothing(served, tmp_path):
         assert page.wait(f"!{SHEET}.open")
         assert fake.posted("/sync/apply") == []
         assert page.js("document.documentElement.classList.contains('sheet-open')") is False
-        # Opened again, it compares afresh and starts at the beginning: nothing was kept but the choice itself.
+        # Opened again, it compares afresh and starts at the beginning: Cancel forgot the side chosen on a card too.
         page.js("location.hash = '#sheet=sync'")
         at_view(page, "what")
         assert page.wait("!document.getElementById('sync-go').disabled")
         assert len(fake.posted("/sync/compare")) == 2
         page.click("#sync-go")
         at_card(page)
-        assert page.js("document.getElementById('sync-card-name').textContent") == "Oasis · Wonderwall"
+        assert page.js(CARD)["name"] == "Eagles · Hotel California" and page.js(CARD)["at"] == "1 of 2"
         page.press("Escape")  # Escape on a card is Cancel too
         assert page.wait(f"!{SHEET}.open")
         assert fake.posted("/sync/apply") == []
@@ -691,6 +726,78 @@ def test_unticked_parts_are_sent_and_their_differences_counted_out(served, tmp_p
         at_view(page, "going")
         [form] = fake.awaited("/sync/apply")
         assert form["parts"] == ["songbooks"] and form["choices"] == ["there\tsong/eagles/hotel california"]
+
+
+@in_chromium
+def test_a_song_a_songbook_lists_comes_along_with_songbooks_but_is_never_removed_by_them(served, tmp_path):
+    """peer_sync.in_scope, as POST /sync/apply reads it: with Songbooks alone, a song a songbook lists comes along to
+    the side that lacks it, but a removal of it (a side that lacks it, and the sync not to bring it there), given or
+    changed on both, is the library's: neither counted, nor carded, nor sent."""
+    comparison = copy.deepcopy(COMPARISON)
+    by = {d["id"]: d for d in comparison["differences"]}
+    # Creep, which Campfire lists, removed here: the sync would remove it there (given). Hotel California, listed
+    # too, removed here and changed there: a conflict whose one side is a removal.
+    by["song/radiohead/creep"].update(song("song/radiohead/creep", "Radiohead", "Creep", "mine", ("gone", None),
+                                           listed=["songbook/campfire"]))
+    by["song/eagles/hotel california"].update(song("song/eagles/hotel california", "Eagles", "Hotel California",
+                                                   "conflict", ("gone", "changed"), listed=["songbook/campfire"]))
+    assert by["song/radiohead/creep"]["here"] is None and by["song/eagles/hotel california"]["here"] is None
+    # Wonderwall, newly listed there and here alone: it comes along (here has it, the sync brings it there).
+    by["song/oasis/wonderwall"].update(song("song/oasis/wonderwall", "Oasis", "Wonderwall", "mine", ("new", None),
+                                            listed=["songbook/campfire"]))
+    fake = FakeSync(comparison=comparison)
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        # Every part: both removals counted, the conflict among them.
+        assert page.js(COUNTS) == [["take", "4 to take"], ["give", "4 to give"], ["both", "1 changed on both"]]
+        page.click(".sync-part[data-part=library] input")
+        page.click(".sync-part[data-part=indexes] input")
+        # Songbooks alone: its two songbooks taken and Wonderwall given; neither removal.
+        assert page.js(COUNTS) == [["take", "2 to take"], ["give", "1 to give"], ["both", "0 changed on both"]]
+        fake.auto = True
+        page.click("#sync-go")
+        at_view(page, "done", timeout=15)  # no card: the one conflict is out of these parts
+        [form] = fake.awaited("/sync/apply")
+        assert form["parts"] == ["songbooks"] and form["choices"] == [""]
+        assert fake.gets("/api/sync/unit") == []
+        assert "conflicts" not in [s["kind"] for s in page.js(SUMMARY)]
+
+
+@in_chromium
+def test_escape_while_the_sync_is_sent_hides_it_and_the_sync_is_followed_all_the_same(served, tmp_path):
+    """The last card answered posts the sync at once: Escape before its answer comes only hides the sheet (as Hide
+    does), and the sync queued is followed, its summary drawn from the cards it showed; opened again, the sheet shows
+    that sync and never sends another."""
+    fake = FakeSync()
+    answered = fake.hold_on("/sync/apply")
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        page.click("#sync-same")
+        page.click("#sync-keep-here")
+        at_view(page, "going")
+        fake.awaited("/sync/apply")  # it reached the server, whose answer waits
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open")
+        fake.auto = True
+        answered.set()
+        page.js("location.hash = '#sheet=sync'")
+        at_view(page, "done", timeout=15)
+        assert len(fake.posted("/sync/apply")) == 1 and len(fake.posted("/sync/compare")) == 1
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        conflicts = next(s for s in page.js(SUMMARY) if s["kind"] == "conflicts")
+        assert conflicts["rows"][0] == ["Hotel California – Eagles", "this computer's version kept: its own key, A "
+                                        "minor, capo 2, its sheet, Ultimate Guitar · tab 1234567"]
+        page.click("#sync-go")  # Done
+        assert page.wait(f"!{SHEET}.open")
+        # Over, a sync is a new one: the next opening compares afresh.
+        page.js("location.hash = '#sheet=sync'")
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-counts').hidden")
+        assert len(fake.posted("/sync/compare")) == 2 and len(fake.posted("/sync/apply")) == 1
 
 
 @in_chromium
@@ -765,7 +872,7 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
             [["Let It Be – The Beatles"], ["Mononoke – Pomme"], ["Creep – Radiohead"]],
             [["Barbara Allen – Traditional", "added on this computer"],
              ["the alias of soda-stereo", "changed on this computer"]],
-            [["Hotel California – Eagles", "this computer's version kept: its own key, A minor, capo 2; its sheet, "
+            [["Hotel California – Eagles", "this computer's version kept: its own key, A minor, capo 2, its sheet, "
                                            "Ultimate Guitar · tab 1234567"],
              ["Wonderwall – Oasis", "Studio's version kept: its lyrics, found"]],
             [["Campfire", "3 songs added"], ["Wedding set", "12 songs"]],
@@ -927,6 +1034,10 @@ def test_export_offers_the_parts_with_their_sizes_indexes_unticked_and_downloads
         assert _saved(downloads) == ["Laptop-03-11-26.caracole"]
         assert fake.gets("/api/sync/export") == ["/api/sync/export?export=0123456789abcdef"]  # once
         assert page.js("document.getElementById('sync-go').textContent") == "Done"
+        # caracole serve sends it once: clicked again, the link says so, and asks nothing.
+        page.click("#sync-status a[download]")
+        assert page.wait(f"{STATUS}.endsWith('sent once already: Export again for another copy')")
+        assert len(fake.gets("/api/sync/export")) == 1 and _saved(downloads) == ["Laptop-03-11-26.caracole"]
         page.click("#sync-go")
         assert page.wait(f"!{SHEET}.open")
         # The indexes' size unknown: their tabs instead; neither library nor songbooks: no export.
@@ -1012,6 +1123,52 @@ def test_import_sends_the_file_in_parts_then_syncs_as_with_a_file_with_no_arrow_
         assert page.js("document.getElementById('sync-file-note').hidden") is False
         assert page.js("document.getElementById('sync-file-note').textContent").split() == (
             'A file takes nothing back: no "given" arrow. To give your changes, export a file of your own.'.split())
+
+
+@in_chromium
+def test_a_file_cancelled_left_or_refused_is_let_go_so_the_next_one_is_sent_at_once(served, tmp_path):
+    """caracole serve stages one import at a time: a file cancelled while it is sent, or whose sheet is closed after
+    its comparison, is dropped at once (POST /sync/import/drop), and one refused at its comparison is deleted there,
+    so that the next file chosen is sent right after, with no hour to wait."""
+    from caracole.peer_file import OLDER
+
+    fake = FakeSync()
+    big, small = tmp_path / "Phone-03-11-26.caracole", tmp_path / "Phone-04-11-26.caracole"
+    big.write_bytes(bytes(range(256)) * (20 * MIB // 256))
+    small.write_bytes(b"PK\x03\x04 a small file")
+    first = fake.hold_on("/sync/import/part")
+    with opened(tmp_path, served(fake) + "#sheet=import") as page:
+        at_view(page, "what")
+        choose_file(page, big)
+        fake.awaited("/sync/import/part")  # its first part on its way
+        page.click("#sync-cancel")
+        assert page.wait(f"!{SHEET}.open")
+        assert fake.awaited("/sync/import/drop") == [{"import": "fedcba9876543210"}]
+        first.set()
+        # The next file, at once; then the sheet closed after its comparison, never synced: dropped too.
+        for n, shut in ((1, "#sync-cancel"), (2, None)):
+            page.js("location.hash = '#sheet=import'")
+            at_view(page, "what")
+            choose_file(page, small)
+            assert page.wait("!document.getElementById('sync-counts').hidden", 20), page.js(STATUS)
+            if shut:
+                page.click(shut)
+                assert page.wait(f"!{SHEET}.open")
+                assert fake.awaited("/sync/import/drop", 2)[1] == {"import": format(0xfedcba9876543210 - n, "016x")}
+            else:
+                page.press("Escape")
+                assert page.wait(f"!{SHEET}.open")
+                assert len(fake.awaited("/sync/import/drop", 3)) == 3
+        # A file refused at its comparison is deleted there: the next one is sent right after.
+        older = OLDER.format(name="horde_logbook", day="03/11/26")
+        fake.refuse["/sync/import/compare"] = [(409, older)]
+        page.js("location.hash = '#sheet=import'")
+        at_view(page, "what")
+        choose_file(page, small)
+        assert page.wait(f"{STATUS} === {json.dumps(older)}")
+        choose_file(page, small)
+        assert page.wait("!document.getElementById('sync-counts').hidden", 20), page.js(STATUS)
+        assert len(fake.posted("/sync/import/open")) == 5 and fake.posted("/sync/apply") == []
 
 
 @in_chromium

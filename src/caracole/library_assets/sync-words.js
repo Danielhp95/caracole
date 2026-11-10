@@ -108,6 +108,10 @@
 
   // --- a song's own key, as overrides.toml's [version] keeps it --------------------------------------------------
   const ACCIDENTAL = { "#": "♯", b: "♭", "♯": "♯", "♭": "♭", "": "" };
+  // The instrument a version is played on (``inst=``, none for the guitar), as a version's name says it
+  // (viewer/version.py ``instrument_words``, which test_sync_words.py holds it to).
+  const INSTRUMENTS = { ukulele: "ukulele", "ukulele-low-g": "low-G ukulele", baritone: "baritone ukulele",
+                        piano: "piano", harmonica: "harmonica", flute: "flute", recorder: "recorder" };
   const keyName = (key) => {
     const m = /^([A-Ga-g])([#b♯♭]?)(m?)$/.exec(key);
     return m ? m[1].toUpperCase() + ACCIDENTAL[m[2]] + (m[3] ? " minor" : " major") : key;
@@ -137,6 +141,8 @@
     if (capo !== null && /^\d+$/.test(capo)) said.push("capo " + Number(capo));
     if (fields.get("alt")) said.push("some chords swapped");
     if (fields.get("at")) said.push("its own shapes");
+    const inst = fields.get("inst");
+    if (inst && inst !== "guitar") said.push("on the " + (own.call(INSTRUMENTS, inst) ? INSTRUMENTS[inst] : inst));
     return said.join(", ");
   };
 

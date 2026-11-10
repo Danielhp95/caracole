@@ -6085,26 +6085,30 @@ Each opens the same sheet the phone's sync button opens, so a sync goes the same
    songbook) changed differently on both sides since the last sync gets a card: its name, "1 of N", and each side's
    version, this computer on the left, showing how the two differ (its own key, its sheet, its versions, its lyrics,
    an override; a songbook's set list). Under **Which version to keep**, a button for each side: **This computer** and
-   the server's name. **Same for the other N** keeps that side for every conflict left. There is no Skip: **Cancel**
-   (or Escape) ends the sync with nothing taken, given or sent.
+   the server's name. Tick **Same for the other N**, then a side, to keep it for every conflict left. There is no
+   Skip: **Cancel** (or Escape) ends the sync with nothing taken, given or sent, and forgets the sides you chose.
 3. **What it did.** The sheet follows the sync (a request like any, in the Requests tab too), then says "Synced with:
    Studio" and when, the two sides as icons, and a line for each kind of change, an arrow the way it went: songs taken,
    songs given (and why: "added on this computer"), the conflicts (whose version was kept, and how it differs), the
    songbooks (each with what changed in it) and the indexes (the tabs each site's index tracks, before and after; a
    site whose listings no longer name some tabs goes down, in red). Each opens on its chevron. **Done** closes it.
 
-A sync already on its way when the page loads, or in another tab, is followed, never started again. When the two
-changed since the comparison, Sync is refused in the server's words and the sheet compares again, keeping your
-choices for every conflict as it was. Behind it, Sync queues `caracole peer sync ADDRESS --push --parts=… --compared
-HASH --choose=SIDE:ID …` (see above): only the comparison, the parts and your choices are sent, never a song.
+A sync already on its way when the page loads, or in another tab, is followed, never started again; once the last
+card is answered the sync is sent, and Escape then only hides the sheet, as **Hide** does. When the two changed
+since the comparison, Sync is refused in the server's words and the sheet compares again, keeping your choices for
+every conflict as it was. Behind it, Sync queues `caracole peer sync ADDRESS --push --parts=… --compared HASH
+--choose=SIDE:ID …` (see above): only the comparison, the parts and your choices are sent, never a song.
 
 **Export** asks what to put in the file, with each part's size: Library and Songbooks ticked, **Site indexes**
 unticked (they are big). **Export** makes the file and the browser saves it as `<library name>-dd-mm-yy.caracole`
-(see [Export and import](#export-and-import-peer-export-peer-import)). **Import a file** sends the file you choose to
-caracole serve in parts of 8 MiB, then opens the sheet as a sync with it: "Sync with a file from Phone", when it was
-exported, and its parts (one the file doesn't hold greyed, "Not in this file"); a conflict's other side is the
-**File**. A file takes nothing back: the summary has no "given" arrow; to give your changes, export a file of your
-own. A file older than your last sync with its caracole, or this library's own export, is refused in its own words.
+(see [Export and import](#export-and-import-peer-export-peer-import)); caracole serve sends it once, so its link,
+clicked again, says to export again for another copy. **Import a file** sends the file you choose to caracole serve
+in parts of 8 MiB, then opens the sheet as a sync with it: "Sync with a file from Phone", when it was exported, and
+its parts (one the file doesn't hold greyed, "Not in this file"); a conflict's other side is the **File**, its
+version read from the file. A file takes nothing back: the summary has no "given" arrow; to give your changes,
+export a file of your own. A file older than your last sync with its caracole, or this library's own export, is
+refused in its own words. caracole serve holds one file to import at a time: one you cancel, or close the sheet on
+without Sync, is dropped at once, so that the next can be sent right after.
 
 The same sheet opens at an address: `#sheet=sync`, `#sheet=export` or `#sheet=import` after the library page's
 (the phone's Settings use these).

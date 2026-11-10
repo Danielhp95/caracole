@@ -84,6 +84,24 @@ def test_an_own_key_reads_as_the_owner_reads_it(words):
                     "C major, capo 0, some chords swapped, its own shapes", "as the sheet's", "nonsense"]
 
 
+def test_an_own_key_says_the_instrument_it_is_played_on_as_a_versions_name_says_it(words):
+    """Two own versions that differ by their instrument alone read apart: ", on the ukulele" (``inst=``, as Make this
+    my version writes it), each instrument in viewer/version.py's words; the guitar, none."""
+    from caracole.viewer.instruments import GUITAR, INSTRUMENTS
+    from caracole.viewer.version import instrument_words
+
+    others = [inst for inst in INSTRUMENTS if inst is not GUITAR]
+    entries = [f"key=Am&capo=2&inst={inst.id}" for inst in others] + ["key=Am&capo=2&inst=guitar", "key=Am&inst=lute"]
+    said = words(f"{json.dumps(entries)}.map(W.ownKey)")
+    assert said == [f"A minor, capo 2, on the {instrument_words(inst)}" for inst in others] + [
+        "A minor, capo 2", "A minor, on the lute"]
+    assert said[0] == "A minor, capo 2, on the ukulele" and "on the low-G ukulele" in said[1]
+    here = song_doc("Eagles", "Hotel California", version="key=Am&capo=2")
+    there = song_doc("Eagles", "Hotel California", version="key=Am&capo=2&inst=ukulele")
+    assert differ(words, "song", here, there) == [
+        {"what": "Its own key", "here": "A minor, capo 2", "there": "A minor, capo 2, on the ukulele"}]
+
+
 def test_a_songbooks_set_lists_are_told_apart(words):
     assert differ(words, "songbook", CAMPFIRE_HERE, CAMPFIRE_THERE) == [
         {"what": "Its set list", "here": "2 songs", "there": "5 songs"},
