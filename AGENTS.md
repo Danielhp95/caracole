@@ -346,8 +346,8 @@ Below the table, a section for each step whose modules have more to say.
 - library_page.py: `index.html`.
 - library_assets/.
 - songbook_section.py: its Songbooks tab's data.
-- song_sites.py: which sites have each song, had nothing or weren't asked yet: its line's marks, rows.js
-  `siteMarks`.
+- song_sites.py: which sites have each song, had nothing or weren't asked yet: its card's marks, rows.js
+  `siteMarks` (card.js `sitesOf`).
 
 #### backup
 
@@ -813,10 +813,14 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
-- A song of yours closes to a line of what it holds (rows.js `holds`, each a `glyph`: inline SVG made with
-  `createElementNS`, the one address the page names) and opens as a card (card.js `caracoleCard`, card.css):
-  - a tile for each thing to play from, each source's versions a chip whose drawer reads the page's data alone, never
-    a request;
+- A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
+  `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
+  came from, how many; the lyrics none), Fetch now's download glyph where it has one (rows.js `fetchIcon`, a site's
+  song's Get it too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
+  its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
+    data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 
@@ -1590,7 +1594,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
   - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
     kept whole).
-- A sheet's versions and progressions (version-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): `viewer.version`'s `Versions`, viewer/version.py's page
+  side function for function, and render.py's `own_version` (`ownVersion`); `apply_version`, a sheet's ChordPro for
+  chordpro's PDF of a version, is the computer's alone.
+  - `fromQuery` and `query`, a version as the viewer's address reads and writes it (Python's parse_qsl, JavaScript's
+    Number(), URLSearchParams' bytes); `playedKey`, `forInstrument`, `label` and `playedLabel`; `settingProblem` in
+    Python's words and reprs, of any value a form or a file gives; `inSetting`; `keyVersion` (an
+    IllegalArgumentException with key_version's words, which `Overrides.read` and `OverrideWriters.addVersion` take as
+    their check), `inKey`, `entry` and `KeyVersion.query` and `label`, byte for byte, as `[version]` is in a song's
+    sync unit.
+  - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
+    text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
+    library-cards' to wire (Found.kt).
+  - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
+    tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
+    (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of
+    room.
+  - Where Kotlin holds less than Python: a chord's index, a shape's number or a swap's root or bass past an Int, in an
+    address, is dropped, and a record's song id past a Long is none.
 - A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
   - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
     harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
@@ -1616,7 +1638,24 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     ones, parsed and read as another reading's pin says (layout/'s small tabs whole, the rest by digest, for the
     viewer's budget), its rows' parts as lengths, its lines and words, `align` on drawn rows, and `_cuts` on drawn
     words, on ties that each of its numbers decides (`TIED_CUTS`) and on MAX_CUTS's edges.
-- The sheet page (pages): not built yet.
+- The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
+  writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
+  inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
+    writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
+    a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
+    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
+    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - A page record is the generator's `page_out` and `PagesReplay.out`: `sha256` and `size` of the whole page, `body`
+    and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
+    digits each), so that it pins the members' order too; another lane's page records take that shape.
+  - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
+    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
+    Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
 

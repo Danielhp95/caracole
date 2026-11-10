@@ -278,6 +278,10 @@ def card(dom: str, title: str) -> str:
     return found.group(0)
 
 
+# A line's button of its sheet's PDF (card.js plays), which a fetched song's line has.
+SHEET_BUTTON = r'<a class="play play-sheet" href="[^"]*sheet\.pdf"'
+
+
 def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, conn, tmp_path):
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
@@ -294,8 +298,8 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     assert 'role="status"' in line and 'data-tone="ready"' in line  # read out as it changes
     # Ready, alone: the line folds it away (a screen reader hears it), and the song's own line opens the sheet.
     assert "Ready" in line and "<a" not in line and "Open sheet" not in line
-    # Once done, the line shows what the library has now: the sheet, its button, and no Fetch now.
-    assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown) and 'action="/fetch"' not in shown
+    # Once done, the line shows what the library has now: the sheet's button, and no Fetch now.
+    assert re.search(SHEET_BUTTON, shown) and 'action="/fetch"' not in shown
     assert 'data-status="found"' in shown
     assert 'action="/fetch"' in card(dom, "Wonderwall")  # the other line is as it was
     # The counts follow: one found song now, in the masthead and on the buttons.
@@ -303,16 +307,16 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
-# Notes each line's glyphs of what its song holds, its badges and how many marks of where things came from it shows
-# beside its sites' marks (song_sites.py's, its own).
+# Notes each line's buttons of what its song holds, its badges and how many marks of where things came from it shows
+# but on its buttons.
 HOLDS = """
 (() => {
   const held = {};
   for (const l of document.querySelectorAll("#list .line")) {
     held[l.querySelector("h3").textContent] = {
-      holds: Array.from(l.querySelectorAll(".line-holds svg")).map((g) => g.getAttribute("aria-label")),
+      holds: Array.from(l.querySelectorAll(".line-plays .play")).map((a) => a.dataset.kind),
       badges: Array.from(l.querySelectorAll(".line-status .badge")).map((b) => b.textContent),
-      marks: l.querySelectorAll(".line-meta .source:not(.line-sites > *)").length,
+      marks: l.querySelectorAll(".line-meta .source").length,
     };
   }
   document.body.setAttribute("data-held", JSON.stringify(held));
@@ -326,7 +330,7 @@ def test_a_served_line_says_what_its_song_holds_and_nothing_of_found(serve, cfg,
     hotel_california(conn, cfg)
     add_song(conn, "Eagles", "Desperado")
     held = attribute(dump_dom(serve(FakeCaracole(cfg), HOLDS), tmp_path), "data-held")
-    assert held["Hotel California"] == {"holds": ["Chord sheet", "Guitar Pro", "Harmonica tab", "Lyrics", "Score"],
+    assert held["Hotel California"] == {"holds": ["sheet", "guitar", "tab", "harmonica", "score"],
                                         "badges": [], "marks": 0}, held
     assert held["Desperado"] == {"holds": [], "badges": ["Wanted"], "marks": 0}, held
 
@@ -367,10 +371,10 @@ def test_a_songs_request_line_stays_the_same_live_region_until_its_request_ends(
 
     shown = card(dom, "Creep")
     assert re.search(r'<p class="progress"[^>]*data-tone="ready"', shown) and shown.count('class="progress"') == 1
-    assert ">Open PDF</a>" in shown  # the line is the song's new one all the same
+    assert re.search(SHEET_BUTTON, shown)  # the line is the song's new one all the same
     assert attribute(dom, "data-same") == {"list Creep": True}
-    # Ready, the request line folds away: the focus goes to the Open that took Fetch now's place, on the same line.
-    assert attribute(dom, "data-focus") == ["a.btn small primary", "Creep"]
+    # Ready, the request line folds away: the focus goes to the first of its buttons, its sheet's, on the same line.
+    assert attribute(dom, "data-focus") == ["a.play play-sheet", "Creep"]
 
 
 def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, tmp_path):
@@ -382,7 +386,7 @@ def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, t
     requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S)
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
-    assert "Radiohead" in shown and "Ready" in shown and ">Open PDF</a>" in shown
+    assert "Radiohead" in shown and "Ready" in shown and re.search(SHEET_BUTTON, shown)
     # Its line is the one "Sending…" was written in: a screen reader hears it change, to the end.
     assert shown.count('class="progress"') == 1 and attribute(dom, "data-same") == {"requested Creep": True}
     seen = attribute(dom, "data-seen")
@@ -510,7 +514,7 @@ def test_a_new_songs_request_shows_after_a_reload(serve, cfg, conn, tmp_path):
     requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S)
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
-    assert "Radiohead" in shown and "Ready" in shown and ">Open PDF</a>" in shown
+    assert "Radiohead" in shown and "Ready" in shown and re.search(SHEET_BUTTON, shown)
     assert "Adding to the library…" in attribute(dom, "data-seen")
 
 
@@ -661,7 +665,7 @@ def test_a_pick_on_a_line_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
-    assert ">Open PDF</a>" in shown and 'class="picker"' not in shown and "Needs review" not in shown
+    assert re.search(SHEET_BUTTON, shown) and 'class="picker"' not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
@@ -748,7 +752,7 @@ r.querySelector("form.pick-form button[type=submit]").click();
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
-    assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown)
+    assert re.search(SHEET_BUTTON, shown)
     assert 'class="picker"' not in shown and "line-pick" not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 

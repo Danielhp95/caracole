@@ -1996,8 +1996,9 @@ def sourced_library(conn, cfg):
 # Notes each icon on the page: its source, its accessible name, and whether the image loaded.
 MARKS = """
 (() => {
-  // The marks of where things came from: a line's sites' marks are its own (song_sites.py, tested on their own).
-  const marks = Array.from(document.querySelectorAll("#list .source:not(.line-sites > *)")).map((m) => ({
+  // The marks of where things came from: a card's sites' marks are its own (song_sites.py), and so are a line's
+  // buttons' (test_library_plays.py), each tested on their own.
+  const marks = Array.from(document.querySelectorAll("#list .source:not(.line-sites > *):not(.play .source)")).map((m) => ({
     source: m.dataset.source, tag: m.tagName.toLowerCase(), text: m.textContent,
     name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
     loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
@@ -2064,8 +2065,8 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     marks = marks_of(dump_dom(path, tmp_path))
     ug = [m for m in marks if m["source"] == "ug"]
     assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
-    # A song's line holds glyphs, not marks: under its chevron, the chips of each tile say where what it holds came
-    # from ("From [UG] Ultimate Guitar", "From [LR] LRCLIB"), and a link elsewhere names its site.
+    # Under a song's chevron, the chips of each tile say where what it holds came from ("From [UG] Ultimate Guitar",
+    # "From [LR] LRCLIB"), and a link elsewhere names its site.
     assert all(m["where"] in ("chip", "link") for m in marks), marks
     assert {m["where"] for m in ug} == {"chip"}, ug
     assert any(m["source"] == "lrclib" and m["where"] == "chip" for m in marks), marks
@@ -2130,23 +2131,28 @@ def link_texts(html: str) -> list[str]:
     return re.findall(r'<a class="btn[^"]*"[^>]*>([^<]*)', html)
 
 
+def play_links(html: str) -> list[tuple[str, str]]:
+    """A line's buttons of what it holds (card.js plays): each one's address and name."""
+    found = re.search(r'<span class="line-plays">(.*?)</span></div>', html, re.S)
+    return re.findall(r'<a class="play[^"]*" href="([^"]*)"[^>]*aria-label="([^"]*)"', found.group(1)) if found else []
+
+
 @in_chromium
-def test_a_songs_title_opens_its_sheet_and_its_lines_button_does_too(conn, cfg, tmp_path):
+def test_a_songs_title_is_no_link_and_its_buttons_open_what_it_holds(conn, cfg, tmp_path):
     filed_library(conn, cfg)
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    # The title opens the viewer, else the PDF: out of the Tab order, as the line's button opens the same.
+    # A button each, the viewer, else the PDF, first: the title opens no file (it opens the card), and the line has
+    # no Open.
     creep = line_of(shown, "Creep")
-    title = re.search(r'<a class="line-title" ([^>]*)><h3[^>]*>Creep</h3></a>', creep)
-    assert title and 'href="Radiohead/Creep/sheet.html"' in title.group(1) and 'tabindex="-1"' in title.group(1)
-    main = re.search(r'<div class="line-action"><a class="btn small primary" ([^>]*)>Open</a>', creep)
-    assert main and 'href="Radiohead/Creep/sheet.html"' in main.group(1), creep
-    assert 'aria-label="Open Creep by Radiohead"' in main.group(1) and 'title="Sheet viewer"' in main.group(1)
+    assert '<a class="line-title"' not in creep and re.search(r'<div class="line-title opens-card"><h3', creep), creep
+    assert play_links(creep) == [
+        ("Radiohead/Creep/sheet.html", "Open the chord sheet of Creep, from Ultimate Guitar"),
+        ("Radiohead/Creep/guitar-1.gp5", "Download the Guitar Pro file of Creep"),
+        ("Radiohead/Creep/tab.txt", "Open the guitar tab of Creep")], creep
+    assert re.search(r'<div class="line-action"></div>', creep), creep
     wonderwall = line_of(shown, "Wonderwall")
-    assert re.search(r'<a class="line-title" href="Oasis/Wonderwall/sheet.pdf"[^>]*><h3[^>]*>Wonderwall</h3></a>',
-                     wonderwall), wonderwall
-    opened = re.search(r'<a class="btn small primary" ([^>]*)>Open PDF</a>', wonderwall)
-    assert opened and 'aria-label="Open PDF of Wonderwall by Oasis"' in opened.group(1), wonderwall
-    assert '<a class="line-title"' not in line_of(shown, "Yesterday")  # no file: a plain title
+    assert play_links(wonderwall) == [("Oasis/Wonderwall/sheet.pdf", "Open the chord sheet of Wonderwall")]
+    assert "line-plays" not in line_of(shown, "Yesterday")  # no file: a title alone
 
 
 @in_chromium
@@ -2162,59 +2168,14 @@ def test_on_the_file_no_name_gets_a_song(conn, cfg, tmp_path, fragment):
         assert 'id="found"' in dom and "caracole serve" in dom  # the line that searches the sites, to run
 
 
-# Notes how each line is laid out: how tall its title's link is against its button, how many lines its title
-# takes, and its button's colour against the accent's.
-LINE_LAYOUT = """
-(() => {
-  const box = (n) => n.getBoundingClientRect();
-  const lines = {};
-  for (const l of document.querySelectorAll("#list .line")) {
-    const h3 = l.querySelector("h3");
-    const title = l.querySelector("a.line-title");
-    const main = l.querySelector(".line-action > a");
-    lines[h3.textContent] = {
-      title: title ? Math.round(box(title).height) : null,
-      button: main ? Math.round(box(main).height) : null,
-      lines: Math.round(box(h3).height / parseFloat(getComputedStyle(h3).lineHeight)),
-      colour: main ? getComputedStyle(main).color : null,
-    };
-  }
-  const accent = document.createElement("span");
-  accent.style.color = "var(--accent)";
-  document.body.appendChild(accent);
-  document.body.setAttribute("data-lines", JSON.stringify({ lines, accent: getComputedStyle(accent).color,
-    page: innerWidth, scroll: document.documentElement.scrollWidth }));
-  accent.remove();
-})();
-"""
-
-
-@pytest.mark.parametrize("size", ["390,844", "1280,800"])
 @in_chromium
-def test_a_lines_title_is_as_easy_to_hit_as_its_button(conn, cfg, tmp_path, size):
-    import html as html_module
-
-    filed_library(conn, cfg)
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), LINE_LAYOUT))
-    found = re.search(r'data-lines="([^"]*)"', dump_dom(path, tmp_path, size=size))
-    assert found
-    laid = json.loads(html_module.unescape(found.group(1)))
-    lines = laid["lines"]
-    assert laid["scroll"] <= laid["page"], laid
-    # The title's link fills its line, as tall as the button beside it, and the title stays on one line.
-    for title in ("Creep", "Wonderwall"):
-        assert lines[title]["title"] >= lines[title]["button"] > 0 and lines[title]["lines"] == 1, lines
-        assert lines[title]["colour"] == laid["accent"], lines  # the sheet is the line's primary action
-    assert lines["Yesterday"]["title"] is None, lines
-
-
-@in_chromium
-def test_a_wanted_songs_auto_sheet_opens_from_its_title_and_leads_its_files_under_fetch_now(conn, cfg, tmp_path):
+def test_a_wanted_songs_auto_sheet_is_its_button_beside_fetch_now(conn, cfg, tmp_path):
     line = line_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path)), "斑马，斑马")
-    # Fetch now is the line's one primary button; its title opens the auto sheet, which also leads its files.
+    # Fetch now is the line's one primary button, the download glyph; the auto sheet's button opens it, in its own
+    # colour, and its tile leads the card.
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', line), line
-    assert line.count("btn primary") == 1, line
-    assert re.search(r'<a class="line-title" ' + AUTO_VIEWER + r' tabindex="-1">', line), line
+    assert line.count("btn small primary line-fetch") == 1 and line.count("primary") == 1, line
+    assert re.search(r'<a class="play play-sheet auto" ' + AUTO_VIEWER, line), line
     first = re.search(r'<div class="tile ([^"]*)"><a class="tile-open" ([^>]*)>', panel_of(line))
     assert first and first.group(1).split() == ["tile-sheet", "auto"] and re.search(AUTO_VIEWER, first.group(2)), line
 
@@ -2251,30 +2212,33 @@ def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
 
 
 @in_chromium
-def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_its_menu(conn, cfg, tmp_path):
+def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_chevron(conn, cfg, tmp_path):
     filed_library(conn, cfg)
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
 
     creep = line_of(shown, "Creep")
     top, menu = creep.split('class="line-panel"', 1)
-    # One button opens the viewer, as the title does.
-    assert link_texts(top) == ["Open"], top
+    # A button each for its sheet, its Guitar Pro file, its tab: no other link on its line.
+    assert [h for h, _ in play_links(top)] == ["Radiohead/Creep/sheet.html", "Radiohead/Creep/guitar-1.gp5",
+                                               "Radiohead/Creep/tab.txt"]
+    assert link_texts(top) == [], top
     # Every file of its folder under its chevron, closed: its card's tiles open and download them, info.json at its
     # foot. No Guitar Pro version of UG's: caracole picks none there.
     assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top) and re.search(r'^[^>]*hidden', menu)
     reached = {unquote(h).rsplit("/", 1)[1] for h in re.findall(r'<a [^>]*href="(Radiohead/Creep/[^"]*)"', menu)}
     assert reached == {"sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5",
                        "tab.txt", "info.json"}, reached
-    assert re.findall(r'<span class="tile-name">([^<]*)</span>', menu) == ["Chord sheet", "Guitar Pro", "Lyrics"]
+    assert re.findall(r'<span class="tile-name">([^<]*)</span>', menu) == ["Chord sheet", "Guitar Pro", "Guitar tab",
+                                                                           "Lyrics"]
     assert '<p class="subhead">Files</p>' not in menu  # nothing left over
     # A sheet with no viewer opens its PDF, its tile too; nothing else to list.
     wonderwall = line_of(shown, "Wonderwall")
-    assert link_texts(wonderwall.split('class="line-panel"', 1)[0]) == ["Open PDF"]
+    assert [h for h, _ in play_links(wonderwall)] == ["Oasis/Wonderwall/sheet.pdf"]
     assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', panel_of(wonderwall))) == {
         "Oasis/Wonderwall/sheet.pdf"}
     # A song with no file has nothing to open.
     yesterday = line_of(shown, "Yesterday")
-    assert ">Open" not in yesterday and "tile" not in yesterday
+    assert "line-plays" not in yesterday and "tile" not in yesterday
 
 
 @in_chromium
@@ -2298,7 +2262,7 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
 
     soda = line_of(shown, "De Música Ligera")
-    assert link_texts(soda.split('class="line-panel"', 1)[0]) == ["Open"]
+    assert [h for h, _ in play_links(soda)] == ["Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"]
     downloads = re.findall(r'<a class="dl" href="([^"]*)"[^>]*>.*?</svg>([^<]*)</a>', panel_of(soda), re.S)
     assert [label for _, label in downloads] == ["PDF", "Text", "PDF · B Minor, capo 2", "PDF · G Dorian, capo 0"]
     assert downloads[3][0] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
@@ -2535,10 +2499,11 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
         ("Ver 2", "4.70★ · 3,000 votes", ["Open"])], drawer
     assert [r["open"] for r in drawer["rows"]] == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
                                                    "Oasis/Wonderwall/version-27596.txt"]
-    # The title still opens the one, sheet.html, and the export is the sheet's.
+    # The line's sheet button still opens the one, sheet.html, counting the three, and the export is the sheet's.
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
     line = line_of(shown, "Wonderwall")
-    assert re.search(r'<a class="line-title" href="Oasis/Wonderwall/sheet.html"', line), line
+    assert play_links(line)[0] == ("Oasis/Wonderwall/sheet.html",
+                                   "Open the chord sheet of Wonderwall, from Ultimate Guitar, 3 versions"), line
     assert ">PDF · G Dorian, capo 0</a>" in line
 
 
@@ -2570,7 +2535,8 @@ note("one", { from: card.tiles[0].from, ug, lc: noteDrawer("De Música Ligera") 
 
 
 @in_chromium
-def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_skips_the_title(conn, cfg, tmp_path):
+def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_to_the_first_button(conn, cfg,
+                                                                                                    tmp_path):
     from helpers.browser import Browser, BrowserError
 
     creep = filed_library(conn, cfg)
@@ -2584,19 +2550,25 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
         phone.open(path.as_uri())
         assert phone.wait(f"document.querySelector({json.dumps(line)}) !== null")
         q = f"document.querySelector({json.dumps(line)})"
-        # A thumb's target: "⋯", and each file once it's open.
+        # A thumb's target: the chevron, each button on the line, and each file once the card is open.
         assert phone.js(f"{q}.querySelector('.line-more').getBoundingClientRect().height") >= 44
+        assert phone.js(f"Math.min(...Array.from({q}.querySelectorAll('.line-plays a')).map((a) => "
+                        "Math.min(a.getBoundingClientRect().width, a.getBoundingClientRect().height)))") >= 44
         phone.click(line + " .line-more")
         assert phone.wait(f"!{q}.querySelector('.line-panel').hidden")
         heights = phone.js(f"Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.getBoundingClientRect().height)")
         files = phone.js(f"new Set(Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.href)).size")
         # The nine files filed_library keeps, each reached from the card, each a thumb's target.
         assert files == 9 and min(heights) >= 44, (files, heights)
-        # From the line, Tab goes to Open: the title opens the same, and isn't a stop of its own.
+        # From the line, Tab goes to its first button, its sheet's: the title is no stop of its own, and a tap on it
+        # folds the card as the chevron does; the sheet's button opens the viewer.
         phone.js(f"{q}.focus()")
         phone.press("Tab")
-        assert phone.js("document.activeElement.textContent") == "Open"
-        phone.click(line + " .line-title")
+        assert phone.js("document.activeElement.getAttribute('aria-label')") == (
+            "Open the chord sheet of Creep, from Ultimate Guitar")
+        phone.click(line + " .line-title h3")
+        assert phone.wait(f"{q}.querySelector('.line-panel').hidden")
+        phone.click(line + " .line-plays a")
         assert phone.wait("location.pathname.endsWith('/Radiohead/Creep/sheet.html')")
 
 
@@ -2762,29 +2734,30 @@ def row_of(shown: str, title: str) -> str:
 
 
 @in_chromium
-def test_a_line_shows_its_title_what_it_holds_its_key_and_main_action(conn, cfg, tmp_path):
+def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_action(conn, cfg, tmp_path):
     sourced_library(conn, cfg)
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
     assert shown.count('<article class="line') == 4
     creep = line_of(shown, "Creep")
     top = creep.split('class="line-panel"', 1)[0]
-    # What it holds, not where each came from (its files say that); found, it needs no badge.
-    assert re.search(r'<h3[^>]*>Creep</h3>', top) and re.search(r'<span class="line-holds"><svg [^>]*aria-label="Chord '
-                                                               r'sheet".*<svg [^>]*aria-label="Lyrics"', top), top
-    # Its sites' marks say which sites have it (song_sites.py): no other mark says where a file came from.
-    sites = re.search(r'<span class="line-sites">(.*?)</span><span class="line-holds">', top)
-    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), top
-    assert 'class="source' not in top.replace(sites.group(0), "") and 'class="badge' not in top
+    # A button for its sheet, marked with where it came from; its lyrics none; found, it needs no badge.
+    assert re.search(r'<h3[^>]*>Creep</h3>', top)
+    assert play_links(top) == [("Radiohead/Creep/sheet.pdf", "Open the chord sheet of Creep, from Ultimate Guitar")]
+    assert re.findall(r'class="source[^"]*"[^>]*data-source="([^"]*)"', top) == ["ug"]  # its button's mark alone
+    assert 'class="badge' not in top and "line-sites" not in top
     assert "Key G major (from the tab)" in top
-    main = re.search(r'<div class="line-action"><a ([^>]*)>Open PDF</a>', creep)
-    assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
-    assert 'aria-label="Open PDF of Creep by Radiohead"' in main.group(1)
+    assert re.search(r'<div class="line-action"></div>', creep), creep  # no Open: its button opens it
+    # Which sites have it (song_sites.py), in its card.
+    sites = re.search(r'<div class="card-sites"><p class="card-label">On the sites</p><span class="line-sites">(.*?)'
+                      r'</span></div>', panel_of(creep))
+    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), panel_of(creep)
     # The rest waits behind a small button, closed.
     more = re.search(r'<button class="line-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
     assert more and re.search(rf'<div class="line-panel" id="{more.group(1)}" hidden', creep)
     assert ">More for Creep<" in creep and "Lyrics" in panel_of(creep)
     soda = line_of(shown, "De Música Ligera")
-    assert 'aria-label="from LaCuerda"' in panel_of(soda) and ">Open PDF<" in soda
+    assert 'aria-label="from LaCuerda"' in panel_of(soda)
+    assert play_links(soda)[0][1] == "Open the chord sheet of De Música Ligera, from LaCuerda"
     wonderwall = line_of(shown, "Wonderwall")
     assert ">Wanted<" in wonderwall and "line-action" in wonderwall and "Find the chords" in panel_of(wonderwall)
 
@@ -2797,7 +2770,7 @@ ROWS = """
   const box = (node) => node.getBoundingClientRect();
   const name = (l) => l.querySelector(".line-by .artist-name") || l.querySelector(".line-by");
   const rows = (l) => {
-    const parts = l.querySelectorAll(".line-title h3, .line-by, .line-status > *, .line-key, .line-holds > *, " +
+    const parts = l.querySelectorAll(".line-title h3, .line-by, .line-status > *, .line-key, .line-plays > *, " +
       ".line-sources > *, .line-action > *, .line-more");
     const middles = Array.from(parts).filter((p) => p.checkVisibility() && box(p).height > 0)
       .map((p) => box(p).top + box(p).height / 2).sort((a, b) => a - b);
@@ -2849,15 +2822,15 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
 
     line = line_of(shown, "Creep")
     top = line.split('class="line-panel"', 1)[0]
-    # Its line holds an auto sheet (its glyph, in the auto sheet's colour), and its button says what it opens ("Auto
-    # sheet PDF"): no badge, and no mark of where it came from but its sites' (YouTube's among them, on its route). A
-    # touch screen shows no title: the button's name says it is an auto sheet too, for a screen reader.
-    assert re.search(r'<svg class="glyph glyph-sheet auto"[^>]*aria-label="Auto sheet"', top), top
-    sites = re.search(r'<span class="line-sites">(.*?)</span><span class="line-holds">', top)
-    assert sites and 'title="YouTube: has it" data-source="youtube" data-state="have"' in sites.group(1), top
-    assert 'class="source' not in top.replace(sites.group(0), "") and 'class="badge' not in top
-    assert re.search(r'<div class="line-action"><a [^>]*title="Auto sheet PDF"[^>]*>Open PDF</a>', line), line
-    assert 'aria-label="Open PDF of Creep by Radiohead, an auto sheet"' in line, line
+    # Its line's button is its auto sheet's, in the auto sheet's colour, marked with where it came from (YouTube),
+    # its name saying it is an auto sheet, for a screen reader and as its tooltip: no badge. Which sites have it is
+    # its card's (YouTube's among them, on its route).
+    assert play_links(top) == [("Radiohead/Creep/sheet%20%28auto%29.pdf", "Open the auto sheet of Creep, from YouTube")]
+    assert re.search(r'<a class="play play-sheet auto" ', top), top
+    assert re.findall(r'class="source[^"]*"[^>]*data-source="([^"]*)"', top) == ["youtube"], top
+    assert 'class="badge' not in top
+    sites = re.search(r'<span class="line-sites">(.*?)</span></div>', panel_of(line))
+    assert sites and 'title="YouTube: has it" data-source="youtube" data-state="have"' in sites.group(1), line
     # The video waits behind the line's chevron, with the rest of what a card said; its text says it came from there.
     note = re.search(r'<p class="youtube">(.*?)</p>', panel_of(line), re.S)
     assert note and note.group(1).startswith("Auto sheet from YouTube audio · <a"), line
@@ -2865,9 +2838,9 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
     assert "Creep (Radiohead - Topic) ↗" in note.group(1)
     assert 'aria-label="from YouTube"' in panel_of(line)
     zebra = line_of(shown, "斑马，斑马")
-    assert re.search(r'<svg class="glyph glyph-sheet auto"[^>]*aria-label="Auto sheet"', zebra), zebra
+    assert re.search(r'<a class="play play-sheet auto" ', zebra), zebra
     assert 'aria-label="from the audio (auto-chords)"' in panel_of(zebra)
-    assert 'aria-label="Open PDF of 斑马，斑马 by 宋冬野, an auto sheet"' in zebra, zebra
+    assert [said for _, said in play_links(zebra)] == ["Open the auto sheet of 斑马，斑马, from the audio (auto-chords)"]
 
 
 def layout_of(dom: str) -> dict:
@@ -2905,9 +2878,10 @@ def test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its
         assert phone["artists"][short] >= phone["whole"][short] > 30, phone
     assert phone["artists"][florence_line] > 40, phone
     assert max(phone["lines"]) <= 2 and phone["scroll"] <= phone["page"], phone
-    # The auto sheet's line says so by what it holds and its button, as a badge would.
+    # The auto sheet's line says so by its button, as a badge would.
     dancing = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Dancing Queen")
-    assert 'aria-label="Auto sheet"' in dancing and 'title="Auto sheet PDF"' in dancing
+    assert [said for _, said in play_links(dancing)] == [
+        "Open the auto sheet of Dancing Queen, from the audio (auto-chords)"], dancing
     assert ">Needs review<" in dancing and not re.search(r'<span class="badge[^"]*">Auto sheet<', dancing)
 
 
@@ -3033,17 +3007,18 @@ LINE_PARTS = """
   const parts = {};
   const outside = (l, selector) => Array.from(l.querySelectorAll(selector)).filter((n) => !n.closest(".line-panel"));
   for (const l of document.querySelectorAll("#list .line, #results .line")) {
-    const holds = l.querySelector(".line-holds");
+    const plays = l.querySelector(".line-title > .line-plays");
     const more = l.querySelector(".line-more");
     const shown = l.querySelector(".line-key [aria-hidden]");
     const chevron = more ? more.querySelector("svg") : null;
     parts[l.querySelector("h3").textContent] = {
       status: l.dataset.status || null,
       badges: outside(l, ".badge").map((b) => b.textContent),
-      holds: holds ? Array.from(holds.children).map((g) => ({ said: g.getAttribute("aria-label"),
-        tip: g.querySelector("title") ? g.querySelector("title").textContent : null, cls: g.getAttribute("class"),
-        svg: g.namespaceURI === "http://www.w3.org/2000/svg" && g.localName === "svg" })) : null,
-      marks: outside(l, ".source").filter((m) => !m.closest(".line-sites")).map((m) => m.dataset.source),
+      plays: plays ? Array.from(plays.children).map((a) => ({ kind: a.dataset.kind, said: a.getAttribute("aria-label"),
+        tip: a.title, cls: a.getAttribute("class"), after: a.parentElement.previousElementSibling.localName,
+        glyph: a.querySelector("svg.glyph") ? a.querySelector("svg.glyph").getAttribute("class") : null })) : null,
+      marks: outside(l, ".source").filter((m) => !m.closest(".line-sites") && !m.closest(".play"))
+        .map((m) => m.dataset.source),
       sites: Array.from(l.querySelectorAll(".line-sites .source")).map((m) => [m.dataset.source, m.dataset.state,
         m.title, m.getAttribute(m.localName === "img" ? "alt" : "aria-label")]),
       key: shown ? shown.textContent : null,
@@ -3104,10 +3079,11 @@ def test_a_wanted_songs_line_keeps_its_badge(conn, cfg, tmp_path):
 
 
 @in_chromium
-def test_a_line_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(conn, cfg, tmp_path):
-    # In place of a "Not found" that named no site: every site that is on, in its colours where it has the song (its
-    # icon where caracole has one, else its letters), grey where it had nothing, faint where it wasn't asked yet; the
-    # tooltip and the name a screen reader hears say which.
+def test_a_card_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(conn, cfg, tmp_path):
+    # In place of a "Not found" that named no site, in the song's card: every site that is on, in its colours where it
+    # has the song (its icon where caracole has one, else its letters), grey where it had nothing, faint where it
+    # wasn't asked yet; the tooltip and the name a screen reader hears say which. On its line, its button's mark says
+    # where its harmonica tab came from.
     from helpers.icon_files import png
 
     from caracole import icons
@@ -3124,6 +3100,7 @@ def test_a_line_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(co
     parts = line_parts(conn, cfg, tmp_path)
     potato = parts["Digging my potato"]
     assert potato["badges"] == [] and potato["marks"] == [], potato
+    assert [p["said"] for p in potato["plays"]] == ["Open the harmonica tab of Digging my potato, from harptabs.com"]
     sites = {source: (state, tip) for source, state, tip, _ in potato["sites"]}
     assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"], sites
     assert sites["harptabs"] == ("have", "harptabs.com: has it")
@@ -3134,10 +3111,10 @@ def test_a_line_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(co
 
 
 @in_chromium
-def test_a_line_shows_what_the_song_holds_not_its_sources(conn, cfg, tmp_path):
-    # Hotel California holds one of everything: its line says so by a glyph each, in this order, each named for a
-    # screen reader and titled for the pointer, with no source's mark (the card says where each came from) and no
-    # instrument's badge (its glyphs say it).
+def test_a_line_has_a_button_for_what_the_song_holds_not_a_mark_of_its_sources(conn, cfg, tmp_path):
+    # Hotel California holds one of everything: its line says so by a button each, in this order, right after its
+    # title, each named for a screen reader and titled for the pointer, with no source's mark but its buttons' (the
+    # card says the rest) and no instrument's badge (its glyphs say it).
     from helpers.icon_files import png
     from helpers.library_songs import hotel_california
 
@@ -3161,21 +3138,21 @@ def test_a_line_shows_what_the_song_holds_not_its_sources(conn, cfg, tmp_path):
     parts = line_parts(conn, cfg, tmp_path)
 
     hotel = parts["Hotel California"]
-    names = ["Chord sheet", "Guitar Pro", "Harmonica tab", "Lyrics", "Score"]
-    assert [g["said"] for g in hotel["holds"]] == names, hotel
-    assert [g["tip"] for g in hotel["holds"]] == names and all(g["svg"] for g in hotel["holds"]), hotel
+    assert [g["kind"] for g in hotel["plays"]] == ["sheet", "guitar", "tab", "harmonica", "score"], hotel
+    assert all(g["tip"] == g["said"] and g["after"] == "h3" for g in hotel["plays"]), hotel
     assert hotel["marks"] == [] and hotel["badges"] == [] and hotel["key"] == "Bm", hotel
-    [auto] = parts["斑马，斑马"]["holds"]
-    assert auto["said"] == "Auto sheet" and "auto" in auto["cls"].split(), auto
-    assert [g["said"] for g in parts["Creep"]["holds"]] == ["Chord sheet", "Guitar tab"]
-    assert [g["said"] for g in parts["Riptide"]["holds"]] == ["Ukulele chords"]
-    assert parts["Riptide"]["badges"] == []
-    assert parts["Desperado"]["holds"] is None and parts["Desperado"]["marks"] == []
+    [auto] = parts["斑马，斑马"]["plays"]
+    assert auto["said"].startswith("Open the auto sheet of") and "auto" in auto["cls"].split(), auto
+    assert [g["kind"] for g in parts["Creep"]["plays"]] == ["sheet", "tab"]
+    [uke] = parts["Riptide"]["plays"]
+    assert uke["said"] == "Open the ukulele chords of Riptide, from Ultimate Guitar"
+    assert uke["glyph"] == "glyph glyph-ukulele" and parts["Riptide"]["badges"] == []
+    assert parts["Desperado"]["plays"] is None and parts["Desperado"]["marks"] == []
     assert all(p["marks"] == [] for p in parts.values()), parts
 
 
 # Two dense lines resultRow draws for another list (the served search's): a site's song, with its sites' marks and
-# its instrument's badge, and a line given what it holds, whose marks it then leaves out.
+# its instrument's badge, and a line given buttons of what it holds (``plays``), which follow its title.
 HIT_AND_HOLDS = """
 (() => {
   const list = document.createElement("div");
@@ -3183,20 +3160,26 @@ HIT_AND_HOLDS = """
   list.id = "results";
   list.appendChild(window.caracole.resultRow({ dense: true, title: "Wonderwall", artist: "Oasis",
     sources: ["ug", "lacuerda"], badges: [{ kind: "instrument ukulele", text: "Ukulele" }], facts: "chords ×9" }));
-  list.appendChild(window.caracole.resultRow({ dense: true, title: "Live Forever", sources: ["ug"], key: "G",
-    holds: ["sheet", "lyrics"] }));
+  const plays = document.createElement("span");
+  plays.className = "line-plays";
+  const sheet = document.createElement("a");
+  sheet.className = "play play-sheet";
+  sheet.dataset.kind = "sheet";
+  sheet.setAttribute("aria-label", "Open the chord sheet of Live Forever");
+  plays.appendChild(sheet);
+  list.appendChild(window.caracole.resultRow({ dense: true, title: "Live Forever", key: "G", plays }));
   document.body.appendChild(list);
 })();
 """
 
 
 @in_chromium
-def test_a_search_hits_line_keeps_its_sites_marks(conn, cfg, tmp_path):
+def test_a_search_hits_line_keeps_its_sites_marks_and_a_lines_buttons_follow_its_title(conn, cfg, tmp_path):
     parts = line_parts(conn, cfg, tmp_path, script=HIT_AND_HOLDS)
     hit = parts["Wonderwall"]
-    assert hit["marks"] == ["ug", "lacuerda"] and hit["badges"] == ["Ukulele"] and hit["holds"] is None, hit
+    assert hit["marks"] == ["ug", "lacuerda"] and hit["badges"] == ["Ukulele"] and hit["plays"] is None, hit
     yours = parts["Live Forever"]
-    assert yours["marks"] == [] and [g["said"] for g in yours["holds"]] == ["Chord sheet", "Lyrics"], yours
+    assert yours["marks"] == [] and [(g["kind"], g["after"]) for g in yours["plays"]] == [("sheet", "h3")], yours
 
 
 # Notes how the fold button's glyph is turned (its computed transform) before and after a click.
@@ -3299,18 +3282,21 @@ MARKS_DRAWN = """
   };
   const mark = (m) => ({ source: m.dataset.source, box: drawn(m), cut: cutBy(m),
     icon: m.localName === "img" ? content(m) : null });
-  const parts = ".line-title, .line-by, .line-status, .line-holds, .line-key, .line-action, .line-more";
+  // A song of yours' sites' marks are its card's: each card opened. A site's song's are on its line, beside its parts.
+  for (const more of document.querySelectorAll("#list .line:not(.hit) > .line-more")) more.click();
+  const parts = ".line-title, .line-by, .line-status, .line-key, .line-action, .line-more";
   const lines = Array.from(document.querySelectorAll("#list .line")).map((l) => {
-    const cell = l.querySelector(".line-sites, .line-sources");
+    const cell = l.querySelector(":scope > .line-panel .card-sites > .line-sites, :scope > .line-meta .line-sources");
+    const around = cell && cell.closest(".card-sites") ? [cell.closest(".card-sites").querySelector(".card-label")]
+      : Array.from(l.querySelectorAll(parts));
     return { title: l.querySelector("h3").textContent, line: box(l), cell: cell ? box(cell) : null,
       marks: cell ? Array.from(cell.children).map(mark) : [],
-      parts: Array.from(l.querySelectorAll(parts)).filter((p) => p.checkVisibility() && box(p)[1] > box(p)[0])
+      parts: around.filter((p) => p.checkVisibility() && box(p)[1] > box(p)[0])
         .map((p) => ({ part: p.className, box: box(p) })) };
   });
   const page = [document.documentElement.scrollWidth, document.documentElement.clientWidth];
   const hotel = Array.from(document.querySelectorAll("#list .line")).find((l) => l.querySelector("h3").textContent ===
     "Hotel California");
-  hotel.querySelector(".line-more").click();
   const card = Array.from(hotel.querySelectorAll(".line-panel .source")).filter((m) => m.checkVisibility()).map(mark);
   document.body.setAttribute("data-marks", JSON.stringify({ lines, card, page }));
 })();
@@ -3327,11 +3313,11 @@ def _overlap(a, b):
     ("1280,900", False, "", "dark"), ("1280,900", False, "#sort=title", "light"), ("1024,800", False, "", "light"),
     ("900,800", False, "", "light"), ("820,1180", True, "", "light"), ("720,800", False, "#sort=title", "dark"),
     ("390,844", True, "", "dark")])
-def test_every_mark_of_a_line_shows_whole_at_every_width(conn, cfg, tmp_path, size, touch, fragment, scheme):
-    # Eight sites' marks (YouTube's among them, on its route; harptabs.com's its icon, the rest their letters), beside a
-    # status badge, a key, Open or Fetch now and the chevron: each mark whole, its dashed edge too, inside its cell,
-    # which covers no other part of the line and leaves it nowhere; a hit's five sites' marks the same; and nothing in
-    # the song's card cut either.
+def test_every_mark_of_a_site_shows_whole_at_every_width(conn, cfg, tmp_path, size, touch, fragment, scheme):
+    # Eight sites' marks in a song's card (YouTube's among them, on its route; harptabs.com's its icon, the rest their
+    # letters), beside its label: each mark whole, its dashed edge too, inside its cell, which covers no other part and
+    # leaves the line nowhere; a hit's five sites' marks the same on its line, beside a status badge, its counts, Get
+    # it and the chevron; and nothing in the song's card cut either.
     from helpers.icon_files import png
     from helpers.library_songs import hotel_california, with_versions
 
@@ -3368,14 +3354,11 @@ def test_every_mark_of_a_line_shows_whole_at_every_width(conn, cfg, tmp_path, si
         assert not [p for p in line["parts"] if _overlap(cell, p["box"])], (title, cell, line["parts"])
     # harptabs.com's icon, whatever the site's state, a pixel inside its square: as big on every line.
     assert {m["icon"] for line in lines.values() for m in line["marks"] if m["source"] == "harptabs"} == {14}, lines
-    # Eight in one row, but from 720px to 900px, where they would leave the title no room: four a row. A hit's five in
-    # one. From 720px a site's mark is where it is on every line, so that they line up.
-    wide = int(size.split(",")[0])
+    # Each in one row: a card's eight beside its label, a hit's five. A card's mark is where it is in every card, so
+    # that they line up.
     rows = {title: len({round(m["box"][2]) for m in line["marks"]}) for title, line in lines.items()}
-    eight = 2 if 720 <= wide < 900 else 1
-    assert rows == {"Hotel California": eight, "Desperado": eight, "Digging my potato": eight, "Take It Easy": 1}, rows
-    if wide >= 720:
-        assert len({lines[t]["marks"][-1]["box"][0] for t in ("Hotel California", "Desperado", "Digging my potato")}) == 1
+    assert rows == {"Hotel California": 1, "Desperado": 1, "Digging my potato": 1, "Take It Easy": 1}, rows
+    assert len({lines[t]["marks"][-1]["box"][0] for t in ("Hotel California", "Desperado", "Digging my potato")}) == 1
     assert drawn["card"] and [m for m in drawn["card"] if m["cut"]] == [], drawn["card"]
 
 
@@ -3887,7 +3870,7 @@ def busy_library(conn, cfg):
 
 
 @in_chromium
-def test_a_laptop_screen_shows_twenty_odd_lines_under_the_bar_and_a_phone_two_lines_a_song(conn, cfg, tmp_path):
+def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_lines_a_song(conn, cfg, tmp_path):
     from helpers.targets import noted, noting
 
     busy_library(conn, cfg)
@@ -3898,13 +3881,14 @@ def test_a_laptop_screen_shows_twenty_odd_lines_under_the_bar_and_a_phone_two_li
     wide = noted(dom, "data-lines")
     assert wide["page"] == 1280 and len(wide["heights"]) == 32 and wide["scroll"] <= wide["page"], wide
     assert set(wide["rows"]) == {1}, wide  # a song a line
-    # 24 px a line, no less: its buttons keep the 24 px a pointer's target needs (WCAG 2.5.8), a pixel's slack.
-    assert max(wide["heights"]) <= 25, wide
-    # Read down under the bar, a laptop's screen (713 px of it the page's) holds twenty-odd lines and the names of
-    # their artists: 21 and 3 today, two lines to spare.
+    # 28 px a line with its buttons, no more: they keep the 24 px a pointer's target needs (WCAG 2.5.8), the marks of
+    # where they came from overhanging them inside the line, a pixel's slack.
+    assert max(wide["heights"]) <= 29, wide
+    # Read down under the bar, a laptop's screen (713 px of it the page's) holds about twenty lines and the names of
+    # their artists: 18 and 3 today, with their buttons, a line to spare.
     view = noted(dom, "data-view")
     assert abs(view["top"] - view["under"]) <= 1 and view["screen"] == wide["screen"], view
-    assert view["lines"] >= 19 and view["lines"] + view["heads"] >= 22, view
+    assert view["lines"] >= 17 and view["lines"] + view["heads"] >= 20, view
 
     for touch in (False, True):
         phone = noted(dump_dom(path, tmp_path, size="390,844", touch=touch), "data-lines")
@@ -3994,21 +3978,22 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     line = re.search(r'<p class="progress"[^>]*>(.*?)</p>', queued, re.S)
     assert line and 'role="status"' in line.group(0) and "Queued behind 1 request…" in line.group(1)
     assert 'href="jobs?job=4#job-4"' in line.group(1) and "/fetch" not in queued
-    # Not found: Fetch now still asks; UG's mark says it had nothing, and no badge; the menu looks in the index, and
+    # Not found: Fetch now still asks; no badge; in its card, UG's mark says it had nothing, it looks in the index, and
     # finds the chords elsewhere.
     lost = line_of(shown, "Yesterday")
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', lost) and ">Not found<" not in lost
-    assert 'data-source="ug" data-state="none"' in lost.split('class="line-panel"', 1)[0]
+    assert 'data-source="ug" data-state="none"' in lost.split('class="line-panel"', 1)[1]
     menu = lost.split('class="line-panel"', 1)[1]
     assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>', menu)
     assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (possible match)" in menu
-    # Found: Open, what it holds and its key on the line, and no badge; its files, its key in words, its
-    # transposition, Add to a songbook… and Remove under its chevron.
+    # Found: a button for its sheet and its key on the line, no other action and no badge; its files, its key in
+    # words, its transposition, Add to a songbook… and Remove under its chevron.
     soda = line_of(shown, "De Música Ligera")
-    assert re.search(r'<div class="line-action"><a class="btn small primary"[^>]*>Open PDF</a>', soda), soda
+    assert re.search(r'<div class="line-action"></div>', soda), soda
     assert re.search(r'<span class="line-key"[^>]*>', soda) and "Key A minor (from the tab)" in soda
     top = soda.split('class="line-panel"', 1)[0]
-    assert 'aria-label="Chord sheet"' in top and 'aria-label="Lyrics"' in top and 'class="badge' not in top
+    assert [said for _, said in play_links(top)] == ["Open the chord sheet of De Música Ligera, from Ultimate Guitar"]
+    assert 'class="badge' not in top
     menu = soda.split('class="line-panel"', 1)[1]
     assert 'aria-label="Download the Text of De Música Ligera"' in menu and "−2" in menu
     assert 'aria-label="Open the lyrics of De Música Ligera"' in menu and "Guitar Pro" not in menu
@@ -4123,7 +4108,7 @@ def test_lines_meet_touch_and_contrast(conn, cfg, tmp_path, size):
 
 
 # The contrast of what a line says against what is behind it, and of its group's heading: WCAG's ratio of each
-# text's colour to the first solid background under it; and of what a line holds, a glyph, where it shows.
+# text's colour to the first solid background under it; and of a button of what a line holds, its glyph.
 READS = """(() => {
   const rgb = (text) => (/^rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?\\)$/.exec(text) || []).slice(1)
     .map(Number);
@@ -4146,11 +4131,11 @@ READS = """(() => {
   const read = {};
   for (const [name, selector] of [["title", ".line-title h3"], ["status", ".line-status .badge"],
       ["key", ".line-key"], ["mark", ".line-panel .source.letters"], ["artist", "section.artist h2 .artist-name"],
-      ["counts", ".artist-counts"], ["open", ".line-action .btn"]]) {
+      ["counts", ".artist-counts"]]) {
     read[name] = first(selector) ? ratio(first(selector)) : null;
   }
-  const holds = first(".line-holds .glyph");
-  read.holds = holds && holds.checkVisibility() ? ratio(holds) : null;
+  const play = first(".line-plays .play");
+  read.play = play && play.checkVisibility() ? ratio(play) : null;
   read.box = Math.round(lum(behind(first("article.line"))) * 1000) / 1000;
   return read;
 })()"""
@@ -4166,10 +4151,10 @@ def test_the_lines_read_in_dark_mode(conn, cfg, tmp_path):
     for size, scheme in (("390,844", "light"), ("390,844", "dark"), ("1280,800", "light"), ("1280,800", "dark")):
         dom = dump_dom(path, tmp_path, size=size, media={"prefers-color-scheme": scheme})
         reads = noted(dom, "data-reads")
-        texts = {name: value for name, value in reads.items() if name not in ("box", "holds")}
+        texts = {name: value for name, value in reads.items() if name not in ("box", "play")}
         assert all(value is not None and value >= 4.5 for value in texts.values()), (size, scheme, reads)
-        # What a line holds waits in its card on a phone; shown, a graphic (WCAG 1.4.11).
-        assert reads["holds"] is None if size == "390,844" else reads["holds"] >= 3, (size, scheme, reads)
+        # A button of what a line holds, on a phone too: a graphic (WCAG 1.4.11).
+        assert reads["play"] >= 3, (size, scheme, reads)
         assert (reads["box"] < 0.05) if scheme == "dark" else (reads["box"] > 0.8), (scheme, reads)  # no white box at night
         assert noted(dom, "data-weak") == [], scheme
 

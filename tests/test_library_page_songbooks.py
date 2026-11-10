@@ -544,13 +544,13 @@ def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands
       const after = titles.map((t) => targets(byTitle(t)).controls.length);
       out = {before, note, details, lines, hidden, after};
     """, size=size)
-    # Before: Open, "⋯" and all it holds (files, Fetch now, the picker, the note's link to the to-do page, Add to a
-    # songbook…, Remove…), a request's Details. Selecting: the title alone (a link to the sheet, or none), which a tap
-    # no more reaches than the rest; a request's line says how it goes, without its links; a tap anywhere lands on
-    # the line, which picks it.
+    # Before: its buttons, "⋯" and all it holds (files, Fetch now, the picker, the note's link to the to-do page, Add
+    # to a songbook…, Remove…), a request's Details. Selecting: the buttons of what it holds alone (none for a song
+    # with nothing), which say what each has and which a tap no more reaches than the rest; a request's line says how
+    # it goes, without its links; a tap anywhere lands on the line, which picks it.
     assert min(out["before"]) >= 3 and out["note"] and out["details"], out["before"]
     shown = out["lines"]
-    assert shown["Creep"]["controls"] == ["line-title"], shown
+    assert shown["Creep"]["controls"] == ["play play-sheet"], shown
     for title in ("Hysteria", "Crep", "Karma Police"):
         assert shown[title]["controls"] == [], (title, shown[title])
     for title, seen in shown.items():
@@ -685,7 +685,7 @@ def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
       const same = () => JSON.stringify(look(card("Creep"))) === JSON.stringify(look(card("Hysteria")));
       const left = {bar: q(".pickbar").hidden, selecting: document.body.classList.contains("selecting"),
                     focus: document.activeElement.id,  // + New songbook is out of sight: the Library tab
-                    open: card("Creep").querySelector("a.btn.primary").checkVisibility(), same: same()};
+                    open: card("Creep").querySelector(".line-plays a").checkVisibility(), same: same()};
       q(".new-book").click();
       out = {left, count: q(".pick-count").textContent, creep: card("Creep").classList.contains("picked"),
              fields: q(".pick-name").checkVisibility()};
