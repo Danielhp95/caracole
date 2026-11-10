@@ -31,14 +31,17 @@ class LinksTest {
         assertEquals(Route.File("Estopa/Tu calorro/sheet.pdf"), links.route("$origin/Estopa/Tu%20calorro/sheet.pdf"))
         assertEquals(Route.File("Ñandú/Canción #1?/sheet.cho"),
             links.route("$origin/%C3%91and%C3%BA/Canci%C3%B3n%20%231%3F/sheet.cho#x"))
-        // caracole serve's Guitar Pro page, which a served viewer links each Guitar Pro file to: the file itself, when
-        // the library has it; else the server's page, which says it isn't on the phone.
-        assertEquals(Route.File("Estopa/Tu calorro/guitar-1.gp5"),
-            links.route("$origin/guitar?file=Estopa%2FTu%20calorro%2Fguitar-1.gp5"))
-        assertEquals(Route.File("Estopa/Tu calorro/guitar-1.gp5"),
-            links.route("$origin/guitar?file=Estopa%2FTu+calorro%2Fguitar-1.gp5&track=2"))
-        assertEquals(Route.Page, links.route("$origin/guitar?file=Estopa%2FTu%20calorro%2Fguitar-2.gp5"))
-        assertEquals(Route.Page, links.route("$origin/guitar"))
+    }
+
+    @Test
+    fun `the Guitar Pro page is a page the phone serves, whatever the file, and a download of it the file`() {
+        // caracole serve's Guitar Pro page, which a served viewer and the library page link each Guitar Pro file to:
+        // the phone's own (GuitarRoutes), which draws the file with alphaTab or says why it can't.
+        for (url in listOf("$origin/guitar?file=Estopa%2FTu%20calorro%2Fguitar-1.gp5",
+                           "$origin/guitar?file=Estopa%2FTu+calorro%2Fguitar-1.gp5&track=2",
+                           "$origin/guitar?file=Estopa%2FTu%20calorro%2Fguitar-2.gp5", "$origin/guitar")) {
+            assertEquals(Route.Page, links.route(url), url)
+        }
     }
 
     @Test
