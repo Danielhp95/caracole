@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The phone's device tests on the one emulator, one caller at a time (AGENTS.md, "How work is done here"):
+# The phone's device tests on a pool of emulators, one caller an emulator at a time (AGENTS.md, "How work is done
+# here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
 #
@@ -13,9 +14,12 @@
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
 #
-# It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then holds
-# ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock} while it installs and runs. It uses an
-# emulator alone (a serial emulator-NNNN), never a phone adb also lists, starts one if none is up (without a display it
+# It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then takes the first free emulator of
+# the pool (CARACOLE_EMULATORS, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556, -5558), holding its
+# lock while it installs and runs: emulator-5554's is
+# ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}, as before, and each other's the same name
+# with its port (caracole-emulator-5556.lock). It uses an emulator alone (a serial emulator-NNNN), never a phone adb also
+# lists, starts the one it took if it isn't up (each read-only, so several run on the one AVD; without a display it
 # stops and says so) and leaves it up, never holding the lock (nothing the script starts inherits it). Between classes the app's data is cleared, and the print spooler and any
 # chooser closed. It prints each class's result and exits non-zero on any failure.
 set -euo pipefail
@@ -57,19 +61,31 @@ done
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-# 2. The emulator's lock, held until the script ends.
+# 2. A free emulator of the pool and its lock, held until the script ends.
 mkdir -p "$(dirname "$lock")" "$logs"
-exec 9>"$lock"
-if ! flock -n 9; then
-    echo "device-test.sh: the emulator is busy (another caller holds $lock): waiting" >&2
-    flock 9
-fi
+pool="${CARACOLE_EMULATORS:-3}"
+lock_of() { if [ "$1" = 5554 ]; then echo "$lock"; else echo "${lock%.lock}-$1.lock"; fi; }
+port=""
+said=0
+while [ -z "$port" ]; do
+    for i in $(seq 0 $((pool - 1))); do
+        p=$((5554 + 2 * i))
+        exec 9>"$(lock_of "$p")"
+        if flock -n 9; then port="$p"; break; fi
+        exec 9>&-
+    done
+    if [ -z "$port" ]; then
+        [ "$said" = 1 ] || echo "device-test.sh: every emulator of the pool ($pool) is busy: waiting" >&2
+        said=1
+        sleep 3
+    fi
+done
 
 # adb: the host's, else the emulator shell's (one adb server for every caller: a phone it also lists is never used).
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(cd "$repo" && nix develop ./android#emulator -c sh -c 'command -v adb')"
 adb_cmd() { "$adb_bin" "$@"; }
-emulator_serial() { adb_cmd devices 2>/dev/null | awk '$1 ~ /^emulator-[0-9]+$/ && $2 == "device" { print $1; exit }'; }
+emulator_serial() { adb_cmd devices 2>/dev/null | awk -v s="emulator-$port" '$1 == s && $2 == "device" { print $1; exit }'; }
 
 serial="$(emulator_serial || true)"
 if [ -z "$serial" ]; then
@@ -77,11 +93,12 @@ if [ -z "$serial" ]; then
         echo "device-test.sh: no emulator is up and there is no display to start one on" >&2
         exit 3
     fi
-    echo "device-test.sh: starting the emulator (its log: $logs/emulator.log)" >&2
+    echo "device-test.sh: starting emulator-$port (its log: $logs/emulator-$port.log)" >&2
     (cd "$repo" && setsid nohup nix develop ./android#emulator -c env \
         ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-/home/dani/.config/.android/avd}" QT_QPA_PLATFORM=xcb \
         LD_LIBRARY_PATH=/run/opengl-driver/lib \
-        emulator -avd caracole -gpu host -no-snapshot-save >"$logs/emulator.log" 2>&1 </dev/null &) 9>&-
+        emulator -avd caracole -port "$port" -read-only -gpu host -no-snapshot-save >"$logs/emulator-$port.log" \
+        2>&1 </dev/null &) 9>&-
     for _ in $(seq 1 180); do
         serial="$(emulator_serial || true)"
         [ -n "$serial" ] && break

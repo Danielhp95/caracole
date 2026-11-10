@@ -333,3 +333,23 @@ def test_a_caracole_with_no_to_do_page_says_the_same_line_with_no_link_to_it():
     assert job_line(done, SongFacts(checked_now=True), todo="_todo.md") == job_line(done, SongFacts(checked_now=True))
     assert job_line(done, SongFacts(checked_now=True), todo="elsewhere.md").link == ("see the to-do page",
                                                                                      "elsewhere.md")
+
+
+def test_an_import_of_a_file_is_a_sync_and_says_its_stages_and_once_over_synced():
+    from caracole.commands.peer import PEER_IMPORT_STAGES
+    from caracole.web.jobs import JobQueue
+    from caracole.web.status import peer_kind
+
+    queue = JobQueue(lambda args, say: 0)
+    shown = "Sync with a file from Desk"
+    args = ("peer", "import", "--yes", "--progress", "--compared=" + "0" * 64, "--",
+            "/state/peer/import-0123456789abcdef")
+    made, _ = queue.submit(shown, "import:0123456789abcdef", [(shown, args)], display=shown, join=False)
+    assert peer_kind(made) == "sync"
+    assert [(s.name, s.label) for s in made.stages] == list(PEER_IMPORT_STAGES)
+    made.state, made.stages[0].state = "running", "running"
+    assert job_line(made, None).text == "Checking what changed since the comparison…"
+    made.state = "done"
+    for s in made.stages:
+        s.state = "done"
+    assert job_line(made, None) == Line("ready", "Synced")
