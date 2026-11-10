@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.core.lacuerda
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.http.LaCuerdaParseError
+import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
@@ -23,6 +25,12 @@ import kotlinx.serialization.json.jsonObject
  * LaCuerda nothing. tests/conformance/vectors/search/lacuerda.jsonl holds it to Python's answers (LaCuerdaTest).
  *
  * `lacuerda_unlisted` is not here: the phone answers null for it until milestone 4.
+ *
+ * The store writers ([storeSongs], [storeArtistPage], [storeSearch]) are lacuerda_index.py's, for what a lookup reads:
+ * an artist page's songs in place of those it gave before, and the rows LaCuerda's own search answered beside what
+ * the index holds. LaCuerda's rows hold no time, so each store notes the page it wrote (core.index.Reads, kv
+ * `phone:read:lacuerda:<page>` at the store's `at`: "<slug>/", or [SEARCH_PAGE]), which the next push of the index
+ * to the computer sends; tests/conformance/vectors/sites/lacuerda_store.jsonl holds them to Python's rows.
  */
 object LaCuerda {
     fun nameKey(name: String): String = Normalize.lacuerdaNameKey(name)
@@ -37,8 +45,94 @@ object LaCuerda {
     /** lacuerda_index.COMPLETE_KEY: when every listing page was last read or found unchanged. */
     const val COMPLETE_KEY = "lacuerda:index:complete_at"
 
+    /** lacuerda_index.SEARCH_PAGE: the page of the rows LaCuerda's search answered. */
+    const val SEARCH_PAGE = "busca.php"
+
+    /** Reads' name of LaCuerda's pages. */
+    const val SITE = "lacuerda"
+
+    private val COLUMNS = listOf("path", "artist_slug", "artist", "artist_key", "title", "title_key", "songs",
+                                 "versions", "acordes", "popular", "page")
+
     /** lacuerda.LETTERS: LaCuerda's initials, as its menu links them ("_num" for "#", "nn" for "Ñ"). */
     val LETTERS: List<String> get() = LaCuerdaUrls.LETTERS
+
+    // --- lacuerda_index.py's store writers ------------------------------------------------------------------------
+
+    /**
+     * store_songs: an artist page's songs in place of those it gave before (page "<slug>/"), noted at [at]. [name]:
+     * the artist's, as the page heads it; without one, the index's row names them, else their slug does, each word
+     * capitalized as str.capitalize does. [popular]: each song's place in the artist's popularity, by slug.
+     */
+    fun storeSongs(db: Db, slug: String, name: String?, songs: List<LaCuerdaSong>, popular: Map<String, Int>? = null,
+                   at: String) {
+        val named = if (!name.isNullOrEmpty()) name else {
+            db.one("SELECT artist FROM lacuerda_index WHERE path = ?", "$slug/") { it.text(0)!! }
+                ?: slug.split("_").filter { it.isNotEmpty() }.joinToString(" ") { PyUnicode.capitalize(it) }.ifEmpty { slug }
+        }
+        val key = nameKey(named)
+        val rows = songs.map { s ->
+            listOf("$slug/${s.slug}", slug, named, key, s.title, titleKey(s.title), 0, s.types,
+                   LaCuerdaPages.bestAcordesVersion(s) ?: 0, popular?.get(s.slug), "$slug/")
+        }
+        replace(db, "$slug/", rows, at)
+    }
+
+    /** store_artist_page: an artist page's songs into the index, as a lookup reads it, noted at [at]; false, and
+     * nothing stored, for LaCuerda's "no such artist" body or a page that won't parse. */
+    fun storeArtistPage(db: Db, slug: String, html: String, at: String): Boolean {
+        if (LaCuerdaPages.isMissingArtistPage(html)) return false
+        val songs = try {
+            LaCuerdaPages.parseArtistPage(html)
+        } catch (_: LaCuerdaParseError) {
+            return false
+        }
+        storeSongs(db, slug, LaCuerdaPages.parseArtistName(html), songs, LaCuerdaPages.parsePopularity(html), at)
+        return true
+    }
+
+    /**
+     * store_search: the rows of an answer of LaCuerda's search into the index, beside what it holds, in one
+     * savepoint; how many it stored. Each song as an artist page's would be, its page [SEARCH_PAGE] (one the index
+     * has already keeps its page and its place in the popularity, and takes the answer's versions); each artist no
+     * listing names yet a row of their own ([SEARCH_PAGE]), a listing's row never touched. Noted at [at] when the
+     * answer has any row.
+     */
+    fun storeSearch(db: Db, answer: LaCuerdaSearchAnswer, at: String): Int {
+        ensureCurrentKeys(db)
+        val named = LinkedHashMap<String, Pair<String, Long>>()
+        for (a in answer.artists) named[a.slug] = a.name to a.songs
+        for (s in answer.songs) named.putIfAbsent(s.artistSlug, s.artist to 0L)
+        val columns = COLUMNS.joinToString(", ")
+        db.savepoint("lacuerda_index_search") {
+            for (s in answer.songs) {
+                db.execute("INSERT INTO lacuerda_index ($columns) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?) " +
+                               "ON CONFLICT(path) DO UPDATE SET title = excluded.title, title_key = excluded.title_key, " +
+                               "versions = excluded.versions, acordes = excluded.acordes",
+                           "${s.artistSlug}/${s.slug}", s.artistSlug, s.artist, nameKey(s.artist), s.title,
+                           titleKey(s.title), s.song.types, LaCuerdaPages.bestAcordesVersion(s.song) ?: 0, SEARCH_PAGE)
+            }
+            for ((slug, artist) in named) {
+                db.execute("INSERT INTO lacuerda_index ($columns) VALUES (?, ?, ?, ?, '', '', ?, '', 0, NULL, ?) " +
+                               "ON CONFLICT(path) DO UPDATE SET songs = max(songs, excluded.songs) WHERE page = excluded.page",
+                           "$slug/", slug, artist.first, nameKey(artist.first), artist.second, SEARCH_PAGE)
+            }
+            if (answer.songs.isNotEmpty() || answer.artists.isNotEmpty()) Reads.note(db, SITE, SEARCH_PAGE, at)
+        }
+        return answer.songs.size + answer.artists.size
+    }
+
+    /** _replace: [page]'s rows in place of those it gave before, in one savepoint, and the page noted at [at]. */
+    private fun replace(db: Db, page: String, rows: List<List<Any?>>, at: String) {
+        ensureCurrentKeys(db)
+        val insert = "INSERT OR REPLACE INTO lacuerda_index (${COLUMNS.joinToString(", ")}) " +
+            "VALUES (${COLUMNS.joinToString(", ") { "?" }})"
+        db.savepoint("lacuerda_index_store") {
+            db.execute("DELETE FROM lacuerda_index WHERE page = ?", page)
+            for (row in rows) db.execute(insert, *row.toTypedArray())
+            Reads.note(db, SITE, page, at)
+        }
+    }
 
     // --- search.py's LaCuerda glue -------------------------------------------------------------------------------
 

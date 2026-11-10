@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -31,8 +32,9 @@ import java.nio.charset.CodingErrorAction
  * - a card of a song the phone removed (a tombstone and no song, Songs.isRemoved) is left out, until a sync settles it;
  * - a song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
  *   and no site (vectors/web/library_page.json's `minimal_cards`): its names, status, the folds the page sorts and
- *   filters it by ([CardText]), and its kept files (the phone's `files`), each with the one its line opens
- *   (`primary`) and the name a Guitar Pro file or a score downloads under;
+ *   filters it by ([CardText]), where its lyrics link back to (`lyricsFrom`: Megalobiz's or AZLyrics' page, which
+ *   their fair use asks for, [lyricsFrom]), and its kept files (the phone's `files`), each with the one its line
+ *   opens (`primary`) and the name a Guitar Pro file or a score downloads under;
  * - each songbook's set names its songs by the same ids (by each entry's `key`), none for a song left out.
  *
  * The parsed block is kept until the mirror's page changes (its entry's SHA-256). Reads only: every query is the
@@ -148,6 +150,7 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
             put("review", JsonPrimitive(song.review && !ignored))
             put("added", JsonPrimitive(song.addedAt))
             put("key", JsonNull)
+            put("lyricsFrom", lyricsFrom(song))
             put("files", JsonArray(files))
             put("source", JsonPrimitive(primary?.let { CardText.sourceOf(it) }))
             put("identity", JsonPrimitive(song.key))
@@ -159,6 +162,21 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
             if (initials.isNotEmpty()) put("initials", JsonPrimitive(initials))
             put("sites", JsonArray(emptyList()))
         })
+    }
+
+    /**
+     * library.lyrics_from: where a song's lyrics link back to, `{source, href}`, for a site of [LYRICS_PAGES] and a page
+     * on it alone (its card's Lyrics tile links it); null for any other, or lyrics that can't be read. Read from the
+     * stored JSON alone, as json.loads reads it.
+     */
+    private fun lyricsFrom(song: SongRow): JsonElement {
+        val stored = song.lyricsJson?.let { runCatching { PyJson.loads(it) }.getOrNull() } as? JsonObject ?: return JsonNull
+        if (song.lyricsStatus != "found") return JsonNull
+        val provider = (stored["provider"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val url = (stored["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val site = provider?.let { LYRICS_PAGES[it] }
+        if (site == null || url == null || !url.startsWith(site)) return JsonNull
+        return JsonObject(linkedMapOf("source" to JsonPrimitive(provider), "href" to JsonPrimitive(url)))
     }
 
     /** The Songbooks tab's data with each set's songs named by the page's ids (none for a song left out). */
@@ -213,6 +231,10 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
     ))
 
     companion object {
+        /** library.LYRICS_PAGES: the lyrics sites whose fair use asks a link back, by provider, and where their pages
+         * are. */
+        val LYRICS_PAGES = mapOf("megalobiz" to "https://megalobiz.com/", "azlyrics" to "https://www.azlyrics.com/")
+
         /** library_page._TRANSLITERATED: the letters fold transliterates, which the page folds typed queries with. */
         const val TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
 
