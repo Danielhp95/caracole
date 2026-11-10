@@ -8,10 +8,13 @@ an offline Ultimate Guitar index (complete, ``ug:index:built_at``) of "Calla Lak
 ``caracole.toml`` the defaults with ``kw.providers``' fields over each provider's (config.py's names:
 ``enabled``, ``lookup_requests``, ``lookup_per_hour``). overrides.toml and wanted.txt live beside the library, never in
 it: the phone keeps neither, its overrides being the rows of ``phone_overrides`` (``test_conformance_overrides
-.rows_of``), written into the database before and after each case from the file overrides.py's writers wrote. The
-fake sites (``Sites``) answer by address: UG's tab and artist pages (tests/helpers/ug_pages.py), LRCLIB's
-``/api/get`` and ``/api/search``, Megalobiz's search, AZLyrics' and LaCuerda's pages (tests/fixtures/, by
-reference); an address none of them answers fails the generator.
+.rows_of``), written into the database before and after each case from the file overrides.py's writers wrote.
+gtptabs.com's, harptabs.com's and gametabs.net's indexes hold the rows a case's song needs (``World.indexed``: an
+artist's or a game's page and the title's, as their sitemaps list them). The fake sites (``Sites``) answer by address:
+UG's tab and artist pages (tests/helpers/ug_pages.py), LRCLIB's ``/api/get`` and ``/api/search``, Megalobiz's search,
+AZLyrics', LaCuerda's, harptabs.com's and gametabs.net's pages (tests/fixtures/, by reference), a gtptabs.com artist
+page of one upload and its file (tests/helpers/gtptabs_site.py); an address none of them answers fails the
+generator.
 
 **What runs.** get.py's ``look_up`` (``caracole get``), or versions_cmd.py's ``choose`` and ``clear`` (``caracole
 versions --choose`` and ``--clear``, each ``caracole get`` in the end), at ``now``, with chordpro absent and the
@@ -26,27 +29,34 @@ songbooks are ``SongbookPages.NONE``, ``SONGBOOKS``, in place of Python's:
 - ``pdf``: a pass that made the PDF or found it up to date is ``["skipped", get.NO_PDFS]`` (no sheet yet is no sheet
   yet on both);
 - ``pages``: "_todo.md and index.html rewritten" is ``get.LIBRARY_PAGE``;
-- ``songbooks``: "no songbook lists it" (no songbooks.toml) is ``["skipped", SONGBOOKS]``.
+- ``songbooks``: "no songbook lists it" (no songbooks.toml) is ``["skipped", SONGBOOKS]``, the words of
+  ``core.lookup.sites.NotYet.WORDS``, which Python has no constant of: they go, and these records are made again, when
+  the phone's ``SongbookPages.NONE`` does (milestone 6).
 
-``out.result.python`` keeps what Python said of each stage so rewritten (``{stage: [state, detail]}``).
+``out.result.python`` keeps what Python said of each stage so rewritten (``{stage: [state, detail]}``). What the phone
+writes and Python doesn't, the index pages a store noted for the next push to the computer, is ``out.noted``
+(scenario.py's ``record_lookup``).
 
 **Vectors** (``vectors/lookup/``), a header, then a record a line:
 
 - ``get.jsonl``: ``{fn: "caracole.get.look_up", case, fixture, kw: {request, providers}, now, cache, answers,
-  leaves_out, out: {result: {result, progress, python}, requests, rows, kv, library, events, pauses}}``:
+  leaves_out, out: {result: {result, progress, python}, requests, rows, kv, library, events, pauses, noted}}``:
   ``kw.request`` every field of ``get.LookupRequest`` by Python's names; ``out.result.result`` what the lookup came to
   (``LookupResult``'s ``song_id``, ``display``, ``states``, ``details``, ``files``, ``seconds_to_sheet``, ``seconds``,
   ``requests``, ``bug``, ``refused``), ``progress`` what it told as it went, in order (``["stage", name, state,
   detail]``, ``["song", id, display]``, ``["readable", files]``). The cases: a new song found and its sheet kept, a
   tab picked, a LaCuerda sheet picked, a block on Ultimate Guitar that cools it while the other sites are asked, an
   hour's lookups spent, the half kept for sheets, two refusals (an ignored song, a tab of a kind caracole doesn't
-  use), the lyrics put together from LRCLIB's miss, Megalobiz's and AZLyrics' answers, a song through its artist's
-  page, and an error that ends a site's part.
+  use), the lyrics put together from LRCLIB's miss, Megalobiz's and AZLyrics' answers, Megalobiz's timed lyrics, a
+  song through its artist's page, an error that ends a site's part, LaCuerda's sheet of a song you picked none of,
+  gtptabs.com and harptabs.com each keeping a file, gametabs.net a game's tab, a harmonica tab picked while
+  gtptabs.com blocks, and a game's tab picked. Replayed by ``core.testing.replays.LookupScenariosReplay`` (area
+  lookup-scenarios) through ``Lookup.run``.
 - ``commands_get.jsonl``: ``{fn: "caracole.versions_cmd.choose" | "caracole.versions_cmd.clear", case, fixture, kw:
   {display, tab, providers}, …, out: {result: {result, progress, python, said, address}, …}}``: the same, of a song
   a lookup filled before (its fixture), ``said`` the command's own line (``--clear``'s) and get's totals line
   (commands/get.py ``_totals``), ``address`` the tab address ``--choose`` looked the song up with (null for
-  ``--clear``).
+  ``--clear``). Replayed through the phone's own ``VersionsRunner`` (:server's ``LookupScenariosCommandsTest``).
 
 Stamps: songs.py's and match.py's clocks are the record's ``now`` while a world is made and a case runs.
 library.keep_file stamps ``created_at`` with SQLite's clock, which no record can fix: every ``files`` row is given the
@@ -73,6 +83,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from helpers.corpus import VECTORS, check, fixture_ref, jsonl, phone_schema
+from helpers.gtptabs_site import entry, gp_file
 from helpers.scenario import record_lookup
 from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
 
@@ -89,7 +100,8 @@ BEFORE = datetime(2026, 11, 3, 11, 30, tzinfo=UTC)  # a lookup before a case's, 
 HTML = [["content-type", "text/html; charset=utf-8"]]
 JSON = [["content-type", "application/json"]]
 
-# While the phone's songbooks are SongbookPages.NONE, its songbooks stage says so (core.lookup.sites.NotYet.WORDS).
+# While the phone's songbooks are SongbookPages.NONE, its songbooks stage says so: core.lookup.sites.NotYet.WORDS,
+# which Python has no constant of (the module's docstring); it goes when SongbookPages.NONE does.
 SONGBOOKS = "not on the phone yet"
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -98,6 +110,9 @@ LRCLIB = "https://lrclib.net/api/"
 MEGALOBIZ = "https://api.megalobiz.com/api/public/v1/"
 AZLYRICS = "https://www.azlyrics.com/"
 LACUERDA = "https://acordes.lacuerda.net/"
+GTPTABS = "https://gtptabs.com/"  # gtptabs.HOST
+HARPTABS = "https://www.harptabs.com/"  # harptabs.HOST
+GAMETABS = "https://gametabs.net/"  # gametabs.HOST
 
 ARTIST, TITLE = "Calla Lake", "River Road"
 ARTIST_KEY, SONG_KEY = "calla-lake", "river-road"
@@ -359,6 +374,19 @@ class World:
             if fields:
                 update_song(self.conn, song_id, **fields)
         return song_id
+
+    def indexed(self, site: str, *urls: str) -> None:
+        """Pages of gtptabs.com's, harptabs.com's or gametabs.net's index (``site``, its module's name), each row as
+        the computer's read of the site's sitemaps stores it (its module's ``parse_page_url``)."""
+        import importlib
+
+        parse = importlib.import_module(f"caracole.{site}").parse_page_url
+        for url in urls:
+            row = parse(url)
+            assert row is not None, url
+            columns = (*row._fields, "sitemap")
+            self.conn.execute(f"INSERT INTO {site}_index ({', '.join(columns)}) VALUES "
+                              f"({', '.join('?' for _ in columns)})", (*row, "1"))
 
     def overrides(self, edit: Callable[[Path], None]) -> None:
         """overrides.toml written with overrides.py's writers (``edit(path)``); the phone's rows of it follow."""
@@ -660,10 +688,118 @@ def artist_page(tmp: Path) -> dict[str, Any]:
 DML_3 = f"{LACUERDA}soda_stereo/de_musica_ligera-3.shtml"
 
 
+def lacuerda_unpicked(tmp: Path) -> dict[str, Any]:
+    w = World(tmp, "lacuerda-unpicked")
+    try:
+        sites = Sites(lrclib_get=ok(lrclib_record("Soda Stereo", "De Música Ligera", 213.0), JSON),
+                      pages={f"{LACUERDA}soda_stereo/": ok(fixture_ref("lacuerda/artist.html")),
+                             DML_3: ok(fixture_ref("lacuerda/version.html"))})
+        return w.record("LaCuerda's sheet unpicked: a Spanish song Ultimate Guitar hasn't, its artist's page read into "
+                        "LaCuerda's index (noted for the push), its best version kept as the sheet",
+                        _request_of(artist="Soda Stereo", title="De Música Ligera"), sites)
+    finally:
+        w.close()
+
+
+# Billy Joel's Piano Man on gtptabs.com (its artist page and its song's, an upload of it) and on harptabs.com (the
+# artist's page, and two tabs of the title, one by the artist), as their sitemaps list them.
+GTP_JOEL, GTP_PIANO = f"{GTPTABS}tabs/3/billy-joel.html", f"{GTPTABS}tabs/3/billy-joel/piano-man.html"
+GTP_DOWNLOAD = f"{GTPTABS}tabs/download/7001.html"
+HARP_JOEL = f"{HARPTABS}artist/1178/billy-joel"
+HARP_PIANO, HARP_OTHER = f"{HARPTABS}tab/25/piano-man", f"{HARPTABS}tab/29525/piano-man"
+# Hollow Knight's Resting Grounds on gametabs.net: the game's page, and two tabs of the title of the game, the first
+# gone.
+GAME = f"{GAMETABS}tabs/hollow-knight"
+GAME_FIRST = f"{GAMETABS}tabs/hollow-knight/resting-grounds"
+GAME_RESTING = f"{GAMETABS}tabs/hollow-knight/resting-grounds-2"
+
+
+def piano_man(tmp: Path, name: str) -> World:
+    w = World(tmp, name)
+    w.indexed("gtptabs", GTP_JOEL, GTP_PIANO)
+    w.indexed("harptabs", HARP_JOEL, HARP_PIANO, HARP_OTHER)
+    return w
+
+
+def piano_man_sites() -> Sites:
+    joel = ('<html><body><div class="autorInfo"><h1>Artist "Billy Joel"</h1></div><div class="autorSongs">'
+            + entry(7001, "tabs/3/billy-joel/piano-man.html", "Piano Man", stars=4) + "</div></body></html>")
+    upload = {"status": 200, "headers": [["content-type", "application/octet-stream"],
+                                         ["content-disposition", "attachment; filename=tab-7001.gp5"]],
+              "body": gp_file()}
+    return Sites(lrclib_get=ok(lrclib_record("Billy Joel", "Piano Man", 339.0), JSON),
+                 pages={GTP_JOEL: ok(joel), GTP_DOWNLOAD: upload,
+                        HARP_PIANO: ok(fixture_ref("harptabs/tab_25_piano-man.html")),
+                        HARP_OTHER: status(404, "<html><body>Not found</body></html>")})
+
+
+def gtptabs_and_harptabs(tmp: Path) -> dict[str, Any]:
+    w = piano_man(tmp, "gtptabs-harptabs")
+    try:
+        return w.record("gtptabs.com and harptabs.com each keep a file: a Guitar Pro upload of the title downloaded, "
+                        "the harmonica tab by the artist kept, the other gone; the offline index doesn't know the song",
+                        _request_of(artist="Billy Joel", title="Piano Man", duration_ms=339000), piano_man_sites())
+    finally:
+        w.close()
+
+
+def harptabs_picked(tmp: Path) -> dict[str, Any]:
+    w = piano_man(tmp, "harptabs-picked")
+    try:
+        w.song("Billy Joel", "Piano Man", duration_ms=339000)
+        sites = piano_man_sites()
+        sites.pages[GTP_JOEL] = status(403, "<html><body>Forbidden</body></html>")
+        return w.record("a harmonica tab picked: recorded under [harptabs], that page kept; a block on gtptabs.com "
+                        "cools it, the sites after it still asked",
+                        _request_of(artist="Billy Joel", title="Piano Man", duration_ms=339000, harptabs=HARP_PIANO),
+                        sites)
+    finally:
+        w.close()
+
+
+def hollow_knight(tmp: Path, name: str) -> World:
+    w = World(tmp, name)
+    w.indexed("gametabs", GAME, GAME_FIRST, GAME_RESTING)
+    w.song("Hollow Knight", "Resting Grounds", duration_ms=200000)
+    return w
+
+
+def hollow_knight_sites() -> Sites:
+    instrumental = json.dumps({"id": 7701, "name": "Resting Grounds", "trackName": "Resting Grounds",
+                               "artistName": "Hollow Knight", "albumName": None, "duration": 200.0,
+                               "instrumental": True, "plainLyrics": None, "syncedLyrics": None})
+    return Sites(lrclib_get=ok(instrumental, JSON),
+                 pages={GAME_FIRST: status(404, "<html><body>Not found</body></html>"),
+                        GAME_RESTING: ok(fixture_ref("gametabs/tab_hollow-knight_resting-grounds-2.html"))})
+
+
+def gametabs_kept(tmp: Path) -> dict[str, Any]:
+    w = hollow_knight(tmp, "gametabs")
+    try:
+        return w.record("gametabs.net keeps a game's tab: the song named by its game, the first candidate gone, the "
+                        "second kept; LRCLIB's an instrumental", _request_of(artist="Hollow Knight",
+                                                                             title="Resting Grounds",
+                                                                             duration_ms=200000),
+                        hollow_knight_sites())
+    finally:
+        w.close()
+
+
+def gametabs_picked(tmp: Path) -> dict[str, Any]:
+    w = hollow_knight(tmp, "gametabs-picked")
+    try:
+        return w.record("a game's tab picked: recorded under [gametabs], that page kept, no other candidate asked",
+                        _request_of(artist="Hollow Knight", title="Resting Grounds", duration_ms=200000,
+                                    gametabs=GAME_RESTING), hollow_knight_sites())
+    finally:
+        w.close()
+
+
 def scenarios(tmp: Path) -> list[dict[str, Any]]:
     return [new_song(tmp), picked_tab(tmp), picked_lacuerda(tmp), blocked(tmp), failed(tmp), spent_hour(tmp),
             kept_for_sheets(tmp), ignored(tmp), unused_kind(tmp), lyrics_then(tmp), timed_by_megalobiz(tmp),
-            artist_page(tmp)]
+            artist_page(tmp), lacuerda_unpicked(tmp), gtptabs_and_harptabs(tmp), harptabs_picked(tmp),
+            gametabs_kept(tmp), gametabs_picked(tmp)]
 
 
 # --- the versions commands' cases ----------------------------------------------------------------------------
@@ -775,6 +911,23 @@ def test_the_cases_come_to_what_they_say(made):
     assert _ends(cases["timed lyrics"])["lyrics"] == ("done", "found; timed lyrics from Megalobiz")
     artist = cases["a song the offline index lacks, through its artist's page on Ultimate Guitar"]
     assert artist["out"]["requests"][0].startswith(f"GET {LAKE_URL}?filter=")
+    unpicked = cases["LaCuerda's sheet unpicked"]
+    assert _ends(unpicked)["sheet"] == ("done", "sheet kept from LaCuerda") and not unpicked["out"]["rows"].get(
+        "phone_overrides")
+    assert unpicked["out"]["noted"] == {"phone:read:lacuerda:soda_stereo/": STAMP}
+    files = cases["gtptabs.com and harptabs.com each keep a file"]
+    assert (_ends(files)["gtptabs"], _ends(files)["harptabs"]) == (("done", get.GTPTABS_KEPT), ("done", get.HARPTABS_KEPT))
+    assert {"Billy Joel/Piano Man/guitar-1.gp5", "Billy Joel/Piano Man/harmonica-1.txt"} <= set(files["out"]["library"])
+    harp = cases["a harmonica tab picked"]
+    assert [r["tbl"] for r in harp["out"]["rows"]["phone_overrides"]] == ["harptabs"]
+    assert _ends(harp)["harptabs"] == ("done", get.HARPTABS_KEPT) and "blocked" in _ends(harp)["gtptabs"][1]
+    assert json.loads(harp["out"]["kv"]["provider:gtptabs"])["cooldown_until"] is not None
+    game = cases["gametabs.net keeps a game's tab"]
+    assert _ends(game)["gametabs"] == ("done", get.GAMETABS_KEPT)
+    assert game["out"]["requests"][1:] == [f"GET {GAME_FIRST}", f"GET {GAME_RESTING}"]
+    picked_game = cases["a game's tab picked"]
+    assert [r["tbl"] for r in picked_game["out"]["rows"]["phone_overrides"]] == ["gametabs"]
+    assert picked_game["out"]["requests"][1:] == [f"GET {GAME_RESTING}"]
     choose_, clear_ = cases["--choose"], cases["--clear"]
     assert choose_["out"]["result"]["address"] == RIVER[102].url and not choose_["out"]["requests"]
     assert clear_["out"]["result"]["said"][0].startswith("Took tab 102 out of [pin]")

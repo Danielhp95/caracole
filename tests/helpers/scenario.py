@@ -46,6 +46,13 @@ runs ``call()`` with:
   make none;
 - ``cache`` seeded into ``cfg.cache_dir`` first, as above.
 
+What the phone writes and Python doesn't is recorded as ``noted``: each index page a lookup's store wrote, which the
+phone notes for its next push to the computer (core.index.Reads, kv ``phone:read:<site>:<page>`` = the store's stamp):
+an Ultimate Guitar artist page a store kept tabs of (``ug.artist_tabs.store``, at the store's time or the read's where
+that is later, never moved back), a LaCuerda page its index stored (``lacuerda_index._replace``: an artist's
+``"<slug>/"``, at the store's time) and its search's answer with rows (``busca.php``), a harptabs.com artist page
+stored (``harptabs_index.store_artist_page``, at its ``now``).
+
 ``settle(conn)``, when given, runs once the pass is over, before what it did is read (a generator's own bookkeeping,
 such as a stamp SQLite's clock wrote). ``leaves_out`` is what the phone never writes, left out of the fixture and of
 what the pass did alike: ``{"kv": [prefix, ...], "files": [file name, ...]}`` (``LEAVES_OUT``: wanted.txt's
@@ -55,7 +62,7 @@ what the pass did alike: ``{"kv": [prefix, ...], "files": [file name, ...]}`` (`
     {"fn": fn, "case": case, "fixture": [...], "kw": kw, "now": "<stamp>", "cache": {...}, "answers": {...},
      "leaves_out": leaves_out,
      "out": {"result": <plain(result)>, "requests": [...], "rows": {...}, "kv": {...}, "library": {...},
-             "events": [[run, provider, url, status, decision], ...], "pauses": N}}
+             "events": [[run, provider, url, status, decision], ...], "pauses": N, "noted": {kv key: stamp}}}
 
 its ``events`` naming each request's run too (a lookup's own, ``lookup:<now>``).
 """
@@ -247,6 +254,43 @@ def _left(records: list[dict[str, Any]], leaves_out: Mapping[str, Any]) -> list[
             and not ("file" in r and r["file"].rsplit("/", 1)[-1] in names)]
 
 
+READ = "phone:read:"  # core.index.Reads.READ
+
+
+def _noting(noted: dict[str, str], stamp: str) -> list[tuple[Any, str, Any]]:
+    """The stores a lookup's index pages go through, each wrapped to note its page as the phone does (the module's
+    docstring, ``noted``): ``(module, name, wrapper)`` for ``mock.patch.object``."""
+    from caracole import harptabs_index, lacuerda_index
+    from caracole.ug import artist_tabs
+
+    real_ug, real_replace = artist_tabs.store, lacuerda_index._replace
+    real_search, real_harp = lacuerda_index.store_search, harptabs_index.store_artist_page
+
+    def ug_store(conn, page, name, tabs, *, read_at):
+        kept = real_ug(conn, page, name, tabs, read_at=read_at)
+        at, key = max(read_at, stamp), f"{READ}ug:{page}"
+        if kept and at > noted.get(key, ""):
+            noted[key] = at
+        return kept
+
+    def replace(conn, page, rows):
+        real_replace(conn, page, rows)
+        noted[f"{READ}lacuerda:{page}"] = stamp
+
+    def store_search(conn, answer):
+        stored = real_search(conn, answer)
+        if answer.songs or answer.artists:
+            noted[f"{READ}lacuerda:{lacuerda_index.SEARCH_PAGE}"] = stamp
+        return stored
+
+    def harp_store(conn, path, page, now):
+        real_harp(conn, path, page, now)
+        noted[f"{READ}harptabs:{path}"] = now.astimezone(UTC).strftime(STAMP)
+
+    return [(artist_tabs, "store", ug_store), (lacuerda_index, "_replace", replace),
+            (lacuerda_index, "store_search", store_search), (harptabs_index, "store_artist_page", harp_store)]
+
+
 def _empty_pass(kind: str) -> Callable[..., Any]:
     """render_all's, write_pages' or render_songbooks' stand-in: a pass that made nothing."""
     from caracole.render import RenderStats
@@ -302,6 +346,7 @@ def record_lookup(cfg, *, fn: str, call: Callable[[], Any],
             super().__init__(*args, **kwargs)
 
     pauses: list[float] = []
+    noted: dict[str, str] = {}
     with closing(db.connect(cfg.db_path)) as conn:
         before = _left(dump_fixture(conn, cfg.library_dir), leaves_out)
         carried_cache = {p: _seed_cache(cfg.cache_dir, p, entries) for p, entries in (cache or {}).items()}
@@ -324,6 +369,8 @@ def record_lookup(cfg, *, fn: str, call: Callable[[], Any],
                 ("caracole.songbook.render_songbooks", _empty_pass("songbooks")),
             ):
                 stack.enter_context(mock.patch(target, value))
+            for module, name, wrapper in _noting(noted, stamp):
+                stack.enter_context(mock.patch.object(module, name, wrapper))
             try:
                 result = call()
             except Exception as e:  # recorded: a pass that raises is a scenario too
@@ -344,8 +391,9 @@ def record_lookup(cfg, *, fn: str, call: Callable[[], Any],
     files_after = _files(cfg.library_dir)
     library = {p: files_after.get(p) for p in sorted(set(files_before) | set(files_after))
                if files_before.get(p) != files_after.get(p) and p.rsplit("/", 1)[-1] not in names}
+    assert not any(k.startswith(READ) for k in kv), "Python notes no page for a push"
     done = {"requests": requests, "rows": rows, "kv": kv, "library": library, "events": events,
-            "pauses": len(pauses)}
+            "pauses": len(pauses), "noted": dict(sorted(noted.items()))}
     out: dict[str, Any] = {
         "fn": fn, "case": case, "fixture": before, "kw": plain(dict(kw or {})), "now": stamp,
         "cache": carried_cache, "answers": carried_answers, "leaves_out": {k: list(v) for k, v in leaves_out.items()},

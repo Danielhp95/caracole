@@ -1,29 +1,21 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.HttpAnswer
+import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
-import io.github.danielhp95.caracole.core.library.OverrideWriters
-import io.github.danielhp95.caracole.core.library.Overrides
-import io.github.danielhp95.caracole.core.library.SongRow
-import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Lookup
 import io.github.danielhp95.caracole.core.lookup.LookupRequest
 import io.github.danielhp95.caracole.core.lookup.LookupResult
-import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.lookup.Progress
-import io.github.danielhp95.caracole.core.lookup.SiteStage
-import io.github.danielhp95.caracole.core.lookup.SiteStages
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
-import io.github.danielhp95.caracole.core.lookup.StageEnd
-import io.github.danielhp95.caracole.core.lookup.sites.NotYet
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.FakeTransport
@@ -31,7 +23,6 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
-import io.github.danielhp95.caracole.core.ug.SheetVersions
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -54,15 +45,19 @@ import java.util.zip.GZIPOutputStream
  * tests/test_conformance_lookup_scenarios.py, whose docstring says what each record holds): each record's fixture
  * loaded into a database of its own, its cache written as http.py writes one, its answers served by a [FakeTransport],
  * its providers' settings over config.json's, every clock at the record's `now` (no pause slept, each one counted),
- * then [Lookup.run] over every site stage, with [SongPages.NONE] and [SongbookPages.NONE] as the phone of milestone 4
- * has them; `caracole versions --choose` and `--clear` as versions_cmd.py runs them: get `--tab` at the version's own
- * address ([SheetVersions.inLibrary]), or the song's chords pins out of `[pin]` ([OverrideWriters.removePin]) then get.
+ * then the record's [Run] in that [World]: [LOOK_UP], [Lookup.run] over every site stage ([SiteStages.ALL], as
+ * GetRunner runs it) with [SongPages.NONE] and [SongbookPages.NONE] as the phone of milestone 4 has them, for get.jsonl
+ * (this area's); the phone's VersionsRunner for commands_get.jsonl's `caracole versions --choose` and `--clear`, which
+ * :core can't reach (server.lookups.LookupScenariosCommandsTest gives it).
  *
- * Compared with Python's: what the lookup came to and told as it went (in the phone's words, the record's), the
- * requests in order, the events the lookup logged (`[run, provider, url, status, decision]`), the rows of every table
- * it changed (`phone_overrides` by table and key, the rest in rowid order), the kv records it changed and the
- * library's files it wrote or deleted (each by its SHA-256), less what the record `leaves_out` (the kv prefixes and file
- * names the phone never writes), and the number of pauses.
+ * Compared with Python's: what the lookup came to (the fields of LookupResult the run can tell: every one for
+ * [LOOK_UP]) and told as it went (in the phone's words, the record's), a command's lines and the address it looked the
+ * song up at, the requests in order, the events the lookup logged (`[run, provider, url, status, decision]`), the rows
+ * of every table it changed (`phone_overrides` by table and key, the rest in rowid order), the kv records it changed
+ * and the library's files it wrote or deleted (each by its SHA-256), less what the record `leaves_out` (the kv
+ * prefixes and file names the phone never writes), and the number of pauses; and what the phone writes and Python
+ * doesn't, the index pages its stores noted for the next push to the computer ([Reads], kv `phone:read:<site>:<page>`),
+ * against the record's `noted`, left out of the kv compared.
  */
 object LookupScenariosReplay : AreaReplay {
     override val area = "lookup-scenarios"
@@ -70,52 +65,82 @@ object LookupScenariosReplay : AreaReplay {
     const val GET = "lookup/get.jsonl"
     const val COMMANDS = "lookup/commands_get.jsonl"
 
-    /** Phase A: the site lanes a stage stands in for while each hasn't landed, by the provider its stage asks
-     * (waiting on lacuerda-sheets, tab-files, harptabs, gametabs); and ug-fetch-artist for a song through its
-     * artist's page. Lane lookup-scenarios' Phase B takes these out. */
-    private val WAITING_ON = mapOf("lacuerda" to "lacuerda-sheets", "gtptabs" to "tab-files", "harptabs" to "harptabs",
-                                   "gametabs" to "gametabs")
-    private const val ARTIST_PAGES = "ug-fetch-artist"
-
-    /** Phase A: each record that waits on a site lane not landed yet (waiting on), by its case: the lanes. */
-    val waiting: MutableMap<String, Set<String>> = LinkedHashMap()
-
-    /** Every record replayed, by its case. */
-    val replayed: MutableList<String> = ArrayList()
-
+    /** get.jsonl's records, each through [LOOK_UP]. */
     override fun replay(misses: Misses) {
-        replay(misses) { it }
+        replay(GET, misses, LOOK_UP)
     }
 
-    /** Every record, each [edit]ed first (a test's, to see a difference found). */
-    fun replay(misses: Misses, edit: (JsonObject) -> JsonObject) {
-        waiting.clear()
-        replayed.clear()
-        for (name in listOf(GET, COMMANDS)) {
-            for (line in Corpus.lines(name).filter { it["header"] != JsonPrimitive(true) }) one(edit(line), misses)
+    /** One record's world: its database, library, settings, cache and fake sites, the pace at its `now`, and the
+     * progress that keeps what the run tells. */
+    class World(val record: JsonObject, val database: Database, val store: LibraryStore, val config: PhoneConfig,
+                val cacheDir: File, val transport: FakeTransport, val progress: Progress, val now: Instant) {
+        var pauses = 0
+            private set
+
+        /** The pace: no pause slept (each counted), every draw its range's middle, every clock at `now`. */
+        val pacing = Pacing(sleep = { pauses++ }, draws = { low, high -> low + (high - low) * 0.5 },
+                            wallSeconds = { now.epochSecond.toDouble() }, monotonic = { 0.0 }, clock = { now })
+
+        /** The record's `kw`. */
+        val kw: JsonObject get() = record.getValue("kw").jsonObject
+
+        val fn: String get() = text(record.getValue("fn"))
+
+        /** A lookup's clients, as Assembly's PhoneParts makes them for each lookup. */
+        fun clients(): Clients = Clients(config, cacheDir, { transport }, pacing)
+    }
+
+    /**
+     * What a record's run came to: [result], the fields of LookupResult it can tell by Python's names (song_id,
+     * display, states, details, files, seconds_to_sheet, seconds, requests, bug, refused), each compared with the
+     * record's, and with no `states` and `details` the run fails; a command's lines ([said], compared with the
+     * record's `said`: its own lines and get's totals) and the tab address it looked the song up at ([address]).
+     */
+    class Ran(val result: JsonObject, val said: List<String>? = null, val address: String? = null)
+
+    /** How a record is run in its [World]; one that can't run a record's `fn` throws. */
+    fun interface Run {
+        fun run(world: World): Ran
+    }
+
+    /** get.py's look_up, as GetRunner runs it (LookupJobs.lookUp): [Lookup.run] in one write, over every site stage. */
+    val LOOK_UP = Run { w ->
+        if (w.fn != "caracole.get.look_up") throw AssertionError("LOOK_UP runs no ${w.fn}")
+        val lookup = Lookup(w.config, w.database, w.store, w.clients(), SongPages.NONE, SongbookPages.NONE, Alerts.NONE,
+                            request(w.kw.getValue("request").jsonObject), w.progress, w.pacing)
+        Ran(resultOf(w.database.writeBlocking { lookup.run(it) }))
+    }
+
+    /**
+     * Every record of [name] ([only] those of these cases, when given), each [edit]ed first (a test's, to see a
+     * difference found), run by [run]; the cases replayed, in order.
+     */
+    fun replay(name: String, misses: Misses, run: Run, only: Set<String>? = null,
+               edit: (JsonObject) -> JsonObject = { it }): List<String> {
+        val replayed = ArrayList<String>()
+        for (line in Corpus.lines(name).filter { it["header"] != JsonPrimitive(true) }) {
+            val case = text(line.getValue("case"))
+            if (only != null && case !in only) continue
+            for (f in one(edit(line), run)) misses.check(false) { f }
+            misses.check(true) { "" }  // the record, compared
+            replayed += case
         }
+        return replayed
     }
 
     // --- one record ---------------------------------------------------------------------------------------------
 
-    private fun one(record: JsonObject, misses: Misses) {
+    /** The differences of [record] run by [run], each "case: what differs". */
+    private fun one(record: JsonObject, run: Run): List<String> {
         val case = text(record.getValue("case"))
-        val fn = text(record.getValue("fn"))
-        val kw = record.getValue("kw").jsonObject
         val done = (record["out"] ?: record.getValue("after")).jsonObject
         val said = done.getValue("result").jsonObject
         val events = done.getValue("events").jsonArray
-        val request = kw["request"]?.jsonObject
-        val asks = events.map { text(it.jsonArray[1]) }.toSet()
-        val picks = listOfNotNull(request?.get("lacuerda")?.takeIf { it != JsonNull }?.let { "lacuerda" },
-                                  request?.get("harptabs")?.takeIf { it != JsonNull }?.let { "harptabs" },
-                                  request?.get("gametabs")?.takeIf { it != JsonNull }?.let { "gametabs" })
-        val lanes = (asks + picks).mapNotNull { WAITING_ON[it] }.toSet()
-        if (lanes.isNotEmpty()) {  // Phase A: waiting on a site lane
-            waiting[case] = lanes
-            return
-        }
         val found = ArrayList<String>()
+        fun check(ok: Boolean, what: () -> String) {
+            if (!ok) found += "$case: ${what()}"
+        }
+
         val now = Instant.parse(text(record.getValue("now")))
         val leaves = record["leaves_out"]?.jsonObject ?: JsonObject(emptyMap())
         val prefixes = leaves["kv"]?.jsonArray?.map(::text).orEmpty()
@@ -127,82 +152,72 @@ object LookupScenariosReplay : AreaReplay {
             TestDb.fresh(File(dir, "db").apply { mkdirs() }).use { database ->
                 database.writeBlocking { db ->
                     Fixtures.loadRecords(db, record.getValue("fixture").jsonArray.map { it.jsonObject }, library, case)
-                    seedCache(cache, record["cache"]?.jsonObject ?: JsonObject(emptyMap()))
-                    val transport = FakeTransport(answers(record["answers"]?.jsonObject ?: JsonObject(emptyMap())))
-                    val cfg = configured(kw["providers"]?.jsonObject ?: JsonObject(emptyMap()))
-                    var pauses = 0
-                    val pacing = Pacing(sleep = { pauses++ }, draws = { low, high -> low + (high - low) * 0.5 },
-                                        wallSeconds = { now.epochSecond.toDouble() }, monotonic = { 0.0 },
-                                        clock = { now })
-                    val heard = ArrayList<JsonElement>()
-                    val progress = object : Progress {
-                        override fun stage(name: String, state: String, detail: String) {
-                            heard.add(JsonArray(listOf("stage", name, state, detail).map(::JsonPrimitive)))
-                        }
-
-                        override fun song(id: Long, display: String) {
-                            heard.add(JsonArray(listOf(JsonPrimitive("song"), JsonPrimitive(id), JsonPrimitive(display))))
-                        }
-
-                        override fun readable(files: Map<String, String>, seconds: Double) {
-                            heard.add(JsonArray(listOf(JsonPrimitive("readable"),
-                                                      JsonObject(files.mapValues { JsonPrimitive(it.value) }))))
-                        }
-                    }
-                    val store = LibraryStore(library)
-                    val before = Tables.of(db)
-                    val kvBefore = kv(db, prefixes)
-                    val filesBefore = files(library, names)
-                    val eventsBefore = db.one("SELECT COALESCE(MAX(id), 0) FROM events") { it.long(0)!! }!!
-                    val saidLines = ArrayList<String>()
-                    var address: String? = null
-
-                    fun lookUp(req: LookupRequest): LookupResult =
-                        Lookup(cfg, database, store, Clients(cfg, cache, { transport }, pacing), SongPages.NONE,
-                               SongbookPages.NONE, Alerts.NONE, req, progress, pacing, standIns(said)).run(db)
-
-                    val result = when (fn) {
-                        "caracole.get.look_up" -> lookUp(request(request!!))
-                        "caracole.versions_cmd.choose" -> {
-                            val song = songNamed(db, text(kw.getValue("display")))
-                            val tab = kw.getValue("tab").jsonPrimitive.content
-                            val v = SheetVersions.inLibrary(db, song.id, cfg.rank).first { it.tabId == tab }
-                            address = v.url
-                            lookUp(LookupRequest(song.artist, song.title, tab = v.url))
-                        }
-                        "caracole.versions_cmd.clear" -> {
-                            val song = songNamed(db, text(kw.getValue("display")))
-                            val pins = SheetVersions.sheetPins(db, song.id, Overrides.read(db).pin[song.key].orEmpty())
-                            OverrideWriters.removePin(db, song.display, pins.toSet())
-                            saidLines += "Took ${pins.joinToString(", ") { "tab $it" }} out of [pin] in overrides.toml; " +
-                                "caracole's pick is the sheet again."
-                            lookUp(LookupRequest(song.artist, song.title))
-                        }
-                        else -> throw AssertionError("$case: no replay of $fn")
-                    }
-                    saidLines += LookupWords.totals(result)
-
-                    fun check(ok: Boolean, what: () -> String) {
-                        if (!ok) found += "$case: ${what()}"
+                }
+                seedCache(cache, record["cache"]?.jsonObject ?: JsonObject(emptyMap()))
+                val heard = ArrayList<JsonElement>()
+                val progress = object : Progress {
+                    override fun stage(name: String, state: String, detail: String) {
+                        heard.add(JsonArray(listOf("stage", name, state, detail).map(::JsonPrimitive)))
                     }
 
-                    val want = said.getValue("result").jsonObject
-                    val got = resultOf(result)
-                    for ((k, v) in want) check(got[k] == v) { "$k ${got[k]}, Python's $v" }
-                    check(JsonArray(heard) == said.getValue("progress")) {
-                        "told ${JsonArray(heard)},\n  Python's ${said["progress"]}"
+                    override fun song(id: Long, display: String) {
+                        heard.add(JsonArray(listOf(JsonPrimitive("song"), JsonPrimitive(id), JsonPrimitive(display))))
                     }
-                    said["said"]?.let { s -> check(JsonArray(saidLines.map(::JsonPrimitive)) == s) { "said $saidLines, Python's $s" } }
-                    said["address"]?.let { a -> check((address?.let(::JsonPrimitive) ?: JsonNull) == a) { "asked $address, Python's $a" } }
-                    val requests = JsonArray(transport.said.map(::JsonPrimitive))
-                    check(requests == done["requests"]) { "requests $requests, Python's ${done["requests"]}" }
-                    val gotEvents = JsonArray(db.query("SELECT run, provider, url, status, decision FROM events WHERE id > ? " +
-                                                           "ORDER BY id", eventsBefore) { r ->
+
+                    override fun readable(files: Map<String, String>, seconds: Double) {
+                        heard.add(JsonArray(listOf(JsonPrimitive("readable"),
+                                                  JsonObject(files.mapValues { JsonPrimitive(it.value) }))))
+                    }
+                }
+                val kw = record.getValue("kw").jsonObject
+                val world = World(record, database, LibraryStore(library),
+                                  configured(kw["providers"]?.jsonObject ?: JsonObject(emptyMap())), cache,
+                                  FakeTransport(answers(record["answers"]?.jsonObject ?: JsonObject(emptyMap()))),
+                                  progress, now)
+                val before = database.read { Tables.of(it) }
+                val kvBefore = database.read { kv(it, prefixes) }
+                val filesBefore = files(library, names)
+                val eventsBefore = database.read { db -> db.one("SELECT COALESCE(MAX(id), 0) FROM events") { it.long(0)!! }!! }
+
+                val ran = try {
+                    run.run(world)
+                } catch (e: Throwable) {
+                    check(false) { "the run threw $e" }
+                    return found
+                }
+
+                val want = said.getValue("result").jsonObject
+                check("states" in ran.result && "details" in ran.result) { "the run told no stage's end" }
+                for (k in ran.result.keys) {
+                    check(k in want) { "the run tells $k, which Python's result hasn't" }
+                }
+                for ((k, v) in want) {
+                    if (k in ran.result) check(ran.result[k] == v) { "$k ${ran.result[k]}, Python's $v" }
+                }
+                check(JsonArray(heard) == said.getValue("progress")) {
+                    "told ${JsonArray(heard)},\n  Python's ${said["progress"]}"
+                }
+                check((ran.said == null) == (said["said"] == null)) {
+                    "said ${ran.said}, Python's ${said["said"]}"
+                }
+                said["said"]?.let { s ->
+                    check(JsonArray(ran.said.orEmpty().map(::JsonPrimitive)) == s) { "said ${ran.said}, Python's $s" }
+                }
+                said["address"]?.let { a ->
+                    check((ran.address?.let(::JsonPrimitive) ?: JsonNull) == a) { "asked ${ran.address}, Python's $a" }
+                }
+                val requests = JsonArray(world.transport.said.map(::JsonPrimitive))
+                check(requests == done["requests"]) { "requests $requests, Python's ${done["requests"]}" }
+                database.read { db ->
+                    val gotEvents = JsonArray(db.query("SELECT run, provider, url, status, decision FROM events " +
+                                                           "WHERE id > ? ORDER BY id", eventsBefore) { r ->
                         JsonArray(listOf(JsonPrimitive(r.text(0)), JsonPrimitive(r.text(1)), JsonPrimitive(r.text(2)),
                                          r.long(3)?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(r.text(4))))
                     })
                     check(gotEvents == events) { "events $gotEvents, Python's $events" }
-                    check(pauses == done.getValue("pauses").jsonPrimitive.int) { "$pauses pauses, Python's ${done["pauses"]}" }
+                    check(world.pauses == done.getValue("pauses").jsonPrimitive.int) {
+                        "${world.pauses} pauses, Python's ${done["pauses"]}"
+                    }
                     val after = Tables.of(db)
                     val changed = (before.keys + after.keys).filter { it != "events" && before[it] != after[it] }.toSet()
                     val wantRows = done.getValue("rows").jsonObject
@@ -214,77 +229,37 @@ object LookupScenariosReplay : AreaReplay {
                         }
                     }
                     val kvAfter = kv(db, prefixes)
-                    val kvChanged = JsonObject((kvBefore.keys + kvAfter.keys).filter { kvBefore[it] != kvAfter[it] }.sorted()
-                        .associateWith { k -> kvAfter[k]?.let(::JsonPrimitive) ?: JsonNull })
-                    check(kvChanged == done["kv"]) { "kv $kvChanged, Python's ${done["kv"]}" }
-                    val filesAfter = files(library, names)
-                    val filesChanged = JsonObject((filesBefore.keys + filesAfter.keys).filter { filesBefore[it] != filesAfter[it] }
-                        .sorted().associateWith { p -> filesAfter[p]?.let(::JsonPrimitive) ?: JsonNull })
-                    check(filesChanged == done["library"]) { "files $filesChanged, Python's ${done["library"]}" }
-
-                    // Phase A: a stage the phone hasn't yet (waiting on ug-fetch-artist's artist pages) says so.
-                    val notYet = heard.any { e ->
-                        val a = e.jsonArray
-                        text(a[0]) == "stage" && text(a[1]) != "songbooks" && text(a[3]) == NotYet.WORDS
-                    }
-                    if (notYet && found.isNotEmpty()) waiting[case] = setOf(ARTIST_PAGES)
+                    val kvChanged = (kvBefore.keys + kvAfter.keys).filter { kvBefore[it] != kvAfter[it] }.sorted()
+                        .associateWith { k -> kvAfter[k]?.let(::JsonPrimitive) ?: JsonNull }
+                    val (notes, rest) = kvChanged.entries.partition { it.key.startsWith(Reads.READ) }
+                    check(JsonObject(rest.associate { it.toPair() }) == done["kv"]) { "kv $rest, Python's ${done["kv"]}" }
+                    val noted = JsonObject(notes.associate { it.toPair() })
+                    check(noted == done.getValue("noted")) { "noted $noted for the push, Python's ${done["noted"]}" }
                 }
+                val filesAfter = files(library, names)
+                val filesChanged = JsonObject((filesBefore.keys + filesAfter.keys)
+                    .filter { filesBefore[it] != filesAfter[it] }.sorted()
+                    .associateWith { p -> filesAfter[p]?.let(::JsonPrimitive) ?: JsonNull })
+                check(filesChanged == done["library"]) { "files $filesChanged, Python's ${done["library"]}" }
             }
         } finally {
             dir.deleteRecursively()
         }
-        if (case in waiting) return
-        replayed += case
-        misses.check(found.isEmpty()) { found.joinToString("\n") }
-        for (f in found.drop(1)) misses.check(false) { f }
-    }
-
-    /** Phase A (waiting on lacuerda-sheets, tab-files, harptabs and gametabs): the stages of the site lanes not landed,
-     * each asking its site through the envelope as get.py's does (its client made, nothing sent) and answering what
-     * Python's said; LaCuerda's, asked for the sheet first, what its stage then said it came to. A record that asked
-     * any of them a request waits for its lane instead ([one]). */
-    private fun standIns(said: JsonObject): SiteStages {
-        val result = said.getValue("result").jsonObject
-        val states = result.getValue("states").jsonObject
-        val details = result.getValue("details").jsonObject
-
-        fun python(stage: String): StageEnd {
-            val state = text(states[stage] ?: JsonPrimitive("skipped"))
-            val detail = text(details[stage] ?: JsonPrimitive(""))
-            val again = "asked already, for the sheet"
-            if (stage == "lacuerda" && detail.startsWith(again)) {
-                return StageEnd(if (state == "skipped") "done" else state, detail.removePrefix(again).removePrefix(": "))
-            }
-            return StageEnd(state, detail)
-        }
-
-        fun standIn(provider: String, stage: String) = SiteStage { ctx ->
-            LookupWords.end(ctx.config, provider, ctx.asking.ask(provider) { python(stage) })
-        }
-        val all = SiteStages.ALL
-        return SiteStages(all.match, all.ugSheet, all.ug, standIn("lacuerda", "lacuerda"), standIn("lacuerda", "lacuerda"),
-                          all.lrclib, all.megalobiz, all.azlyrics, standIn("gtptabs", "gtptabs"),
-                          standIn("harptabs", "harptabs"), standIn("gametabs", "gametabs"))
+        return found
     }
 
     // --- the record's world -------------------------------------------------------------------------------------
 
     /** get.LookupRequest from its fields by Python's names. */
-    private fun request(r: JsonObject): LookupRequest {
+    fun request(r: JsonObject): LookupRequest {
         fun opt(name: String) = r[name]?.takeIf { it != JsonNull }?.let(::text)
         return LookupRequest(text(r.getValue("artist")), text(r.getValue("title")), opt("album"),
                              r["duration_ms"]?.jsonPrimitive?.longOrNull, opt("ug"), opt("tab"), opt("lacuerda"),
                              opt("harptabs"), opt("gametabs"), r["songbooks"]?.jsonPrimitive?.booleanOrNull ?: true)
     }
 
-    /** _common.song_named over "Artist - Title". */
-    private fun songNamed(db: Db, display: String): SongRow {
-        val (artist, title) = display.split(" - ", limit = 2)
-        return Songs.byKey(db, Normalize.identityKey(artist, title)) ?: throw AssertionError("no song $display")
-    }
-
     /** What the lookup came to, as the record writes Python's LookupResult. */
-    private fun resultOf(r: LookupResult): JsonObject = JsonObject(mapOf(
+    fun resultOf(r: LookupResult): JsonObject = JsonObject(mapOf(
         "song_id" to (r.songId?.let(::JsonPrimitive) ?: JsonNull),
         "display" to JsonPrimitive(r.display),
         "states" to JsonObject(r.states.mapValues { JsonPrimitive(it.value) }),
