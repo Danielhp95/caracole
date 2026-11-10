@@ -27,6 +27,21 @@ and what the next step needs of it). The steps, as the plan numbers them:
    with C1 kept as the phone has it (removed), nothing left.
 7. Both: the phone's units (``DIR/phone/phone-state.json``) are the computer's, unit by unit; the computer lacks C1
    and R, and its wanted.txt holds the phone's adds; phase 4 compares once more and finds no difference.
+8. Computer off; the fake sites server up (tests/helpers/fake_sites.py, scenario ``lookups``, on 127.0.0.1, in this
+   process). Phone, phase 5 (``-Pcaracole.e2e.sites``): the lookups phase, §9's M4 goal: Get it, Fetch now and Fetch
+   them look songs up against the fake sites, each request routed there by RoutedTransport; the song new to both sides
+   keeps its sheet and its card's sheet.txt is served; each lookup within lookup_requests, every lookup within
+   lookup_per_hour; no URL robots.txt closes asked; no request but to the fake server, which counted every one the
+   phone sent, each with the user agent the computer gave it; a 403 cools Ultimate Guitar down on the phone.
+9. Computer: the first of those songs looked up there too, against the same sites (``Computer.against``), and its
+   caracole.toml changed (``change_settings``).
+10. Computer: serve again. Phone, phase 6: the next sync lists the phone's lookups as its own and the song looked up
+   on both sides a conflict (how many, and where the two differ, reported in DIR/lookups-report.json and on stdout:
+   UG's ratings among them, the plan's §11 Q2), takes that one from the computer and gives the rest; the units equal
+   on both sides; the phone takes the computer's settings (its kv ``phone:settings`` is politeness.py's
+   ``settings_document`` of the computer's config); nothing of either side's politeness crosses (the owner's choice:
+   Ultimate Guitar cools on the phone alone, and the computer counted none of the phone's requests); and the index
+   pages the phone read reach the computer's index.
 
 The module also checks ``python -m tests.helpers.e2e_library serve DIR PORT``, which the device tests run.
 
@@ -54,6 +69,7 @@ from helpers.e2e_library import (
     CHANGED,
     CHOSEN,
     LABEL,
+    LOOKUPS,
     LYRICS,
     REMOVED,
     REPO,
@@ -64,6 +80,7 @@ from helpers.e2e_library import (
     stop,
     wait_until_answering,
 )
+from helpers.fake_sites import FakeSites
 
 pytestmark = [
     pytest.mark.slow,
@@ -214,15 +231,16 @@ def test_the_library_holds_the_goals_changes_and_asked_no_site(served):
 # --- the scenario -------------------------------------------------------------------------------------------------
 
 
-def phone(phase: int, server: str, dir: Path) -> dict:
+def phone(phase: int, server: str, dir: Path, sites: str | None = None) -> dict:
     """The phone's phase ``phase`` (PhoneScenarioTest on the JVM, one Gradle run), against the computer at
-    ``server``; what it wrote as it ended, DIR/phone/phase-N.json."""
+    ``server``, its sites the fake sites at ``sites`` (every site refusing with none); what it wrote as it ended,
+    DIR/phone/phase-N.json."""
     logs = dir / "logs"
     logs.mkdir(exist_ok=True)
     log = logs / f"phone-{phase}.log"
     command = ["nix", "develop", "./android", "-c", "gradle", "-p", "android", "--console=plain", ":e2e:test",
                "--rerun", f"-Pcaracole.e2e.phase={phase}", f"-Pcaracole.e2e.server={server}",
-               f"-Pcaracole.e2e.dir={dir}"]
+               f"-Pcaracole.e2e.dir={dir}", *([f"-Pcaracole.e2e.sites={sites}"] if sites else [])]
     with log.open("w") as out:
         done = subprocess.run(command, cwd=REPO, stdout=out, stderr=subprocess.STDOUT, timeout=PHASE_TIMEOUT,
                               check=False)
@@ -290,3 +308,74 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
 
         last = phone(4, url, dir)
     assert last["differences"] == []  # nothing more: the phone and the computer agree
+
+    # 8. The computer off, the phone looks songs up against the fake sites; 9. the computer too, and its settings.
+    assert refused(port)
+    lookups = scenario["lookups"]
+    events = computer.events()
+    with FakeSites(LOOKUPS) as fake:
+        five = phone(5, url, dir, sites=fake.url)
+        asked = fake.requests
+        both = lookups["songs"]["get_it"]["search"]  # as the phone's Get it asked for it: its row's pick
+        computer.against(fake.url, "get", "--ug", both["ug"], f"{both['artist']} - {both['title']}")
+        computer.change_settings()
+    looked_up(five, asked, lookups, computer)
+    assert computer.events()[:len(events)] == events
+
+    # 10. The next sync.
+    with computer.serving(port):
+        six = phone(6, url, dir)
+        state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+        assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    synced_after_the_lookups(five, six, asked, lookups, computer, dir)
+
+
+def looked_up(five: dict, asked: list[dict], lookups: dict, computer: Computer) -> None:
+    """Phase 5's lookups, as the fake sites saw them: ``asked``, every request they answered the phone (and none
+    since, the computer's own lookup aside)."""
+    from caracole.config import DEFAULT_PROVIDERS
+
+    mine = asked[:five["sites"]]  # the phone's; the computer's lookup came after
+    assert five["sites"] == five["requests"] > 0  # every request the phone sent, and each one the fake sites'
+    assert not [r for r in mine if r["closed"]]
+    assert {r["user_agent"] for r in mine} == {computer.cfg().user_agent}  # the computer's, taken at a sync
+    for name, sent in five["asked"].items():
+        for provider, n in sent.items():
+            assert n <= DEFAULT_PROVIDERS[provider].lookup_requests, (name, provider, n)
+    blocked = lookups["songs"]["blocked"]["tabs"]
+    assert [r["status"] for r in mine if r["url"] in blocked] == [403]
+    assert len(five["added"]) == 4
+
+
+def synced_after_the_lookups(five: dict, six: dict, asked: list[dict], lookups: dict, computer: Computer,
+                             dir: Path) -> None:
+    """Phase 6's sync, as the computer has it after: the phone's lookups its, its settings the phone's, nothing of
+    either side's politeness crossed, the phone's index reads its; the conflicts reported."""
+    from caracole import db
+    from caracole.index_transfer import PAGES
+    from caracole.politeness import settings_document
+
+    songs = computer.songs()
+    assert {song["key"] for song in five["added"]} <= set(songs)
+    assert six["settings"] == settings_document(computer.cfg())  # the computer's settings, the phone's now
+    ug = computer.provider("ug")
+    assert ug is None or ug.get("cooldown_until") is None, ug  # the phone's block stayed the phone's
+    theirs = {url for _, url in computer.events()}
+    phones = {r["url"] for r in asked[:five["sites"]]}
+    blocked = set(lookups["songs"]["blocked"]["tabs"])
+    assert blocked <= phones and not blocked & theirs  # the phone's requests counted on the phone alone
+    if five["reads"]:
+        conn = db.connect(computer.cfg().db_path)
+        try:
+            for read in five["reads"]:
+                site, _, page = read.partition(":")  # Reads' site:page, index_transfer.PAGES' rows of it
+                table, column = PAGES[site].tables[0]
+                assert conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {column} = ?", (page,)).fetchone()[0], read
+        finally:
+            conn.close()
+    report = {"conflicts": six["conflicts"], "differ": six["differ"], "waiting": five["waiting"] + six["waiting"],
+              "asked": five["asked"]}
+    (dir / "lookups-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n",
+                                             encoding="utf-8")
+    print("the lookups phase:", json.dumps(report, ensure_ascii=False, indent=1))
+    assert six["conflicts"] == 1  # the song looked up on both sides between two syncs

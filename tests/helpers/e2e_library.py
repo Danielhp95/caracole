@@ -30,8 +30,15 @@ fill: what the phone's ``phone_overrides`` holds once it took them), ``index`` (
 got, the query that finds it, and its names and identity key as search.py's ``search_index`` gives them),
 ``index_tables`` (the tables ``caracole index export`` writes, index_transfer.py's ``SITES``), ``requests`` (the songs
 the phone asks for by name, ``fetch`` 1 and 0), ``removed`` (R and C1, which the phone removes), ``transposed`` (C1
-and C2, whose ``[transpose]`` the computer changes while the phone is away) and ``adds`` (the songs the computer adds
-meanwhile, ``after_the_phone_left``).
+and C2, whose ``[transpose]`` the computer changes while the phone is away), ``adds`` (the songs the computer adds
+meanwhile, ``after_the_phone_left``), ``lookups`` (the fake sites' document of their scenario, ``fake_sites.document``
+over this library's index: the songs only the fake sites have pages of, whose slugged tabs UG's index lists here too,
+each with its part in the lookups phase) and ``settings`` (what ``change_settings`` makes caracole.toml say once the
+phone has looked them up: ``SETTINGS``, which the next sync gives the phone).
+
+``computer.against(sites, "get", "Artist - Title")`` runs a caracole command on the library with every site it asks
+the fake sites server at ``sites`` (tests/helpers/fake_sites.py), so that the computer looks a song up as the phone
+does; ``provider`` and ``events`` read its health record of a site and the requests it counted.
 
 ``python -m tests.helpers.e2e_library serve DIR PORT`` (in nix develop, from the repository's root) builds the library
 in DIR when DIR holds none, exports its index to DIR/index.sqlite (what ``GET /api/peer/index`` gives the phone, and
@@ -147,6 +154,11 @@ REQUESTS = (("Traditional", "Black Is the Color", "1"), ("Traditional", "Down in
 REMOVED = {"R": ("Traditional", "Barbara Allen"), "C1": ("Traditional", "The Parting Glass")}  # on the phone
 TRANSPOSED = {"C1": (("Traditional", "The Parting Glass"), 4), "C2": (("Traditional", "The Water Is Wide"), -3)}
 ADDS = (("Traditional", "Red River Valley"), ("Traditional", "Home on the Range"), ("Joseph Brackett", "Simple Gifts"))
+# The lookups phase's (§9's M4 check): the fake sites' scenario, whose slugged songs UG's index lists too, and what the
+# computer's caracole.toml says once the phone has looked them up, which the next sync gives the phone.
+LOOKUPS = "lookups"
+SETTINGS = "\n[match]\naccept = 92\n\n[providers.megalobiz]\nlookup_requests = 4\n"
+SETTINGS_SAID = {"match": {"accept": 92}, "providers": {"megalobiz": {"lookup_requests": 4}}}
 
 
 def slug(name: str) -> str:
@@ -277,6 +289,43 @@ class Computer:
         finally:
             conn.close()
 
+    def against(self, sites: str, *args: str, timeout: float = 300) -> str:
+        """``caracole ARGS`` on this library with every site it asks the fake sites at ``sites``
+        (``python -m tests.helpers.fake_sites caracole``), which must succeed; what it printed."""
+        command = [sys.executable, "-m", "tests.helpers.fake_sites", "caracole", sites, "--config", str(self.config),
+                   *args]
+        done = subprocess.run(command, env=self.env(), cwd=REPO, capture_output=True, text=True, check=False,
+                              timeout=timeout)
+        if done.returncode != 0:
+            raise RuntimeError(f"caracole {' '.join(args)} (the fake sites) exited {done.returncode}:\n{done.stdout}\n"
+                               f"{done.stderr}")
+        return done.stdout
+
+    def change_settings(self) -> None:
+        """``SETTINGS`` at the end of caracole.toml: what the owner changes while the phone looks songs up."""
+        with self.config.open("a", encoding="utf-8") as toml:
+            toml.write(SETTINGS)
+
+    def provider(self, name: str) -> dict | None:
+        """kv ``provider:<name>``, health.py's record of the site (its cooldown and strikes), or None."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return db.kv_get_json(conn, f"provider:{name}")
+        finally:
+            conn.close()
+
+    def events(self) -> list[tuple[str, str]]:
+        """Every request this caracole counted (``events``): its provider and URL."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return [tuple(r) for r in conn.execute("SELECT provider, url FROM events ORDER BY id")]
+        finally:
+            conn.close()
+
     def after_the_phone_left(self) -> None:
         """What the owner does on the computer while the phone is away (§9's step 5): ``caracole add`` adds ``ADDS``,
         and C1's and C2's ``[transpose]`` change (overrides.toml's writer, ``put_song_entries``, keeping their other
@@ -359,6 +408,7 @@ def build(dir: Path) -> Computer:
     from caracole.versions import upsert_version
     from caracole.viewer.version import Setting
     from caracole.wanted import append_wanted, sync_wanted
+    from helpers import fake_sites
     from helpers.guitar import SYNTHETIC, keep_guitar
     from helpers.ug_pages import version_dict
 
@@ -407,6 +457,7 @@ def build(dir: Path) -> Computer:
             refresh_status(conn, song.id, ignored=False)
             write_info(conn, cfg.library_dir, get_song(conn, song.id))
         sitemap += [(a, s, INDEX_TAB + n) for n, (a, s) in enumerate(INDEX)]
+        sitemap += fake_sites.index_rows(LOOKUPS)  # the songs only the fake sites have pages of
 
         sitemaps = computer.root / "sitemaps"
         sitemaps.mkdir()
@@ -453,9 +504,10 @@ def build(dir: Path) -> Computer:
         write_pages(conn, cfg, overrides, NOW)
         conn.commit()
         found = index_song(conn)
+        lookups = fake_sites.document(conn, LOOKUPS)
     finally:
         conn.close()
-    write_scenario(computer, found)
+    write_scenario(computer, found, lookups)
     return computer
 
 
@@ -472,9 +524,10 @@ def index_song(conn) -> dict:
             "key": identity_key(hit.artist, hit.title)}
 
 
-def write_scenario(computer: Computer, index: dict) -> None:
+def write_scenario(computer: Computer, index: dict, lookups: dict) -> None:
     """scenario.json: what the Kotlin phases need to know of the scenario's songs (this module's docstring), with
-    ``index``, ``index_song``'s. Written last, so a folder that has it holds a library built whole."""
+    ``index``, ``index_song``'s, and ``lookups``, the fake sites' document of their scenario over this library's
+    index. Written last, so a folder that has it holds a library built whole."""
     from caracole.index_transfer import SITES
     from caracole.normalize import identity_key
 
@@ -497,6 +550,8 @@ def write_scenario(computer: Computer, index: dict) -> None:
         "removed": {name: named(*song) for name, song in REMOVED.items()},
         "transposed": {name: named(*song, transpose=n) for name, (song, n) in TRANSPOSED.items()},
         "adds": [named(a, t) for a, t in ADDS],
+        "lookups": lookups,
+        "settings": SETTINGS_SAID,
     }
     (computer.dir / "scenario.json").write_text(json.dumps(scenario, ensure_ascii=False, indent=1) + "\n",
                                                 encoding="utf-8")

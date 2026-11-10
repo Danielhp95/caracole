@@ -9,7 +9,8 @@
 #                   computer of its own (tests.helpers.e2e_library in a fresh folder), as the M1-3 integration ran them
 #   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest...), with DIR its computer's folder
 #   --computer DIR  one computer for every class that names none
-#   --sites S       the fake sites server for the classes (lane lookups-e2e fills this branch)
+#   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
+#                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
 #
 # It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then holds
 # ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock} while it installs and runs. It uses an
@@ -49,10 +50,6 @@ while [ $# -gt 0 ]; do
 done
 [ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
 [ "$areas" = all ] && areas=""
-if [ -n "$sites" ]; then
-    echo "device-test.sh: --sites is lane lookups-e2e's (the fake sites server): not built yet" >&2
-    exit 2
-fi
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
 (cd "$repo" && nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest --console=plain -q)
@@ -131,14 +128,40 @@ start_computer() {
     return 1
 }
 
+# The fake sites server of scenario $sites, on a free port (never 8737), for every class: its address as the
+# emulator reaches it, in each class's arguments.
+site_args=()
+if [ -n "$sites" ]; then
+    sites_port="$(free_port)"
+    while [ "$sites_port" = 8737 ]; do sites_port="$(free_port)"; done
+    (exec 9>&-; cd "$repo" && exec nix develop -c python -m tests.helpers.fake_sites serve "$sites" "$sites_port" \
+        --address 127.0.0.1) \
+        >"$logs/sites-$sites_port.log" 2>&1 &
+    servers+=($!)
+    for _ in $(seq 1 600); do
+        if python3 -c 'import sys, urllib.request; urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+                "http://127.0.0.1:%s/" % sys.argv[1], timeout=2).close()' "$sites_port" 2>/dev/null; then
+            site_args=(-e sites "http://10.0.2.2:$sites_port")
+            break
+        fi
+        sleep 1
+    done
+    if [ ${#site_args[@]} -eq 0 ]; then
+        echo "device-test.sh: the fake sites of $sites didn't answer (their log: $logs/sites-$sites_port.log)" >&2
+        exit 3
+    fi
+    echo "device-test.sh: the fake sites of $sites at http://10.0.2.2:$sites_port (their log: $logs/sites-$sites_port.log)" >&2
+fi
+
 failed=0
 results=()
 
 # One class run: `am instrument -w`, its args; the app's data cleared, the print spooler and choosers closed after.
 run_class() {
-    local name="$1"; shift
+    local name="${1#"$app_id."}"; shift  # a class named whole (io.github.danielhp95.caracole.X) or by its name
     local out
-    out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" "$runner" 2>&1 | tr -d '\r')" || true
+    out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
+        | tr -d '\r')" || true
     echo "$out"
     if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
         results+=("PASS $name")
