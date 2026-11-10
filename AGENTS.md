@@ -2357,7 +2357,8 @@ picks one).
   using any automated means (including bots, scrapers, and spiders), to view, access or collect information", and
   TIDAL's Content Guidelines, part of its terms, say the same in the same words (both as a web search quoted them on
   2026-11-10); the owner chose on 2026-11-10 that the phone reads one of their track pages for a link shared to it
-  (A shared link read by asking its service once, above).
+  (A shared link read by asking its service once, above), and, told these terms the same day, kept both on ("don't
+  turn tidal and spotify off").
 - One page a shared link (its short link's hop besides), at a lookup's pace, robots.txt honoured (both open their
   track pages), cached; only the song's two names are read of it, for the share page and a lookup the owner taps.
 - Apple's lookup is its documented public API and YouTube's oEmbed a public endpoint for any client; YouTube's terms
