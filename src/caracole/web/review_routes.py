@@ -46,13 +46,12 @@ def picker(app: WebApp, song_field: str) -> Response:
     if pick is None:
         not_ignored(song, overrides)
     if pick is None and song.review:
-        raise Refused(409, "Nothing to pick", f"{song.display} has no candidates to pick: caracole review "
-                                              "offers a pin or an ignore.")
+        raise Refused(409, "Nothing to pick", f"{song.display} has no candidates. caracole review offers a "
+                                              "pin or an ignore.")
     if pick is None:
-        raise Refused(409, "Nothing to pick", f"{song.display} doesn't need review: there's nothing to pick.")
+        raise Refused(409, "Nothing to pick", f"{song.display} needs no review. Nothing to pick.")
     if not pick.choices:
-        raise Refused(409, "Nothing to pick", f"caracole search finds nothing close to {song.display} in the "
-                                              "offline Ultimate Guitar index.")
+        raise Refused(409, "Nothing to pick", f"Nothing close to {song.display} in UG's index.")
     return html_response(200, pages.review_page(pick, app.csrf, library_name=app.library_name))
 
 
@@ -75,15 +74,15 @@ def review(app: WebApp, form: dict[str, str]) -> Response:
         offered = _offer(conn, song, overrides, search=True)
     not_ignored(song, overrides)
     if offered is None:
-        raise Refused(409, "Nothing to pick", f"{song.display} doesn't need review any more: reload the "
-                                              "library to see where it stands.")
+        raise Refused(409, "Nothing to pick", f"{song.display} needs no review now. Reload the book to see "
+                                              "where it stands.")
     refs = [str(c["ref"]) for c in offered.choices]
     if not pick:
         raise Refused(400, "No answer", "Pick a candidate, or None of these.")
     if form.get("shown", "").split() != refs or not refs:
         raise Refused(409, "The candidates changed",
-                      f"caracole matched {song.display} again since this page was loaded, and its "
-                      "candidates changed: reload the library and pick again.")
+                      f"{song.display} was matched again since this page loaded; its candidates "
+                      "changed. Reload and pick again.")
     if pick == "none" and offered.search:
         raise Refused(400, "Not an answer", "A song not found takes one of its search hits, or nothing.")
     if pick != "none" and pick not in refs:
@@ -94,13 +93,13 @@ def review(app: WebApp, form: dict[str, str]) -> Response:
         fetch = form.get("fetch") in ("1", "on", "yes")
         title, steps = f"Pick {pick} for {song.display}", review_steps(song.display, pick=pick)
         if fetch:  # caracole review matched it again already
-            title += ", and fetch it"
+            title += ", and fetch"
             steps += [step for step in fetch_steps(song.display) if step[1][0] != "match"]
     # Never into the song's own request, nor after its fetch: checked under the queue's lock.
     job, new = app.submit(title, song.key, steps, fetching=fetch, join=False, display=song.display)
     if not new:
         raise Refused(409, "Wait for its request",
-                      f"A request for {song.display} is waiting or running: pick once it ends.")
+                      f"A request for {song.display} is queued or running. Pick once it ends.")
     return app.queued(job)  # the card's line says how it goes, as Fetch now's
 
 

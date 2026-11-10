@@ -96,7 +96,7 @@ def _library(app: WebApp):
     try:
         books = load_songbooks(songbooks_file(app.cfg.library_dir))
     except SongbookError as e:
-        raise Refused(503, "songbooks.toml can't be read", f"songbooks.toml can't be read: {e}.") from e
+        raise Refused(503, "Can't read songbooks.toml", f"Can't read songbooks.toml: {e}.") from e
     return overrides, books
 
 
@@ -149,7 +149,7 @@ def song_file(app: WebApp, params: dict[str, str]) -> Response:
     except Refused as e:
         return json_response(e.status, {"error": e.message})
     if data is None:
-        return json_response(404, {"error": "no such file kept, or it changed since caracole kept it"})
+        return json_response(404, {"error": "no such file kept, or it changed since"})
     return Response(200, data, [("Content-Type", "application/octet-stream")])
 
 
@@ -163,10 +163,10 @@ def pull(app: WebApp, form: dict[str, str]) -> Response:
         raise Refused(400, "Not an address", str(e)) from None
     units = [u.strip() for u in form.get("units", "").splitlines() if u.strip()]
     if not units or len(units) > MAX_UNITS or any("/" not in u or len(u) > 1000 for u in units):
-        raise Refused(400, "No units", "Which units? The form names none caracole can take.")
+        raise Refused(400, "No units", "Which units? The form names none we can take.")
     steps = [(f"Taking {len(units)} {'change' if len(units) == 1 else 'changes'} from {address}",
               ("peer", "pull", *(f"--unit={u}" for u in units), "--", address))]
-    job, _ = app.submit(f"Sync with {address}", PEER_PULL + address, steps, display=address, join=False)
+    job, _ = app.submit(f"Share with {address}", PEER_PULL + address, steps, display=address, join=False)
     return app.queued(job)
 
 
@@ -187,7 +187,7 @@ def push_new(app: WebApp, doc: Any) -> Response:
     except peer_push.PushError as e:
         raise _refused(e) from None
     except OSError as e:  # the staging folder's, not the database's (read above)
-        raise Refused(503, "Not kept", f"The push couldn't be opened: {e}.") from e
+        raise Refused(503, "Not kept", f"Couldn't open the push: {e}.") from e
     return json_response(200, {"push": opened.push, "need": opened.need})
 
 
@@ -198,7 +198,7 @@ def push_file(app: WebApp, params: dict[str, str], data: bytes) -> Response:
     except peer_push.PushError as e:
         raise _refused(e) from None
     except OSError as e:
-        raise Refused(503, "Not kept", f"The file couldn't be kept: {e}.") from e
+        raise Refused(503, "Not kept", f"Couldn't keep the file: {e}.") from e
     return json_response(200, {"ok": True})
 
 
@@ -220,7 +220,7 @@ def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
     except peer_push.PushError as e:
         raise _refused(e) from None
     except OSError as e:  # the staging folder's, not the database's (read above)
-        raise Refused(503, "Not kept", f"The push couldn't be kept: {e}.") from e
+        raise Refused(503, "Not kept", f"Couldn't keep the push: {e}.") from e
     shown = f"Changes from {(sent.name.strip() or 'another caracole')[:120]}"
     count = len(sent.take)
     steps = [(f"Taking {count} {'change' if count == 1 else 'changes'}",
@@ -232,8 +232,8 @@ def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
         raise
     if not new:  # a take of this caracole's waits or runs: this push stays open, to send again once it is over
         peer_push.unsend(state_dir, push_id)
-        raise Refused(409, "Taking already", f"{shown} are being taken already (request {job.id}): send them "
-                                             "again once that is over.")
+        raise Refused(409, "Taking already", f"{shown}: being taken already (request {job.id}). Send again once "
+                                             "that's done.")
     return app.queued(job)
 
 
@@ -284,7 +284,7 @@ def index(app: WebApp, asked, params: dict[str, str]) -> Response:
     except index_transfer.TransferError as e:
         return json_response(400, {"error": str(e)})
     if not _streaming.acquire(blocking=False):
-        return json_response(503, {"error": "Another copy of the indexes is being sent: try again once it is."})
+        return json_response(503, {"error": "Another index copy is on its way. Try again once it's sent."})
     folder = app.cfg.cache_dir / "peer"
     path = folder / f"index-{secrets.token_hex(8)}.sqlite"
     stream = None
@@ -299,7 +299,7 @@ def index(app: WebApp, asked, params: dict[str, str]) -> Response:
     except Refused as e:
         return json_response(e.status, {"error": e.message})
     except (index_transfer.TransferError, OSError) as e:
-        return json_response(503, {"error": f"The indexes couldn't be copied: {e}"})
+        return json_response(503, {"error": f"Couldn't copy the indexes: {e}"})
     finally:
         path.unlink(missing_ok=True)
         if stream is None:
@@ -330,14 +330,14 @@ def push_index(app: WebApp, data: bytes) -> Response:
     except peer_push.PushError as e:
         raise _refused(e) from None
     except OSError as e:
-        raise Refused(503, "Not kept", f"The index pages couldn't be kept: {e}.") from e
+        raise Refused(503, "Not kept", f"Couldn't keep the index pages: {e}.") from e
     try:
         with app.db() as conn:
             index_transfer.check_pages(conn, path)
         job, _ = app.submit(**jobs.index_merge_job(path))
     except index_transfer.OtherVersion as e:
         path.unlink(missing_ok=True)
-        raise Refused(409, "Not merged", f"{_unstaged(e, path)} Bring both caracoles to one version first.") from None
+        raise Refused(409, "Not merged", f"{_unstaged(e, path)} Bring both scribes to one version first.") from None
     except index_transfer.TransferError as e:
         path.unlink(missing_ok=True)
         raise Refused(400, "Not merged", _unstaged(e, path)) from None

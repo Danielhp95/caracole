@@ -16,7 +16,7 @@ the job and what the library knows of its song:
   stage ended skipped, with nothing to do for the song. The sheet skipped for a block, a cooldown or a spent
   budget had something to do: it is the step that stopped the lookup, drawn failed, as a site's error leaves
   it, so a lookup that ends Not fetched yet shows it. Two steps name a site (``Chip.source``): Match the
-  offline index it matched in, Ultimate Guitar's ("Match UG"), or, for a song that index lacks, "Match: not
+  offline index it matched in, Ultimate Guitar's ("Match UG"), or, for a song that index lacks, "Match · not
   on UG", drawn plain (``plain``: over, and no failure, as the sheet may come from LaCuerda); Sheet no site
   until it asks one, then the one it asks (its running detail, get.py's ``SHEET_FROM``: "Sheet LaCuerda"),
   and once done where the song's sheet came from (``SongFacts.sheet_from``), never guessed.
@@ -28,7 +28,7 @@ the job and what the library knows of its song:
   result's row) while it runs, with how many are over ("4 of 7 done"); once it ends Ready they fold away, as
   the song's line opens its sheet itself; ended otherwise they stay, to show which step stopped. A request
   that runs no lookup keeps its one line.
-- **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs review, Not found,
+- **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs your pick, Not on the sites,
   Not fetched yet, Failed, Removed, a songbook's Made, Deleted…: the line's), a reason in one sentence
   when there is one, from the job's stages and the song's state (``SongFacts``), and the next step
   (``Action``): a link, or a form posted with the form token. Ready opens its sheet; Needs review picks
@@ -47,15 +47,15 @@ the job and what the library knows of its song:
 
 - **A sync with another caracole** (``caracole peer sync``, the Sync tab's), a push another sent taken (``caracole peer
   take``) and a pull it asked for (``peer pull``; ``status.peer_kind``): their stages as steps (``PEER_STEPS``: Compare,
-  Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Synced or Taken, what it took
+  Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Shared or Taken, what it took
   and gave in a sentence, how many changes it left, and for a sync, the next step Compare again (the Sync tab), never
   Try again: a sync is made of the choices of one comparison, and a push is the other caracole's to send again.
   Another caracole's index pages merged (``caracole index merge --progress``, Merge): Merged, and what its stage
   said it did.
 
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
-says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
-run."); a Not found says Ultimate Guitar has no chords for it only when the fetch asked it
+says which site, what it answered and what waits ("LRCLIB answered 503. The lyrics wait until
+tonight."); a Not found says Ultimate Guitar has no chords for it only when the fetch asked it
 (``SongFacts.asked_ug``), and else, for a song the offline index didn't match, that the index doesn't
 have it under this name; then what the indexes have elsewhere. A reason that can't be told from the job
 is left out, never made up.
@@ -102,37 +102,36 @@ YOUTUBE_STEPS = (
 YOUTUBE_SOURCE = tag("youtube")  # the site its Audio step names
 # A request of other commands: each command's step, by what it does; any other by its step's label.
 COMMAND_STEPS = {"add": "Add", "match": "Match", "fetch": "Sheet", "render": "PDF", "review": "Your pick",
-                 "remove": "Remove", "lacuerda": "LaCuerda", "songbook": "Songbook", LOOKUP: "Look it up"}
+                 "remove": "Remove", "lacuerda": "LaCuerda", "songbook": "Songbook", LOOKUP: "Fetch"}
 _OVER = ("done", "skipped", "failed")
 MATCHED_IN = "UG"  # the offline index a lookup's match stage matches in: Ultimate Guitar's
-NOT_ON_UG = "Match: not on UG"  # its step, for a song that index lacks
+NOT_ON_UG = "Match · not on UG"  # its step, for a song that index lacks
 _ASKS = {said: tag(provider) for provider, said in SHEET_FROM.items()}  # a running sheet stage's site, by its words
 
 # What a stage leaves for tonight's run, when it ends in a wait or an error: its name, and its verb.
 _WHAT = {"sheet": ("the sheet", "waits"), "lyrics": ("the lyrics", "wait"),
-         "ug": ("its other versions and its tab", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
+         "ug": ("its other versions and tab", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
          "gtptabs": ("the Guitar Pro file", "waits"), "harptabs": ("the harmonica tab", "waits"),
-         "gametabs": ("the tab of game music", "waits")}
+         "gametabs": ("the game music tab", "waits")}
 # How get.py words them (``_Lookup.asking``, ``_usable``).
-_FAILED = re.compile(r"^(?P<site>.+?) failed \((?P<why>.*)\); the nightly run tries again$")
+_FAILED = re.compile(r"^(?P<site>.+?) failed \((?P<why>.*)\); tried again tonight$")
 _STATUS = re.compile(r"^[\w.-]+: (\d{3})(?::|$)")  # http.ProviderError: "provider: status: url: message"
-_BLOCKED = re.compile(r"^(?P<site>.+?) blocked caracole\b(?:.*?no more requests to it until (?P<until>.+?)\.(?:\s|$))?")
-_COOLING = re.compile(r"^(?P<site>.+?) is cooling down after a block, until (?P<until>.+)$")
-_SPENT = re.compile(r"^(?P<spent>.+); the nightly run does the rest$")
+_BLOCKED = re.compile(r"^(?P<site>.+?) turned us back\b(?:.*?No more asks until (?P<until>.+?)\.(?:\s|$))?")
+_COOLING = re.compile(r"^Waiting out (?P<site>.+?) until (?P<until>.+)$")
+_SPENT = re.compile(r"^(?P<spent>.+); tonight's run does the rest$")
 
-NO_CHORDS = "Ultimate Guitar has no chords for it"
-NOT_INDEXED = "Not in the offline Ultimate Guitar index under this name"
-NOT_ASKED = ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, a spent budget or an error: "
-             "the output says which).")
-IN_REVIEW = "caracole isn't sure which Ultimate Guitar song it is."
-CANCELLED = "Taken out of the queue before it ran."
-INTERRUPTED_RAN = "caracole serve stopped while it ran: run it again to finish it."
-INTERRUPTED_WAITED = "caracole serve stopped before it ran: Try again runs it."
-_ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's index lists a page for it"}
+NO_CHORDS = "UG has no chords for it"
+NOT_INDEXED = "Not in UG's index under this name"
+NOT_ASKED = "UG not asked this time: waiting out a block, no asks left, or an error. The output says which."
+IN_REVIEW = "Not sure which UG song it is."
+CANCELLED = "Cancelled before it ran."
+INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
+INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+_ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
-PEER_STEPS = {"compare": "Compare", "check": "Check", "take": "Take", "give": "Give", "render": "Render",
-              "mirror": "Pages", "agree": "Agree", "index": "Indexes",
+PEER_STEPS = {"compare": "Compare", "check": "Check", "take": "Take", "give": "Give", "render": "Pages",
+              "mirror": "Copy", "agree": "Agree", "index": "Indexes",
               "merge": "Merge"}  # jobs.INDEX_MERGE_STAGES
 # The kinds of no unit: another caracole's index pages merged.
 _NO_UNITS = ("index-merge",)
@@ -141,7 +140,7 @@ _NO_UNITS = ("index-merge",)
 @dataclass(frozen=True)
 class Chip:
     """A step of the running request: its name, its state (waiting, running, done or failed; or plain, over and
-    neither, "Match: not on UG") and the site it names, ``source`` ("UG", "LaCuerda"; "" for none)."""
+    neither, "Match · not on UG") and the site it names, ``source`` ("UG", "LaCuerda"; "" for none)."""
 
     name: str
     state: str
@@ -324,10 +323,10 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         return Outcome("ready", text, "", Action(line.link[0], href=href) if line.link and href else None)
     if tone == "review":
         picker = facts.picker if facts is not None else None
-        action = Action("Pick the match", href=_href(picker)) if picker else _in_library(song_id)
-        return Outcome("review", "Needs review", IN_REVIEW, action)
-    word, _, rest = text.partition(": ")  # "Read: …", "Not read: …", "Added: the nightly run looks for it"
-    if job.song_key.startswith(INDEX_READS):
+        action = Action("Pick", href=_href(picker)) if picker else _in_library(song_id)
+        return Outcome("review", "Needs your pick", IN_REVIEW, action)
+    if job.song_key.startswith(INDEX_READS):  # "Read: …", "Not read: …"
+        word, _, rest = text.partition(": ")
         return Outcome(tone, word, _sentence(rest) if rest else "", again if tone == "waiting" else None)
     if tone == "missing":
         return _not_found(job, facts, song_id)
@@ -335,11 +334,13 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         return Outcome("waiting", text, _youtube_stopped(job.stages), again)
     if tone == "waiting":
         return Outcome("waiting", text, _waits(job.stages) or ("" if job.stages else NOT_ASKED), again)
+    # "Added · fetched tonight": the word, then the reason; any other line ("Ignored · overrides.toml") whole
+    word, _, rest = text.partition(" · ") if text.startswith("Added · ") else (text, "", "")
     return Outcome(tone, word, _sentence(rest[:1].upper() + rest[1:]) if rest else "")
 
 
 def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
-    """A sync, a take or a pull over: Synced or Taken, what it took and gave, and what it left; else how it failed or
+    """A sync, a take or a pull over: Shared or Taken, what it took and gave, and what it left; else how it failed or
     was stopped. A sync's next step is a comparison afresh in the Sync tab, never Try again (its choices were made on a
     comparison that is past); a take's or a pull's is the other caracole's to send again."""
     action = COMPARE_AGAIN if kind == "sync" else None
@@ -353,12 +354,12 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     taken = sum(1 for _, said, _ in job.units if said == "taken")
     given = sum(1 for _, said, _ in job.units if said == "given")
     left = sum(1 for _, said, _ in job.units if said == "left")
-    parts = [f"took {plural(taken, 'change')} here"] if taken or kind != "sync" else []
-    parts += [f"gave {plural(given, 'change')} there"] if given else []
-    said = (" and ".join(parts)).capitalize() + "." if parts else "Nothing changed on either side."
+    parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
+    parts += [f"{plural(given, 'change')} given"] if given else []
+    said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
     if line.tone == "ready":
         return Outcome("ready", line.text, said)
-    word = line.text.partition(": ")[0] if left else "Not taken"
+    word = line.text.partition(" · ")[0] if left else "Not taken"
     reason = f"{said} {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else (
         _sentence(line.text))
     return Outcome("waiting", word, reason, action)
@@ -371,32 +372,32 @@ def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcom
     it; any other, with nothing elsewhere, is requested by name."""
     unmatched = facts is not None and facts.not_found
     head = NO_CHORDS if facts is not None and facts.asked_ug else NOT_INDEXED if unmatched else ""
-    search = (Action("See what caracole search finds", href=f"/review?song={song_id}")
+    search = (Action("Search the index", href=f"/review?song={song_id}")
               if unmatched and song_id is not None else None)
     if any(s.name == "gtptabs" and s.state == "done" and s.detail == GTPTABS_KEPT for s in job.stages):
-        return Outcome("missing", "Not found", _joined(head, "caracole got a Guitar Pro file from gtptabs.com"),
+        return Outcome("missing", "Not on the sites", _joined(head, "Got a Guitar Pro file from gtptabs"),
                        _in_library(song_id), search)
     where = facts.elsewhere if facts is not None else None
     if where is not None and song_id is not None and where[0] in _ELSEWHERE:
         source, url = where
         fields = (("song", str(song_id)), *((("lacuerda", url),) if source == "lacuerda" else ()))
-        return Outcome("missing", "Not found", _joined(head, _ELSEWHERE[source]),
-                       Action("Get it from there", post="/lookup", fields=fields), search)
-    return Outcome("missing", "Not found", _sentence(head),
-                   search or Action("Request by name", href="/#" + urlencode({"q": job.display or job.title})))
+        return Outcome("missing", "Not on the sites", _joined(head, _ELSEWHERE[source]),
+                       Action("Fetch from there", post="/lookup", fields=fields), search)
+    return Outcome("missing", "Not on the sites", _sentence(head),
+                   search or Action("Ask by name", href="/#" + urlencode({"q": job.display or job.title})))
 
 
 def _joined(head: str, rest: str) -> str:
-    return _sentence(f"{head}; {rest}" if head else rest)
+    return _sentence(f"{head}. {rest}" if head else rest)
 
 
 def _in_library(song_id: int | None) -> Action | None:
-    return Action("Open in the library", href=f"/#song={song_id}") if song_id is not None else None
+    return Action("Open in the book", href=f"/#song={song_id}") if song_id is not None else None
 
 
 def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:
-    """The first stage's wait or error, in one sentence ("LRCLIB answered 503: the lyrics wait for tonight's
-    run."); "" for none. ``after_sheet``: the stages after the sheet only, for a song whose sheet is there."""
+    """The first stage's wait or error, in two short sentences ("LRCLIB answered 503. The lyrics wait until
+    tonight."); "" for none. ``after_sheet``: the stages after the sheet only, for a song whose sheet is there."""
     names = [name for _, group in LOOKUP_STEPS[3 if after_sheet else 2:] for name in group]
     by_name = {stage.name: stage for stage in stages}
     return next((said for name in names if name in by_name and (said := _stage_reason(by_name[name]))), "")
@@ -430,19 +431,20 @@ def _stage_reason(stage: Stage) -> str:
     if stage.name not in _WHAT:
         return ""
     what, verb = _WHAT[stage.name]
+    waits = f"{what[:1].upper()}{what[1:]} {verb}"  # the second sentence's start
     if stage.state == "failed" and (m := _FAILED.match(detail)):
         status = _STATUS.match(m["why"])
         answered = f"answered {status[1]}" if status else "failed"
-        return f"{m['site']} {answered}: {what} {verb} for tonight's run."
+        return f"{m['site']} {answered}. {waits} until tonight."
     if stage.state != "skipped":
         return ""
     if m := _BLOCKED.match(detail):
-        return f"{m['site']} blocked caracole: {what} {verb} until {m['until'] or 'it cools down'}."
+        return f"{m['site']} turned us back. {waits} until {m['until'] or 'it cools down'}."
     if m := _COOLING.match(detail):
-        return f"{m['site']} is cooling down after a block: {what} {verb} until {m['until']}."
+        return f"Waiting out {m['site']} until {m['until']}. {waits}."
     if m := _SPENT.match(detail):
         spent = m["spent"]
-        return f"{spent[:1].upper()}{spent[1:]}: {what} {verb} for tonight's run."
+        return f"{spent[:1].upper()}{spent[1:]}. {waits} until tonight."
     return ""
 
 

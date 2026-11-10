@@ -42,9 +42,8 @@ KEPT_FOR = 600.0  # seconds a comparison is kept for its Sync
 KEPT = 20  # comparisons kept at most, the newest
 SIDES = ("here", "there", "skip")
 PREFER = ("", "here", "there")
-STALE = ("The two changed since that comparison: compare them again, and choose again.")
-GONE = ("That comparison is more than 10 minutes old, or caracole serve has restarted since: compare the two "
-        "again.")
+STALE = "Both books changed since that comparison. Compare again, then choose again."
+GONE = "That comparison is over 10 minutes old, or caracole serve restarted. Compare again."
 
 ROUTES = (
     Route("GET", "/api/sync", lambda app, asked: sync_state(app)),
@@ -160,9 +159,8 @@ def _compared(app: WebApp, address: str):
     except sync.PeerError as e:
         raise Refused(502, "Not reached", str(e)) from None
     if me is not None and me == state.server:
-        raise Refused(409, "The same caracole", f"The caracole at {address} is this one (the same id, {me}): its "
-                                                "database is a copy of this one's. Give one of them another: "
-                                                "caracole peer new-id.")
+        raise Refused(409, "The same scribe", f"The scribe at {address} is this one (same id, {me}): its database is "
+                                              "a copy of ours. Give one a new id: caracole peer new-id.")
     with app.db() as conn:
         mine = sync.library_state(conn, overrides, books)
         ours = sync.base_of(conn, state.server) if state.server else None
@@ -204,8 +202,8 @@ def choices_of(text: str, proposals: dict[str, str]) -> dict[str, str]:
             continue
         side, tab, unit_id = line.partition("\t")
         if not tab or side not in SIDES or unit_id not in proposals:
-            raise Refused(400, "Not a choice", f"{line[:200]!r} isn't a choice of this comparison's: here, there "
-                                               "or skip, a tab, then one of its units.")
+            raise Refused(400, "Not a choice", f"{line[:200]!r} isn't a choice of this compare: here, there "
+                                               "or skip, a tab, then a unit.")
         if found.get(unit_id, side) != side:
             raise Refused(400, "Not a choice", f"{unit_id[:200]} is chosen two ways.")
         found[unit_id] = side
@@ -226,7 +224,7 @@ def apply(app: WebApp, form: dict[str, str]) -> Response:
     choices = choices_of(form.get("choices", ""), kept.proposals)
     open_ = [u for u, proposal in kept.proposals.items() if proposal == "conflict" and u not in choices]
     if open_ and not prefer:
-        raise Refused(409, "Choose first", f"Choose a side for every conflict first: {len(open_)} "
+        raise Refused(409, "Choose first", f"Choose a book for every conflict: {len(open_)} "
                                            f"{'has' if len(open_) == 1 else 'have'} none.")
     from caracole import peer_sync as sync
 
@@ -234,13 +232,13 @@ def apply(app: WebApp, form: dict[str, str]) -> Response:
     if sync.compared_hash(found) != kept.hash:
         _forget(app, made)
         raise Refused(409, "Compare again", STALE)
-    shown = f"Sync with {(kept.name.strip() or kept.address)[:120]}"
+    shown = f"Share with {(kept.name.strip() or kept.address)[:120]}"
     args = ("peer", "sync", "--push", "--yes", "--progress", f"--compared={kept.hash}",
             *(f"--choose={side}:{unit_id}" for unit_id, side in choices.items()),
             *((f"--prefer={prefer}",) if prefer else ()), "--", kept.address)
     job, new = app.submit(shown, SYNCING + kept.address, [(shown, args)], display=shown, join=False)
     if not new:
-        raise Refused(409, "Syncing already", f"A sync with {kept.address} is on its way already (request "
-                                              f"{job.id}): compare again once it is over.")
+        raise Refused(409, "Sharing already", f"Already sharing with {kept.address} (request {job.id}). Compare "
+                                              "again once it's done.")
     _forget(app, made)
     return app.queued(job, "/#tab=sync")

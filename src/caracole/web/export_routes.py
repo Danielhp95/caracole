@@ -51,13 +51,13 @@ ROUTES = (
     Route("GET", "/export.pdf", lambda app, asked: export_pdf(app, asked.target, change=asked.method == "GET")),
 )
 
-_NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
-_NOT_A_VERSION = Refused(400, "Not a version", "That version can't be read.")
-_BESIDE = ("This is the auto-chords sheet kept beside the song's own sheet, with chords of its own: a PDF in "
-           "another version is made from the song's own sheet, so open that one from the library and export it.")
-_VERSION = ("This is a version kept beside the song's own sheet, with chords of its own: a PDF in another version "
-            "is made from the song's own sheet, so make this version the one first (Make this the one, under its "
-            "Versions), then export it from the song's sheet.")
+_NOT_AN_ADDRESS = Refused(400, "Not an address", "Can't read that address.")
+_NOT_A_VERSION = Refused(400, "Not a version", "Can't read that version.")
+_BESIDE = ("This is the auto-chords sheet kept beside the song's own. A PDF in another version comes from the "
+           "song's own sheet: open that from the book and export it.")
+_VERSION = ("This is a version kept beside the song's own. A PDF in another version comes from the song's own "
+            "sheet: make this one the one first (Make this the one, under Versions), then export from the song's "
+            "sheet.")
 
 
 def export_pdf(app: WebApp, target: str, *, change: bool = True) -> Response:
@@ -82,7 +82,7 @@ def export_pdf(app: WebApp, target: str, *, change: bool = True) -> Response:
         with app.db() as conn:
             label, data = version_pdf(conn, app.cfg, song, v, traditional=export_traditional(asked))
     except (RenderError, OSError) as e:
-        raise Refused(500, "No PDF", f"The PDF couldn't be made: {e}") from e
+        raise Refused(500, "No PDF", f"Couldn't make the PDF: {e}") from e
     if mine and change:
         version = export_query(v)
         app.submit(f"Make {song.display} your version", f"{EXPORTING}{song.key}:{version}{MINE}",
@@ -107,7 +107,7 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, Version]:
 
     parts = tuple(sheet.split("/"))
     if len(parts) < 2 or not sheet or any(p in ("", ".", "..") for p in parts) or written_page(parts[-1]) is None:
-        raise Refused(404, "Not found", "There's no such sheet in the library.")
+        raise Refused(404, "Not found", "No such sheet in the book.")
     overrides = app.overrides()
     library = app.cfg.library_dir
     with app.db() as conn:
@@ -115,13 +115,13 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, Version]:
                      if song_dir(library, s).relative_to(library).parts == parts[:-1]
                      and written_file(conn, s.id, parts[-1]) is not None), None)
         if song is None:
-            raise Refused(404, "Not found", "There's no such sheet in the library.")
+            raise Refused(404, "Not found", "No such sheet in the book.")
         if parts[-1] != export_viewer(conn, song):
             if parts[-1] == AUTO_OUTPUTS[2]:  # beside the human sheet, whose PDF an export would be
                 raise Refused(409, "Not this sheet", _BESIDE)
             if version_page_tab(parts[-1]) is not None:  # another sheet's chords, the human sheet's PDF
                 raise Refused(409, "Not this sheet", _VERSION)
-            raise Refused(404, "Not found", "There's no such sheet in the library.")
+            raise Refused(404, "Not found", "No such sheet in the book.")
         try:
             return song, export_version(query, export_sheet(conn, app.cfg, song).own(overrides))
         except RenderError as e:

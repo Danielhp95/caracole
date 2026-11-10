@@ -97,7 +97,7 @@ class Pick:
 
 def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
     """The picker's form, as the library page's script builds it on a card: a radio group of the
-    candidates and "None of these" (not for search hits: nothing proposed them), "Fetch it now"
+    candidates and "None of these" (not for search hits: nothing proposed them), "Fetch"
     (ticked) and Pick, posted to ``/review``. ``focus``: its first candidate takes the focus when the
     page opens (a page for this alone)."""
     rows = []
@@ -106,21 +106,20 @@ def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
         name = f"{c.get('artist')} – {c.get('title')}"
         href = str(c.get("href") or "")
         page = (f'<a class="choice-link" href="{escape(href, quote=True)}" target="_blank" rel="noopener noreferrer" '
-                f'aria-label="{escape(name, quote=True)} on Ultimate Guitar, in a new tab">UG ↗</a>'
+                f'aria-label="{escape(name, quote=True)} on UG, new tab">UG ↗</a>'
                 if href.startswith(("https://", "http://")) else "")
         rows.append(_choice(str(c.get("ref")), f"{c.get('n')}. {name}", why, autofocus=focus and n == 0) + page
                     + "</div>")
     if pick.search:
-        hint = ("Your pick goes into overrides.toml under [match], as caracole review --song --pick writes it, "
-                "with no [alias]: a hit under another artist's name may be a cover. Fetch it now then asks "
-                "Ultimate Guitar for it.")
+        hint = ("Your pick goes in overrides.toml under [match], with no [alias]: a hit under another artist may be a "
+                "cover. Fetch then asks UG for it.")
     else:
-        rows.append(_choice("none", "None of these", "caracole drops them for good and goes on looking for the "
-                            "song", cls="choice none") + "</div>")
-        hint = ("Your answer goes into overrides.toml, as caracole review writes it. Fetch it now then asks "
-                "Ultimate Guitar for the song picked; None of these fetches nothing.")
+        rows.append(_choice("none", "None of these", "Drops them for good; we keep looking", cls="choice none")
+                    + "</div>")
+        hint = ("Your answer goes in overrides.toml. Fetch then asks UG for the song picked; None of these fetches "
+                "nothing.")
     shown = " ".join(str(c.get("ref")) for c in pick.choices)
-    question = f"Which Ultimate Guitar song is “{pick.title}” by {pick.artist}?"
+    question = f"Which UG song is “{pick.title}” by {pick.artist}?"
     return (
         '<form class="pick-form" method="post" action="/review">\n'
         f'  <input type="hidden" name="csrf" value="{escape(csrf, quote=True)}">\n'
@@ -128,7 +127,7 @@ def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
         f'  <input type="hidden" name="shown" value="{escape(shown, quote=True)}">\n'
         f'  <fieldset class="choices"><legend>{escape(question)}</legend>\n  ' + "\n  ".join(rows) + "\n  </fieldset>\n"
         '  <div class="pick-row"><label class="pick-check"><input type="checkbox" name="fetch" value="1" checked>'
-        'Fetch it now</label><button class="btn primary" type="submit">Pick</button></div>\n'
+        'Fetch</label><button class="btn primary" type="submit">Pick</button></div>\n'
         f'  <p class="pick-hint">{escape(hint)}</p>\n</form>'
     )
 
@@ -146,12 +145,12 @@ def review_page(pick: Pick, csrf: str, *, library_name: LibraryName | None = Non
     """A song in review's picker on a page of its own, for the Requests tab to link to; or a song not
     found's, with what ``caracole search`` finds for it."""
     if pick.search:
-        lede = (f'<p class="lede">Nothing in the offline Ultimate Guitar index matched {escape(pick.display)} '
-                "closely enough. These are what <code>caracole search</code> finds for its artist and title: pick "
-                "one only if it is the song, and caracole writes it under <code>[match]</code>.</p>")
+        lede = (f'<p class="lede">Nothing in UG\'s index matched {escape(pick.display)} closely. These are what '
+                "<code>caracole search</code> finds for its artist and title: pick one only if it's the song, and we "
+                "note it under <code>[match]</code>.</p>")
     else:
-        lede = (f'<p class="lede">caracole isn\'t sure which Ultimate Guitar song {escape(pick.display)} is. '
-                "Pick it here, as <code>caracole review</code> would ask you.</p>")
+        lede = (f'<p class="lede">Not sure which UG song {escape(pick.display)} is. '
+                "Pick it here, as <code>caracole review</code> would ask.</p>")
     return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>',
                 library_name=library_name)
 
@@ -162,10 +161,8 @@ def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str]
     """Whether to remove a song, with what goes and what stays (``removal.describe``); the form confirms it.
     Both answers go back to ``library``, the library page as it was left: ``back``, its address after #,
     goes along with the form."""
-    after = (f" It runs after the {waiting} request{'s' if waiting != 1 else ''} queued before it."
-             if waiting else "")
-    lede = ('<p class="lede">Remove it queues <code>caracole remove</code> for this song, as every request is '
-            f"queued.{escape(after)}</p>")
+    after = f" {waiting} request{'s' if waiting != 1 else ''} ahead of it." if waiting else ""
+    lede = f'<p class="lede">Remove queues <code>caracole remove</code> for this song.{escape(after)}</p>'
 
     def items(heading: str, lines: list[str]) -> str:
         if not lines:
@@ -177,10 +174,10 @@ def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str]
     hidden = "".join(f'  <input type="hidden" name="{name}" value="{escape(str(value), quote=True)}">\n'
                      for name, value in fields)
     form = ('<form class="confirm" method="post" action="/remove">\n' + hidden
-            + '  <button class="btn danger" type="submit">Remove it</button>\n'
-            f'  <a class="btn" href="{escape(library, quote=True)}">Keep it</a>\n</form>')
+            + '  <button class="btn danger" type="submit">Remove</button>\n'
+            f'  <a class="btn" href="{escape(library, quote=True)}">Keep</a>\n</form>')
     said = "".join(f'<p class="message">{escape(note)}</p>\n' for note in notes)
-    return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form,
+    return page(f"Remove {display}?", lede + items("Removes", goes) + items("Keeps", stays) + said + form,
                 library_name=library_name)
 
 
@@ -195,4 +192,4 @@ class Refused(Exception):
 def message_page(title: str, message: str, *, library_name: LibraryName | None = None) -> str:
     """An error, said plainly, and the way back."""
     return page(title, f'<p class="message">{escape(message)}</p>\n'
-                       '<p><a class="btn" href="/">Back to the library</a></p>', library_name=library_name)
+                       '<p><a class="btn" href="/">Back to the book</a></p>', library_name=library_name)

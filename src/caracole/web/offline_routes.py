@@ -72,8 +72,8 @@ FORMAT = 1
 START = "/offline/index.html"
 # The headers an entry names, as the app hands them to its WebView with the file.
 HEADERS = ("Content-Security-Policy", "Referrer-Policy", "X-Content-Type-Options")
-NO_START = ("The library page isn't as caracole last wrote it (it was changed on a synced device, say, or caracole "
-            "has no record of it yet), so there is nothing to copy: caracole todo writes it again.")
+NO_START = ("The logbook page isn't as we last wrote it (changed on a synced device, or not recorded yet). Nothing "
+            "to copy: caracole todo writes it again.")
 
 ROUTES = (
     Route("GET", "/api/offline", lambda app, asked: manifest(app)),
