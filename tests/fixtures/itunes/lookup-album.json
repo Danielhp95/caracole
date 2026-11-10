@@ -1,0 +1,10 @@
+
+
+
+{
+ "resultCount":1,
+ "results": [
+{"wrapperType":"collection", "collectionType":"Album", "artistId":136975, "collectionId":1440833098, "amgArtistId":3644, "artistName":"The Beatles", "collectionName":"1", "collectionCensoredName":"1", "artistViewUrl":"https://music.apple.com/us/artist/the-beatles/136975?uo=4", "collectionViewUrl":"https://music.apple.com/us/album/1/1440833098?uo=4", "collectionPrice":12.99, "collectionExplicitness":"notExplicit", "trackCount":27, "copyright":"This Compilation ℗ 2015 Calderstone Productions Limited (a division of Universal Music Group) / Apple Corps Ltd.", "country":"USA", "currency":"USD", "releaseDate":"2000-11-13T08:00:00Z", "primaryGenreName":"Rock"}]
+}
+
+

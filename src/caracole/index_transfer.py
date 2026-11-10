@@ -760,6 +760,14 @@ def newest(conn: sqlite3.Connection) -> dict[str, str]:
     return found
 
 
+def tab_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    """The tabs each site's index tracks, by ``SITES``' order: the rows of its first table (UG's ``ug_index``,
+    never its artist pages' tabs; LaCuerda's ``lacuerda_index``, …), which ``GET /api/sync/indexes`` answers and a
+    sync's report counts before and after an index is merged."""
+    return {name: conn.execute(f"SELECT COUNT(*) FROM main.{site.tables[0]}").fetchone()[0]
+            for name, site in SITES.items()}
+
+
 # --- applying ------------------------------------------------------------------------------------------------------
 
 

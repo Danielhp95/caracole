@@ -37,9 +37,12 @@ def test_every_path_named_is_one_caracole_keeps_out_of():
 
 
 def test_youtubes_paths_are_named_from_its_robots_txt_and_said_to_be_gone_against():
+    # yt-dlp asks them against its robots.txt, the one exception; no PoliteClient does: http.py keeps www.youtube.com's
+    # rules whole for the phone's oEmbed of a shared link, and the Sites tab counts none of them as kept out of.
     youtube = site("youtube")
     assert [path for path, _ in youtube.paths] == ["/results", "/youtubei/"]
-    assert not any(path in rules for path, _ in youtube.paths for rules in ROBOTS_DISALLOW.values())
+    assert youtube.hosts == () and more_paths(youtube) == 0
+    assert all(path in ROBOTS_DISALLOW["www.youtube.com"] for path, _ in youtube.paths)
     assert "caracole goes against" in youtube.robots
 
 

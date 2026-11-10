@@ -43,11 +43,11 @@ def a_song_with_a_sheet(cfg, conn):
 def test_the_state_lists_each_unit_with_this_sides_id_and_its_base_with_the_peer_that_asks(cfg, conn):
     song = a_song_with_a_sheet(cfg, conn)
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Radiohead - Creep"])
-    kv_set_json(conn, sync.BASE_KEY + "phone", {"format": 2, "units": {f"song/{song.key}": ["d", NOW]}})
+    kv_set_json(conn, sync.BASE_KEY + "phone", {"format": sync.FORMAT, "units": {f"song/{song.key}": ["d", NOW]}})
     app = an_app(cfg)
     status, doc = answer(app, "/api/peer/state")
     assert status == 200
-    assert doc["format"] == sync.FORMAT == 2 and doc["server"] == sync.own_id(conn) and doc["caracole"] == "0.1.0"
+    assert doc["format"] == sync.FORMAT == 3 and doc["server"] == sync.own_id(conn) and doc["caracole"] == "0.1.0"
     assert doc["name"] == cfg.library_name and doc["token"] == "tok" and doc["base"] is None
     assert stamps.parse(doc["now"]) is not None and stamps.stamp(stamps.parse(doc["now"])) == doc["now"]
     assert isinstance(doc["indexes"], dict)
@@ -69,6 +69,21 @@ def test_the_state_gives_this_sides_settings_for_the_phone_and_a_reader_of_the_s
     assert doc["settings"] == politeness.settings_document(cfg)
     assert doc["settings"]["name"] == "Canciones" and doc["settings"]["providers"]["megalobiz"]["enabled"] is False
     assert sync.read_state_document(doc).name == "Canciones"
+
+
+def test_the_state_document_gives_the_asker_the_kept_answers_this_side_keeps_for_it(cfg, conn):
+    """What this side's imports of the asker's files answered "keep mine" (kv ``sync:base:<id>``'s ``kept``), as
+    stored, ``here`` this side's digest: the asker's sync reads it (``PeerState.kept``) and gives this side its
+    version no more. An asker that names no id is given none, and one this side kept nothing for an empty one."""
+    song = a_song_with_a_sheet(cfg, conn)
+    unit = f"song/{song.key}"
+    sync.record_kept(conn, "phone", {unit: ("d-here", "d-phone")}, NOW)
+    app = an_app(cfg)
+    status, doc = answer(app, "/api/peer/state?peer=phone")
+    assert status == 200 and doc["kept"] == {unit: ["d-here", "d-phone", NOW]}
+    assert sync.read_state_document(doc).kept == {unit: ("d-here", "d-phone", NOW)}
+    assert answer(app, "/api/peer/state?peer=desk")[1]["kept"] == {}
+    assert "kept" not in answer(app, "/api/peer/state")[1]
 
 
 def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
@@ -115,7 +130,7 @@ def test_a_unit_is_answered_whole_with_the_digest_the_state_gives_it(cfg, conn):
     app = an_app(cfg)
     units = answer(app, "/api/peer/state")[1]["units"]
     status, doc = answer(app, f"/api/peer/unit?id=song/{song.key}")
-    assert status == 200 and doc["format"] == 2 and doc["digest"] == units[f"song/{song.key}"]["digest"]
+    assert status == 200 and doc["format"] == 3 and doc["digest"] == units[f"song/{song.key}"]["digest"]
     assert sync.digest_of(sync.value_of_document(doc["id"], doc["unit"])) == doc["digest"]
     unit = doc["unit"]
     assert unit["names"]["title"] == "Creep" and unit["overrides"] == {"version": "key=Gm&capo=0"}

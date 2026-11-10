@@ -40,7 +40,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from caracole.config import DEFAULT_PROVIDERS, NO_BUDGET, Config
+from caracole.config import DEFAULT_PROVIDERS, NO_BUDGET, SHARE_PROVIDERS, Config
 from caracole.db import kv_set_json
 from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
@@ -71,8 +71,9 @@ from caracole.report import (
 from caracole.songs import ensure_current_keys, list_songs
 
 log = logging.getLogger(__name__)
-# Each gets a polite client; YouTube yt-dlp, and its image host none: only a search's suggestion asks it.
-PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p not in ("youtube", "ytimg"))
+# Each gets a polite client; YouTube yt-dlp, and its image host none: only a search's suggestion asks it; nor the
+# services a link shared to the phone is read from, which the phone alone asks.
+PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p not in ("youtube", "ytimg", *SHARE_PROVIDERS))
 clock = time.monotonic  # what the run's duration is measured with; tests replace it
 
 

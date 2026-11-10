@@ -10,6 +10,9 @@ db.kv_set_json answer, which core.json.Canonical and core.json.PyJson must answe
   ``Canonical.write`` of what it reads throws). Its texts: the spec's vectors, caracole's own stored records
   (UG's version records as ``versions.raw`` holds them, LRCLIB's answers as ``songs.lyrics_json`` does, and the
   fixtures' own texts), numbers, the reading's edges, whitespace.
+- ``stored_hash_without.jsonl``: ``canonical.stored_hash(text, without=["rating", "votes"])``, H of each text of
+  ``stored_hash.jsonl`` and of the edges of taking members out (a version's raw record from UG, as a sync unit's value
+  hashes it: ``peer_sync.VOLATILE_RAW``), ``kw.without`` the members taken out.
 - ``stored_hash_utf16.jsonl``: H of texts that hold a raw lone surrogate, which no corpus string may: each record's
   text is its ``utf16`` code units (``args`` empty), with ``reads`` as above.
 - ``pydumps.jsonl``: ``json.dumps(value, ensure_ascii=False, **kw)``, db.kv_set_json's text with no ``kw`` beyond
@@ -112,7 +115,7 @@ def stored_records() -> list[str]:
 
 RECORD = '{"id": 85053, "rating": 4.54038, "votes": 7, "song_name": "De M\\u00fasica Ligera", "tags": [], "x": null}'
 LONE = ['"\\ud800"', '"\\udfff"', '"\\udfb8\\ud83c"', '"\\ud83c\\u0041"', '"\\ud83cx"', '{"\\ud800": 1}',
-        '["ok", {"k": "\\udc00"}]']
+        '["ok", {"k": "\\udc00"}]', '{"a": "\\ud800", "a": "x"}', '[{"k": "\\udc00", "k": 1}, {"j": ["\\udc00"]}]']
 ESCAPES = ['"\\ud83c\\udfb8"', '"\\uD83C\\uDFB8"', '"\\u00E9\\u00e9"', '"\\/\\b\\f\\n\\r\\t\\"\\\\"', '"\\u0000"',
            '"\\u001F\\u007F\\u2028"', '"a\\tb"', '{"\\u00e9": 1, "\\u00c9": 2, "e\\u0301": 3}']
 NOT_JSON = [
@@ -180,6 +183,24 @@ def test_stored_hash_vectors():
                           for text in stored_texts()])
 
 
+# Taking members out: an object's own alone, a member that couldn't be canonical, repeated, in another case.
+WITHOUT = ["rating", "votes"]
+WITHOUT_EDGES = ['{"rating": 1e1001, "a": 1}', '{"votes": "\\ud800", "a": 1}', '{"a": {"rating": 1}, "votes": 2}',
+                 '[{"rating": 1}]', '{"rating": 1, "rating": 2, "b": 3}', '{"Rating": 1, "VOTES": 2}', '{"rating": 1}',
+                 '{"votes": 1, "a": "\\udfff"}', '"rating"', '{"rating": [1, 2.50], "a": 4.50}',
+                 '{"n": {"a": "\\ud800", "a": 1}, "rating": 2}', '{"votes": "\\ud800", "votes": 1, "a": 1}',
+                 '{"a": "\\ud800", "a": 1, "rating": "\\udfff"}']
+
+
+@needs_the_spec
+def test_stored_hash_without_vectors():
+    texts = stored_texts() + [t for t in WITHOUT_EDGES if t not in stored_texts()]
+    records = [{"fn": "caracole.canonical.stored_hash", "args": [text], "kw": {"without": WITHOUT},
+                "out": canonical.stored_hash(text, WITHOUT)} for text in texts]
+    assert sum(r["out"] != canonical.stored_hash(r["args"][0]) for r in records) > 20  # it takes something out
+    write("stored_hash_without", records)
+
+
 def utf16(text: str) -> list[int]:
     units = []
     for c in text:
@@ -192,13 +213,13 @@ def utf16(text: str) -> list[int]:
 # surrogates in Python, never as the pair their UTF-16 units look like in Kotlin.
 RAW_SURROGATES = ['"a\ud800b"', '"\udfff"', "\ud800", "x\udc00", '{"k": "\udfff"}', '{"\ud83c": 1}',
                   '"\ud83c\\udfb8"', '"\\ud83c\udfb8"', '"\\ud83c\udfb8\\ud83c\\udfb8"', '"\udfb8\ud83c"',
-                  '"\U0001F3B8"', '["\ud800", 1e1001]', '"\ud800']
+                  '"\U0001F3B8"', '["\ud800", 1e1001]', '"\ud800', '{"a": "\\ud83c\udfb8", "a": 1}']
 
 
 def test_stored_hash_utf16_vectors():
     records = [{"fn": "caracole.canonical.stored_hash", "args": [], "kw": {}, "utf16": utf16(text), **stored(text)}
                for text in RAW_SURROGATES]
-    assert [r["canonical"] for r in records if r["canonical"] is not None] == ['"\U0001F3B8"']
+    assert [r["canonical"] for r in records if r["canonical"] is not None] == ['"\U0001F3B8"', '{"a":1}']
     write("stored_hash_utf16", records)
 
 

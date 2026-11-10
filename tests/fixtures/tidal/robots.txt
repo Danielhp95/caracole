@@ -1,0 +1,28 @@
+# TIDAL reserves its rights against text and data mining (TDM) for AI training.
+# See /.well-known/tdmrep.json and the noai/noimageai meta + X-Robots-Tag signals.
+# AI training crawlers are disallowed; general search indexing stays allowed.
+
+User-agent: GPTBot
+User-agent: Google-Extended
+User-agent: CCBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Applebot-Extended
+User-agent: Bytespider
+User-agent: Meta-ExternalAgent
+User-agent: FacebookBot
+User-agent: Diffbot
+User-agent: ImagesiftBot
+User-agent: omgili
+User-agent: Webzio-Extended
+User-agent: Timpibot
+Disallow: /
+
+User-agent: *
+Allow: /
+
+Sitemap: https://tidal.com/sitemap.xml
+Sitemap: https://tidal.com/sitemaps/sitemap-index.xml
+Sitemap: https://tidal.com/sitemaps/sitemap-index-tracks.xml
+Sitemap: https://tidal.com/sitemaps/sitemap-index-videos.xml
+Sitemap: https://tidal.com/sitemaps/sitemap-index-playlists.xml

@@ -1,6 +1,8 @@
-"""UG's lookup path for a matched song, for the phone's lane ug-fetch-sheet (core.ug's ``UgFetch.processSong`` and
-``keepVersion``, ``internal/fetch/``) to replay: scenario records (tests/helpers/scenario.py, the corpus spec's
-"Scenario records") of ``ug/fetch.py``'s ``process_song`` and ``keep_version`` over a fake Ultimate Guitar.
+"""UG's lookup path, for the phone's lanes ug-fetch-sheet (core.ug's ``UgFetch.processSong`` and ``keepVersion``,
+``internal/fetch/``) and ug-fetch-artist (the artist-page route, ``ArtistRoute`` and ``internal/fetch/ArtistPages``;
+``VersionsCommands``) to replay: scenario records (tests/helpers/scenario.py, the corpus spec's "Scenario records")
+of ``ug/fetch.py``'s ``process_song`` and ``keep_version``, and of versions_cmd.py's ``keep`` and ``keep_more``, over
+a fake Ultimate Guitar.
 
 **The world.** One song, "Soda Stereo - Persiana Americana", matched to ``soda-stereo/persiana-americana`` with ten
 synthetic lyric lines, and the offline index's tabs of it, whose pages (helpers/ug_pages.py, at their slugged URLs)
@@ -28,10 +30,29 @@ sheet, so that ``sheet.json`` is UG's raw in UG's key order, its floats as ``rep
   lookup filled, through one client: each of its answers (kept, same, held, sheet, gone, unreadable, closed, no text,
   unknown), ``out.result`` the list of them.
 
-The overrides of a case (pins, ``[block]``, ``[lacuerda]``) are written to an overrides.toml with overrides.py's
-writers and read back by ``load_overrides``; the fixture carries them as the phone holds them, ``phone_overrides``
-rows (``tbl``, the key, the name written, the canonical JSON of ``overrides.song_entries``' value), which
-``Overrides.read`` reads.
+- ``ug_artist.jsonl``: ``process_song`` records as ``ug_sheet.jsonl``'s, of a song the index can't place (not found:
+  "Soda Stereo - Té Para Tres", whose tabs UG lists by bare ids) looked up on its artist's page
+  (``www.ultimate-guitar.com/artist/soda_stereo_2946``): the page learned from a slugged tab of another of their songs
+  (``LEARN_TRIES`` at most) or pasted under ``[artist_url]`` (a tab page read once, kv ``ug:pasted_tab:<tab>``, and
+  what it leads to when it leads nowhere), the chords list then the lists its filter bar offers, read until the title's entries end and
+  ``artist_pages_per_kind`` pages at most, 30 days from the cache (a stale copy no answer once the budget is spent),
+  the unfiltered page when a list answers 404, a page gone; titles as ``_best_title`` takes them (``TITLE_MATCH``,
+  ``TITLE_MARGIN``), ``[reject]``; and a matched song whose index tabs hold no chords. Each record also carries
+  ``noted``, the artist pages a store kept tabs of, each at the lookup's time or its read's where later (what the phone
+  notes for its next push to the computer, kv ``phone:read:ug:<page>``, which Python doesn't), ``artist_known`` (``artist_is_known`` before
+  the pass) and ``paste_problem`` (``pasted_page_problem`` after it, a pair or null).
+- ``commands_versions.jsonl``: ``{fn: "caracole.versions_cmd", case, fixture, kw: {song, turns}, …}``: each turn
+  (``{command: "keep", tab}`` or ``{command: "keep_more", tab: null}``) run in turn with ``progress`` on, as caracole
+  serve queues them, through the record's client (each command's own count of requests, the cache, pace and events
+  shared), its pages standing still (``render_all``, ``write_pages``: the phone's runner makes them at the ``pdf`` and
+  ``pages`` stages' running events); ``out.result`` each turn's ``{"lines"}`` (``phone_lines``: what the phone's
+  ``VersionsCommands`` says, its last line last, the library's folder written ``{library}``) or ``{"error"}``, a
+  refusal's words (``_common.fail``).
+
+The overrides of a case (pins, ``[block]``, ``[lacuerda]``, ``[artist_url]``, ``[reject]``) are written to an
+overrides.toml with overrides.py's writers and read back by ``load_overrides``; the fixture carries them as the phone
+holds them, ``phone_overrides`` rows (``tbl``, the key, the name written, the canonical JSON of the value as
+``overrides.song_entries`` gives it, an ``[artist_url]``'s its page), which ``Overrides.read`` reads.
 
 Stamps: songs.py's clock (``utc_now_iso``) is the record's ``now`` while the world is made and each pass runs.
 library.keep_file stamps ``created_at`` with SQLite's clock, which no record can fix: a ``files`` row a pass wrote is
@@ -47,7 +68,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
@@ -58,13 +79,15 @@ import pytest
 
 from helpers.corpus import VECTORS, check, fixture_ref, jsonl, phone_schema
 from helpers.scenario import record
-from helpers.ug_pages import make_tab_page_html, version_dict
+from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
 
 MADE_BY = "tests/test_conformance_ug_fetch.py"
 LOOKUP = VECTORS / "lookup"
 SHEET = LOOKUP / "ug_sheet.jsonl"
 STAGES = LOOKUP / "ug_sheet_stages.jsonl"
 KEEP = LOOKUP / "ug_keep.jsonl"
+ARTIST_ROUTE = LOOKUP / "ug_artist.jsonl"
+VERSIONS_CMD = LOOKUP / "commands_versions.jsonl"
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 STAMP = "2026-11-03T12:00:00Z"
@@ -366,7 +389,8 @@ class World:
 
 def rows_of(o, display: str) -> list[dict[str, str]]:
     """The phone's ``phone_overrides`` rows of ``o``, whose one song is ``display``, as the phone holds overrides.toml
-    (phone.sql): the song tables (and ``ignore``) by identity key, ``block`` by tab id."""
+    (phone.sql): the song tables (and ``ignore``) by identity key, ``artist_url`` by the artist's key (written
+    under the name the entry is), ``block`` by tab id."""
     from caracole.overrides import SONG_TABLES, song_entries
 
     rows = []
@@ -376,6 +400,9 @@ def rows_of(o, display: str) -> list[dict[str, str]]:
         for table in (*SONG_TABLES, "ignore"):
             if table in entries:
                 rows.append({"tbl": table, "key": key, "written": display, "value": canonical(entries[table])})
+    for artist, page in o.artist_url.items():
+        rows.append({"tbl": "artist_url", "key": artist, "written": o.artist_url_names.get(artist, artist),
+                     "value": canonical(page)})
     for tab in sorted(o.block):
         rows.append({"tbl": "block", "key": str(tab), "written": str(tab), "value": canonical(True)})
     return sorted(rows, key=lambda r: (r["tbl"], r["key"]))
@@ -916,6 +943,559 @@ def keep_records(tmp: Path) -> list[dict[str, Any]]:
         w.close()
 
 
+# --- the artist-page route (A6) ---------------------------------------------------------------------------------
+
+ARTIST_ID = 2946
+TEA, TEA_KEY = "Té Para Tres", "te-para-tres"
+TEA_DISPLAY = f"{ARTIST} - {TEA}"
+LONG_AGO = "2026-09-24T12:00:00Z"  # forty days before the record's now: past an artist page's 30 days
+LATELY = "2026-10-29T12:00:00Z"  # five days before it: within them
+# The index's tab of another song of the artist, whose page teaches the artist page.
+OTHER = [(101, SONG_KEY, "chords")]
+
+
+def listed(tab_id: int, *, kind: str = "chords", title: str = TEA, rating: float = 4.5, votes: int = 10,
+           number: int = 1, **extra: Any) -> dict[str, Any]:
+    """A tab of the artist as UG lists it on its artist page and its tab pages: a bare ``/tab/{id}``."""
+    return version_dict(tab_id, type=UG_TYPES[kind], version=number, rating=rating, votes=votes, song=title,
+                        artist=ARTIST, song_id=77, tab_url=f"{TAB}{tab_id}", **extra)
+
+
+def bare_page(tab: dict[str, Any], content: str | None, others: list[dict[str, Any]] = (), *,
+              artist_url: str | None = SODA_URL) -> str:
+    return make_tab_page_html(tab, list(others), content=content, artist_url=artist_url)
+
+
+def artist_list(tabs: list[dict[str, Any]], *, page: int = 1, pages: int = 1,
+                types: tuple[str, ...] = ("Chords", "Tabs")) -> str:
+    """One page of one of the artist's lists, its filter bar offering ``types``."""
+    return make_artist_page_html(ARTIST_ID, ARTIST, tabs, page=page, pages=pages, types=list(types))
+
+
+def list_url(kind: str | None = None, page: int = 1) -> str:
+    from caracole.ug.artist import artist_page_url
+
+    return artist_page_url(SODA_URL, kind=kind, page=page)
+
+
+def got(url: str, body: str, status: int = 200) -> tuple[str, dict[str, Any]]:
+    return f"GET {url}", {"status": status, "headers": HTML, "body": body}
+
+
+def missing(url: str) -> tuple[str, dict[str, Any]]:
+    return got(url, NOT_FOUND, 404)
+
+
+# The song's versions on the artist page: two chords, a text tab; another song's chords around them.
+TEA_CHORDS = [listed(501, rating=4.8, votes=30, number=1), listed(502, rating=4.1, votes=4, number=2)]
+TEA_TAB = listed(601, kind="tabs", rating=4.6, votes=12)
+BEFORE = listed(503, title="Persiana Americana")  # listed before the song's title: sorted by title
+AFTER = listed(504, title="Zoom")
+TEA_PAGES = {501: sheet_markup("version 501", LINES), 502: sheet_markup("version 502", LINES[:6]),
+             601: tab_markup("tab 601")}
+
+
+def tea_answers(*tab_ids: int) -> dict[str, dict[str, Any]]:
+    """The bare tab pages of the song's versions."""
+    tabs = {t["id"]: t for t in [*TEA_CHORDS, TEA_TAB]}
+    out = {}
+    for t in tab_ids:
+        others = [o for o in tabs.values() if o["type"] == tabs[t]["type"] and o["id"] != t]
+        out.update([got(f"{TAB}{t}", bare_page(tabs[t], TEA_PAGES[t], others))])
+    return out
+
+
+def teaching() -> dict[str, dict[str, Any]]:
+    """The other song's slugged tab page, which links the artist page."""
+    return dict([got(slugged(101), page_of(101, versions={101: VERSIONS[101]}))])
+
+
+def artist_world(tmp: Path, name: str, *, index: list[tuple[int, str, str]] | None = None,
+                 title: str = TEA) -> "World":
+    """The artist's song the index can't place (not found), the index holding ``index`` (by default the artist's other
+    song's tab)."""
+    from caracole.songs import update_song
+
+    w = World(tmp, name, index=OTHER if index is None else index, title=title)
+    with clock():
+        update_song(w.conn, w.song_id, match_decision="not_found", match_step=None, match_score=None,
+                    match_artist_key=None, match_song_key=None, match_candidates=[])
+    return w
+
+
+@contextmanager
+def noting(noted: dict[str, str]) -> Iterator[None]:
+    """Each artist page a store keeps tabs of, at the store's own time (the lookup's, ``STAMP``) or the read's where
+    that is later, never moved back: what the phone notes for its next push to the computer (core.index.Reads, kv
+    ``phone:read:ug:<page>``; ArtistTabs.store), which Python doesn't."""
+    from caracole.ug import artist_tabs
+
+    real = artist_tabs.store
+
+    def store(conn, page, name, tabs, *, read_at):
+        kept = real(conn, page, name, tabs, read_at=read_at)
+        at = max(read_at, STAMP)
+        if kept and at > noted.get(page, ""):
+            noted[page] = at
+        return kept
+
+    with mock.patch.object(artist_tabs, "store", store):
+        yield
+
+
+def route(w: "World", case: str, passes: list[dict[str, Any]], answers: dict[str, dict[str, Any]],
+          cache: dict[str, Any] | None = None, budget: int = 6) -> dict[str, Any]:
+    """``process_song`` passes of a song the artist's page settles, recorded as ``process`` records them, with what the
+    phone notes (``noted``), whether the artist's page could be found before (``artist_known``, ``artist_is_known``)
+    and the pasted page's problem after (``paste_problem``, ``pasted_page_problem``)."""
+    from caracole.ug.fetch import artist_is_known, pasted_page_problem
+
+    known = artist_is_known(w.conn, w.song, w.overrides())
+    noted: dict[str, str] = {}
+    with noting(noted):
+        made = w.process(case, passes, answers, cache, budget)
+    made["noted"] = noted
+    made["artist_known"] = known
+    with clock():
+        problem = pasted_page_problem(w.conn, w.song, w.overrides())
+    made["paste_problem"] = list(problem) if problem is not None else None
+    return made
+
+
+def learned(tmp: Path) -> list[dict[str, Any]]:
+    """A lookup's two passes of a song the index can't place: its artist's page learned from a slugged tab of another
+    of their songs (kv ``ug:artist_url:``), the chords list then the tabs list its filter bar offers, read until the
+    title's entries end; the match written (step ``artist_page``); the second pass reads the lists again from the
+    cache (30 days), then the slots."""
+    w = artist_world(tmp, "learned")
+    try:
+        answers = teaching() | dict([
+            got(list_url("chords"), artist_list([BEFORE, *TEA_CHORDS, AFTER])),
+            got(list_url("tabs"), artist_list([TEA_TAB])),
+        ]) | tea_answers(501, 502, 601)
+        made = [route(w, "a song the index can't place, found on its artist's page learned from another of their tabs",
+                      [FIRST, REST], answers)]
+    finally:
+        w.close()
+    # Four slugged tabs of other songs of the artist: LEARN_TRIES of them read, oldest first, none teaching the page.
+    others = [(301, "cuando-pase-el-temblor", "Cuando Pase el Temblor"), (302, "de-musica-ligera", "De Música Ligera"),
+              (303, "nada-personal", "Nada Personal"), (304, "zoom", "Zoom")]
+    w = artist_world(tmp, "learn-tries", index=[(t, key, "chords") for t, key, _ in others])
+    try:
+        answers = dict([missing(slugged(301, song="cuando-pase-el-temblor"))] + [
+            got(slugged(t, song=key), bare_page(listed(t, title=title), sheet_markup(f"version {t}", LINES),
+                                                artist_url=None if t < 304 else SODA_URL))
+            for t, key, title in others[1:]])
+        made.append(route(w, "LEARN_TRIES slugged tabs at most: three teaching no artist page (one gone), the fourth "
+                             "never read; not found, checked", [REST], answers))
+    finally:
+        w.close()
+    return made
+
+
+def pasted(tmp: Path) -> list[dict[str, Any]]:
+    """A tab page you pasted under [artist_url], read once for the artist page it links to (kv ``ug:pasted_tab:``),
+    a bare address of a slugged tab read at its slugged page; a list whose filter bar offers chords alone; and the
+    pages a pasted tab page leads nowhere: gone, closed to caracole, linking no artist page, unreadable."""
+    from caracole.overrides import add_artist_url
+
+    made = []
+    for name, url, answer, case in [
+        ("pasted", slugged(101), teaching(), "a tab page pasted under [artist_url] read once for its artist page"),
+        ("pasted-bare", f"{TAB}101", teaching(), "a bare address pasted is read at the slugged page"),
+    ]:
+        w = artist_world(tmp, name)
+        try:
+            w.write_overrides(lambda path, url=url: add_artist_url(path, ARTIST, url))
+            answers = answer | dict([got(list_url("chords"), artist_list(TEA_CHORDS, types=("Chords",)))]) | \
+                tea_answers(501, 502)
+            made.append(route(w, case, [REST], answers))
+        finally:
+            w.close()
+    bad = {"status": 200, "headers": HTML, "body": UNREADABLE}
+    for name, answers, cache, case in [
+        ("paste-gone", dict([missing(slugged(101))]), None, "a pasted tab page UG answers 404 for: no artist page"),
+        ("paste-closed", {f"GET {slugged(101)}": {"status": 301, "headers": [["location", f"{TAB}print?id=101"]],
+                                                   "body": ""}}, None,
+         "a pasted tab page UG moved where robots.txt closes: no artist page"),
+        ("paste-unlinked", dict([got(slugged(101), bare_page(VERSIONS[101].listed(), VERSIONS[101].content,
+                                                             artist_url=None))]), None,
+         "a pasted tab page that links no artist page"),
+        ("paste-unreadable", {f"GET {slugged(101)}": bad}, cached({f"GET {slugged(101)}": bad}),
+         "a pasted tab page that won't parse, cached or fetched again: asked again in 7 days"),
+    ]:
+        w = artist_world(tmp, name, index=[])  # no tab of the artist's to learn the page from instead
+        try:
+            w.write_overrides(lambda path: add_artist_url(path, ARTIST, slugged(101)))
+            made.append(route(w, case, [REST], answers, cache))
+        finally:
+            w.close()
+    return made
+
+
+def lists(tmp: Path) -> list[dict[str, Any]]:
+    """The artist's lists: read whole across their pages; cut short by ``artist_pages_per_kind``, the song left as it
+    was; a cached list within 30 days asks nothing, one past them is no answer once the budget is spent; a list that
+    answers 404 sends caracole to the unfiltered page, whose filter bar names the lists there are; a page gone."""
+    from caracole.overrides import add_artist_url
+    from caracole.ug import artist_tabs as listed_tabs
+    from caracole.ug.lookup import remember_artist_url
+    from caracole.ug.page import parse_version
+
+    made = []
+
+    def pasted_page(w):
+        w.write_overrides(lambda path: add_artist_url(path, ARTIST, SODA_URL))
+
+    w = artist_world(tmp, "straddling")
+    try:
+        pasted_page(w)
+        answers = dict([got(list_url("chords"), artist_list([BEFORE, TEA_CHORDS[0]], pages=2)),
+                        got(list_url("chords", 2), artist_list([TEA_CHORDS[1], AFTER], page=2, pages=2)),
+                        got(list_url("tabs"), artist_list([TEA_TAB]))]) | tea_answers(501, 502, 601)
+        made.append(route(w, "the title straddling two pages of the list: both read, then the tabs list", [REST],
+                          answers))
+    finally:
+        w.close()
+    w = artist_world(tmp, "cut-short")
+    try:
+        pasted_page(w)
+        pages = [artist_list([listed(510 + n, number=n)], page=n, pages=5) for n in (1, 2, 3)]
+        answers = {f"GET {list_url('chords', n)}": ok(pages[n - 1]) for n in (1, 2, 3)}
+        made.append(route(w, "a list cut short by the pages a kind may read: the song as it was, unchecked", [REST],
+                          answers))
+    finally:
+        w.close()
+    w = artist_world(tmp, "cached")
+    try:
+        pasted_page(w)
+        lists_ = dict([got(list_url("chords"), artist_list(TEA_CHORDS, types=("Chords",)))])
+        made.append(route(w, "a list cached within 30 days asks nothing", [REST], tea_answers(501, 502),
+                          cache=cached(lists_, fetched_at=LATELY)))
+    finally:
+        w.close()
+    w = artist_world(tmp, "stale")
+    try:
+        pasted_page(w)
+        lists_ = dict([got(list_url("chords"), artist_list(TEA_CHORDS, types=("Chords",)))])
+        made.append(route(w, "a list cached past 30 days is no answer once the budget is spent", [REST], {},
+                          cache=cached(lists_, fetched_at=LONG_AGO), budget=0))
+    finally:
+        w.close()
+    w = artist_world(tmp, "no-chords-list")
+    try:
+        pasted_page(w)
+        answers = dict([missing(list_url("chords")), got(list_url(), artist_list([BEFORE, TEA_TAB], types=("Tabs",))),
+                        got(list_url("tabs"), artist_list([TEA_TAB], types=("Tabs",)))]) | tea_answers(601)
+        made.append(route(w, "a chords list that answers 404: the unfiltered page names the lists there are", [REST],
+                          answers))
+    finally:
+        w.close()
+    w = artist_world(tmp, "page-gone")
+    try:
+        with clock():
+            remember_artist_url(w.conn, ARTIST_KEY, SODA_URL)
+            listed_tabs.store(w.conn, SODA_URL, ARTIST, [parse_version(BEFORE)], read_at=LONG_AGO)
+        answers = dict([missing(list_url("chords")), missing(list_url())])
+        made.append(route(w, "an artist page gone: its learned address and its listed tabs forgotten, the song checked",
+                          [REST], answers))
+    finally:
+        w.close()
+    return made
+
+
+def titles(tmp: Path) -> list[dict[str, Any]]:
+    """Titles: a fuzzy title (rapidfuzz ratio of 90 at least) leading the next by 8 is the song's; two closer than
+    that are none; a UG song you rejected for the song drops out, its page's other titles still competing; a title
+    the page doesn't list leaves the song not found, checked."""
+    from caracole.overrides import add_artist_url, add_reject
+
+    made = []
+    for name, tabs, reject, case in [
+        ("fuzzy", [listed(521, title="Te Para Dos"), listed(522, title="Te Para Tre")], None,
+         "a fuzzy title leading the next by 8 is the song's"),
+        ("fuzzy-close", [listed(523, title="Tea Para Tres"), listed(524, title="Te Para Tre")], None,
+         "two fuzzy titles closer than 8 are none: not found, checked"),
+        ("rejected", [listed(525, title="Te Para Tre"), *TEA_CHORDS], f"{ARTIST_KEY}/{TEA_KEY}",
+         "a UG song you rejected drops out, the page's other titles still competing"),
+        ("absent", [BEFORE, AFTER], None, "a title the page doesn't list: not found, checked"),
+    ]:
+        w = artist_world(tmp, name)
+        try:
+            def edit(path, reject=reject):
+                add_artist_url(path, ARTIST, SODA_URL)
+                if reject is not None:
+                    add_reject(path, TEA_DISPLAY, [reject])
+
+            w.write_overrides(edit)
+            tea = {t["id"]: t for t in tabs}
+            answers = dict([got(list_url("chords"), artist_list(tabs, types=("Chords",)))])
+            for t in tabs:
+                if t["song_name"] not in ("Persiana Americana", "Zoom"):
+                    others = [o for o in tea.values() if o["id"] != t["id"]]
+                    answers.update([got(f"{TAB}{t['id']}", bare_page(t, sheet_markup(f"version {t['id']}", LINES),
+                                                                     others))])
+            made.append(route(w, case, [REST], answers))
+        finally:
+            w.close()
+    return made
+
+
+def matched(tmp: Path) -> list[dict[str, Any]]:
+    """A matched song whose index tabs hold no chords (bare ids): its own text tab's page teaches the artist page,
+    whose chords list gives the sheet's candidates."""
+    w = World(tmp, "own-tabs", index=[(201, SONG_KEY, "tabs")])
+    try:
+        own = {201: VERSIONS[201]}
+        answers = answers_of(201, versions=own) | dict([
+            got(list_url("chords"), artist_list([listed(531, title=TITLE), listed(532, title=TITLE, number=2)],
+                                                types=("Chords",))),
+        ])
+        chords = [listed(531, title=TITLE), listed(532, title=TITLE, number=2)]
+        for t in chords:
+            answers.update([got(f"{TAB}{t['id']}", bare_page(t, sheet_markup(f"version {t['id']}", LINES),
+                                                             [o for o in chords if o is not t]))])
+        return [route(w, "a matched song with no chords in the index: its own tab teaches the page, the chords list "
+                         "the sheet", [REST], answers)]
+    finally:
+        w.close()
+
+
+def errors(tmp: Path) -> list[dict[str, Any]]:
+    """What is never a miss on the artist's page (errors are never misses): a list UG blocks, one that fails, one
+    that won't parse, and a teaching tab that fails, each raised with nothing checked; a list UG moves where robots.txt
+    closes, which ends it unread (the unfiltered page then names the lists there are); and an artist whose page can't
+    be found, a pasted tab page that led nowhere and no tab of theirs in the index, asked nothing."""
+    from caracole.overrides import add_artist_url
+
+    made = []
+    closed = {"status": 301, "headers": [["location", "https://www.ultimate-guitar.com/search.php?search_type=title"]],
+              "body": ""}
+    for name, answers, case in [
+        ("list-blocked", dict([got(list_url("chords"), "Forbidden", 403)]),
+         "a chords list UG blocks: raised, nothing checked, the song as it was"),
+        ("list-failed", dict([got(list_url("chords"), "Server error", 500)]),
+         "a chords list that fails (500): an error raised, never a miss"),
+        ("list-unreadable", dict([got(list_url("chords"), UNREADABLE)]),
+         "a chords list that won't parse: an error raised, never a miss"),
+        ("list-closed", {f"GET {list_url('chords')}": closed} | dict([
+            got(list_url(), artist_list([BEFORE, TEA_TAB], types=("Tabs",))),
+            got(list_url("tabs"), artist_list([TEA_TAB], types=("Tabs",)))]) | tea_answers(601),
+         "a chords list UG moves where robots.txt closes ends unread: the unfiltered page names the lists there are"),
+    ]:
+        w = artist_world(tmp, name)
+        try:
+            w.write_overrides(lambda path: add_artist_url(path, ARTIST, SODA_URL))
+            made.append(route(w, case, [REST], answers))
+        finally:
+            w.close()
+    w = artist_world(tmp, "teaching-failed")
+    try:
+        made.append(route(w, "a slugged tab that fails as it would teach the artist's page: raised, nothing learned",
+                          [REST], dict([got(slugged(101), "Server error", 500)])))
+    finally:
+        w.close()
+    w = artist_world(tmp, "unknown-artist", index=[])
+    try:
+        from caracole.db import kv_set_json
+
+        w.write_overrides(lambda path: add_artist_url(path, ARTIST, slugged(101)))
+        with clock():
+            kv_set_json(w.conn, "ug:pasted_tab:101", {"artist_url": None, "problem": "UG answers 404 for it",
+                                                      "at": LATELY})
+        made.append(route(w, "an artist whose pasted tab page led nowhere and whom the index doesn't list: their page "
+                             "unknown, nothing asked, nothing checked", [REST], {}))
+    finally:
+        w.close()
+    w = artist_world(tmp, "nothing-known", index=[])
+    try:
+        made.append(route(w, "an artist nothing names a page for: not on their page, checked, nothing asked", [REST],
+                          {}))
+    finally:
+        w.close()
+    return made
+
+
+def artist_records(tmp: Path) -> list[dict[str, Any]]:
+    return [*learned(tmp), *pasted(tmp), *lists(tmp), *titles(tmp), *matched(tmp), *errors(tmp)]
+
+
+# --- caracole versions --keep and --keep-more -------------------------------------------------------------------
+
+
+class KeepRefused(Exception):
+    """A keep's refusal (``_common.fail``): the version isn't one the song may keep, its words. The phone's
+    ``VersionsCommands.KeepRefused``."""
+
+
+class _Turn:
+    """The record's client as one command's own (``make_client``'s): its requests counted from the command's start,
+    and closing it leaves it open for the next command, so the record's turns share its cache, pace and events."""
+
+    def __init__(self, client):
+        self._client = client
+        self._start = client.requests_made
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    @property
+    def requests_made(self) -> int:
+        return self._client.requests_made - self._start
+
+    def close(self) -> None:
+        pass
+
+
+class _Open:
+    """The world's connection, which a command's ``closing(open_db(cfg))`` leaves open."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def close(self) -> None:
+        pass
+
+
+PROGRESS = "caracole-progress: "
+
+
+def phone_lines(lines: list[str], library: Path) -> list[str]:
+    """The lines a keep prints that the phone's ``VersionsCommands`` says, in the phone's order: the runner (lane
+    lookup's VersionsRunner) says the song stage's start and ends the command (``done``), and says the command's last
+    line, which it returns, once it has returned, after the ``pdf`` and ``pages`` stages (at whose running events the
+    runner makes the pages); no ``Viewer:`` line, the phone's viewer a page it serves. The library's folder is written
+    ``{library}``."""
+    out = []
+    for line in lines:
+        if line.startswith(PROGRESS):
+            event = json.loads(line[len(PROGRESS):])
+            if "done" in event or (event.get("stage") == "song" and event.get("state") == "running"):
+                continue
+        elif line.startswith("Viewer: "):
+            continue
+        out.append(line.replace(str(library), "{library}"))
+    last = max((i for i, line in enumerate(out) if not line.startswith(PROGRESS)), default=None)
+    if last is not None:
+        out.append(out.pop(last))
+    return out
+
+
+def versions_record(w: "World", case: str, turns: list[tuple[str, int | None]], answers: dict[str, dict[str, Any]],
+                    cache: dict[str, Any] | None = None, budget: int = 10) -> dict[str, Any]:
+    """``versions_cmd.keep`` (``("keep", tab)``) and ``keep_more`` (``("keep_more", None)``) of the world's song in
+    turn, each with ``progress`` on (caracole serve's), through the record's client (``_Turn``), at the record's now:
+    each turn's lines (``phone_lines``), or the refusal that ended it (``{"error"}``). Its pages are the runner's:
+    ``render_all`` and ``write_pages`` stand still."""
+    import types
+
+    from caracole import config, versions_cmd
+    from caracole.config import RankPolicy
+
+    cfg = types.SimpleNamespace(rank=RankPolicy(), library_dir=w.library, overrides_file=w.overrides_file,
+                                provider=lambda name: config.DEFAULT_PROVIDERS[name])
+
+    def refuse(message, code=1):
+        raise KeepRefused(message)
+
+    def call(clients):
+        done = []
+        for command, tab in turns:
+            lines: list[str] = []
+            with mock.patch.object(versions_cmd, "load_ovr", lambda cfg: w.overrides()), \
+                    mock.patch.object(versions_cmd, "exclusive", lambda *a, **k: nullcontext()), \
+                    mock.patch.object(versions_cmd, "open_db", lambda cfg: _Open(w.conn)), \
+                    mock.patch.object(versions_cmd, "make_client", lambda *a, **k: _Turn(clients["ug"])), \
+                    mock.patch.object(versions_cmd, "utcnow", lambda: NOW), \
+                    mock.patch.object(versions_cmd, "write_pages", lambda *a, **k: None), \
+                    mock.patch.object(versions_cmd, "fail", refuse), \
+                    mock.patch("caracole.render.render_all", lambda *a, **k: None), \
+                    mock.patch("typer.echo", lines.append):
+                try:
+                    if command == "keep":
+                        versions_cmd.keep(cfg, w.display, tab, progress=True)
+                    else:
+                        versions_cmd.keep_more(cfg, w.display, progress=True)
+                except KeepRefused as e:
+                    done.append({"error": str(e)})
+                    continue
+            done.append({"lines": phone_lines(lines, w.library)})
+        return done
+
+    kw = {"song": w.song_id, "turns": [{"command": c, "tab": t} for c, t in turns]}
+    return w.record("caracole.versions_cmd", case, call, kw, answers, cache, budget)
+
+
+def keep_world(tmp: Path, name: str) -> "World":
+    """The library a lookup left (keep_records'): the sheet 103, 104 and 102 beside it, the tab 202."""
+    w = World(tmp, name)
+    w.run([FIRST, REST], answers_of(101, 102, 103, 104, 201, 202, versions=VERSIONS))
+    return w
+
+
+def versions_records(tmp: Path) -> list[dict[str, Any]]:
+    """``caracole versions --keep`` and ``--keep-more`` as caracole serve runs them, over the library a lookup left:
+    keep's every answer and refusal in turn; a block, then the cooldown; keep-more through one client, a version it
+    can't keep noted (``note_unkeepable``), until a block or the lookup's budget; and nothing left to keep."""
+    from caracole.config import RankPolicy
+    from caracole.overrides import add_block
+    from caracole.sheet_versions import in_library
+    from caracole.versions import mark_gone
+
+    def answer(tab_id: int, status: int, body: str) -> dict[str, dict[str, Any]]:
+        return {f"GET {slugged(tab_id)}": {"status": status, "headers": HTML, "body": body}}
+
+    made = []
+    w = keep_world(tmp, "keep-turns")
+    try:
+        w.write_overrides(lambda path: add_block(path, 110))
+        with clock():
+            mark_gone(w.conn, next(v.version_id for v in in_library(w.conn, w.song_id, RankPolicy())
+                                   if v.tab_id == "111"))
+        w.settle()
+        answers = answers_of(101, 105, 107, versions=VERSIONS) | answer(108, 404, NOT_FOUND) | \
+            answer(109, 500, "Server error")
+        # The refusals first: a page read lists 111 again, which UG then has.
+        turns = [("keep", 111), ("keep", 999), ("keep", 110), ("keep", 101), ("keep", 103), ("keep", 104),
+                 ("keep", 105), ("keep", 107), ("keep", 108), ("keep", 109)]
+        made.append(versions_record(w, "keep's answers in turn: refused (gone, not listed, blocked), kept, the sheet, "
+                                       "kept already, the same text, held, gone now, failed", turns, answers))
+    finally:
+        w.close()
+    w = keep_world(tmp, "keep-blocked")
+    try:
+        made.append(versions_record(w, "a keep UG blocks: the cooldown it began, then neither command asks",
+                                    [("keep", 101), ("keep_more", None), ("keep", 105)],
+                                    answer(101, 403, "Forbidden")))
+    finally:
+        w.close()
+    w = keep_world(tmp, "keep-more-blocked")
+    try:
+        answers = answers_of(101, 105, 107, versions=VERSIONS) | answer(108, 403, "Forbidden")
+        made.append(versions_record(w, "keep-more in rank order through one client: kept, the same text, held "
+                                       "(noted), then a block", [("keep_more", None)], answers))
+    finally:
+        w.close()
+    w = keep_world(tmp, "keep-more-spent")
+    try:
+        made.append(versions_record(w, "keep-more until the lookup's budget is spent, then again with none left",
+                                    [("keep_more", None), ("keep_more", None)], answers_of(101, versions=VERSIONS),
+                                    budget=1))
+    finally:
+        w.close()
+    w = World(tmp, "keep-more-none", index=[(101, SONG_KEY, "chords")])
+    try:
+        w.run([REST], answers_of(101, versions={101: VERSIONS[101]}))
+        made.append(versions_record(w, "keep-more with nothing left to keep sends nothing", [("keep_more", None)],
+                                    {}))
+    finally:
+        w.close()
+    return made
+
+
 # --- the tests --------------------------------------------------------------------------------------------------
 
 
@@ -923,7 +1503,10 @@ def every_file(tmp: Path) -> dict[Path, str]:
     (tmp / "stages").mkdir(parents=True)
     return {SHEET: jsonl(sheet_records(tmp / "sheet"), corpus="lookup/ug_sheet", made_by=MADE_BY),
             STAGES: jsonl(stage_records(tmp / "stages"), corpus="lookup/ug_sheet_stages", made_by=MADE_BY),
-            KEEP: jsonl(keep_records(tmp / "keep"), corpus="lookup/ug_keep", made_by=MADE_BY)}
+            KEEP: jsonl(keep_records(tmp / "keep"), corpus="lookup/ug_keep", made_by=MADE_BY),
+            ARTIST_ROUTE: jsonl(artist_records(tmp / "artist"), corpus="lookup/ug_artist", made_by=MADE_BY),
+            VERSIONS_CMD: jsonl(versions_records(tmp / "versions"), corpus="lookup/commands_versions",
+                                made_by=MADE_BY)}
 
 
 @pytest.fixture(scope="module")
@@ -931,7 +1514,7 @@ def made(tmp_path_factory) -> dict[Path, str]:
     return every_file(tmp_path_factory.mktemp("ug-fetch"))
 
 
-@pytest.mark.parametrize("path", [SHEET, STAGES, KEEP], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [SHEET, STAGES, KEEP, ARTIST_ROUTE, VERSIONS_CMD], ids=lambda p: p.name)
 def test_the_vector_is_what_ug_fetch_does(made, path):
     check(path, made[path])
 
@@ -983,7 +1566,7 @@ def test_a_block_a_spent_budget_a_parse_error_and_a_shared_folder_raise_as_the_p
 
 
 def test_every_body_is_a_text_or_a_fixture_reference(made):
-    for text in (made[SHEET], made[KEEP]):
+    for text in (made[SHEET], made[KEEP], made[ARTIST_ROUTE], made[VERSIONS_CMD]):
         for r in _records(text):
             for entry in [*r["answers"].values(), *r["cache"].get("ug", {}).values()]:
                 assert set(entry["body"]) <= {"text", "fixture"}
@@ -1011,3 +1594,125 @@ def test_the_stages_words_cover_every_answer_of_ug_ready(made):
     assert said["a review of UG songs"].startswith("caracole isn't sure")
     known = [c for c, s in said.items() if c.startswith("not found") and s is None]
     assert len(known) == 9, known
+
+
+def test_a_song_found_on_its_artists_page_is_matched_there(made):
+    found = [r for r in _records(made[ARTIST_ROUTE]) if "out" in r and r["out"]["result"][-1]["settled"]]
+    assert len(found) >= 6
+    for r in found:
+        song = r["out"]["rows"]["songs"][0]
+        step = "exact" if r["case"].startswith("a matched song") else "artist_page"  # the match stands
+        assert (song["match_decision"], song["match_step"]) == ("accept", step), r["case"]
+        assert r["out"]["kv"].get("ug:artist_page_checked:1") == STAMP, r["case"]
+        assert r["noted"], r["case"]  # every list stored is noted for the computer
+
+
+def test_at_most_learn_tries_slugged_tabs_are_read_to_learn_the_artists_page(made):
+    from caracole.ug.fetch import LEARN_TRIES
+
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    tries = next(r for case, r in out.items() if case.startswith("LEARN_TRIES slugged tabs at most"))["out"]
+    assert len(tries["requests"]) == LEARN_TRIES == 3
+    assert not any(r.endswith("zoom-chords-304") for r in tries["requests"])
+    assert tries["kv"].get("ug:artist_page_checked:1") == STAMP
+    assert not any(k.startswith("ug:artist_url:") for k in tries["kv"])
+    assert "songs" not in tries["rows"]  # the song as it was: not found
+
+
+def test_a_pasted_tab_page_is_read_once_and_what_it_led_to_kept(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    read = out["a tab page pasted under [artist_url] read once for its artist page"]
+    assert json.loads(read["out"]["kv"]["ug:pasted_tab:101"]) == {"artist_url": SODA_URL, "problem": None,
+                                                                   "at": STAMP}
+    problems = {r["paste_problem"][1] for r in out.values() if r["paste_problem"]}
+    assert {"UG answers 404 for it", "robots.txt closes it to caracole", "it doesn't link to its artist's page"} <= \
+        problems
+    for r in out.values():
+        if r["paste_problem"]:  # no verdict: the song wasn't looked for
+            assert "ug:artist_page_checked:1" not in (r.get("out") or r["after"])["kv"], r["case"]
+
+
+def test_a_list_is_read_as_far_as_the_pages_a_kind_may_read_and_a_stale_one_is_no_answer(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    short = out["a list cut short by the pages a kind may read: the song as it was, unchecked"]["out"]
+    assert len(short["requests"]) == 3 and "ug:artist_page_checked:1" not in short["kv"]
+    stale = out["a list cached past 30 days is no answer once the budget is spent"]
+    assert stale["raises"]["type"] == "BudgetExhausted" and stale["after"]["requests"] == []
+    assert out["a list cached within 30 days asks nothing"]["out"]["requests"] == [f"GET {TAB}501", f"GET {TAB}502"]
+
+
+def test_an_error_on_the_artists_page_is_raised_never_a_miss(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    raised = {case: r["raises"]["type"] for case, r in out.items() if "raises" in r}
+    assert raised == {
+        "a list cached past 30 days is no answer once the budget is spent": "BudgetExhausted",
+        "a chords list UG blocks: raised, nothing checked, the song as it was": "ProviderBlocked",
+        "a chords list that fails (500): an error raised, never a miss": "ProviderError",
+        "a chords list that won't parse: an error raised, never a miss": "PageParseError",
+        "a slugged tab that fails as it would teach the artist's page: raised, nothing learned": "ProviderError",
+    }
+    for case in raised:
+        after = out[case]["after"]
+        assert "ug:artist_page_checked:1" not in after["kv"], case
+        assert "songs" not in after["rows"], case  # the song as it was: neither matched nor not found anew
+        assert not any(k.startswith("ug:artist_url:") for k in after["kv"]), case
+    closed = out["a chords list UG moves where robots.txt closes ends unread: the unfiltered page names the lists "
+                 "there are"]["out"]
+    assert closed["requests"][:2] == [f"GET {list_url('chords')}", f"GET {list_url()}"]
+    assert f"GET {list_url('tabs')}" in closed["requests"] and closed["result"][-1]["settled"]
+
+
+def test_an_artist_whose_page_cant_be_found_is_asked_nothing(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    unknown = [r for r in out.values() if not r["artist_known"]]
+    assert {r["case"] for r in unknown} == {
+        "an artist whose pasted tab page led nowhere and whom the index doesn't list: their page unknown, nothing "
+        "asked, nothing checked",
+        "an artist nothing names a page for: not on their page, checked, nothing asked"}
+    for r in unknown:
+        assert r["out"]["requests"] == [], r["case"]
+    led_nowhere, nothing = sorted(unknown, key=lambda r: r["case"].startswith("an artist nothing"))
+    assert "ug:artist_page_checked:1" not in led_nowhere["out"]["kv"]
+    assert led_nowhere["paste_problem"] == [slugged(101), "UG answers 404 for it"]
+    assert nothing["out"]["kv"].get("ug:artist_page_checked:1") == STAMP
+
+
+def test_keep_and_keep_more_say_what_versions_cmd_says(made):
+    records = {r["case"]: r for r in _records(made[VERSIONS_CMD])}
+    turns = records["keep's answers in turn: refused (gone, not listed, blocked), kept, the sheet, kept already, the "
+                    "same text, held, gone now, failed"]["out"]["result"]
+    assert [t.get("error", "")[:20] for t in turns[:3]] == ["Ultimate Guitar no l", "Tab 999 isn't one of",
+                                                            "Tab 110 is under [bl"]
+    last = [t["lines"][-1] for t in turns[3:]]
+    assert last[0].startswith("Kept tab 101 beside the sheet") and last[0].endswith("/version-101.txt")
+    assert last[-1].startswith("Ultimate Guitar failed (ug: 500")
+    more = records["keep-more until the lookup's budget is spent, then again with none left"]["out"]["result"]
+    assert more[0]["lines"][-1].endswith("; 6 more not kept: ask again.")
+    assert more[1]["lines"][-1].endswith("nothing kept. Ask again later.")
+    for r in records.values():
+        for turn in (r.get("out") or r["after"])["result"]:
+            for line in turn.get("lines", []):
+                event = json.loads(line[len(PROGRESS):]) if line.startswith(PROGRESS) else {}
+                assert "done" not in event and (event.get("stage"), event.get("state")) != ("song", "running"), line
+                assert not line.startswith("Viewer: ")
+            assert not turn.get("lines", ["said"])[-1].startswith(PROGRESS)  # the last line, the runner's to say
+
+
+def _pages_made(turn: dict[str, Any]) -> list[str]:
+    """The stages of a turn whose running events have the phone's runner make the song's pages."""
+    events = [json.loads(line[len(PROGRESS):]) for line in turn.get("lines", []) if line.startswith(PROGRESS)]
+    return [e["stage"] for e in events if e.get("stage") in ("pdf", "pages") and e["state"] == "running"]
+
+
+def test_the_songs_pages_are_made_where_versions_cmd_makes_them(made):
+    records = {r["case"]: r for r in _records(made[VERSIONS_CMD])}
+    turns = records["keep's answers in turn: refused (gone, not listed, blocked), kept, the sheet, kept already, the "
+                    "same text, held, gone now, failed"]["out"]["result"]
+    # kept, the sheet, kept already, the same text, held, gone now, failed
+    assert [_pages_made(t) for t in turns[3:]] == [["pdf", "pages"], [], [], ["pages"], ["pages"], ["pages"], []]
+    more = records["keep-more until the lookup's budget is spent, then again with none left"]["out"]["result"]
+    assert [_pages_made(t) for t in more] == [["pdf", "pages"], []]
+    blocked = records["keep-more in rank order through one client: kept, the same text, held (noted), then a block"]
+    assert [_pages_made(t) for t in blocked["out"]["result"]] == [["pdf", "pages"]]
+    none = records["keep-more with nothing left to keep sends nothing"]["out"]["result"]
+    assert [_pages_made(t) for t in none] == [[]]

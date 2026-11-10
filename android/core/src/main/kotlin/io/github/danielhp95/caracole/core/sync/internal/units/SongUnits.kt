@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.sync.internal.units.Python.iterate
 import io.github.danielhp95.caracole.core.sync.internal.units.Python.member
 import io.github.danielhp95.caracole.core.sync.internal.units.Python.truthy
@@ -49,7 +50,7 @@ internal object SongUnits {
                 "provider" to v.getValue("provider"), "tab" to v.getValue("tab_id"), "slot" to v.getValue("slot"),
                 "kind" to v.getValue("kind"), "label" to v.getValue("label"), "pick" to v.getValue("pick_rank"),
                 "gone" to JsonPrimitive(truthy(v.getValue("gone"))), "url" to v.getValue("url"),
-                "raw" to stored(Cells.text(v.getValue("raw"))),
+                "raw" to raw(v.getValue("provider"), Cells.text(v.getValue("raw"))),
             )
         }
         val files = LinkedHashMap<String, JsonElement>()
@@ -136,7 +137,7 @@ internal object SongUnits {
                 "slot" to member(version, "slot"), "kind" to member(version, "kind"),
                 "label" to member(version, "label"), "pick" to member(version, "pick_rank"),
                 "gone" to JsonPrimitive(truthy(member(version, "gone"))), "url" to member(version, "url"),
-                "raw" to stored(Cells.text(raw)),
+                "raw" to raw(member(version, "provider"), Cells.text(raw)),
             ))
             for (f in iterate(member(version, "files"))) {
                 files[Python.text(member(f, "name"))] = member(f, "sha256")
@@ -162,6 +163,13 @@ internal object SongUnits {
 
     /** The stored-JSON hash a value holds for a raw record or a song's lyrics (canonical.stored_hash). */
     private fun stored(text: String?): JsonElement = JsonPrimitive(Canonical.hashStoredJson(text))
+
+    /** peer_sync._raw_hash: a version's raw record, without what Units.VOLATILE_RAW names for its provider (UG's
+     * ratings and votes); a provider that isn't text takes nothing out. */
+    private fun raw(provider: JsonElement, text: String?): JsonElement {
+        val name = (provider as? JsonPrimitive)?.takeIf { it.isString }?.content
+        return JsonPrimitive(Canonical.hashStoredJson(text, name?.let { Units.VOLATILE_RAW[it] } ?: emptySet()))
+    }
 
     private fun obj(vararg members: Pair<String, JsonElement>): JsonObject = JsonObject(linkedMapOf(*members))
 }

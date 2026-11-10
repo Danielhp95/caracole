@@ -204,6 +204,16 @@ def test_a_game_page_that_says_it_has_tabs_and_lists_none_wont_parse():
     assert parse_game_page(game_page("Nothing Yet", [])).listed == ()
 
 
+def test_a_page_number_that_isnt_an_int_wont_parse():
+    # "²" and "①" are digits to str.isdigit, and int() refuses them: a page caracole can't read, never a crash.
+    page = fixture("game_final-fantasy-vii.html")
+    for number in ("²", "①", "1²"):
+        with pytest.raises(GameTabsParseError, match="page number"):
+            parse_game_page(page.replace("\n            5\n", f"\n            {number}\n", 1))
+    # A digit of another script is one int() reads, and so is the page's.
+    assert parse_game_page(page.replace("\n            5\n", "\n            ٧\n", 1)).pages == 7
+
+
 def test_a_made_game_page_reads_as_made():
     page = parse_game_page(game_page("Hollow Knight", [("dirtmouth", "Dirtmouth", "Christopher Larkin", "Guitar, Bass",
                                                           "3.4k"), ("hornet", "Hornet", "")]))

@@ -320,6 +320,21 @@ The comparison is made with the kept answers (`merged_kept` of this side's and t
 are library, songbooks or indexes, by commas.") and queues `caracole peer sync --push --yes --progress --parts=<P>
 --compared=<H> --choose=… -- ADDRESS` (Python) or the phone's job (Kotlin).
 
+What lane sync-routes settled beyond the table (both servers answer so, and the corpus holds it):
+- `GET /api/sync/unit` is the page's script's alone: it asks the other caracole, so it needs the form token in the
+  `X-Caracole-Form-Token` header, as a `json` route does (403 without). `GET /api/sync/indexes` is a plain `/api/` read,
+  which the phone's `PeerClient.indexes` asks as a client.
+- `GET /api/sync`'s `songbooks` is null on caracole serve while songbooks.toml can't be read (that stops the songbooks
+  and nothing else); the phone's is always a count.
+- `POST /sync/apply`'s `parts`: absent is all three; sent, it names at least one part (blank, or commas alone, is the
+  400 of a part it doesn't know). caracole serve queues `--parts=<P>` (in `PARTS`' order) only when the form sends
+  `parts`, so a Sync with none queues the command as before.
+- `POST /sync/test`'s `indexes` is the newest of the state's reads that is a time (`stamps.parse`), as the state
+  writes it; one that isn't a time is left out.
+- caracole serve's `Compared` keeps the differences (`found`) for a Sync's scope; one kept without them has every
+  conflict it proposes chosen first, whatever the parts, and `GET /api/sync/unit` answers a comparison of a peer
+  alone (another `source`, a file's, 409).
+
 `said` words (exact):
 - `"{name} answered: {songs} songs, {songbooks} songbooks, its indexes read {day}"`, singular "1 song" and
   "1 songbook";
