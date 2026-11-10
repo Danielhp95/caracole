@@ -231,6 +231,12 @@ object UgFetchReplay : AreaReplay {
      * vectors/lookup/commands_versions.jsonl: each turn of a record, `VersionsCommands.keep` or `keepMore` of the
      * record's song, through a command's own asking of the record's client ([TurnAsking]): its lines and its last, the
      * library's folder written `{library}`, or its refusal's words.
+     *
+     * The record holds what the phone's VersionsCommands says (the generator's `phone_lines`); the rest of Python's
+     * output is lane lookup's VersionsRunner's, which owns three differences: it begins the song stage before the
+     * command speaks, it says the command's last line once it returns (after the pdf and pages stages it makes the
+     * pages at), and the queue ends the job where Python prints its `done` event. LookupRunnersTest runs a keep
+     * through that runner, LookupJobs.context and InteractiveAsk against a real client.
      */
     fun versions(misses: Misses) {
         for (record in records(VERSIONS)) {

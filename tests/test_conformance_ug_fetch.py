@@ -1261,8 +1261,63 @@ def matched(tmp: Path) -> list[dict[str, Any]]:
         w.close()
 
 
+def errors(tmp: Path) -> list[dict[str, Any]]:
+    """What is never a miss on the artist's page (errors are never misses): a list UG blocks, one that fails, one
+    that won't parse, and a teaching tab that fails, each raised with nothing checked; a list UG moves where robots.txt
+    closes, which ends it unread (the unfiltered page then names the lists there are); and an artist whose page can't
+    be found, a pasted tab page that led nowhere and no tab of theirs in the index, asked nothing."""
+    from caracole.overrides import add_artist_url
+
+    made = []
+    closed = {"status": 301, "headers": [["location", "https://www.ultimate-guitar.com/search.php?search_type=title"]],
+              "body": ""}
+    for name, answers, case in [
+        ("list-blocked", dict([got(list_url("chords"), "Forbidden", 403)]),
+         "a chords list UG blocks: raised, nothing checked, the song as it was"),
+        ("list-failed", dict([got(list_url("chords"), "Server error", 500)]),
+         "a chords list that fails (500): an error raised, never a miss"),
+        ("list-unreadable", dict([got(list_url("chords"), UNREADABLE)]),
+         "a chords list that won't parse: an error raised, never a miss"),
+        ("list-closed", {f"GET {list_url('chords')}": closed} | dict([
+            got(list_url(), artist_list([BEFORE, TEA_TAB], types=("Tabs",))),
+            got(list_url("tabs"), artist_list([TEA_TAB], types=("Tabs",)))]) | tea_answers(601),
+         "a chords list UG moves where robots.txt closes ends unread: the unfiltered page names the lists there are"),
+    ]:
+        w = artist_world(tmp, name)
+        try:
+            w.write_overrides(lambda path: add_artist_url(path, ARTIST, SODA_URL))
+            made.append(route(w, case, [REST], answers))
+        finally:
+            w.close()
+    w = artist_world(tmp, "teaching-failed")
+    try:
+        made.append(route(w, "a slugged tab that fails as it would teach the artist's page: raised, nothing learned",
+                          [REST], dict([got(slugged(101), "Server error", 500)])))
+    finally:
+        w.close()
+    w = artist_world(tmp, "unknown-artist", index=[])
+    try:
+        from caracole.db import kv_set_json
+
+        w.write_overrides(lambda path: add_artist_url(path, ARTIST, slugged(101)))
+        with clock():
+            kv_set_json(w.conn, "ug:pasted_tab:101", {"artist_url": None, "problem": "UG answers 404 for it",
+                                                      "at": LATELY})
+        made.append(route(w, "an artist whose pasted tab page led nowhere and whom the index doesn't list: their page "
+                             "unknown, nothing asked, nothing checked", [REST], {}))
+    finally:
+        w.close()
+    w = artist_world(tmp, "nothing-known", index=[])
+    try:
+        made.append(route(w, "an artist nothing names a page for: not on their page, checked, nothing asked", [REST],
+                          {}))
+    finally:
+        w.close()
+    return made
+
+
 def artist_records(tmp: Path) -> list[dict[str, Any]]:
-    return [*learned(tmp), *pasted(tmp), *lists(tmp), *titles(tmp), *matched(tmp)]
+    return [*learned(tmp), *pasted(tmp), *lists(tmp), *titles(tmp), *matched(tmp), *errors(tmp)]
 
 
 # --- caracole versions --keep and --keep-more -------------------------------------------------------------------
@@ -1511,7 +1566,7 @@ def test_a_block_a_spent_budget_a_parse_error_and_a_shared_folder_raise_as_the_p
 
 
 def test_every_body_is_a_text_or_a_fixture_reference(made):
-    for text in (made[SHEET], made[KEEP]):
+    for text in (made[SHEET], made[KEEP], made[ARTIST_ROUTE], made[VERSIONS_CMD]):
         for r in _records(text):
             for entry in [*r["answers"].values(), *r["cache"].get("ug", {}).values()]:
                 assert set(entry["body"]) <= {"text", "fixture"}
@@ -1584,6 +1639,42 @@ def test_a_list_is_read_as_far_as_the_pages_a_kind_may_read_and_a_stale_one_is_n
     stale = out["a list cached past 30 days is no answer once the budget is spent"]
     assert stale["raises"]["type"] == "BudgetExhausted" and stale["after"]["requests"] == []
     assert out["a list cached within 30 days asks nothing"]["out"]["requests"] == [f"GET {TAB}501", f"GET {TAB}502"]
+
+
+def test_an_error_on_the_artists_page_is_raised_never_a_miss(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    raised = {case: r["raises"]["type"] for case, r in out.items() if "raises" in r}
+    assert raised == {
+        "a list cached past 30 days is no answer once the budget is spent": "BudgetExhausted",
+        "a chords list UG blocks: raised, nothing checked, the song as it was": "ProviderBlocked",
+        "a chords list that fails (500): an error raised, never a miss": "ProviderError",
+        "a chords list that won't parse: an error raised, never a miss": "PageParseError",
+        "a slugged tab that fails as it would teach the artist's page: raised, nothing learned": "ProviderError",
+    }
+    for case in raised:
+        after = out[case]["after"]
+        assert "ug:artist_page_checked:1" not in after["kv"], case
+        assert "songs" not in after["rows"], case  # the song as it was: neither matched nor not found anew
+        assert not any(k.startswith("ug:artist_url:") for k in after["kv"]), case
+    closed = out["a chords list UG moves where robots.txt closes ends unread: the unfiltered page names the lists "
+                 "there are"]["out"]
+    assert closed["requests"][:2] == [f"GET {list_url('chords')}", f"GET {list_url()}"]
+    assert f"GET {list_url('tabs')}" in closed["requests"] and closed["result"][-1]["settled"]
+
+
+def test_an_artist_whose_page_cant_be_found_is_asked_nothing(made):
+    out = {r["case"]: r for r in _records(made[ARTIST_ROUTE])}
+    unknown = [r for r in out.values() if not r["artist_known"]]
+    assert {r["case"] for r in unknown} == {
+        "an artist whose pasted tab page led nowhere and whom the index doesn't list: their page unknown, nothing "
+        "asked, nothing checked",
+        "an artist nothing names a page for: not on their page, checked, nothing asked"}
+    for r in unknown:
+        assert r["out"]["requests"] == [], r["case"]
+    led_nowhere, nothing = sorted(unknown, key=lambda r: r["case"].startswith("an artist nothing"))
+    assert "ug:artist_page_checked:1" not in led_nowhere["out"]["kv"]
+    assert led_nowhere["paste_problem"] == [slugged(101), "UG answers 404 for it"]
+    assert nothing["out"]["kv"].get("ug:artist_page_checked:1") == STAMP
 
 
 def test_keep_and_keep_more_say_what_versions_cmd_says(made):

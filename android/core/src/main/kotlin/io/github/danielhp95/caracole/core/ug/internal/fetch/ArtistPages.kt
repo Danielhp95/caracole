@@ -275,7 +275,7 @@ internal object ArtistPages {
             }
             val fresh = !resp.fromCache
             if (fresh) fetched += 1
-            val readAt = resp.fetchedAt ?: run.stamp
+            val readAt = readAt(run, resp.fetchedAt)
             oldest = oldest?.let { if (readAt < it) readAt else it } ?: readAt
             if (page == null) {
                 whole = number == 1  // an empty list may answer 404
@@ -301,6 +301,9 @@ internal object ArtistPages {
         return Triple(hits, true, first)
     }
 
+    /** `resp.fetched_at or _iso(now)`: when a page was read, the run's time for an answer that names none. */
+    private fun readAt(run: SongRun, fetchedAt: String?): String = fetchedAt?.takeIf { it.isNotEmpty() } ?: run.stamp
+
     /** `_offered_kinds`: the kinds of list the artist page offers, read from its unfiltered first page; null when it's
      * gone, and none when robots.txt closes it (or the page redirects to where it does). Its tabs, every kind mixed,
      * are kept for searches, never as all of a kind's. */
@@ -313,7 +316,7 @@ internal object ArtistPages {
             return emptySet()
         }
         if (page == null) return null
-        ArtistTabs.store(run.db, base, page.name, page.tabs, resp.fetchedAt ?: run.stamp, now = run.stamp)
+        ArtistTabs.store(run.db, base, page.name, page.tabs, readAt(run, resp.fetchedAt), now = run.stamp)
         return page.filters.ifEmpty { ArtistRoute.ARTIST_PAGE_KINDS.toSet() }
     }
 

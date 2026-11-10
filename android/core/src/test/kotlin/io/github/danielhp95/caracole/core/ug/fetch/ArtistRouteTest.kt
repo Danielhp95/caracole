@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -20,8 +21,9 @@ import org.junit.rules.TemporaryFolder
 /**
  * The artist-page route replays vectors/lookup/ug_artist.jsonl (a song the index can't place found on its artist's
  * page, learned (LEARN_TRIES tabs at most) or pasted; a pasted tab page that leads nowhere; the lists, their pages and
- * the cache's 30 days; a 404 and a page gone; titles and `[reject]`; a matched song with no chords in the index), and
- * reads titles, keys and a pasted page's problem as ug/fetch.py reads them.
+ * the cache's 30 days; a 404 and a page gone; titles and `[reject]`; a matched song with no chords in the index; a
+ * block, an error and a page that won't parse raised, never a miss; a list moved where robots.txt closes; an artist
+ * whose page can't be found), and reads titles, keys and a pasted page's problem as ug/fetch.py reads them.
  */
 class ArtistRouteTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -39,7 +41,9 @@ class ArtistRouteTest {
                              "links no artist page", "won't parse",
                              "straddling two pages", "cut short", "within 30 days", "past 30 days",
                              "the unfiltered page", "an artist page gone", "leading the next by 8",
-                             "closer than 8", "you rejected", "doesn't list", "no chords in the index")) {
+                             "closer than 8", "you rejected", "doesn't list", "no chords in the index",
+                             "UG blocks", "fails (500)", "won't parse: an error", "moves where robots.txt closes",
+                             "as it would teach", "led nowhere", "nothing names a page")) {
             assertTrue("no record of $words", cases.any { words in it })
         }
         for (record in UgFetchReplay.records(UgFetchReplay.ARTIST)) assertTrue(record["noted"] is JsonObject)
@@ -91,9 +95,18 @@ class ArtistRouteTest {
                 db.kvSet("ug:unreadable:101", """{"until": "2026-11-10T12:00:00Z", "strikes": 1, "error": "x"}""")
                 assertEquals(paste to "UG's copy of it can't be read; caracole asks for it again after 2026-11-10",
                              ArtistRoute.pastedPageProblem(db, song, overrides))
+                assertTrue(ArtistRoute.artistIsKnown(db, song, overrides))  // not read yet: it may still lead there
                 db.kvSetJson("ug:pasted_tab:101", JsonObject(mapOf("artist_url" to JsonPrimitive(null as String?),
                                                                    "problem" to JsonPrimitive(ArtistRoute.PASTE_GONE))))
                 assertEquals(paste to ArtistRoute.PASTE_GONE, ArtistRoute.pastedPageProblem(db, song, overrides))
+                // A paste that led nowhere no longer counts: nothing learned and no index tab of theirs, no page known.
+                assertFalse(ArtistRoute.artistIsKnown(db, song, overrides))
+                db.kvSet("ug:artist_url:soda-stereo", "https://www.ultimate-guitar.com/artist/soda_stereo_2946")
+                assertTrue(ArtistRoute.artistIsKnown(db, song, overrides))
+                db.kvDelete("ug:artist_url:soda-stereo")
+                db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                               "VALUES (7, 'soda-stereo', 'a-song', 'chords', 'last', '2026-10-01T00:00:00Z', '')")
+                assertTrue(ArtistRoute.artistIsKnown(db, song, overrides))
                 assertEquals(null, ArtistRoute.pastedPageProblem(
                     db, song, Overrides(artistUrl = mapOf("soda-stereo" to "https://www.ultimate-guitar.com/artist/soda_stereo_2946"))))
             }

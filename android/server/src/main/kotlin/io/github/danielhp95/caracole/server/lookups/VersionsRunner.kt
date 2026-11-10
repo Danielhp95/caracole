@@ -94,6 +94,8 @@ class VersionsRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
             val said = try {
                 if (tab != null) VersionsCommands.keep(c, parts.store, song, tab)
                 else VersionsCommands.keepMore(c, parts.store, song)
+            } catch (e: VersionsCommands.KeepRefused) {
+                throw CommandExit(1, e.message.orEmpty())  // versions_cmd.py's fail: exit 1, its words
             } finally {
                 ask.close()
             }
