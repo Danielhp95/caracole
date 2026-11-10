@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
+import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.lookups.InboxShare
@@ -23,9 +25,10 @@ import java.io.IOException
  * Files shared to caracole: ACTION_SEND and SEND_MULTIPLE of the stream types the manifest names alone (a Guitar Pro
  * file, MusicXML, a PDF, MIDI, MuseScore; never VIEW, text/plain or any type: a music app's link is
  * ShareLinkActivity's). Each file is read from its EXTRA_STREAM (or the share's ClipData) while the activity holds the
- * share's read grant, with its display name and type, then finished; the phone stages it in `state/inbox/` and queues
- * its filing as the inbox runner's job (server's InboxShare, PhoneKinds' inbox kind), as `_inbox/` files a file on the
- * computer. Once each job is over (or [WAIT_MS] on), a toast says how each went, its line on the Requests tab: "Filed
+ * share's read grant, with its display name and type; the phone stages it in `state/inbox/` and queues its filing as
+ * the inbox runner's job (server's InboxShare, PhoneKinds' inbox kind), as `_inbox/` files a file on the computer,
+ * while the activity is still in front (so the queue's foreground service may start); then it finishes. Once each
+ * job is over (or [WAIT_MS] on), a toast says how each went, its line on the Requests tab: "Filed
  * as guitar-1.gp5 of Oasis - Wonderwall", "Waiting for a song that fits: …" (tried again after each sync and lookup,
  * for 30 days), "Not filed: …".
  */
@@ -41,24 +44,34 @@ class ShareActivity : Activity() {
         }
         val type = intent?.type
         Caracole.background.launch(Dispatchers.IO) {
-            val read = streams.map { read(it, type) }  // while the share's grant holds: before finish
-            withContext(Dispatchers.Main) { finish() }
-            val said = try {
+            // Read while the share's grant holds, and queued while the activity is in front, so the phone's queue
+            // may start its foreground service and keep the process going: then finished.
+            val queued = try {
+                val read = streams.map { read(it, type) }
                 val phone = Caracole.phone(app)
                 read.map { file ->
-                    val data = file.data ?: return@map PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to file.why!!)
+                    val data = file.data ?: return@map Queued(PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to file.why!!))
                     val shared = InboxShare.share(phone.parts, file.name, file.type, data)
-                    val job = shared.job ?: return@map shared.said!!
-                    val over = withTimeoutOrNull(WAIT_MS) { phone.queue.await(job.id) }
-                    JobViews.line(over ?: phone.queue.job(job.id) ?: job).text
+                    shared.job?.let { Queued(job = it, phone = phone) } ?: Queued(shared.said!!)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "a share not filed", e)
-                listOf(PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to (e.message ?: e::class.java.simpleName)))
+                listOf(Queued(PhoneKinds.fill(PhoneKinds.INBOX.failed, "why" to (e.message ?: e::class.java.simpleName))))
+            } finally {
+                withContext(Dispatchers.Main) { finish() }
+            }
+            val said = queued.map { q ->
+                val job = q.job ?: return@map q.said!!
+                val phone = q.phone!!
+                val over = withTimeoutOrNull(WAIT_MS) { phone.queue.await(job.id) }
+                JobViews.line(over ?: phone.queue.job(job.id) ?: job).text
             }
             tell(app, said.joinToString("\n"))
         }
     }
+
+    /** A file shared, queued: its [job] on [phone]'s queue, or what is [said] of it. */
+    private class Queued(val said: String? = null, val job: Job? = null, val phone: Phone? = null)
 
     /** A file shared: its display name, its type, and its bytes, or why there are none. */
     private class SharedFile(val name: String?, val type: String?, val data: ByteArray?, val why: String?)
