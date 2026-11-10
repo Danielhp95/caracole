@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server
 
 import io.github.danielhp95.caracole.core.lookup.RenderStats
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -112,13 +111,14 @@ class AssemblyTest {
 
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
         // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
-        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code.
+        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code; the render's
+        // has (phone-render).
         assertSame(phone.render.seam, phone.parts.pages)
         assertSame(phone.songbookPages.seam, phone.parts.songbooks)
-        assertSame(SongPages.NONE, phone.parts.pages)
+        assertSame(phone.render, phone.parts.pages)
         assertSame(SongbookPages.NONE, phone.parts.songbooks)
         assertTrue(phone.parts.cards is PhonePageData)
-        // Nothing is stale while the phone's render is neutral, so its start queues no render job, nor does a take.
+        // A library with no song owes no page, so its start queues no render job, nor does a take that brought none.
         phone.start()
         phone.afterSync()
         assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind })

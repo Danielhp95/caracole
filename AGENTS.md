@@ -1384,18 +1384,36 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
     answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
-  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's (it replaces the skeleton's `ArtistRoute.find`,
-    which nothing calls), `artist_is_known` whole; until it lands its route and lists answer as Python's list cut short
-    does: no request, the song marked dirty and left unchecked, never clean.
+  - `ArtistPages`: the artist-page route (ug-fetch-artist's, below).
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
-  beside it: …"), `_ug_ready`'s skips ("not on the phone yet" where Python reads the artist's page), and what asking
-  came to in `LookupWords.end`'s words; the envelope (InteractiveAsk) marks the song owed a fetch (`_owed`), and the
-  frame (LookupRun) asks the ug stage within `after_the_sheet`, and LaCuerda after a sheet stage that kept none.
+  beside it: …"), `_ug_ready`'s skips (none for a song the index can't settle whose artist's page is known,
+  `ArtistRoute.artistIsKnown`), and what asking came to in `LookupWords.end`'s words; the envelope (InteractiveAsk)
+  marks the song owed a fetch (`_owed`), and the frame (LookupRun) asks the ug stage within `after_the_sheet`, and
+  LaCuerda after a sheet stage that kept none.
 - tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario records, and
   ug_sheet_stages.jsonl, get.py's words for the two stages and `_ug_ready`'s answers (`UgFetchReplay`, area
   `ug-fetch`).
-- UG's artist pages (ug-fetch-artist): not built yet.
+- UG's artist pages (ug-fetch-artist): a song the index can't place looked up on its artist's UG page, ug/fetch.py's
+  route, in internal/fetch/`ArtistPages` (`processSong` calls it, as `process_song` calls `_artist_page_route`):
+  - the page's address: `[artist_url]`, a tab page there read once for the page it links to (kv
+    `ug:pasted_tab:<tab>`, or what is wrong with it: `ArtistRoute.pastedPageProblem`), a learned one (kv
+    `ug:artist_url:<artist key>`), else `LEARN_TRIES` slugged tabs of the artist read for it;
+  - the chords list, then those its filter bar offers (the unfiltered page when a list answers 404, a 404 there a
+    page gone), `artistPagesPerKind` pages a kind, 30 days from the cache (a stale copy no answer: BudgetExhausted
+    once the budget is spent), every page stored for searches (`ArtistTabs.store`, `Reads.note`d for the computer);
+    a block, an error or a page that won't parse raised, never a miss (no `ug:artist_page_checked:`);
+  - titles as `_best_title` takes them (`TITLE_MATCH` 90, `TITLE_MARGIN` 8), a `[reject]`ed song out first, the
+    match written with step `artist_page`; the lists of a song matched there, or of one whose index tabs hold no
+    chords, read as its versions; `ArtistRoute.artistIsKnown` what the UG stages ask first.
+- `versions --keep` and `--keep-more` (ug-fetch-artist): core/lookup/sites/`VersionsCommands`, versions_cmd.py's
+  `keep` and `keep_more` through a `CommandContext` and the song's `LibraryStore` (the `[block]`, gone and "the
+  sheet already" checks, `KeepRefused` its `fail`, exit 1; `keepVersion`; `_stopped`'s words; `Health.recordOk` only
+  after a request; keep-more in `SheetVersions.mayKeep`'s rank order through one client, `noteUnkeepable`, "kept N of
+  M"), saying its `pdf` and `pages` stages where versions_cmd.py makes the song's pages, its last line returned, which
+  lane lookup's VersionsRunner says after them.
+- tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_artist.jsonl and commands_versions.jsonl too (the
+  same `UgFetchReplay`).
 - core.match's `Matcher`: match.py for a lookup's song (`matchAll`, `candidatesOf`; the ladder, `Ladder`; the index
   as it reads it, `IndexView`), each answer Python's for the same index and overrides.
   - Its scores are core.fuzz's: `ratio` and `extract`, `osaDistance` and `extractDistance` (rapidfuzz's OSA, the typo
@@ -1772,7 +1790,35 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     each tab's fit and choices, `_tab_harps`), harmonica_pages.jsonl (the parts, and every page as digests: the page,
     its header, tab, foot and bar, each data member, the overlay's two) and harmonica_pages_whole.jsonl (a small page
     whole, the files it inlines by name); the texts that are no fixture in harpfit_texts.jsonl.
-- The phone's own pages, `PhoneRender` (phone-render): not built yet.
+- The phone's own pages, `PhoneRender` (phone-render): render.py's page path with no PDF, for the songs no mirror
+  page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
+  render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
+  the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
+  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port), after `PlainLyrics`
+  (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its progressions, script
+  and info.json alone, the phone's own pages of it forgotten.
+  - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
+    made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`
+    (`unit`, `build`, `script`, which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's
+    kv `songbook:<folder>`.
+  - `InfoJson` is library.write_info, its `render` null whatever kv `render:<id>` holds; `RenderBuild` is the app's
+    version and, on the phone, the APK's `classes*.dex` and `caracole/` entries by name, size and CRC-32, so every
+    APK whose code or tables changed makes the pages again (elsewhere each viewer asset and runtime data file the
+    pages read, hashed, each listed and held to its folder by PhoneRenderTest).
+  - `render` is the lookup's pdf stage (in its write, its `between` never the queue's), its failed detail render.py's
+    log line, the phone's alone; `renderStale` the render job's, a write a song, `between` two
+    (JobContext.yieldToQueued: PhoneRenderJobTest on the real queue), passing over a song a lookup made meanwhile, then
+    kv `phone:render-build`; a song's pass that fails, on a bug too ("a bug in caracole"), costs the others nothing
+    and is stamped all the same.
+  - `stale` is the start's, one query (a song this build never made, or kv `phone:render-build` not this build's);
+    `afterSync` reads every song's digest, inside the sync's job, and `owe`s (that kv forgotten) what moved, as a change
+    on the phone that makes no page of its song does.
+  - tests/helpers/phone_render.py is the reference (render_all with `_render_sheet_pdf`, `_render_traditional` and
+    `_remake_exports` making nothing, `_write_viewer` linking no PDF, `_drop_human_outputs` the phone's and no PDF's
+    record read, whatever PDFs the library holds; then the phone's records and info.json);
+    tests/test_conformance_viewer_render.py writes vectors/viewer/render.jsonl (fixture libraries and steps: renders, a
+    file dropped, one deleted), which `RenderReplay` (area `render`) replays: the names, each pass's info.json and
+    units, and every step whole.
 
 ##### The phone's written pages
 
@@ -2373,7 +2419,8 @@ picks one).
   using any automated means (including bots, scrapers, and spiders), to view, access or collect information", and
   TIDAL's Content Guidelines, part of its terms, say the same in the same words (both as a web search quoted them on
   2026-11-10); the owner chose on 2026-11-10 that the phone reads one of their track pages for a link shared to it
-  (A shared link read by asking its service once, above).
+  (A shared link read by asking its service once, above), and, told these terms the same day, kept both on ("don't
+  turn tidal and spotify off").
 - One page a shared link (its short link's hop besides), at a lookup's pace, robots.txt honoured (both open their
   track pages), cached; only the song's two names are read of it, for the share page and a lookup the owner taps.
 - Apple's lookup is its documented public API and YouTube's oEmbed a public endpoint for any client; YouTube's terms
