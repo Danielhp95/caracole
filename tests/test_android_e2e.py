@@ -364,6 +364,8 @@ def synced_after_the_lookups(five: dict, six: dict, asked: list[dict], lookups: 
     phones = {r["url"] for r in asked[:five["sites"]]}
     blocked = set(lookups["songs"]["blocked"]["tabs"])
     assert blocked <= phones and not blocked & theirs  # the phone's requests counted on the phone alone
+    # waiting on lookup-scenarios (its producers ug-fetch-artist and lacuerda-sheets): until they merge, a lookup on
+    # the phone reads no index page, so there is none to find on the computer (phase 6 says so in its "waiting").
     if five["reads"]:
         conn = db.connect(computer.cfg().db_path)
         try:

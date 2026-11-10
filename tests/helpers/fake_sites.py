@@ -30,7 +30,7 @@ is counted, in order, and its own routes, which no site is, say what was asked:
 - ``GET /``: a line saying it is up.
 
 ``caracole SITES ARGS…`` runs caracole's CLI (``python -m caracole ARGS``) with every client's transport routed to the
-server at SITES (``Routed``, RoutedTransport's twin in httpx), so that the computer looks a song up against the same
+server at SITES (``routed``, RoutedTransport's twin in httpx), so that the computer looks a song up against the same
 pages the phone does. In a test, ``FakeSites(name)`` is the server on a free port of 127.0.0.1, in a thread
 (``with FakeSites("lookups") as sites: sites.url``).
 
