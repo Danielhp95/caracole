@@ -107,19 +107,23 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     hotel(conn, cfg)
     card = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'), "data-card")
     tiles = card["tiles"]
-    assert [t["name"] for t in tiles] == ["Chord sheet", "Guitar Pro", "Harmonica tab", "Lyrics", "Score"], tiles
-    assert [t["href"] for t in tiles] == [HOTEL + "sheet.html", HOTEL + "guitar-1.gp5", HOTEL + "harmonica-1.txt",
-                                          HOTEL + "lyrics.txt", HOTEL + "score-1.mxl"]
+    # The line's order, its text tab a tile of its own beside its Guitar Pro files.
+    assert [t["name"] for t in tiles] == ["Chord sheet", "Guitar Pro", "Guitar tab", "Harmonica tab", "Lyrics",
+                                          "Score"], tiles
+    assert [t["href"] for t in tiles] == [HOTEL + "sheet.html", HOTEL + "guitar-1.gp5", HOTEL + "tab.txt",
+                                          HOTEL + "harmonica-1.txt", HOTEL + "lyrics.txt", HOTEL + "score-1.mxl"]
     assert [t["said"] for t in tiles] == [
         "Open the chord sheet of Hotel California", "Download the Guitar Pro file of Hotel California",
-        "Open the harmonica tab of Hotel California", "Open the lyrics of Hotel California",
-        "Download the score of Hotel California"]
+        "Open the guitar tab of Hotel California", "Open the harmonica tab of Hotel California",
+        "Open the lyrics of Hotel California", "Download the score of Hotel California"]
     # From the file, a Guitar Pro file and a MusicXML score download under the song's name.
     assert tiles[1]["download"] == "Eagles - Hotel California.gp5" and tiles[0]["download"] is None
-    assert tiles[4]["download"] == "Eagles - Hotel California.mxl"
-    assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "Tab 1",
+    assert tiles[5]["download"] == "Eagles - Hotel California.mxl"
+    assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "a text tab", "Tab 1",
                                           "synced to the recording", "Score 1 (MusicXML)"]
-    assert "primary" in tiles[0]["cls"].split() and not any("primary" in t["cls"].split() for t in tiles[1:])
+    assert [d["text"] for d in tiles[1]["downloads"]] == [".gp5"] and [d["text"] for d in tiles[2]["downloads"]] == [
+        "Text"]
+    assert not any("primary" in t["cls"].split() for t in tiles)  # none first
     # Served with alphaTab, the Guitar Pro tile opens caracole serve's Guitar Pro page.
     served = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));', controls=SERVED),
                           "data-card")["tiles"][1]
@@ -211,7 +215,7 @@ def test_chips_count_versions_per_source(conn, cfg, tmp_path):
     assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs.com")])
     assert chips["Score"] == ("From", [("span", "inbox", None, "your inbox")])
     # More than one version: a small stack.
-    assert [("stack" in t["cls"].split()) for t in tiles] == [True, True, False, False, False]
+    assert [("stack" in t["cls"].split()) for t in tiles] == [True, True, False, False, False, False]
     assert all(c["expanded"] == "false" for t in tiles for c in t["chips"] if c["tag"] == "button")
 
 
@@ -338,12 +342,14 @@ def test_opening_a_drawer_sends_no_request(conn, cfg, tmp_path):
 def test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links(conn, cfg, tmp_path):
     lost = add_song(conn, "The Beatles", "Yesterday")
     update_song(conn, lost.id, match_decision="not_found")
-    script = 'note("card", noteCard("Yesterday"));\nnote("action", text(lineOf("Yesterday").querySelector(".line-action")));'
+    script = ('note("card", noteCard("Yesterday"));\n'
+              'note("action", lineOf("Yesterday").querySelector(".line-action button").getAttribute("aria-label"));')
     dom = run(conn, cfg, tmp_path, script, controls=WebControls(csrf="tok"))
     card = attribute_of(dom, "data-card")
     assert card["tiles"] == [] and "tiles" not in card["parts"]
-    assert card["parts"] == ["facts", "actions", "find-elsewhere", "foot"], card["parts"]  # Look in the index; links
-    assert attribute_of(dom, "data-action") == "Fetch now"
+    # Look in the index; which sites had it; links
+    assert card["parts"] == ["facts", "actions", "card-sites", "find-elsewhere", "foot"], card["parts"]
+    assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles now"
 
 
 def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
@@ -355,7 +361,7 @@ def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
     script = ('note("card", noteCard("Hotel California"));\n'
               'note("elsewhere", text(lineOf("Hotel California").querySelector(".find-elsewhere")));')
     dom = run(conn, cfg, tmp_path, script)
-    assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "find-elsewhere", "foot"]
+    assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "card-sites", "find-elsewhere", "foot"]
     elsewhere = attribute_of(dom, "data-elsewhere")
     assert elsewhere.startswith("Find it elsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
 
@@ -603,7 +609,8 @@ const ratio = (n) => { const [hi, lo] = [lum(rgb(getComputedStyle(n).color)), lu
   return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
 const reads = {};
 for (const sel of [".tile-name", ".tile-from", ".tile-versions .lead", ".vchip .n", ".dl", ".drawer-said", ".vrow .ver",
-  ".vrow .stars", ".vrow .note", ".inuse", ".drawer-rest", ".card-label", ".facts", ".btn.remove", ".tile.primary .tile-name"]) {
+  ".vrow .stars", ".vrow .note", ".inuse", ".drawer-rest", ".card-label", ".facts", ".btn.remove", ".tile-ico",
+  ".line-plays .play", ".line-plays .play .n"]) {
   const n = lineOf("Hotel California").querySelector(sel);
   reads[sel] = n ? ratio(n) : null;
 }
