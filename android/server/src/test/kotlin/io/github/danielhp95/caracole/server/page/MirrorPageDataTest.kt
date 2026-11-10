@@ -5,7 +5,10 @@ import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.mirror.Gate
+import io.github.danielhp95.caracole.mirror.Looked
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.mirror.pageFor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -252,6 +255,71 @@ class MirrorPageDataTest {
         assertEquals(CardText.haystack(listOf("宋冬野", "宋冬野", "斑马斑马", "宋冬野 - 斑马斑马")), card.getValue("search").jsonPrimitive.content)
         assertEquals(0, card.getValue("sites").jsonArray.size)
         assertEquals(JsonNull, card.getValue("source"), "no file, none it opens")
+    }
+
+    // --- the cards of songs taken from a file -------------------------------------------------------------------
+
+    private val hoppipolla = mirroredCard(7, "sigur-ros/hoppipolla", "Sigur Rós", "Hoppípolla", "key" to "D",
+                                          "files" to listOf(mapOf("name" to "sheet.html", "label" to "Sheet viewer",
+                                                                  "href" to "Sigur%20R%C3%B3s/Hopp%C3%ADpolla/sheet.html")))
+    private val sheetPath = "Sigur Rós/Hoppípolla/sheet.html"
+
+    /** A file's pages taken into [mirror] as the layer [id]: its library page holding [cards], and the song's sheet. */
+    private fun takeFile(mirror: Mirror, id: String, cards: List<JsonObject>, sheet: ByteArray = "<html>sheet</html>".toByteArray()) {
+        val page = libraryPage(mirroredData(cards))
+        val blobs = mapOf(sha256(page) to page, sha256(sheet) to sheet)
+        fun entry(path: String, bytes: ByteArray, unit: String?) = obj(
+            "path" to path, "url" to "/offline/x", "size" to bytes.size, "sha256" to sha256(bytes),
+            "type" to "text/html; charset=utf-8", "headers" to emptyMap<String, String>(),
+            *(if (unit == null) arrayOf<Pair<String, Any?>>() else arrayOf<Pair<String, Any?>>("unit" to unit, "digest" to "e".repeat(64))),
+        )
+        val manifest = obj("format" to 1, "start" to "index.html",
+                           "files" to listOf(entry("index.html", page, null), entry(sheetPath, sheet, "song/sigur-ros/hoppipolla")))
+        mirror.takeLayer(id, manifest.toString().toByteArray(), setOf("song/sigur-ros/hoppipolla")) { sha -> blobs[sha]?.inputStream() }
+    }
+
+    @Test
+    fun `a song taken from a file has the file's card, with its sheet's link`() {
+        val mine = addSong(database, "sigur-ros/hoppipolla", "Sigur Rós", "Hoppípolla", status = "wanted")
+        val calorro = addSong(database, "estopa/tu-calorro", "Estopa", "Tu Calorro")
+        val data = mirrored()
+        val filesEstopa = mirroredCard(3, "estopa/tu-calorro", "Estopa", "Tu Calorro (the file's)")
+        takeFile(data.mirror!!, "0123456789abcdef", listOf(hoppipolla, filesEstopa))
+
+        val songs = songsOf(read(data))
+        assertEquals(listOf("estopa/tu-calorro", "oasis/wonderwall", "radiohead/creep", "sigur-ros/hoppipolla"),
+                     songs.map { it.getValue("identity").jsonPrimitive.content })
+        assertEquals(JsonObject(estopa - "id"), JsonObject(songs[0] - "id"), "the computer's card first, where it has one")
+        assertEquals(calorro, songs[0].getValue("id").jsonPrimitive.long)
+        val card = songs.last()
+        assertEquals(hoppipolla.keys.toList(), card.keys.toList(), "the file's card, every field in its place")
+        assertEquals(JsonObject(hoppipolla - "id" - "status"), JsonObject(card - "id" - "status"))
+        assertEquals(mine to "wanted", card.getValue("id").jsonPrimitive.long to card.getValue("status").jsonPrimitive.content,
+                     "re-identified as the computer's are")
+        val href = card.getValue("files").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content
+        assertEquals("Sigur%20R%C3%B3s/Hopp%C3%ADpolla/sheet.html", href)
+        val served = data.mirror.pageFor(sheetPath) { _, _ -> Gate.SERVE }
+        assertTrue(served is Looked.Page, "its sheet's link is the file's page: $served")
+
+        val cards = database.read { db -> data.cards(db, listOfNotNull(Songs.byId(db, mine))) }
+        assertEquals(card, cards.getValue(mine), "a song's card alone is the same")
+    }
+
+    @Test
+    fun `the newest file whose page holds the song gives its card, and with none it gets the minimal card`() {
+        val mine = addSong(database, "sigur-ros/hoppipolla", "Sigur Rós", "Hoppípolla")
+        val data = mirrored()
+        val minimal = database.read { db -> data.cards(db, listOfNotNull(Songs.byId(db, mine))) }.getValue(mine)
+        assertEquals(JsonNull, minimal.getValue("key"), "no layer yet: the minimal card")
+
+        takeFile(data.mirror!!, "1111111111111111", listOf(hoppipolla))
+        takeFile(data.mirror, "2222222222222222", listOf(mirroredCard(8, "sigur-ros/hoppipolla", "Sigur Rós", "Hoppípolla", "key" to "E")),
+                 "<html>newer sheet</html>".toByteArray())
+        assertEquals("E", songsOf(read(data)).last().getValue("key").jsonPrimitive.content, "the newest layer's")
+
+        takeFile(data.mirror, "2222222222222222", listOf(mirroredCard(9, "radiohead/creep", "Radiohead", "Creep")))
+        assertEquals("D", songsOf(read(data)).last().getValue("key").jsonPrimitive.content,
+                     "the newest whose library page holds the song")
     }
 
     /** [names] kept by the song [id] in its [folder], as a take leaves them: a version and a row of `files` each. */

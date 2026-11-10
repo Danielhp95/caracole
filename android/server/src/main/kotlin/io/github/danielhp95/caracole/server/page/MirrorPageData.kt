@@ -30,25 +30,34 @@ import java.nio.charset.CodingErrorAction
  * - a card of a song the phone hasn't got keeps the computer's, under a negative id of its own (-1, -2, … in the
  *   cards' order), which the served page makes no request of (`fetchable` false: [LibraryPage.withServer]);
  * - a card of a song the phone removed (a tombstone and no song, Songs.isRemoved) is left out, until a sync settles it;
- * - a song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
+ * - a song the computer's data has no card of, taken from a file, gets the card of the newest of the mirror's layers
+ *   ([Mirror.layers]) whose library page (the file's start page) holds its identity, re-identified as the computer's
+ *   are: its sheet's link is the file's page, which the mirror serves from that layer ([io.github.danielhp95.caracole.mirror.pageFor]);
+ * - any other song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
  *   and no site (vectors/web/library_page.json's `minimal_cards`): its names, status, the folds the page sorts and
  *   filters it by ([CardText]), where its lyrics link back to (`lyricsFrom`: Megalobiz's or AZLyrics' page, which
  *   their fair use asks for, [lyricsFrom]), and its kept files (the phone's `files`), each with the one its line
  *   opens (`primary`) and the name a Guitar Pro file or a score downloads under;
  * - each songbook's set names its songs by the same ids (by each entry's `key`), none for a song left out.
  *
- * The parsed block is kept until the mirror's page changes (its entry's SHA-256). Reads only: every query is the
- * caller's [Db], inside Database.read.
+ * Each parsed block (the mirror's, and each layer's) is kept until its page changes (its entry's SHA-256). Reads only:
+ * every query is the caller's [Db], inside Database.read.
  */
 class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
     @Volatile private var parsed: Pair<String, JsonObject>? = null
+
+    /** Each layer's library page's cards by identity, by that page's SHA-256. */
+    @Volatile private var layersParsed: Map<String, Map<String, JsonObject>> = emptyMap()
 
     override fun data(db: Db, now: String): JsonObject {
         val base = mirrorData() ?: emptyLibrary(now)
         val cards = (base["songs"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         val phone = Phone.read(db)
         val made = Remade(phone, cards)
-        val songs = made.cards + phone.songs.filter { it.key !in made.identities }.map { minimalCard(db, phone, it) }
+        val layers by lazy { layerCards() }
+        val songs = made.cards + phone.songs.filter { it.key !in made.identities }.map { song ->
+            layers.firstNotNullOfOrNull { it[song.key] }?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song)
+        }
         return JsonObject(base.mapValues { (name, value) ->
             when (name) {
                 "songs" -> JsonArray(songs)
@@ -62,8 +71,10 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         val cards = (mirrorData()?.get("songs") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         val byIdentity = cards.associateBy { identityOf(it) }
         val phone = Phone(songs, emptySet(), ignoredKeys(db))
+        val layers by lazy { layerCards() }
         return songs.associate { song ->
-            song.id to (byIdentity[song.key]?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song))
+            val card = byIdentity[song.key] ?: layers.firstNotNullOfOrNull { it[song.key] }
+            song.id to (card?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song))
         }
     }
 
@@ -214,6 +225,30 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         } ?: return null
         parsed = served.entry.sha256 to data
         return data
+    }
+
+    /** The cards of each of the mirror's layers' library pages by identity, the newest layer first; none for a layer
+     * whose page can't be read. */
+    private fun layerCards(): List<Map<String, JsonObject>> {
+        val mirror = mirror ?: return emptyList()
+        val known = layersParsed
+        val read = LinkedHashMap<String, Map<String, JsonObject>>()
+        for (layer in mirror.layers()) {
+            val served = layer.manifest()?.let { layer.lookup(it.start) } ?: continue
+            val sha = served.entry.sha256
+            if (sha in read) continue
+            read[sha] = known[sha] ?: run {
+                val data = try {
+                    dataBlock(served.file.readBytes())
+                } catch (e: java.io.IOException) {
+                    null
+                }
+                val cards = (data?.get("songs") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+                LinkedHashMap<String, JsonObject>().apply { for (card in cards) identityOf(card)?.let { putIfAbsent(it, card) } }
+            }
+        }
+        layersParsed = read
+        return read.values.toList()
     }
 
     /** A library with no song, for a phone with no mirror: the page's data as library_page.py's build makes it of a
