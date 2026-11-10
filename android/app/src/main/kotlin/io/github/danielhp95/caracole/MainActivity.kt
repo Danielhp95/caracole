@@ -49,7 +49,9 @@ import kotlin.coroutines.resume
 /**
  * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
  * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
- * bar (the page's title; Sync now, Library, Settings) and the sync's line under it. The WebView carries the launch's
+ * bar (the page's title; the sync button, which opens the library page's sync sheet; ⋮ with Library and Settings)
+ * and the unattended sync's line under it. An intent's [SHEET] (Settings' Export and Import a file, the notification
+ * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
  * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
  * at over the page while it lasts ([sizeLabel]).
  */
@@ -77,6 +79,8 @@ class MainActivity : Activity() {
     /** The page an intent asked the screen to show (a song shared to the app: ShareLinkActivity's), until the server
      * has started. */
     private var asked: String? = null
+    /** The sync sheet's flow an intent asked for ([SHEET]), until the server has started. */
+    private var askedSheet: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,6 +129,7 @@ class MainActivity : Activity() {
         // WebView can't show, comes here, not as a navigation.
         web.setDownloadListener { url, _, _, _, _ -> follow(url, download = true) }
 
+        findViewById<ImageButton>(R.id.sync).setOnClickListener { showSheet(SYNC) }
         findViewById<ImageButton>(R.id.more).setOnClickListener { menu(it) }
         backCallback()
         screen.launch { start(savedInstanceState) }
@@ -155,27 +160,36 @@ class MainActivity : Activity() {
             return
         }
         val page = asked ?: if (saved == null) SharedLink.shown(intent?.getStringExtra(SharedLink.PAGE)) else null
+        val sheet = askedSheet ?: if (saved == null) intent?.getStringExtra(SHEET) else null
         asked = null
+        askedSheet = null
         if (page != null) {
             showPage(page)
+        } else if (sheet != null) {
+            showSheet(sheet)
         } else if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) &&
             web.restoreState(saved) != null) {
             shown = true
         } else {
             showLibrary()
         }
-        if (saved == null && page == null && settings.server.isBlank() && Caracole.mirror(this).manifest() == null) {
+        if (saved == null && page == null && sheet == null && settings.server.isBlank() &&
+            Caracole.mirror(this).manifest() == null) {
             openSettings()
         }
     }
 
-    /** A song shared to the app while the screen was open (MainActivity is single-task): its page, once the server
-     * has started. */
+    /** A song shared to the app while the screen was open (MainActivity is single-task): its page; or the sync sheet
+     * an intent asked for ([SHEET]); either once the server has started. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val page = SharedLink.shown(intent.getStringExtra(SharedLink.PAGE)) ?: return
-        if (origin != null) showPage(page) else asked = page
+        val page = SharedLink.shown(intent.getStringExtra(SharedLink.PAGE))
+        val sheet = intent.getStringExtra(SHEET)
+        when {
+            page != null -> if (origin != null) showPage(page) else asked = page
+            sheet != null -> if (origin != null) showSheet(sheet) else askedSheet = sheet
+        }
     }
 
     /** The launch's cookie, set for [origin] before the WebView asks it for anything; false when it can't be. */
@@ -246,19 +260,20 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The library page's Sync tab (`#tab=sync`): where the phone and the computer compare their libraries, and each
-     * takes what the other changed, the computer's address the one Settings keeps. From the library page itself a
-     * change of its address alone (tabs.js hears it); from any other page, the library page at that tab.
+     * The library page's sync sheet at [name]'s flow ([SheetAddress]: sync, export or import; the page alone for any
+     * other word): where the phone and the computer, or a file, compare their libraries and each takes what the other
+     * changed. From the library page itself a change of its address alone (sync.js hears it and opens the sheet);
+     * from any other page, the library page with the sheet open.
      */
-    private fun showSyncTab() {
+    private fun showSheet(name: String) {
         val links = links ?: return
         askToNotify()
-        web.loadUrl(links.address("") + SYNC_TAB)
+        web.loadUrl(SheetAddress.of(links.address(""), name))
         shown = true
     }
 
-    /** Android 13 and later show the notification of a sync that runs (SyncService) only once asked; it runs either
-     * way. */
+    /** Android 13 and later show the notification of a sync that runs (SyncService), and of one that left conflicts,
+     * only once asked; it runs either way. */
     private fun askToNotify() {
         if (Build.VERSION.SDK_INT < 33) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
@@ -272,8 +287,6 @@ class MainActivity : Activity() {
         popup.menuInflater.inflate(R.menu.main, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.sync_now -> Syncs.now(this)
-                R.id.sync_tab -> showSyncTab()
                 R.id.library -> showLibrary()
                 R.id.settings -> openSettings()
             }
@@ -514,11 +527,16 @@ class MainActivity : Activity() {
     private fun notFound() =
         WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
-    private companion object {
-        const val SHOW_ENDED_MS = 5_000L
-        const val SYNC_TAB = "#tab=sync"
-        const val NOTIFY = 1
-        const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
-        const val FADE_MS = 250L
+    companion object {
+        /** The intent's extra that opens the sync sheet at a flow: "sync", "export" or "import" ([SheetAddress]). */
+        const val SHEET = "sheet"
+
+        /** The sheet's network sync, the bar's button's and the notification's. */
+        const val SYNC = "sync"
+
+        private const val SHOW_ENDED_MS = 5_000L
+        private const val NOTIFY = 1
+        private const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
+        private const val FADE_MS = 250L
     }
 }

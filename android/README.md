@@ -58,15 +58,16 @@ with the same key.
 2. On the phone, open Settings (the first start opens it). Type the address, for example
    `http://192.168.1.20:8737`. Without a scheme, `http://` is assumed. An IPv6 address goes in brackets when it
    has a port (`[fd7a:115c::1]:8737`); typed without them, the app adds them.
-3. Tap **Test**. It answers "caracole answered: 312 files, 41 MB", or says what went wrong. Then tap **Sync now**.
+3. Tap **Test**. It answers "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26", or says what went
+   wrong. Then tap the bar's sync button ([below](#sync-from-the-phone)).
 
 **Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers
 at the address. When nothing answers there, or something else does (another network's device, a Wi-Fi login
-page), it does nothing and keeps the last sync's outcome; **Sync now** says what answered. The library screen's
-menu (⋮) has Sync now, Sync with the computer ([below](#sync-from-the-phone)), Library and Settings.
+page), it does nothing and says nothing ([below](#sync-from-the-phone)). The library screen's bar has the sync
+button, and its menu (⋮) Library and Settings.
 
-Sync now copies the computer's pages, one way. Sync with the computer, the library page's Sync tab, is the two-way
-sync: what you add, remove or change on the phone goes to the computer too.
+The sync is two-way: what you add, remove or change on the phone goes to the computer too, and the computer's pages
+come to the phone with what it changed.
 
 ## Offline
 
@@ -141,36 +142,35 @@ artist's songs. LaCuerda's own search and YouTube's suggestions need the compute
 
 ## Sync from the phone
 
-The library page's **Sync** tab syncs the phone and the computer both ways, as `caracole peer sync` syncs two
-computers. Open it from the menu (⋮ › Sync with the computer) or from the library page's tabs. The field offers the
-address in Settings; the address you compare with becomes the one Settings keeps, for Sync now too.
+The bar's **sync** button (two circular arrows, left of ⋮) opens the library page's sync sheet, from any page: the
+phone and the computer at the address in Settings compared, and each takes what the other changed, as `caracole peer
+sync` syncs two computers. It is the sheet caracole serve's Sync tab opens, written once in library_assets; the
+phone's library page has no Sync tab.
 
-**Compare** asks the computer for its state and lists what differs, a line per unit: a song (its names, versions,
-choices and kept files), a removal, a songbook, an artist's alias or UG page, a blocked tab. Each line says what the
-sync proposes:
+1. **What to sync**: Library (your songs, their sheets and pages, both ways), Songbooks and Site indexes (for
+   searching offline), all three ticked, each with what is waiting ("3 changed on the computer"). A song a songbook
+   lists comes along with the songbooks, even with Library unticked. **Cancel** on the left, **Sync** on the right.
+2. **A card for each conflict**, a song (or a songbook, a removal…) changed on both sides since the two last agreed:
+   its name, "1 of N", the phone on the left and the computer on the right, a line for each way the two differ (its
+   own key, its sheet, its versions, its kept files…). Under "Which version to keep", **Phone** or **Computer**, and
+   **Same for the other N**. Above the card, what is to take (↓), to give (↑) and changed on both (⚠). There is no
+   Skip: Cancel ends the sync with nothing taken or given.
+3. **The sync** runs in the background, with a notification ("Syncing with <the computer's name>…") that keeps the
+   app working while you leave it, gone once it ends:
+   1. compared again, refused if either side changed since you compared (compare again then);
+   2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
+      each file checked by its SHA-256;
+   3. what the phone changed given to the computer (`POST /peer/push`), which takes it as its own request and
+      renders its pages;
+   4. the computer's pages copied (skipped with Library unticked);
+   5. what the two agree on recorded, so the next comparison lists only what changes after;
+   6. the computer's newer indexes merged (skipped with Site indexes unticked, or when none is newer).
+4. **The summary**: "Synced with: <name>" and when, then a section for each kind of change, each closed at first:
+   the songs taken, the songs given (and why), the conflicts (which side was kept), the songbooks, the indexes (each
+   site's tabs before → after). **Done** closes it.
 
-- **keep here's**: changed on the phone since the two last agreed;
-- **take there's**: changed on the computer;
-- **CONFLICT**: changed on both, differently.
-
-Each has Here, There and Skip, the proposal chosen at first. A conflict has none until you choose, one at a time or
-all at once (Keep here's for every conflict, Take there's for every conflict), and **Sync** waits until each has
-one. Skip leaves a unit as it is on both sides, until the next comparison.
-
-**Sync** runs it in the background, with a notification ("Syncing with <the computer's name>…") that keeps the app
-working while you leave it, gone once it ends. Its stages show on the tab:
-
-1. compared again, refused if either side changed since you compared (compare again then);
-2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
-   each file checked by its SHA-256;
-3. what the phone changed given to the computer (`POST /peer/push`), which takes it as its own request and renders
-   its pages;
-4. the computer's pages copied, as Sync now copies them;
-5. what the two agree on recorded, so the next comparison lists only what changes after;
-6. the computer's newer indexes merged, skipped when none is newer.
-
-At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
-comparison"), and Reload shows the library page with the songs as they are now.
+A sync already on its way when the page loads (a reload, a notification's tap) is followed to its summary, never
+started again.
 
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the

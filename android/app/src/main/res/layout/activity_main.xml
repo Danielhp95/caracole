@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- A small top bar: the page's title, and a menu with Sync now, Library and Settings. -->
+    <!-- A small top bar: the page's title, the sync button (the page's sync sheet), and a menu with Library and
+         Settings. -->
     <LinearLayout
         android:id="@+id/bar"
         android:layout_width="match_parent"
@@ -25,6 +26,15 @@
             android:text="@string/app_name"
             android:textColor="@color/on_bar"
             android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/sync"
+            android:layout_width="40dp"
+            android:layout_height="36dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/sync"
+            android:src="@drawable/ic_sync"
+            android:tooltipText="@string/sync" />
 
         <ImageButton
             android:id="@+id/more"
