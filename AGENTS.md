@@ -1782,7 +1782,23 @@ Not built yet. (written-pages.)
 
 - Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
 - A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
-- Export PDF and Make this my version (export-print): not built yet.
+- Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
+  and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.
+  - A viewer is the library's where the phone recorded writing it (render.written_file's kv `render:files:<id>`) or
+    the mirror holds it under the song's unit (`ExportRoutes.mirrorOf`, the cards' mirror); `Exports` and
+    `ExportSheet` (server/routes/ExportSheet.kt) are render.py's export half: `export_version`, `export_query`,
+    `export_traditional`, `export_viewer`, `export_sheet` over `_export_source`.
+  - `mine=1` (a GET, never a HEAD) queues `render --song=… --version=… --mine` under `export:<key>:<version>:mine`:
+    the phone's one write with no form token (ExportRoutesTest posts every other without it). `RenderRunner` writes
+    `ExportSheet.kept` through `OverrideWriters.addVersion` (checked by `Versions.keyVersion`), then makes the song's
+    pages (PhoneParts.pages) and the songbooks (PhoneParts.songbooks) again; `--version` alone, a PDF beside the
+    sheet, is the computer's.
+  - The app's `Printer`: the server asked in-process (`ask`, as LocalFiles asks), then `PrintManager.print(name,
+    web.createPrintDocumentAdapter(name), A4)` on the WebView shown, on the UI thread; nothing kept. PrintTest checks
+    the job and runs the WebView's adapter as the print spooler would (android.print's `PrintedPdf`, the callbacks'
+    constructors being that package's): an A4 PDF.
+  - vectors/web/export.jsonl, tests/test_conformance_export.py (caracole serve's route, `version_pdf` giving the label
+    alone, checked against `_export_text`'s), `ExportReplay` (area `export`).
 
 ##### Guitar Pro on the phone
 
