@@ -1606,7 +1606,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### The phone's written pages
 
-Not built yet. (written-pages.)
+- `LibraryFiles` serves a page the phone wrote (a sheet's viewer, a kept version's, a harmonica tab's, a songbook's in
+  `_songbooks/<folder>/`) as app.py's `_written_page` does, before the mirror's:
+  - while it is the bytes its record holds (`PhonePages`: WrittenPages' `render:files:<id>` among the songs whose
+    folder it is in, `songbook:<folder>`; read once through no link, of a recorded size and SHA-256) and its song's
+    unit is still at the digest it was made at;
+  - with `viewer_csp` of those very bytes and `frame-ancestors 'none'`;
+  - otherwise the mirror's through PhoneGate, else a message page: 409 for a unit moved since its page was made (the
+    phone's sheet.txt linked), 404 Not sent for one changed on disk;
+  - a .cho it wrote the same way, as text (LibraryFilesTest).
+- Until phone-render's WrittenPages lands, it reads `PhonePages.NONE`: no page of the phone's.
+- A removal takes the phone's written pages by their records: every name `render:files:<id>` records with an entry
+  `render.written_entry` reads, as removal.py takes a version's or a tab's page (the phone makes no PDF, so no render
+  record names them; a sync carries none and a respell drops them), and a take that moves the song's folder moves
+  them with it (RemovalWrittenTest).
+- What a take supersedes, forgotten (`PhoneRender.afterSync`), and PagesServedTest: not built yet.
 
 ##### Songbooks, versions and printing on the phone
 

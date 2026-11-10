@@ -19,8 +19,8 @@ import java.nio.file.Path
 /**
  * removal.py on the phone, which has no wanted.txt, no Music/ and no audio from YouTube: a song taken out for good,
  * its record deleted with its versions, kept files' rows and per-song kv, its tombstone left
- * ([Upsert.markRemoved]), then the files caracole wrote in its folder ([plan]'s `delete`), and the folder, and its
- * artist's, once empty. Files caracole didn't write stay. vectors/library/remove.jsonl holds Python's answers.
+ * ([Upsert.markRemoved]), then the files caracole wrote in its folder ([plan]'s `delete`: the phone's written pages
+ * among them, by their records), and the folder, and its artist's, once empty. Files caracole didn't write stay. vectors/library/remove.jsonl holds Python's answers.
  */
 internal object Removal {
     private const val INFO = "info.json"
@@ -168,7 +168,8 @@ internal object Removal {
         return here to elsewhere
     }
 
-    /** removal._caracoles: the names of the files caracole wrote in the song's folder. */
+    /** removal._caracoles: the names of the files caracole wrote in the song's folder; on the phone, also every page
+     * and .cho its records name (kv `render:files:<id>`, WrittenPages'), the phone's written pages. */
     private fun caracoles(db: Db, song: SongRow, keptHere: Set<String>): Set<String> {
         val ours = LinkedHashSet(keptHere)
         ours += INFO
@@ -178,9 +179,12 @@ internal object Removal {
                 ours += TRADITIONAL_PDFS.getValue(sheet)
             }
         }
-        (kvJson(db, "$FILES_KEY${song.id}") as? JsonObject)?.keys?.forEach { name ->
+        (kvJson(db, "$FILES_KEY${song.id}") as? JsonObject)?.forEach { (name, entry) ->
             val tab = tabOf(name)
             if ((tab != null && name == "version-$tab.html") || isHarmonicaPage(name)) ours += name
+            // The phone's written pages and .cho (WrittenPages' records): it makes no PDF, so no render record names
+            // its sheet's, and a sync carries no such record nor a respell keeps one: each is the phone's own.
+            else if (isWritten(entry)) ours += name
         }
         for (key in listOf("render:${song.id}", "render:${song.id}:auto")) {
             val pdf = text((kvJson(db, key) as? JsonObject)?.get("pdf"))
@@ -200,6 +204,17 @@ internal object Removal {
     }
 
     private fun kvJson(db: Db, key: String) = SongKv.json(db.kvGet(key))
+
+    /** render.written_entry's reading of a file written's record: `{"sha256": <a string>, "size": <an int>}` (a JSON
+     * integer, never a boolean or a float), whatever else it holds. */
+    private fun isWritten(entry: JsonElement): Boolean {
+        val record = entry as? JsonObject ?: return false
+        val sha = record["sha256"] as? JsonPrimitive
+        val size = record["size"] as? JsonPrimitive
+        if (sha == null || !sha.isString || size == null || size.isString) return false
+        val digits = size.content.removePrefix("-")
+        return digits.isNotEmpty() && digits.all { it in '0'..'9' }
+    }
 
     private fun text(e: kotlinx.serialization.json.JsonElement?): String? =
         (e as? JsonPrimitive)?.takeIf { it.isString }?.content
