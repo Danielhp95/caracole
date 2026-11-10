@@ -61,7 +61,7 @@ class BackupsTest {
         phone.parts.database.writeBlocking { db ->
             val now = "2026-11-10T08:00:00Z"
             val song = phone.parts.store.add(db, "Los Fabulosos Cadillacs", title, now = now)
-            val version = Versions.upsert(db, "inbox", title, song.id, "tab", "tabs", 0.0, 0, 1, null, "",
+            val version = Versions.upsert(db, "inbox", title, song.id, "sheet", "tabs", 0.0, 0, 1, null, "",
                                           JsonObject(emptyMap()), now)
             Kept.keepFile(db, phone.parts.store, song, version, "tab.txt", bytes, 0, now)
         }
