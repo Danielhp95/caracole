@@ -1675,7 +1675,50 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   after its merge job, none from a computer that doesn't count them.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
   `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
-  `PageSource`, none until one is wired).
+  `PageSource`, server/routes/sync/MirrorPages.kt: the mirror's and its layers' pages of each unit at the digest the
+  phone holds, the computer's first, and for its start page the phone's own library page's data, every card it shows,
+  `MirrorPages.startPage`, so that a song taken from a file opens its sheet on a phone the export goes on to).
+- **A file's pages, a layer of the mirror** (mirror/Layers.kt, `Mirror.takeLayer`, the engine's `pagesFromFile`,
+  `SyncFileRoutes.pagesFromFile`): an import keeps the pages its file held of the units it took, and the file's start
+  page, in `mirror/layers/<the file's caracole's id>/` (a list and blobs, each checked by its SHA-256 as it is
+  written; a page the file lacks or holds otherwise than listed leaves the layer as it was), one layer a caracole, the
+  newest taken first; then every layer is cut to what `PhoneGate` still serves (a unit the phone changed or removed
+  since loses its pages, a layer left with none goes).
+  - `pageFor` serves the computer's page while its unit is as the phone holds it, else the newest layer's of that same
+    unit at that path (never a page of another unit at a path the computer gives one), else the computer's answer; a
+    layer's start page is never served, and the computer's mirror sync (`cleanUp`) never touches a layer.
+  - A file is anyone's to make, so a layer serves no header the file gave (`LayerPolicy`): a kind caracole serves alone
+    (a page, a PDF, text, JSON, a download; any other is never kept), caracole serve's Content-Type for it, the
+    phone's `nosniff` and Referrer-Policy, and a page only in a sandbox (the file's policy where its `sandbox` holds
+    `allow-scripts` and `allow-downloads` alone, as viewer_csp's; else `LayerPolicy.NOTHING`, one that runs and loads
+    nothing): never `allow-same-origin`, which would give a file's page the phone server's origin, its form token and
+    every write. An export carries the layer's headers on, never the file's.
+  - MirrorPageData gives a song the computer has no card of the card of the newest layer that keeps a page of it and
+    whose start page holds its identity, read as untrusted (`fromFile`: library_page.py's fields alone, each of its
+    JSON type, every `href` the library's or a site's over https, a kept file's the library's, its Lyrics link the
+    phone's own), else the minimal card.
+  - Layers are kept until a unit changes or the app's data is cleared; `storageBytes` counts them.
+- **Export and Import a file** (server/routes/SyncFileRoutes.kt, web/sync_file_routes.py's routes on the phone:
+  `GET /api/sync/sizes`, `POST /sync/export`, `GET /api/sync/export`, `POST /sync/import/open`, `/part`, `/compare`,
+  `/drop`; vectors/web/sync_file_routes.jsonl, `WebReplay.syncFileRoutes`, area `web`):
+  - an export (`routes/sync/Exports.kt`) is made through the database's writer (its indexes' attached file) into
+    `stateDir/cache/peer/export-<16 hex>.caracole` (0700, 0600), one at a time, and sent once: taken out of the
+    exports' names, its name deleted as the server opens it (`Body.FromFile`'s `once`, `open()`), one never asked for
+    swept an hour after, one taken that no server opened 10 minutes after, and every one an earlier start left cleared
+    as the phone starts (`Exports.clear`); a HEAD is 405;
+  - an import's file (`routes/sync/Imports.kt`, peer_import.py's) is staged part by part in
+    `stateDir/peer/import-<16 hex>/` (0700: `file.caracole`, `open.json`, 0600), one at a time, each hold the job's
+    or a comparison's alone (one process: an in-process hold, no flock), let go as another is opened once whole or
+    stopped, dropped by the page's Cancel, swept an hour after;
+  - its comparison is the engine's `compareFile`, answered as `POST /sync/compare`'s (`peer.kind` `"file"`, its
+    `made`, no address, the indexes it read more recently alone); SyncRoutes' `POST /sync/apply` hands a file's
+    comparison to it (`SyncRoutes.files`, `FileSyncs`), which compares the file again and queues the import: kind
+    `sync` under `import:<id>`, "Sync with a file from <name>", `FILE_STAGES`, the folder deleted once it ends;
+  - the phone's App reads a `json` or `bytes` route's body as web/app.py does (`Route.body`, `DocumentAnswer`: the form
+    token in its header, its content type, its limit, JSON by PyJson.loads); the routes declare Python's kinds and
+    limits (the vectors' `limits`).
+  - Where the phone answers otherwise: `indexes` of `GET /api/sync/sizes` is null, its bundled SQLite having no
+    dbstat (peer_file.indexes_size's None), and an index export's comparison names no index newer in it.
 - What the phone says otherwise: the report leaves out a site whose merge moved its progress records alone (no row
   taken, its count the same), as IndexTransfer's `Merged` says what changed of the merge whole (`SyncEngine.taken`).
 
@@ -1903,11 +1946,66 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - vectors/web/versions_routes.jsonl and harmonica_routes.jsonl (tests/test_conformance_choices.py: a library a
     scene; every page whole but its stylesheet, every post's job, `caracole harmonica`'s runs), `ChoicesReplay`
     (area `choices`).
-- Export PDF and Make this my version (export-print): not built yet.
+- Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
+  and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.
+  - A viewer is the library's where the phone recorded writing it (`WrittenPages.written`, render.written_file's kv
+    `render:files:<id>`) or the mirror holds it under the song's unit (`ExportRoutes.mirrorOf`, the cards' mirror),
+    the computer's pages being most of what the phone shows (PhoneRender forgets its own of a song the mirror serves).
+  - `Exports` and `ExportSheet` (server/routes/ExportSheet.kt) are render.py's export half: `export_version`,
+    `export_query`, `export_traditional`, `export_viewer`, `export_sheet` over `_export_source`; its sheet is the one
+    the phone's viewer shows, its ChordPro PhoneRender's `.cho` byte for byte (ExportRoutesTest).
+  - Making no PDF, the phone names any version the viewer's code can read, where caracole serve refuses one whose PDF
+    can't be made (500).
+  - `mine=1` (a GET, never a HEAD) queues `render --song=… --version=… --mine` under `export:<key>:<version>:mine`:
+    the phone's one write with no form token (ExportRoutesTest posts every other without it). `RenderRunner` writes
+    `ExportSheet.kept` through `OverrideWriters.addVersion` (checked by `Versions.keyVersion`), then makes the song's
+    pages (PhoneParts.pages, PhoneRender: a song the mirror served gets the phone's own, its unit's digest moved) and
+    the songbooks (PhoneParts.songbooks) again; plain `render`, each song in a write of its own, the queued lookups
+    let go between two; `--version` alone, a PDF beside the sheet, is the computer's.
+  - The app's `Printer`: the server asked in-process (`ask`, as LocalFiles asks), then `PrintManager.print(name,
+    web.createPrintDocumentAdapter(name), A4)` on the WebView shown, on the UI thread; nothing kept. PrintTest, on an
+    emulator alone (it stops the print spooler), checks the job, a link the page follows through MainActivity's hook,
+    and runs the WebView's adapter as the print spooler would (android.print's `PrintedPdf`, the callbacks'
+    constructors being that package's): an A4 PDF.
+  - vectors/web/export.jsonl, tests/test_conformance_export.py (caracole serve's route, `version_pdf` giving the label
+    alone, checked against `_export_text`'s; a message's library folder `{library}`, a reader's own words on a file
+    left out, `prefix`), `ExportReplay` (area `export`).
 
 ##### Guitar Pro on the phone
 
-Not built yet. (guitar-alphatab.)
+- server.guitar's `AlphaTabBundle` is web/alphatab.py (`bundle`, `fontFace`, `load`), `GuitarPage` web/guitar_page.py
+  (`style`, `script`, `policy`, `build`, top.py's header) and routes/GuitarRoutes.kt web/guitar_routes.py: `GET
+  /guitar?file=` and `GET /assets/alphatab/<name>`, caracole serve's answers (its `parse_qs`, strict and four fields at
+  most; a file the phone's `files` records alone; Power Tab; past 8 MiB; a link at any step; the sheet viewer its
+  folder holds), held by vectors/web/guitar.jsonl (tests/test_conformance_guitar.py, `GuitarReplay`, area `guitar`).
+- :core's `GuitarFiles.of` is inbox.guitar_files, phone-render's port, the one the render, the cards, the set lists
+  and the page read: N `int()`'s of any script's digits, ordered and labelled by the whole number (`wholeNumber`; an
+  Int `number`, `Int.MAX_VALUE` past one, a name caracole never writes), past 4300 digits Python's ValueError.
+- **The bundle in the APK**: app/alphatab.gradle.kts makes it from `CARACOLE_ALPHATAB_DIR` (android/flake.nix,
+  ../nix/alphatab.nix) as `bundle` does:
+  - the asset `alphatab/<name>`, beside `alphatab/licenses/` (MPL-2.0, OFL, Apache-2.0);
+  - its name, integrity and CSP sources as the Java resource `caracole/web/alphatab.json`, which
+    `AlphaTabBundle.installed` reads;
+  - one task a variant, wired through the Android Gradle plugin's variant API reached dynamically (a script plugin
+    sees none of its classes);
+  - without the variable the build fails, naming it: never an APK without the bundle.
+- **`AlphaTabAssets.answer`**, MainActivity's `shouldInterceptRequest`'s first: the sandboxed page's request for the
+  bundle carries no launch cookie, so the app answers `GET /assets/alphatab/<name>` of the server's exact origin
+  (127.0.0.1 at its port, once it listens) from its assets, with guitar_routes.asset's headers and app.py's
+  (`Access-Control-Allow-Origin: *`, the script being CORS with its integrity; `text/javascript; charset=utf-8`; kept
+  for good), any other name there 404; the server's own route answers only a bundle whose bytes it holds (the JVM's
+  tests).
+- `ServerControls.guitar` is `GuitarRoutes.available()` (the APK's bundle there), so the served library page opens a
+  card's `guitarPage`; mirror's `Links` routes `/guitar?file=` as a page, a download of it the file.
+- Beyond caracole serve:
+  - a path the phone's library records no Guitar Pro file at, that the mirror lists as a file (a song only the
+    computer's pages copied), is a 303 to the file, which the app hands to another app as before (the mirror reached
+    through `PhoneParts.cards`, PhoneParts naming none);
+  - a file past 8 MiB is refused before it is read, never held whole to be refused.
+- Tests: server.guitar's GuitarPageTest (the vector, the APK's bundle as named, the mirror's 303); the app's
+  AlphaTabAssetsTest (the build's resource is the port's bundle of the same files); androidTest's GuitarPageTest (the
+  APK's bytes Python's, the licences, and the page in the WebView: drawn, the font's stylesheet allowed by its hash, the
+  synthesizer ready, Play and Stop, Download handed off).
 
 ##### A song shared to the app
 
@@ -2006,7 +2104,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
   io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner`.
 
-- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, `--dist worksteal`).
+- Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
+  the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
 - `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and `-m autochords` do.
 - `slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro or the models
   (`@pytest.mark.chordpro` and `autochords` add `slow`) or another process: mark a new one too.

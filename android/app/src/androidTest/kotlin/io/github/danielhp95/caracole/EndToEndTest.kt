@@ -39,9 +39,9 @@ import java.security.MessageDigest
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test, opens the library page (the phone's own server's, at its
- * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that each
- * link it shows to caracole serve's own pages (Export PDF) is answered by the phone's stub ("… isn't on the phone
- * yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
+ * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
+ * Export PDF is the phone's own route (here, a copy of pages with no song, its 404) and each other link it shows to
+ * caracole serve's own pages is answered by the phone's stub ("… isn't on the phone yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
  * the phone's server with the launch's cookie. Every ACTION_VIEW is stubbed: nothing outside the app opens. Without
  * `server` it is skipped.
  */
@@ -122,14 +122,33 @@ class EndToEndTest {
                 exportShown: (() => { const e = document.getElementById('export'); return !!e && !e.hidden; })()})""") as String)
             record("viewer", sandbox)
             // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
-            // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
-            // page, 409, "… isn't on the phone yet." (Stubs).
+            // the Guitar Pro page) as it does on the computer. Export PDF is the phone's own route (ExportRoutes: the
+            // version named, {name, label}, which the app prints, for a song of the phone's library): this sync took
+            // the computer's pages alone, no song, so it says the library has no such sheet (404). The Guitar Pro page
+            // is the phone's own too (GuitarRoutes): a file only the copy of the computer's pages holds, as this test's
+            // sync of the copy alone leaves it, is the file itself (303 to the file's own address), which the app hands
+            // to another app; the page itself (200) is GuitarPageTest's. A version's page is the phone's own as well
+            // (VersionsRoutes), of a viewer the phone made: a copy's names no sheet of its (404; VersionsPageTest's
+            // viewer is the phone's). The phone answers each other with its stub: the message page, 409, "… isn't on
+            // the phone yet." (Stubs).
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
-                val (status, text) = stubbed(origin + href)
+                val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
+                if (href.startsWith("/export.pdf?") || href.startsWith("/versions?")) {
+                    assertEquals("$href on the phone: $text", 404, status)
+                    assertTrue("$href: $text", "no such sheet in the library" in text)
+                    continue
+                }
+                if (href.startsWith("/guitar")) {
+                    assertEquals("$href on the phone", 303, status)
+                    val file = android.net.Uri.parse(href).getQueryParameter("file")
+                    assertTrue("$href names a file", !file.isNullOrEmpty())
+                    assertEquals("$href goes to its file", "/$file", location?.let { android.net.Uri.decode(it) })
+                    continue
+                }
                 assertEquals("$href on the phone", 409, status)
                 assertTrue("$href: $text", "on the phone yet" in text)
             }
@@ -209,8 +228,8 @@ class EndToEndTest {
                     record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app")
                         .put("at", url(main)))
                     shot("viewer-guitar")
-                    // Served, the link is the Guitar Pro page's (/guitar), which the tap may have opened in the WebView:
-                    // the phone's stub, one page more to go back from.
+                    // Served, the link is the Guitar Pro page's (/guitar): the phone's own page, or, for a file only the
+                    // copy holds, the file itself; a page opened is one more to go back from.
                     instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
                     waitUntil("back from the Guitar Pro link") {
                         val at = url(main).substringBefore('#')
@@ -237,25 +256,26 @@ class EndToEndTest {
     }
 
     /** [url]'s status and text, asked of the phone's server with the launch's cookie, as the WebView asks it. */
-    private fun stubbed(url: String): Pair<Int, String> {
+    private fun stubbed(url: String): Triple<Int, String, String?> {
         val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Cookie", "${io.github.danielhp95.caracole.server.http.Security.SECRET_COOKIE}=${Caracole.secret}")
             val status = connection.responseCode
             val body = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
-            return status to body.toString(Charsets.UTF_8)
+            return Triple(status, body.toString(Charsets.UTF_8), connection.getHeaderField("Location"))
         } finally {
             connection.disconnect()
         }
     }
 
-    /** The page at [address] (its fragment aside) once it has loaded: its own document, at the phone's origin, never
-     * the one before it, which the WebView's url already names [address] over while the new one is on its way
-     * (about:blank's, or a sandboxed viewer's, each of an opaque origin, "null", and long "complete"). */
+    /** The page at [address] (its fragment aside) once it has loaded: the document shown says so itself, by its own
+     * location. WebView.getUrl names a navigation the app started while it is still pending, and until it commits the
+     * document shown is the blank one before it, complete and of origin null (a slow answer read it so: no sheet, origin
+     * "null"). */
     private fun loadedAt(main: ActivityScenario<MainActivity>, address: String) = waitUntil("$address loaded") {
-        url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete" &&
-            evaluate(main, "String(window.origin)") == Pages.origin()
+        val shown = evaluate(main, "document.readyState === 'complete' ? location.href : ''") as? String
+        url(main).substringBefore('#') == address && shown?.substringBefore('#') == address
     }
 
     /**
