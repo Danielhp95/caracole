@@ -22,7 +22,16 @@ pages written. With it the goal's changes (docs/android_port.md): ``[version]`` 
 (``CHANGED``), and two songs whose sheet the owner chose among their two UG versions, ``[pin]`` (``CHOSEN``).
 
 The songs are traditional or long out of copyright (one Chinese, one artist's name accented), and their charts are
-made up here, chords over words that are no song's.
+made up here, chords over words that are no song's. The Chinese song's chart sings made-up Chinese words (``CHINESE``,
+in Simplified characters), so that its page carries the readings Pinyin shows (the data's ``pinyin``) and its words
+in either script (``hanzi``), as a sheet whose words hold no Chinese never does whatever its title: the sheet the
+device's pinches try with Pinyin on. One song keeps a harmonica tab as harptabs.com's is kept (``HARMONICA``: its
+``harmonica-1.txt``, made up, and the page render.py writes beside it, ``harmonica-1.html``).
+
+``Computer.phone_pages(keys, into)`` is the phone's reference for its songs' pages (milestone 5's check): render.py's
+page path with no PDF (tests/helpers/phone_render.py) run on a copy of the computer in ``into``, so that the pages
+the phone made of its own lookups are compared, byte for byte, with what Python writes for the same inputs once the
+computer has taken them.
 
 ``scenario.json`` tells the Kotlin phases (android/e2e's PhoneScenarioTest) which songs the scenario does what with:
 ``songs`` (the 20: artist, title, identity key), ``changed`` (the keys of each overrides.toml table the goal's changes
@@ -53,7 +62,7 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -111,6 +120,12 @@ CHANGED = {
 }
 # The songs whose sheet the owner chose: their second UG version, pinned.
 CHOSEN = (("Traditional", "Greensleeves"), ("Traditional", "Molly Malone"))
+# The Chinese song, whose chart sings made-up Chinese words: its page carries pinyin, and either script.
+CHINESE = ("Traditional", "茉莉花")
+# A harmonica tab, made up, kept as harptabs.com's is (harptabs_fetch.py): its key and harp chips, as its page names
+# them, and its page's id.
+HARMONICA = ("Stephen Foster", "Oh! Susanna")
+HARMONICA_TAB = (6001, "C", "Diatonic")
 # Lyrics as LRCLIB gives them, made up.
 LYRICS = (("Traditional", "Wayfaring Stranger"), ("Stephen Foster", "Beautiful Dreamer"),
           ("Traditional", "Wild Mountain Thyme"))
@@ -160,16 +175,47 @@ def tab_url(artist: str, title: str, tab: int) -> str:
 
 
 def chart(title: str, chords: Sequence[str], version: int = 1) -> str:
-    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words."""
+    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words
+    (``words``)."""
     lines = []
     for section in ("Verse 1", "Chorus", "Verse 2"):
         lines.append(f"[{section}]")
         for n in range(4):
             first, second = chords[n % len(chords)], chords[(n + 1) % len(chords)]
             lines.append(f"[tab][ch]{first}[/ch]" + " " * (16 - len(first)) + f"[ch]{second}[/ch]")
-            lines.append(f"Words of {section.lower()} for the test, line {n + 1}, take {version}[/tab]")
+            lines.append(words(title, section, n, version) + "[/tab]")
     lines.insert(0, f"{title}: a chart made up for caracole's tests")
     return "\r\n".join(lines) + "\r\n"
+
+
+# The Chinese chart's parts and its lines' numbers, as its made-up words name them.
+CHINESE_PARTS = {"Verse 1": "第一段", "Chorus": "副歌", "Verse 2": "第二段"}
+CHINESE_NUMBERS = "一二三四"
+
+
+def words(title: str, section: str, n: int, version: int = 1) -> str:
+    """The made-up words of line ``n`` of a chart's ``section``: for the Chinese song (``CHINESE``), Chinese in
+    Simplified characters, most of which Traditional writes otherwise (这 這, 为 為, 测试 測試, 编 編, 词 詞), so that
+    the viewer's Chinese characters change the words shown, each with its reading."""
+    if title == CHINESE[1]:
+        return f"这是为测试编的歌词，{CHINESE_PARTS[section]}第{CHINESE_NUMBERS[n]}行"
+    return f"Words of {section.lower()} for the test, line {n + 1}, take {version}"
+
+
+def harmonica_tab(title: str) -> str:
+    """A harmonica tab in harptabs.com's way, made up: a title line, then rows of holes for a C harp, each hole over
+    a word of the made-up words under it, blown (``4``) or drawn (``-4``)."""
+    rows = (("4", "4", "5", "6", "6", "-6", "6", "5"), ("4", "-4", "5", "5", "-4", "4", "-4", "4"),
+            ("4", "4", "5", "6", "6", "-6", "6", "5"), ("4", "-4", "5", "5", "-4", "-4", "4", "4"))
+    out = [f"{title}: a harmonica tab made up for caracole's tests", ""]
+    for n, holes in zip(("one", "two", "three", "four"), rows):
+        lyric = f"made up words of row {n} for harp"
+        starts = [i for i, ch in enumerate(lyric) if ch != " " and (i == 0 or lyric[i - 1] == " ")]
+        line = [" "] * (len(lyric) + 4)
+        for at, hole in zip(starts, holes):
+            line[at:at + len(hole)] = hole
+        out += ["".join(line).rstrip(), lyric, ""]
+    return "\n".join(out)
 
 
 # --- the computer ---------------------------------------------------------------------------------------------------
@@ -274,6 +320,59 @@ class Computer:
         conn = db.connect(self.cfg().db_path)
         try:
             return {s.key: f"{s.artist} - {s.title}" for s in list_songs(conn)}
+        finally:
+            conn.close()
+
+    def phone_pages(self, keys: Collection[str], into: Path) -> dict[str, bytes]:
+        """The pages the phone writes of the songs of identity keys ``keys``, as Python writes them for the same
+        inputs: render.py's page path with no PDF (tests/helpers/phone_render.py's ``phone_render``, the phone's
+        reference) over a copy of this computer made in ``into`` (``into/computer/``: its database copied whole, its
+        library and overrides.toml, a caracole.toml naming the copy's folders), this computer untouched. Each file
+        the pass recorded of those songs (kv ``render:files:<id>``: a viewer, a kept version's, a harmonica tab's
+        page, the sheet's .cho) and each one's info.json, its bytes by its path in the library."""
+        import shutil
+        import sqlite3
+
+        from caracole import db
+        from caracole.library import song_dir
+        from caracole.render import FILES_KEY
+        from caracole.songs import find_song
+        from helpers.phone_render import phone_render
+
+        copy = Computer(into)
+        if copy.root.exists():
+            raise FileExistsError(f"{copy.root} is there already: the reference is made on a copy of its own")
+        cfg = self.cfg()
+        shutil.copytree(cfg.library_dir, copy.root / cfg.library_dir.relative_to(self.root), symlinks=True)
+        (copy.root / "home").mkdir()
+        copy.config.write_text(self.config.read_text(encoding="utf-8").replace(str(self.root), str(copy.root)),
+                               encoding="utf-8")
+        mine = copy.cfg()
+        mine.db_path.parent.mkdir(parents=True, exist_ok=True)
+        source = sqlite3.connect(cfg.db_path)
+        try:  # the database whole, as one read sees it, whatever serve writes meanwhile
+            source.execute("VACUUM INTO ?", (str(mine.db_path),))
+        finally:
+            source.close()
+        conn = db.connect(mine.db_path)
+        try:
+            songs = []
+            for key in keys:
+                song = find_song(conn, key)
+                if song is None:
+                    raise LookupError(f"no song {key!r} in the computer's library")
+                songs.append(song)
+            done = phone_render(conn, mine, song_ids=[song.id for song in songs])
+            if done.failed:
+                raise RuntimeError(f"the phone's reference failed on {done.failed}")
+            pages = {}
+            for song in songs:
+                folder = song_dir(mine.library_dir, song)
+                names = sorted(db.kv_get_json(conn, f"{FILES_KEY}{song.id}", default={}) or {}) + ["info.json"]
+                for name in names:
+                    pages[(folder / name).relative_to(mine.library_dir).as_posix()] = (folder / name).read_bytes()
+            conn.commit()
+            return pages
         finally:
             conn.close()
 
@@ -432,6 +531,7 @@ def build(dir: Path) -> Computer:
 
         keep_guitar(conn, cfg, find_song(conn, identity_key(*GUITAR)), SYNTHETIC.read_bytes(), name="guitar-1.gp",
                     tab="7701")
+        keep_harmonica(conn, cfg, find_song(conn, identity_key(*HARMONICA)))
 
         # The goal's changes, before the renders that play them.
         for (artist, title), (version, semitones) in CHANGED.items():
@@ -457,6 +557,24 @@ def build(dir: Path) -> Computer:
         conn.close()
     write_scenario(computer, found)
     return computer
+
+
+def keep_harmonica(conn, cfg, song) -> None:
+    """``HARMONICA``'s tab kept as harptabs_fetch.py's ``_keep`` keeps one: its version (provider harptabs, kind
+    harmonica, the page's chips in its raw) and ``harmonica-1.txt``, which render.py gives its page."""
+    from caracole.harptabs import PROVIDER, page_url
+    from caracole.inbox import HARMONICA_KIND
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    tab, key, harp = HARMONICA_TAB
+    raw = {"title": song.title, "artist": song.artist, "key": key, "harp": harp, "difficulty": "Beginner",
+           "views": 1200, "rating": 4.5}
+    vid = upsert_version(conn, provider=PROVIDER, tab_id=str(tab), song_id=song.id, slot="guitar", kind=HARMONICA_KIND,
+                         rating=4.5, votes=1200, version=1, label=None, url=page_url(f"tab/{tab}/{slug(song.title)}"),
+                         raw=raw, now=FETCHED)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="harmonica-1.txt",
+              data=harmonica_tab(song.title).encode("utf-8"), rank=1)
 
 
 def index_song(conn) -> dict:

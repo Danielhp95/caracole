@@ -40,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import sqlite3
@@ -52,7 +53,9 @@ import pytest
 from helpers.e2e_library import (
     ADDS,
     CHANGED,
+    CHINESE,
     CHOSEN,
+    HARMONICA,
     LABEL,
     LYRICS,
     REMOVED,
@@ -211,6 +214,63 @@ def test_the_library_holds_the_goals_changes_and_asked_no_site(served):
     assert (cfg.library_dir / "index.html").is_file()
 
 
+def data_block(page: Path, name: str) -> dict:
+    """A page's JSON data block ``name`` (``<script type="application/json" id="NAME">``)."""
+    found = re.search(rf'<script type="application/json" id="{name}">(.*?)</script>', page.read_text("utf-8"),
+                      re.DOTALL)
+    assert found, f"no {name} data in {page}"
+    return json.loads(found.group(1))
+
+
+def test_the_chinese_sheet_carries_its_readings_and_a_harmonica_tab_its_page(served):
+    from caracole import db
+    from caracole.normalize import identity_key
+    from caracole.render import FILES_KEY
+    from caracole.songs import find_song
+
+    cfg = served[0].cfg()
+    # The Chinese song sings Chinese words: its page has each character's reading, its words in either script, and
+    # its names; and the computer prints it in Traditional characters too.
+    folder = cfg.library_dir / CHINESE[0] / CHINESE[1]
+    song = data_block(folder / "sheet.html", "song")
+    readings = [r for line in song["pinyin"] for r in (line or []) if r]
+    assert readings and all(r.isalpha() for r in readings), song["pinyin"]
+    assert "這是為測試編的歌詞" in json.dumps(song["hanzi"], ensure_ascii=False)
+    assert (folder / "sheet (Traditional).pdf").is_file()
+    # The harmonica tab: its page beside it, recorded as render.py records a viewer, and linked from the sheet's.
+    folder = cfg.library_dir / HARMONICA[0] / HARMONICA[1]
+    assert (folder / "harmonica-1.txt").is_file() and (folder / "harmonica-1.html").is_file()
+    assert [t["page"] for t in data_block(folder / "sheet.html", "song")["harmonicaTabs"]] == ["harmonica-1.html"]
+    conn = db.connect(cfg.db_path)
+    try:
+        tabbed = find_song(conn, identity_key(*HARMONICA))
+        assert "harmonica-1.html" in db.kv_get_json(conn, f"{FILES_KEY}{tabbed.id}")
+    finally:
+        conn.close()
+
+
+def test_the_phones_reference_pages_are_made_on_a_copy_of_the_computer(served, tmp_path):
+    pytest.importorskip("helpers.phone_render", reason="waiting on phone-render: tests/helpers/phone_render.py")
+    from caracole.normalize import identity_key
+
+    computer = served[0]
+    library = computer.cfg().library_dir
+    before = {p: p.read_bytes() for p in library.rglob("*") if p.is_file()}
+    units = computer.units()
+    pages = computer.phone_pages([identity_key(*CHINESE), identity_key(*HARMONICA)], tmp_path / "reference")
+    chinese, tabbed = (f"{a}/{t}" for a, t in (CHINESE, HARMONICA))
+    assert {f"{chinese}/sheet.html", f"{chinese}/sheet.cho", f"{chinese}/info.json"} <= set(pages)
+    assert {f"{tabbed}/sheet.html", f"{tabbed}/harmonica-1.html", f"{tabbed}/info.json"} <= set(pages)
+    assert not any(path.endswith(".pdf") for path in pages)  # the phone makes none
+    for path in (f"{chinese}/sheet.html", f"{tabbed}/sheet.html"):
+        page = pages[path].decode("utf-8")
+        assert ".pdf" not in page.split('id="song">', 1)[1].split("</script>", 1)[0], path  # no PDF linked
+    assert b'"pinyin":' in pages[f"{chinese}/sheet.html"]
+    # The computer itself untouched, file for file and unit for unit.
+    assert {p: p.read_bytes() for p in library.rglob("*") if p.is_file()} == before
+    assert computer.units() == units
+
+
 # --- the scenario -------------------------------------------------------------------------------------------------
 
 
@@ -255,7 +315,7 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     assert first["indexes"] == counts(computer.index, tables)  # each site's rows, imported whole
     computers, phones = kept(computer.cfg().db_path), kept(dir / "phone" / "caracole.sqlite")
     assert phones == computers  # every kept file, at its path, with its bytes' hash
-    assert {Path(path).name for path in computers} == {"sheet.txt", "sheet.json", "guitar-1.gp"}
+    assert {Path(path).name for path in computers} == {"sheet.txt", "sheet.json", "guitar-1.gp", "harmonica-1.txt"}
     for path, sha in phones.items():
         assert hashlib.sha256((dir / "phone" / "library" / path).read_bytes()).hexdigest() == sha, path
     for artist, title in LYRICS:

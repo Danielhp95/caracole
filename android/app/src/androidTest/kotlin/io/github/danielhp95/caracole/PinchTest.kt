@@ -13,6 +13,7 @@ import io.github.danielhp95.caracole.Pages.pinch
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.mirror.Manifest
+import io.github.danielhp95.caracole.mirror.Mirror
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -34,9 +35,11 @@ import kotlin.math.roundToInt
  * are down the size shows over the page ("135%", the limit at a limit), and it goes about a second after they lift;
  * Reset shows none. A page reflows: never zoomed as a picture, never wider than the
  * screen. On a sheet each chord stays over its syllable, above its line and clear of the next, a row's chords at one
- * height, at a larger size and a smaller one; with Pinyin, over its reading, over its character (a Chinese sheet, when
- * the library has one). The viewer's own Aa multiplies the size. `-e shots <ms>` holds each sheet for a screenshot
- * from the host, as EndToEndTest does. Without `server` it is skipped.
+ * height, at a larger size and a smaller one; with Pinyin, over its reading, over its character: a Chinese sheet whose
+ * page carries readings, which the scenario's computer has (tests/helpers/e2e_library.py's 茉莉花, its words made-up
+ * Chinese) and a library without one fails, pinched larger and smaller in Simplified characters and in Traditional
+ * ones, each reading over the character shown. The viewer's own Aa multiplies the size. `-e shots <ms>` holds each
+ * sheet for a screenshot from the host, as EndToEndTest does. Without `server` it is skipped.
  */
 @RunWith(AndroidJUnit4::class)
 class PinchTest {
@@ -153,23 +156,32 @@ class PinchTest {
             assertEquals(small, zoom(main))
             evaluate(main, "document.getElementById('smaller').click()")
 
-            // A sheet in Chinese with its readings, at that size, then larger: one whose page carries them (the data's
-            // `pinyin`, which a sheet whose words hold no Chinese has none of, whatever its title).
-            val mirror = Caracole.mirror(context)
-            val chinese = manifest.entries
-                .filter { e -> e.path.endsWith("/sheet.html") && e.path.any { it.code in 0x4E00..0x9FFF } }
-                .firstOrNull { e -> "\"pinyin\":" in mirror.blob(e.sha256).readText() }?.path
-            record("pinyin sheet", chinese ?: "none: no Chinese sheet of this library has readings")
-            if (chinese != null) {
-                open(main, Pages.address(chinese) + "#py=1")
-                waitUntil("the readings") { evaluate(main, "document.querySelector('#sheet ruby.py') !== null") == true }
-                sheet(main, "pinyin-$small")
-                pinch(main, 0.3f, 0.8f)
-                pinch(main, 0.3f, 0.8f)
-                val most = zoomAfter(main, small)
-                record("pinyin: fingers apart twice", most)
-                sheet(main, "pinyin-$most")
-            }
+            // A sheet in Chinese with its readings, at that size, then larger, in Traditional characters, then
+            // smaller: one whose page carries them (the data's `pinyin`, which a sheet whose words hold no Chinese has
+            // none of, whatever its title).
+            val chinese = SheetLayout.chineseSheet(Caracole.mirror(context), manifest)
+            record("pinyin sheet", chinese)
+            open(main, Pages.address(chinese) + "#py=1")
+            waitUntil("the readings") { evaluate(main, SheetLayout.READINGS) as Int > 0 }
+            sheet(main, "pinyin-$small")
+            pinch(main, 0.3f, 0.8f)
+            pinch(main, 0.3f, 0.8f)
+            val most = zoomAfter(main, small)
+            record("pinyin: fingers apart twice", most)
+            assertTrue("larger: $most", most > small)
+            sheet(main, "pinyin-$most")
+
+            evaluate(main, "document.getElementById('hanzi-t').click()")
+            waitUntil("Traditional characters") { SheetLayout.TRADITIONAL in words(main) }
+            assertTrue("each reading kept in Traditional", evaluate(main, SheetLayout.READINGS) as Int > 0)
+            sheet(main, "pinyin-traditional-$most")
+            pinch(main, 0.8f, 0.3f)
+            val less = zoomAfter(main, most)
+            record("pinyin, Traditional: fingers together", less)
+            assertTrue("smaller: $less", less < most)
+            sheet(main, "pinyin-traditional-$less")
+            evaluate(main, "document.getElementById('hanzi-s').click()")
+            waitUntil("Simplified characters again") { SheetLayout.SIMPLIFIED in words(main) }
         }
         Log.i(TAG, "RESULT $found")
     }
@@ -188,10 +200,18 @@ class PinchTest {
 
     /** A sheet viewer at [address], once its script ran. */
     private fun open(main: ActivityScenario<MainActivity>, address: String) {
+        // The page before marked, so that its own document, which the WebView's url names the new address over
+        // until the new one loads, is never taken for the new page's.
+        evaluate(main, "window.before = true")
         main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(address) }
         waitFor(main, address.substringBefore('#'))
-        waitUntil("the viewer's script") { evaluate(main, "document.documentElement.dataset.ready === '1'") == true }
+        waitUntil("the viewer's script") {
+            evaluate(main, "!window.before && document.documentElement.dataset.ready === '1'") == true
+        }
     }
+
+    /** The words the sheet's lines show ([SheetLayout.WORDS]). */
+    private fun words(main: ActivityScenario<MainActivity>): String = evaluate(main, SheetLayout.WORDS) as String
 
     /** The text size the WebView shows its pages at, in percent of the size Android's font size gives them. */
     private fun zoom(main: ActivityScenario<MainActivity>): Int {
@@ -253,15 +273,15 @@ class PinchTest {
         evaluate(main, "window.dispatchEvent(new Event('resize'))")
         Thread.sleep(300)
         assertEquals("$name was fitted for another size", sheet.getString("widths"),
-            JSONObject(evaluate(main, LAID_OUT) as String).getString("widths"))
+            JSONObject(evaluate(main, SheetLayout.LAID_OUT) as String).getString("widths"))
         return sheet
     }
 
-    /** The sheet once the viewer has fitted it (a frame after it hears of a new size): [LAID_OUT], twice the same. */
+    /** The sheet once the viewer has fitted it (a frame after it hears of a new size): [SheetLayout.LAID_OUT], twice the same. */
     private fun fitted(main: ActivityScenario<MainActivity>): JSONObject {
         var last = ""
         waitUntil("the sheet fitted") {
-            val now = evaluate(main, LAID_OUT) as String
+            val now = evaluate(main, SheetLayout.LAID_OUT) as String
             (now == last).also { last = now }
         }
         return JSONObject(last)
@@ -274,40 +294,70 @@ class PinchTest {
 
     private companion object {
         const val TAG = "CaracolePinch"
-
-        /**
-         * What went wrong with the sheet's chords (`wrong`, the first few, and `count`), the widths the viewer gave
-         * its columns (`widths`), the text size the viewer sets (`fs`, its `--fs`) and its first chord's width.
-         */
-        const val LAID_OUT = """(() => {
-            const wrong = [];
-            const glyph = (node) => { const r = document.createRange(); r.selectNodeContents(node); return r.getBoundingClientRect(); };
-            document.querySelectorAll('#sheet section.sec > p.l').forEach((line, n) => {
-              const rows = new Map();
-              let before = null;
-              for (const col of line.querySelectorAll(':scope > .s')) {
-                const c = col.querySelector(':scope > .c'), y = col.querySelector(':scope > .y');
-                if (!c || !y) continue;
-                const name = c.textContent, cr = c.getBoundingClientRect(), yr = y.getBoundingClientRect();
-                if (Math.abs(cr.left - yr.left) > 1) wrong.push(name + ' is not over its syllable');
-                if (cr.bottom > yr.top + 1) wrong.push(name + ' is over its line');
-                const ruby = y.querySelector('ruby.py');
-                if (ruby) {
-                  const rt = ruby.querySelector('rt').getBoundingClientRect();
-                  if (cr.bottom > rt.top + 1) wrong.push(name + ' is over its reading');
-                  if (rt.bottom > glyph(ruby.firstChild).top + 1) wrong.push(name + "'s reading is over its character");
-                }
-                if (before && Math.abs(before.top - cr.top) < 2 && before.right > cr.left + 0.5) wrong.push(before.name + ' runs into ' + name);
-                before = {top: cr.top, right: cr.right, name: name};
-                const row = Math.round(yr.bottom);
-                rows.set(row, (rows.get(row) || []).concat([cr.top]));
-              }
-              for (const tops of rows.values()) if (Math.max(...tops) - Math.min(...tops) > 1) wrong.push('line ' + n + ': chords at several heights');
-            });
-            return JSON.stringify({wrong: wrong.slice(0, 5), count: wrong.length,
-              widths: Array.from(document.querySelectorAll('#sheet .s > .y')).map((y) => y.style.minWidth).join(','),
-              fs: getComputedStyle(document.documentElement).getPropertyValue('--fs').trim(),
-              chord: document.querySelector('#sheet .c').getBoundingClientRect().width});
-          })()"""
     }
+}
+
+/**
+ * A sheet viewer's layout, as the device tests check it (PinchTest, PagesOnDeviceTest): [LAID_OUT], what went wrong
+ * with its chords; a Chinese sheet's readings and words.
+ */
+internal object SheetLayout {
+    /** The words of the scenario's Chinese sheet (tests/helpers/e2e_library.py's `words`) as written, in Simplified
+     * characters, and in Traditional ones. */
+    const val SIMPLIFIED = "这是为测试编的歌词"
+    const val TRADITIONAL = "這是為測試編的歌詞"
+
+    /** How many of the sheet's characters show their reading (Pinyin on), each a ruby with a reading. */
+    const val READINGS = """Array.from(document.querySelectorAll('#sheet ruby.py'))
+        .filter((r) => (r.querySelector('rt') || {}).textContent).length"""
+
+    /** The words the sheet's lines show, a line each, their chords and readings left out. */
+    const val WORDS = """Array.from(document.querySelectorAll('#sheet section.sec > p.l')).map((line) => {
+        const copy = line.cloneNode(true); copy.querySelectorAll('.c, rt').forEach((e) => e.remove());
+        return copy.textContent;
+      }).join('\n')"""
+
+    /**
+     * What went wrong with the sheet's chords (`wrong`, the first few, and `count`), the widths the viewer gave
+     * its columns (`widths`), the text size the viewer sets (`fs`, its `--fs`) and its first chord's width.
+     */
+    const val LAID_OUT = """(() => {
+        const wrong = [];
+        const glyph = (node) => { const r = document.createRange(); r.selectNodeContents(node); return r.getBoundingClientRect(); };
+        document.querySelectorAll('#sheet section.sec > p.l').forEach((line, n) => {
+          const rows = new Map();
+          let before = null;
+          for (const col of line.querySelectorAll(':scope > .s')) {
+            const c = col.querySelector(':scope > .c'), y = col.querySelector(':scope > .y');
+            if (!c || !y) continue;
+            const name = c.textContent, cr = c.getBoundingClientRect(), yr = y.getBoundingClientRect();
+            if (Math.abs(cr.left - yr.left) > 1) wrong.push(name + ' is not over its syllable');
+            if (cr.bottom > yr.top + 1) wrong.push(name + ' is over its line');
+            const ruby = y.querySelector('ruby.py');
+            if (ruby) {
+              const rt = ruby.querySelector('rt').getBoundingClientRect();
+              if (cr.bottom > rt.top + 1) wrong.push(name + ' is over its reading');
+              if (rt.bottom > glyph(ruby.firstChild).top + 1) wrong.push(name + "'s reading is over its character");
+            }
+            if (before && Math.abs(before.top - cr.top) < 2 && before.right > cr.left + 0.5) wrong.push(before.name + ' runs into ' + name);
+            before = {top: cr.top, right: cr.right, name: name};
+            const row = Math.round(yr.bottom);
+            rows.set(row, (rows.get(row) || []).concat([cr.top]));
+          }
+          for (const tops of rows.values()) if (Math.max(...tops) - Math.min(...tops) > 1) wrong.push('line ' + n + ': chords at several heights');
+        });
+        return JSON.stringify({wrong: wrong.slice(0, 5), count: wrong.length,
+          widths: Array.from(document.querySelectorAll('#sheet .s > .y')).map((y) => y.style.minWidth).join(','),
+          fs: getComputedStyle(document.documentElement).getPropertyValue('--fs').trim(),
+          chord: document.querySelector('#sheet .c').getBoundingClientRect().width});
+      })()"""
+
+    /** The path of the copy's Chinese sheet whose page carries readings (the data's `pinyin`, which a sheet whose
+     * words hold no Chinese has none of, whatever its title); a library without one fails. */
+    fun chineseSheet(mirror: Mirror, manifest: Manifest): String =
+        manifest.entries
+            .filter { e -> e.path.endsWith("/sheet.html") && e.path.any { it.code in 0x4E00..0x9FFF } }
+            .firstOrNull { e -> "\"pinyin\":" in mirror.blob(e.sha256).readText() }?.path
+            ?: throw AssertionError("no Chinese sheet of this library carries readings: the scenario's computer " +
+                                    "(tests/helpers/e2e_library.py) has one, 茉莉花")
 }
