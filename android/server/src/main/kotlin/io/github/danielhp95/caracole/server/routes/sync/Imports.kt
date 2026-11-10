@@ -26,8 +26,11 @@ import java.security.SecureRandom
  *
  * Nothing of it goes into the library. An import's id is 16 hex, checked before any path is built of it. At most
  * [OPEN] import is here at once, sent or being sent, and a file is at most [IMPORT_MAX]. One untouched for [EXPIRES]
- * (an hour, by [clock]) is deleted ([sweep]: as one is opened, as an import ends), unless the job holds it. The words of
- * each refusal ([StagingError], with the status the route answers it with) are peer_import.py's.
+ * (an hour, by [clock]) is deleted ([sweep]: as one is opened, as an import ends), unless the job holds it; one no job
+ * holds and no queued request names may go sooner ([letGo], as another is opened: its file whole, compared or not, or
+ * not whole and untouched for [STOPPED], an upload that stopped), or at once ([drop]: the page's Cancel). The words of
+ * each refusal ([StagingError], with the status the route answers it with) are peer_import.py's. The phone runs one
+ * process, so an import's hold is this object's own (peer_import's is an flock of its `open.json`).
  */
 class Imports(stateDir: File, private val clock: () -> Long = System::currentTimeMillis) {
     /** `stateDir/peer`, a push's and an import's folder as caracole serve's (peer_push.FOLDER). */
@@ -38,6 +41,7 @@ class Imports(stateDir: File, private val clock: () -> Long = System::currentTim
 
     private val lock = Any()
     private val holds = HashMap<String, Int>()
+    private val released = Object()
 
     /** The folder of the import [importId] names: the one path built of an id, once it is checked. */
     fun folderOf(importId: String): File = File(root, PREFIX + checkId(importId))
@@ -111,22 +115,43 @@ class Imports(stateDir: File, private val clock: () -> Long = System::currentTim
     fun openedName(importId: String): String =
         synchronized(lock) { opened(folderOf(importId))?.second?.takeIf { it.isNotEmpty() } ?: FILE }
 
-    /** The import [importId] held while [block] reads it (its folder), so that no [sweep] deletes it meanwhile;
-     * [StagingError] when it is gone (left over an hour). */
-    fun <T> held(importId: String, block: (File) -> T): T {
-        val folder = synchronized(lock) {
-            val folder = folderOf(importId)
-            if (opened(folder) == null) throw StagingError(GONE, 404)
-            holds[importId] = (holds[importId] ?: 0) + 1
-            folder
-        }
+    /**
+     * The import [importId] held while [block] reads it (its folder), so that no [sweep], [letGo] or [drop] deletes it
+     * meanwhile, one hold at a time (peer_import.held): [StagingError] when it is gone (left over an hour, or let go:
+     * 404), and, without [wait], when another holds it (409, [TAKING]) rather than waiting for it to end.
+     */
+    fun <T> held(importId: String, wait: Boolean = true, block: (File) -> T): T {
+        val folder = hold(importId, wait)
         try {
             return block(folder)
         } finally {
-            synchronized(lock) {
-                val left = (holds[importId] ?: 1) - 1
-                if (left > 0) holds[importId] = left else holds.remove(importId)
+            release(importId)
+        }
+    }
+
+    /** The import [importId] held as [held] holds it, until [release]d: its folder (an import's job, whose reading
+     * is a coroutine's). */
+    fun hold(importId: String, wait: Boolean = true): File {
+        checkId(importId)
+        return synchronized(released) {
+            while (synchronized(lock) { importId in holds }) {
+                if (!wait) throw StagingError(TAKING, 409)
+                released.wait()
             }
+            synchronized(lock) {
+                val folder = folderOf(importId)
+                if (opened(folder) == null) throw StagingError(GONE, 404)
+                holds[importId] = 1
+                folder
+            }
+        }
+    }
+
+    /** The hold [hold] took let go. */
+    fun release(importId: String) {
+        synchronized(released) {
+            synchronized(lock) { holds.remove(importId) }
+            released.notifyAll()
         }
     }
 
@@ -148,6 +173,51 @@ class Imports(stateDir: File, private val clock: () -> Long = System::currentTim
             }
         }
         return gone
+    }
+
+    /**
+     * peer_import.let_go: delete each import no job holds and no queued or running request names ([named]: their
+     * ids), whose file is whole (sent, compared or not, never imported: a Cancel, a comparison left) or, not whole, was
+     * untouched for [STOPPED] (an upload that stopped), so that a file chosen again needn't wait an hour for it; the
+     * ids deleted. One being sent now is left, as one an import takes.
+     */
+    fun letGo(named: Set<String>): List<String> {
+        val now = clock()
+        val gone = ArrayList<String>()
+        synchronized(lock) {
+            for (folder in imports()) {
+                val id = folder.name.removePrefix(PREFIX)
+                if (id in named || id in holds || !(isWhole(folder) || now - touched(folder) > STOPPED)) continue
+                folder.deleteRecursively()
+                gone.add(id)
+            }
+        }
+        return gone
+    }
+
+    /** peer_import.drop: the import [importId] deleted now, whatever it has (the page's Cancel, an upload that
+     * failed); [StagingError] for no such import (404) or one a job holds (409, [TAKING]). */
+    fun drop(importId: String) {
+        synchronized(lock) {
+            val folder = folderOf(importId)
+            if (!Files.isDirectory(folder.toPath(), LinkOption.NOFOLLOW_LINKS)) throw StagingError(NO_SUCH, 404)
+            if (importId in holds) throw StagingError(TAKING, 409)
+            folder.deleteRecursively()
+        }
+    }
+
+    /** The id of the import whose staged file [file] is (`<root>/import-<id>/file.caracole`); null for any other. */
+    fun idOf(file: File): String? {
+        val folder = file.parentFile ?: return null
+        val id = folder.name.removePrefix(PREFIX)
+        if (file.name != FILE || !folder.name.startsWith(PREFIX) || !ID.matches(id)) return null
+        return id.takeIf { folder.parentFile?.canonicalFile == root.canonicalFile }
+    }
+
+    private fun isWhole(folder: File): Boolean {
+        val size = opened(folder)?.first ?: return false
+        val file = File(folder, FILE)
+        return Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS) && file.length() == size
     }
 
     /** The imports' folders under [root], by their names alone. */
@@ -202,7 +272,11 @@ class Imports(stateDir: File, private val clock: () -> Long = System::currentTim
         const val NOT_NEXT = "That part isn't the next one: choose the file again."
         const val NO_SUCH = "No such import is open here: choose the file again."
         const val NOT_WHOLE = "That file isn't whole yet: send the rest of it."
-        const val GONE = "That file is gone: it was left over an hour. Choose it again."
+        const val TAKING = "That file is being imported now: it is gone once that is over."
+        const val GONE = "That file is gone: it was left over an hour, or another was chosen since. Choose it again."
+
+        /** peer_import.STOPPED: an import's file, not whole, left untouched this long may make way for another. */
+        const val STOPPED = 120_000L
 
         val ID = Regex("[0-9a-f]{16}")
 

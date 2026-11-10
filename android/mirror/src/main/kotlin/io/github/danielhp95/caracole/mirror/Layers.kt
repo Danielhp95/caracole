@@ -16,6 +16,12 @@ import java.security.MessageDigest
  * sync never touches it ([Mirror.cleanUp] deletes the computer's blobs alone). [Mirror.pageFor] serves a layer's page
  * of a unit where the computer's isn't the phone's (the sync redesign's §10, Task 31): a song taken from a file opens
  * the file's sheet until the computer makes its own of the song as the phone holds it.
+ *
+ * A file is anyone's to make, so a layer's list says how the phone serves each page, never the file's
+ * ([LayerPolicy]): a kind caracole serves alone (a page, a PDF, text, JSON, a download), each with the phone's
+ * headers, and a page only in a sandbox, an origin of its own that can't read the phone's server: the file's policy
+ * where it sandboxes the page as caracole serve's viewers are (scripts and downloads alone), else one that runs and
+ * loads nothing.
  */
 class Layer(val id: String, val dir: File) {
     val blobs = File(dir, "blobs")
@@ -77,10 +83,11 @@ internal fun readLayers(root: File): List<Layer> =
 
 /**
  * Keeps [manifest]'s pages of [units] and its start page as the layer [id], each page's bytes from [blob], under
- * [root] (`layers/`), the order it is taken in [taken]. What the layer had of other units stays; what it had of these
- * goes. Each blob the layer lacks is written to a temporary file, checked by its size and its SHA-256, then renamed;
- * then the list is written whole over the old one, and the blobs it no longer names are deleted. A page the file
- * lacks, or whose bytes aren't the ones listed, fails it ([LayerError]) with the layer as it was.
+ * [root] (`layers/`), the order it is taken in [taken], each as [LayerPolicy] says the phone serves it (a page of a
+ * kind it doesn't serve is left out). What the layer had of other units stays; what it had of these goes. Each blob
+ * the layer lacks is written to a temporary file, checked by its size and its SHA-256, then renamed; then the list is
+ * written whole over the old one, and the blobs it no longer names are deleted. A page the file lacks, or whose bytes
+ * aren't the ones listed, fails it ([LayerError]) with the layer as it was.
  */
 internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<String>, taken: Long,
                         blob: (String) -> InputStream?) {
@@ -92,10 +99,12 @@ internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<
     }
     val layer = Layer(id, File(root, id))
     val before = layer.manifest()
-    val start = given.byPath.getValue(given.start)
+    val start = LayerPolicy.start(given.byPath.getValue(given.start))
     val took = given.entries.filter { it.path != given.start && it.unit != null && it.unit in units }
+        .mapNotNull(LayerPolicy::served)
     val paths = took.mapTo(HashSet()) { it.path }.apply { add(given.start) }
     val kept = before?.entries.orEmpty().filter { it.unit != null && it.unit !in units && it.path !in paths }
+        .mapNotNull(LayerPolicy::served)
     val entries = listOf(start) + took + kept
 
     val written = ArrayList<File>()
@@ -121,6 +130,94 @@ internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<
     }
     val named = entries.mapTo(HashSet()) { it.sha256 }
     layer.blobs.listFiles()?.forEach { if (it.name !in named) it.delete() }
+}
+
+/**
+ * Each layer under [root] cut to the pages [gate] still serves: an entry of a unit the phone changed or removed since
+ * it was taken is dropped (its list written again whole, then the blobs no entry names deleted), and a layer left
+ * with its start page alone is deleted, its cards' pages gone with it. A layer that can't be written is left as it was.
+ */
+internal fun pruneLayers(root: File, gate: UnitGate) {
+    for (layer in readLayers(root)) {
+        val manifest = layer.manifest() ?: continue
+        val start = manifest.byPath[manifest.start] ?: continue
+        val kept = manifest.entries.filter { it.path != manifest.start && it.unit != null }
+            .filter { gate.check(it.unit!!, it.digest) == Gate.SERVE }
+        if (kept.isEmpty()) {
+            layer.dir.deleteRecursively()
+            continue
+        }
+        if (kept.size == manifest.entries.size - 1) continue
+        val entries = listOf(start) + kept
+        try {
+            swap(layer, listJson(manifest.start, layer.taken, entries).toByteArray(Charsets.UTF_8))
+        } catch (e: IOException) {
+            continue
+        } finally {
+            removeTemporaries(layer)
+        }
+        val named = entries.mapTo(HashSet()) { it.sha256 }
+        layer.blobs.listFiles()?.forEach { if (it.name !in named) it.delete() }
+    }
+}
+
+/**
+ * How the phone serves a page a file held (a layer's, [writeLayer]), whatever the file's list says of it: its
+ * Content-Type one of caracole serve's for its kind ([TYPES]: a page, a PDF, text, JSON or a download; any other
+ * kind is never served, nor kept), and the phone's own headers: no type sniffed, no referrer to another site, and a
+ * policy. A page's is the file's only where it sandboxes the page as caracole serve's viewers are
+ * (viewer.viewer_csp's `sandbox allow-scripts allow-downloads`, no other token: never `allow-same-origin`, which would
+ * give it the phone server's origin, its form token and every write), else [NOTHING], a sandbox that runs and loads
+ * nothing (viewer_csp's own for a page whose policy it can't read); any other kind's frames nothing.
+ */
+object LayerPolicy {
+    /** files.py's TYPES and a written page's, by mime type: the one Content-Type each is served with. */
+    val TYPES = mapOf(
+        "text/html" to "text/html; charset=utf-8",
+        "application/pdf" to "application/pdf",
+        "text/plain" to "text/plain; charset=utf-8",
+        "application/json" to "application/json; charset=utf-8",
+        "application/octet-stream" to "application/octet-stream",
+    )
+
+    /** The sandbox's tokens a file's page may keep: caracole serve's viewers' (scripts, and Export PDF's download). */
+    val SANDBOX = setOf("allow-scripts", "allow-downloads")
+
+    /** app.py's FRAMES: no page frames it. */
+    const val FRAMES = "frame-ancestors 'none'"
+
+    /** viewer_csp's `_NOTHING`, framed by none: a sandbox that runs and loads nothing. */
+    const val NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; $FRAMES"
+
+    private const val PAGE = "text/html"
+    private val SPACES = Regex("[ \\t]+")
+
+    /** [entry] as the phone serves it from a layer, or null for a kind it never serves. */
+    fun served(entry: Entry): Entry? {
+        val type = TYPES[entry.mimeType] ?: return null
+        val policy = if (type.startsWith(PAGE)) page(entry.headers["Content-Security-Policy"]) else FRAMES
+        return entry.copy(type = type, headers = headers(policy))
+    }
+
+    /** A file's start page, kept for its cards alone and never served: a page, with [NOTHING] for its policy. */
+    fun start(entry: Entry): Entry = entry.copy(type = TYPES.getValue(PAGE), headers = headers(NOTHING))
+
+    /** The policy a file's page is served with: [given]'s directives, when its first `sandbox` directive (the one a
+     * browser keeps) holds no token but [SANDBOX]'s and it is one policy (no comma), framed by none (its own
+     * `frame-ancestors` replaced by [FRAMES]); else [NOTHING]. */
+    fun page(given: String?): String {
+        if (given == null || ',' in given) return NOTHING
+        val directives = given.split(';').map { it.trim(' ', '\t') }.filter { it.isNotEmpty() }
+        val sandbox = directives.firstOrNull { name(it) == "sandbox" } ?: return NOTHING
+        if (sandbox.split(SPACES).drop(1).any { it.lowercase() !in SANDBOX }) return NOTHING
+        return (directives.filter { name(it) != "frame-ancestors" } + FRAMES).joinToString("; ")
+    }
+
+    private fun name(directive: String) = directive.split(SPACES).first().lowercase()
+
+    private fun headers(policy: String) = linkedMapOf(
+        "Content-Security-Policy" to policy, "Referrer-Policy" to "same-origin", "X-Content-Type-Options" to "nosniff",
+    )
 }
 
 private fun copyChecked(layer: Layer, entry: Entry, blob: (String) -> InputStream?, to: File) {

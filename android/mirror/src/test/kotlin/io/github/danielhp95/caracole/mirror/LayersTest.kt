@@ -77,7 +77,7 @@ class LayersTest {
     }
 
     private fun take(pages: FilePages, units: Set<String>, id: String = layerId) =
-        mirror.takeLayer(id, pages.manifest, units, pages::blob)
+        mirror.takeLayer(id, pages.manifest, units, blob = pages::blob)
 
     /** A layer's whole state: its list and every file in its folder. */
     private fun snapshot(dir: File): Map<String, String> =
@@ -208,6 +208,98 @@ class LayersTest {
                      "the computer's blobs are its list's alone")
         assertContentEquals(filesSheet, assertIs<Looked.Page>(mirror.pageFor(sheetPath, holding(song to inFile))).file.readBytes())
         assertTrue(mirror.storageBytes() >= filesSheet.size + filesLibrary.size, "the layers' bytes are the mirror's too")
+    }
+
+    /** A file's list of [entries] (path, type, headers, unit), each page's bytes its path's. */
+    private fun listed(vararg entries: Triple<String, String, Pair<Map<String, String>, String?>>): FilePages {
+        val pages = entries.associate { (path, _, _) -> path to "<html>$path</html>".toByteArray() }
+        val json = FakeCaracole.manifestJson(entries.first().first, entries.map { (path, type, rest) ->
+            val bytes = pages.getValue(path)
+            FakeCaracole.entryJson(Entry(path, FakeCaracole.urlOf(path), bytes.size.toLong(), sha256(bytes), type, rest.first,
+                                         rest.second, rest.second?.let { inFile }))
+        })
+        return FilePages(json.toByteArray(), pages.values.associateBy { sha256(it) })
+    }
+
+    @Test
+    fun `a file's page is served with the phone's headers and in a sandbox, never as the file says`() {
+        val viewer = "sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-abc'; frame-ancestors *"
+        val html = "text/html; charset=utf-8"
+        val quoted = "Estopa/\"Tu\" calorro/sheet.html"
+        take(listed(
+            Triple("index.html", "text/html; charset=utf-7", mapOf("Content-Security-Policy" to "default-src 'self'") to null),
+            Triple(sheetPath, html, mapOf("Content-Security-Policy" to viewer, "Referrer-Policy" to "unsafe-url",
+                                         "X-Content-Type-Options" to "sniff") to song),
+            Triple("Estopa/Tu calorro/none.html", html, emptyMap<String, String>() to song),
+            Triple("Estopa/Tu calorro/same.html", html,
+                   mapOf("Content-Security-Policy" to "sandbox allow-scripts allow-same-origin; default-src 'none'") to song),
+            Triple("Estopa/Tu calorro/two.html", html,
+                   mapOf("Content-Security-Policy" to "sandbox allow-scripts, default-src *") to song),
+            Triple("Estopa/Tu calorro/sheet.pdf", "text/html", emptyMap<String, String>() to song),
+            Triple("Estopa/Tu calorro/tab.txt", "text/plain; charset=utf-7", emptyMap<String, String>() to song),
+            Triple("Estopa/Tu calorro/art.svg", "image/svg+xml", emptyMap<String, String>() to song),
+            Triple("Estopa/Tu calorro/page.xhtml", "application/xhtml+xml", emptyMap<String, String>() to song),
+            Triple(quoted, html, mapOf("Content-Security-Policy" to viewer) to song),
+        ), setOf(song))
+
+        val gate = holding(song to inFile)
+        val again = Mirror(mirror.dir)  // the layer's own list, read back
+        fun served(path: String): Entry = assertIs<Looked.Page>(again.pageFor(path, gate), path).entry
+        val sandboxed = "sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-abc'; " +
+            "frame-ancestors 'none'"
+        val phones = mapOf("Content-Security-Policy" to sandboxed, "Referrer-Policy" to "same-origin",
+                           "X-Content-Type-Options" to "nosniff")
+        assertEquals(phones, served(sheetPath).headers, "a viewer's sandbox kept, framed by none, the rest the phone's")
+        assertEquals(html, served(sheetPath).type)
+        assertEquals(phones, served(quoted).headers)
+        assertEquals(quoted, served(quoted).path, "a path with a quote reads back as it was")
+        for (path in listOf("none.html", "same.html", "two.html", "sheet.pdf")) {
+            val entry = served("Estopa/Tu calorro/$path")
+            assertEquals(LayerPolicy.NOTHING, entry.headers["Content-Security-Policy"], "$path: a sandbox that runs nothing")
+            assertEquals(html, entry.type, path)
+            assertEquals("nosniff", entry.headers["X-Content-Type-Options"], path)
+        }
+        assertEquals("text/plain; charset=utf-8", served("Estopa/Tu calorro/tab.txt").type, "caracole serve's own type")
+        assertEquals("frame-ancestors 'none'", served("Estopa/Tu calorro/tab.txt").headers["Content-Security-Policy"])
+        for (path in listOf("art.svg", "page.xhtml")) {
+            assertEquals(Looked.Missing, again.pageFor("Estopa/Tu calorro/$path", gate), "$path: a kind the phone never serves")
+        }
+        val start = assertNotNull(again.layers().single().manifest()).byPath.getValue("index.html")
+        assertEquals(LayerPolicy.NOTHING, start.headers["Content-Security-Policy"], "the start page, never served, as none")
+        assertEquals(html, start.type)
+    }
+
+    @Test
+    fun `a layer's page of one unit is never served at a path the computer gives another`() {
+        syncedWithComputer()  // the computer's sheetPath is the song's
+        take(filePages(mapOf("index.html" to filesLibrary, sheetPath to othersSheet), mapOf(sheetPath to (other to inFile))),
+             setOf(other))
+        val gated = assertIs<Looked.Gated>(mirror.pageFor(sheetPath, holding(song to "f".repeat(64), other to inFile)),
+                                           "the song changed on the phone: the file's page of another unit isn't it")
+        assertEquals(song, gated.entry.unit)
+    }
+
+    @Test
+    fun `the layers lose the pages of units the phone changed or removed since, and a layer with none goes`() {
+        val pdf = "Estopa/Tu calorro/sheet.pdf"
+        val wonderwall = "Oasis/Wonderwall/sheet.html"
+        take(filePages(mapOf("index.html" to filesLibrary, sheetPath to filesSheet, wonderwall to othersSheet),
+                       mapOf(sheetPath to (song to inFile), wonderwall to (other to inFile))), setOf(song, other))
+        val later = "fedcba9876543210"
+        val changed = UnitGate { unit, _ -> if (unit == song) Gate.CHANGED else Gate.SERVE }
+        mirror.takeLayer(later, filePages(mapOf("index.html" to filesLibrary, pdf to filesPdf), mapOf(pdf to (other to inFile))).manifest,
+                         setOf(other), changed) { sha -> ByteArrayInputStream(if (sha == sha256(filesPdf)) filesPdf else filesLibrary) }
+        val first = mirror.layers().single { it.id == layerId }
+        assertEquals(listOf("index.html", wonderwall), assertNotNull(first.manifest()).entries.map { it.path },
+                     "the song changed on the phone: its page goes")
+        assertEquals(setOf(sha256(filesLibrary), sha256(othersSheet)), first.blobs.list()!!.toSet())
+
+        val removed = UnitGate { unit, _ -> if (unit == other) Gate.REMOVED else Gate.SERVE }
+        mirror.takeLayer(later, filePages(mapOf("index.html" to filesLibrary), emptyMap()).manifest, emptySet(), removed) {
+            ByteArrayInputStream(filesLibrary)
+        }
+        assertEquals(emptyList(), mirror.layers().map { it.id }, "each left with its start page alone: gone")
+        assertTrue(!File(mirror.layersDir, layerId).exists())
     }
 
     @Test

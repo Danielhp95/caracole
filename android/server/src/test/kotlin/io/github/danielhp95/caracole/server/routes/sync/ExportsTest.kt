@@ -26,7 +26,7 @@ class ExportsTest {
     private fun files() = exports.folder.listFiles().orEmpty().map { it.name }.toSet()
 
     @Test
-    fun `an export is sent once and leaves nothing in the cache`() {
+    fun `an export is taken once, and one taken that no server opened is swept`() {
         val made = exports.make("horde_logbook-03-11-26.caracole") { it.writeBytes(bytes) }
         assertTrue(Imports.ID.matches(made.id))
         assertEquals("horde_logbook-03-11-26.caracole" to bytes.size.toLong(), made.name to made.size)
@@ -40,9 +40,33 @@ class ExportsTest {
         assertNull(exports.take(made.id), "sent once")
         assertTrue(files().none { it.startsWith("export-") }, "no export of that name is left")
 
-        clock.addAndGet(Exports.SENT + 1)
+        clock.addAndGet(Exports.SENT)
+        exports.sweep()
+        assertEquals(1, files().size, "kept for the download that opens it")
+        clock.addAndGet(1)
         exports.sweep()
         assertEquals(emptySet(), files(), "nothing left in the cache")
+    }
+
+    @Test
+    fun `one export waits for its download at most, a new one taking the place of one never asked for`() {
+        val first = exports.make("a.caracole") { it.writeBytes(bytes) }
+        val second = exports.make("b.caracole") { it.writeBytes(bytes) }
+        assertEquals(setOf("export-${second.id}.caracole"), files())
+        assertNull(exports.take(first.id))
+        assertNotNull(exports.take(second.id))
+    }
+
+    @Test
+    fun `a phone's caracole starting clears every export an earlier one left`() {
+        val taken = exports.make("b.caracole") { it.writeBytes(bytes) }
+        exports.take(taken.id)
+        val made = exports.make("a.caracole") { it.writeBytes(bytes) }
+        File(exports.folder, ".export-0123456789abcdef.caracole.0123456789ab.part").writeBytes(bytes)
+        File(exports.folder, "something else").writeBytes(bytes)
+        Exports(cache, clock::get).clear()
+        assertEquals(setOf("something else"), files())
+        assertNull(exports.take(made.id))
     }
 
     @Test

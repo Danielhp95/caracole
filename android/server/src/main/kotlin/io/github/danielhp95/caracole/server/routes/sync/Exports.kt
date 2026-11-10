@@ -12,13 +12,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  * library, one at a time ([make]: [Busy] while another is), and sent once ([take]).
  *
  * - [make] writes one through the caller's writer (core.sync.file's export) at `export-<16 hex>.caracole`, and keeps
- *   its id with the name it downloads under;
+ *   its id with the name it downloads under, one at most: the one before it, never asked for, is deleted;
  * - [take] gives the file of an id once, never again: it is renamed out of the exports' names (`.sent-<id>…`), so a
- *   second GET finds nothing, and the route answers it streamed from there;
+ *   second GET finds nothing, and the route answers it streamed from there, its name deleted as the server opens it
+ *   to send it (Body.FromFile's `once`: a file open is read whole after its name is gone), as caracole serve deletes
+ *   its export as it opens it;
  * - [sweep] (as an export is made, its sizes asked or one taken) deletes an export never asked for an hour after it
- *   was made, a part a writer killed while it made one left (`.export-…`) as long after, and a file sent [SENT] after it
- *   was taken (the phone's server opens it as it answers, and a file open is read whole after its name is gone); then
- *   it forgets the exports whose files are gone.
+ *   was made, a part a writer killed while it made one left (`.export-…`) as long after, and a file taken that no
+ *   server opened (a download the app never read) [SENT] after it was taken; then it forgets the exports whose files
+ *   are gone;
+ * - [clear], as the phone's caracole starts (no export of an earlier one can be asked for: the ids were its), deletes
+ *   every file of the exports' names, made, taken or half made.
  *
  * Times are [clock]'s, each file dated by it as it is made or taken.
  */
@@ -59,7 +63,11 @@ class Exports(cacheDir: File, private val clock: () -> Long = System::currentTim
                 file.delete()
                 throw e
             }
-            synchronized(made) { made[id] = file to name }
+            synchronized(made) {
+                for ((earlier, _) in made.values) earlier.delete()  // never asked for: this one takes its place
+                made.clear()
+                made[id] = file to name
+            }
             return Made(id, name, file.length())
         } finally {
             making.set(false)
@@ -79,6 +87,21 @@ class Exports(cacheDir: File, private val clock: () -> Long = System::currentTim
             sent to name
         } catch (e: java.io.IOException) {
             null
+        }
+    }
+
+    /** Every file of the exports' names deleted (see the class), unless an export is being made now. */
+    fun clear() {
+        if (!making.compareAndSet(false, true)) return
+        try {
+            for (file in folder.listFiles().orEmpty()) {
+                val ours = file.name.startsWith(SENT_PREFIX) || file.name.startsWith(".$PREFIX") ||
+                    (file.name.startsWith(PREFIX) && file.name.endsWith(SUFFIX))
+                if (ours && Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.delete()
+            }
+            synchronized(made) { made.clear() }
+        } finally {
+            making.set(false)
         }
     }
 
@@ -108,8 +131,8 @@ class Exports(cacheDir: File, private val clock: () -> Long = System::currentTim
         /** An export never asked for, or a part left, is kept this long. */
         const val EXPIRES = 3_600_000L
 
-        /** A file taken is kept this long, for the download that opens it. */
-        const val SENT = 60_000L
+        /** A file taken that no server opened is kept this long, for the download that opens it. */
+        const val SENT = 600_000L
 
         const val BUSY = "Another export is being made: try again once it is."
     }

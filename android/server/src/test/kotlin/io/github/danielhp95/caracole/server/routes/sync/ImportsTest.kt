@@ -82,7 +82,7 @@ class ImportsTest {
     }
 
     @Test
-    fun `an upload cut short is never compared, and is swept an hour after`() {
+    fun `a staged file cut short is never whole, and is swept an hour after unless held`() {
         val id = imports.open(10, "a.caracole")
         imports.addPart(id, 0, "1234".toByteArray())
         refused(400, Imports.NOT_WHOLE) { imports.whole(id) }
@@ -108,5 +108,39 @@ class ImportsTest {
         val other = imports.open(3, "b.caracole")
         assertFalse(imports.folderOf(again).exists(), "opening one sweeps those an hour has left first")
         assertTrue(imports.folderOf(other).isDirectory)
+    }
+
+    @Test
+    fun `a file whole or stopped makes way for another unless a request names it or a job holds it`() {
+        val whole = imports.open(4, "a.caracole")
+        imports.addPart(whole, 0, "1234".toByteArray())
+        assertEquals(emptyList(), imports.letGo(setOf(whole)), "its request waits")
+        imports.held(whole) { assertEquals(emptyList(), imports.letGo(emptySet()), "a job holds it") }
+        assertEquals(listOf(whole), imports.letGo(emptySet()), "whole, compared or not, never imported")
+
+        val sending = imports.open(10, "b.caracole")
+        imports.addPart(sending, 0, "12".toByteArray())
+        clock.addAndGet(Imports.STOPPED)
+        assertEquals(emptyList(), imports.letGo(emptySet()), "being sent still")
+        clock.addAndGet(1)
+        assertEquals(listOf(sending), imports.letGo(emptySet()), "an upload that stopped")
+    }
+
+    @Test
+    fun `a file is dropped at once unless a job holds it, and a hold refuses a second one that won't wait`() {
+        val id = imports.open(4, "a.caracole")
+        imports.held(id) {
+            refused(409, Imports.TAKING) { imports.drop(id) }
+            refused(409, Imports.TAKING) { imports.held(id, wait = false) {} }
+        }
+        imports.drop(id)
+        assertFalse(imports.folderOf(id).exists())
+        refused(404, Imports.NO_SUCH) { imports.drop(id) }
+        refused(400, "Which import? Its id is 16 hex.") { imports.drop("../x") }
+
+        val next = imports.open(4, "b.caracole")
+        assertEquals(next, imports.idOf(File(imports.folderOf(next), "file.caracole")))
+        assertEquals(null, imports.idOf(File(tmp.root, "import-$next/file.caracole")), "a folder of the imports alone")
+        assertEquals(null, imports.idOf(File(imports.folderOf(next), "open.json")))
     }
 }

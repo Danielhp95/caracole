@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server.routes.sync
 
+import io.github.danielhp95.caracole.mirror.LayerPolicy
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.page.json
 import io.github.danielhp95.caracole.server.page.obj
 import io.github.danielhp95.caracole.server.page.sha256
@@ -100,5 +102,29 @@ class MirrorPagesTest {
         File(mirror.blobs, sha256(library)).delete()
         assertEquals(sha256(filesLibrary), assertNotNull(MirrorPages(mirror).manifest(emptyMap())).getValue("files").jsonArray
             .single().jsonObject.getValue("sha256").jsonPrimitive.content, "the newest layer's start page, the computer's gone")
+    }
+
+    @Test
+    fun `a file's page goes on with the phone's headers, never the file's`() {
+        val listed = assertNotNull(MirrorPages(mirror()).manifest(mapOf(song to d2)))
+        val sheet = listed.getValue("files").jsonArray[1].jsonObject
+        assertEquals(sha256(filesSheet), sheet.getValue("sha256").jsonPrimitive.content)
+        assertEquals(json(mapOf("Content-Security-Policy" to LayerPolicy.NOTHING, "Referrer-Policy" to "same-origin",
+                                "X-Content-Type-Options" to "nosniff")), sheet.getValue("headers"),
+                     "a page with no sandbox of its own, as the layer serves it")
+    }
+
+    @Test
+    fun `the phone's own library page is its export's start page where it gives one, with every card it shows`() {
+        val data = obj("songs" to listOf(obj("identity" to "estopa/tu-calorro", "title" to "</script><b>")))
+        val page = MirrorPages.startPage(data)
+        val pages = MirrorPages(mirror(), page)
+        val listed = assertNotNull(pages.manifest(mapOf(song to d2)))
+        assertEquals(listOf("index.html", "Estopa/Tu calorro/sheet.html", "Estopa/Tu calorro/sheet.pdf"), paths(listed))
+        val start = listed.getValue("files").jsonArray[0].jsonObject
+        assertEquals(sha256(page), start.getValue("sha256").jsonPrimitive.content)
+        assertContentEquals(page, assertNotNull(pages.open(sha256(page))).use { it.readBytes() })
+        assertEquals(data, MirrorPageData.dataBlock(page), "its cards read back as a phone that takes the file reads them")
+        assertNotNull(MirrorPages(null, page).manifest(emptyMap()), "a phone that never synced gives its own")
     }
 }

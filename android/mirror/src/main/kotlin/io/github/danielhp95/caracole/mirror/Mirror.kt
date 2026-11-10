@@ -82,14 +82,19 @@ class Mirror(val dir: File) {
      * its pages of other units and loses those of [units] and its start page. Each blob is checked by its size and
      * its SHA-256 as it is written, then the layer's list is written whole and the blobs it no longer names are
      * deleted, so a page the file lacks or holds otherwise than listed fails it ([LayerError]) and leaves the layer as
-     * it was. One at a time, as a sync of the computer's is ([syncLock]).
+     * it was. Each page is kept as the phone serves it ([LayerPolicy]: a kind caracole serves alone, a page in a
+     * sandbox), never with the headers the file gave. With a [gate], the layers are then cut to the pages it still
+     * serves ([pruneLayers]: a page of a unit the phone changed or removed since goes, a layer left with no page
+     * goes). One at a time, as a sync of the computer's is ([syncLock]).
      */
-    fun takeLayer(id: String, manifest: ByteArray, units: Set<String>, blob: (String) -> InputStream?) {
+    fun takeLayer(id: String, manifest: ByteArray, units: Set<String>, gate: UnitGate? = null,
+                  blob: (String) -> InputStream?) {
         syncLock.lock()
         try {
             val taken = (readLayers(layersDir).maxOfOrNull { it.taken } ?: 0L) + 1
             try {
                 writeLayer(layersDir, id, manifest, units, taken, blob)
+                gate?.let { pruneLayers(layersDir, it) }
             } finally {
                 layersRead = null
             }
@@ -198,17 +203,23 @@ sealed interface Looked {
 
 /**
  * The mirror's file at [path], checked by [gate] when its entry names a unit: the computer's when the gate serves it
- * (or it names no unit); else the first layer's ([Mirror.layers], the newest first) of a unit the gate serves; else
- * what the computer's answered (Gated), or where the computer has nothing at [path], the first layer's (Gated), or
- * Missing. A layer's file of no unit (its start page) is never served: the phone's library page is its own.
+ * (or it names no unit); else the first layer's ([Mirror.layers], the newest first) of a unit the gate serves, at a
+ * path the computer's list gives no other unit (a file's page never stands for another song's, as in a folder two
+ * songs share); else what the computer's answered (Gated), or where the computer has nothing at [path], the first
+ * layer's (Gated), or Missing. A layer's file of no unit (its start page) is never served: the phone's library page
+ * is its own.
  */
 fun Mirror.pageFor(path: String, gate: UnitGate): Looked {
-    val computers = lookup(path)?.let { checked(it, gate) }
+    val listed = lookup(path)
+    val computers = listed?.let { checked(it, gate) }
     if (computers is Looked.Page) return computers
     var layers: Looked.Gated? = null
     for (layer in layers()) {
-        val served = layer.lookup(path) ?: continue
-        if (served.entry.unit == null) continue
+        val found = layer.lookup(path) ?: continue
+        if (found.entry.unit == null) continue
+        if (listed != null && listed.entry.unit != found.entry.unit) continue
+        // As the phone serves a file's page, whatever its list on disk says (LayerPolicy is idempotent).
+        val served = Served(LayerPolicy.served(found.entry) ?: continue, found.file)
         when (val looked = checked(served, gate)) {
             is Looked.Page -> return looked
             is Looked.Gated -> if (layers == null) layers = looked

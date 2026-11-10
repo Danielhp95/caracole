@@ -10,6 +10,8 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.routes.ShareRoutes
+import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
+import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -43,7 +45,7 @@ class AssemblyTest {
         val scope = CoroutineScope(SupervisorJob())
         try {
             return TestDb.fresh(tmp.root).use { database ->
-                val deps = PhoneDeps(database, tmp.newFolder("library"), tmp.newFolder("state"), null, scope,
+                val deps = PhoneDeps(database, tmp.newFolder("library"), File(tmp.root, "state").apply { mkdirs() }, null, scope,
                                      NoAddress, secret = "s".repeat(64), csrf = "tok", transport = { RefusingTransport })
                 block(Phone(deps, render?.invoke(deps)))
             }
@@ -70,9 +72,10 @@ class AssemblyTest {
     }
 
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
-        assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "LibraryRoutes",
-                            "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes", "ReviewRoutes",
-                            "ExportRoutes", "GuitarRoutes", "ShareRoutes"), phone.modules.map { it::class.simpleName })
+        assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
+                            "LibraryRoutes", "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes",
+                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
+                     phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
         assertEquals(emptyMap(), twice)
@@ -94,6 +97,11 @@ class AssemblyTest {
             "ReviewRoutes" to listOf("GET /review", "POST /review"),
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
+            "SyncRoutes" to listOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
+                                   "GET /api/sync/indexes", "POST /sync/apply"),
+            "SyncFileRoutes" to listOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",
+                                       "POST /sync/import/open", "POST /sync/import/part", "POST /sync/import/compare",
+                                       "POST /sync/import/drop"),
         )
         // The phone's own page of a song shared to the app, which caracole serve has none of.
         assertEquals(listOf("GET /share", "GET /share/cancel"),
@@ -107,6 +115,18 @@ class AssemblyTest {
             val name = module::class.simpleName!!
             assertEquals(moved.getValue(name).toSet(), module.routes.map { "${it.method} ${it.path}" }.toSet(), name)
         }
+    }
+
+    @Test fun theSyncIsTheAppsAndHandsAFilesComparisonToTheFilesRoutes() = phone { phone ->
+        assertSame(phone.modules.filterIsInstance<SyncRoutes>().single(), phone.sync, "the app's unattended sync's")
+        assertSame(phone.modules.filterIsInstance<SyncFileRoutes>().single(), phone.sync.files,
+                   "Sync on a file's comparison queues its import")
+    }
+
+    @Test fun anExportAnEarlierStartLeftIsClearedAsThePhoneStarts() {
+        val left = File(tmp.root, "state/cache/peer").apply { mkdirs() }.let { File(it, "export-0123456789abcdef.caracole") }
+        left.writeBytes(ByteArray(1))
+        phone { assertTrue(!left.exists(), "no earlier start's export can be asked for") }
     }
 
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->

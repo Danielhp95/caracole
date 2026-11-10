@@ -42,8 +42,9 @@ class MirrorPageDataTest {
     private val oasis = mirroredCard(11, "oasis/wonderwall", "Oasis", "Wonderwall", "review" to true)
     private val creep = mirroredCard(12, "radiohead/creep", "Radiohead", "Creep", "status" to "wanted")
 
-    private fun mirrored(vararg sets: JsonObject) =
-        MirrorPageData(mirrorOf(tmp.newFolder(), libraryPage(mirroredData(listOf(estopa, oasis, creep), sets.toList()))))
+    private fun mirrored(vararg sets: JsonObject, withCreep: Boolean = true) =
+        MirrorPageData(mirrorOf(tmp.newFolder(), libraryPage(mirroredData(listOfNotNull(estopa, oasis, creep.takeIf { withCreep }),
+                                                                           sets.toList()))))
 
     private fun songsOf(data: JsonObject) = data.getValue("songs").jsonArray.map { it.jsonObject }
 
@@ -320,6 +321,51 @@ class MirrorPageDataTest {
         takeFile(data.mirror, "2222222222222222", listOf(mirroredCard(9, "radiohead/creep", "Radiohead", "Creep")))
         assertEquals("D", songsOf(read(data)).last().getValue("key").jsonPrimitive.content,
                      "the newest whose library page holds the song")
+    }
+
+    @Test
+    fun `a file's card is read as untrusted, and one that isn't a card is the minimal card`() {
+        val mine = addSong(database, "sigur-ros/hoppipolla", "Sigur Rós", "Hoppípolla")
+        val data = mirrored()
+        fun shown(vararg more: Pair<String, Any?>): JsonObject {
+            takeFile(data.mirror!!, "0123456789abcdef", listOf(JsonObject(hoppipolla + obj(*more))))
+            return database.read { db -> data.cards(db, listOfNotNull(Songs.byId(db, mine))) }.getValue(mine)
+        }
+        val evil = "https://megalobiz.com.evil.example/x"
+        val kept = shown("lyricsFrom" to mapOf("source" to "megalobiz", "href" to evil), "evil" to "<script>",
+                         "links" to listOf(mapOf("label" to "Chordify", "href" to "https://chordify.net/search/x")))
+        assertEquals("D", kept.getValue("key").jsonPrimitive.content, "a card of the fields library_page writes: the file's")
+        assertEquals(JsonNull, kept.getValue("lyricsFrom"), "where its lyrics link back to is the phone's own")
+        assertTrue("evil" !in kept, "a field library_page never writes is left out")
+
+        val minimal = mapOf(
+            "its files a string" to arrayOf<Pair<String, Any?>>("files" to "sheet.html"),
+            "a kept file at another site" to arrayOf<Pair<String, Any?>>(
+                "files" to listOf(mapOf("name" to "sheet.html", "label" to "Sheet viewer", "href" to "https://evil.example/x"))),
+            "a kept file at the server's root" to arrayOf<Pair<String, Any?>>(
+                "files" to listOf(mapOf("name" to "sheet.html", "label" to "Sheet viewer", "href" to "/api/sync/export"))),
+            "a script for a link" to arrayOf<Pair<String, Any?>>(
+                "links" to listOf(mapOf("label" to "Chordify", "href" to "javascript:alert(1)"))),
+            "a plain http link deep in it" to arrayOf<Pair<String, Any?>>(
+                "youtube" to mapOf("text" to "x", "video" to mapOf("label" to "v", "href" to "http://evil.example/"))),
+            "its review a string" to arrayOf<Pair<String, Any?>>("review" to "yes"),
+            "its artists no list" to arrayOf<Pair<String, Any?>>("artists" to mapOf("0" to "x")),
+            "another song's identity" to arrayOf<Pair<String, Any?>>("identity" to "radiohead/creep"),
+        )
+        for ((why, more) in minimal) {
+            val card = shown(*more)
+            assertEquals(JsonNull, card.getValue("key"), "$why: the minimal card")
+            assertEquals(emptyList(), card.getValue("files").jsonArray.toList(), "$why: no file the phone hasn't got")
+        }
+    }
+
+    @Test
+    fun `a file's card is the song's only from a layer that keeps a page of it`() {
+        val mine = addSong(database, "radiohead/creep", "Radiohead", "Creep")
+        val data = mirrored(withCreep = false)
+        takeFile(data.mirror!!, "0123456789abcdef", listOf(mirroredCard(9, "radiohead/creep", "Radiohead", "Creep", "key" to "E")))
+        val card = database.read { db -> data.cards(db, listOfNotNull(Songs.byId(db, mine))) }.getValue(mine)
+        assertEquals(JsonNull, card.getValue("key"), "its page isn't in the layer, so its card would open none: minimal")
     }
 
     /** [names] kept by the song [id] in its [folder], as a take leaves them: a version and a row of `files` each. */
