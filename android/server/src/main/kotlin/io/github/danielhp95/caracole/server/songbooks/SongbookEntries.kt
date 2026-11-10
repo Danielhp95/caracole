@@ -2,8 +2,8 @@ package io.github.danielhp95.caracole.server.songbooks
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -13,6 +13,10 @@ import io.github.danielhp95.caracole.core.songbooks.Setting
 import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookSong
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
+import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.viewer.render.RenderNames
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.sheet.MusicKeys
 import io.github.danielhp95.caracole.viewer.sheet.SheetView
 import io.github.danielhp95.caracole.viewer.sheet.Sheets
@@ -20,8 +24,6 @@ import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
 import io.github.danielhp95.caracole.viewer.version.Version
 import io.github.danielhp95.caracole.viewer.version.Versions
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -29,7 +31,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.LinkOption
-import java.nio.file.NoSuchFileException
+import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 
 /** songbook.Entry: one song of a songbook as it is rendered: its sheet's ChordPro ([cho]) as caracole wrote it beside
@@ -50,7 +52,11 @@ data class Entry(val text: String, val title: String, val artist: String, val so
  *   find_song re-keys it ([entries] writes then, in the caller's write, when the keys are a KEY_VERSION behind).
  * - Its sheet ([sheetOf]) is the .cho of its human sheet, else of its auto sheet, while it is the bytes caracole
  *   recorded for it (kv `render:files:<song id>`, render.written_file's record, which the phone's render writes as the
- *   computer's does), read as a regular file only; one changed on disk counts as none.
+ *   computer's does), read as a regular file only; one changed on disk counts as none. Where the phone wrote none of
+ *   a sheet it keeps, the song's pages are the computer's (PhoneRender makes none of a song the mirror serves at its
+ *   unit's digest): its .cho is then the mirror's, while the mirror lists it of the song's unit at the digest the
+ *   song is at now (what LibraryFiles serves of it, PhoneGate's rule), so a song taken from the computer plays in a
+ *   songbook the phone makes as it does in the computer's.
  * - Where it plays: [entries]'s version, then [playsIn] and [wherePlayed] in words and as a key and a capo; and the
  *   setting `caracole songbook set` comes to ([withCapo], [onInstrument]).
  *
@@ -71,9 +77,6 @@ object SongbookEntries {
     private val SHEETS = listOf("sheet.txt" to "sheet.cho", "sheet (auto).txt" to "sheet (auto).cho")
     private const val AUTO_CHO = "sheet (auto).cho"
 
-    /** render.FILES_KEY: kv `render:files:<song id>`, what caracole wrote in the song's folder. */
-    private const val FILES_KEY = "render:files:"
-
     /** songbook.check_setting's problem: why [setting]'s parts make no setting (version.setting_problem), or null;
      * what Songbooks.set checks a setting by. */
     fun problem(setting: Setting): String? =
@@ -82,10 +85,12 @@ object SongbookEntries {
     /** songbook.songbook_entries: the songbook's songs, in order, each with its sheet or why it has none: a song the
      * library hasn't got (removed since, say) or one without a sheet is missing, never an error. The library is
      * re-keyed first, as find_song re-keys it, unless [rekey] is false: a read (the Songbooks tab's data in
-     * `/jobs.json`), which takes the keys as every write that adds or looks songs up leaves them. */
-    fun entries(db: Db, libraryDir: File, overrides: Overrides, book: Songbook, rekey: Boolean = true): List<Entry> {
+     * `/jobs.json`), which takes the keys as every write that adds or looks songs up leaves them. [mirror]: the
+     * computer's pages the phone holds, whose .cho a song the phone made no pages of plays from ([sheetOf]). */
+    fun entries(db: Db, libraryDir: File, overrides: Overrides, book: Songbook, rekey: Boolean = true,
+                mirror: Mirror? = null): List<Entry> {
         if (rekey) LibraryStore(libraryDir).ensureCurrentKeys(db)
-        return book.songs.map { entryOf(db, libraryDir, overrides, it) }
+        return book.songs.map { entryOf(db, libraryDir, overrides, it, mirror) }
     }
 
     /** songbook.songs_to_get: the songs of [entries] a lookup could get a sheet for now (Get the missing songs now):
@@ -103,7 +108,7 @@ object SongbookEntries {
     }
 
     /** songbook._entry_of. */
-    private fun entryOf(db: Db, libraryDir: File, overrides: Overrides, entry: SongbookSong): Entry {
+    private fun entryOf(db: Db, libraryDir: File, overrides: Overrides, entry: SongbookSong, mirror: Mirror?): Entry {
         val text = entry.text
         val setting = entry.setting
         val song = Songbooks.findEntrySong(db, text)
@@ -115,7 +120,7 @@ object SongbookEntries {
                          setting = setting)
         }
         val title = Normalize.cleanTitle(song.title)
-        val (name, cho) = sheetOf(db, libraryDir, song)
+        val (name, cho) = sheetOf(db, libraryDir, song, mirror)
             ?: return Entry(text, title, song.artist, song, missing = MISSING_SHEET, setting = setting)
         val (human, auto) = MusicKeys.sheetKeys(db, libraryDir, song.id)
         val found = if (name == AUTO_CHO) auto else human
@@ -202,61 +207,59 @@ object SongbookEntries {
 
     /** songbook._sheet_of: the .cho of the song's human sheet, else of its auto sheet, as caracole last wrote it
      * (render.written_file): (its name, its text). One that is no longer those bytes (changed on a device, a link in
-     * its place) or isn't UTF-8 counts as none: only caracole's sheets go into a songbook. */
-    fun sheetOf(db: Db, libraryDir: File, song: SongRow): Pair<String, String>? {
+     * its place) or isn't UTF-8 counts as none: only caracole's sheets go into a songbook. Where the phone wrote none
+     * of a sheet the song keeps, the [mirror]'s .cho of it, made by the computer of the song as the phone holds it now
+     * ([mirrored]). */
+    fun sheetOf(db: Db, libraryDir: File, song: SongRow, mirror: Mirror? = null): Pair<String, String>? {
         val kept = Kept.keptFiles(db, song.id).mapTo(HashSet()) { it.name }
         val folder = LibraryStore(libraryDir).folderOf(song)
         for ((sheet, cho) in SHEETS) {
             if (sheet !in kept) continue
-            val (sha, size) = writtenFile(db, song.id, cho) ?: continue
-            val data = regularBytes(File(folder, cho)) ?: continue
-            if (data.size.toLong() == size && Canonical.sha256Hex(data) == sha) {
-                return cho to (strictUtf8(data) ?: continue)
+            val written = WrittenPages.written(db, song.id, cho)
+            val text = if (written != null) {
+                regularBytes(File(folder, cho).toPath())
+                    ?.takeIf { it.size.toLong() == written.size && Canonical.sha256Hex(it) == written.sha256 }
+                    ?.let(::strictUtf8)
+            } else {
+                mirror?.let { mirrored(db, it, song, cho) }
             }
+            if (text != null) return cho to text
         }
         return null
     }
 
-    /** render.written_file: the SHA-256 and the length of the file [name] caracole last wrote in the song's folder, as
-     * kv `render:files:<song id>` records it (render.written_entry: a string and an int that is no bool), or null. */
-    internal fun writtenFile(db: Db, songId: Long, name: String): Pair<String, Long>? {
-        val text = db.kvGet("$FILES_KEY$songId") ?: return null
-        val record = try {
-            PyJson.loads(text)
-        } catch (e: Exception) {  // kv_get_json's json.loads would raise: a record no writer made, read as none
-            return null
-        } as? JsonObject ?: return null
-        return writtenEntry(record[name])
+    /** The [mirror]'s file [name] of the song's folder, as text: only while its entry names the song's unit at the
+     * digest the phone holds the song at now (the computer made it of the song as it is here: what LibraryFiles
+     * serves of it), and its blob is the bytes the entry lists, UTF-8; else null. */
+    internal fun mirrored(db: Db, mirror: Mirror, song: SongRow, name: String): String? {
+        val (artist, title) = SafeName.songFolder(song.artist, song.title)
+        val served = mirror.lookup("$artist/$title/$name") ?: return null
+        val unit = RenderNames.unitOf(song.key)
+        val digest = served.entry.digest ?: return null
+        if (served.entry.unit != unit || Units.digestOf(db, unit) != digest) return null
+        val data = regularBytes(served.file.toPath()) ?: return null
+        if (data.size.toLong() != served.entry.size || Canonical.sha256Hex(data) != served.entry.sha256) return null
+        return strictUtf8(data)
     }
 
-    /** render.written_entry: the SHA-256 and the length an entry of a record says, or null for one that says
-     * neither. */
-    internal fun writtenEntry(entry: Any?): Pair<String, Long>? {
-        if (entry !is JsonObject) return null
-        val sha = (entry["sha256"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
-        val size = (entry["size"] as? JsonPrimitive)?.takeIf { !it.isString }?.content
-            ?.takeIf { c -> c.isNotEmpty() && c.trimStart('-').let { d -> d.isNotEmpty() && d.all { it in '0'..'9' } } }
-            ?.toLongOrNull() ?: return null
-        return sha to size
-    }
-
-    /** library.read_regular: the bytes of the regular file at [file], never read through a link in its place; null
-     * for nothing there, anything else, or a file that can't be read. */
-    internal fun regularBytes(file: File): ByteArray? {
-        val path = file.toPath()
-        val attrs = try {
-            Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-        } catch (e: NoSuchFileException) {
-            return null
-        } catch (e: IOException) {
-            return null
-        }
-        if (!attrs.isRegularFile) return null
+    /** library.read_regular: the bytes of the regular file at [path], never read through a link in its place; null
+     * for nothing there, anything else, or a file that can't be read. The library is the app's own folder, which
+     * nothing but the app writes, so the file isn't looked at again once opened. */
+    internal fun regularBytes(path: Path): ByteArray? {
+        if (attrs(path)?.isRegularFile != true) return null
         return try {
             Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS).use { it.readBytes() }
         } catch (e: IOException) {
             null
         }
+    }
+
+    /** What the file at [path] is itself (no link followed), or null for nothing there or a file that can't be looked
+     * at. */
+    internal fun attrs(path: Path): BasicFileAttributes? = try {
+        Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+    } catch (e: IOException) {
+        null
     }
 
     /** bytes.decode("utf-8"): strict, a byte order mark kept as U+FEFF; null for bytes that aren't UTF-8. */

@@ -14,6 +14,7 @@ import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookError
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.web.DownloadNames
+import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.songbooks.Entry
 import io.github.danielhp95.caracole.server.songbooks.SongbookEntries
 import io.github.danielhp95.caracole.viewer.shapes.Instruments
@@ -24,10 +25,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import java.io.File
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 import java.time.ZoneOffset
@@ -40,8 +39,10 @@ import java.time.ZoneOffset
  * The phone makes a songbook's page alone ([PHONE_FILES], `[("songbook.html", "Phone page")]`, songbooks_data's
  * `files`), never chordpro's PDF or .cho: its tab names that one file and links it while it is in the songbook's
  * folder, `_songbooks/<folder>/` of the phone's library. A song's line opens its sheet as its line on the library page
- * does (library_page.sheet_href: its folder's first viewer or PDF, else its text), and its Guitar Pro mark is the
- * file caracole keeps for it (inbox.guitar_files, still in its folder) with caracole serve's page of one it shows.
+ * does (library_page.sheet_href: on the phone its card's primary file, [SongCards], the line's own; with no card that
+ * names one, its folder's first viewer or PDF, else its text), and its Guitar Pro mark is the file caracole keeps for
+ * it (inbox.guitar_files, GuitarFiles.of, still in its folder) with caracole serve's page of one it shows. A song
+ * whose pages are the computer's plays from the mirror's .cho of it (SongbookEntries.sheetOf).
  */
 object SongbookSection {
     /** The songbook's files the phone makes, each (name, label), in the order its tab links them. */
@@ -50,22 +51,28 @@ object SongbookSection {
     /** songbook.FOLDER. */
     private const val FOLDER = "_songbooks"
 
+    /** songs.py's kv of the KEY_VERSION the songs' keys were made at (LibraryStore.ensureCurrentKeys'). */
+    private const val KEY_VERSION_KV = "songs:key_version"
+
     /**
-     * The tab's data for the phone's library, as `/jobs.json` gives it once a job is over (JobsRoutes): null, the
-     * page's own data standing (the mirror's), until the phone serves the songbook pages it writes and reads the
-     * sheets the mirror serves. A Phase A guard, waiting on: written-pages (LibraryFiles serving a songbook's page by
-     * its record) and phone-render (the songs' .cho the entries read, render:files): before them every songbook's
-     * files would read as none and every song the computer rendered as having no sheet. Phase B makes it
-     * `data(db, store.libraryDir, Overrides.read(db), rekey = false)`: a read, which takes the songs' keys as the
-     * writes left them (SongbookEntries.entries' `rekey`).
+     * The tab's data for the phone's library, as `/jobs.json` gives it once a job is over (JobsRoutes): a read, which
+     * takes the songs' keys as the writes left them (SongbookEntries.entries' `rekey`), with the [mirror]'s sheets of
+     * the songs whose pages are the computer's and each line's sheet as its [cards] open it. Null, the page's own data
+     * standing, while kv `songs:key_version` names another KEY_VERSION than this app's (an update that changed how
+     * keys are made, until the render job its start queues re-keys the songs), when every entry would read as not in
+     * the library.
      */
-    @Suppress("UNUSED_PARAMETER")
-    fun data(db: Db, store: LibraryStore): JsonObject? = null
+    fun data(db: Db, store: LibraryStore, mirror: Mirror?, cards: SongCards?): JsonObject? {
+        val keys = db.kvGet(KEY_VERSION_KV)
+        if (keys != null && keys != Normalize.KEY_VERSION.toString()) return null
+        return data(db, store.libraryDir, Overrides.read(db), rekey = false, mirror = mirror, cards = cards)
+    }
 
     /** songbooks_data(conn, cfg, overrides, files=[files]): the songbooks as the Songbooks tab draws them; a
      * songbooks' table that can't be read is said (`error`), and costs the rest of the page nothing. */
     fun data(db: Db, libraryDir: File, overrides: Overrides, files: List<Pair<String, String>> = PHONE_FILES,
-             guitarFiles: (Db) -> List<GuitarFile> = ::keptGuitarFiles, rekey: Boolean = true): JsonObject {
+             guitarFiles: (Db) -> List<GuitarFile> = { GuitarFiles.of(it) }, rekey: Boolean = true,
+             mirror: Mirror? = null, cards: SongCards? = null): JsonObject {
         val shared = linkedMapOf<String, JsonElement>(
             "keys" to JsonArray(Theory.spelling(null).map(::JsonPrimitive)),
             "modes" to JsonArray(Theory.MODES.map { JsonArray(listOf(JsonPrimitive(it), JsonPrimitive(Versions.MODE_NAMES.getValue(it)))) }),
@@ -84,7 +91,7 @@ object SongbookSection {
         }
         val guitar = if (books.isEmpty()) Guitar(emptyMap(), emptyMap()) else Guitar.read(db, guitarFiles)
         val out = linkedMapOf<String, JsonElement>(
-            "books" to JsonArray(books.map { book(db, libraryDir, overrides, it, guitar, files, rekey) }),
+            "books" to JsonArray(books.map { book(db, libraryDir, overrides, it, guitar, files, rekey, mirror, cards) }),
             "error" to JsonNull,
         )
         out.putAll(shared)
@@ -103,8 +110,10 @@ object SongbookSection {
 
     /** songbook_section._book. */
     private fun book(db: Db, libraryDir: File, overrides: Overrides, book: Songbook, guitar: Guitar,
-                     files: List<Pair<String, String>>, rekey: Boolean): JsonObject {
-        val entries = SongbookEntries.entries(db, libraryDir, overrides, book, rekey)
+                     files: List<Pair<String, String>>, rekey: Boolean, mirror: Mirror?, cards: SongCards?): JsonObject {
+        val entries = SongbookEntries.entries(db, libraryDir, overrides, book, rekey, mirror)
+        val shown = entries.mapNotNull { e -> e.song?.takeIf { e.cho?.isNotEmpty() == true } }.distinctBy { it.id }
+        val opened = if (cards != null && shown.isNotEmpty()) cards.cards(db, shown) else emptyMap()
         val getting = SongbookEntries.songsToGet(entries, overrides).mapTo(HashSet()) { it.id }
         val folder = SafeName.safeName(book.name)
         val made = made(File(File(libraryDir, FOLDER), folder), files)
@@ -119,7 +128,9 @@ object SongbookSection {
                 "id" to (song?.id?.let(::JsonPrimitive) ?: JsonNull), "missing" to text(e.missing),
                 "get" to JsonPrimitive(song != null && song.id in getting), "plays" to text(plays),
                 "own" to JsonPrimitive(e.setting == null || e.setting == Setting()), "at" to (at ?: JsonNull),
-                "href" to (if (song != null && e.cho != null) text(sheetHref(libraryDir, song)) else JsonNull),
+                "href" to (if (song != null && e.cho?.isNotEmpty() == true) {
+                    text(primaryHref(opened[song.id]) ?: sheetHref(libraryDir, song))
+                } else JsonNull),
                 "guitar" to (song?.let { guitar.mark(libraryDir, it) } ?: JsonNull),
             ))
         }
@@ -160,6 +171,15 @@ object SongbookSection {
             "sounds" to (key?.let { JsonPrimitive(Math.floorMod(it.tonic + capo, 12)) } ?: JsonNull),
             "inst" to JsonPrimitive(Versions.playedOn(entry.version).id),
         ))
+    }
+
+    /** The file a song's [card] opens its line with (its `files`' `primary`), as SongFacts reads it, or null for a
+     * card that names none. */
+    private fun primaryHref(card: JsonObject?): String? {
+        val files = card?.get("files") as? JsonArray ?: return null
+        return files.filterIsInstance<JsonObject>()
+            .firstOrNull { (it["primary"] as? JsonPrimitive)?.booleanOrNull == true }
+            ?.let { (it["href"] as? JsonPrimitive)?.takeIf { href -> href.isString }?.content }
     }
 
     /** library_page's viewers and PDFs a line opens first, in its order, then its texts (`_primary` over
@@ -209,20 +229,8 @@ object SongbookSection {
         }
     }
 
-    /** inbox.guitar_files, :core's GuitarFiles.of. A Phase A guard, waiting on: guitar-alphatab, whose port it is:
-     * until it lands no file is a mark, so the tab is drawn whatever. */
-    private fun keptGuitarFiles(db: Db): List<GuitarFile> = try {
-        GuitarFiles.of(db)
-    } catch (e: NotImplementedError) {
-        emptyList()
-    }
-
     /** What [file] is itself (no link followed), or null for nothing there or a file that can't be looked at. */
-    private fun attrs(file: File): BasicFileAttributes? = try {
-        Files.readAttributes(file.toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-    } catch (e: IOException) {
-        null
-    }
+    private fun attrs(file: File): BasicFileAttributes? = SongbookEntries.attrs(file.toPath())
 
     private fun text(value: String?): JsonElement = value?.let(::JsonPrimitive) ?: JsonNull
 }

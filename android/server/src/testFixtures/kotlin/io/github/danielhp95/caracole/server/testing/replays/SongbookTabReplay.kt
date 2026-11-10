@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.server.testing.replays
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.inbox.GuitarFile
-import io.github.danielhp95.caracole.core.inbox.GuitarFiles
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -117,8 +116,7 @@ object SongbookTabReplay : AreaReplay {
         }
     }
 
-    /** vectors/songbook/tab.jsonl; [guitarFiles] in place of GuitarFiles.of, for a test that checks the marks before
-     * it lands. */
+    /** vectors/songbook/tab.jsonl, the Guitar Pro marks of GuitarFiles.of, or of [guitarFiles] in its place. */
     fun tab(misses: Misses, guitarFiles: ((Db) -> List<GuitarFile>)? = null) {
         val overrides = overrides(Corpus.records(ENTRIES))
         withLibrary { db, dir ->
@@ -129,13 +127,9 @@ object SongbookTabReplay : AreaReplay {
                             Files.setLastModifiedTime(File(dir, path).toPath(), FileTime.fromMillis(time.jsonPrimitive.long * 1000))
                         }
                         val files = r.kw.getValue("files").jsonArray.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.content }
-                        // A Phase A guard, waiting on: guitar-alphatab (GuitarFiles.of, inbox.guitar_files): until
-                        // it lands no song has a Guitar Pro mark, so the marks alone go unchecked.
-                        val marks = guitarFiles != null || guitarFilesBuilt(db)
-                        misses.expect(r.fn, files, r.out?.let { if (marks) it else withoutMarks(it) }) {
-                            val data = if (guitarFiles == null) SongbookSection.data(db, dir, overrides, files)
-                                       else SongbookSection.data(db, dir, overrides, files, guitarFiles)
-                            if (marks) data else withoutMarks(data)
+                        misses.expect(r.fn, files, r.out) {
+                            if (guitarFiles == null) SongbookSection.data(db, dir, overrides, files)
+                            else SongbookSection.data(db, dir, overrides, files, guitarFiles)
                         }
                     }
                     "test_conformance_songbook_tab.book_songs" -> {
@@ -189,23 +183,6 @@ object SongbookTabReplay : AreaReplay {
             JsonObject(mapOf("out" to (r.out ?: JsonNull)))
         }
         misses.check(canonical(got) == canonical(want)) { "set_song_setting(${r.args}) answered $got, Python's $want" }
-    }
-
-    private fun guitarFilesBuilt(db: Db): Boolean = try {
-        GuitarFiles.of(db)
-        true
-    } catch (e: NotImplementedError) {
-        false
-    }
-
-    /** The tab's data with every song's Guitar Pro mark taken out. */
-    private fun withoutMarks(data: JsonElement): JsonElement {
-        val tab = data.jsonObject
-        return JsonObject(tab + ("books" to JsonArray(tab.getValue("books").jsonArray.map { book ->
-            JsonObject(book.jsonObject + ("set" to JsonArray(book.jsonObject.getValue("set").jsonArray.map {
-                JsonObject(it.jsonObject - "guitar")
-            })))
-        })))
     }
 
     private fun values(db: Db): JsonArray = JsonArray(Songbooks.all(db).map(Songbooks::value))

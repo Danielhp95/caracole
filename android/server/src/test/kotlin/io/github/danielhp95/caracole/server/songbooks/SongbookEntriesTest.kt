@@ -2,8 +2,8 @@ package io.github.danielhp95.caracole.server.songbooks
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.inbox.GuitarFile
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -13,8 +13,12 @@ import io.github.danielhp95.caracole.core.songbooks.Setting
 import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookSong
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
+import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.server.page.SongCards
 import io.github.danielhp95.caracole.server.page.SongbookSection
 import io.github.danielhp95.caracole.server.testing.replays.SongbookTabReplay
 import kotlinx.serialization.json.JsonArray
@@ -31,12 +35,14 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** songbook.py's entries and plays and songbook_section's data on the phone: the corpus's songbook-tab area replayed
- * (entries.jsonl, tab.jsonl), and what the vectors can't show: a sheet changed on disk, a link in a sheet's place, a
- * read that never re-keys. */
+ * (entries.jsonl, tab.jsonl), and what the vectors can't show: a sheet changed on disk, a link in a sheet's place, the
+ * mirror's sheet of a song whose pages are the computer's, a line's sheet as its card opens it, a read that never
+ * re-keys. */
 class SongbookEntriesTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -58,23 +64,6 @@ class SongbookEntriesTest {
         SongbookTabReplay.tab(misses)
         misses.assertNone()
         assertTrue(misses.checked >= 9, "${misses.checked} answers checked")
-    }
-
-    @Test fun theGuitarProMarksAreSongbookSectionsForTheFilesInboxGuitarFilesGives() {
-        // inbox.guitar_files, as its SQL and its pattern read the files table (GuitarFiles.of is guitar-alphatab's)
-        val files = { db: Db ->
-            db.query("SELECT f.song_id, f.name, f.path FROM files f JOIN versions v ON v.id = f.version_id " +
-                         "WHERE v.kind IN ('guitar-pro', 'power')") { Triple(it.long(0)!!, it.text(1)!!, it.text(2)!!) }
-                .mapNotNull { (song, name, path) ->
-                    val m = Regex("guitar-(\\d+)(\\.[A-Za-z0-9]+)").matchEntire(name) ?: return@mapNotNull null
-                    if (m.groupValues[2].lowercase() !in listOf(".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb")) null
-                    else GuitarFile(song, name, path, m.groupValues[1].toInt())
-                }
-                .sortedWith(compareBy({ it.songId }, { it.number }, { it.name }))
-        }
-        val misses = Misses("songbook-tab tab, the marks")
-        SongbookTabReplay.tab(misses, files)
-        misses.assertNone()
     }
 
     /** A song with a sheet the phone rendered: sheet.txt kept, sheet.cho written and recorded as render.py records
@@ -118,6 +107,126 @@ class SongbookEntriesTest {
             db.kvSet("render:files:${song.id}", "not json")
             assertNull(SongbookEntries.sheetOf(db, library, song))
         }
+    }
+
+    /** A song taken from the computer: its sheet.txt kept, no page of the phone's (no render record). */
+    private fun taken(db: Db, artist: String, title: String): SongRow {
+        val song = store.add(db, artist, title, now = NOW)
+        val version = LibraryVersions.upsert(db, provider = "ug", tabId = "2${song.id}", songId = song.id, slot = "sheet",
+                                             kind = "chords", rating = 4.5, votes = 3, version = 1, label = null,
+                                             url = "", raw = JsonObject(emptyMap()), now = NOW)
+        Kept.keepFile(db, store, song, version, "sheet.txt", "words".toByteArray(), 1, NOW)
+        return song
+    }
+
+    /** A mirror holding [files] (path, content, unit, digest), as a sync leaves one: its blobs and its list. */
+    private fun mirror(vararg files: List<String?>): Mirror {
+        val mirror = Mirror(tmp.newFolder())
+        mirror.blobs.mkdirs()
+        val start = "index.html"
+        val entries = (files.toList() + listOf(listOf(start, "<!doctype html>start", null, null))).map { (path, content, unit, digest) ->
+            val bytes = content!!.toByteArray()
+            File(mirror.blobs, Canonical.sha256Hex(bytes)).writeBytes(bytes)
+            val page = path!!.endsWith(".html")
+            JsonObject(buildMap {
+                put("path", JsonPrimitive(path)); put("url", JsonPrimitive("/" + PyUrl.quote(path)))
+                put("size", JsonPrimitive(bytes.size)); put("sha256", JsonPrimitive(Canonical.sha256Hex(bytes)))
+                put("type", JsonPrimitive(if (page) "text/html; charset=utf-8" else "text/plain; charset=utf-8"))
+                put("headers", JsonObject(emptyMap()))
+                unit?.let { put("unit", JsonPrimitive(it)) }
+                digest?.let { put("digest", JsonPrimitive(it)) }
+            })
+        }
+        mirror.manifestFile.writeText(JsonObject(mapOf("format" to JsonPrimitive(1), "start" to JsonPrimitive(start),
+                                                       "files" to JsonArray(entries))).toString())
+        assertEquals(files.map { it[2] }, mirror.reload()!!.entries.dropLast(1).map { it.unit })
+        return mirror
+    }
+
+    @Test fun aSongWhosePagesAreTheComputersPlaysFromTheMirrorsSheetWhileItIsOfTheSongAsThePhoneHoldsIt() {
+        val cho = "{title: Creep}\n{artist: Radiohead}\n[G]Words [B]here\n"
+        database.writeBlocking { db ->
+            val song = taken(db, "Radiohead", "Creep")
+            val unit = "song/${song.key}"
+            val now = Units.digestOf(db, unit)!!
+            val book = Songbook("Gig", listOf(SongbookSong("Radiohead - Creep", Setting(key = "A"))))
+            // with no mirror, as on the computer: the phone wrote no .cho of it, so no sheet yet, and a get would ask
+            val alone = SongbookEntries.entries(db, library, Overrides(), book).single()
+            assertEquals(SongbookEntries.MISSING_SHEET, alone.missing)
+            assertEquals(listOf(song.key), SongbookEntries.songsToGet(listOf(alone), Overrides()).map { it.key })
+            // the computer's sheet.cho of the song as the phone holds it: its sheet, and nothing to get
+            val served = mirror(listOf("Radiohead/Creep/sheet.cho", cho, unit, now))
+            val (entry) = SongbookEntries.entries(db, library, Overrides(), book, mirror = served)
+            assertEquals(cho, entry.cho)
+            assertNull(entry.missing)
+            assertEquals("A Major", SongbookEntries.playsIn(entry))
+            assertEquals(emptyList(), SongbookEntries.songsToGet(listOf(entry), Overrides()))
+            // made of the song at another digest (the phone changed it since), of another unit, of none: none
+            for (other in listOf(listOf("Radiohead/Creep/sheet.cho", cho, unit, "0".repeat(64)),
+                                 listOf("Radiohead/Creep/sheet.cho", cho, "song/someone-else", now),
+                                 listOf("Radiohead/Creep/sheet.cho", cho, null, null))) {
+                assertNull(SongbookEntries.sheetOf(db, library, song, mirror(other)), other.toString())
+            }
+            // a blob that isn't the bytes listed: none
+            File(served.blobs, Canonical.sha256Hex(cho.toByteArray())).writeText("{title: changed}\n")
+            assertNull(SongbookEntries.sheetOf(db, library, song, served))
+        }
+    }
+
+    @Test fun theSheetThePhoneWroteGoesBeforeTheMirrorsAndOneChangedOnDiskIsNoneEvenWithTheMirrors() {
+        val cho = "{title: Creep}\n{artist: Radiohead}\n[G]Words [B]here\n"
+        database.writeBlocking { db ->
+            val song = rendered(db, "Radiohead", "Creep", cho)
+            val unit = "song/${song.key}"
+            val served = mirror(listOf("Radiohead/Creep/sheet.cho", "{title: the computer's}\n", unit, Units.digestOf(db, unit)))
+            assertEquals("sheet.cho" to cho, SongbookEntries.sheetOf(db, library, song, served))
+            Files.write(File(store.folderOf(song), "sheet.cho").toPath(), "{title: changed}\n".toByteArray())
+            assertNull(SongbookEntries.sheetOf(db, library, song, served))
+        }
+    }
+
+    @Test fun aSetListsSheetOpensAsItsLineOpensItAndAnEmptySheetLinksNone() {
+        database.writeBlocking { db ->
+            rendered(db, "Radiohead", "Creep", "{title: Creep}\n")
+            rendered(db, "Muse", "Hysteria", "")
+            Songbooks.make(db, "Gig", listOf("Radiohead - Creep", "Muse - Hysteria"))
+        }
+        File(store.libraryDir, "Radiohead/Creep/sheet.html").writeText("a page")
+        fun hrefs(cards: SongCards?) = database.read { db ->
+            SongbookSection.data(db, library, Overrides.read(db), rekey = false, cards = cards)
+        }.getValue("books").jsonArray.single().jsonObject.getValue("set").jsonArray.map { it.jsonObject["href"] }
+        // library_page.sheet_href over the folder; an empty .cho is no sheet to link, as Python's `e.cho` is false
+        assertEquals(listOf(JsonPrimitive("Radiohead/Creep/sheet.html"), JsonNull), hrefs(null))
+        // the card's primary file, which the song's line opens
+        val cards = object : SongCards {
+            override fun cards(db: Db, songs: List<SongRow>) = songs.associate { song ->
+                song.id to JsonObject(mapOf("files" to JsonArray(listOf(
+                    JsonObject(mapOf("href" to JsonPrimitive("Radiohead/Creep/sheet.txt"), "primary" to JsonPrimitive(false))),
+                    JsonObject(mapOf("href" to JsonPrimitive("Radiohead/Creep/sheet.pdf"), "primary" to JsonPrimitive(true))),
+                ))))
+            }
+        }
+        assertEquals(listOf(JsonPrimitive("Radiohead/Creep/sheet.pdf"), JsonNull), hrefs(cards))
+        // a card that names no primary file: the folder's, as on the computer
+        val none = object : SongCards {
+            override fun cards(db: Db, songs: List<SongRow>) = songs.associate { it.id to JsonObject(emptyMap()) }
+        }
+        assertEquals(listOf(JsonPrimitive("Radiohead/Creep/sheet.html"), JsonNull), hrefs(none))
+    }
+
+    @Test fun theTabsDataForJobsJsonIsTheMirrorsWhileTheKeysAreAKeyVersionBehind() {
+        database.writeBlocking { db ->
+            store.add(db, "Muse", "Hysteria", now = NOW)
+            Songbooks.make(db, "Camp Fire", listOf("Muse - Hysteria"))
+        }
+        assertEquals("Muse - Hysteria", database.read { db -> SongbookSection.data(db, store, null, null) }!!
+            .getValue("books").jsonArray.single().jsonObject.getValue("set").jsonArray.single().jsonObject
+            .getValue("entry").jsonPrimitive.content)
+        database.writeBlocking { db -> db.kvSet("songs:key_version", "1") }  // an app whose keys moved, not re-keyed yet
+        assertNull(database.read { db -> SongbookSection.data(db, store, null, null) })
+        database.writeBlocking { db -> store.ensureCurrentKeys(db) }  // the render job its start queues re-keys
+        assertEquals(Normalize.KEY_VERSION.toString(), database.read { db -> db.kvGet("songs:key_version") })
+        assertNotNull(database.read { db -> SongbookSection.data(db, store, null, null) })
     }
 
     @Test fun anEntryTheLibraryHasNoSongOfIsNamedByItsTextAndAGetSkipsIt() {

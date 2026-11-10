@@ -15,14 +15,19 @@ import io.github.danielhp95.caracole.core.songbooks.Setting
 import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookSong
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
+import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.testing.replays.SongbookTabReplay
 import io.github.danielhp95.caracole.viewer.pages.SongbookPage
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -45,7 +50,8 @@ class SongbookPagesTest {
     private val database: Database by lazy { TestDb.fresh(tmp.root) }
     private val library: File by lazy { tmp.newFolder("library") }
     private val store: LibraryStore by lazy { LibraryStore(library) }
-    private val pages: SongbookPagesImpl by lazy { SongbookPagesImpl(database, store) }
+    private var stamp = "build-1"
+    private val pages: SongbookPagesImpl by lazy { SongbookPagesImpl(database, store, null) { stamp } }
 
     @After fun close() = database.close()
 
@@ -94,16 +100,30 @@ class SongbookPagesTest {
         assertEquals(SongbookPage.build("Camp Fire", SongbookPagesImpl.bookSongs(entries)), String(bytes))
         val record = database.read { db -> record(db, "Camp Fire") }
         assertEquals(listOf("inputs", "files"), record.keys.toList())
+        // each file's entry names the songbook unit's digest it was made at, as WrittenPages.noteSongbook writes it
+        val unit = database.read { db -> Units.digestOf(db, WrittenPages.songbookUnit(db, "Camp Fire")!!) }!!
         assertEquals(JsonObject(linkedMapOf("songbook.html" to JsonObject(linkedMapOf(
-            "sha256" to JsonPrimitive(Canonical.sha256Hex(bytes)), "size" to JsonPrimitive(bytes.size))))), record["files"])
+            "sha256" to JsonPrimitive(Canonical.sha256Hex(bytes)), "size" to JsonPrimitive(bytes.size),
+            "unit" to JsonPrimitive(unit))))), record["files"])
+        assertTrue(database.read { db -> WrittenPages.songbookCurrent(db, "Camp Fire", "songbook.html") })
         // nothing changed: nothing written
         assertEquals(SongbookStats(skipped = 2), write { db -> pages.render(db, null) })
         // only the songbooks asked for, by their names in any case
         assertEquals(SongbookStats(skipped = 1), write { db -> pages.render(db, setOf("PICNIC")) })
-        // a setting moves its song: the page again
+        // a setting moves its song: the page again, current at the unit's digest now
         write { db -> Songbooks.set(db, "Camp Fire", "Radiohead - Creep", Setting(key = "A")) { null } }
+        assertFalse(database.read { db -> WrittenPages.songbookCurrent(db, "Camp Fire", "songbook.html") })
         assertEquals(SongbookStats(rendered = 1, skipped = 1), write { db -> pages.render(db, null) })
         assertFalse(bytes.contentEquals(page.readBytes()))
+        assertTrue(database.read { db -> WrittenPages.songbookCurrent(db, "Camp Fire", "songbook.html") })
+        // a change to the songbook its page doesn't show (a song's setting that says what it played already): the
+        // page stays as written, recorded at the digest now
+        val shown = page.readBytes()
+        write { db -> Songbooks.set(db, "Camp Fire", "Muse - Hysteria", Setting(key = "A")) { null } }
+        assertFalse(database.read { db -> WrittenPages.songbookCurrent(db, "Camp Fire", "songbook.html") })
+        assertEquals(SongbookStats(skipped = 1), write { db -> pages.render(db, setOf("camp fire")) })
+        assertTrue(shown.contentEquals(page.readBytes()))
+        assertTrue(database.read { db -> WrittenPages.songbookCurrent(db, "Camp Fire", "songbook.html") })
         // changed on a device: written again, as it was
         val now = page.readBytes()
         page.writeBytes("a page of someone else's".toByteArray())
@@ -165,8 +185,66 @@ class SongbookPagesTest {
             version = entry.version.copy(t = -1, capo = 0, inst = "piano"), setting = Setting(instrument = "piano"))))
     }
 
-    @Test fun theLookupsSeamWaitsForThePhoneToServeItsPages() {
-        assertSame(SongbookPages.NONE, pages.seam)
+    @Test fun theLookupsSeamIsTheSongbooksPages() {
+        assertSame<SongbookPages>(pages, pages.seam)
+    }
+
+    @Test fun aNewBuildMakesAnOtherwiseUnchangedPageAgain() {
+        write { db -> Songbooks.make(db, "Gig", listOf("Muse - Hysteria")) }
+        assertEquals(SongbookStats(rendered = 1), write { db -> pages.render(db, null) })
+        assertEquals(SongbookStats(skipped = 1), write { db -> pages.render(db, null) })
+        val before = database.read { db -> record(db, "Gig") }.getValue("inputs")
+        stamp = "build-2"  // the app updated: the page's inputs name the build that makes it now, so it is made again
+        // (here the same bytes, which aren't written again: a build whose viewer changed writes its own)
+        assertEquals(SongbookStats(skipped = 1), write { db -> pages.render(db, null) })
+        assertFalse(before == database.read { db -> record(db, "Gig") }.getValue("inputs"))
+        assertEquals(SongbookStats(skipped = 1), write { db -> pages.render(db, null) })
+    }
+
+    @Test fun renderOwnMakesAgainTheSongbooksThePhoneMadeAPageOfAndNoOther() {
+        write { db ->
+            Songbooks.make(db, "Gig", listOf("Muse - Hysteria"))
+            Songbooks.make(db, "Picnic", listOf("Muse - Hysteria"))
+            pages.render(db, setOf("Gig"))
+        }
+        val gig = File(library, "_songbooks/Gig/songbook.html")
+        val made = gig.readText()
+        gig.writeText("changed on a device")
+        assertEquals(SongbookStats(rendered = 1), write { db -> pages.renderOwn(db) })
+        assertEquals(made, gig.readText())
+        assertFalse(File(library, "_songbooks/Picnic").exists())  // the computer's page, the mirror's, stands
+        assertNull(database.read { db -> db.kvGet("songbook:Picnic") })
+        // one gone: its files go, as render_songbooks' _remove_gone takes them
+        write { db -> Songbooks.delete(db, "Gig") }
+        assertEquals(SongbookStats(removed = 1), write { db -> pages.renderOwn(db) })
+        assertFalse(gig.exists())
+    }
+
+    @Test fun eachSongPlaysInItsOwnVersionAsItPlaysNowAsRenderSongbooksUpgradesItFirst() {
+        // own_versions' fixture: Hotel California kept by `key=B&capo=2`, made while caracole read its UG key "B"
+        // as major; its sheet reads as minor now, so render_songbooks first rewrites the entry in the minor key
+        // that plays it where it did (render.own_versions_upgraded)
+        val record = Corpus.records("viewer/render.jsonl").first { it.extra["case"] == JsonPrimitive("own_versions") }
+        write { db -> Fixtures.loadRecords(db, record.args[0].jsonArray.map { it.jsonObject }, library) }
+        val render = PhoneRender(database, library, null, "0.1.0")
+        write { db -> render.render(db, listOf(1L), null) }  // its sheet.cho, written and recorded
+        val upgraded = database.read { db -> Overrides.read(db).version.getValue("eagles/hotel-california") }
+        assertFalse(upgraded == "key=B&capo=2")
+        write { db ->  // as before the upgrade: the entry as it was kept, never rewritten yet
+            db.execute("UPDATE phone_overrides SET value = ? WHERE tbl = 'version' AND key = ?", "\"key=B&capo=2\"",
+                       "eagles/hotel-california")
+            db.kvDelete("keys:own_versions")
+            Songbooks.make(db, "Gig", listOf("Eagles - Hotel California"))
+        }
+        val (asKept, asNow) = database.read { db ->
+            val book = Songbooks.find(Songbooks.all(db), "Gig")!!
+            listOf(Overrides.read(db), Overrides.read(db).let { it.copy(version = it.version + ("eagles/hotel-california" to upgraded)) })
+                .map { SongbookPagesImpl.bookSongs(SongbookEntries.entries(db, library, it, book, rekey = false)) }
+        }
+        assertFalse(asKept == asNow, "the upgrade moves where the songbook plays it")
+        assertEquals(SongbookStats(rendered = 1), write { db -> pages.render(db, null) })
+        assertEquals(upgraded, database.read { db -> Overrides.read(db).version.getValue("eagles/hotel-california") })
+        assertEquals(SongbookPage.build("Gig", asNow), File(library, "_songbooks/Gig/songbook.html").readText())
     }
 
     private companion object {
