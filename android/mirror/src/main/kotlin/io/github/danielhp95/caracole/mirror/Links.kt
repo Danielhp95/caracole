@@ -38,9 +38,10 @@ sealed interface Route {
  * (a Termux caracole serve's 8737) included, opens in the browser, which has no such cookie.
  *
  * [isFile] says whether a path of the library ("Estopa/Tu calorro/sheet.pdf") is a file another app opens rather than a
- * page: a link to one is [Route.File]. A page that takes itself for served links caracole serve's Guitar Pro page,
- * `/guitar?file=<its path>`, for each Guitar Pro file: the file opens as any other. Its Export PDF,
- * `/export.pdf?<the version>`, is printed ([Route.Print]), a navigation or a download alike.
+ * page: a link to one is [Route.File]. The Guitar Pro page, `/guitar?file=<its path>`, which the library page and a
+ * served viewer link each Guitar Pro file to, is a page the phone serves (its GuitarRoutes, alphaTab from the APK);
+ * a download of it, the file. Its Export PDF, `/export.pdf?<the version>`, is printed ([Route.Print]), a navigation
+ * or a download alike.
  */
 class Links(origin: URI, private val isFile: (String) -> Boolean) {
     private val scheme = origin.scheme.lowercase()
@@ -56,10 +57,7 @@ class Links(origin: URI, private val isFile: (String) -> Boolean) {
         if (!own(uri)) return Route.Browser(url)
         val path = (uri.path ?: "").removePrefix("/")
         if (path == EXPORT) return Route.Print(url)
-        if (path == GUITAR_PAGE) {
-            val file = query(uri.rawQuery)["file"]
-            if (file != null && (download || isFile(file))) return Route.File(file)
-        }
+        if (path == GUITAR_PAGE && download) query(uri.rawQuery)["file"]?.let { return Route.File(it) }
         return when {
             download -> if (path.isEmpty()) Route.Ignored else Route.File(path)
             path.isNotEmpty() && isFile(path) -> Route.File(path)
@@ -107,7 +105,7 @@ class Links(origin: URI, private val isFile: (String) -> Boolean) {
     }
 
     companion object {
-        /** caracole serve's Guitar Pro page, which a served viewer links each Guitar Pro file to. */
+        /** The Guitar Pro page, which the library page and a served viewer link each Guitar Pro file to. */
         private const val GUITAR_PAGE = "guitar"
 
         /** caracole serve's Export PDF, which a served viewer's settings link (viewer.js). */

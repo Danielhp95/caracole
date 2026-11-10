@@ -195,8 +195,9 @@ class RoutingTest {
                        HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the Songbooks tab's forms
-                // SongbookRoutes' (SongbookRoutesTest), the rest neutral still.
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), Export PDF ExportRoutes'
+                // (ExportRoutesTest), the Songbooks tab's forms SongbookRoutes' (SongbookRoutesTest), the rest
+                // neutral still.
                 for (path in listOf("/songbook/make", "/songbook/add", "/songbook/add-song", "/songbook/get",
                                     "/songbook/remove", "/songbook/move", "/songbook/set", "/songbook/rename",
                                     "/songbook/delete")) {
@@ -211,8 +212,13 @@ class RoutingTest {
                     assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
                 }
-                for (path in listOf("/review", "/versions", "/harmonica", "/guitar", "/export.pdf",
-                                    "/assets/alphatab/alphaTab.min.js")) {
+                // The Guitar Pro page and alphaTab's bundle are GuitarRoutes' own now (server.guitar's GuitarPageTest),
+                // and no stub stands in for either.
+                for (path in listOf("/guitar", "/assets/alphatab/", "/assets/alphatab/alphaTab.min.js")) {
+                    assertTrue(path !in stubbed, "$path is its module's now")
+                }
+                assertTrue(stubbed.none { it.startsWith("/assets/alphatab") || it == "/guitar" }, stubbed.toString())
+                for (path in listOf("/review", "/versions", "/harmonica")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")
                     assertEquals(409, page.status, path)
