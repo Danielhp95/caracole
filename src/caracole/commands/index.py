@@ -272,10 +272,10 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
             except transfer.TransferError as e:
                 refused(str(e), 2, done_with=True)
             except backup.BackupError as e:
-                refused(f"no backup, so no merge: {e}. Nothing changed.", 1, done_with=False)
+                refused(f"No backup, so no merge: {e}. Nothing changed.", 1, done_with=False)
     except typer.Exit:
         if not ended:  # caracole's lock or its database not to be had: their words are the log's
-            stage("failed", "Not merged: caracole's lock or its database couldn't be had (its log says why). "
+            stage("failed", "Not merged: couldn't get the lock or the database (see the log). "
                             "Nothing changed.")
         raise
     except Exception as e:
@@ -286,7 +286,7 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
         file.unlink(missing_ok=True)
     if not merged.changed:
         typer.echo(f"Nothing to merge: {cfg.db_path} holds everything {file} does, read as recently.")
-        stage("done", "Nothing read more recently")
+        stage("done", "Nothing newer")
         return
     if merged.backup is not None:
         typer.echo(f"Backed up the database to {merged.backup} first.")

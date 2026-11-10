@@ -86,17 +86,17 @@ log = logging.getLogger(__name__)
 
 STAGES = (
     ("song", "Find the song"),
-    ("match", "Match it against the offline index"),
-    ("sheet", "The sheet"),
-    ("pdf", "The PDF"),
-    ("lyrics", "Lyrics from LRCLIB"),
-    ("ug", "Ultimate Guitar: the sheets scored, the tab"),
+    ("match", "Match on UG's index"),
+    ("sheet", "Sheet"),
+    ("pdf", "PDF"),
+    ("lyrics", "Lyrics"),
+    ("ug", "UG: versions scored, tab"),
     ("lacuerda", "LaCuerda"),
-    ("gtptabs", "A Guitar Pro file from gtptabs.com"),
-    ("harptabs", "A harmonica tab from harptabs.com"),
-    ("gametabs", "A tab of game music from gametabs.net"),
-    ("pages", "The library page"),
-    ("songbooks", "The songbooks it is in"),
+    ("gtptabs", "Guitar Pro file from gtptabs"),
+    ("harptabs", "Harmonica tab from harptabs"),
+    ("gametabs", "Game music tab from gametabs"),
+    ("pages", "The logbook page"),
+    ("songbooks", "Its songbooks"),
 )
 STAGE_LABELS = dict(STAGES)
 NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "megalobiz": "Megalobiz", "azlyrics": "AZLyrics",
@@ -107,15 +107,15 @@ _FIRST_SCORED = 1  # sheets fetched for it: the best rated
 SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
 # A running sheet stage's detail, once it asks a site: the site it asks now, which caracole serve's line follows
 # (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's, and its Sheet step ("Sheet LaCuerda").
-SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
+SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from UG"}
 # How the match stage begins for a song the offline index lacks, which caracole serve's Match step reads
 # ("Match: not on UG").
-MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
+MATCH_NOT_FOUND = "not in UG's index"
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
 HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
-NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
+NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 # The words of a caracole with no ChordPro, no wanted.txt and no index.html to write (the phone's: android/): its
 # song stage for a song new to it, its pdf stage while it makes no page of the song (skipped) and once it makes them,
 # and its pages stage, whose library page is made as it is asked for. Used by nothing here but the conformance corpus
@@ -288,15 +288,15 @@ class _Lookup:
         from caracole.health import get_state, is_cooling
 
         if not self.cfg.provider(provider).enabled:
-            return f"{NAMES[provider]} is off in caracole.toml"
+            return f"{NAMES[provider]} is off (caracole.toml)"
         if provider in self.blocked:
-            return f"{NAMES[provider]} blocked caracole: it cools down, and the nightly run asks again later"
+            return f"{NAMES[provider]} turned us back; we wait it out, and tonight's run asks again"
         if provider in self.failed:
-            return f"{NAMES[provider]} failed earlier in this lookup; the nightly run tries again"
+            return f"{NAMES[provider]} failed earlier in this fetch; tried again tonight"
         if is_cooling(self.conn, provider, self.now):
             until = get_state(self.conn, provider).cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return f"{NAMES[provider]} is cooling down after a block, until {when}"
+            return f"Waiting out {NAMES[provider]} until {when}"
         return None
 
     def client(self, provider: str):
@@ -325,23 +325,23 @@ class _Lookup:
             state = record_block(self.conn, e.provider, self.now, str(e))
             self.blocked.add(e.provider)
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            return "skipped", (f"{NAMES[e.provider]} blocked caracole ({e}): no more requests to it until {until}. "
-                               "Nothing was marked not found.")
+            return "skipped", (f"{NAMES[e.provider]} turned us back ({e}). No more asks until {until}. "
+                               "Nothing marked not on the sites.")
         except BudgetExhausted as e:
             self._owed(provider)
             p = self.cfg.provider(e.provider)
             if e.provider in self.kept_for_sheets:
                 spent = self._kept_for_sheets(e.provider)
             elif client.policy.budget < p.lookup_requests:
-                spent = f"this hour's {p.lookup_per_hour} lookup requests to {NAMES[e.provider]} are spent"
+                spent = f"no more asks of {NAMES[e.provider]} this hour ({p.lookup_per_hour} spent)"
             else:
-                spent = f"the lookup's {p.lookup_requests} requests to {NAMES[e.provider]} are spent"
-            return "skipped", f"{spent}; the nightly run does the rest"
+                spent = f"this fetch's {p.lookup_requests} asks of {NAMES[e.provider]} are spent"
+            return "skipped", f"{spent}; tonight's run does the rest"
         except ProviderError as e:
             self._owed(provider)
             record_error(self.conn, e.provider, self.now, str(e))
             self.failed.add(e.provider)  # as in a nightly step: an error ends the site's part for this lookup
-            return "failed", f"{NAMES.get(e.provider, e.provider)} failed ({e}); the nightly run tries again"
+            return "failed", f"{NAMES.get(e.provider, e.provider)} failed ({e}); tried again tonight"
         except SharedFolder as e:  # nothing written over the other song's file: this one waits, as in the run
             return "failed", shared_folder(e).text
 
@@ -367,7 +367,7 @@ class _Lookup:
         p = self.cfg.provider(provider)
         left = p.lookup_per_hour - math.ceil(p.lookup_per_hour * SHEETS_SHARE) - lookup_requests_used(self.conn, provider)
         if left <= 0 and self._usable(provider) is None:
-            return "skipped", f"{self._kept_for_sheets(provider)}; the nightly run does the rest"
+            return "skipped", f"{self._kept_for_sheets(provider)}; tonight's run does the rest"
 
         def within(client) -> tuple[str, str] | str:
             if client.requests_made + left < client.policy.budget:  # no stage after it asks this site for a sheet
@@ -379,8 +379,8 @@ class _Lookup:
 
     def _kept_for_sheets(self, provider: str) -> str:
         p = self.cfg.provider(provider)  # SHEETS_SHARE is a half
-        return (f"this hour's lookups have spent half of their {p.lookup_per_hour} requests to {NAMES[provider]}, "
-                "and the other half is kept for sheets")
+        return (f"half this hour's {p.lookup_per_hour} asks of {NAMES[provider]} are spent; "
+                "the rest is kept for sheets")
 
     # --- what can be read -----------------------------------------------------------------------------
 
@@ -426,25 +426,25 @@ class _Lookup:
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
-            raise _Stop(f"{req.display} is ignored in overrides.toml: take it out of [ignore] to look it up")
+            raise _Stop(f"{req.display} is ignored (overrides.toml [ignore]). Take it out to fetch it")
         if req.tab:
             self._refuse_an_unused_kind(req)
         song = find_song(self.conn, key)
-        said = "in the library"
+        said = "in the book"
         if song is None:
             try:
                 line = append_wanted(self.cfg.wanted_file, req.artist, req.title, req.album, req.duration_ms)
             except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-                raise _Stop(f"caracole can't add this song: {e}") from e
+                raise _Stop(f"Can't add this song: {e}") from e
             except OSError as e:
-                raise _Stop(f"wanted.txt can't be written: {e.strerror or e}") from e
+                raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
             sync_wanted(self.conn, self.cfg.wanted_file, self.now)
             song = find_song(self.conn, line.identity)
             if song is None:
-                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but couldn't be synced")
+                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
             said = f"added to wanted.txt, line {line.line_no}"
         if song.status == "ignored":
-            raise _Stop(f"{song.display} is ignored in overrides.toml: take it out of [ignore] to look it up")
+            raise _Stop(f"{song.display} is ignored (overrides.toml [ignore]). Take it out to fetch it")
         picked = []
         try:
             if req.ug:
@@ -470,13 +470,13 @@ class _Lookup:
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
-            raise _Stop(f"your pick can't be recorded in overrides.toml: {e}") from e
+            raise _Stop(f"Couldn't note your pick in overrides.toml: {e}") from e
         self.song = song
         self.result.song_id, self.result.display = song.id, song.display
         tell = getattr(self.progress, "song", None)  # a Progress of another shape may not hear it
         if tell is not None:
             tell(song.id, song.display)
-        return said + (f"; recorded in overrides.toml: {', '.join(picked)}" if picked else "")
+        return said + (f"; noted in overrides.toml: {', '.join(picked)}" if picked else "")
 
     def _refuse_an_unused_kind(self, req: LookupRequest) -> None:
         """Stop, before anything is written, when the address of the tab asked for names a type caracole doesn't use
@@ -490,7 +490,7 @@ class _Lookup:
             return  # said as the pin is recorded
         kind = classify_tab_url(pin_url(req.tab or ""))
         if isinstance(kind, str) and kind not in (BARE, UNRECOGNIZED):
-            raise _Stop(f"tab {tab_id} is not a chords, tabs or ukulele chords page")
+            raise _Stop(f"tab {tab_id} isn't chords, a tab or ukulele chords")
 
     def _other_pins(self, song, tab_id: int) -> list[str]:
         """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
@@ -529,12 +529,12 @@ class _Lookup:
         r = change.new
         target = f"{r.artist_key}/{r.song_key}" if r.artist_key and r.song_key else ""
         words = {"accept": f"matched to {target}", "pinned": f"pinned to {target or 'your tab'}",
-                 "review": f"not sure which Ultimate Guitar song: {target} is the nearest",
+                 "review": f"not sure which UG song: nearest is {target}",
                  "not_found": MATCH_NOT_FOUND, "ignored": "ignored in overrides.toml"}
         said = words.get(self.song.match_decision or "not_found", self.song.match_decision or "")
         if state != "complete" and r.step not in ("override", "pin"):
-            said += (" (the offline index is empty: run caracole index build once)" if state == "empty"
-                     else " (the offline index is incomplete)")
+            said += (" (UG's index is empty: run caracole index build once)" if state == "empty"
+                     else " (UG's index is incomplete)")
         return said
 
     def _ug_ready(self) -> str | None:
@@ -547,7 +547,7 @@ class _Lookup:
         if needs_artist_page(song) and artist_is_known(self.conn, song, self.overrides):
             return None  # its artist's UG page may list it (A6)
         if song.match_decision == "review":
-            return ("caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, "
+            return ("not sure which UG song this is: pick it on the lookup page, "
                     "or run caracole review")
         return NOT_IN_INDEX
 
@@ -608,8 +608,8 @@ class _Lookup:
             def first(client) -> str:
                 self._sheet_from("ug")
                 out = process_song(self._fetch_context(client, first=True), self.song, guitar=False)
-                return (f"tab {out.sheet} from Ultimate Guitar" if out.sheet is not None
-                        else "Ultimate Guitar has no sheet to keep")
+                return (f"tab {out.sheet} from UG" if out.sheet is not None
+                        else "UG has no sheet to keep")
             ug = self.asking("ug", first)
             self.song = get_song(self.conn, self.song.id)
         else:
@@ -633,7 +633,7 @@ class _Lookup:
         if stats.font_error:
             return "failed", stats.font_error
         if stats.failed:
-            return "failed", "chordpro couldn't make the PDF; the log says why"
+            return "failed", "chordpro couldn't make the PDF (see the log)"
         return "made" if stats.rendered else "up to date"
 
     def lyrics(self) -> tuple[str, str] | str:
@@ -757,11 +757,11 @@ class _Lookup:
                 _, e = s.failures[0]
                 raise e
             if not s.tried and self._holds_pick():
-                return "done", "the LaCuerda sheet you picked is the sheet already"
+                return "done", "your LaCuerda pick is the sheet already"
             if not s.tried and self._picked() is not None:
                 return "skipped", self._pick_waits()
             if not s.tried:
-                return "skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"
+                return "skipped", "not for LaCuerda: not Spanish, a full sheet already, or asked this month"
             return "sheet kept from LaCuerda" if s.kept else ("not on LaCuerda" if s.missing else "kept what it had")
 
         # Without a sheet yet, LaCuerda's is the sheet, and so is the one you picked there; with one, a better one
@@ -783,10 +783,10 @@ class _Lookup:
         version = get_version(self.conn, kept.version_id) if kept is not None else None
         if (version is not None and version.provider == "ug" and version.tab_id.isdigit()
                 and int(version.tab_id) in self.overrides.pin.get(self.song.key, ())):
-            return "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
+            return "your pinned UG tab is kept over your LaCuerda pick"
         if get_song(self.conn, self.song.id).lacuerda_checked_at:
-            return "your pick on LaCuerda waits: it was asked for this month"
-        return "your pick on LaCuerda waits for the nightly run"
+            return "your LaCuerda pick waits: asked this month already"
+        return "your LaCuerda pick comes tonight"
 
     def gtptabs(self) -> tuple[str, str] | str:
         from caracole.gtptabs_fetch import gtptabs_files
@@ -800,7 +800,7 @@ class _Lookup:
                 _, e = s.failures[0]
                 raise e
             if not s.tried:
-                return "skipped", "no file wanted, or gtptabs.com's index doesn't know the artist"
+                return "skipped", "no file wanted, or gtptabs doesn't list the artist"
             return GTPTABS_KEPT if s.kept else "no file there"
 
         return self.asking("gtptabs", ask)
@@ -817,7 +817,7 @@ class _Lookup:
                 _, e = s.failures[0]
                 raise e
             if not s.tried:
-                return "skipped", "no tab wanted, or harptabs.com's index has no tab of the title by the artist"
+                return "skipped", "no tab wanted, or harptabs lists none of this title by the artist"
             return HARPTABS_KEPT if s.kept else "no tab there by the artist"
 
         return self.asking("harptabs", ask)
@@ -834,7 +834,7 @@ class _Lookup:
                 _, e = s.failures[0]
                 raise e
             if not s.tried:
-                return "skipped", ("no tab wanted, or gametabs.net's index has no tab of the title of its game or "
+                return "skipped", ("no tab wanted, or gametabs lists none of this title for its game or "
                                    "composer")
             return GAMETABS_KEPT if s.kept else "no tab there of its game or composer"
 
@@ -860,12 +860,12 @@ class _Lookup:
         try:
             books = load_songbooks(songbooks_file(self.cfg.library_dir))
         except SongbookError as e:
-            return "skipped", f"songbooks.toml can't be read ({e}); no songbook was made again"
+            return "skipped", f"can't read songbooks.toml ({e}); no songbook remade"
         if not self.request.songbooks:
-            return "skipped", "left to the job that makes the songbook after the lookups"
+            return "skipped", "left for the songbook's own job, after the fetches"
         mine = songbooks_listing(self.conn, books, self.song)
         if not mine:
-            return "skipped", "no songbook lists it"
+            return "skipped", "in no songbook"
         names = ", ".join(b.name for b in mine)
         # The stage began as "running" without detail (self.stage); this second event is deliberate: it carries the
         # names for caracole serve's "Remaking songbook X…", and Job.stages updates the stage's detail in place.
@@ -875,10 +875,10 @@ class _Lookup:
         if stats.rendered or stats.failed:  # index.html shows each songbook's files: written again after them
             write_pages(self.conn, self.cfg, self.overrides, self.now)
         if stats.failed:
-            return "failed", f"a file of {', '.join(stats.failed)} couldn't be made; the nightly run tries again"
+            return "failed", f"a file of {', '.join(stats.failed)} wasn't made; tried again tonight"
         if stats.font_error:
             return "skipped", stats.font_error
-        return f"{names} made again" if stats.rendered else f"{names} up to date"
+        return f"{names} remade" if stats.rendered else f"{names} up to date"
 
     # --- the whole lookup ---------------------------------------------------------------------------
 
@@ -894,11 +894,11 @@ class _Lookup:
         try:
             self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
-            return self._refuse(f"overrides.toml can't be read: {e}")
+            return self._refuse(f"Can't read overrides.toml: {e}")
 
         def waiting(holder: str) -> None:
-            self.progress.stage("song", "running", f"waiting for another caracole ({holder}), which lets a "
-                                                   "lookup go first at its next pause, or between two songs")
+            self.progress.stage("song", "running", f"waiting for the book ({holder}); a fetch goes first "
+                                                   "at its next pause")
 
         with exclusive(self.cfg, f"get {self.request.display}", interactive=True, on_wait=waiting):
             with closing(db.connect(self.cfg.db_path)) as conn:

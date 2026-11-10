@@ -384,8 +384,8 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
     with exclusive(cfg, f"lacuerda --artist {artist}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         if is_cooling(conn, "lacuerda", now):
-            typer.echo(f"{NOT_READ}LaCuerda is cooling down after a block until "
-                       f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
+            typer.echo(f"{NOT_READ}waiting out LaCuerda until "
+                       f"{shown(get_state(conn, 'lacuerda').cooldown_until)}.")
             return
         run_id = _common.lookup_run_id(now)
         client = make_client(cfg, conn, "lacuerda", run_id, interactive=True)
@@ -393,19 +393,19 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
             found = read_artist_page(conn, client, artist, now)
         except ProviderBlocked as e:
             state = record_block(conn, "lacuerda", now, str(e))
-            typer.echo(f"{NOT_READ}LaCuerda blocked caracole ({e}); no more requests to it until "
+            typer.echo(f"{NOT_READ}LaCuerda turned us back ({e}); no asks until "
                        f"{shown(state.cooldown_until)}.")
             return
         except BudgetExhausted:
             p = cfg.provider("lacuerda")
-            spent = (f"this hour's {p.lookup_per_hour} lookup requests to LaCuerda are spent"
+            spent = (f"no more asks of LaCuerda this hour ({p.lookup_per_hour} spent)"
                      if client.policy.budget < p.lookup_requests else
-                     f"the lookup's {p.lookup_requests} requests to LaCuerda are spent")
-            typer.echo(f"{NOT_READ}{spent}; ask again later.")
+                     f"this fetch's {p.lookup_requests} asks of LaCuerda are spent")
+            typer.echo(f"{NOT_READ}{spent}. Ask again later.")
             return
         except ProviderError as e:
             record_error(conn, "lacuerda", now, str(e))
-            typer.echo(f"{NOT_READ}LaCuerda failed ({e}); nothing changed: try again later.")
+            typer.echo(f"{NOT_READ}LaCuerda failed ({e}). Try again later.")
             return
         finally:
             client.close()
@@ -414,10 +414,9 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         row = found and conn.execute("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1",
                                      (found[0],)).fetchone()
     if not found:
-        typer.echo(f"Not found: LaCuerda has no artist page for {artist}.")
+        typer.echo(f"Not found: LaCuerda has no page for {artist}.")
         return
-    typer.echo(f"Read: LaCuerda's page of {row[0] if row else artist} lists {plural(found[1], 'song')}, in the "
-               "index now.")
+    typer.echo(f"Read: LaCuerda's page of {row[0] if row else artist} lists {plural(found[1], 'song')}.")
 
 
 NOT_SEARCHED = "Not searched: "  # how a search that asked nothing, or got no answer, ends
@@ -463,7 +462,7 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
     shown_query = f"“{query}”"
     key = query_key(query)
     if not key:
-        end(f"{NOT_SEARCHED}LaCuerda's search reads only words of 4 letters or more, and {shown_query} has none.")
+        end(f"{NOT_SEARCHED}LaCuerda needs a word of 4 letters or more; {shown_query} has none.")
         return
     say("running", "asking LaCuerda")
     with exclusive(cfg, f"lacuerda --search {query}", interactive=True), closing(open_db(cfg)) as conn:
@@ -471,31 +470,31 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
         backfill_cached(conn, CachedAnswers("lacuerda", cfg.cache_dir))  # the artist pages it holds: no request
         was = asked(conn, key, now)
         if was is not None:
-            end(f"Searched: LaCuerda was asked for {shown_query} on {shown(stamps_parse(was.get('at')))}: "
-                f"{plural(int(was.get('songs') or 0), 'song')}, in the index.", "done")
+            end(f"Searched: LaCuerda, asked for {shown_query} on {shown(stamps_parse(was.get('at')))}: "
+                f"{plural(int(was.get('songs') or 0), 'song')}.", "done")
             return
         if answered(conn, query):  # what the page's gate saw may be older than what the cache just gave
-            end(f"Found already: caracole has {shown_query} already, in your library or its copy of LaCuerda's "
-                "index; no request sent.", "done")
+            end(f"Found already: {shown_query} is in your book or LaCuerda's index. "
+                "No ask sent.", "done")
             return
         p = cfg.provider("lacuerda")
         if is_cooling(conn, "lacuerda", now):
-            end(f"{NOT_SEARCHED}LaCuerda is cooling down after a block until "
-                f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
+            end(f"{NOT_SEARCHED}waiting out LaCuerda until "
+                f"{shown(get_state(conn, 'lacuerda').cooldown_until)}.")
             return
         policy = _common.lookup_policy(cfg, conn, "lacuerda", now)
         if policy.budget < 1:
-            end(f"{NOT_SEARCHED}this hour's {p.lookup_per_hour} lookup requests to LaCuerda are spent; ask again "
+            end(f"{NOT_SEARCHED}no more asks of LaCuerda this hour ({p.lookup_per_hour} spent). Ask again "
                 "later.")
             return
         failure = failed(conn, key, now) if auto else None
         if failure is not None:
-            end(f"{NOT_SEARCHED}{failure.said(shown_query)}; its Ask LaCuerda button, Try again or a terminal "
+            end(f"{NOT_SEARCHED}{failure.said(shown_query)}. Ask LaCuerda or Try again "
                 "asks now.")
             return
         if auto and searches_used(conn, now) >= SEARCHES_PER_HOUR:
-            end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} searches of LaCuerda the page sends by itself are "
-                "spent; its Ask LaCuerda button, or a terminal, asks anyway.")
+            end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} automatic searches are "
+                "spent. Ask LaCuerda asks anyway.")
             return
         run_id = _common.LOOKUP_RUN + RUN + run_id_for(now)
         client = make_client(cfg, conn, "lacuerda", run_id, policy=replace(policy, budget=1), interactive=True)
@@ -503,27 +502,27 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             answer = search(conn, client, query, now)
         except ProviderBlocked as e:
             state = record_block(conn, "lacuerda", now, str(e))
-            end(f"{NOT_SEARCHED}LaCuerda blocked caracole ({e}); no more requests to it until "
+            end(f"{NOT_SEARCHED}LaCuerda turned us back ({e}); no asks until "
                 f"{shown(state.cooldown_until)}.")
             return
         except BudgetExhausted:
-            end(f"{NOT_SEARCHED}the search's one request to LaCuerda is spent; ask again later.")
+            end(f"{NOT_SEARCHED}the search's one ask is spent. Ask again later.")
             return
         except ProviderError as e:
             record_error(conn, "lacuerda", now, str(e))
             record_failure(conn, key, now, f"LaCuerda failed: {e}")  # not sent by the page by itself for an hour
-            end(f"{NOT_SEARCHED}LaCuerda failed ({e}); nothing changed: try again later.")
+            end(f"{NOT_SEARCHED}LaCuerda failed ({e}). Try again later.")
             return
         finally:
             client.close()
         if answered_any(conn, run_id, "lacuerda", client.requests_made):
             record_ok(conn, "lacuerda", now)
     if answer.songs:
-        some = (f"{plural(answer.stated, 'song')} for {shown_query}: the first {len(answer.songs)} are"
+        some = (f"{plural(answer.stated, 'song')} for {shown_query}; the first {len(answer.songs)} are"
                 if answer.stated > len(answer.songs) else f"{plural(len(answer.songs), 'song')} for {shown_query},")
-        end(f"Searched: LaCuerda has {some} in the index now.", "done")
+        end(f"Searched: LaCuerda has {some} in the index.", "done")
     elif answer.artists:
-        end(f"Searched: LaCuerda names {plural(len(answer.artists), 'artist')} for {shown_query}, in the index now.",
+        end(f"Searched: LaCuerda names {plural(len(answer.artists), 'artist')} for {shown_query}.",
             "done")
     else:
         end(f"Nothing found: LaCuerda has no song for {shown_query}.", "done")
@@ -721,21 +720,21 @@ def _harptabs_artist(cfg: Config, artist: str) -> None:
     from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 
     if not cfg.provider("harptabs").enabled:
-        typer.echo(f"{NOT_READ}harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked.")
+        typer.echo(f"{NOT_READ}harptabs is off (caracole.toml). Nothing asked.")
         return
     with exclusive(cfg, f"harptabs --artist {artist}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         paths = artist_paths(conn, artist)
         if not paths:
             if conn.execute("SELECT 1 FROM harptabs_index LIMIT 1").fetchone() is None:
-                typer.echo(f"{NOT_READ}harptabs.com's index is empty: the nightly run reads its sitemap, or "
-                           "caracole harptabs --index now.")
+                typer.echo(f"{NOT_READ}harptabs' index is empty; tonight's run reads its sitemap (or "
+                           "caracole harptabs --index).")
             else:
-                typer.echo(f"Not found: harptabs.com's sitemap lists no artist named {artist}.")
+                typer.echo(f"Not found: harptabs lists no artist named {artist}.")
             return
         if is_cooling(conn, "harptabs", now):
-            typer.echo(f"{NOT_READ}harptabs.com is cooling down after a block until "
-                       f"{shown(get_state(conn, 'harptabs').cooldown_until)}; caracole won't ask it before then.")
+            typer.echo(f"{NOT_READ}waiting out harptabs until "
+                       f"{shown(get_state(conn, 'harptabs').cooldown_until)}.")
             return
         run_id = _common.lookup_run_id(now)
         client = make_client(cfg, conn, "harptabs", run_id, interactive=True)
@@ -743,31 +742,31 @@ def _harptabs_artist(cfg: Config, artist: str) -> None:
             page = read_artist(conn, client, paths[0], now)
         except ProviderBlocked as e:
             state = record_block(conn, "harptabs", now, str(e))
-            typer.echo(f"{NOT_READ}harptabs.com blocked caracole ({e}); no more requests to it until "
+            typer.echo(f"{NOT_READ}harptabs turned us back ({e}); no asks until "
                        f"{shown(state.cooldown_until)}.")
             return
         except BudgetExhausted:
             p = cfg.provider("harptabs")
-            spent = (f"this hour's {p.lookup_per_hour} lookup requests to harptabs.com are spent"
+            spent = (f"no more asks of harptabs this hour ({p.lookup_per_hour} spent)"
                      if client.policy.budget < p.lookup_requests else
-                     f"the lookup's {p.lookup_requests} requests to harptabs.com are spent")
-            typer.echo(f"{NOT_READ}{spent}; ask again later.")
+                     f"this fetch's {p.lookup_requests} asks of harptabs are spent")
+            typer.echo(f"{NOT_READ}{spent}. Ask again later.")
             return
         except ProviderError as e:
             record_error(conn, "harptabs", now, str(e))
-            typer.echo(f"{NOT_READ}harptabs.com failed ({e}); nothing changed: try again later.")
+            typer.echo(f"{NOT_READ}harptabs failed ({e}). Try again later.")
             return
         finally:
             client.close()
         if answered_any(conn, run_id, "harptabs", client.requests_made):
             record_ok(conn, "harptabs", now)
     if page is None:
-        typer.echo(f"Not found: harptabs.com no longer has the page of {artist}.")
+        typer.echo(f"Not found: harptabs no longer has {artist}'s page.")
         return
     listed = len(page.listed)
     lists = (f"{listed} of their {plural(page.tabs, 'tab')}" if page.tabs > listed else
              f"their {plural(listed, 'tab')}" if listed else "no tab")
-    typer.echo(f"Read: harptabs.com's page of {page.name} lists {lists}, in the index now.")
+    typer.echo(f"Read: harptabs' page of {page.name} lists {lists}.")
 
 
 def _musescore(cfg: Config) -> None:

@@ -56,11 +56,11 @@ log = logging.getLogger(__name__)
 PROVIDER = "youtube"
 STAGES = (
     ("song", "Find the song"),
-    ("audio", "The audio from YouTube"),
-    ("lyrics", "Lyrics from LRCLIB"),
-    ("chords", "The chords, from the audio"),
-    ("pdf", "The PDF"),
-    ("pages", "The library page"),
+    ("audio", "Audio from YouTube"),
+    ("lyrics", "Lyrics"),
+    ("chords", "Chords from the audio"),
+    ("pdf", "PDF"),
+    ("pages", "The logbook page"),
 )
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
@@ -174,27 +174,27 @@ class _Sheet:
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
-            raise _Stop(f"{req.display} is ignored in overrides.toml")
+            raise _Stop(f"{req.display} is ignored (overrides.toml)")
         song = find_song(self.conn, key)
-        said = "in the library"
+        said = "in the book"
         if song is None:
             try:
                 line = append_wanted(self.cfg.wanted_file, req.artist, req.title)
             except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-                raise _Stop(f"caracole can't add this song: {e}") from e
+                raise _Stop(f"Can't add this song: {e}") from e
             except OSError as e:
-                raise _Stop(f"wanted.txt can't be written: {e.strerror or e}") from e
+                raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
             sync_wanted(self.conn, self.cfg.wanted_file, self.now)
             song = find_song(self.conn, line.identity)
             if song is None:
-                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but couldn't be synced")
+                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
             said = f"added to wanted.txt, line {line.line_no}"
         if song.status == "ignored":
-            raise _Stop(f"{song.display} is ignored in overrides.toml")
+            raise _Stop(f"{song.display} is ignored (overrides.toml)")
         if self.conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
             raise _Stop(f"{song.display} already has a sheet")
         if song.audio_path and youtube_audio(self.conn, song) is None:
-            raise _Stop(f"{song.display} has bought audio in Music/: auto-chords uses that")
+            raise _Stop(f"{song.display} has bought audio in Music/; auto-chords uses that")
         if req.url is None and song.key in self.overrides.youtube and self.overrides.youtube[song.key] is None:
             raise _Stop(f'[youtube] says "none" for {song.display}: give it a video')
         if req.url is not None:
@@ -202,8 +202,8 @@ class _Sheet:
                 add_youtube(self.cfg.overrides_file, song.display, req.url)
                 self.overrides = load_overrides(self.cfg.overrides_file)
             except OverridesError as e:
-                raise _Stop(f"the video can't be recorded in overrides.toml: {e}") from e
-            said += f"; recorded under [youtube]: {watch_url(self.overrides.youtube.get(song.key) or '')}"
+                raise _Stop(f"couldn't note the video in overrides.toml: {e}") from e
+            said += f"; noted under [youtube]: {watch_url(self.overrides.youtube.get(song.key) or '')}"
         self.song = song
         self.result.song_id, self.result.display = song.id, song.display
         self.progress.song(song.id, song.display)
@@ -226,11 +226,11 @@ class _Sheet:
         video = youtube_audio(self.conn, self.song)
         pasted = self.overrides.youtube.get(self.song.key)
         if video is not None and (not pasted or pasted == video.id):
-            return "done", f"it has the audio of {video.url} already"
+            return "done", f"has the audio of {video.url} already"
         if is_cooling(self.conn, PROVIDER, self.now):
             until = get_state(self.conn, PROVIDER).cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return "skipped", f"YouTube is paused after a block, until {when}"
+            return "skipped", f"waiting out YouTube until {when}"
         heard: list[tuple[str, Record]] = []
         runner = make_youtube(self.cfg, self.conn, self.run_id)
         try:
@@ -242,7 +242,7 @@ class _Sheet:
             message = (f"{e}\nNo more yt-dlp runs until {until} (block #{state.strikes}). Nothing was marked "
                        "missing.")
             alert_block(self.cfg, PROVIDER, message)
-            return "skipped", f"YouTube blocked caracole; paused until {until}"
+            return "skipped", f"YouTube turned us back; waiting until {until}"
         finally:
             self.result.requests[PROVIDER] = runner.requests_made
             runner.close()
@@ -251,7 +251,7 @@ class _Sheet:
         self._song_again()
         if stats.budget_exhausted or not heard:
             budget = self.cfg.provider(PROVIDER).budget
-            return "skipped", f"YouTube's budget of {budget} runs is spent; try again later"
+            return "skipped", f"no YouTube runs left ({budget} spent); try again later"
         outcome, record = heard[-1]
         got = record.video
         if outcome == DOWNLOADED_NOW and got is not None:
@@ -313,9 +313,9 @@ class _Sheet:
             state = record_block(self.conn, provider, self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
             alert_block(self.cfg, provider, f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
-            return "skipped", f"{name} blocked caracole; paused until {until}"
+            return "skipped", f"{name} turned us back; waiting until {until}"
         except BudgetExhausted:
-            return "skipped", f"{name}'s budget spent; tonight's run asks it"
+            return "skipped", f"no asks of {name} left; tonight's run asks"
         finally:
             self.result.requests[provider] = client.requests_made
             client.close()
@@ -323,9 +323,9 @@ class _Sheet:
             record_ok(self.conn, provider, self.now)
         if stats.failures:
             record_error(self.conn, provider, self.now, str(stats.failures[0][1]))
-            return "failed", f"no {gap} yet ({name} unavailable); tonight's run tries again"
+            return "failed", f"no {gap} yet ({name} unavailable); tried again tonight"
         if stats.budget_exhausted:
-            return "skipped", f"{name}'s budget spent; tonight's run asks it"
+            return "skipped", f"no asks of {name} left; tonight's run asks"
         return stats
 
     def _megalobiz(self, length: float | None) -> tuple[str, str] | None:
@@ -375,7 +375,7 @@ class _Sheet:
         if is_cooling(self.conn, "lrclib", self.now):
             until = get_state(self.conn, "lrclib").cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return "skipped", f"no lyrics yet (LRCLIB paused until {when})"
+            return "skipped", f"no lyrics yet (waiting out LRCLIB until {when})"
         client = make_client(self.cfg, self.conn, "lrclib", self.run_id)
         try:
             stats = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
@@ -384,7 +384,7 @@ class _Sheet:
             state = record_block(self.conn, "lrclib", self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
             alert_block(self.cfg, "lrclib", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
-            return "skipped", f"no lyrics yet (LRCLIB blocked caracole; paused until {until})"
+            return "skipped", f"no lyrics yet (LRCLIB turned us back; waiting until {until})"
         finally:
             self.result.requests["lrclib"] = client.requests_made
             client.close()
@@ -392,9 +392,9 @@ class _Sheet:
             record_ok(self.conn, "lrclib", self.now)
         self._song_again()
         if stats.budget_exhausted:
-            return "skipped", "no lyrics yet (LRCLIB's budget spent); tonight's run tries again"
+            return "skipped", "no lyrics yet (no LRCLIB asks left); tried again tonight"
         if stats.failures:
-            return "failed", "no lyrics yet (LRCLIB unavailable); tonight's run tries again"
+            return "failed", "no lyrics yet (LRCLIB unavailable); tried again tonight"
         if stats.found:
             found = song_lyrics(self.song)
             return "done", "found, timed" if found is not None and found.synced else "found"
@@ -427,7 +427,7 @@ class _Sheet:
             "SELECT version_id FROM files WHERE song_id = ? AND name = ?", (self.song.id, AUTO_SHEET)).fetchone()
         made = kept is not None and self.song.autochords_mtime == self.song.audio_mtime
         if not made:
-            return self._fail("auto-chords made no sheet; see the log")
+            return self._fail("auto-chords made no sheet (see the log)")
         used = get_version(self.conn, kept[0]).raw.get("lyrics")
         holds = HOLDS.get(str(used), "chords")
         return "done", holds if stats.generated else f"up to date: {holds}"
@@ -442,7 +442,7 @@ class _Sheet:
         if stats.font_error:
             return "failed", stats.font_error
         if stats.failed:
-            return "failed", "chordpro couldn't make the PDF; the log says why"
+            return "failed", "chordpro couldn't make the PDF (see the log)"
         return "made" if stats.rendered else "up to date"
 
     def pages(self) -> str:
@@ -463,10 +463,10 @@ class _Sheet:
         try:
             self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
-            return self._refuse(f"overrides.toml can't be read: {e}")
+            return self._refuse(f"Can't read overrides.toml: {e}")
 
         def waiting(holder: str) -> None:
-            self.progress.stage("song", "running", f"waiting for another caracole ({holder})")
+            self.progress.stage("song", "running", f"waiting for the book ({holder})")
 
         with exclusive(self.cfg, f"youtube --sheet {self.request.display}", on_wait=waiting):
             with closing(db.connect(self.cfg.db_path)) as conn:

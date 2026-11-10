@@ -10,7 +10,7 @@ Every text is data, which the script puts in the page with ``textContent``.
 ``songbooks_data`` gives:
 
 - ``books``: each songbook, in songbooks.toml's order: its ``name``; ``songs``, how many; ``missing``, how
-  many have no sheet in it (not in the library, or no sheet yet); ``changed``, the day (UTC) caracole last
+  many have no sheet in it (not in the logbook, or no sheet yet); ``changed``, the day (UTC) caracole last
   wrote one of its files, None before it made any; ``files``, those it made, as links relative to
   index.html, percent-encoded (``label``: "PDF", "Phone page", "ChordPro", in that order); and ``set``, its
   songs in order, each with its place (``n``), its entry as songbooks.toml writes it (``entry``, which the
@@ -80,8 +80,8 @@ def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) 
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))
     except SongbookError as e:
-        return {"books": [], "error": f"songbooks.toml can't be read: {e}. Fix it, and the songbooks are back; "
-                                      "until then each keeps its files.", **shared}
+        return {"books": [], "error": f"songbooks.toml can't be read: {e}. Fix it and the songbooks return; "
+                                      "each keeps its files meanwhile.", **shared}
     guitar = _Guitar.read(conn) if books else _Guitar({}, {})
     return {"books": [_book(conn, cfg, overrides, book, guitar) for book in books], "error": None, **shared}
 
@@ -109,7 +109,7 @@ def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any
     newest = max(made.values(), default=None)
     return {
         "name": book.name, "songs": len(entries), "missing": sum(1 for e in entries if e.missing),
-        "changed": datetime.fromtimestamp(newest, UTC).strftime("%Y-%m-%d") if newest is not None else None,
+        "changed": datetime.fromtimestamp(newest, UTC).strftime("%d/%m/%y") if newest is not None else None,
         "files": [{"name": name, "label": label, "href": f"{base}/{quote(name)}"}
                   for name, label in FILES if name in made],
         "set": songs,

@@ -103,7 +103,7 @@ def route_problem(cfg: Config) -> str | None:
         return f"turned off ([providers.{PROVIDER}] enabled = false)"
     missing = autochords_missing()
     if missing:
-        return (f"this caracole was built without auto-chords (missing: {', '.join(missing)}), so it has nothing "
+        return (f"built without auto-chords (missing: {', '.join(missing)}): nothing "
                 "to make of the audio")
     for what, path, verb in (("BTC weights", cfg.autochords.btc_weights, "aren't"),
                              ("beat_this checkpoint", cfg.autochords.beat_checkpoint, "isn't")):
@@ -122,7 +122,7 @@ def route_reason(cfg: Config) -> str | None:
     if problem is None:
         return None
     if problem.startswith("turned off"):
-        return "YouTube is turned off"
+        return "YouTube is off"
     if "built without auto-chords" in problem:
         return "auto-chords isn't installed"
     if problem.startswith("auto-chords"):
