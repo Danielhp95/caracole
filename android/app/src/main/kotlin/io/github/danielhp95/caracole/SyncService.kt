@@ -21,9 +21,11 @@ import kotlinx.coroutines.launch
 
 /**
  * The foreground service (a data sync) that keeps the phone's caracole alive while its job queue works: a sync from
- * the Sync tab, an add, a removal ([Working]). Its notification names the job that runs ("Syncing with Daniel's
- * library…"); a tap on it opens the library. Started as the queue gets such a job, it stops itself once none waits
- * or runs. An index import has none: its worker is in the foreground with its own notification.
+ * the Sync tab, an add, a removal, a lookup on the sites (Get it, Fetch now, an artist's Songs, LaCuerda's own search,
+ * Fetch them) ([Working]). Its notification, on the `jobs` channel, names the job that runs ("Syncing with Daniel's
+ * library…", "Estopa - Tu calorro: Looking up the lyrics…"); a tap on it opens the library. Started as the queue gets
+ * such a job, it stops itself once none waits or runs. An index import has none: its worker is in the foreground with
+ * its own notification.
  *
  * Android may refuse to start it while the app is in the background (from Android 12); the job then goes on as long
  * as the process lives, as it did before. Jobs are asked for from the app's own screen, where the start is allowed.

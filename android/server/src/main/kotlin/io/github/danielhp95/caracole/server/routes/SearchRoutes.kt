@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.DatabaseTooNew
@@ -21,15 +22,17 @@ import io.github.danielhp95.caracole.server.routes.search.Superseded
 import io.github.danielhp95.caracole.server.routes.search.jsonResponse
 import io.github.danielhp95.caracole.server.routes.search.obj
 import java.io.IOException
+import java.time.Instant
 
 /**
  * caracole serve's search on the phone (web/search_routes.py's `/api/search` and `/api/artist`), over the phone's
  * own database, so that the library page's search box works with the computer off.
  *
  *     GET /api/search?q=&box=  your library and the offline indexes, as JSON, for a search box (`box`, the id its
- *                              page made): search_routes.py's answer, key for key, with `progression`,
- *                              `lacuerda_unlisted`, `lacuerda_search` and `youtube` null (not on the phone in this
- *                              round: the page then sends nothing by itself)
+ *                              page made): search_routes.py's answer, key for key, with the LaCuerda page to read
+ *                              (`lacuerda_unlisted`) and whether LaCuerda's own search may be sent (`lacuerda_search`,
+ *                              its gate at [clock]'s time; null with [searchesLacuerda] false), and `progression`
+ *                              and `youtube` null (no progressions on the phone yet, and no yt-dlp ever)
  *     GET /api/artist?key=     an artist of the offline index: their songs, most tabbed first, 50 from `offset`, and
  *                              yours by them; `?lacuerda=SLUG` (`?lacuerda_name=NAME`), a LaCuerda artist's songs the
  *                              index holds; `?harptabs=PATH`, a harptabs.com artist's
@@ -38,12 +41,15 @@ import java.io.IOException
  * with Chinese) looks nowhere (`short`). One search runs at a time, in the order they were asked, and a search typed
  * on in the same box wins over that box's older ones, waiting or running: those answer `{query, superseded: true}`
  * ([Searches]); another box's never stops one. The offline indexes' answers are kept 300 s, the 128 made last
- * ([AnswerCache]), until [invalidate]. A song of your library comes as its card has it ([cards]): its files, where its
- * sheet came from, its key. [enabled] names the sites that are on (caracole.toml's switchable providers). Reads go
- * through [Database.read]; a database that can't be read is 503, `{query, error}` (an artist's, `{error}`).
+ * ([AnswerCache]), until [invalidate], which the phone calls after every job (a lookup adds a song, reads an artist's
+ * page and changes the gate's records). A song of your library comes as its card has it ([cards]): its files, where
+ * its sheet came from, its key. The sites that are on are the phone's settings' (PhoneConfig.read: the computer's
+ * switches, as a sync gave them), read for each search, unless [enabled] names them (a test's). [searchesLacuerda]
+ * is the app's PhoneDeps' (false under the test runner, as `WebApp(searches_lacuerda=False)`), false by default.
+ * Reads go through [Database.read]; a database that can't be read is 503, `{query, error}` (an artist's, `{error}`).
  */
-class SearchRoutes(val database: Database, val cards: SongCards,
-                   val enabled: Set<String> = setOf("gtptabs", "musescore", "harptabs", "gametabs")) : RouteModule {
+class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Set<String>? = null,
+                   val searchesLacuerda: Boolean = false, val clock: () -> Instant = Instant::now) : RouteModule {
     internal val searches = Searches()
     internal val answers = AnswerCache<IndexAnswers>()
     private val forms = SongForms()
@@ -69,7 +75,11 @@ class SearchRoutes(val database: Database, val cards: SongCards,
         val superseded = obj("query" to q, "superseded" to true)
         return searches.search(box) { ticket ->
             try {
-                database.read { db -> jsonResponse(200, Found(db, enabled, cards, forms, answers, ticket::check).answer(q)) }
+                database.read { db ->
+                    val config = PhoneConfig.read(db)
+                    jsonResponse(200, Found(db, on(config), cards, forms, answers, ticket::check, config, searchesLacuerda,
+                                            clock()).answer(q))
+                }
             } catch (e: Exception) {
                 if (e is Superseded || !unreadable(e)) throw e
                 if (ticket.over) throw Superseded()  // stopped by a newer one: it reads now
@@ -111,13 +121,17 @@ class SearchRoutes(val database: Database, val cards: SongCards,
     /** An artist's answer, read one at a time with the searches. */
     private fun artistAlone(answer: (Artists) -> Answered): Response = searches.alone {
         try {
-            val answered = database.read { db -> answer(Artists(db, enabled, cards, forms)) }
+            val answered = database.read { db -> answer(Artists(db, on(PhoneConfig.read(db)), cards, forms)) }
             jsonResponse(answered.status, answered.json)
         } catch (e: Exception) {
             if (!unreadable(e)) throw e
             jsonResponse(503, obj("error" to "The database can't be read: ${said(e)}"))
         }
     }
+
+    /** The sites on: [enabled], else those the settings don't turn off. */
+    private fun on(config: PhoneConfig): Set<String> =
+        enabled ?: config.providers.filterValues { it.enabled }.keys
 
     private companion object {
         /** search_routes._BOX: a search box's id, as its page makes it. */
