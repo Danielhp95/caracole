@@ -10,12 +10,12 @@ import io.github.danielhp95.caracole.server.songbooks.Entry
 import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
 import io.github.danielhp95.caracole.server.testing.ServerReplays
 import io.github.danielhp95.caracole.viewer.version.Version
-import kotlinx.serialization.json.JsonArray
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 /** :server's milestone-5 and 6 declarations (skeleton-m5m6's): the phone's own job kinds and their words, the neutral
@@ -46,7 +46,7 @@ class M6SkeletonTest {
                 assertEquals(SongbookStats(), pages.render(db, null))
                 // The lookup's songbooks stage reaches none of milestone 6's code while the pages are neutral.
                 assertSame(SongbookPages.NONE, pages.seam)
-                assertEquals(JsonArray(emptyList()), SongbookSection.data(db, store)?.get("books"))  // songbook-entries' now
+                assertNull(SongbookSection.data(db, store))
             }
         }
         assertEquals(Version(), Entry("A - T", "T", "A").version)

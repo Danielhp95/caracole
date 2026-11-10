@@ -50,9 +50,17 @@ object SongbookSection {
     /** songbook.FOLDER. */
     private const val FOLDER = "_songbooks"
 
-    /** The tab's data for the phone's library (its overrides read from phone_overrides), in a read: the songs' keys
-     * taken as the writes left them (SongbookEntries.entries' `rekey`). */
-    fun data(db: Db, store: LibraryStore): JsonObject? = data(db, store.libraryDir, Overrides.read(db), rekey = false)
+    /**
+     * The tab's data for the phone's library, as `/jobs.json` gives it once a job is over (JobsRoutes): null, the
+     * page's own data standing (the mirror's), until the phone serves the songbook pages it writes and reads the
+     * sheets the mirror serves. A Phase A guard, waiting on: written-pages (LibraryFiles serving a songbook's page by
+     * its record) and phone-render (the songs' .cho the entries read, render:files): before them every songbook's
+     * files would read as none and every song the computer rendered as having no sheet. Phase B makes it
+     * `data(db, store.libraryDir, Overrides.read(db), rekey = false)`: a read, which takes the songs' keys as the
+     * writes left them (SongbookEntries.entries' `rekey`).
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun data(db: Db, store: LibraryStore): JsonObject? = null
 
     /** songbooks_data(conn, cfg, overrides, files=[files]): the songbooks as the Songbooks tab draws them; a
      * songbooks' table that can't be read is said (`error`), and costs the rest of the page nothing. */

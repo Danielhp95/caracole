@@ -145,13 +145,13 @@ class SongbookEntriesTest {
         }
         val folder = File(library, "_songbooks/Camp Fire").also { it.mkdirs() }
         File(folder, "songbook.pdf").writeBytes(byteArrayOf(1))
-        val data = database.read { db -> SongbookSection.data(db, store)!! }
+        val data = database.read { db -> SongbookSection.data(db, library, Overrides.read(db), rekey = false) }
         assertEquals(JsonArray(listOf(JsonPrimitive("Phone page"))), data["fileLabels"])
         val book = data.getValue("books").jsonArray.single().jsonObject
         assertEquals(JsonArray(emptyList()), book["files"])  // the computer's PDF is no file of the phone's
         assertEquals(JsonNull, book["changed"])
         File(folder, "songbook.html").writeBytes(byteArrayOf(2))
-        val made = database.read { db -> SongbookSection.data(db, store)!! }.getValue("books").jsonArray.single().jsonObject
+        val made = database.read { db -> SongbookSection.data(db, library, Overrides.read(db), rekey = false) }.getValue("books").jsonArray.single().jsonObject
         assertEquals("_songbooks/Camp%20Fire/songbook.html",
                      made.getValue("files").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content)
         assertEquals("0", database.read { db -> db.kvGet("songs:key_version") })
