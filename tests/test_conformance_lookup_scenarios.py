@@ -618,6 +618,18 @@ def lyrics_then(tmp: Path) -> dict[str, Any]:
         w.close()
 
 
+def timed_by_megalobiz(tmp: Path) -> dict[str, Any]:
+    w = World(tmp, "timed-by-megalobiz")
+    try:
+        sites = Sites(lrclib_get=ok(lrclib_record("Eagles", "Hotel California", 391.0, synced=False), JSON),
+                      pages={f"{MEGALOBIZ}search?title=Hotel+California&artist=Eagles&duration=391&limit=10":
+                             ok(fixture_ref("megalobiz/search_hotel_california.json"), JSON),
+                             f"{MEGALOBIZ}lrc/24519": ok(fixture_ref("megalobiz/lrc_24519.json"), JSON)})
+        return w.record("timed lyrics: LRCLIB's plain ones, then Megalobiz's timed ones, asked with their length", _request_of(artist="Eagles", title="Hotel California", duration_ms=391000), sites)
+    finally:
+        w.close()
+
+
 LANTERN = {v.tab_id: v for v in [
     Version(401, "chords", 4.7, 30, 1, sheet_markup("version 401", LINES), f"{TAB}401", song="Paper Lantern"),
     Version(402, "tabs", 4.4, 9, 1, tab_markup("tab 402"), f"{TAB}402", song="Paper Lantern"),
@@ -650,7 +662,8 @@ DML_3 = f"{LACUERDA}soda_stereo/de_musica_ligera-3.shtml"
 
 def scenarios(tmp: Path) -> list[dict[str, Any]]:
     return [new_song(tmp), picked_tab(tmp), picked_lacuerda(tmp), blocked(tmp), failed(tmp), spent_hour(tmp),
-            kept_for_sheets(tmp), ignored(tmp), unused_kind(tmp), lyrics_then(tmp), artist_page(tmp)]
+            kept_for_sheets(tmp), ignored(tmp), unused_kind(tmp), lyrics_then(tmp), timed_by_megalobiz(tmp),
+            artist_page(tmp)]
 
 
 # --- the versions commands' cases ----------------------------------------------------------------------------
@@ -759,6 +772,7 @@ def test_the_cases_come_to_what_they_say(made):
         assert r["out"]["result"]["result"]["refused"] and not r["out"]["requests"] and not r["out"]["rows"]
     assert _ends(cases["lyrics put together"])["lyrics"] == (
         "done", "LRCLIB has none; Megalobiz has no timed ones; lyrics from AZLyrics")
+    assert _ends(cases["timed lyrics"])["lyrics"] == ("done", "found; timed lyrics from Megalobiz")
     artist = cases["a song the offline index lacks, through its artist's page on Ultimate Guitar"]
     assert artist["out"]["requests"][0].startswith(f"GET {LAKE_URL}?filter=")
     choose_, clear_ = cases["--choose"], cases["--clear"]
