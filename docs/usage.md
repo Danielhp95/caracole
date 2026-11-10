@@ -108,6 +108,18 @@ delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 enabled = true                    # false: suggestions come without thumbnails
 budget = 20
 delay = [0, 0]                    # no wait: right after the search
+[providers.itunes]                # Apple's catalogue: an Apple Music link shared to the phone, one lookup
+enabled = true                    # false: the phone asks Apple nothing; the link is said to name no song it read
+lookup_requests = 1               # a shared link's requests, at most; the phone alone asks it, at a lookup's pace
+[providers.spotify]               # a Spotify link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a spotify.link short link's hop, then the page
+[providers.tidal]                 # a TIDAL link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a tidal.link short link's hop, then the page
+[providers.youtube-oembed]        # a YouTube or YouTube Music link shared to the phone: its oEmbed, never yt-dlp
+enabled = true
+lookup_requests = 1
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -203,7 +215,11 @@ other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
 `harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
-the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
+the library page suggests for a search), and `itunes`, `spotify`, `tidal` and `youtube-oembed`, the
+services the phone asks once about a link shared to it that names no song (your choice of 10 November
+2026; android/README.md, "Sharing a song from a music app"): no run or command of the computer asks
+them, so they have no `budget` and no line in the to-do page's Provider health, and the phone takes
+their switches and lookup settings at a sync. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's and its image host's go unused: a lookup runs no yt-dlp; Megalobiz's `lookup_delay` is
 0.5–0.75 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: caracole's
@@ -234,11 +250,13 @@ robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image 
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
 video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
 two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
-gametabs.net, YouTube and YouTube's image host can be turned
+gametabs.net, YouTube, YouTube's image host and the phone's four services of a shared link can be turned
 off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
+`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
+`[providers.spotify]`, `[providers.tidal]` or `[providers.youtube-oembed]`, caracole sends
 that site nothing, the nightly run skips
-its step, and the to-do page's Provider health says it is off. The other three
+its step, and the to-do page's Provider health says it is off (the phone's services have no step and no line there:
+the phone's share page says it). The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
 [Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
@@ -4773,11 +4791,44 @@ why it can't show one.
 
 **Another caracole's sync.** `GET /api/peer/state` answers what this library
 holds, unit by unit, for another caracole's `caracole peer` (see
-[Two caracoles](#two-caracoles-the-phones-and-the-computers)); `GET
+[Two caracoles](#two-caracoles-the-phones-and-the-computers)), with what the two
+last agreed on and each "keep mine" this library's imports of that caracole's
+files remembered, so that its sync gives this one its version no more; `GET
 /api/peer/unit` a unit whole and `GET /api/peer/file` a song's kept file, while
 it is as kept: reads, with no lock and no request to a site, that another
 site's page can't make. `POST /peer/pull` queues `caracole peer pull` of the
 units another caracole's sync asks this one to take from it.
+
+**Export and Import a file.** `GET /api/sync/sizes` says what an export of this
+library would hold: its name, songs and songbooks, its library's size in bytes
+(its kept files, and the library page with what it links), its site indexes'
+size (null where the server's SQLite can't count it) and the tabs they track.
+`POST /sync/export` (JSON `{"parts": ["library", "songbooks"]}`, `indexes`
+beside them or not) makes the file `caracole peer export` writes (see [Export
+and import](#export-and-import-peer-export-peer-import)) in `cache_dir/peer/`,
+one at a time (503 while another is made), and answers its id, the name it
+downloads under (`horde_logbook-03-11-26.caracole`) and its size; `GET
+/api/sync/export?export=ID` sends it once, as that attachment: it is deleted as
+it is sent, as the next export is made if it never is (one waits to be sent at
+most), and an hour after at the latest. A file to import comes in parts:
+`POST /sync/import/open` (JSON `{"size", "name"}`, 8 GiB at most, one at a time)
+answers its id and how big a part may be (8 MiB), then `POST
+/sync/import/part?import=ID&at=N` sends each, in order, into
+`state_dir/peer/import-<id>/`. `POST /sync/import/compare` (a form, `import`)
+reads it whole and compares it with this library, as `POST /sync/compare` does
+with another caracole (its other side the file: `kind` `file`, when it was made,
+the parts it holds), or refuses it in the words `caracole peer import` says
+(400 for no file caracole exported, one of another version or one cut short; 409
+for this library's own export or one no newer than your last sync with its
+caracole) and deletes it. `POST /sync/apply` on that comparison queues
+`caracole peer import` of the folder, a sync shown as "Sync with a file from
+<its library>", which deletes it once it is over. `POST /sync/import/drop`
+(JSON `{"import"}`) deletes one at once, as the page's Cancel does (409 while its
+import waits or runs). One never taken is deleted an hour after its last part,
+or as the next file is opened, when no request names it and it is whole (a file
+compared and left) or its upload stopped two minutes before. The two reads take
+no lock, ask no site and can't be made by another site's page; the writes carry
+the form token, in their header or their form.
 
 **The Android app's copy.** caracole's Android app copies the library from the
 server to read it offline: `GET /api/offline` lists what to copy, as JSON
@@ -5381,7 +5432,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
-      sheet.json            the same version as the source gave it
+      sheet.json            the same version as the source gave it (Ultimate Guitar's without its rating and votes)
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
       sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
@@ -5817,7 +5868,7 @@ different things, is a conflict for you to settle. Before then, a unit on one si
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
 
-Two caracoles sync in one format, format 2, which every answer of theirs names: a caracole of another format is
+Two caracoles sync in one format, format 3, which every answer of theirs names: a caracole of another format is
 refused, and says so. What each remembers it agreed on is kept in that format too, and a caracole of an earlier
 format remembered it in its own, which this one doesn't read: the first sync after the upgrade compares as a first
 sync, a unit on one side alone that side's and one both hold differently a conflict, with no history to say which
@@ -5825,7 +5876,10 @@ side changed it. A song one side removed since the two last synced then shows as
 here's for it. Each answer also says the time on its side's clock, which both sides stamp what they agree on with,
 and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
 they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
-other spaces, `4.50` for `4.5`) agree on it.
+other spaces, `4.50` for `4.5`) agree on it; and a version from Ultimate Guitar without its rating and votes, which
+change from one day to the next (format 3: format 2 counted them). Nor does the `sheet.json`, `tab.json` or
+`version-<tab>.json` caracole keeps of a version from Ultimate Guitar hold them, so a tab both caracoles read on two
+days is the same on both; one kept before holds them until caracole keeps it again.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what
@@ -5915,9 +5969,10 @@ it now: compare again, and choose again.
 
 Each unit taken here is checked against both sides' digests as compared, so one that changed on either side since is
 left as it is. Then the sync keeps what the two agree on, stamped by the other side's clock, and the other side's
-address and name, which caracole serve's Sync tab lists. A unit left doesn't fail the sync (exit 0): it says why.
-**`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
-for caracole serve.
+address and name, which caracole serve's Sync tab lists, and brings the indexes up to date (see [Syncing parts, and
+the indexes](#syncing-parts-and-the-indexes)). A unit left doesn't fail the sync (exit 0): it says why.
+**`--progress`** prints its stages, compare, take, give, agree and index, each unit taken, given or left, and at the
+end a report of what it did, as JSON lines for caracole serve.
 
 ### Export and import: peer export, peer import
 
@@ -5978,14 +6033,32 @@ or an hour after its last part if it is never taken. `--choose`, `--prefer`, `--
 are `peer sync`'s; with `--progress` it ends with a report of what it did, for caracole serve, even when it could
 take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
 
+A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
+chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+is given there, with no question asked.
+
+### Syncing parts, and the indexes
+
 **`--parts`**, of `peer sync` and `peer import`: the parts of the sync, `library`, `songbooks` and `indexes` by
 commas, all three by default. A difference outside them is neither taken nor given nor listed, but a song a songbook
-lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
+lists comes along with the songbooks.
 
-A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
---compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
-`--prefer`.
+With `indexes` among them, `caracole peer sync` brings each site's index up to date on both sides, once the units are
+synced and agreed on (its stage **index**): each site goes the way of the later read, whichever side read it.
+
+- A site the other side read more recently is **taken**: its index streamed here (`GET /api/peer/index?sites=`, into
+  `cache_dir/peer/`) and merged as `caracole index merge` merges a file, the database backed up first
+  (`…-before-merge.sqlite`), under caracole's lock; the copy is deleted.
+- A site this side read more recently is **given**: exported (`caracole index export` of those sites, no lock), sent
+  to the other's Import a file in parts as its page sends one, compared there and synced there, of the indexes alone;
+  the other caracole serve merges it as a queued `caracole peer import`, which the sync waits for (ten minutes at
+  most). The other side must be a caracole serve of this version or later.
+- Neither newer, or the indexes not among the parts: nothing is asked ("no index is newer on either side").
+
+With `--progress` the sync ends with a report of what it did, for caracole serve's Sync tab: the other caracole, when,
+the parts, and each index taken or given with the tabs it tracked before and after (the rows of its first table:
+UG's sitemap index, LaCuerda's listings, …) and when it was read. An index stage that fails says why; the sync exits
+1, the units taken and given all the same.
 
 ### The Sync tab
 
@@ -6035,6 +6108,37 @@ own. A file older than your last sync with its caracole, or this library's own e
 
 The same sheet opens at an address: `#sheet=sync`, `#sheet=export` or `#sheet=import` after the library page's
 (the phone's Settings use these).
+
+The sync is a request like any, in the Requests tab too, where a sync that left something or failed offers
+**Compare again**, never Try again, as its choices were made on a comparison that is past. caracole serve writes
+nothing for it but the request: `caracole peer sync` keeps what the two agree on, and the other side's address and
+name, which `GET /api/sync` lists.
+
+What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
+is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
+
+- `GET /api/sync`: this caracole's id and library's name, `device` (`computer`; the phone's says `phone`), its songs
+  and songbooks counted (`songbooks` is null while songbooks.toml can't be read: that stops the songbooks alone), the
+  address it last synced with and every caracole it synced with before.
+- `POST /sync/test` (`address`): asks the other caracole for its state, one request, and changes nothing on either
+  side. It answers its songs, its songbooks, the newest read of its site indexes, when this one last synced with it,
+  and says it: "Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26" (the day in the server's zone), or
+  "…, no indexes". Refused as Compare is: not an address (400), nothing answering (502), this very caracole (409).
+- `POST /sync/compare` also gives each song's artist and title, what each side did to each unit since the two last
+  agreed (new, changed, gone, or nothing), its part (library or songbooks), the songbooks either side has that list
+  it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
+  whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
+- `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
+  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
+  page's own script may ask it (the form token in its header).
+- `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
+  it gives the computer its index pages.
+- `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and
+  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
+  `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
+
+The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 

@@ -282,6 +282,24 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # YouTube's image host, of which caracole asks a suggested video's thumbnail alone (youtube_search.py); /sb/ is
     # a video's storyboard frames.
     "i.ytimg.com": ("/sb/",),
+    # The services a link shared to the phone is read from, each asked once a share (config.SHARE_PROVIDERS, the
+    # phone's core.share.ShareLinks), each host's `User-agent: *` group as its live robots.txt had it on 2026-11-10
+    # (tests/fixtures/itunes/, spotify/, tidal/ and youtube/www-robots.txt). Apple's catalogue: /lookup? is open,
+    # /{cc}/lookup? closed. Spotify's track pages are open, its embeds closed (its oEmbed is open, and unasked). Its
+    # short links' hosts close Branch's /_r/. tidal.com's and tidal.link's close nothing. YouTube's /oembed is open;
+    # its /results and /youtubei/, which yt-dlp asks against them (the one exception), no PoliteClient ever asks.
+    "itunes.apple.com": (
+        "/WebObjects/MZFastFinance.woa", "/WebObjects/MZFinance.woa", "/WebObjects/MZPersonalizer.woa",
+        "/WebObjects/MZStoreElements.woa", "/station/idst.", "/WebObjects/*", "/search*", "/*/rss/*", "/*/lookup?",
+    ),
+    "open.spotify.com": ("/local/", "/download/", "/embed/"),
+    "spotify.link": ("/_r/",),
+    "spotify.app.link": ("/_r/",),
+    "www.youtube.com": (
+        "/api/", "/channel_picker", "/comment", "/feeds/videos.xml", "/file_download", "/get_video", "/get_video_info",
+        "/get_midroll_info", "/live_chat", "/login", "/qr", "/results", "/signup", "/t/terms", "/timedtext_video",
+        "/verify_age", "/watch_ajax", "/watch_fragments_ajax", "/watch_popup", "/watch_queue_ajax", "/youtubei/",
+    ),
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",
@@ -408,7 +426,9 @@ class PoliteClient:
       request like any other (budget, pause, event) and must stay on the site
       asked for, or ``ProviderError``. A hop robots.txt closes isn't followed:
       ``RobotsClosed``, which the error breaker doesn't count (the site
-      answered). The final answer is cached under the URL asked for.
+      answered). The final answer is cached under the URL asked for. A redirect whose
+      status the caller accepts is its answer, never followed (a short link's one hop:
+      its ``location`` kept with it), and, as any status but 200 and 404, not cached.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - A 503 the caller rejects, from a host of ``RETRY_AFTER_503`` (LRCLIB), with a
@@ -508,7 +528,7 @@ class PoliteClient:
             if modified:
                 headers["If-Modified-Since"] = modified
 
-        at, resp = self._answer(full, headers)
+        at, resp = self._answer(full, headers, accept)
         wait = self._retry_wait(at, resp, accept)
         if wait is not None:  # the host is busy, and said when to ask again: once
             said = _header(resp.headers, "retry-after")
@@ -517,7 +537,7 @@ class PoliteClient:
             self._event(at, resp.status_code, "error",
                         f"HTTP {resp.status_code}, asked again in {wait:.1f} s (Retry-After: {said})")
             self._wait(wait)
-            at, resp = self._answer(full, headers)
+            at, resp = self._answer(full, headers, accept)
 
         status, body = resp.status_code, resp.content
         if status == 304 and cached is not None:  # the copy is current: it is as old as this answer
@@ -568,13 +588,14 @@ class PoliteClient:
 
     # -- internals ---------------------------------------------------------
 
-    def _answer(self, full: str, headers: Mapping[str, str]) -> tuple[str, httpx.Response]:
-        """GET ``full`` with ``headers``, its redirects followed one checked hop at a time; the URL that answered
-        (the one asked for, or the last hop) and its answer."""
+    def _answer(self, full: str, headers: Mapping[str, str], accept: Collection[int]) -> tuple[str, httpx.Response]:
+        """GET ``full`` with ``headers``, its redirects followed one checked hop at a time, but one whose status the
+        caller accepts (``accept``), which is the answer; the URL that answered (the one asked for, or the last hop)
+        and its answer."""
         at = full
         resp = self._send(at, self._http.build_request("GET", full, headers=headers))
         hops = 0
-        while resp.next_request is not None:  # a redirect; its hop is a request like any other
+        while resp.next_request is not None and resp.status_code not in accept:  # a hop is a request like any other
             hops += 1
             target = str(resp.next_request.url)
             problem = _redirect_problem(full, target, hops)

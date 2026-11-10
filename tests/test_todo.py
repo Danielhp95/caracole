@@ -533,6 +533,14 @@ def test_provider_health_has_gtptabs_and_says_when_it_is_off(conn, cfg):
     assert "| gtptabs | off ([providers.gtptabs] enabled = false) | never |  |  |" in todo(conn, off)
 
 
+def test_provider_health_lists_none_of_the_services_only_the_phone_asks(conn, cfg):
+    from caracole.config import SHARE_PROVIDERS
+
+    health = todo(conn, cfg).split("## Provider health", 1)[1]
+    assert "| ug | OK |" in health
+    assert not any(f"| {name} |" in health for name in SHARE_PROVIDERS)
+
+
 def test_inbox_unmatched_files_listed(conn, cfg):
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)

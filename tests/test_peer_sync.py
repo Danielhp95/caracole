@@ -1,5 +1,5 @@
 """peer_sync.py: a library cut into units, each unit's digest, two libraries compared, three ways once they synced,
-and each unit taken from the other (FORMAT 2: the peer's names as written, its folders, whole or not at all)."""
+and each unit taken from the other (FORMAT 3: the peer's names as written, its folders, whole or not at all)."""
 
 import json
 import os
@@ -148,8 +148,9 @@ def test_a_unit_one_side_pushed_to_the_other_is_synced_whichever_side_pulled():
 
 
 def test_an_agreement_keeps_what_the_two_hold_the_same_and_what_both_lack(conn):
-    kv_set_json(conn, sync.BASE_KEY + "p", {"format": 2, "units": {"song/gone": ["x", "2026-10-01T00:00:00Z"],
-                                                                   "song/differs": ["y", "2026-10-01T00:00:00Z"]}})
+    kv_set_json(conn, sync.BASE_KEY + "p", {"format": sync.FORMAT,
+                                            "units": {"song/gone": ["x", "2026-10-01T00:00:00Z"],
+                                                      "song/differs": ["y", "2026-10-01T00:00:00Z"]}})
     mine = {"song/same": u("song/same", "1"), "song/differs": u("song/differs", "2")}
     theirs = {"song/same": u("song/same", "1"), "song/differs": u("song/differs", "3")}
     assert sync.record_agreement(conn, "p", mine, theirs, NOW) == 1
@@ -172,7 +173,7 @@ def test_the_state_document_reads_back_as_it_was_written():
     found = {"song/a": sync.Unit("song/a", "A - B", "d1")}
     doc = sync.state_document(None, "0.1.0", "Tabs", found, {"song/a": ("d1", NOW)}, now=NOW,
                               indexes={"ug": "2026-10-30T03:30:00Z"})
-    assert doc["format"] == 2 and doc["now"] == NOW and doc["indexes"] == {"ug": "2026-10-30T03:30:00Z"}
+    assert doc["format"] == 3 and doc["now"] == NOW and doc["indexes"] == {"ug": "2026-10-30T03:30:00Z"}
     state = sync.read_state_document(json.loads(json.dumps(doc)))
     assert (state.server, state.version, state.name, state.units, state.base, state.now, state.indexes) == (
         None, "0.1.0", "Tabs", found, {"song/a": ("d1", NOW)}, NOW, {"ug": "2026-10-30T03:30:00Z"})
@@ -180,9 +181,10 @@ def test_the_state_document_reads_back_as_it_was_written():
     later = {**doc, "cooldowns": {"ug": NOW}, "indexes": {"ug": "2026-10-30T03:30:00Z", "x": 5}}
     assert sync.read_state_document(later).indexes == {"ug": "2026-10-30T03:30:00Z"}  # a stamp, or not read
     assert sync.read_state_document(later).units == found
-    for broken in ({}, {"format": 1, "units": {}}, {"format": 2, "server": "", "units": {}},
-                   {"format": 2, "units": {"no-slash": {"label": "x", "digest": "y"}}},
-                   {"format": 2, "units": {"song/a": {"label": "x"}}}):
+    for broken in ({}, {"format": 1, "units": {}}, {"format": 2, "units": {}},
+                   {"format": 3, "server": "", "units": {}},
+                   {"format": 3, "units": {"no-slash": {"label": "x", "digest": "y"}}},
+                   {"format": 3, "units": {"song/a": {"label": "x"}}}):
         with pytest.raises(sync.StateError):
             sync.read_state_document(broken)
 
@@ -238,16 +240,18 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
         read("http://phone:8737", httpx.MockTransport(refused))
 
 
-# --- FORMAT 2 --------------------------------------------------------------------------------------------------
+# --- FORMAT 3 --------------------------------------------------------------------------------------------------
 
 
 def test_a_stored_base_is_tagged_with_its_format_and_an_untagged_one_reads_as_none(conn):
     mine, theirs = {"song/a": u("song/a", "1")}, {"song/a": u("song/a", "1")}
     assert sync.record_agreement(conn, "p", mine, theirs, NOW) == 1
-    assert kv_get(conn, sync.BASE_KEY + "p") == '{"format": 2, "units": {"song/a": ["1", "%s"]}}' % NOW
+    assert kv_get(conn, sync.BASE_KEY + "p") == '{"format": 3, "units": {"song/a": ["1", "%s"]}}' % NOW
     assert sync.base_of(conn, "p") == {"song/a": ("1", NOW)}
-    # A FORMAT 1 base, untagged, is no base: the next sync compares as a first one (no translation).
-    for stored in ({"song/a": ["1", NOW]}, {"format": 1, "units": {"song/a": ["1", NOW]}}, ["song/a"], "x"):
+    # A base of an earlier format (FORMAT 1's, untagged; FORMAT 2's, whose digests hashed UG's ratings) is no base:
+    # the next sync compares as a first one (no translation).
+    for stored in ({"song/a": ["1", NOW]}, {"format": 1, "units": {"song/a": ["1", NOW]}},
+                   {"format": 2, "units": {"song/a": ["1", NOW]}}, ["song/a"], "x"):
         kv_set_json(conn, sync.BASE_KEY + "old", stored)
         assert sync.base_of(conn, "old") is None
     assert sync.record_agreement(conn, "old", {}, {"song/b": u("song/b", "2")}, NOW) == 0
@@ -265,8 +269,47 @@ def test_a_versions_raw_and_the_lyrics_are_hashed_as_canonical_json(tmp_path):
         lib.conn.execute("UPDATE songs SET lyrics_json = ? WHERE id = ?", (lyrics, song.id))
     assert one.digests() == two.digests()
     value = sync.unit_value(one.conn, one.overrides(), one.books(), "song/radiohead/creep")
-    assert value["versions"][0]["raw"] == canonical.stored_hash('{"rating": 4.50, "b": [1, 2]}')
+    assert value["versions"][0]["raw"] == canonical.stored_hash('{"b": [1, 2]}')  # UG's: its rating left out
     assert value["lyrics"][1] == canonical.stored_hash('{"plain": "la", "synced": null}')
+
+
+def test_a_ug_versions_ratings_and_votes_are_no_part_of_its_unit_and_another_sites_are(tmp_path):
+    """UG's tab page gives a tab's rating and votes as they are the day it is read, so two caracoles that read one
+    tab on two days hold one version: its raw record is hashed without them (FORMAT 3), and with everything else."""
+    from caracole import canonical
+
+    libs = [Library(tmp_path / name) for name in ("one", "two", "three", "four")]
+    raws = ['{"id": 101, "rating": 4.5, "votes": 10, "content": "x"}',
+            '{"votes": 12, "content": "x", "id": 101, "rating": 4.71}',
+            '{"id": 101, "rating": 4.5, "votes": 10, "content": "y"}',
+            '{"id": 101, "content": "x"}']
+    for lib, raw in zip(libs, raws):
+        lib.song("Radiohead", "Creep", lyrics=None)
+        lib.conn.execute("UPDATE versions SET raw = ?", (raw,))
+    one, two, three, four = (lib.digests() for lib in libs)
+    assert one == two == four  # its ratings and votes, there or not, are no part of it
+    assert one != three  # anything else is
+    value = sync.unit_value(libs[0].conn, libs[0].overrides(), libs[0].books(), "song/radiohead/creep")
+    assert value["versions"][0]["raw"] == canonical.stored_hash('{"id": 101, "content": "x"}')
+    # Of another site's, every member counts; and of UG's, a rating within one, or a raw that holds no object.
+    for provider, raw, kept in (("lacuerda", '{"rating": 4.5, "votes": 10}', '{"rating": 4.5, "votes": 10}'),
+                                ("ug", '{"meta": {"rating": 4.5}, "votes": 1}', '{"meta": {"rating": 4.5}}'),
+                                ("ug", '[{"rating": 4.5}]', '[{"rating": 4.5}]'), ("ug", "not json", "not json")):
+        libs[0].conn.execute("UPDATE versions SET provider = ?, raw = ?", (provider, raw))
+        value = sync.unit_value(libs[0].conn, libs[0].overrides(), libs[0].books(), "song/radiohead/creep")
+        assert value["versions"][0]["raw"] == canonical.stored_hash(kept), (provider, raw)
+        doc = libs[0].document("song/radiohead/creep")
+        assert sync.value_of_document("song/radiohead/creep", doc["unit"]) == value
+    for lib in libs:
+        lib.close()
+
+
+def test_what_a_ugs_raw_record_hashes_without_is_what_its_kept_json_leaves_out():
+    # A unit hashes each kept file's bytes: the version's JSON kept beside a UG sheet leaves out what the raw record's
+    # hash does, or a tab read on two days would differ still (test_fetch.py's two days).
+    from caracole.ug.fetch import KEPT_WITHOUT
+
+    assert tuple(sync.VOLATILE_RAW["ug"]) == KEPT_WITHOUT
 
 
 # --- a unit's value, from the library and from its document alone ------------------------------------------------

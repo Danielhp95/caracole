@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -56,6 +57,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLEncoder
 import java.nio.file.Files
+import java.time.ZoneOffset
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -358,23 +360,34 @@ object WebReplay : AreaReplay {
 
     private const val MASKED = "<comparison>"
 
-    /** The phone's sync's stages the computer's hasn't (§5.3). */
-    private val PHONE_ALONE = setOf("mirror", "index")
+    /** The phone's sync's stages the computer's hasn't (§5.3): its mirror; the index stage both have
+     * (jobs.PEER_SYNC_STAGES' index, `caracole peer sync`'s indexes both ways). */
+    private val PHONE_ALONE = setOf("mirror")
+
+    /** The six routes of the Sync tab sync_routes.jsonl asks (the sync redesign's §3.4.1). */
+    val SYNC_ROUTES = setOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
+                            "GET /api/sync/indexes", "POST /sync/apply")
 
     /** sync_routes.jsonl: each record's route asked of the phone's SyncRoutes over its own sides, its status and
-     * its words Python's, the comparison's id masked; a Sync queued the computer's view of the same job but for the
-     * stages the phone's sync has alone, its comparison the one the computer's queued command names. */
+     * its words Python's, under UTC (a day is said in the server's zone), the comparison's id masked; where the phone
+     * says itself (GET /api/sync's `device` "phone") and the computer (a comparison's `peer.kind` "computer"), the
+     * record's words for the computer's (`"computer"`) and caracole serve's (`"server"`); a Sync queued the
+     * computer's view of the same job but for the stages the phone's sync has alone, its comparison the one the
+     * computer's queued command names. */
     fun syncRoutes(misses: Misses) {
         val records = Corpus.records("web/sync_routes.jsonl")
-        misses.check(records.map { it.fn }.toSet() == setOf("GET /api/sync", "POST /sync/compare", "POST /sync/apply")) {
+        misses.check(records.map { it.fn }.toSet() == SYNC_ROUTES) {
             "sync_routes.jsonl's routes: ${records.map { it.fn }.toSet()}"
         }
-        misses.check(records.size >= 15) { "sync_routes.jsonl holds ${records.size} records" }
+        misses.check(records.size >= 30) { "sync_routes.jsonl holds ${records.size} records" }
         misses.check(records.any { (it.out as? JsonObject)?.get("job") is JsonObject }) {
             "sync_routes.jsonl holds no Sync queued"
         }
         misses.check(records.any { (it.out as? JsonObject)?.get("synced_before").let { at -> at is JsonPrimitive && at !is JsonNull } }) {
             "sync_routes.jsonl holds no record synced before"
+        }
+        misses.check(records.any { ((it.out as? JsonObject)?.get("songbooks") as? JsonObject)?.isNotEmpty() == true }) {
+            "sync_routes.jsonl holds no comparison of a songbook's two documents"
         }
         for (record in records) syncRoute(record, misses)
     }
@@ -385,10 +398,15 @@ object WebReplay : AreaReplay {
         val asked = AtomicInteger()
         val first = record.extra["peer_state"] as? JsonObject
         val then = record.extra["peer_state_then"] as? JsonObject
-        val computer = StateServer {
-            val state = if (asked.getAndIncrement() == 0 || then == null) first else then
-            state?.let { 200 to PyJson.dumps(it, compact = true) } ?: (500 to """{"error": "$note: no state to answer"}""")
-        }
+        val units = (record.extra["peer_units"] as? JsonObject).orEmpty()
+        val computer = StateServer(
+            state = {
+                // Only a state asked moves on to the one Sync reads again: a unit asked between doesn't.
+                val state = if (asked.getAndIncrement() == 0 || then == null) first else then
+                state?.let { 200 to PyJson.dumps(it, compact = true) } ?: (500 to """{"error": "$note: no state to answer"}""")
+            },
+            unit = { id -> units[id]?.let { 200 to PyJson.dumps(it, compact = true) } ?: (404 to """{"error": "no unit"}""") },
+        )
         val scope = CoroutineScope(Job().apply { cancel() })  // a Sync queued stays so: the record is its answer
         val queue = JobQueue(scope)
         val settings = object : SyncSettings {
@@ -399,7 +417,8 @@ object WebReplay : AreaReplay {
         val app = TestApp(dir, modules = { database ->
             engine = SyncEngine(database, LibraryStore(File(dir, "library")), File(dir, "state"),
                                 client = { PeerClient(computer.address) }, mirrorRefresh = null)
-            listOf(SyncRoutes(engine, queue, settings, database, afterSync = {}, name = here.getValue("name").jsonPrimitive.content))
+            listOf(SyncRoutes(engine, queue, settings, database, afterSync = {},
+                              name = here.getValue("name").jsonPrimitive.content, zone = { ZoneOffset.UTC }))
         })
         try {
             app.database.writeBlocking { db ->
@@ -408,17 +427,32 @@ object WebReplay : AreaReplay {
                 for ((key, value) in here.getValue("kv").jsonObject) db.kvSet(key, value.jsonPrimitive.content)
             }
             val form = (record.extra["form"] as? JsonObject).orEmpty().mapValues { it.value.jsonPrimitive.content }
+
+            /** The comparison the record's route follows, made first: its id, and the hash the phone keeps of it. */
+            fun compared(): String? {
+                val compare = record.extra.getValue("compare").jsonObject.mapValues { it.value.jsonPrimitive.content }
+                val made = app.postScript("/sync/compare", compare.toList())
+                if (made.status != 200) {
+                    misses.check(false) { "$note: its comparison ${made.text}" }
+                    return null
+                }
+                return made.json.jsonObject.getValue("comparison").jsonPrimitive.content
+            }
+
             val answer = when (record.fn) {
                 "GET /api/sync" -> app.script("/api/sync")
+                "GET /api/sync/indexes" -> app.script("/api/sync/indexes")
+                "POST /sync/test" -> app.postScript("/sync/test", form.toList())
                 "POST /sync/compare" -> app.postScript("/sync/compare", form.toList())
+                "GET /api/sync/unit" -> {
+                    val id = compared() ?: return@inFolder
+                    val query = record.extra.getValue("query").jsonObject.mapValues { it.value.jsonPrimitive.content }
+                    val made = query.getValue("comparison").let { if (it == MASKED) id else it }
+                    app.script("/api/sync/unit?comparison=${URLEncoder.encode(made, "UTF-8")}" +
+                               "&id=${URLEncoder.encode(query.getValue("id"), "UTF-8")}")
+                }
                 "POST /sync/apply" -> {
-                    val compare = record.extra.getValue("compare").jsonObject.mapValues { it.value.jsonPrimitive.content }
-                    val compared = app.postScript("/sync/compare", compare.toList())
-                    if (compared.status != 200) {
-                        misses.check(false) { "$note: its comparison ${compared.text}" }
-                        return@inFolder
-                    }
-                    val id = compared.json.jsonObject.getValue("comparison").jsonPrimitive.content
+                    val id = compared() ?: return@inFolder
                     val hash = engine.comparison(id)?.hash
                     val queued = record.extra.getValue("queued").jsonArray
                     if (queued.isNotEmpty()) {
@@ -435,7 +469,7 @@ object WebReplay : AreaReplay {
             }
             val status = record.extra.getValue("status").jsonPrimitive.int
             misses.check(status == answer.status) { "$note: status ${answer.status}, not $status: ${answer.text}" }
-            val shown = shown(record.fn, answer.json)
+            val shown = shown(record.fn, answer.json, note, misses)
             misses.check(record.out == shown) { "$note: ${shown.toString().take(400)}\n   Python: ${record.out.toString().take(400)}" }
         } finally {
             app.close()
@@ -444,12 +478,20 @@ object WebReplay : AreaReplay {
         }
     }
 
-    /** The phone's answer as the record keeps Python's: a comparison's id masked, and a Sync's stages the
+    /** The phone's answer as the record keeps Python's: a comparison's id masked; the phone's device and the
+     * computer's kind, checked, in the computer's words for itself and for caracole serve; and a Sync's stages the
      * computer's sync has alone. */
-    private fun shown(fn: String, answer: JsonElement): JsonElement {
+    private fun shown(fn: String, answer: JsonElement, note: String, misses: Misses): JsonElement {
         val data = answer.jsonObject
+        if (fn == "GET /api/sync" && "device" in data) {
+            misses.check(data["device"] == JsonPrimitive("phone")) { "$note: the phone's device is ${data["device"]}" }
+            return JsonObject(data + ("device" to JsonPrimitive("computer")))
+        }
         if (fn == "POST /sync/compare" && "comparison" in data) {
-            return JsonObject(data + ("comparison" to JsonPrimitive(MASKED)))
+            val peer = data.getValue("peer").jsonObject
+            misses.check(peer["kind"] == JsonPrimitive("computer")) { "$note: the computer's kind is ${peer["kind"]}" }
+            return JsonObject(data + ("comparison" to JsonPrimitive(MASKED)) +
+                              ("peer" to JsonObject(peer + ("kind" to JsonPrimitive("server")))))
         }
         val job = data["job"] as? JsonObject ?: return answer
         val steps = job.getValue("steps").jsonArray.filter {
@@ -459,11 +501,14 @@ object WebReplay : AreaReplay {
     }
 
     /**
-     * Another caracole's `GET /api/peer/state` as a record gives it, on 127.0.0.1 at a free port: [state]'s status and
-     * JSON for that path, 404 for any other. A plain socket server of the replay's own (no JDK HTTP server, which
-     * Android hasn't got): one request a connection, answered and closed.
+     * Another caracole's `GET /api/peer/state` and `GET /api/peer/unit` as a record gives them, on 127.0.0.1 at a free
+     * port: [state]'s status and JSON for the first, [unit]'s for the second (by its `id`), 404 for any other path. A
+     * plain socket server of the replay's own (no JDK HTTP server, which Android hasn't got): one request a
+     * connection, answered and closed.
      */
-    private class StateServer(private val state: () -> Pair<Int, String>) : AutoCloseable {
+    private class StateServer(private val state: () -> Pair<Int, String>,
+                              private val unit: (String) -> Pair<Int, String> = { 404 to """{"error": "no unit"}""" }) :
+        AutoCloseable {
         // 127.0.0.1 by number: Android's getLoopbackAddress() is ::1, where 127.0.0.1 finds nothing.
         private val socket = ServerSocket(0, 16, InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
         val address: ServerAddress = ServerAddress.parse("127.0.0.1:${socket.localPort}")
@@ -488,11 +533,16 @@ object WebReplay : AreaReplay {
                 head.append(b.toChar())
             }
             val lines = head.split("\r\n")
-            val path = lines.first().split(' ').getOrElse(1) { "" }.substringBefore('?')
+            val target = lines.first().split(' ').getOrElse(1) { "" }
+            val path = target.substringBefore('?')
             val length = lines.drop(1).firstOrNull { it.startsWith("content-length:", ignoreCase = true) }
                 ?.substringAfter(':')?.trim(' ')?.toLongOrNull() ?: 0
             repeat(length.toInt()) { input.read() }
-            val (status, body) = if (path == PeerClient.STATE_PATH) state() else 404 to """{"error": "no such route"}"""
+            val (status, body) = when (path) {
+                PeerClient.STATE_PATH -> state()
+                PeerClient.UNIT_PATH -> unit(PyUrl.query(target)["id"].orEmpty())
+                else -> 404 to """{"error": "no such route"}"""
+            }
             val bytes = body.toByteArray()
             val out = connection.getOutputStream()
             out.write(("HTTP/1.1 $status ${if (status == 200) "OK" else "Error"}\r\n" +

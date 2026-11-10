@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-import json
 import random
 import sqlite3
 import sys
