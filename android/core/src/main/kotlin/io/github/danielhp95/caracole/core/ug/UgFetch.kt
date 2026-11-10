@@ -14,7 +14,7 @@ import java.time.Instant
  * - **Candidates**: the song's tabs in the offline index, at their slugged URLs, and its pins, which replace the kind
  *   group they belong to and are read at the slugged address you pasted; blocked ids never compete, nor a tab at a URL
  *   robots.txt closes, nor one UG redirects there (RobotsClosed: neither gone nor unreadable). A not-found song is
- *   looked up on its artist's UG page, lane ug-fetch-artist's seam (internal/fetch/ArtistPages.kt).
+ *   looked up on its artist's UG page, as `_artist_page_route` does ([ArtistRoute], internal/fetch/ArtistPages.kt).
  * - **Ratings**: for each kind group (chords; tabs; ukulele) the page of the lowest unrated id, a slug naming no part
  *   first, up to `maxPagesPerGroup` pages (`guitarPagesPerGroup` for the tabs).
  * - **Slots**, one at a time: the sheet (the top `scoredSheets` chords versions scored for lyric coverage, ranked
