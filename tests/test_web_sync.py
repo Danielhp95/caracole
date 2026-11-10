@@ -483,7 +483,8 @@ def test_two_computers_sync_through_the_tabs_routes_and_end_with_no_differences(
     (seen,) = polled["jobs"]
     assert seen["line"] == {"tone": "ready", "text": "Synced", "link": None, "details": None}
     assert [(s["name"], s["state"]) for s in seen["steps"]] == [("compare", "done"), ("take", "done"),
-                                                                 ("give", "done"), ("agree", "done")]
+                                                                 ("give", "done"), ("agree", "done"),
+                                                                 ("index", "skipped")]
     outcome = seen["outcome"]
     assert sorted(outcome["taken"]) == sorted([ids["Oasis - Wonderwall"], ids["Estopa - Tu Calorro"]])
     assert sorted(outcome["given"]) == sorted([ids["Radiohead - Creep"], ids["Muse - Hysteria"]])
@@ -501,7 +502,7 @@ def test_two_computers_sync_through_the_tabs_routes_and_end_with_no_differences(
     here.app.queue.run_pending()
     last = here.app.queue.snapshot()[0]
     assert last.state == "done" and [(s.name, s.state) for s in last.stages] == [
-        ("compare", "done"), ("take", "skipped"), ("give", "skipped"), ("agree", "done")]
+        ("compare", "done"), ("take", "skipped"), ("give", "skipped"), ("agree", "done"), ("index", "skipped")]
 
 
 def test_sync_queues_its_parts_and_refuses_a_part_it_doesnt_know(computers):
@@ -663,7 +664,8 @@ def test_the_tabs_fake_answers_are_shaped_as_the_real_routes_answer(computers):
     _, polled = script(here.app, f"/jobs.json?jobs={answer['job']['id']}")
     over = dict(polled["jobs"][0])
     over.pop("songbooks")  # the Songbooks tab's, which /jobs.json adds to a job asked about once it is over
-    assert shape(over) == shape(VIEWS[-1])
+    # Once over, a sync's outcome carries its report too (``peer_outcome``), which the tab's older fakes lack.
+    assert within(shape(VIEWS[-1]), shape(over)) and "report" in over["outcome"]
 
 
 def sync_routes_kinds():
@@ -684,7 +686,8 @@ def test_the_kinds_the_tab_groups_are_peer_syncs():
 
 def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = None, *, units=(), output=(),
              job_id: int = 41, name: str = "Desk", address: str = "http://192.168.1.20:8737") -> Job:
-    """A sync's (``kind`` "sync"), a take's ("peer-push") or an index export's merge ("index-merge") job of caracole serve's as its queue would hold it in ``state``: its stages as
+    """A sync's (``kind`` "sync"), a file's import ("import"), a take's ("peer-push") or an index export's merge
+    ("index-merge") job of caracole serve's as its queue would hold it in ``state``: its stages as
     ``stages`` says (name: (state, detail); waiting else; a running one's detail its running detail too), its
     ``units`` as its command said them, ``output`` its step's last lines."""
     when = datetime(2026, 11, 3, 9, 30, tzinfo=UTC)
@@ -696,6 +699,13 @@ def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = 
         title = f"Sync with {name}"
         args = ("peer", "sync", "--push", "--yes", "--progress", "--compared=" + "0" * 64, "--", address)
         key, names, label = sync_routes.SYNCING + address, PEER_SYNC_STAGES, title
+    elif kind == "import":  # a sync with a file (sync_file_routes.py), of kind "sync" as the page names it
+        from caracole.commands.peer import PEER_IMPORT_STAGES
+
+        title = f"Sync with a file from {name}"
+        args = ("peer", "import", "--yes", "--progress", "--compared=" + "0" * 64, "--",
+                "/state/peer/import-0123456789abcdef")
+        key, names, label = sync_routes.IMPORTING + "0123456789abcdef", PEER_IMPORT_STAGES, title
     else:
         title = f"Changes from {name}"
         args = ("peer", "take", "--progress", "--", "/state/peer/push-0123456789abcdef")

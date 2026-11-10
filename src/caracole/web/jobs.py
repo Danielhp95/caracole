@@ -351,6 +351,7 @@ PEER_SYNC_STAGES = (
     ("take", "Taking what changed there"),
     ("give", "Giving what changed here"),
     ("agree", "What the two agree on"),
+    ("index", "Bringing the indexes up to date"),
 )
 
 

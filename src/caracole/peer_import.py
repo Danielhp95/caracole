@@ -13,10 +13,12 @@ Nothing of it goes into the library. An import's id is 16 hex, checked before an
 ``staged_folder`` checks the one an import is given, so that a take, which deletes its folder, deletes no other. At
 most ``OPEN`` (1) import is here at once, sent or being sent, and a file is at most ``peer_file.IMPORT_MAX``
 (8 GiB). One untouched for ``EXPIRES`` (an hour) is deleted (``sweep``: as one is opened, as an import ends), unless
-an import holds it.
+an import holds it. One no import holds and no queued request names may go sooner (``let_go``, which caracole
+serve's routes call as another is opened: its file whole, compared or not, never imported, or not whole and untouched
+for ``STOPPED``, an upload that stopped), or at once (``drop``: the page's Cancel, an upload that failed).
 
 ``Uploader`` is the sending side: a file sent to another caracole serve's import routes in parts, as its page sends
-one (web/sync_file_routes.py).
+one, then compared and synced there (web/sync_file_routes.py, web/sync_routes.py).
 """
 
 from __future__ import annotations
@@ -29,9 +31,10 @@ import shutil
 import stat
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from caracole import peer_push
 from caracole import peer_sync as sync
@@ -41,17 +44,23 @@ from caracole.peer_push import FOLDER, ID, _private_dir, _read_json, _write_priv
 OPEN = 1  # imports here at once, at most
 PART_MAX = 8 * 1024 * 1024  # a part's bytes, at most (POST /sync/import/part's limit)
 EXPIRES = 3600.0  # seconds an import is left untouched before it is deleted
+STOPPED = 120.0  # seconds an import's file, not whole, is left untouched before a new one may take its place
 PREFIX = "import-"
 FILE = "file.caracole"  # the file, as it comes
 OPENED = "open.json"  # its size, its name and when it was opened
 OPEN_PATH = "/sync/import/open"  # another caracole serve's routes a file is sent to (web/sync_file_routes.py)
 PART_PATH = "/sync/import/part"
+COMPARE_PATH = "/sync/import/compare"
+DROP_PATH = "/sync/import/drop"
+APPLY_PATH = "/sync/apply"
 
 TOO_BIG = "That file is too big: a file to import is at most 8 GiB."
 BUSY = "A file is being sent here already: try again once it is taken, or in an hour."
 NOT_NEXT = "That part isn't the next one: choose the file again."
 NO_SUCH = "No such import is open here: choose the file again."
 NOT_WHOLE = "That file isn't whole yet: send the rest of it."
+TAKING = "That file is being imported now: it is gone once that is over."
+GONE = "That file is gone: it was left over an hour, or another was chosen since. Choose it again."
 
 _lock = threading.Lock()  # one change at a time to the imports, of caracole serve's threads
 
@@ -73,6 +82,11 @@ def check_id(import_id: str) -> str:
 def _folder(state_dir: Path, import_id: str) -> Path:
     """The folder of the import ``import_id`` names: the one path built of an id, once it is checked."""
     return Path(state_dir) / FOLDER / (PREFIX + check_id(import_id))
+
+
+def folder_of(state_dir: Path, import_id: str) -> Path:
+    """The folder of the import ``import_id`` names (``check_id``: StagingError for no id), there or not."""
+    return _folder(state_dir, import_id)
 
 
 def _opened(folder: Path) -> dict | None:
@@ -212,6 +226,46 @@ def sweep(state_dir: Path, now: float | None = None) -> list[str]:
     return gone
 
 
+def _is_whole(folder: Path) -> bool:
+    opened = _opened(folder)
+    try:
+        return opened is not None and _size_of(folder) == opened["size"]
+    except (OSError, StagingError):
+        return False
+
+
+def let_go(state_dir: Path, named: set[str], now: float | None = None) -> list[str]:
+    """Delete each import no import holds (``held``) and no queued or running request names (``named``: their
+    ids), whose file is whole (sent, compared or not, never imported: a Cancel, a comparison left) or, not whole, was
+    untouched for ``STOPPED`` (an upload that stopped), so that a file chosen again needn't wait an hour for it; the
+    ids deleted. One being sent now is left, as one an import takes."""
+    now = time.time() if now is None else now
+    gone = []
+    with _lock:
+        for folder in _imports(Path(state_dir) / FOLDER):
+            import_id = folder.name[len(PREFIX):]
+            if import_id in named or not (_is_whole(folder) or now - _touched(folder) > STOPPED):
+                continue
+            with _unless_held(folder) as free:
+                if free:
+                    shutil.rmtree(folder, ignore_errors=True)
+                    gone.append(import_id)
+    return gone
+
+
+def drop(state_dir: Path, import_id: str) -> None:
+    """The import ``import_id`` deleted now, whatever it has (the page's Cancel, an upload that failed);
+    StagingError for no such import (404) or one an import holds (409)."""
+    with _lock:
+        folder = _folder(state_dir, import_id)
+        if not os.path.isdir(folder) or os.path.islink(folder):
+            raise StagingError(NO_SUCH, 404)
+        with _unless_held(folder) as free:
+            if not free:
+                raise StagingError(TAKING, 409)
+            shutil.rmtree(folder, ignore_errors=True)
+
+
 @contextmanager
 def _unless_held(folder: Path) -> Iterator[bool]:
     try:
@@ -234,17 +288,21 @@ def _unless_held(folder: Path) -> Iterator[bool]:
 
 
 @contextmanager
-def held(folder: Path) -> Iterator[None]:
-    """The import in ``folder`` held for ``caracole peer import``, so that no ``sweep`` deletes it meanwhile;
-    StagingError when it is gone (left over an hour)."""
+def held(folder: Path, *, wait: bool = True) -> Iterator[None]:
+    """The import in ``folder`` held for ``caracole peer import`` (or a comparison of it), so that no ``sweep`` deletes
+    it meanwhile; StagingError when it is gone (left over an hour, or let go), and, with ``wait`` False, when another
+    holds it (409) rather than waiting for it."""
     try:
         fd = os.open(folder / OPENED, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
-        raise StagingError("That file is gone: it was left over an hour. Choose it again.", 404) from None
+        raise StagingError(GONE, 404) from None
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise StagingError(TAKING, 409) from None
         if not (folder / OPENED).exists():  # a sweep deleted it as the import came
-            raise StagingError("That file is gone: it was left over an hour. Choose it again.", 404)
+            raise StagingError(GONE, 404)
         yield
     finally:
         os.close(fd)
@@ -280,19 +338,33 @@ def remove(folder: Path) -> None:
 
 class Uploader(peer_push.Pusher):
     """Another ``caracole serve``'s Import a file, asked as its page asks it (web/sync_file_routes.py): a file sent
-    there in parts, each a write with its form token in the header (``peer_push.Pusher``'s, its state's)."""
+    there in parts (``upload``), compared there (``compare``) and synced there (``apply``), each a write with its form
+    token (``peer_push.Pusher``'s: ``token``, given, else its state's), and an import dropped (``drop``)."""
 
-    def upload(self, path: Path) -> str:
-        """The file at ``path`` sent there, under its name: an import opened (``POST /sync/import/open``), then each
-        part, of the size it says, in order (``POST /sync/import/part``); the import's id there. PeerError when it
-        refuses one, or says it has other than what was sent."""
+    def __init__(self, address: str, *, transport=None, token: str | None = None, asking: str | None = None):
+        super().__init__(address, transport=transport)
+        self.token, self._asking = token, asking
+
+    def upload(self, path: Path, *, name: str | None = None) -> str:
+        """The file at ``path`` sent there, under ``name`` (its own, with none): an import opened (``POST
+        /sync/import/open``), then each part, of the size it says, in order (``POST /sync/import/part``); the import's
+        id there. PeerError when it refuses one, or says it has other than what was sent; then the import opened there
+        is dropped, so that the next file sent needn't wait for it."""
         size = os.path.getsize(path)
-        opened = self._post(OPEN_PATH, peer_push._json({"size": size, "name": Path(path).name}), "application/json")
+        opened = self._post(OPEN_PATH, peer_push._json({"size": size, "name": name or Path(path).name}),
+                            "application/json")
         opened = opened if isinstance(opened, dict) else {}
         import_id, part = opened.get("import"), opened.get("part")
         if not (isinstance(import_id, str) and ID.fullmatch(import_id) and type(part) is int and 0 < part):
             raise sync.PeerError(f"The caracole at {self.address} opened an import it can't name.")
-        part = min(part, PART_MAX)  # never more of the file in memory at once than this side's own parts
+        try:
+            self._send(path, import_id, size, min(part, PART_MAX))  # never more in memory than this side's parts
+        except BaseException:
+            self.drop(import_id)
+            raise
+        return import_id
+
+    def _send(self, path: Path, import_id: str, size: int, part: int) -> None:
         at = 0
         with open(path, "rb") as f:
             while chunk := f.read(part):
@@ -304,4 +376,59 @@ class Uploader(peer_push.Pusher):
                 at = have
         if at != size:
             raise sync.PeerError(f"{path} changed while it was sent: {at} bytes of it sent, not {size}.")
-        return import_id
+
+    def drop(self, import_id: str) -> bool:
+        """``POST /sync/import/drop``: the import ``import_id`` there deleted; whether it was (an error, or its
+        refusal, is no more than that: the import there is swept within the hour)."""
+        try:
+            self._post(DROP_PATH, peer_push._json({"import": import_id}), "application/json")
+        except sync.PeerError:
+            return False
+        return True
+
+    def _form(self, path: str, fields: dict[str, str]) -> dict[str, Any]:
+        """A form posted there as its page posts one, with its form token (``csrf``); asked once more with the token
+        its state gives now when refused for an older one (403, ``reload``)."""
+        import httpx
+
+        for again in (False, True):
+            if self.token is None:
+                self.state(self._asking)
+            try:
+                response = self._client.post(
+                    self.address + path, data={"csrf": self.token or "", **fields},
+                    headers={"Origin": self.address, "Sec-Fetch-Site": "same-origin", "Accept": "application/json"})
+            except httpx.HTTPError as e:
+                raise sync.PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+            if response.status_code == 403 and not again and peer_push._says_reload(response):
+                self.token = None
+                continue
+            if response.status_code not in (200, 202):
+                raise self._refused(response)
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+            if not isinstance(data, dict):
+                raise sync.PeerError(f"The caracole at {self.address} answered {path} with something it can't "
+                                     "read.")
+            return data
+        raise AssertionError("unreachable")
+
+    def compare(self, import_id: str) -> dict[str, Any]:
+        """``POST /sync/import/compare``: the file sent there (``upload``) compared with its library, as its Sync tab
+        shows it (``{comparison, peer, holds, differences, …}``); PeerError when it refuses the file."""
+        found = self._form(COMPARE_PATH, {"import": import_id})
+        if not isinstance(found.get("comparison"), str):
+            raise sync.PeerError(f"The caracole at {self.address} compared the file, but named no comparison.")
+        return found
+
+    def apply(self, comparison: str, parts: Sequence[str]) -> int:
+        """``POST /sync/apply``: that comparison synced there, of ``parts`` alone, nothing chosen (a file's
+        comparison of the indexes alone has nothing to choose); the number of the job that imports it there."""
+        answer = self._form(APPLY_PATH, {"comparison": comparison, "prefer": "", "choices": "",
+                                         "parts": ",".join(parts)})
+        job = answer.get("job")
+        if not (isinstance(job, dict) and type(job.get("id")) is int):
+            raise sync.PeerError(f"The caracole at {self.address} took the file, but named no job for it.")
+        return job["id"]

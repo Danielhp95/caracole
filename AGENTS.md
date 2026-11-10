@@ -1055,7 +1055,18 @@ It is rows.js's, shared by both pages:
   tabs), `POST /sync/export` (`peer_file.export_file` of the parts named into `cache_dir/peer/`, one at a time) and
   `GET /api/sync/export` (that file once, an attachment named `peer_file.file_name`, streamed); `POST
   /sync/import/open` and `/sync/import/part` (a file sent in parts, `json` and `bytes` routes with the form token in
-  their header, staged by peer_import.py for `caracole peer import`).
+  their header, staged by peer_import.py for `caracole peer import`), `POST /sync/import/compare` (the staged file
+  read whole and compared as `caracole peer import` compares it, `sync_routes.comparison_answer`, kept as a
+  `Compared` of source `import:<id>`, kind `file`, holding the file's parts; refused in peer_file.py's words and
+  deleted) and `POST /sync/import/drop`.
+  - `POST /sync/apply` on that comparison reads the staged file again (409 `STALE` once this library moved) and queues
+    `caracole peer import --yes --progress [--parts=…] --compared HASH --choose=… -- FOLDER` under `import:<id>`, a
+    job of kind `sync` (`status.PEER_KINDS`), "Sync with a file from <name>".
+  - `caracole peer sync`'s index stage gives a site read more recently here through these routes
+    (peer_import.py `Uploader`: open, parts, compare, apply of the indexes alone, then `peer_push.wait_for`), and
+    takes one read more recently there (`peer_sync.Peer.index`, then `index_transfer.merge`), each counted for its
+    report (`{"event": "report"}`, `jobs.Job.report`, `jobs_routes.peer_outcome`'s `report`).
+  - The phone's SyncFileRoutes answers alike (vectors/web/sync_file_routes.jsonl, its routes' limits among them).
 
 ##### The router
 
@@ -2713,11 +2724,14 @@ picks one).
   a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
   `peer_push.sweep_indexes`).
 - And for Export and Import a file (sync_file_routes.py), nothing else: an export's file
-  (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time from one read transaction, no lock, deleted
-  once it is open to be sent, or an hour after if never asked, a part a killed process left too); and a file to
-  import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py: 0700, its `file.caracole` and
-  `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in all), deleted once its import is
-  over, or an hour after its last part unless an import holds it. Everything else stays a queued command's.
+  (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time, its units from one read transaction and its
+  indexes from one of their own, no lock; one waits to be sent at most, the one before it deleted as the next is made;
+  deleted once it is open to be sent, or an hour after if never asked, a part a killed process left swept only while
+  no export is made); and a file to import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py:
+  0700, its `file.caracole` and `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in
+  all), deleted once its import is over, refused at its comparison, dropped (`POST /sync/import/drop`), let go as
+  another is opened when no request names it and it is whole or its upload stopped (`peer_import.let_go`,
+  `STOPPED`), or an hour after its last part, unless an import holds it. Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 
