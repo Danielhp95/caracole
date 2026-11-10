@@ -22,7 +22,7 @@ Notes, each hole's note on that harp in its place. The song's title and its arti
 Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a ``song-names`` block), read from
 the browser's storage or ``trad=1`` in the address, with no row of the page's own. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
 end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
-song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
+song's viewer (‹ Logbook for a song with none), and the tab's text is a tap away at the foot.
 
 From 1200 px, the sheet viewer's overlay (overlay.js) is on the left, Harmonica first and shown: the harps round the
 circle of fifths for the song as its chord sheet sounds, the one chosen the page's own harp both ways (a harp tapped
@@ -35,8 +35,8 @@ The script (harptab.js) computes no music theory: the page's data, a JSON block 
 holds every answer, made here:
 
 - ``harpKeys``: the 12 harps' names, by pitch class (harp.py ``HARP_KEYS``); ``start``, the one the page starts on;
-  ``why``: what the header says of a harp, by pitch class ("with the record", "as the tab says", "harptabs.com's
-  key", "for the song's key"); ``positions``: the position each harp plays the song in ("4th position, aeolian"),
+  ``why``: what the bar says of a harp, by pitch class ("with the record", "the tab's", "harptabs' key",
+  "the song's key"); ``positions``: the position each harp plays the song in ("4th position, aeolian"),
   or null for a song with no key;
 - ``holes``: each harp's every note (harp.py ``hole_tables``: ``blow[i]``, ``draw[i]``, its note then its bends;
   ``over[i]``, its overblow's breath and note), and ``names``, each harp's names of the 12 pitch classes
@@ -89,12 +89,13 @@ from caracole.viewer.theory import Chord, Key, key_name, parse_chord, sounding, 
 
 BPM = 132  # a line played: a hole a beat
 SITE = "https://www.harptabs.com/"
-# What the header and the bar say of the harp the page starts on, by why it was chosen (harpfit.WHY).
-_SAID = {"record": "with the record", "tab": "as the tab says", "page": "harptabs.com's key",
-         "song": "for the song's key", "usual": ""}
+# What the bar says of the harp the page starts on, by why it was chosen (harpfit.WHY): the header says it in words
+# of its own (_harp_lines).
+_SAID = {"record": "with the record", "tab": "the tab's", "page": "harptabs' key",
+         "song": "the song's key", "usual": ""}
 _BRACKETS = {"note": ("", ""), "chord": ("(", ")"), "shake": ("{", "}"), "split": ("[", "]")}
 _JOIN = '<span class="jn" aria-hidden="true">‿</span>'  # notes run together: 3*d-3d
-_SOURCE = {"legend": "from the tab's own legend", "pinned": "as you set it"}
+_SOURCE = {"legend": "from its legend", "pinned": "as you set it"}
 _PLAY_ICON = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 '
               '0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg>')
 
@@ -129,7 +130,7 @@ def build_harmonica_viewer(
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
-    ‹ Chord sheet opens; with none, ‹ Library."""
+    ‹ Chord sheet opens; with none, ‹ Logbook."""
     tab = parse(text, harp=harp, notation=_pinned(pin, text))
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
@@ -184,8 +185,8 @@ def _data(tab: Tab, choice: harpfit.Choice) -> dict[str, Any]:
 
 # --- the overlay: Harmonica and Guitar --------------------------------------------------------------------------
 
-_NO_SHEET = "With no chord sheet, caracole doesn't know the song's key, so it can't tell which harp plays it."
-_NO_KEY = "With no key in its chord sheet, caracole can't tell which harp plays the song."
+_NO_SHEET = "No chord sheet, so no key: no harp to suggest."
+_NO_KEY = "The chord sheet has no key: no harp to suggest."
 
 
 def _overlay_data(choice: harpfit.Choice, cho: str | None, key: str | None, key_source: str | None) -> dict[str, Any]:
@@ -255,14 +256,14 @@ def _a(name: str) -> str:
 def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Mapping[str, Any],
             back: str | None, names: dict[str, dict[str, str]] | None = None) -> str:
     link = (f'<a class="back" href="{escape(quote(back))}" data-sheet>‹ Chord sheet</a>\n' if back
-            else f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n')
+            else f'<a class="back" href="{LIBRARY_PAGE}">‹ Logbook</a>\n')
     return (
         '<header class="head">\n'
         + link
         + f"<h1{zh_attr(title or 'Untitled', names)}>{escape(title or 'Untitled')}</h1>\n"
         + artist_line(artist, names)
         + (_harp_lines(choice) if tab.readable else
-           '<p class="facts" id="facts">Harmonica tab, as its tabber wrote it: caracole can\'t read its notation.</p>\n')
+           '<p class="facts" id="facts">Harmonica tab, as written. We can\'t read its notation.</p>\n')
         + (_read_as(tab, facts) if tab.readable else "")
         + "</header>\n"
     )
@@ -274,16 +275,16 @@ def _harp_lines(choice: harpfit.Choice) -> str:
     where = f" ({escape(harp.position_text(choice.tonic, choice.harp))})" if choice.tonic is not None else ""
     said = {"record": f"<b>{name} harp</b> with the record{where}",
             "tab": f"<b>{name} harp</b>, as the tab says{where}",
-            "page": f"<b>{name} harp</b>, as harptabs.com's key says{where}",
+            "page": f"<b>{name} harp</b>, as harptabs' key says{where}",
             "song": f"<b>{name} harp</b> for the song's key{where}",
-            "usual": f"<b>{name} harp</b>, as tabs are written when they name none{where}"}[choice.why]
+            "usual": f"<b>{name} harp</b>, the default when a tab names none{where}"}[choice.why]
     bits = ["Harmonica tab", said]
     if choice.why == "record" and choice.named is not None and choice.named != choice.harp:
         bits.append(f"the tab says {harp.HARP_KEYS[choice.named]} harp")
     html = f'<p class="facts" id="facts">{" · ".join(bits)}</p>\n'
     if choice.why == "record" and len(choice.fits) > 1:
         best, runner = choice.fits[0], choice.fits[1]
-        html += (f'<p class="why">{best.share:.0%} of the sung notes fall on the sheet\'s chords on '
+        html += (f'<p class="why">{best.share:.0%} of the sung notes fit the sheet\'s chords on '
                  f"{_a(harp.HARP_KEYS[best.harp])}, {runner.share:.0%} on {_a(harp.HARP_KEYS[runner.harp])}</p>\n")
     return html
 
@@ -403,7 +404,7 @@ def _row_html(row: Row, data: dict[str, Any]) -> str:
         line = f'<p class="l hl">{"".join(out)}'
     data["rows"].append(list(range(first, len(data["groups"]))))
     return (f'{line}<button type="button" class="rp" data-row="{len(data["rows"]) - 1}" '
-            f'aria-label="Play this line" aria-pressed="false">{_PLAY_ICON}</button></p>')
+            f'aria-label="Play line" aria-pressed="false">{_PLAY_ICON}</button></p>')
 
 
 def _cells(groups: list[Group], data: dict[str, Any], space: str) -> str:
@@ -466,10 +467,10 @@ def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = Fals
     site = url if isinstance(url, str) and url.startswith(SITE) else SITE
     return (
         '<footer class="foot">\n'
-        f'<p><a class="pdf" href="{escape(quote(tab_file))}">The tab as text</a></p>\n'
+        f'<p><a class="pdf" href="{escape(quote(tab_file))}">Tab as text</a></p>\n'
         f'<p>Tab from <a href="{escape(site)}">harptabs.com</a>, as its tabber wrote it'
-        + ("; caracole placed each hole over its syllable.</p>\n" if placed else ".</p>\n")
-        + "<p>Keep this page private: the lyrics and the tab are other people's work.</p>\n"
+        + (". We placed each hole over its syllable.</p>\n" if placed else ".</p>\n")
+        + "<p>Private page: the lyrics and the tab are other people's work.</p>\n"
         + ('<p class="reading" id="reading-foot" hidden><a href="#">Change how it\'s read</a></p>\n' if change else "")
         + "</footer>\n"
     )
@@ -484,9 +485,9 @@ _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="harps" role="group" aria-label="Harp">
-<button type="button" class="step" id="h-down" aria-label="The harp a semitone down">−</button>
+<button type="button" class="step" id="h-down" aria-label="Harp down a semitone">−</button>
 <output class="now" id="harp-now" for="h-down h-up"><span class="k" id="harp-name"></span><span class="d" id="harp-why"></span></output>
-<button type="button" class="step" id="h-up" aria-label="The harp a semitone up">+</button>
+<button type="button" class="step" id="h-up" aria-label="Harp up a semitone">+</button>
 </span>
 <button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
 <button type="button" class="tool notes" id="notes" aria-pressed="false" aria-label="Note names">♪</button>
@@ -498,7 +499,7 @@ _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
 </span>
 </span>
-<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself">""" + _PLAY_ICON + """</button>
+<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll">""" + _PLAY_ICON + """</button>
 </div>
 </div>
 """
@@ -507,7 +508,7 @@ _BAR_RAW = (_BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<butt
             .replace(_BAR[_BAR.index('<button type="button" class="tool notes"'):_BAR.index('<span class="size-box"')], "", 1))
 
 # Scrolling by itself, as the viewer's (page.py's _CONTROLS): the pill that steers it, above the bar's place.
-_PILL = """<div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>
+_PILL = """<div class="pill" id="pill" role="group" aria-label="Auto-scroll" hidden>
 <button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
 <button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>
 <output id="pill-speed">6</output>

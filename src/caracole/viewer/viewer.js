@@ -21,13 +21,13 @@
   for (const el of chordEls) if (!own.call(written, el.dataset.c)) written[el.dataset.c] = el.textContent;
   const count = data.chords.length;
   const MODES = {
-    ionian: ["Major", "bright and settled"],
-    dorian: ["Dorian", "minor, with a brighter sixth"],
-    phrygian: ["Phrygian", "minor and dark, with a Spanish half step"],
-    lydian: ["Lydian", "major and dreamy, with a raised fourth"],
-    mixolydian: ["Mixolydian", "major and bluesy, with a flat seventh"],
-    aeolian: ["Minor", "the natural minor"],
-    locrian: ["Locrian", "tense and unstable"],
+    ionian: ["Major", "bright, settled"],
+    dorian: ["Dorian", "minor, brighter 6th"],
+    phrygian: ["Phrygian", "minor, dark, Spanish half step"],
+    lydian: ["Lydian", "major, dreamy, raised 4th"],
+    mixolydian: ["Mixolydian", "major, bluesy, flat 7th"],
+    aeolian: ["Minor", "natural minor"],
+    locrian: ["Locrian", "tense, unstable"],
   };
   const FS = { min: 13, max: 30, step: 2, start: 18 };
   // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
@@ -115,7 +115,7 @@
     if (params.has("nm")) into.nm = nmOf(params.get("nm"));
   };
   // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
-  // starts there when its address names no version of its own, and Reset everything goes back there.
+  // starts there when its address names no version of its own, and Reset all goes back there.
   const start = new URLSearchParams(data.start || "");
   const hash = new URLSearchParams(location.hash.slice(1));
   if (data.start && !["t", "mode", "capo", "alt", "at"].some((name) => hash.has(name))) adopt(start);
@@ -270,8 +270,8 @@
       $("export-fold").hidden = false;
       cmd.hidden = false;
       $("export-copy").hidden = false;
-      $("export-hint").textContent = "Run this where caracole is installed; the PDF is written beside the sheet. "
-        + "With --mine, it is your version instead: the song's own PDF, its viewer and its songbooks.";
+      $("export-hint").textContent = "Run this where caracole is installed. The PDF lands beside the sheet. "
+        + "With --mine it becomes your version: the song's PDF, sheet and songbooks start there.";
       return;
     }
     const query = new URLSearchParams();
@@ -292,7 +292,7 @@
     return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
   };
   // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
-  // [transpose]), or the one made the song's own on this page since (Download and make it mine), which its job saves.
+  // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves.
   let madeMine = null;
   const ownMusic = () => {
     if (madeMine !== null) return madeMine;
@@ -447,6 +447,8 @@
   const asWritten = () => !state.mode || (key && state.mode === key.mode);
   const sheetCapo = Number(data.capoSheet) || 0;
   const inst = () => (drawn(instOf(state.inst)) ? instOf(state.inst) : instOf("guitar") || INSTRUMENTS[0]);
+  // An instrument in words, as version.py's instrument_words says it: "baritone ukulele", "low-G ukulele".
+  const instWords = (i) => (i.id === "ukulele-low-g" ? "low-G ukulele" : String(i.name).toLowerCase());
   // An instrument with no capo (the piano) plays the chords as they sound: the capo folded in, the chords named a
   // capo's frets up, the key the one the song sounds in. The capo set stays, for the guitar.
   const takesCapo = () => inst().capo !== false;
@@ -667,7 +669,7 @@
       const table = data.voicings[pianoKey(rep)];
       const list = table ? table[pc] || [] : [];
       const bass = n[mod12((rep[2] === null ? rep[0] : rep[2]) + s)];
-      return { list, note: "", mine: 0, each: list.map((_, k) => INVERSIONS[k] + "; " + bass + " in the bass, left hand.") };
+      return { list, note: "", mine: 0, each: list.map((_, k) => INVERSIONS[k] + " · " + bass + " in the bass, left hand") };
     }
     if (it.kind !== "strings") return { list: [], note: "", mine: 0 };
     if (it.shapes) {
@@ -675,8 +677,8 @@
       const quality = near === null ? rep[3] : near;
       const table = data.voicings[it.shapes + quality];
       const list = table ? table[mod12(pc + (Number(it.offset) || 0))] || [] : [];
-      let note = rep[4] || near !== null ? "No shape for this chord here: " + n[pc] + qualityName(quality) + " is the closest." : "";
-      if (rep[2] !== null) note = (note ? note + " " : "") + "Shown without its bass, " + n[mod12(rep[2] + s)] + ".";
+      let note = rep[4] || near !== null ? "No shape for this chord. Closest: " + n[pc] + qualityName(quality) + "." : "";
+      if (rep[2] !== null) note = (note ? note + " " : "") + "Without its bass, " + n[mod12(rep[2] + s)] + ".";
       return { list, note, mine: 0 };
     }
     const which = pc + "," + rep[1] + "," + (rep[2] === null ? "" : mod12(rep[2] + s));
@@ -685,7 +687,7 @@
     if (slash && slash.length) return { list: given.list || slash, note: "", mine: given.mine };
     const list = data.voicings[rep[3]] ? data.voicings[rep[3]][pc] || [] : [];
     let note = "";
-    if (rep[4]) note = "No shape for this chord here: " + n[pc] + qualityName(rep[3]) + " is the closest.";
+    if (rep[4]) note = "No shape for this chord. Closest: " + n[pc] + qualityName(rep[3]) + ".";
     if (rep[2] !== null) note = (note ? note + " " : "") + "Play " + n[mod12(rep[2] + s)] + " in the bass.";
     return { list: given.list || list, note, mine: given.mine };
   };
@@ -794,8 +796,8 @@
     refill($("easy"), moves.map(([move, name]) => button(name, move === 0, () => {
       if (move) step(wrapT(state.t + move));
     }, move ? signed(move) : "now")));
-    $("easy-hint").textContent = table.length ? "Keys whose chords sit well on the " + String(inst().name).toLowerCase()
-      + ": each moves the song there, as Transpose does." : "";
+    $("easy-hint").textContent = table.length ? "Keys that sit well on the " + instWords(inst())
+      + ". Each transposes the song there." : "";
     const panelBox = $("inst-panel");
     panelBox.textContent = "";
     const parts = partsOf();
@@ -942,9 +944,10 @@
       }
       if (f[2]) box.appendChild(document.createTextNode(f[2]));
       if (f[3]) {
+        if (f[0] || f[1]) box.appendChild(document.createTextNode(" · "));  // "Key D · from the tab"
         const from = document.createElement("span");
         from.className = "from";
-        from.textContent = (f[0] || f[1] ? " " : "") + f[3];
+        from.textContent = f[3];
         box.appendChild(from);
       }
     });
@@ -1220,7 +1223,7 @@
   let harpAt = null;  // the harp tapped on the circle, semitones above the tonic as it sounds; null: none yet
   const harmonicaTab = () => {
     if (!key || !data.harpRing || !data.harps || !data.harps[modeNow()]) {
-      return { key: null, none: "With no key, caracole can't tell which harp plays the song.", plain: null };
+      return { key: null, none: "No key, so no harp to suggest.", plain: null };
     }
     const s = state.t + sheetCapo;  // the song as it sounds: a harmonica takes no capo
     const mode = modeNow(), n = names(s), choices = data.harps[mode] || [];
@@ -1548,12 +1551,12 @@
       c.textContent = shapes.list.length > 1 ? shown.at + 1 + " of " + shapes.list.length : "";
       box.appendChild(c);
     } else {
-      box.textContent = rep ? "No shape to show for this chord." : "caracole can't read this chord.";
+      box.textContent = rep ? "No shape for this chord." : "We can't read this chord.";
     }
     heardBy(box, name);
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
-    const capoNote = capoNow() ? " With the capo on fret " + capoNow() + "." : saysNoCapo() ? " With no capo." : "";
+    const capoNote = capoNow() ? " Capo on fret " + capoNow() + "." : saysNoCapo() ? " No capo." : "";
     // The shape's note, and a hidden copy of the note on the chord's other shapes (viewer.css): from the
     // tab's shapes to chords-db's, the card keeps its height, and ‹ › stay under the thumb.
     const tabs = shown.at < shapes.mine;
@@ -1855,7 +1858,7 @@
     }));
     $("roles").hidden = !can;
     $("roles").setAttribute("aria-pressed", state.roles ? "true" : "false");
-    $("names-hint").textContent = can ? "" : "caracole can't tell this song's key, so it can't number its chords.";
+    $("names-hint").textContent = can ? "" : "No key found, so no numerals.";
     $("harmony-row").hidden = !can || !data.progressions;
   }
   $("roles").addEventListener("click", () => {
@@ -2001,8 +2004,8 @@
   // necks is; the circle when nothing is kept, or the page has no storage (a server's sandbox: the choice then lasts
   // as long as the page).
   const TIPVIEW = "caracole-viewer-tipview";
-  const VIEWS = { circle: ["Keyboard ›", "Show the notes on a keyboard", "keys"],
-    keys: ["‹ Circle", "Show the notes on a circle", "circle"] };
+  const VIEWS = { circle: ["Keyboard ›", "Notes on a keyboard", "keys"],
+    keys: ["‹ Circle", "Notes on a circle", "circle"] };
   let tipView = "circle";
   try {
     if (localStorage.getItem(TIPVIEW) === "keys") tipView = "keys";
@@ -2068,7 +2071,7 @@
     $("tip-role").textContent = own.call(ROLES, found.role) ? ROLES[found.role] : "outside the key";
     tip.dataset.role = found.role;
     $("tip-line").textContent = found.line ? textOf(found.line)
-      : found.text + ": the chord you chose in place of " + label(i, base(i)) + ".";
+      : found.text + ": your swap for " + label(i, base(i)) + ".";
     $("tip-key").textContent = "In " + keyWords() + ".";
     drawTipNotes(current(i));
     drawTipView();
@@ -2130,8 +2133,7 @@
   // filtered (#prog=), and so is Songs with each one it contains.
   const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
     half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
-  const COUNTS = ["no", "one", "two", "three"];
-  const counted = (n, word) => (n < COUNTS.length ? COUNTS[n] : String(n)) + " " + word + (n === 1 ? "" : "s");
+  const counted = (n, word) => n + " " + word + (n === 1 ? "" : "s");
   // The named progressions a section plays within it, each [name, times, key].
   const containedOf = (found) => (Array.isArray(found[8]) ? found[8] : [])
     .filter((c) => Array.isArray(c) && typeof c[0] === "string" && c[0] && typeof c[2] === "string");
@@ -2237,7 +2239,7 @@
   };
   const drawHarmony = () => {
     if (!key) return;
-    $("harmony-key").textContent = "Read in " + keyWords() + ".";
+    $("harmony-key").textContent = "In " + keyWords() + ".";
     const neckBox = $("harmony-neck");
     const inNeck = neckBox.contains(document.activeElement);
     neckBox.textContent = "";
@@ -2286,7 +2288,7 @@
         const times = nums.appendChild(document.createElement("span"));
         times.className = "prog-x";
         times.textContent = "×" + repeats;
-        if (variations > 0) {  // "×8, one variation", the words kept together
+        if (variations > 0) {  // "×8, 1 variation", the words kept together
           times.appendChild(document.createTextNode(", "));
           const varied = times.appendChild(document.createElement("span"));
           varied.className = "prog-var";
@@ -2342,7 +2344,7 @@
   // they take the text size and the scroll speed along (the key and the rest are this sheet's chords'). In
   // the list a kept version opens; one not kept is kept by caracole serve's /versions page, which reads it
   // on UG now, or, from a file, links to UG's page and shows the command that keeps it, with Copy; a version
-  // gone from UG opens nothing. Make this the one, and Back to caracole's pick (while your [pin] chooses the sheet),
+  // gone from UG opens nothing. Make it the one, and Back to our pick (while your [pin] chooses the sheet),
   // the same way.
   const vSource = data.versions && typeof data.versions === "object" ? data.versions : {};
   const vRows = (Array.isArray(vSource.list) ? vSource.list : [])
@@ -2399,9 +2401,9 @@
   };
   const apart = () => make("span", "vh", " · ");  // heard between the parts a row shows apart
   const SAYS = {
-    keep: "it reads this version on UG now and keeps it beside the sheet.",
-    choose: "this version becomes the sheet the title opens, and the PDF's and the songbooks'.",
-    clear: "the title opens caracole's pick again: the best rated of the versions with the lyrics.",
+    keep: "it fetches this version from UG and keeps it beside the sheet.",
+    choose: "this version becomes the song's sheet, PDF and songbook entry.",
+    clear: "the song goes back to our pick, the best rated version with lyrics.",
   };
   // Served, a link to caracole serve's page that asks for it; from a file, a button that shows the command.
   const vCommand = (box, what, tab) => {
@@ -2465,15 +2467,15 @@
     const what = vHere ? [vHere.chosen ? "the one" : "", vHere.gone ? "gone from UG" : ""]
       : [vOne && vOne.page === here ? "the one: " + vOne.label : ""];
     for (const tag of what.filter(Boolean)) line.append(apart(), make("span", tag === "gone from UG" ? "tag" : "tag one", tag));
-    $("version-list-title").textContent = vCount(vTotal) + " on Ultimate Guitar";
+    $("version-list-title").textContent = vCount(vTotal) + " on UG";
     const acts = $("ver-acts");
     acts.textContent = "";
-    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make this the one", "choose", vHere.tab, true);
+    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make it the one", "choose", vHere.tab, true);
     // While a [pin] of yours chooses the sheet (the data's ``pinned``, the pin caracole versions --clear takes
     // out); on a page whose data has no ``pinned`` (written before it), while your choice isn't caracole's first.
     const pick = vRows.find((v) => !v.gone);
     const pinned = typeof vSource.pinned === "boolean" ? vSource.pinned : Boolean(vChosen && pick && pick !== vChosen);
-    if (pinned) vAction(acts, "Back to caracole's pick", "clear", null, false);
+    if (pinned) vAction(acts, "Back to our pick", "clear", null, false);
     acts.hidden = acts.children.length === 0;
     const items = $("ver-items");
     items.textContent = "";
@@ -2488,7 +2490,7 @@
           ug.setAttribute("href", v.url);
           todo.appendChild(ug);
         }
-        vAction(todo, "Keep it", "keep", v.tab, false, li);
+        vAction(todo, "Keep", "keep", v.tab, false, li);
       }
       todo.hidden = todo.children.length === 0;
       items.appendChild(li);
@@ -2603,7 +2605,7 @@
   const moving = () => scroll.state === "counting" || scroll.state === "running";
   // Pixels a second: a bigger text scrolls as much faster, so a speed keeps its pace through the song.
   const pace = () => (state.speed * SPEED.px * state.fs) / FS.start;
-  const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
+  const LABELS = { counting: "Start", running: "Pause", paused: "Resume" };
   const showScroll = (said) => {
     pill.hidden = scroll.state === "off";
     if (scroll.state === "off") delete doc.dataset.pill;
@@ -2667,7 +2669,7 @@
       scroll.timer = setTimeout(tick, left % 1000 || 1000);
     };
     tick();
-    showScroll("Scrolling in " + COUNTDOWN / 1000 + " seconds");
+    showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
     holdScreen();
   };
   // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
@@ -2696,7 +2698,7 @@
           scroll.at = window.scrollY;
         }
         if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
-          pauseScroll("Paused at the end of the song");
+          pauseScroll("Paused · end of song");
           return;
         }
       }
