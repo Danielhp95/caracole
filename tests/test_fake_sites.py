@@ -98,6 +98,25 @@ def test_the_blocked_songs_page_is_a_403(sites):
     assert fetch(sites, song.tab_url(song.tabs[0]))[0] == 403
 
 
+def test_the_closed_songs_page_redirects_to_its_print_view_which_robots_txt_closes(sites):
+    from caracole.http import robots_disallows
+
+    song = ROLES["closed"]
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+    url = f"{sites.url}/fetch?url={urllib.parse.quote_plus(song.tab_url(song.tabs[0]))}"
+    with pytest.raises(urllib.error.HTTPError) as answer:
+        opener.open(url, timeout=30)
+    assert answer.value.code == 301
+    assert answer.value.headers["Location"] == song.print_url(song.tabs[0])
+    assert robots_disallows(song.print_url(song.tabs[0])) is not None
+    assert [r["known"] for r in sites.requests] == [True]
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 def test_the_get_it_songs_votes_grow_with_every_read_of_a_page(sites):
     from caracole.ug.page import parse_tab_page
 
@@ -131,6 +150,15 @@ def test_lrclib_has_the_get_it_songs_timed_lyrics_and_none_else(sites):
     status, body = fetch(sites, f"https://lrclib.net/api/search?{query}")
     assert (status, json.loads(body)) == (200, [])
     assert all(r["known"] for r in sites.requests)
+
+
+def test_a_gtptabs_artist_page_lists_none_of_the_scenarios_songs(sites):
+    from caracole.gtptabs import parse_artist_page
+
+    url = "https://gtptabs.com/tabs/20/traditional.html"
+    status, body = fetch(sites, url)
+    assert status == 200 and parse_artist_page(body.decode("utf-8"), url) == []
+    assert [r["known"] for r in sites.requests] == [True]
 
 
 def test_it_never_takes_the_owners_port():
@@ -186,7 +214,7 @@ def test_caracole_looks_the_scenarios_songs_up_against_it_within_a_lookups_limit
         return {p.name for p in folder.iterdir()} if folder.is_dir() else set()
 
     each = {}
-    for role in ("get_it", "fetch_now", "artist_page", "blocked"):
+    for role in ("get_it", "fetch_now", "artist_page", "closed", "blocked"):
         song = ROLES[role]
         before = len(sites.requests)
         result = look_up(cfg, LookupRequest(song.artist.name, song.title), runner=Chordpro(), now=now)
@@ -197,21 +225,32 @@ def test_caracole_looks_the_scenarios_songs_up_against_it_within_a_lookups_limit
             assert n <= DEFAULT_PROVIDERS[provider].lookup_requests, (role, provider, asked)
     every = sites.requests
     assert not any(r["closed"] for r in every)
+    assert [r for r in every if not r["known"]] == []  # every URL caracole asks is one the scenario answers
     assert {r["user_agent"] for r in every} == {cfg.user_agent}
+    closed = ROLES["closed"]
+    # its page asked (by the sheet's stage, then the ug stage: a 301 is never cached), its redirect never followed
+    assert {r["status"] for r in each["closed"] if r["url"] == closed.tab_url(closed.tabs[0])} == {301}
+    assert not any(r["url"] == closed.print_url(closed.tabs[0]) for r in every)
 
     assert {"sheet.txt", "sheet.json", "lyrics.lrc"} <= files(ROLES["get_it"])
     assert "sheet.txt" in files(ROLES["fetch_now"])
     assert "sheet.txt" in files(ROLES["artist_page"])  # from the bare tab its artist's page lists
     assert any(r["url"].startswith(ROLES["artist_page"].artist.page) for r in each["artist_page"])
-    assert "sheet.txt" not in files(ROLES["blocked"])
+    assert "sheet.txt" not in files(ROLES["blocked"]) and "sheet.txt" not in files(closed)
+    assert (cfg.library_dir / "Thomas Moore" / "The Minstrel Boy" / "lyrics.lrc").read_text().startswith("[00:10.00]")
     conn = db.connect(cfg.db_path)
     try:
         assert get_state(conn, "ug").cooldown_until is not None  # the 403 cooled Ultimate Guitar down
-        assert len(list_songs(conn)) == 4
+        assert len(list_songs(conn)) == 5
+        status = dict(conn.execute("SELECT title, lyrics_status FROM songs"))
+        assert (status["The Minstrel Boy"], status["Oft in the Stilly Night"]) == ("found", "missing")
+        # Errors are never misses: the block leaves its song matched and waiting for the next run; a redirect to a
+        # page robots.txt closes is Ultimate Guitar's answer (RobotsClosed), its song matched and checked.
+        decided = {role: tuple(conn.execute("SELECT match_decision, ug_dirty FROM songs WHERE title = ?",
+                                            (ROLES[role].title,)).fetchone()) for role in ("closed", "blocked")}
+        assert decided == {"closed": ("accept", 0), "blocked": ("accept", 1)}, decided
     finally:
         conn.close()
-    assert not [r for r in each["get_it"] + each["fetch_now"] + each["artist_page"] if not r["known"]
-                and r["provider"] in ("ug", "lrclib")]
 
 
 @pytest.mark.slow

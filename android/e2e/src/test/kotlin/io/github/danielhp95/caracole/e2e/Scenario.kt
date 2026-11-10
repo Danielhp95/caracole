@@ -70,11 +70,13 @@ class Lookups(json: JsonObject) {
     fun provider(host: String): String? = hosts[host]
 }
 
-/** A song of the fake sites' scenario: its names and identity key, its tab pages, its artist's page, and, for a song of
- * UG's index, what a search types for it and the row it finds ([search]: `ug`, the names and their key). */
+/** A song of the fake sites' scenario: its names and identity key, its tab pages (and where a page redirects that
+ * robots.txt closes, [closed]), its artist's page, and, for a song of UG's index, what a search types for it and the
+ * row it finds ([search]: `ug`, the names and their key). */
 class LookupSong(json: JsonObject) {
     val song: Song = Song(json.text("artist"), json.text("title"), json.text("key"))
     val tabs: List<String> = json["tabs"]!!.jsonArray.map { it.jsonPrimitive.content }
+    val closed: List<String> = json["closed"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
     val artistPage: String = json.text("artist_page")
     val search: JsonObject? = json["search"]?.jsonObject
 

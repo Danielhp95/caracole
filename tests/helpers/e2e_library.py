@@ -38,7 +38,9 @@ phone has looked them up: ``SETTINGS``, which the next sync gives the phone).
 
 ``computer.against(sites, "get", "Artist - Title")`` runs a caracole command on the library with every site it asks
 the fake sites server at ``sites`` (tests/helpers/fake_sites.py), so that the computer looks a song up as the phone
-does; ``provider`` and ``events`` read its health record of a site and the requests it counted.
+does; ``provider`` and ``events`` read its health record of a site and the requests it counted, ``politeness``
+everything of its own politeness (its events whole, and the kv records that gate its requests), and ``index_merges``
+the merges of index pages its caracole serve queued (``POST /peer/index``), from its request history.
 
 ``python -m tests.helpers.e2e_library serve DIR PORT`` (in nix develop, from the repository's root) builds the library
 in DIR when DIR holds none, exports its index to DIR/index.sqlite (what ``GET /api/peer/index`` gives the phone, and
@@ -325,6 +327,38 @@ class Computer:
             return [tuple(r) for r in conn.execute("SELECT provider, url FROM events ORDER BY id")]
         finally:
             conn.close()
+
+    def politeness(self) -> dict:
+        """Everything of this caracole's own politeness: every ``events`` row, whole, and the kv records of its pace
+        (``http:last_request:``), its health (``provider:``) and its lookups (``lookup:``), which no sync may change
+        (the owner's choice: each caracole's politeness is its own)."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return {"events": [tuple(r) for r in conn.execute("SELECT * FROM events ORDER BY id")],
+                    "kv": dict(conn.execute("SELECT key, value FROM kv WHERE key LIKE 'http:last_request:%' "
+                                            "OR key LIKE 'provider:%' OR key LIKE 'lookup:%' ORDER BY key"))}
+        finally:
+            conn.close()
+
+    def index_merges(self) -> dict[int, str]:
+        """The merges of index pages another caracole pushed (``POST /peer/index``, web/jobs.py's
+        ``index_merge_job``) that caracole serve queued: each one's state, by its id, as its request history
+        (``state_dir/requests.jsonl``, web/history.py) last says it."""
+        from caracole.web.jobs import INDEX_MERGE
+
+        history = self.cfg().state_dir / "requests.jsonl"
+        states: dict[int, str] = {}
+        if history.is_file():
+            for line in history.read_text(encoding="utf-8").splitlines():
+                try:
+                    job = json.loads(line)
+                except ValueError:
+                    continue  # a line cut short, as the history skips it
+                if isinstance(job, dict) and str(job.get("song_key", "")).startswith(INDEX_MERGE):
+                    states[int(job["id"])] = str(job.get("state"))
+        return states
 
     def after_the_phone_left(self) -> None:
         """What the owner does on the computer while the phone is away (§9's step 5): ``caracole add`` adds ``ADDS``,

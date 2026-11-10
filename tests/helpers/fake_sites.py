@@ -15,11 +15,15 @@ URL, quoted>``, with the headers it was sent with (the user agent). The site's U
   (those records whose names fit, else ``[]``);
 - Megalobiz's search (megalobiz_site.py's fake, with no record: a search finds nothing), AZLyrics' artist pages
   (azlyrics_site.py's 404: it lists none of the scenario's artists) and LaCuerda's (its 404 page,
-  tests/fixtures/lacuerda/not_found.html).
+  tests/fixtures/lacuerda/not_found.html);
+- gtptabs.com's artist pages (``/tabs/<n>/<artist>.html``, which a lookup asks for an artist gtptabs.com's index
+  lists, as the computer's lists Traditional): gtptabs_site.py's page of the artist, listing none of the scenario's
+  songs, so that gtptabs.com has no Guitar Pro file of them.
 
-A URL the scenario has no rule for gets its site's 404 and is logged as unknown (on stderr, ``known`` false); one
-robots.txt closes (``caracole.http.robots_disallows``) is never answered either, a 404, logged ``closed``. Every request
-is counted, in order, and its own routes, which no site is, say what was asked:
+A URL the scenario has no rule for gets its site's 404 and is logged as unknown (on stderr, ``known`` false), so that
+a caracole asking a URL the computer's wouldn't is seen, never read as the site's miss; one robots.txt closes
+(``caracole.http.robots_disallows``) is never answered either, a 404, logged ``closed``. Every request is counted, in
+order, and its own routes, which no site is, say what was asked:
 
 - ``GET /log`` (``?since=N``: those after the N-th): ``{"requests": [{"n", "url", "provider", "status", "known",
   "closed", "user_agent"}, ...]}``, each as it came;
@@ -34,7 +38,7 @@ server at SITES (``routed``, RoutedTransport's twin in httpx), so that the compu
 pages the phone does. In a test, ``FakeSites(name)`` is the server on a free port of 127.0.0.1, in a thread
 (``with FakeSites("lookups") as sites: sites.url``).
 
-The scenario ``lookups`` (``LOOKUPS``): four songs, each with a part (``role``) in the lookups the phase makes:
+The scenario ``lookups`` (``LOOKUPS``): five songs, each with a part (``role``) in the lookups the phase makes:
 
 - ``get_it``, Thomas Moore's The Minstrel Boy: four chords versions in UG's index and on each of its pages, the best
   rated first, and LRCLIB's timed lyrics. Get it on its search row keeps its sheet; Fetch them keeps more of its
@@ -44,6 +48,8 @@ The scenario ``lookups`` (``LOOKUPS``): four songs, each with a part (``role``) 
   fetch, then Fetch now on its card.
 - ``artist_page``, Thomas Moore's The Last Rose of Summer: a tab at a bare ``/tab/<id>``, in no sitemap, listed on
   Thomas Moore's artist page alone (A6), which his other pages name (``artist_url``): asked for with Fetch now.
+- ``closed``, The Wild Rover (Traditional): its tab page answers a 301 to its print view, ``/tab/print?id=…``, which
+  robots.txt closes: a redirect a caracole never follows, an error and never a miss.
 - ``blocked``, Whiskey in the Jar (Traditional): its tab page answers 403, a block.
 
 The standard library alone at import, so that e2e_library.py can import its songs; caracole, httpx and the suite's
@@ -118,12 +124,17 @@ class SiteSong:
     bare: int | None = None  # its one tab, at a bare /tab/<id>, on the artist's page alone
     lyrics: bool = False  # LRCLIB has its timed lyrics
     blocked: bool = False  # UG answers its tab page with a 403
+    closed: bool = False  # UG answers its tab page with a 301 to its print view, which robots.txt closes
     query: str = ""  # what a search for it types (a song of UG's index)
 
     def tab_url(self, tab: int) -> str:
         if self.bare is not None:
             return f"{UG_TAB}{tab}"
         return f"{UG_TAB}{slug(self.artist.name)}/{slug(self.title)}-chords-{tab}"
+
+    def print_url(self, tab: int) -> str:
+        """Its tab's print view, where a ``closed`` song's page redirects: robots.txt closes ``/tab/print?``."""
+        return f"{UG_TAB}print?id={tab}"
 
     @property
     def every_tab(self) -> tuple[int, ...]:
@@ -137,6 +148,8 @@ LOOKUPS = (
              tabs=(7000001, 7000002, 7000003, 7000004), lyrics=True, query="minstrel boy"),
     SiteSong("fetch_now", THOMAS_MOORE, "Oft in the Stilly Night", "D", ("D", "G", "A", "Bm"), tabs=(7000011,)),
     SiteSong("artist_page", THOMAS_MOORE, "The Last Rose of Summer", "G", ("G", "C", "D", "Em"), bare=7000021),
+    SiteSong("closed", TRADITIONAL, "The Wild Rover", "C", ("C", "F", "G", "Am"), tabs=(7000041,), closed=True,
+             query="wild rover"),
     SiteSong("blocked", TRADITIONAL, "Whiskey in the Jar", "G", ("G", "Em", "C", "D"), tabs=(7000031,),
              blocked=True, query="whiskey in the jar"),
 )
@@ -210,7 +223,8 @@ def document(conn: sqlite3.Connection, name: str = "lookups") -> dict:
     for song in SCENARIOS[name]:
         entry = {"artist": song.artist.name, "title": song.title, "key": identity_key(song.artist.name, song.title),
                  "tabs": [song.tab_url(t) for t in song.every_tab], "artist_page": song.artist.page,
-                 "lyrics": song.lyrics, "blocked": song.blocked}
+                 "lyrics": song.lyrics, "blocked": song.blocked,
+                 "closed": [song.print_url(t) for t in song.every_tab] if song.closed else []}
         if song.query:
             want = (ug_slug_key(slug(song.artist.name)), ug_slug_key(slug(song.title)))  # as ug_index keeps them
             hit = next((h for h in search_index(conn, song.query) if (h.artist_key, h.song_key) == want), None)
@@ -234,6 +248,7 @@ class Answer:
     content_type: str
     body: bytes
     known: bool = True
+    location: str | None = None  # a redirect's
 
 
 HTML = "text/html; charset=utf-8"
@@ -277,6 +292,8 @@ class Sites:
 
         if song.blocked:
             return Answer(403, HTML, b"<html><head><title>Access denied</title></head><body>Forbidden</body></html>")
+        if song.closed:
+            return Answer(301, HTML, b"<html><title>Moved</title></html>", location=song.print_url(tab))
         with self._lock:
             reads = self._reads[song.tab_url(tab)] = self._reads.get(song.tab_url(tab), 0) + 1
         own = self._version(song, tab, reads)
@@ -342,6 +359,17 @@ class Sites:
             return Answer(200, JSON, json.dumps(found).encode("utf-8"))
         return None
 
+    # gtptabs.com.
+
+    def _gtptabs_artist(self, path: str) -> Answer | None:
+        from helpers.gtptabs_site import artist_page
+
+        artist = re.fullmatch(r"/tabs/\d+/([a-z0-9]+(?:-[a-z0-9]+)*)\.html", path)
+        if artist is None:
+            return None
+        name = " ".join(word.capitalize() for word in artist[1].split("-"))
+        return Answer(200, HTML, artist_page(name, path.lstrip("/")).encode("utf-8"))
+
     # The rest: the suite's fakes, or the site's 404.
 
     def _fake(self, handler, url: str) -> Answer | None:
@@ -369,6 +397,8 @@ class Sites:
             found = self._fake(self.azlyrics.handler, url)
         elif provider == "lacuerda" and re.fullmatch(r"/[a-z0-9_]+/", parts.path):
             found = Answer(404, HTML, _fixture("lacuerda/not_found.html"))
+        elif provider == "gtptabs" and not parts.query:
+            found = self._gtptabs_artist(parts.path)
         if found is not None:
             return found
         return Answer(404, JSON if provider == "lrclib" else HTML, b"<html><title>Not Found</title></html>",
@@ -480,8 +510,10 @@ def _handler(fake: FakeSites) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format, *args):  # the log is /log's, and stderr's unknown lines
             pass
 
-        def _send(self, status: int, content_type: str, body: bytes) -> None:
+        def _send(self, status: int, content_type: str, body: bytes, location: str | None = None) -> None:
             self.send_response(status)
+            if location is not None:
+                self.send_header("Location", location)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -492,7 +524,7 @@ def _handler(fake: FakeSites) -> type[BaseHTTPRequestHandler]:
             query = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
             if parts.path == "/fetch" and "url" in query:
                 answer = fake.fetch(query["url"], self.headers.get("User-Agent", ""))
-                self._send(answer.status, answer.content_type, answer.body)
+                self._send(answer.status, answer.content_type, answer.body, answer.location)
             elif parts.path == "/log":
                 since = int(query.get("since") or 0)
                 body = {"requests": [r for r in fake.requests if r["n"] > since]}

@@ -70,20 +70,24 @@ import kotlin.test.fail
  * 4. A comparison once more finds no difference.
  * 5. With the computer off, the phone looks songs up against the fake sites server (`-Pcaracole.e2e.sites`,
  *    tests/helpers/fake_sites.py's scenario `lookups`, every site's request sent there by RoutedTransport): Get it on
- *    a search row of a song new to both sides keeps its sheet, its lyrics and its card's sheet.txt, served; a song
- *    asked for with no fetch, then Fetch now on its card, keeps its sheet; Fetch them keeps more of the first one's
- *    versions; a song at a bare tab its artist's page lists is asked for with Fetch now; Get it on a song whose page
- *    answers 403 cools Ultimate Guitar down on the phone. Each lookup sends each site at most its lookup_requests,
- *    every lookup together at most its lookup_per_hour, no URL robots.txt closes, and no request leaves for any host
- *    but the fake server's (Requests, against the server's own count); what the phone noted of the index pages it
- *    read, and each lookup's requests, are written for the Python side.
+ *    a search row of a song new to both sides keeps its sheet, LRCLIB's timed lyrics and its card's sheet.txt,
+ *    served; a song asked for with no fetch (no site asked), then Fetch now on its card, keeps its sheet, every lyrics
+ *    site answering a miss; Fetch them keeps more of the first one's versions; a song at a bare tab its artist's page
+ *    alone lists, asked for with Fetch now, keeps its sheet from that page, an index page noted for the computer; Get
+ *    it on a song whose page redirects to one robots.txt closes keeps no sheet, the redirect never followed; Get it on
+ *    one whose page answers 403 keeps none either and is never a miss, Ultimate Guitar cooling down on the phone. Each lookup asks the sites (counted from
+ *    just before it is posted), each at most its lookup_requests, every lookup together at most its lookup_per_hour,
+ *    never a URL robots.txt closes, every URL one the scenario answers (`known`: no URL the computer's caracole
+ *    wouldn't ask read as a miss), and no request leaves for any host but the fake server's (Requests, against the
+ *    server's own count); what the phone noted of the index pages it read, and each lookup's requests (Get it's URLs
+ *    in order, which the Python side compares with the computer's own lookup), are written for the Python side.
  * 6. The computer back, having looked the first song up itself against the same sites and changed its caracole.toml:
  *    the comparison lists the phone's lookups as the phone's and the song looked up on both sides a conflict (how many
- *    conflicts, and which fields of the unit differ, are reported: UG's ratings among them, §11 Q2); applied with
- *    that one taken from the computer: every stage done, the rest given, nothing left; the computer's settings taken
- *    (kv `phone:settings`, `PhoneConfig.read`); Ultimate Guitar still cooling on the phone, as nothing of either
- *    side's politeness crosses; the index pages the phone read pushed (none noted left); every mirrored page served;
- *    then the phone's units written to DIR/phone/phone-state.json again.
+ *    conflicts, and which fields of the unit differ, are reported: §11 Q2); applied with that one taken from the
+ *    computer: every stage done, the rest given, nothing left; the computer's settings taken (kv `phone:settings`,
+ *    `PhoneConfig.read`); Ultimate Guitar still cooling on the phone, as nothing of either side's politeness crosses;
+ *    the index pages the phone read pushed (none noted left); every mirrored page served; then the phone's units
+ *    written to DIR/phone/phone-state.json again.
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -257,24 +261,27 @@ class PhoneScenarioTest {
         val lookups = scenario.lookups
         val asked = LinkedHashMap<String, List<JsonObject>>()  // each lookup's requests to the sites, by its name
         val lines = LinkedHashMap<String, JsonObject>()
-        val waiting = ArrayList<String>()
         val started = fake.count()
 
-        /** The lookup [response] queued, done: its requests to the sites kept under [name], its line read. */
-        fun lookUp(name: String, response: Response): Job {
-            assertTrue(response.status in setOf(200, 202), "$name: HTTP ${response.status} ${response.text.take(1000)}")
+        /** The lookup [post] queues, done: the requests the fake sites were sent from just before it was posted (so
+         * that none its worker sends at once escapes the count) kept under [name], at least one, and its line read. */
+        fun lookUp(name: String, post: () -> Response): Job {
             val before = fake.count()
+            val response = post()
+            assertTrue(response.status in setOf(200, 202), "$name: HTTP ${response.status} ${response.text.take(1000)}")
             val job = done(phone.await(phone.jobOf(response)))
             asked[name] = fake.log(before)
+            assertTrue(asked.getValue(name).isNotEmpty(), "$name asked no site: ${job.asJson()}")
             lines[name] = shownLine(phone, job.id)
             return job
         }
 
-        // Get it on a search's row: a song new to both sides, its sheet, lyrics and card's sheet.txt the phone's.
+        // Get it on a search's row: a song new to both sides, its sheet, timed lyrics and card's sheet.txt the phone's.
         val getIt = lookups.song("get_it")
         val hit = searchRow(phone, getIt.search!!)
-        val got = lookUp("get it", phone.post("/lookup", "artist" to hit.text("artist"), "title" to hit.text("title"),
-                                              "ug" to hit.text("ug")))
+        val got = lookUp("get it") {
+            phone.post("/lookup", "artist" to hit.text("artist"), "title" to hit.text("title"), "ug" to hit.text("ug"))
+        }
         assertStage(got, "song", DONE)
         assertStage(got, "match", DONE)
         assertStage(got, "sheet", DONE)
@@ -282,60 +289,80 @@ class PhoneScenarioTest {
         val minstrel = songOf(phone, getIt.found)
         val sheet = keptSheet(phone, minstrel.key)
         assertTrue("Made-up words of verse 1" in sheet, "the chart the fake sites gave: ${sheet.take(500)}")
-        assertTrue(phone.database.read { db ->
-            db.one("SELECT lyrics_status FROM songs WHERE key = ?", minstrel.key) { it.text(0) }
-        } == "found", "LRCLIB's timed lyrics kept")
+        assertEquals("found", lyricsStatus(phone, minstrel.key), "LRCLIB's lyrics kept")
+        val timed = File(songFolder(phone, minstrel.key), "lyrics.lrc")
+        assertTrue(timed.isFile, "LRCLIB's timed lyrics written as $timed")
+        assertTrue(timed.readText().startsWith("[00:10.00]"), "LRCLIB's timed lyrics: ${timed.readText().take(300)}")
         servedFromItsCard(phone, minstrel.key, sheet)
 
-        // A song asked for with no fetch, then Fetch now on its card.
+        // A song asked for with no fetch (no site asked), then Fetch now on its card: every lyrics site a miss.
         val fetchNow = lookups.song("fetch_now").song
+        val quiet = fake.count()
         done(phone.await(phone.jobOf(phone.post("/request", "artist" to fetchNow.artist, "title" to fetchNow.title,
                                                 "fetch" to "0"))))
+        assertEquals(emptyList(), fake.log(quiet), "a request with no fetch asks no site")
         val stilly = songOf(phone, fetchNow)
-        val fetched = lookUp("fetch now", phone.post("/fetch", "song" to "${idOf(phone, stilly.key)}"))
+        val fetched = lookUp("fetch now") { phone.post("/fetch", "song" to "${idOf(phone, stilly.key)}") }
         assertStage(fetched, "sheet", DONE)
         assertTrue("Made-up words" in keptSheet(phone, stilly.key))
-        assertFalse(fetched.stages.single { it.name == "lyrics" }.state == "failed",
-                    "every lyrics site answered (none has its words): ${fetched.asJson()}")
+        assertEquals("missing", lyricsStatus(phone, stilly.key),
+                     "every lyrics site answered a miss: ${fetched.asJson()}")
 
         // Fetch them: more of Get it's song's versions kept beside its sheet.
         val versionsBefore = keptVersions(phone, minstrel.key)
-        val more = lookUp("fetch them", phone.post("/versions/keep-more", "song" to "${idOf(phone, minstrel.key)}"))
-        // waiting on lookup-scenarios (its producer ug-fetch-artist: `caracole versions --keep-more` on the phone): until
-        // it merges, Fetch them says it isn't on the phone yet; then it keeps the versions Get it left.
-        if (more.output.any { NOT_YET in it }) {
-            waiting += "Fetch them keeps more versions: lookup-scenarios (ug-fetch-artist)"
-        } else {
-            assertTrue(keptVersions(phone, minstrel.key).size > versionsBefore.size,
-                       "Fetch them kept more of its versions: ${more.asJson()}")
-        }
+        val more = lookUp("fetch them") { phone.post("/versions/keep-more", "song" to "${idOf(phone, minstrel.key)}") }
+        assertTrue(keptVersions(phone, minstrel.key).size > versionsBefore.size,
+                   "Fetch them kept more of its versions (it had $versionsBefore): ${more.asJson()}")
 
-        // Fetch now on the request form: a song at a bare tab its artist's page alone lists.
+        // Fetch now on the request form: a song at a bare tab its artist's page alone lists, which the phone notes.
         val rose = lookups.song("artist_page")
-        val roseJob = lookUp("artist page", phone.post("/request", "artist" to rose.song.artist,
-                                                       "title" to rose.song.title, "fetch" to "1"))
-        // waiting on lookup-scenarios (its producer ug-fetch-artist: UG's artist-page route): until it merges, the ug
-        // stage says the artist's page isn't read on the phone yet; then its sheet comes from the bare tab, and the
-        // artist's page is an index read the next sync gives the computer.
-        if (roseJob.stages.any { it.name == "ug" && NOT_YET_WORDS in it.detail }) {
-            waiting += "a bare tab from its artist's page: lookup-scenarios (ug-fetch-artist)"
-        } else {
-            assertTrue("Made-up words" in keptSheet(phone, rose.song.key), "the bare tab's sheet: ${roseJob.asJson()}")
-            assertTrue(asked.getValue("artist page").any { it.text("url").startsWith(rose.artistPage) },
-                       "the artist's page read: ${asked["artist page"]}")
+        val roseJob = lookUp("artist page") {
+            phone.post("/request", "artist" to rose.song.artist, "title" to rose.song.title, "fetch" to "1")
         }
+        assertTrue("Made-up words" in keptSheet(phone, rose.song.key), "the bare tab's sheet: ${roseJob.asJson()}")
+        assertTrue(asked.getValue("artist page").any { it.text("url").startsWith(rose.artistPage) },
+                   "the artist's page read: ${asked["artist page"]}")
+        assertTrue(rose.tabs.single() in asked.getValue("artist page").map { it.text("url") },
+                   "the bare tab read: ${asked["artist page"]}")
+        val reads = noted(phone)
+        assertTrue(reads.any { it.startsWith("ug:") && URI(it.removePrefix("ug:")).path == URI(rose.artistPage).path },
+                   "the artist's page noted for the computer: $reads")
+
+        // Get it on a song whose page redirects to its print view, which robots.txt closes: never followed, the song
+        // matched and its page checked as the computer's caracole checks it (tests/test_fake_sites.py: a page
+        // robots.txt closes is Ultimate Guitar's answer, RobotsClosed, so the song isn't left dirty).
+        val wild = lookups.song("closed")
+        val wildRow = searchRow(phone, wild.search!!)
+        val closed = lookUp("closed") {
+            phone.post("/lookup", "artist" to wildRow.text("artist"), "title" to wildRow.text("title"),
+                       "ug" to wildRow.text("ug"))
+        }
+        assertEquals(setOf("301"), asked.getValue("closed").filter { it.text("url") in wild.tabs }
+            .map { it.text("status") }.toSet(), "its page's redirect: ${asked["closed"]}")
+        assertTrue(keptFiles(phone, wild.found.key).none { it.startsWith("sheet") }, "no sheet kept for it")
+        assertEquals("accept" to 0L, phone.database.read { db ->
+            db.one("SELECT match_decision, ug_dirty FROM songs WHERE key = ?", wild.found.key) {
+                it.text(0) to it.long(1)
+            }
+        }, "matched, and checked as the computer checks it: ${closed.asJson()}")
 
         // Get it on a song Ultimate Guitar answers 403 for: a block, Ultimate Guitar cooling on the phone.
         val blocked = lookups.song("blocked")
         val row = searchRow(phone, blocked.search!!)
-        lookUp("blocked", phone.post("/lookup", "artist" to row.text("artist"), "title" to row.text("title"),
-                                     "ug" to row.text("ug")))
+        val stopped = lookUp("blocked") {
+            phone.post("/lookup", "artist" to row.text("artist"), "title" to row.text("title"), "ug" to row.text("ug"))
+        }
         assertTrue(asked.getValue("blocked").any { it.text("status") == "403" }, "UG's 403: ${asked["blocked"]}")
         assertTrue(phone.database.read { db -> Health.isCooling(db, "ug", Instant.now()) },
                    "a 403 cools Ultimate Guitar down on the phone")
         assertTrue(keptFiles(phone, blocked.found.key).none { it.startsWith("sheet") }, "no sheet kept for it")
+        neverAMiss(phone, blocked.found.key, stopped)
+        assertEquals(1L, phone.database.read { db ->
+            db.one("SELECT ug_dirty FROM songs WHERE key = ?", blocked.found.key) { it.long(0) }
+        }, "the blocked song waits for Ultimate Guitar again")
 
-        // The limits: each lookup's to each site, the hour's together; no closed URL; no other host.
+        // The limits: each lookup's to each site, the hour's together; no closed URL; every URL one the scenario
+        // answers; no other host.
         for ((name, requests) in asked) {
             for ((provider, n) in FakeSites.byProvider(requests)) {
                 assertTrue(n <= lookups.requests(provider), "$name sent $provider $n requests: $requests")
@@ -346,23 +373,28 @@ class PhoneScenarioTest {
             assertTrue(n <= lookups.perHour(provider), "the lookups sent $provider $n requests in the hour")
         }
         assertEquals(emptyList(), every.filter { it.text("closed") == "true" }, "no URL robots.txt closes")
+        assertEquals(emptyList(), every.filter { it.text("url") in wild.closed }, "the redirect to one, not followed")
+        assertEquals(emptyList(), every.filter { it.text("known") != "true" },
+                     "every URL the phone asked is one the scenario answers")
         assertEquals(emptyList(), every.filter { it.text("provider").isEmpty() }, "no host but the sites'")
         assertEquals(setOf(fake.hostPort), Requests.hosts.toSet(), "no request to any host but the fake sites'")
         assertTrue(Requests.paths.all { it == "/fetch" }, "${Requests.paths}")
         assertEquals(every.size, Requests.count, "every request the phone sent is one the fake sites counted")
 
-        val looked = listOf(getIt.found, fetchNow, rose.song, blocked.found)
+        val looked = listOf(getIt.found, fetchNow, rose.song, wild.found, blocked.found)
         buildJsonObject {
             put("sites", every.size)
             put("asked", JsonObject(asked.mapValues { (_, requests) ->
                 JsonObject(FakeSites.byProvider(requests).mapValues { JsonPrimitive(it.value) })
             }))
+            put("urls", JsonObject(asked.mapValues { (_, requests) ->
+                JsonArray(requests.map { it["url"]!! })
+            }))
             put("lines", JsonObject(lines))
             put("added", JsonArray(looked.map { song ->
                 buildJsonObject { put("artist", song.artist); put("title", song.title); put("key", song.key) }
             }))
-            put("reads", JsonArray(noted(phone).map(::JsonPrimitive)))
-            put("waiting", JsonArray(waiting.map(::JsonPrimitive)))
+            put("reads", JsonArray(reads.map(::JsonPrimitive)))
         }
     }
 
@@ -371,8 +403,8 @@ class PhoneScenarioTest {
         val looked = five["added"]!!.jsonArray.map { it.jsonObject.text("key") }
         val both = scenario.lookups.song("get_it").found  // looked up on the computer too, meanwhile
         val noted = noted(phone)
-        val waiting = ArrayList<String>()
         assertEquals(five["reads"]!!.jsonArray.map { it.jsonPrimitive.content }, noted, "the reads phase 5 noted")
+        assertTrue(noted.isNotEmpty(), "phase 5 noted the index pages it read")
 
         val compared = compare(phone)
         val expected = looked.associate { key -> "song/$key" to if (key == both.key) "conflict" else "mine" }
@@ -401,13 +433,7 @@ class PhoneScenarioTest {
         assertTrue(phone.database.read { db -> Health.isCooling(db, "ug", Instant.now()) },
                    "Ultimate Guitar still cooling on the phone: no cooldown crosses")
         // The index pages the phone read, pushed: none noted is left.
-        if (noted.isEmpty()) {
-            // waiting on lookup-scenarios (its producers ug-fetch-artist and lacuerda-sheets): until they merge, a lookup
-            // on the phone reads no index page (an artist's), so there is none to push.
-            waiting += "the phone's index reads at the next sync: lookup-scenarios (ug-fetch-artist, lacuerda-sheets)"
-        } else {
-            assertEquals(emptyList(), noted(phone), "every index page the phone read, pushed")
-        }
+        assertEquals(emptyList(), noted(phone), "every index page the phone read, pushed")
 
         val gate = PhoneGate(phone.database)
         for (page in phone.mirror.manifest()!!.entries.filter { it.unit != null }) {
@@ -424,7 +450,6 @@ class PhoneScenarioTest {
             put("settings", phone.database.read { db -> db.kvGet(PhoneConfig.SETTINGS_KV) }
                 ?.let { Json.parseToJsonElement(it) } ?: JsonNull)
             put("reads", JsonArray(noted.map(::JsonPrimitive)))
-            put("waiting", JsonArray(waiting.map(::JsonPrimitive)))
         }
     }
 
@@ -554,17 +579,45 @@ class PhoneScenarioTest {
                      "ORDER BY files.name", key) { it.text(0)!! }
     }
 
+    /** A lookup whose site answered with an error (a block, a redirect robots.txt closes): never a miss, its song
+     * neither not found by its match nor shown "Not found" (status.py's words for a miss), as
+     * test_pipeline.py's test_ug_block_cools_down_and_never_marks_not_found holds the computer to. */
+    private fun neverAMiss(phone: ScenarioPhone, key: String, job: Job) {
+        val decision = phone.database.read { db ->
+            db.one("SELECT match_decision FROM songs WHERE key = ?", key) { it.text(0) }
+        }
+        assertTrue(decision != "not_found", "$key, its match: $decision")
+        val line = shownLine(phone, job.id)
+        assertTrue(line.text("text") != NOT_FOUND && line.text("tone") != "missing", "$key's line: $line")
+    }
+
+    private fun lyricsStatus(phone: ScenarioPhone, key: String): String? = phone.database.read { db ->
+        db.one("SELECT lyrics_status FROM songs WHERE key = ?", key) { it.text(0) }
+    }
+
+    /** The text of the file [name] the phone keeps of the song of [key], read from its library folder. */
+    private fun keptFile(phone: ScenarioPhone, key: String, name: String): String {
+        val path = phone.database.read { db ->
+            db.one("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id " +
+                       "WHERE songs.key = ? AND files.name = ?", key, name) { it.text(0) }
+        } ?: fail("no $name kept for $key: ${keptFiles(phone, key)}")
+        return File(phone.libraryDir, path).readText()
+    }
+
     private fun keptVersions(phone: ScenarioPhone, key: String): List<String> =
         keptFiles(phone, key).filter { it.startsWith("version-") && it.endsWith(".txt") }
 
-    /** The sheet.txt the phone keeps of the song of [key], read from its library folder. */
-    private fun keptSheet(phone: ScenarioPhone, key: String): String {
+    /** The song's folder in the phone's library, where its sheet.txt is kept (and its lyrics written beside it). */
+    private fun songFolder(phone: ScenarioPhone, key: String): File {
         val path = phone.database.read { db ->
             db.one("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id " +
                        "WHERE songs.key = ? AND files.name = 'sheet.txt'", key) { it.text(0) }
         } ?: fail("no sheet.txt kept for $key: ${keptFiles(phone, key)}")
-        return File(phone.libraryDir, path).readText()
+        return File(phone.libraryDir, path).parentFile
     }
+
+    /** The sheet.txt the phone keeps of the song of [key], read from its library folder. */
+    private fun keptSheet(phone: ScenarioPhone, key: String): String = keptFile(phone, key, "sheet.txt")
 
     /** The song's card on the library page links its sheet.txt, and the link answers it, [sheet] whole. */
     private fun servedFromItsCard(phone: ScenarioPhone, key: String, sheet: String) {
@@ -622,8 +675,7 @@ class PhoneScenarioTest {
         /** status.py's line for a lookup over that found no sheet and checked nothing (phase 2's, every site refused). */
         const val NOT_FETCHED = "Not fetched yet"
 
-        /** What a lookup command not on the phone yet says (core.lookup.sites' NotYet), and a stage of one. */
-        const val NOT_YET = "Not on the phone yet."
-        const val NOT_YET_WORDS = "not on the phone yet"
+        /** status.py's line for a lookup that found its song nowhere: a miss, which an error never is. */
+        const val NOT_FOUND = "Not found"
     }
 }

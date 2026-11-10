@@ -35,7 +35,7 @@ computer=""
 sites=""
 classes=()
 
-usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -159,7 +159,7 @@ results=()
 
 # One class run: `am instrument -w`, its args; the app's data cleared, the print spooler and choosers closed after.
 run_class() {
-    local name="${1#"$app_id."}"; shift  # a class named whole (io.github.danielhp95.caracole.X) or by its name
+    local name="$1"; shift
     local out
     out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
         | tr -d '\r')" || true

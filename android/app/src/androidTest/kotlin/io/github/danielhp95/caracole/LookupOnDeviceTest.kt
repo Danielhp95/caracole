@@ -36,9 +36,10 @@ import java.time.Instant
  *
  * The app takes the scenario's index (the fake server's GET /index.sqlite, imported as the computer's would be), finds
  * the song it hasn't got by its /api/search row, and Get it, posted as the library page's script posts it, looks it
- * up: its sheet and LRCLIB's timed lyrics kept, its card's sheet.txt served, each site asked at most its
- * lookup_requests, no URL robots.txt closes, every request one the fake server counted, with the user agent the app
- * names. Then Get it on a song whose page answers 403 cools Ultimate Guitar down on the phone.
+ * up: its sheet and LRCLIB's timed lyrics kept (lyrics.lrc), its card's sheet.txt served, each site asked at most its
+ * lookup_requests, no URL robots.txt closes, every URL one the scenario answers (the fake server's `known`: no URL
+ * the computer's caracole wouldn't ask, read as a miss), every request one the fake server counted, with the user
+ * agent the app names. Then Get it on a song whose page answers 403 cools Ultimate Guitar down on the phone.
  */
 @RunWith(AndroidJUnit4::class)
 class LookupOnDeviceTest {
@@ -87,6 +88,9 @@ class LookupOnDeviceTest {
             assertEquals("found", phone.parts.database.read { db ->
                 db.one("SELECT lyrics_status FROM songs WHERE key = ?", key) { it.text(0) }
             })
+            val lrc = File(File(phone.parts.store.libraryDir, path).parentFile, "lyrics.lrc")  // beside its sheet
+            assertTrue("no $lrc: ${job.asJson()}", lrc.isFile)
+            assertTrue(lrc.readText().take(300), lrc.readText().startsWith("[00:10.00]"))
             val card = card(key)
             val href = (0 until card.getJSONArray("files").length()).map { card.getJSONArray("files").getJSONObject(it) }
                 .first { it.getString("name") == "sheet.txt" }.getString("href")
@@ -100,6 +104,7 @@ class LookupOnDeviceTest {
             for (i in 0 until asked.length()) {
                 val request = asked.getJSONObject(i)
                 assertTrue("a URL robots.txt closes: $request", !request.getBoolean("closed"))
+                assertTrue("a URL the scenario doesn't answer: $request", request.getBoolean("known"))
                 assertTrue("a host no site's: $request", request.getString("provider").isNotEmpty())
                 assertEquals("its user agent: $request", agent, request.getString("user_agent"))
                 sent.merge(request.getString("provider"), 1, Int::plus)
@@ -117,6 +122,14 @@ class LookupOnDeviceTest {
             assertEquals(stopped.asJson().toString(), Job.DONE, stopped.state)
             val answered = log(from)
             assertTrue("UG's 403: $answered", (0 until answered.length()).any { answered.getJSONObject(it).getInt("status") == 403 })
+            for (i in 0 until answered.length()) {
+                assertTrue("a URL the scenario doesn't answer: ${answered.getJSONObject(i)}",
+                           answered.getJSONObject(i).getBoolean("known"))
+            }
+            assertTrue("the block is never a miss", phone.parts.database.read { db ->
+                db.one("SELECT match_decision FROM songs WHERE key = ?",
+                       blocked.getJSONObject("search").getString("key")) { it.text(0) }
+            } != "not_found")
             assertTrue("a 403 cools Ultimate Guitar down on the phone",
                        phone.parts.database.read { db -> Health.isCooling(db, "ug", Instant.now()) })
         }
