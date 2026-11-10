@@ -34,8 +34,9 @@ data class Shared(val app: String?, val said: String?, val link: String?)
  *    name at its end ("… | Spotify", "… on #Deezer") or alone, for read_names to read as it reads any text; never
  *    for an app whose texts name a song only in its own words ([App.shapesOnly]: a Subsonic client's greeting).
  *
- * A share whose texts hold a link alone names no song ([Shared.said] null): caracole never asks the service what a
- * link is (a new provider, its politeness the owner's to decide).
+ * A share whose texts hold a link alone names no song here ([Shared.said] null): this reads no link. A link of Apple
+ * Music's, Spotify's, TIDAL's, YouTube's or YouTube Music's is then read by asking its service once ([ShareLinks],
+ * [ShareAsk]: the owner's choice of 2026-11-10); any other's stays a link alone.
  *
  * tests/fixtures/share/shares.jsonl holds what each app sends, where it was found, and what this reads of it.
  */
