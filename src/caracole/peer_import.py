@@ -14,6 +14,9 @@ Nothing of it goes into the library. An import's id is 16 hex, checked before an
 most ``OPEN`` (1) import is here at once, sent or being sent, and a file is at most ``peer_file.IMPORT_MAX``
 (8 GiB). One untouched for ``EXPIRES`` (an hour) is deleted (``sweep``: as one is opened, as an import ends), unless
 an import holds it.
+
+``Uploader`` is the sending side: a file sent to another caracole serve's import routes in parts, as its page sends
+one (web/sync_file_routes.py).
 """
 
 from __future__ import annotations
@@ -30,6 +33,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from caracole import peer_push
+from caracole import peer_sync as sync
 from caracole.peer_file import IMPORT_MAX
 from caracole.peer_push import FOLDER, ID, _private_dir, _read_json, _write_private
 
@@ -39,6 +44,8 @@ EXPIRES = 3600.0  # seconds an import is left untouched before it is deleted
 PREFIX = "import-"
 FILE = "file.caracole"  # the file, as it comes
 OPENED = "open.json"  # its size, its name and when it was opened
+OPEN_PATH = "/sync/import/open"  # another caracole serve's routes a file is sent to (web/sync_file_routes.py)
+PART_PATH = "/sync/import/part"
 
 TOO_BIG = "That file is too big: a file to import is at most 8 GiB."
 BUSY = "A file is being sent here already: try again once it is taken, or in an hour."
@@ -266,3 +273,34 @@ def staged_folder(state_dir: Path, given: str | os.PathLike[str]) -> Path:
 def remove(folder: Path) -> None:
     """An import's folder deleted, all of it (once it is taken)."""
     shutil.rmtree(folder, ignore_errors=True)
+
+
+# --- a file sent to another caracole serve ----------------------------------------------------------------------
+
+
+class Uploader(peer_push.Pusher):
+    """Another ``caracole serve``'s Import a file, asked as its page asks it (web/sync_file_routes.py): a file sent
+    there in parts, each a write with its form token in the header (``peer_push.Pusher``'s, its state's)."""
+
+    def upload(self, path: Path) -> str:
+        """The file at ``path`` sent there, under its name: an import opened (``POST /sync/import/open``), then each
+        part, of the size it says, in order (``POST /sync/import/part``); the import's id there. PeerError when it
+        refuses one, or says it has other than what was sent."""
+        size = os.path.getsize(path)
+        opened = self._post(OPEN_PATH, peer_push._json({"size": size, "name": Path(path).name}), "application/json")
+        opened = opened if isinstance(opened, dict) else {}
+        import_id, part = opened.get("import"), opened.get("part")
+        if not (isinstance(import_id, str) and ID.fullmatch(import_id) and type(part) is int and 0 < part):
+            raise sync.PeerError(f"The caracole at {self.address} opened an import it can't name.")
+        at = 0
+        with open(path, "rb") as f:
+            while chunk := f.read(part):
+                said = self._post(PART_PATH, chunk, "application/octet-stream", {"import": import_id, "at": str(at)})
+                have = said.get("have") if isinstance(said, dict) else None
+                if have != at + len(chunk):
+                    raise sync.PeerError(f"The caracole at {self.address} has {have} bytes of the file, not the "
+                                         f"{at + len(chunk)} sent.")
+                at = have
+        if at != size:
+            raise sync.PeerError(f"{path} changed while it was sent: {at} bytes of it sent, not {size}.")
+        return import_id

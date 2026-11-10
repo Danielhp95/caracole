@@ -872,7 +872,10 @@ STATE_PATH = "/api/peer/state"
 UNIT_PATH = "/api/peer/unit"
 FILE_PATH = "/api/peer/file"
 PULL_PATH = "/peer/pull"
+INDEX_PATH = "/api/peer/index"
 PEER_TIMEOUT = 60.0  # seconds: a phone's caracole reads every song of its library to answer
+INDEX_MAX = 8 * 1024 ** 3  # the bytes of another caracole's indexes read at most (peer_file.IMPORT_MAX's)
+_CHUNK = 1024 * 1024  # what its indexes are written by, never whole in memory
 
 
 class PeerError(Exception):
@@ -912,8 +915,8 @@ def peer_address(text: str) -> str:
 
 class Peer:
     """Another ``caracole serve``, asked over HTTP, one request at a time: its state, a unit, a file (a
-    ``UnitSource``), and a pull of this side's units (``ask_to_pull``, a form posted as its pages post one).
-    ``transport`` is httpx's, for tests."""
+    ``UnitSource``), its site indexes (``index``), and a pull of this side's units (``ask_to_pull``, a form posted as
+    its pages post one). ``transport`` is httpx's, for tests."""
 
     def __init__(self, address: str, *, transport=None):
         import httpx
@@ -986,6 +989,33 @@ class Peer:
             raise PeerError(f"The caracole at {self.address} sent {name} other than it said it is: it changed "
                             "there since, so the song is left as it was here.")
         return response.content
+
+    def index(self, to: Path, sites: Sequence[str]) -> None:
+        """``GET /api/peer/index``: its site indexes of ``sites`` (every one with none), as ``caracole index export``
+        writes them, streamed into a new file at ``to`` (0600), ``INDEX_MAX`` at most; PeerError when it can't be
+        asked, answers otherwise or sends more, nothing left at ``to``."""
+        import httpx
+
+        params = {"sites": ",".join(sites)} if sites else None
+        fd = os.open(to, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with open(fd, "wb") as out, self._client.stream(
+                    "GET", self.address + INDEX_PATH, params=params, headers={"Accept": "application/json"}) as got:
+                if got.status_code != 200:
+                    got.read()
+                    raise self._refused(got)
+                written = 0
+                for chunk in got.iter_bytes(_CHUNK):
+                    written += len(chunk)
+                    if written > INDEX_MAX:
+                        raise PeerError(f"The caracole at {self.address} sent more than 8 GiB of indexes.")
+                    out.write(chunk)
+        except httpx.HTTPError as e:
+            Path(to).unlink(missing_ok=True)
+            raise PeerError(f"The caracole at {self.address} stopped sending its indexes: {e}") from None
+        except BaseException:
+            Path(to).unlink(missing_ok=True)
+            raise
 
     def ask_to_pull(self, here: str, units: Sequence[str], token: str) -> int:
         """Ask it to take ``units`` from this side, at ``here`` (an address it can reach): its form posted with its
