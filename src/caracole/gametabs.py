@@ -348,6 +348,15 @@ def _card(card: LexborNode, game: str, instruments: frozenset[str]) -> ListedTab
                      tabber=tabber, views=views, rating=float(rating.group(1)) if rating else None)
 
 
+def _page_number(text: str, url: str | None) -> int:
+    """A page selector's number: ``GameTabsParseError`` for digits int() refuses ("²", "①": str.isdigit's, no
+    decimal's), never a crash."""
+    try:
+        return int(text)
+    except ValueError:
+        raise GameTabsParseError(f"a page number caracole can't read: {text!r}", url=url) from None
+
+
 def parse_game_page(html: str | bytes, url: str | None = None) -> GamePage:
     """A game page's name, the tabs it says the game has and those it lists; ``GameTabsParseError`` for a page
     without its heading (the name in its ``<h1>``), or one that says the game has tabs and lists none caracole can
@@ -366,6 +375,6 @@ def parse_game_page(html: str | bytes, url: str | None = None) -> GamePage:
     tabs = int(said.group(1).replace(",", "")) if said is not None else len(listed)
     if tabs and not listed:
         raise GameTabsParseError(f"the page says {tabs} tabs and lists none caracole can read", url=url)
-    pages = [int(n) for a in wrapper.css(".page-selector-wrapper a") if (n := _text(a)).isdigit()]
+    pages = [_page_number(n, url) for a in wrapper.css(".page-selector-wrapper a") if (n := _text(a)).isdigit()]
     return GamePage(name, max(tabs, len(listed)), tuple(dict((t.path, t) for t in listed).values()),
                     max(pages, default=1))
