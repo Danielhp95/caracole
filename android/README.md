@@ -458,7 +458,28 @@ as they came.
 
 ## Sharing files to caracole
 
-Not built yet.
+A Guitar Pro file (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`, or a Power Tab `.ptb`) or a score (`.mscz`, `.mxl`,
+`.musicxml`, `.pdf`, `.mid`, `.midi`) you have on the phone, in a file manager, your browser's downloads or a chat:
+**Share** it and pick **caracole**. Share several at once if you like.
+
+caracole files each one as the computer files what you drop into `_inbox/`:
+
+- **For the song its name is of**: "Oasis - Wonderwall.gp5", "Oasis - Wonderwall (ver 2).gp5", or "wonderwall.gp5"
+  when one song of your library has that title. It is kept as the song's `guitar-1.gp5` (or the next number free) or
+  `score-1.pdf`, never over a file the song keeps, and goes to the computer as the song's at the next sync.
+- **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed as guitar-1.gp5 of …".
+  One the library lost (deleted on another device) is put back where it was.
+- **A file no song fits waits**, up to 30 days, and is tried again after each sync and each lookup: share a Guitar
+  Pro file first and look its song up after, and it is filed then.
+- A score is placed by its name alone on the phone: a MusicXML file named "score.musicxml" waits, where the computer
+  would read the title and composer inside it.
+
+A toast says how each went, as its line on the Requests tab does: "Filed as guitar-1.gp5 of Oasis - Wonderwall",
+"Waiting for a song that fits: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
+Guitar Pro files and scores alone). A file shared with no extension takes the one its bytes or its type tell.
+
+caracole is offered for files alone: never to open a PDF (Android's Open with), and never for a text (a music app's
+song, above, is another share).
 
 ## Alerts and backups
 
