@@ -1869,7 +1869,50 @@ Not built yet. (inbox-share.)
 
 ##### Alerts and backups on the phone
 
-Not built yet. (alerts-backups.)
+- **Alerts** (the app's `AndroidAlerts`, core.health's `Alerts`, Caracole's from the phone's start), notifications on
+  the `alerts` channel:
+  - `blocked`: InteractiveAsk's block of a lookup, once a lookup, titled as `_common.alert_block` titles ntfy's
+    ("caracole: <provider name> blocked", `LookupWords.NAMES`), with the cooldown's end; once a cooldown, the cooldown
+    posted kept in the app's preferences (`AndroidAlerts.PREFS`), so a second block of the same cooldown posts none. On
+    the computer a lookup sends none; the phone has no nightly run to tell;
+  - `failed`: a job that failed (Assembly's `afterJob`, through `JobQueue.onEnd`) while no screen of the app's is
+    started (the activities' lifecycle; one started before the alerts were made counts by the process's importance
+    until a screen stops), titled by the job's display, its text its line (`JobViews.line`);
+  - nothing posted without the right to notify (`areNotificationsEnabled`); AlertsTest on the device.
+- **Backups** (core.backup, `Backups`): the take's backup made public, with labels (`by-hand`, `daily`,
+  `before-sync`), the newest `KEEP` (3) of each label, SQLite's quick check before a copy takes an old one's place, none
+  made without twice the room (`freeSpace`), `stateDir/backups/<label>-<UTC time>.sqlite`:
+  - the library's tables (`BackupTables.TABLES`: songs, versions, files, removed, kv and the phone's), the index tables
+    empty, and the library's kept files by SHA-256 in `stateDir/backups/blobs/`, each read once and checked as it is
+    copied, shared between backups and gone with the last that names it (`sweep`); a file that no longer holds its
+    row's bytes is never kept as them;
+  - `Take.backupBeforeSync(db, stateDir, now, store)` is the `before-sync` one, the sync's take giving its store so the
+    files are kept too;
+  - `exportTo`: one zip of the copy and `blobs/<sha256>`, `exportName` its name;
+  - `restore(database, lib, file)`: in one write, this side's own records read (`OwnRecords.document`), the tables put
+    back exactly, and those records written over them (`OwnRecords.putBack`), one savepoint; then each kept file whose
+    bytes its file doesn't hold written from its blob, each kept file of before that the backup doesn't name deleted
+    while it holds its row's bytes, each song's lyrics files as its row has them (`Restored`: written, removed, the
+    paths no blob could give);
+  - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
+    `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
+    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
+    restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
+    index push's notes and every index's progress records, and each song's records that gate a request (`SONGS`:
+    `megalobiz:checked:` and the other 30-day checks, `ug:artist_page_checked:`) by the song's identity key; the rest
+    of kv, and the songs' own columns, are the library's;
+  - BackupsTest on the JVM.
+- **The jobs**: server/lookups' `BackupRunner`, `backup --label LABEL` and `backup --restore NAME` (a name in
+  `stateDir/backups/` alone), run as jobs of the phone's own (`backup(label)`, `restore(backup)`: PhoneKinds' backup
+  and restore kinds, their words JobViews'), so on the queue's one worker, never beside a lookup's write; a restore
+  owes every page again in its savepoint (`owePages`: each `render:<id>:phone` and `phone:render-build` forgotten),
+  and the app then reloads the mirror, forgets the search's answers and queues the render job
+  (`BackupsActivity.afterRestore`). BackupRunnerTest.
+- **The app**: `BackupsActivity` (Settings' Backups row): the list, Back up now, Export… through
+  `ACTION_CREATE_DOCUMENT` (`application/zip`), Restore… asked first; `BackupWorker`, the daily backup, a periodic
+  WorkManager job while the phone is idle and its battery isn't low, which queues the backup and waits for it, kept
+  scheduled by `AndroidAlerts` at each start (the one start-time hook the app gives this lane). BackupsTest on the
+  device.
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through

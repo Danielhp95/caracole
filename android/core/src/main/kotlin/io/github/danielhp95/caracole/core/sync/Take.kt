@@ -133,9 +133,11 @@ object Take {
     }
 
     /** A full openable database of the library's tables (songs, versions, files, removed, kv and the phone's), as
-     * `stateDir/backups/before-sync-<UTC time>.sqlite`, three kept; null, and none made, without free space of twice
-     * what it needs. */
-    fun backupBeforeSync(db: Db, stateDir: File, now: String): File? = Backups.make(db, stateDir, now)
+     * `stateDir/backups/before-sync-<UTC time>.sqlite`, three kept (core.backup.Backups, labelled `before-sync`), with
+     * [store]'s kept files by SHA-256 when it is given, so core.backup's restore puts them back too; null, and none
+     * made, without free space of twice what it needs. */
+    fun backupBeforeSync(db: Db, stateDir: File, now: String, store: LibraryStore? = null): File? =
+        Backups.make(db, stateDir, now, store)
 
     /**
      * A backup's library tables (songs, versions, files, removed, kv and the phone's) back, exactly, in one savepoint:
