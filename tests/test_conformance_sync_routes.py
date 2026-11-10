@@ -359,10 +359,15 @@ def view_record(note: str, job: PyJob, kind: str, *, song_id: int | None = None,
 
 
 SYNC_DONE = {"compare": ("done", "4 differences"), "take": ("done", "took 2"), "give": ("done", "gave 1"),
-             "agree": ("done", "312 units the two agree on")}
+             "agree": ("done", "312 units the two agree on"), "index": ("done", "took 1 index")}
 TAKE_DONE = {"check": ("done", "3 changes from Phone"), "take": ("done", "took 3"), "render": ("done", ""),
              "agree": ("done", "40 units the two agree on")}
 CRASH = "error: The caracole at http://192.168.1.20:8737 answered 500. It may be restarting."
+NO_INDEX = "no index is newer on either side"  # commands/peer.py's
+REPORT = {"with": {"name": "Desk", "kind": "server", "address": "http://192.168.1.20:8737"},
+          "at": "2026-11-03T09:31:00Z", "parts": ["library", "songbooks", "indexes"],
+          "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
+                       "after": 1515576, "read": "2026-11-03T03:10:00Z"}]}
 
 
 def view_records() -> list[dict[str, Any]]:
@@ -391,13 +396,19 @@ def view_records() -> list[dict[str, Any]]:
                 ("songbook/campfire", "left", sync.CHANGED_HERE)]), kind),
             view_record("done, nothing to take or give", job("done", {first: ("done", "0 differences"),
                                                                      "agree": ("done", "1 unit the two agree on")}
-                                                              | {n: ("skipped", "") for n in names[1:-1]}), kind),
+                                                              | {n: ("skipped", "") for n in names[1:-1]}
+                                                              | ({"index": ("skipped", NO_INDEX)} if kind == "sync"
+                                                                 else {})), kind),
             view_record("failed in a stage's words", job("failed", {first: ("failed", sync_routes.STALE)},
                                                         output=["error: " + sync_routes.STALE]), kind),
             view_record("failed with an error line, its stage ended by the queue", _ended(job(
                 "failed", {first: done[first], second: ("running", "2 changes")}, output=["Comparing…", CRASH]),
                 second), kind),
         ]
+        if kind == "sync":  # what it did, for the Sync tab's summary (peer_outcome's report, once over)
+            reported = job("done", SYNC_DONE, units=[("song/oasis/wonderwall", "taken", "")])
+            reported.report = REPORT
+            records.append(view_record("done, with its report", reported, kind))
         if kind == "sync":  # its command's label is its title, as the phone's job has no other (a take's is its own)
             records.append(view_record("failed with no error line", _ended(job(
                 "failed", {first: ("running", "")}, output=["Traceback (most recent call last):"]), first), kind))
