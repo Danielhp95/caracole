@@ -195,8 +195,9 @@ class RoutingTest {
                        HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the rest neutral still.
-                for (path in listOf("/review", "/versions/choose", "/versions/keep",
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the picker ReviewRoutes'
+                // (ReviewRoutesTest), the rest neutral still.
+                for (path in listOf("/versions/choose", "/versions/keep",
                                     "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
                                     "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {
@@ -206,7 +207,7 @@ class RoutingTest {
                     assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
                 }
-                for (path in listOf("/review", "/versions", "/harmonica", "/guitar", "/export.pdf",
+                for (path in listOf("/versions", "/harmonica", "/guitar", "/export.pdf",
                                     "/assets/alphatab/alphaTab.min.js")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")

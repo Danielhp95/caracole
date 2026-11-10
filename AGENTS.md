@@ -1784,6 +1784,24 @@ Not built yet. (written-pages.)
 - A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
 - Export PDF and Make this my version (export-print): not built yet.
 
+##### An uncertain match reviewed on the phone
+
+- server's `ReviewRoutes` is review_routes.py:
+  - `GET /review?song=ID`, the picker's page (the Requests tab's Pick the match, a song not found's Look in the
+    index), pages.picker_form's markup in the message page's frame and policy (`MessagePage.html`: no script);
+  - `POST /review`, its answer and the card's picker's: `caracole review --song=… --pick=…` (or `--none --seen=…`)
+    queued under the song's key, never joined (`join` false), refused while the song's own request waits or runs;
+  - a pick with Fetch it now is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
+    caracole serve's `caracole fetch --song` and `render --song`, which the phone hasn't.
+- server/lookups' `ReviewRunner` is commands/library.py's `_answer`, in one savepoint: `Review.accept` (`[match]`, and
+  `[alias]` when `writesAlias`) or `Review.reject` (the candidates seen, else every one listed, under `[reject]`),
+  `review` false, then `Matcher.matchAll` over the song and, after an `[alias]`, every song with that artist among its
+  artists; its lines caracole review's but `Wrote …` (the phone writes no _todo.md or index.html).
+- `Review` is review.py's rules: `candidatesOf`, `searchCandidates` (core.search's `searchIndex`, less the song's
+  `[reject]`), `writesAlias`, `stepWords` and the picker's choices (library_page.review_choices).
+- vectors/web/review.jsonl (tests/test_conformance_review.py, `ReviewReplay`, area `review`) holds both routes, the
+  rules, the command over a copy of a library and the job's line after it; ReviewRoutesTest the phone whole.
+
 ##### Guitar Pro on the phone
 
 Not built yet. (guitar-alphatab.)
