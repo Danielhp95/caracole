@@ -4763,6 +4763,25 @@ it is as kept: reads, with no lock and no request to a site, that another
 site's page can't make. `POST /peer/pull` queues `caracole peer pull` of the
 units another caracole's sync asks this one to take from it.
 
+**Export and Import a file.** `GET /api/sync/sizes` says what an export of this
+library would hold: its name, songs and songbooks, its library's size in bytes
+(its kept files, and the library page with what it links), its site indexes'
+size (null where the server's SQLite can't count it) and the tabs they track.
+`POST /sync/export` (JSON `{"parts": ["library", "songbooks"]}`, `indexes`
+beside them or not) makes the file `caracole peer export` writes (see [Export
+and import](#export-and-import-peer-export-peer-import)) in `cache_dir/peer/`,
+one at a time (503 while another is made), and answers its id, the name it
+downloads under (`horde_logbook-03-11-26.caracole`) and its size; `GET
+/api/sync/export?export=ID` sends it once, as that attachment: it is deleted as
+it is sent, and an hour after if it never is. A file to import comes in parts:
+`POST /sync/import/open` (JSON `{"size", "name"}`, 8 GiB at most, one at a time)
+answers its id and how big a part may be (8 MiB), then `POST
+/sync/import/part?import=ID&at=N` sends each, in order, into
+`state_dir/peer/import-<id>/`, for `caracole peer import` to take; one never
+taken is deleted an hour after its last part. The two reads take no lock, ask no
+site and can't be made by another site's page; the writes carry the form token
+in their header.
+
 **The Android app's copy.** caracole's Android app copies the library from the
 server to read it offline: `GET /api/offline` lists what to copy, as JSON
 (`format` 1; `start`, the page the app opens first; `files`, each with its

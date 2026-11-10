@@ -1021,6 +1021,12 @@ It is rows.js's, shared by both pages:
   `GET /api/sync`, `POST /sync/compare` (one `GET /api/peer/state` of the other caracole, kept 10 minutes) and `POST
   /sync/apply` (`caracole peer sync --push --compared HASH --choose=…` queued, a job of kind `sync`). The phone
   answers the same three routes with the same shapes (vectors/web/sync_routes.jsonl).
+- **sync_file_routes.py** is the sync's Export and Import a file: `GET /api/sync/sizes` (what an export would hold:
+  the library's bytes, its songbooks, the indexes' bytes by SQLite's dbstat, `peer_file.indexes_size`, and their
+  tabs), `POST /sync/export` (`peer_file.export_file` of the parts named into `cache_dir/peer/`, one at a time) and
+  `GET /api/sync/export` (that file once, an attachment named `peer_file.file_name`, streamed); `POST
+  /sync/import/open` and `/sync/import/part` (a file sent in parts, `json` and `bytes` routes with the form token in
+  their header, staged by peer_import.py for `caracole peer import`).
 
 ##### The router
 
@@ -2393,7 +2399,13 @@ picks one).
   export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
   `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
   a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
-  `peer_push.sweep_indexes`). Everything else stays a queued command's.
+  `peer_push.sweep_indexes`).
+- And for Export and Import a file (sync_file_routes.py), nothing else: an export's file
+  (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time from one read transaction, no lock, deleted
+  once it is open to be sent, or an hour after if never asked, a part a killed process left too); and a file to
+  import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py: 0700, its `file.caracole` and
+  `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in all), deleted once its import is
+  over, or an hour after its last part unless an import holds it. Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 
