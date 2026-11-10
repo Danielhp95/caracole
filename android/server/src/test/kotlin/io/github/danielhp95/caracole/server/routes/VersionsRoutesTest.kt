@@ -218,6 +218,17 @@ class VersionsRoutesTest {
         assertTrue("<a class=\"btn primary\" href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/$page\">Open it</a>" in said)
     }
 
+    @Test fun `the phone's own viewer of the song, once PhoneRender made it, names a sheet the page answers`() {
+        ChoicesReplay.viewable(phone.parts.store.folderOf(ligera()))
+        val made = phone.parts.database.writeBlocking { db -> phone.render.render(db, listOf(ligera().id), null) }
+        assertEquals(emptyMap(), made.failed)
+        phone.parts.database.read { db ->
+            assertTrue(WrittenPages.current(db, ligera().id, "sheet.html"),
+                       "${WrittenPages.record(db, ligera().id)} ${WrittenPages.rendered(db, ligera().id)}")
+        }
+        assertEquals(200, navigate(versions(OTHER, "keep")).status)
+    }
+
     @Test fun `a rating is written as Python's format g writes it`() {
         // Each Python's own `format(x, "g")`, computed by CPython 3.14.
         val said = listOf(4.8 to "4.8", 4.835 to "4.835", 0.0 to "0", -0.0 to "-0", 1e6 to "1e+06",

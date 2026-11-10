@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.webkit.WebView
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -53,8 +54,9 @@ class VersionsPageTest {
     @Before fun theLibrary() {
         Corpus.open = { name -> runCatching { instrumentation.context.assets.open("conformance/$name") }.getOrNull() }
         Corpus.openFixture = { name -> runCatching { instrumentation.context.assets.open("fixtures/$name") }.getOrNull() }
-        // No Settings over the library screen: an address no computer answers, unless the test was given one.
-        if (server == null && Settings(context).server.isBlank()) Settings(context).server = "http://127.0.0.1:9"
+        // No Settings over the library screen (a first start with no address and no copy opens it): the computer the
+        // test was given, else an address no computer answers.
+        if (Settings(context).server.isBlank()) Settings(context).server = server ?: "http://127.0.0.1:9"
         // The vectors' base library in the phone's database, once a process (the tests of a class share it).
         val phone = Caracole.phone(context)
         phone.parts.database.writeBlocking { db ->
@@ -107,6 +109,7 @@ class VersionsPageTest {
     /** Taps the page's first element matching [selector] as a finger does (`input tap`, a user's gesture), scrolled
      * into view first. */
     private fun tap(main: ActivityScenario<MainActivity>, selector: String) {
+        check(main.state == Lifecycle.State.RESUMED) { "the library screen is under another, ${main.state}: nothing to tap" }
         val quoted = JSONObject.quote(selector)
         evaluate(main, "document.querySelector($quoted).scrollIntoView({block: 'center'})")
         Thread.sleep(300) // the scroll settles
@@ -158,7 +161,8 @@ class VersionsPageTest {
         val phone = Caracole.phone(context)
         phone.parts.database.writeBlocking { db ->
             val song = Songs.byKey(db, Normalize.identityKey("Soda Stereo", "De Música Ligera"))!!
-            phone.render.render(db, listOf(song.id), null)
+            ChoicesReplay.viewable(phone.parts.store.folderOf(song))
+            assertEquals("the song's pages made", emptyMap<Long, String>(), phone.render.render(db, listOf(song.id), null).failed)
             assertTrue("the phone made the song's viewer", WrittenPages.current(db, song.id, "sheet.html"))
         }
         started { main ->

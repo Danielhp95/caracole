@@ -83,6 +83,19 @@ object ChoicesReplay : AreaReplay {
         .first { fn(it) == "fixture" && it["scene"]?.jsonPrimitive?.content == scene }
         .getValue("records").jsonArray.map { it.jsonObject }
 
+    /**
+     * The words a viewer of the versions' base scene is made of, for a test that has the phone make one (PhoneRender):
+     * the scene records the song's kept files alone, as no route reads a sheet's words, and a viewer is made of the JSON
+     * the fetch keeps beside the sheet and beside each version kept with it (render._human_sheet, _ug_sheet; ug/fetch.py's
+     * `{"content": …, "meta": {}}`): sheet.json, and version-39144.json, Ver 2's, in the song's [folder].
+     */
+    fun viewable(folder: File) {
+        folder.mkdirs()
+        for ((name, words) in listOf("sheet.json" to "De musica ligera", "version-39144.json" to "Otra 39144")) {
+            File(folder, name).writeText("{\"content\": \"[ch]G[/ch]\\n$words\", \"meta\": {}}")
+        }
+    }
+
     private fun replay(misses: Misses, name: String) {
         val lines = Corpus.lines(name).filter { it["header"] != JsonPrimitive(true) }
         for (fixture in lines.filter { fn(it) == "fixture" }) {

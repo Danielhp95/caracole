@@ -250,9 +250,12 @@ class EndToEndTest {
         }
     }
 
-    /** The page at [address] (its fragment aside) once it has loaded. */
+    /** The page at [address] (its fragment aside) once it has loaded: its own document, at the phone's origin, never
+     * the one before it, which the WebView's url already names [address] over while the new one is on its way
+     * (about:blank's, or a sandboxed viewer's, each of an opaque origin, "null", and long "complete"). */
     private fun loadedAt(main: ActivityScenario<MainActivity>, address: String) = waitUntil("$address loaded") {
-        url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete"
+        url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete" &&
+            evaluate(main, "String(window.origin)") == Pages.origin()
     }
 
     /**
