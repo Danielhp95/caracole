@@ -668,7 +668,7 @@ def test_the_tab_meets_touch_contrast_and_dark_mode(serve, cfg, library, tmp_pat
                            ".map((l) => Math.round(l.getBoundingClientRect().height))")
             page.js("document.getElementById('tab-library').click()")
             line = page.js("Math.round(document.querySelector('#list .line').getBoundingClientRect().height)")
-            assert line <= 26, line  # the library's own line, about 25 px with its border
+            assert line <= 29, line  # the library's own line, about 29 px with its buttons and its border
             assert max(tall) <= line, (tall, line)
         colours = page.js("""(() => { const c = (n) => getComputedStyle(n);
             return [c(document.body).backgroundColor, c(document.querySelector('#songbooks .book')).color]; })()""")

@@ -116,6 +116,14 @@ HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab ke
 GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
+# The words of a caracole with no ChordPro, no wanted.txt and no index.html to write (the phone's: android/): its
+# song stage for a song new to it, its pdf stage while it makes no page of the song (skipped) and once it makes them,
+# and its pages stage, whose library page is made as it is asked for. Used by nothing here but the conformance corpus
+# (tests/test_conformance_lookup.py).
+ADDED = "added to the library"
+NO_PDFS = "this caracole makes no PDF"
+PAGES_MADE = "its pages made; this caracole makes no PDF"
+LIBRARY_PAGE = "the library page shows it as it is now"
 
 
 @dataclass(frozen=True)

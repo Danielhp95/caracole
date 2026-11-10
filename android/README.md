@@ -172,8 +172,8 @@ working while you leave it, gone once it ends. Its stages show on the tab:
 At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
 comparison"), and Reload shows the library page with the songs as they are now.
 
-The computer needs a caracole that syncs with the phone (sync format 2: `GET /api/peer/state` answers
-`"format": 2`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
+The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
+`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
 reason; upgrade caracole there.
 
 **Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your
@@ -284,7 +284,34 @@ up and leaving it up:
 
 ## Lookups on the phone
 
-Not built yet.
+The library page's lookups ask the sites from the phone itself, as `caracole get` does on the computer, with the
+computer off:
+
+- **Get it** on a search's line, and **Fetch now** on the request form, look the song up now: the song you have, or a
+  new one, which the lookup adds. A pick on the line (an Ultimate Guitar song or tab, a LaCuerda song, a harptabs.com
+  or gametabs.net tab) is the one it asks for. **Add** with a LaCuerda song picked records the pick for the song, as
+  `caracole add --lacuerda` does, for the next lookup or the computer's nightly run once synced.
+- **Fetch now** on a song's card looks up a song you have, unless it is ignored or caracole isn't sure which Ultimate
+  Guitar song it is (review it first).
+- An artist's **Songs** reads their page on LaCuerda or harptabs.com, and **Fetch them** keeps more of a song's
+  Ultimate Guitar versions.
+- **LaCuerda's own search** goes as on the computer: once a query has settled, by the page itself while its gate
+  allows, or with Ask LaCuerda, never twice for a query, at most 20 an hour by the page alone.
+
+Each is a request of the Requests tab, one at a time behind any other, its line on the song's card saying how it goes
+in caracole serve's words. A form posted without the page's script goes to that request's line in the Requests tab.
+The phone keeps the computer's politeness, at the lookup pace (a few requests a song, 60 an hour to a site), with its
+own counts, cooldowns and cache: two caracoles at one address may together send more than either one's limits. A
+site that refuses or fails is never a miss: the song is added, its stage says what went wrong, its line says "Not
+fetched yet", and the next lookup or the computer's nightly run, once synced, tries again. The sites' answers are kept for ever under the app's files
+(`state/cache/http/`), never in a cache Android may clear.
+
+While a lookup runs, the app stays in the foreground, with a notification naming the song and what the lookup does
+now ("Estopa - Tu calorro: …"), gone once nothing waits or runs. Lookups use mobile data too.
+
+On the emulator, LookupOfflineTest looks a song up with every site refusing, as with no network (the song added, its
+stages failed, the notification while it runs), and NoNetworkTest checks that with no sites set a lookup opens no
+socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest NoNetworkTest`.
 
 ## Performance notes
 
@@ -354,6 +381,45 @@ Not built yet.
 ## Guitar Pro
 
 Not built yet.
+
+## Sharing a song from a music app
+
+In a music app, **Share** a song and pick **caracole** in Android's share sheet: caracole opens on a page of its own
+for that song.
+
+1. **What it read**: "caracole read Queen – Bohemian Rhapsody." It reads the artist and the title from the text the
+   app shared, the way caracole reads what you type in a search box. It sends no request to the music app or to any
+   site. "What Spotify sent" shows the text as it came.
+2. **The best match**: the song the phone's search finds for those names, in your library or in the indexes, with
+   what each site has of it ("Ultimate Guitar: chords ×12 · tabs ×3 · LaCuerda ×2"), and "In your library" when the
+   song is yours. Up to three other songs the search found come under it, each with its own Get it.
+3. **Your choice**:
+   - **Get it** looks the song up now, like a search line's Get it, and the Requests tab shows how the lookup goes.
+   - **Open** shows your song, when the library has it.
+   - **Edit** takes the artist and the title as you type them, then searches again.
+   - **Cancel** takes you back to the app you shared from.
+
+Nothing is sent to any site until you tap Get it. With no index imported, the page says so, and Get it still looks
+the song up by its names.
+
+What each app shares (tests/fixtures/share/shares.jsonl lists them, each with where it was found):
+
+- **Names in the text**, read as they come: Deezer ("I've found a song for you... Hotel California by Eagles 🔥
+  Listen now on #Deezer"), Shazam ("I used Shazam to discover … by …"), SoundCloud ("Listen to … by … on
+  #SoundCloud"), SoundHound, Musixmatch, YouTube (its subject, the video's title), Audile ("Hotel California -
+  Eagles", title first), and Ultrasonic with Share on server off (its "Title:" and "Artist:" lines, in any of its
+  languages).
+- **A link alone**: Spotify, Apple Music, TIDAL and YouTube Music, as far as anyone has written down what they
+  send; Navic, DSub and Ultrasonic's server shares send a link to your Navidrome or Subsonic server. Tempo copies its
+  share's link instead of sharing it. Symfonium's text isn't known yet: share from it once and read the log (below).
+- Any other app's text is read as you'd type it in the search box, less its links and the app's name at its end
+  ("… | Spotify").
+
+For a link alone, caracole says so and offers Edit. It never asks the music service what a link is.
+
+**To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
+Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
+as they came.
 
 ## Sharing files to caracole
 

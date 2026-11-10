@@ -10,15 +10,17 @@
   library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
   characters a JSON block must escape, one with no songs; each object's keys sorted, as the vector keeps them, so
   that its JSON block is the one a reader of the vector writes) and the server's controls (``controls``: the form
-  token, the badge, the Sync tab or not), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself
-  (``page``) for the smallest case. The page is ``library_page.assemble_page``'s served page with no Requests tab,
-  as the phone serves it until M4 brings the tab: ``__TABREQUESTS__`` and ``__REQUESTS__`` filled with nothing.
+  token, the badge, the Sync tab or not, and ``active``, how many requests wait or run, the data's
+  ``server.active``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself (``page``) for the
+  smallest case. The page is ``library_page.assemble_page``'s served page as it is, its Requests tab counting
+  ``active`` (data/caracole/page/requests.json, tests/test_conformance_requests.py, holds the tab and its panel).
   The vector also holds ``server``, the server's member of the page's data (``build_library_page``'s, for the phone's
   controls ``SERVER_CONTROLS``: no Guitar Pro page, no sheet from YouTube and YouTube off) that the phone's
   ``LibraryPage.withServer`` writes; and ``minimal_cards``: songs only the phone has (``song``: their rows, ``files``:
   their ``files`` rows' name and path, ``ignored``: whether the phone's overrides ignore them), each with the card the
   phone gives it (``card``, ``minimal_card``: library_page.py's ``_song`` of a song with no key, no site, no
-  file's origin, of its kept files alone); and ``routes``, caracole serve's status and headers for ``GET /``,
+  file's origin, of its kept files alone, with where its lyrics link back to, ``lyricsFrom``: Megalobiz's and
+  AZLyrics' page, ``library.lyrics_from``); and ``routes``, caracole serve's status and headers for ``GET /``,
   ``/index.html`` and ``/favicon.ico`` (``WebApp.finish``'s among them), and the icon (``svg``).
 - ``data/caracole/page/empty_library.json``: what the page's data holds of a library with no song that is no
   song's (``fold``, ``icons`` with no icon kept, ``catalogue``, ``songbooks`` with no songbooks.toml), as
@@ -49,7 +51,7 @@ import pytest
 from caracole import library_page
 from caracole.icons import page_icons, source_of
 from caracole.inline import sha256_source
-from caracole.library import keep_file
+from caracole.library import keep_file, lyrics_from
 from caracole.library_page import (
     _TRANSLITERATED,
     SCRIPTS,
@@ -174,23 +176,21 @@ def data_objects() -> dict[str, dict[str, Any]]:
     return {"chinese": sorted_deep(chinese), "empty": sorted_deep(empty)}
 
 
-# The cases: a data object, and the controls the page is served with.
+# The cases: a data object, and the controls the page is served with (its requests counted as its data's server
+# member counts them: none in the empty one's, two in the other's).
 CASES = (
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": False}),  # the smallest: its page is in the vector whole
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": True}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": False}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": True}),
-    ("chinese", {"csrf": CSRF, "badge": None, "sync": True}),
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 0}),  # the smallest: its page is whole
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 0}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": True, "active": 2}),
 )
 
 
 def phone_page(data: dict[str, Any], controls: dict[str, Any]) -> str:
-    """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served), with no
-    Requests tab."""
-    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"])
-    with (mock.patch.object(library_page, "_requests_tab", lambda controls: ""),
-          mock.patch.object(library_page, "_requests_panel", lambda controls: "")):
-        return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
+    """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served)."""
+    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+    return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
 
 
 # Songs only the phone has (taken in a sync before the mirror came again, or added on the phone): their artist,
@@ -204,7 +204,20 @@ MINIMAL_SONGS = (
     ("宋冬野", "斑马斑马", None, "found", True, False, ("sheet (auto).pdf", "sheet (auto).txt", "sheet (auto).html")),
     ("Guns N' Roses", "Sweet Child O' Mine", None, "found", True, True, ("sheet.txt",)),
     ("AC/DC", "T.N.T.", [], "wanted", False, False, ()),  # its row's artists empty, as an older row's may be
+    ("Estopa", "Como Camarón", None, "found", False, False, ("sheet.txt", "lyrics.txt")),
+    ("Gloria Trevi", "Pelo Suelto", None, "found", False, False, ("lyrics.txt",)),
+    ("Ella Baila Sola", "Lo Echamos a Suertes", None, "found", False, False, ("lyrics.lrc",)),
 )
+# The lyrics each of them has (lyrics_status, lyrics_json) where it has some: Megalobiz's and AZLyrics', whose card
+# links back to their page (library.lyrics_from, its Lyrics tile's), and LRCLIB's, which asks none.
+MINIMAL_LYRICS = {
+    "Como Camarón": ("found", json.dumps({"provider": "megalobiz", "plain": "Como camarón",
+                                          "url": "https://megalobiz.com/lrc/maker/estopa-como-camaron.123"})),
+    "Pelo Suelto": ("found", json.dumps({"provider": "azlyrics", "plain": "Pelo suelto",
+                                         "url": "https://www.azlyrics.com/lyrics/gloriatrevi/pelosuelto.html"})),
+    "Lo Echamos a Suertes": ("found", json.dumps({"provider": "lrclib", "plain": "Lo echamos",
+                                                  "url": "https://lrclib.net/api/get/1"})),
+}
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 
 
@@ -217,6 +230,9 @@ def keep_minimal_songs(conn, cfg) -> list[tuple[Any, dict[str, str], bool]]:
         conn.execute("UPDATE songs SET status = ?, review = ? WHERE id = ?", (status, int(review), song.id))
         if artists == []:
             conn.execute("UPDATE songs SET artists = '[]' WHERE id = ?", (song.id,))
+        if title in MINIMAL_LYRICS:
+            conn.execute("UPDATE songs SET lyrics_status = ?, lyrics_json = ? WHERE id = ?",
+                         (*MINIMAL_LYRICS[title], song.id))
         version = upsert_version(conn, provider="ug", tab_id=str(100 + song.id), song_id=song.id, slot="sheet",
                                  kind="chords", rating=4, votes=1, version=1, label=None, url="u", raw={},
                                  now="2026-10-01T00:00:00Z")
@@ -246,7 +262,8 @@ def minimal_card(song: Any, files: dict[str, str], ignored: bool) -> dict[str, A
     return {
         "id": song.id, "artist": song.artist, "artists": song.artists or [song.artist], "title": title,
         "display": song.display, "status": "ignored" if ignored else song.status,
-        "review": bool(song.review) and not ignored, "added": song.added_at, "key": None, "files": entries,
+        "review": bool(song.review) and not ignored, "added": song.added_at, "key": None,
+        "lyricsFrom": lyrics_from(song), "files": entries,
         "source": next((f["source"] for f in entries if f["primary"]), None), "identity": song.key,
         "sortArtist": sort_artist, "sortTitle": sort_title, "artistLetter": _letter(sort_artist),
         "titleLetter": _letter(sort_title), "search": _haystack([song.artist, *song.artists, title, song.display]),
@@ -256,7 +273,8 @@ def minimal_card(song: Any, files: dict[str, str], ignored: bool) -> dict[str, A
 
 def minimal_cards(conn, cfg) -> list[dict[str, Any]]:
     return [{"song": {"key": song.key, "artist": song.artist, "title": song.title, "artists": song.artists,
-                      "added_at": song.added_at, "status": song.status, "review": bool(song.review)},
+                      "added_at": song.added_at, "status": song.status, "review": bool(song.review),
+                      "lyrics_status": song.lyrics_status, "lyrics_json": song.lyrics_json},
              "files": sorted([name, path] for name, path in files.items()),
              "ignored": ignored, "card": minimal_card(song, files, ignored)}
             for song, files, ignored in keep_minimal_songs(conn, cfg)]
@@ -404,18 +422,18 @@ def test_cards_jsonl_is_library_pages_sort_keys_letters_initials_haystacks_and_f
     check(CARDS, jsonl(card_records(), corpus="web/cards", made_by=MADE_BY))
 
 
-def test_the_phones_page_is_caracole_serves_without_its_requests_tab():
-    # The one difference: the Requests tab and its panel (requests.js asks /requests.json, which the phone has not
-    # in M3). With them, the page is assemble_page's as caracole serve fills it in.
+def test_the_phones_page_has_the_requests_tab_counting_the_requests_that_wait_or_run():
+    # The Requests tab and its panel, once each, the tab's count the controls' (none for none), as the data's server
+    # member counts them.
     objects = data_objects()
     for name, controls in CASES:
-        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"])
-        computer = assemble_page(objects[name], served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
-        phone = phone_page(objects[name], controls)
+        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+        page = phone_page(objects[name], controls)
         tab, panel = library_page._requests_tab(served), library_page._requests_panel(served)
-        assert tab and panel and tab not in phone and panel not in phone
-        assert computer.count(tab) == computer.count(panel) == 1
-        assert computer.replace(tab, "", 1).replace(panel, "", 1) == phone
+        assert page.count(tab) == page.count(panel) == 1
+        assert f'Requests <span class="n">{controls["active"] or ""}</span>' in tab
+        assert objects[name]["server"]["active"] == controls["active"]
+    assert {controls["active"] for _, controls in CASES} == {0, 2}
 
 
 def test_the_vectors_data_reads_back_in_the_order_its_page_was_made_with(conn, cfg):
@@ -521,7 +539,7 @@ def test_the_phones_own_data_shapes_draw_with_no_script_error(conn, cfg, tmp_pat
     # library.js, card.js and songbooks.js read every field through listOf() and defaults; this shows it, on the
     # shapes no computer's page has.
     data = phone_shaped_data(conn, cfg)
-    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync})
+    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync, "active": 0})
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     html = html.replace(csp, csp.replace("script-src ", f"script-src {_sha(CATCH)} {_sha(PROBE)} "))
     html = html.replace("<head>", f"<head>\n<script>{CATCH}</script>", 1)

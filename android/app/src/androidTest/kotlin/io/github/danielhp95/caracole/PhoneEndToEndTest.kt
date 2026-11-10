@@ -3,7 +3,11 @@ package io.github.danielhp95.caracole
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
+import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.util.Log
+import android.view.WindowInsets
+import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.test.core.app.ActivityScenario
@@ -32,6 +36,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.SocketException
 import java.net.URL
+import java.net.URLEncoder
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
@@ -53,8 +58,11 @@ import kotlin.concurrent.thread
  * - Sec-Fetch-Site reaches the server from the WebView: the library page's own read of /api/sync is answered, and the
  *   same read from a sandboxed viewer (an opaque origin, so `cross-site`) is refused as another site's;
  * - a query typed into the library page's box shows /api/search's rows: a song of the computer's index the library
- *   hasn't got;
- * - its row's Get it adds it: the phone's job is done and the reloaded page has its card;
+ *   hasn't got; /api/search offers no LaCuerda search for it, so the page sends none by itself
+ *   (CaracoleTestRunner's `searchesLacuerda` false);
+ * - its row's Get it looks it up, `caracole get` under the runner's transport, which refuses every site: the job is
+ *   done, its song added, its sites' stages failed or skipped (a lane's port still neutral), never a miss, its line
+ *   the library page's (/jobs.json's: "Not fetched yet"), and the reloaded page has its card;
  * - a song removed with its line's Remove is gone from the reloaded page's cards;
  * - a sandboxed viewer's link back to the library (its artist line, index.html#by=…) loads the library page, so the
  *   navigation carried the cookie.
@@ -196,7 +204,11 @@ class PhoneEndToEndTest {
             reload(main, library)
             assertFalse("the index's song isn't the phone's yet", cardTitles(cards(main)).any { WANTED.containsMatchIn(it) })
             tap(main, "#q")
-            instrumentation.uiAutomation.executeShellCommand("input text ${QUERY.replace(" ", "%s")}").close()
+            // `input text` types a key at a time: read its output to its end, so the keys are all sent (an `input tap`
+            // sent while it still types is lost) before the box is read
+            ParcelFileDescriptor.AutoCloseInputStream(
+                instrumentation.uiAutomation.executeShellCommand("input text ${QUERY.replace(" ", "%s")}"),
+            ).use { it.readBytes() }
             val typed = try {
                 waitUntil("the query typed", 10_000) { js("document.getElementById('q').value") == QUERY }
                 true
@@ -207,6 +219,27 @@ class PhoneEndToEndTest {
                 false
             }
             record("typed", typed)
+            // The keyboard put away, and whatever it shows over the page with it (Gboard's own sheets, such as its
+            // stylus tour, which take every tap below them), so that the row's Get it is what a tap reaches.
+            main.onActivity { activity ->
+                activity.getSystemService(InputMethodManager::class.java)
+                    .hideSoftInputFromWindow(activity.findViewById<WebView>(R.id.web).windowToken, 0)
+            }
+            if (Build.VERSION.SDK_INT >= 30) {
+                waitUntil("the keyboard put away") {
+                    var shown = true
+                    main.onActivity { activity ->
+                        shown = activity.window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+                    }
+                    !shown
+                }
+            }
+            // the page's answer to the whole query drawn (library.js's results, `found`, of that query, no search on
+            // its way), so that the row tapped is the one it keeps
+            waitUntil("the query's answer drawn") {
+                js("(() => { const f = document.getElementById('found'); " +
+                   "return f.dataset.query === ${JSONObject.quote(QUERY)} && !f.hasAttribute('aria-busy'); })()") == true
+            }
             val getIt = "button[aria-label^=\"Get \"][aria-label*=\"$TITLE_WORD\" i]"
             waitUntil("the index's row and its Get it") { js("document.querySelector(${JSONObject.quote(getIt)}) !== null") == true }
             val row = js("""(() => { const b = document.querySelector(${JSONObject.quote(getIt)});
@@ -214,13 +247,46 @@ class PhoneEndToEndTest {
                 return JSON.stringify({label: b.getAttribute('aria-label'), line: line.textContent.slice(0, 200),
                     hit: line.dataset ? line.dataset.hit || '' : ''}); })()""") as String
             record("row", JSONObject(row))
+            // The runner's searchesLacuerda false: /api/search offers no LaCuerda search for the query, so the page
+            // (library.js, which sends one only where `lacuerda_search` says so) sends none by itself.
+            assertFalse(Caracole.searchesLacuerdaForTests)
+            val (searched, said) = PhoneForms.script("/api/search?q=${URLEncoder.encode(QUERY, "UTF-8")}&box=check")
+            assertEquals(said.take(500), 200, searched)
+            val answer = JSONObject(said)
+            record("lacuerda_search", answer.opt("lacuerda_search")?.toString() ?: "absent")
+            assertTrue("no LaCuerda search offered: ${answer.opt("lacuerda_search")}", answer.isNull("lacuerda_search"))
+            assertTrue("no LaCuerda search queued", Caracole.started()!!.queue.snapshot().none { it.spec.kind == "lacuerda-search" })
 
             // Its Get it: the song added on the phone.
             val before = Caracole.started()!!.queue.snapshot().map { it.id }.toSet()
+            val where = """(() => { const b = document.querySelector(${JSONObject.quote(getIt)}); const r = b.getBoundingClientRect();
+                const v = window.visualViewport; return JSON.stringify({top: r.top, left: r.left, h: window.innerHeight,
+                vh: v ? v.height : null, focus: document.activeElement ? document.activeElement.id : null,
+                disabled: b.disabled}); })()"""
+            record("before the tap", JSONObject(js(where) as String))
             tap(main, getIt)
+            try {
+                waitUntil("the Get it's job queued", 10_000) { Caracole.started()!!.queue.snapshot().any { it.id !in before } }
+            } catch (e: AssertionError) {
+                record("no job after the tap", JSONObject(js(where) as String))
+                throw e
+            }
             val added = waitForJob("the Get it's job", before)
-            record("get it", JSONObject().put("kind", added.spec.kind).put("title", added.spec.title).put("state", added.state))
+            val stages = added.stages.associate { it.name to it.state }
+            val line = PhoneForms.line(added.id)  // as the library page shows it: /jobs.json's, its song's facts read
+            record("get it", JSONObject().put("kind", added.spec.kind).put("title", added.spec.title).put("state", added.state)
+                .put("stages", JSONObject(stages)).put("line", line))
             assertEquals("the Get it's job: ${added.spec.title}", Job.DONE, added.state)
+            // A lookup, every site refused: its song added, its sites failed or skipped, never a miss.
+            assertEquals("song", added.spec.kind)
+            assertEquals("get", added.steps.single().args.first())
+            assertEquals("done", stages["song"])
+            assertEquals("failed", stages["lyrics"])
+            for (site in listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")) {
+                assertTrue("$site: $stages", stages[site] in setOf("failed", "skipped"))
+            }
+            // status.py's line for a lookup that no site answered: not fetched yet, never Not found
+            assertEquals(line.toString(), "Not fetched yet", line.getString("text"))
             reload(main, library)
             val withIt = cardTitles(cards(main))
             assertTrue("the added song's card: $withIt", withIt.any { WANTED.containsMatchIn(it) })
