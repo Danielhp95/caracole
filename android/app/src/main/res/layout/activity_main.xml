@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- A small top bar: the page's title, and a menu with Sync now, Library and Settings. -->
+    <!-- A small top bar: the page's title, and a menu with Copy pages, Logbook and Settings. -->
     <LinearLayout
         android:id="@+id/bar"
         android:layout_width="match_parent"

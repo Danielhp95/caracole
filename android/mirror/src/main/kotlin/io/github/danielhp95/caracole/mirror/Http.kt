@@ -94,7 +94,7 @@ class Http(
                 } catch (e: SyncError) {
                     throw e
                 } catch (e: IOException) {
-                    throw SyncError.NoAnswer(address, "the connection broke: ${describe(e)}", e)
+                    throw SyncError.NoAnswer(address, "connection broke: ${describe(e)}", e)
                 }
             }
         } catch (e: IOException) {
@@ -112,10 +112,10 @@ class Http(
     }
 
     private fun describe(e: IOException): String = when (e) {
-        is ConnectException -> "the connection was refused, or nothing listens there"
-        is NoRouteToHostException -> "no route to it: is the phone on the same network?"
-        is UnknownHostException -> "the name isn't known on this network"
-        is SocketTimeoutException -> "it took too long"
+        is ConnectException -> "refused, or nothing listens there"
+        is NoRouteToHostException -> "no route: is the phone on the same network?"
+        is UnknownHostException -> "name unknown on this network"
+        is SocketTimeoutException -> "timed out"
         else -> e.message ?: e.javaClass.simpleName
     }
 }

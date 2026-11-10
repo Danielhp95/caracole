@@ -49,7 +49,7 @@ import kotlin.coroutines.resume
 /**
  * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
  * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
- * bar (the page's title; Sync now, Library, Settings) and the sync's line under it. The WebView carries the launch's
+ * bar (the page's title; Copy pages, Logbook, Settings) and the sync's line under it. The WebView carries the launch's
  * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
  * at over the page while it lasts ([sizeLabel]).
  */
