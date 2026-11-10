@@ -82,6 +82,23 @@
             </intent-filter>
         </activity>
 
+        <!-- A song's link shared from a music app (Spotify, Deezer, Apple Music, TIDAL, a Navidrome client, Audile…):
+             SEND of text/plain alone, shown on the library screen as the phone's page of the song it names (the
+             server's /share), where Get it asks the sites. Text alone: the files are ShareActivity's. -->
+        <activity
+            android:name=".ShareLinkActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- The phone's job queue at work (a sync from the Sync tab, an add, a removal), in the foreground: a data
              sync, its notification naming the job. -->
         <service

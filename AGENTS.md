@@ -1672,6 +1672,23 @@ Not built yet. (written-pages.)
 
 Not built yet. (guitar-alphatab.)
 
+##### A song shared to the app
+
+- A music app's Share of a song is `ShareLinkActivity`'s (SEND of text/plain alone, its own intent filter; files are
+  ShareActivity's): its extras logged under `caracole-share` (`SharedLink.said`), then the library screen loads
+  `GET /share` with them (`SharedLink.page`; MainActivity takes a share page alone from an intent, and Cancel,
+  `/share/cancel`, as `leaveShare`: the history before the share, the sender in front).
+- core.share's `SharedText.read`, the one place that knows each app's words, before read_names: the app (package,
+  link host, words), the first link, each app's shape (`SHAPES`: Deezer's, Shazam's, SoundCloud's… as "Artist -
+  Title"), else the text less its links and an app's name. A link alone names no song: never a request to the
+  service. tests/fixtures/share/shares.jsonl holds each app's shapes and where they were found (SharedTextTest).
+- server's `ShareRoutes` is the phone's own page, which caracole serve has none of:
+  - the names through `SongNames.readNames`, searched as `/api/search` searches (`SearchRoutes.answer`);
+  - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
+  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+    and policy (`MessagePage.html`: no script).
+- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
+
 ##### Files shared to the app
 
 Not built yet. (inbox-share.)
