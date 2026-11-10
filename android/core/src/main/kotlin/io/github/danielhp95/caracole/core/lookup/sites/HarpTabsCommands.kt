@@ -33,17 +33,17 @@ object HarpTabsCommands {
     /** stamps.shown: a time as the pages show it, in UTC; "?" for none. */
     private fun shown(at: Instant?): String = at?.let(WHEN::format) ?: "?"
 
-    fun artist(c: CommandContext, path: String): String {
+    fun artist(c: CommandContext, artist: String): String {
         val off = "${NOT_READ}harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked."
         val policy = PhoneConfig.read(c.db).provider(HarpTabsFetch.PROVIDER)
         if (!policy.enabled) return off
-        val paths = HarpTabsFetch.artistPaths(c.db, path)
+        val paths = HarpTabsFetch.artistPaths(c.db, artist)
         if (paths.isEmpty()) {
             return if (c.db.one("SELECT 1 FROM harptabs_index LIMIT 1") { true } == null) {
                 "${NOT_READ}harptabs.com's index is empty: the nightly run reads its sitemap, or caracole harptabs " +
                     "--index now."
             } else {
-                "Not found: harptabs.com's sitemap lists no artist named $path."
+                "Not found: harptabs.com's sitemap lists no artist named $artist."
             }
         }
         val page: HarpArtistPage?
@@ -68,7 +68,7 @@ object HarpTabsCommands {
         if (Health.answeredAny(c.db, Pace.lookupRunId(c.now), HarpTabsFetch.PROVIDER, sent)) {
             Health.recordOk(c.db, HarpTabsFetch.PROVIDER, c.now)
         }
-        if (page == null) return "Not found: harptabs.com no longer has the page of $path."
+        if (page == null) return "Not found: harptabs.com no longer has the page of $artist."
         val listed = page.listed.size
         val lists = when {
             page.tabs > listed -> "$listed of their ${plural(page.tabs, "tab")}"

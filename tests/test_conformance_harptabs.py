@@ -269,6 +269,11 @@ def tab_records() -> list[dict[str, Any]]:
         _tab(mini_tab(work={"@type": "MusicComposition", "name": float("nan"), "composer": {"name": float("-inf")}})),
         _tab(mini_tab(work={"@type": "MusicComposition", "name": -0.0, "composer": {"name": 0.5e-400}})),
         _tab(mini_tab().replace('"name": "Yesterday"', '"name": 1e400')),
+        # literals json.loads reads as 0.0, falsy (the header's title and link then), and one that stays a subnormal
+        _tab(mini_tab().replace('"name": "The Beatles"', '"name": 1e-400').replace('"name": "Yesterday"',
+                                                                                    '"name": -4e-325')),
+        _tab(mini_tab().replace('"name": "The Beatles"', '"name": 5e-324').replace('"name": "Yesterday"',
+                                                                                    '"name": 0e7')),
         _tab(mini_tab(work={"@type": "MusicComposition", "name": "", "composer": None})),
         _tab(mini_tab(work={"@type": "MusicRecording", "name": "Other", "composer": {"name": "Other One"}})),
         _tab(mini_tab(work={"@type": ["MusicComposition"], "name": "Other"})),
