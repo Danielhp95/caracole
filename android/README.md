@@ -396,6 +396,24 @@ On the emulator: `android/scripts/device-test.sh --area render`.
 
 Not built yet.
 
+### Export PDF
+
+**Export PDF** in a sheet's settings prints the sheet as the viewer shows it, in its version (key, capo, mode, the
+shapes and swaps you chose, the instrument): Android's print dialog opens on an A4 page, for a printer or **Save as
+PDF**, the file named as caracole serve names its download ("Soda Stereo - De Música Ligera (A Major, capo 0).pdf").
+Nothing is written into the library. The phone makes no PDF of its own: the page you see is what prints, in the
+viewer's print style (a light page, the margins).
+
+- **Download and make it mine** (the viewer asks when the version's music isn't the song's own) prints it and makes
+  it your version too, as on the computer: the song's `[version]`, kept by the key it plays in, so its viewer and its
+  songbooks start there (a song whose pages were the computer's copy gets pages the phone makes, at once). The
+  Requests tab shows it ("Your version now"). Like caracole serve's, it is a plain link with no form token, the one
+  write the phone takes so.
+- The phone names the version of a sheet of its own library: one it made the pages of, or one of the computer's
+  pages whose song a sync brought (the Sync tab). A copy of the computer's pages with no song of its own (Sync now's
+  pages alone) has no sheet to name, and says so. The auto-chords sheet kept beside a song's own sheet, and a kept
+  version's page, offer no export of their own, as on the computer.
+
 ## Guitar Pro
 
 A song's Guitar Pro file (filed from the inbox or downloaded from gtptabs.com) opens on a page of its own in the app,

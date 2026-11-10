@@ -195,7 +195,8 @@ class RoutingTest {
                        HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), the rest neutral still.
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), Export PDF ExportRoutes'
+                // (ExportRoutesTest), the rest neutral still.
                 for (path in listOf("/review", "/versions/choose", "/versions/keep",
                                     "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
@@ -212,7 +213,7 @@ class RoutingTest {
                     assertTrue(path !in stubbed, "$path is its module's now")
                 }
                 assertTrue(stubbed.none { it.startsWith("/assets/alphatab") || it == "/guitar" }, stubbed.toString())
-                for (path in listOf("/review", "/versions", "/harmonica", "/export.pdf")) {
+                for (path in listOf("/review", "/versions", "/harmonica")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")
                     assertEquals(409, page.status, path)
