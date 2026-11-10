@@ -260,9 +260,13 @@ class EndToEndTest {
         }
     }
 
-    /** The page at [address] (its fragment aside) once it has loaded. */
+    /** The page at [address] (its fragment aside) once it has loaded: the document shown says so itself, by its own
+     * location. WebView.getUrl names a navigation the app started while it is still pending, and until it commits the
+     * document shown is the blank one before it, complete and of origin null (a slow answer read it so: no sheet, origin
+     * "null"). */
     private fun loadedAt(main: ActivityScenario<MainActivity>, address: String) = waitUntil("$address loaded") {
-        url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete"
+        val shown = evaluate(main, "document.readyState === 'complete' ? location.href : ''") as? String
+        url(main).substringBefore('#') == address && shown?.substringBefore('#') == address
     }
 
     /**
