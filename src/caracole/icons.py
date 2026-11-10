@@ -98,15 +98,15 @@ def _site(key: str, name: str, tag: str, letters: str, home: str) -> Source:
 
 SOURCES: Mapping[str, Source] = {
     s.key: s for s in (
-        _site("ug", "Ultimate Guitar", "UG", "UG", "https://www.ultimate-guitar.com/"),
+        _site("ug", "UG", "UG", "UG", "https://www.ultimate-guitar.com/"),
         _site("lacuerda", "LaCuerda", "LaCuerda", "LC", "https://acordes.lacuerda.net/"),
         _site("lrclib", "LRCLIB", "LRCLIB", "LR", "https://lrclib.net/"),
         _site("megalobiz", "Megalobiz", "Megalobiz", "MZ", "https://megalobiz.com/"),
         _site("azlyrics", "AZLyrics", "AZLyrics", "AZ", "https://www.azlyrics.com/"),
-        _site("gtptabs", "gtptabs.com", "gtptabs", "GT", "https://gtptabs.com/"),
+        _site("gtptabs", "gtptabs", "gtptabs", "GT", "https://gtptabs.com/"),
         _site("musescore", "MuseScore", "MuseScore", "MS", "https://musescore.com/"),
-        _site("harptabs", "harptabs.com", "harptabs", "HT", "https://www.harptabs.com/"),
-        _site("gametabs", "gametabs.net", "gametabs", "GM", "https://gametabs.net/"),
+        _site("harptabs", "harptabs", "harptabs", "HT", "https://www.harptabs.com/"),
+        _site("gametabs", "gametabs", "gametabs", "GM", "https://gametabs.net/"),
         _site("youtube", "YouTube", "YouTube", "YT", "https://www.youtube.com/"),
         Source(AUTO, "the audio (auto-chords)", "auto", "♪"),
         Source(INBOX, "your inbox", "inbox", "↓"),

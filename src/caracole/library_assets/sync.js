@@ -7,8 +7,9 @@
 // and the caracoles it synced with before, each a button that compares with it. Compare posts the address (POST
 // /sync/compare); the answer is the comparison's id, the other side, and every unit the two hold differently, each with
 // its label, its kind, why it differs and what the sync proposes (peer_sync.compare: this side's, "mine", the other's,
-// "theirs", or a conflict). They are drawn grouped by kind, each with its proposal in words (keep here's, take there's,
-// CONFLICT) and a choice of three: Here, There or Skip, the proposal's side chosen at first, none for a conflict. Two
+// "theirs", or a conflict). They are drawn grouped by kind, each with its proposal in words (ours goes there, theirs
+// comes here, Both books changed it) and a choice of three: Ours, Theirs or Skip, the proposal's side chosen at first,
+// none for a conflict. Two
 // buttons settle every conflict at once. Sync waits until every conflict has a choice, then posts the comparison's id
 // and the choices that aren't the proposal's (every conflict's, and each one flipped or skipped), one line each in one
 // field (POST /sync/apply): the differences and the choices travel, never a unit's document, which the two caracoles
@@ -72,16 +73,16 @@
       || !jobLine || !steps || !jobDetail || !outcome || !reload) return;
 
   // Each kind of unit, in the order peer_sync.compare lists them, under the name its group has.
-  const KINDS = [["song", "Songs"], ["removed", "Removals"], ["songbook", "Songbooks"], ["alias", "Artists' aliases"],
+  const KINDS = [["song", "Songs"], ["removed", "Removed"], ["songbook", "Songbooks"], ["alias", "Artists' aliases"],
                  ["artist_url", "Artists' UG pages"], ["block", "Blocked tabs"]];
-  const PROPOSED = { mine: "keep here's", theirs: "take there's", conflict: "CONFLICT" };
+  const PROPOSED = { mine: "ours goes there", theirs: "theirs comes here", conflict: "Both books changed it" };
   const SIDE_OF = { mine: "here", theirs: "there" };  // the choice a proposal makes; a conflict makes none
-  const CHOICES = [["here", "Here", "keep here's"], ["there", "There", "take there's"], ["skip", "Skip",
-                                                                                         "leave it as it is"]];
-  const UNREACHABLE = "caracole serve can't be reached: is it running?";
+  const CHOICES = [["here", "Ours", "keep ours"], ["there", "Theirs", "take theirs"],
+                   ["skip", "Skip", "leave both as they are"]];
+  const UNREACHABLE = "No answer from caracole serve. Is it running?";
   // What a sync that takes and gives nothing still does: the agreement kept, and on the phone the computer's newer
   // pages and indexes brought (§5.3's mirror and index stages).
-  const AGREES = "Sync still records that the two agree, and brings newer pages and indexes where there are any.";
+  const AGREES = "Share still notes that the books agree, and brings newer pages and indexes.";
 
   let me = null;  // GET /api/sync's answer: this library, the address remembered, the peers synced before
   let loaded = false;
@@ -101,21 +102,20 @@
   };
   const answerOf = (r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body }));
   const refusal = (answer) => (answer.body && typeof answer.body.error === "string" && answer.body.error
-    ? answer.body.error : "caracole serve answered " + answer.status + ": reload the page.");
+    ? answer.body.error : "caracole serve answered " + answer.status + ". Reload the page.");
   // A form posted as the page's script: its answer as data, never a page.
   const post = (path, fields) => {
     const body = new URLSearchParams({ csrf: String(server.csrf || "") });
     for (const [name, value] of fields) body.set(name, value);
     return fetch(path, { method: "POST", body, headers: { Accept: "application/json" } }).then(answerOf);
   };
+  // A time as the pages write one: dd/mm/yy and the 24-hour clock, in the browser's own zone.
   const when = (text) => {
     const at = new Date(String(text || ""));
     if (!text || Number.isNaN(at.getTime())) return "";
-    try {
-      return at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    } catch (err) {
-      return at.toISOString().slice(0, 16).replace("T", " ");
-    }
+    const two = (n) => String(n).padStart(2, "0");
+    return two(at.getDate()) + "/" + two(at.getMonth() + 1) + "/" + two(at.getFullYear() % 100) + " " +
+      two(at.getHours()) + ":" + two(at.getMinutes());
   };
   const timeOf = (text) => {
     const shown = when(text);
@@ -141,7 +141,7 @@
       button.appendChild(el("span", "sync-peer-name", p.name || p.address));
       const where = el("span", "sync-peer-where", p.name ? String(p.address) : "");
       const at = timeOf(p.synced_at);
-      if (at) where.append(where.textContent ? " · synced " : "synced ", at);
+      if (at) where.append(where.textContent ? " · shared " : "shared ", at);
       button.appendChild(where);
       button.setAttribute("aria-label", "Compare with " + String(p.name || p.address) + " at " + String(p.address));
       button.addEventListener("click", () => {
@@ -209,13 +209,13 @@
     if (n.open) {
       plan.textContent = "Choose a side for " + plural(n.open, "conflict") + " first.";
     } else if (!n.here && !n.there) {
-      plan.textContent = (n.skip ? "Nothing to take or give: every difference is skipped. "
+      plan.textContent = (n.skip ? "Nothing to take or give: all skipped. "
         : "Nothing to take or give. ") + AGREES;
     } else {
       const parts = [];
-      if (n.there) parts.push("takes " + n.there + " here");
-      if (n.here) parts.push("gives " + n.here + " there");
-      plan.textContent = "Sync " + parts.join(" and ") + (n.skip ? "; " + n.skip + " skipped." : ".");
+      if (n.there) parts.push("takes " + n.there);
+      if (n.here) parts.push("gives " + n.here);
+      plan.textContent = "Share " + parts.join(", ") + (n.skip ? "; " + n.skip + " skipped." : ".");
     }
     go.disabled = quiet() || n.open > 0;
   };
@@ -266,8 +266,8 @@
       choices.set(d.id, was !== undefined ? was : own.call(SIDE_OF, d.proposal) ? SIDE_OF[d.proposal] : null);
     }
     const peer = compared.peer && typeof compared.peer === "object" ? compared.peer : {};
-    const here = me && me.name ? String(me.name) : "this library";
-    const there = String(peer.name || peer.address || "the other caracole");
+    const here = me && me.name ? String(me.name) : "this book";
+    const there = String(peer.name || peer.address || "the other horde");
     if (sides) {
       const side = (name, text) => {
         const part = el("span", "sync-side-name");
@@ -277,10 +277,10 @@
       const before = compared.synced_before;
       const at = typeof before === "string" ? timeOf(before) : null;
       const last = el("span", "sync-last");
-      if (at) last.append("Last synced ", at);
-      else if (before) last.textContent = "Synced before";
-      else last.textContent = "Never synced: what both have, each its own way, is a conflict";
-      sides.replaceChildren(side("Here", here), side("There", there + (peer.address && peer.name ? " · " +
+      if (at) last.append("Last shared ", at);
+      else if (before) last.textContent = "Shared before";
+      else last.textContent = "Never shared: where both books hold a song differently, you choose";
+      sides.replaceChildren(side("This book", here), side("Their book", there + (peer.address && peer.name ? " · " +
                             peer.address : "")), last);
     }
     const boxes = [];
@@ -291,7 +291,7 @@
       const head = el("h3", "sync-group-head", name + " ");
       head.appendChild(el("span", "n", String(mine.length)));
       const conflicts = mine.filter((d) => proposalOf(d) === "conflict").length;
-      if (conflicts) head.appendChild(el("span", "sync-group-conflicts", plural(conflicts, "conflict")));
+      if (conflicts) head.appendChild(el("span", "sync-group-conflicts", conflicts + " changed in both"));
       const list = el("ul", "sync-list");
       list.setAttribute("aria-label", name);
       for (const d of mine) {
@@ -305,8 +305,8 @@
     groups.replaceChildren(...boxes);
     groups.hidden = !all.length;
     found.hidden = false;  // nothing differing, Sync still keeps the agreement and brings what is newer
-    say(all.length ? plural(all.length, "difference") + " with " + there + "."
-      : "Nothing differs: " + here + " and " + there + " agree.", all.length ? "" : "done");
+    say(all.length ? plural(all.length, "difference") + " with " + there + "'s book."
+      : here + " and " + there + " agree, line for line.", all.length ? "" : "done");
     refresh();
   };
   const compare = () => {
@@ -315,7 +315,7 @@
     comparing = true;
     ready();
     refresh();
-    say("Comparing with " + where + "…", "running");
+    say("Reading " + where + "'s book…", "running");
     post("sync/compare", [["address", where]]).then((answer) => {
       comparing = false;
       const body = answer.body && typeof answer.body === "object" ? answer.body : null;
@@ -358,7 +358,7 @@
     sending = true;
     refresh();
     ready();
-    say("Sending the sync…", "running");
+    say("Sending…", "running");
     post("sync/apply", [["comparison", String(compared.comparison || "")], ["prefer", ""],
                         ["choices", sent().join("\n")]]).then((answer) => {
       sending = false;
@@ -412,7 +412,7 @@
     const list = el("ul");
     for (const [id, why] of entries) {
       const item = el("li", null, labels.get(id) || id);
-      if (why) item.appendChild(el("span", "sync-why", " — " + why));
+      if (why) item.appendChild(el("span", "sync-why", " · " + why));
       list.appendChild(item);
     }
     box.appendChild(list);
@@ -425,16 +425,16 @@
       const given = listOf(said.given).map((id) => [String(id), ""]);
       const left = listOf(said.left).map((e) => (Array.isArray(e) ? [String(e[0]), String(e[1] || "")]
         : [String(e), ""]));
-      if (taken.length) parts.push(unitList("Taken here", taken, "taken"));
-      if (given.length) parts.push(unitList("Given there", given, "given"));
+      if (taken.length) parts.push(unitList("Taken", taken, "taken"));
+      if (given.length) parts.push(unitList("Given", given, "given"));
       if (left.length) parts.push(unitList("Left as they were", left, "left"));
       if (!taken.length && !given.length && !left.length) {
-        parts.push(el("p", "sync-none", "Nothing changed on either side."));
+        parts.push(el("p", "sync-none", "Neither book changed."));
       }
       const indexed = listOf(said.indexed).map(String);
-      if (indexed.length) parts.push(el("p", "sync-note", "Indexes brought up to date: " + indexed.join(", ") + "."));
+      if (indexed.length) parts.push(el("p", "sync-note", "Indexes updated: " + indexed.join(", ") + "."));
       if (Number.isInteger(said.agreed)) {
-        parts.push(el("p", "sync-note", "The two agree on " + plural(said.agreed, "unit") + " now."));
+        parts.push(el("p", "sync-note", "The books agree on " + plural(said.agreed, "entry", "entries") + "."));
       }
     }
     outcome.replaceChildren(...parts);
@@ -453,7 +453,7 @@
       return null;
     }
     if (!tab || tab === "sync" || tabs.names.indexOf(tab) < 0) return null;
-    const a = el("a", null, "Details");
+    const a = el("a", null, "Journal");
     a.href = "#" + href.replace(/^#/, "");
     return a;
   };
@@ -466,7 +466,7 @@
     running = !over;
     job.hidden = false;
     found.hidden = true;
-    jobName.textContent = String(view.display || "Sync");
+    jobName.textContent = String(view.display || "Share");
     jobLine.dataset.tone = String(line.tone || view.state || "");
     jobLine.replaceChildren(el("span", null, line.text || view.state || ""));
     const more = detailsLink(view);

@@ -41,7 +41,7 @@ SCRATCH = "Scratch library"  # the badge of a library in a temporary folder
 LABEL_LIMIT = 40  # characters of a badge
 TEMPORARY = ("/tmp", "/var/tmp", "/dev/shm")
 TEMPORARY_VARIABLES = ("TMPDIR", "TEMP", "TMP")
-BADGE_TITLE = "Not your usual library"  # the badge's tooltip
+BADGE_TITLE = "Scratch"  # the badge's tooltip
 SCRATCH_COLOUR = "#7a4c00"  # base.css's --wanted, light: the badge's colour, and its icon's
 _SCRATCH_ICON = SVG.replace(ACCENT, SCRATCH_COLOUR)
 SCRATCH_LINK = ('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,'

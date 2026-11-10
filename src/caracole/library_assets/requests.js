@@ -46,15 +46,15 @@
   };
   const POLL = paced("poll", 1500);  // while a request waits or runs
   const IDLE = paced("idle", 10000);  // while none does: one from another device shows within seconds
-  const UNREACHABLE = "caracole serve can't be reached; trying again…";
+  const UNREACHABLE = "No answer from caracole serve. Trying again…";
   // The forms the server answers with data, so the page stays where it is; any other (a failed removal's Try again,
   // POST /remove) posts as a form, and the server asks what goes on a page of its own.
   const SENT = ["/jobs/cancel", "/jobs/again", "/lookup"];
 
   const status = el("p", "reqs-status");
   status.setAttribute("role", "status");
-  const empty = el("p", "reqs-empty", "No requests yet. Request a song from ");
-  const toLibrary = el("a", null, "the library");
+  const empty = el("p", "reqs-empty", "Nothing asked yet. Ask for a song from ");
+  const toLibrary = el("a", null, "the logbook");
   toLibrary.href = "#tab=library";
   empty.append(toLibrary, ".");
   empty.hidden = true;
@@ -132,7 +132,7 @@
         go.disabled = false;
         const body = answer.body && typeof answer.body === "object" ? answer.body : null;
         if (!answer.ok || !body || body.error) {
-          refuse(item, (body && body.error) || "caracole serve answered " + answer.status + ": reload the page.");
+          refuse(item, (body && body.error) || "caracole serve answered " + answer.status + ". Reload the page.");
           return;
         }
         const view = body.view && typeof body.view === "object" ? body.view
@@ -141,7 +141,7 @@
         ask();
       }, () => {
         go.disabled = false;
-        refuse(item, "caracole serve can't be reached: is it running?");
+        refuse(item, "No answer from caracole serve. Is it running?");
       });
   };
   // A next step: a link (an address of the server's, or a site's), or a one-button form posted with the form token.
@@ -355,7 +355,7 @@
         const body = answer.body && typeof answer.body === "object" ? answer.body : null;
         if (!answer.ok || !body || !Array.isArray(body.groups)) {
           say((body && typeof body.error === "string" ? body.error : "caracole serve answered " + answer.status +
-            ": reload the page.") + (answer.status === 403 ? "" : " Trying again…"));
+            ". Reload the page.") + (answer.status === 403 ? "" : " Trying again…"));
           if (answer.status !== 403) later(IDLE);  // 403: the server restarted since this page was loaded
           return;
         }

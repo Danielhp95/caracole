@@ -48,7 +48,7 @@ const caracoleCard = (icons, rows) => {
   // for one never scored. Enough to count as whole (``complete``, rank.py's threshold): in the found colour.
   const lyricsShare = (complete, coverage) => {
     if (typeof coverage !== "number") return "";
-    const said = coverage >= 0.995 ? "Every line of the lyrics" : percent(coverage) + " of the lyrics";
+    const said = coverage >= 0.995 ? "All the lyrics" : percent(coverage) + " of the lyrics";
     return complete === true ? el("b", null, said) : said;
   };
   const stars = (v) => (typeof v.rating === "number" ? v.rating.toFixed(2) + "★" : "");
@@ -139,17 +139,17 @@ const caracoleCard = (icons, rows) => {
     const ukulele = listOf(s.instruments).indexOf("ukulele") >= 0;
     const extra = [];
     if (v.pinned && acts.clear) extra.push(acts.clear());
-    drawer.appendChild(drawerHead(drawer, "ug", "Ultimate Guitar · " + (ukulele ? "ukulele chords" : "chord sheets"),
-      many(v.total, "version") + " on the site · " + list.length + " kept in your library", extra));
+    drawer.appendChild(drawerHead(drawer, "ug", "UG · " + (ukulele ? "ukulele chords" : "chord sheets"),
+      Number(v.total || 0).toLocaleString("en") + " on UG · " + list.length + " in your logbook", extra));
     const ol = el("ol", "vrows");
     for (const x of list) {
       const ver = "Ver " + (Number(x.number) || "?");
       const share = lyricsShare(x.complete, x.coverage);
       const note = [];
-      if (x.gone) note.push("gone from Ultimate Guitar");
+      if (x.gone) note.push("gone from UG");
       if (share) note.push(share);
       if (x.note) note.push(String(x.note));
-      if (x.chosen) note.push(v.pinned ? "your choice" : "caracole's pick");
+      if (x.chosen) note.push(v.pinned ? "your choice" : "our pick");
       const actions = [];
       if (x.chosen) actions.push(inUse());
       else if (!x.gone && acts.choose) actions.push(acts.choose(x, ver));
@@ -162,12 +162,12 @@ const caracoleCard = (icons, rows) => {
     const rest = Number(v.rest) || 0;
     if (rest > 0) {
       const more = el("div", "drawer-rest");
-      more.appendChild(el("span", "rest-said", rest + " more on Ultimate Guitar, not kept"));
+      more.appendChild(el("span", "rest-said", rest + " more on UG, not kept"));
       const fetch = acts.keepMore ? acts.keepMore(rest, Number(v.keepMore) || 0) : null;
       if (fetch) {
         more.appendChild(fetch);
       } else if (acts.keepMoreCommand) {
-        const said = el("span", "rest-command", "Keep them with ");
+        const said = el("span", "rest-command", "Keep them: ");
         said.appendChild(el("code", null, acts.keepMoreCommand));
         more.appendChild(said);
       }
@@ -183,18 +183,18 @@ const caracoleCard = (icons, rows) => {
     const pinned = Boolean(s.versions && s.versions.pinned) && Boolean(acts.useLaCuerda);
     const extra = [];
     if (pinned) {
-      extra.push(el("p", "pin-note", "Your choice on Ultimate Guitar is in use: Back to caracole's pick first."));
+      extra.push(el("p", "pin-note", "Your UG choice is in use. Back to our pick first."));
       if (acts.clear) extra.push(acts.clear());
     }
     drawer.appendChild(drawerHead(drawer, "lacuerda", "LaCuerda · chord sheets", many(met.length, "version") +
-      " caracole met", extra));
+      " seen", extra));
     const ol = el("ol", "vrows");
     met.forEach((x, n) => {
       const ver = "Version " + (n + 1);
       const actions = [];
       if (x.sheet) actions.push(inUse());
       else if (acts.useLaCuerda && !pinned) actions.push(acts.useLaCuerda(x, ver));
-      actions.push(openLink(x.href, ver + " of " + title + " on LaCuerda, in a new tab", { external: true }));
+      actions.push(openLink(x.href, ver + " of " + title + " on LaCuerda, new tab", { external: true }));
       ol.appendChild(versionRow({ ver, note: [lyricsShare(null, x.coverage) || "not scored"], actions,
         cls: x.sheet ? "cur" : "" }));
     });
@@ -204,7 +204,7 @@ const caracoleCard = (icons, rows) => {
   const autoDrawer = (s, drawer) => {
     const a = s.autoSheet;
     const title = String(s.title);
-    drawer.appendChild(drawerHead(drawer, "auto", "Auto sheet · from the recording", "made by caracole from the audio"));
+    drawer.appendChild(drawerHead(drawer, "auto", "Auto sheet · from the recording", "made by us from the audio"));
     const ol = el("ol", "vrows");
     const downloads = listOf(a.files).filter((f) => f && f.href)
       .map((f) => downloadLink(f, String(f.label), "Download the auto sheet's " + String(f.label) + " of " + title));
@@ -260,7 +260,7 @@ const caracoleCard = (icons, rows) => {
         row.appendChild(el("span", "lead", "From"));
         // A source that links back to its page (``href``: Megalobiz's or AZLyrics' lyrics) is that link.
         const one = c.href ? anchor(c.href, "vchip one", { external: true }) : el("span", "vchip one");
-        if (c.href) one.setAttribute("aria-label", t.name + ": " + nameOf(c.source) + ", its page there");
+        if (c.href) one.setAttribute("aria-label", t.name + ": its page on " + nameOf(c.source));
         const mark = sourceMark(c.source);
         if (mark) one.appendChild(mark);
         one.appendChild(el("span", "vchip-name", nameOf(c.source)));
@@ -417,7 +417,7 @@ const caracoleCard = (icons, rows) => {
       const from = s.lyricsFrom && s.lyricsFrom.source === source && typeof s.lyricsFrom.href === "string"
         ? s.lyricsFrom.href : null;
       made.push({ kind: "lyrics", glyph: "lyrics", name: "Lyrics", open: { href: lyrics[0].href },
-        said: "Open the lyrics of " + title, from: timed ? "synced to the recording" : "plain", lead: "From",
+        said: "Open the lyrics of " + title, from: timed ? "timed" : "plain", lead: "From",
         chips: source ? [{ source, count: 1, fixed: true, href: from }] : [], downloads });
     }
 
@@ -614,7 +614,7 @@ const caracoleCard = (icons, rows) => {
     if (!found.length) return null;
     const box = el("div", "progressions");
     const label = el("p", "card-label", "Progressions");
-    label.title = "Find your songs that play one";
+    label.title = "Find songs that play one";
     box.appendChild(label);
     const row = el("div", "progs");
     const chips = found.map((p) => {
@@ -632,7 +632,7 @@ const caracoleCard = (icons, rows) => {
       for (const c of rest) c.hidden = true;
       const more = el("button", "progs-more", "+" + rest.length);
       more.type = "button";
-      more.setAttribute("aria-label", "Show " + many(rest.length, "more progression"));
+      more.setAttribute("aria-label", "Show " + rest.length + " more");
       more.addEventListener("click", () => {
         for (const c of rest) c.hidden = false;
         more.remove();
@@ -648,7 +648,7 @@ const caracoleCard = (icons, rows) => {
     const shown = listOf(groups).filter((g) => g && listOf(g.links).some((x) => x && x.href));
     if (!shown.length) return null;
     const box = el("div", "find-elsewhere");
-    box.appendChild(el("p", "card-label", "Find it elsewhere"));
+    box.appendChild(el("p", "card-label", "Elsewhere"));
     for (const g of shown) {
       const group = el("div", "row-group");
       group.appendChild(el("p", "subhead", String(g.heading)));
@@ -669,8 +669,7 @@ const caracoleCard = (icons, rows) => {
     if (p.book) box.appendChild(p.book);
     const behind = [];
     if (p.info && p.info.href) {
-      const info = downloadLink(p.info, "info.json", "Download what caracole knows of " + String(s.title) +
-        ", info.json");
+      const info = downloadLink(p.info, "info.json", String(s.title) + "'s entry, info.json");
       info.replaceChild(glyph("info"), info.firstChild);
       info.classList.add("info-file");
       behind.push(info);
@@ -679,7 +678,7 @@ const caracoleCard = (icons, rows) => {
     if (behind.length) {
       const more = el("details", "foot-more");
       const summary = el("summary", "btn small foot-more-btn");
-      const said = "More for " + String(s.title);
+      const said = "More: " + String(s.title);
       summary.setAttribute("aria-label", said);
       summary.title = said;
       const dots = el("span", null, "⋯");

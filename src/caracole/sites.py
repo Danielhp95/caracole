@@ -48,48 +48,48 @@ class Site:
 SITES: tuple[Site, ...] = (
     Site("ug", "Chord sheets and text tabs", "ultimate-guitar.com",
          ("www.ultimate-guitar.com", "tabs.ultimate-guitar.com"),
-         "Closes its search, downloads and print pages. caracole matches songs against its sitemap, on your machine.",
+         "Closes its search, downloads and print pages. We match songs against its sitemap, on your machine.",
          (("/search.php", "its search"), ("/tab/download", "downloads"), ("/tab/print?", "print pages"),
           ("/download/public/", "public downloads"))),
-    Site("lacuerda", "Spanish-language chord sheets", "acordes.lacuerda.net", (),
-         "Its robots.txt is empty: nothing is closed. caracole keeps its own pace all the same."),
-    Site("lrclib", "Lyrics, many synced to the music", "lrclib.net", (),
-         "An API with no robots rules: nothing is closed to caracole.", asked="Asked song by song"),
+    Site("lacuerda", "Spanish chord sheets", "acordes.lacuerda.net", (),
+         "Its robots.txt is empty: nothing closed. We keep our own pace all the same."),
+    Site("lrclib", "Lyrics, many timed", "lrclib.net", (),
+         "An API with no robots rules: nothing closed.", asked="Asked song by song"),
     Site("megalobiz", "Timed lyrics, where LRCLIB has none", "megalobiz.com", ("megalobiz.com",),
-         "Its official API has no robots rules; its site closes only accounts and editors. caracole keeps the "
-         "API's fair use: your songs alone, its 1,000 requests a day, and each song's lyrics links back to its "
-         "page. Its API allows 30 requests a minute; {pace}.",
+         "Its official API has no robots rules; its site closes only accounts and editors. We keep the API's fair "
+         "use: your songs alone, its 1,000 requests a day, each song's lyrics linked back to its page. Its API "
+         "allows 30 requests a minute; {pace}.",
          asked="Asked song by song"),
     Site("azlyrics", "Plain lyrics, where LRCLIB and Megalobiz have none", "azlyrics.com",
          ("www.azlyrics.com", "azlyrics.com"),
          "Closes its search, so a song is reached from its artist's page: two requests, never an index. Its pages "
-         "forbid other lyrics providers their lyrics: caracole keeps them for your songs alone, your choice, and "
-         "each song's lyrics links back to its page.",
+         "forbid other lyrics providers their lyrics: we keep them for your songs alone, by your choice, each "
+         "linked back to its page.",
          (("/search/", "its search"), ("/suggest/", "its suggestions"), ("/song/", "its song pages"),
           ("/lyricsdb/", "its lyrics database")), asked="Asked song by song"),
     Site("gtptabs", "Guitar Pro files", "gtptabs.com", ("gtptabs.com",),
          "Closes its Russian half, its search and its storage (an artist's “Download all”).",
-         (("/ru/", "the Russian half of the site"), ("/search/", "its search"),
+         (("/ru/", "its Russian half"), ("/search/", "its search"),
           ("/storage/", "“Download all” archives"))),
-    Site("musescore", "Scores, as links you open yourself", "musescore.com", ("musescore.com",),
-         "Closes its API, downloads, search and embeds. caracole reads only its sitemaps.",
+    Site("musescore", "Scores, as links you open", "musescore.com", ("musescore.com",),
+         "Closes its API, downloads, search and embeds. We read only its sitemaps.",
          (("/api/jmuse", "its API"), ("/score/*/download/*", "downloads"), ("/sheetmusic?", "its search"),
           ("/oembed/*", "embeds"))),
     Site("harptabs", "Harmonica tabs", "harptabs.com", ("www.harptabs.com", "harptabs.com"),
          "Closes its search, its API and its app's data. Artist and tab pages are open.",
-         (("/search", "its search"), ("/api/", "its API"), ("/*?*_rsc=", "the app's data requests")),
+         (("/search", "its search"), ("/api/", "its API"), ("/*?*_rsc=", "its app's data")),
          terms="Its terms forbid copying. Kept by your choice: one tab a song, privately."),
     Site("gametabs", "Video-game music tabs", "gametabs.net", ("gametabs.net", "www.gametabs.net"),
-         "Closes its API, its filters and every download behind a login. Its robots.txt asks for 5 s between "
+         "Closes its API, its filters and every download behind a login. Its robots.txt asks 5 s between "
          "requests; {pace}.",
          (("/api/", "its API"), ("/tabs?*", "filtered lists"),
           ("/preparing-tab-file-download", "downloads (a login's)")),
-         terms="Its terms forbid bots. Read by your choice since 28 Oct 2026."),
+         terms="Its terms forbid bots. Read by your choice since 28/10/26."),
     Site("youtube", "Audio for auto-chords", "youtube.com", (),
-         "Closes /results and /youtubei/, which yt-dlp uses: caracole goes against them, by your choice.",
+         "Closes /results and /youtubei/, which yt-dlp uses: we go against them, by your choice.",
          (("/results", "search results"), ("/youtubei/", "the player's API")),
-         terms="The one site whose closed paths caracole asks for, by your choice: a few of your songs a night, "
-               "the videos you give it, and a search's first video.",
+         terms="The one site whose closed paths we ask for, by your choice: a few of your songs a night, the "
+               "videos you give, and a search's first video.",
          asked="Searched song by song"),
 )
 
@@ -235,7 +235,7 @@ def index_figures(conn: sqlite3.Connection) -> dict[str, Figures]:
     # give each artist and the smaller line sums; and the letters whose every listing page is read.
     artists, known = index_size(conn)
     listed = _one(conn, "SELECT SUM(songs) FROM lacuerda_index WHERE title = ''")
-    figures["lacuerda"] = (Indexed(known, "songs", f"of {listed:,} its listings count, {artists:,} artists"),
+    figures["lacuerda"] = (Indexed(known, "songs", f"of {listed:,} its listings count · {artists:,} artists"),
                            Progress(len(letters_read(conn)), len(LETTERS), "letters read"))
 
     songs, tabs = _counts(conn, "gtptabs", kept)
@@ -274,7 +274,6 @@ def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetim
     caracole.toml, or YouTube, or its image host, without auto-chords), cooling down after a block, errors since its
     last good run, else OK, or Indexing while its index is ``partial``."""
     from caracole.health import get_state
-    from caracole.stamps import shown
     from caracole.youtube_fetch import route_problem
 
     if not cfg.provider(provider).enabled:
@@ -283,9 +282,9 @@ def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetim
         return Status("off", "Off", problem)
     s = get_state(conn, provider)
     if s.cooldown_until and now < s.cooldown_until:
-        blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''} in a row"
-        why = f": {s.last_error}" if s.last_error else ""
-        return Status("cooling", "Cooling down", f"Until {shown(s.cooldown_until, local=True)}, after {blocks}{why}")
+        blocks = f"turned back {s.strikes} time{'s' if s.strikes != 1 else ''} in a row"
+        why = f" · {s.last_error}" if s.last_error else ""
+        return Status("cooling", "Waiting out", f"Until {_local(s.cooldown_until)}: {blocks}{why}")
     if s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
         return Status("errors", "Errors", s.last_error)  # nothing has worked since the last error
     return Status("indexing", "Indexing") if partial else Status("ok", "OK")
@@ -325,7 +324,7 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
         mine = [n for n in names if n & set(_LYRICS)]
         synced = sum(1 for n in mine if "lyrics.lrc" in n)
         return {"count": len(mine), "unit": "lyrics", "songs": len(mine),
-                "detail": f"{synced:,} of them synced" if mine else None}
+                "detail": f"{synced:,} of them timed" if mine else None}
     if key == "musescore":  # the possible matches the to-do page and a song's card link: caracole downloads none
         links = [len(c.get("museScore") or []) for c in cards]
         return {"count": sum(links), "unit": _unit(sum(links), "links"), "songs": sum(1 for n in links if n),
@@ -352,15 +351,23 @@ def _robots(cfg: Config, site: Site) -> str:
     asked = CRAWL_DELAY_ASKED.get(site.key, API_PACE_ASKED.get(site.key))
     if asked is None:
         return site.robots
-    waits = f"caracole waits {_spread(cfg, site.key)}"
+    waits = f"we wait {_spread(cfg, site.key)}"
     return site.robots.format(pace=waits + (", by your choice" if cfg.provider(site.key).delay[0] < asked else ""))
 
 
+def _local(dt: datetime) -> str:
+    """A time as the tab shows it: in the server's local time zone, named, the day as dd/mm/yy ("17/10/26 23:30
+    EDT")."""
+    from caracole.stamps import utc
+
+    return utc(dt).astimezone().strftime("%d/%m/%y %H:%M %Z")
+
+
 def _shown(value: Any) -> str | None:
-    from caracole.stamps import parse, shown
+    from caracole.stamps import parse
 
     at = parse(value) if isinstance(value, str) else None
-    return shown(at, local=True) if at is not None else None
+    return _local(at) if at is not None else None
 
 
 def _whole(conn: sqlite3.Connection, key: str) -> bool:

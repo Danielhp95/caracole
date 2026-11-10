@@ -35,7 +35,7 @@
   try {
     data = JSON.parse(byId("songs").textContent);
   } catch (err) {
-    list.appendChild(el("p", "empty", "This page's song list can't be read. Run caracole todo to write it again."));
+    list.appendChild(el("p", "empty", "Song list unreadable. Run caracole todo to write it again."));
     return;
   }
   const songs = Array.isArray(data.songs) ? data.songs : [];
@@ -115,7 +115,7 @@
   const SORTS = ["artist", "title", "recent"];
   const LETTERS = { artist: "artistLetter", title: "titleLetter" };  // the A-Z strip's letter, by sort
   // A key is "A minor" or "C" (keys.py); where it came from, as keys.SOURCES says.
-  const KEY_SOURCES = { tab: "from the tab", chords: "estimated from the chords", audio: "from the audio" };
+  const KEY_SOURCES = { tab: "from the tab", chords: "guessed from the chords", audio: "from the audio" };
   const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
   const keyText = (s) => "Key " + keyName(String(s.key)) +
     (label(KEY_SOURCES, s.key_source) ? " (" + label(KEY_SOURCES, s.key_source) + ")" : "");
@@ -284,8 +284,8 @@
   // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS);
   const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, fetchIcon, many,
-    indexLine, titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine,
-    countMarks, countsSaid } = rowKit;
+    shortDate, indexLine, titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound,
+    notesLine, countMarks, countsSaid } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
@@ -302,7 +302,7 @@
   // A wanted song whose sheet you picked on LaCuerda: tonight's run gets it, a link to its page.
   const lacuerdaNote = (s) => {
     if (!s.lacuerda || typeof s.lacuerda !== "object" || !/^https:[/][/]/i.test(String(s.lacuerda.href || ""))) return null;
-    const note = el("p", "note lacuerda-pick", "Tonight's run gets ");
+    const note = el("p", "note lacuerda-pick", "Tonight's run fetches ");
     note.appendChild(link(s.lacuerda, null, true));
     note.appendChild(document.createTextNode("."));
     return note;
@@ -355,8 +355,8 @@
   // song alone. Nothing is sent before it is pressed.
   const fetchForm = (s) => {
     const form = songForm("fetch", "/fetch", s);
-    const go = fetchIcon("Fetch " + String(s.title) + " by " + String(s.artist) + " now");
-    go.title = "Fetch now: ask Ultimate Guitar for this song now, politely";
+    const go = fetchIcon("Fetch " + String(s.title) + " by " + String(s.artist));
+    go.title = "Fetch: ask UG for this song";
     form.appendChild(go);
     postInPlace(form, go, s);
     return form;
@@ -401,11 +401,11 @@
     field.setAttribute("inputmode", "url");
     field.placeholder = "youtube.com/watch?v=…";
     label.appendChild(field);
-    const go = el("button", "btn small", "Make the sheet");
+    const go = el("button", "btn small", "Make sheet");
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
-      " from this YouTube video");
-    go.title = "Chords from its audio, lyrics from LRCLIB (a few minutes)";
+      " from this video");
+    go.title = "Chords from its audio, lyrics from LRCLIB. A few minutes.";
     form.append(label, go);
     postInPlace(form, go, s);
     return form;
@@ -429,13 +429,13 @@
     const box = el("div", "actions again");
     if (s.status === "found") {
       box.appendChild(lookupForm(s, "Fetch again", "Fetch " + names + " again",
-        "Looks the song up anew now, as caracole get does: Ultimate Guitar's best sheet of it, then the rest", "",
+        "Fetches the song anew: UG's best sheet, then the rest", "",
         "refresh"));
     }
     const lacuerda = lacuerdaOf(s);
     if (lacuerda) {
-      box.appendChild(lookupForm(s, "Use LaCuerda's sheet", "Get " + names + " again, keeping LaCuerda's sheet",
-        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", lacuerda, "refresh"));
+      box.appendChild(lookupForm(s, "Use LaCuerda's sheet", "Fetch " + names + " again, keeping LaCuerda's sheet",
+        "Fetches the song and keeps this LaCuerda sheet", lacuerda, "refresh"));
     }
     return box.childNodes.length ? box : null;
   };
@@ -444,7 +444,7 @@
     const held = el("button", cls, "Review first");
     held.type = "button";
     held.disabled = true;
-    held.title = "caracole review settles this match; then it can be fetched";
+    held.title = "Settle the match with caracole review, then fetch.";
     return held;
   };
   // Every line's "Remove", under its chevron: one tap counts down REMOVE_WAIT seconds on the song's own line,
@@ -466,9 +466,8 @@
     const go = el("button", "btn small remove", "Remove");
     go.prepend(glyph("trash"));
     go.type = "submit";
-    go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
-    go.title = "Delete the files caracole wrote for it, and keep caracole from bringing it back; Undo, for " +
-      REMOVE_WAIT + " seconds, keeps it";
+    go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from your logbook");
+    go.title = "Deletes our files for it; we won't bring it back. Undo within " + REMOVE_WAIT + " seconds.";
     form.appendChild(go);
     return form;
   };
@@ -536,7 +535,7 @@
   const startRemoval = (s, item) => {
     const id = Number(s.id);
     if (removals.has(id)) return;
-    const r = { song: s, left: REMOVE_WAIT, timer: 0, brief: "Asking what goes…", key: null, ready: null,
+    const r = { song: s, left: REMOVE_WAIT, timer: 0, brief: "Checking what goes…", key: null, ready: null,
                 spot: item && !isOwn(s, item) ? item : null, held: new Set() };
     removals.set(id, r);
     let undo = null;
@@ -603,8 +602,8 @@
   // server sends the browser to the request in the Requests tab (requests.js).
   const POLL = paced("poll", 1500);
   const BACKGROUND_POLL = 6000;  // a page in a background tab asks less often
-  const UNREACHABLE = { line: { tone: "failed", text: "caracole serve can't be reached: is it running?" } };
-  const UNREACHABLE_NOW = "caracole serve can't be reached; trying again…";
+  const UNREACHABLE = { line: { tone: "failed", text: "No answer from caracole serve. Is it running?" } };
+  const UNREACHABLE_NOW = "No answer from caracole serve. Trying again…";
   const MISSES = 3;  // asked in vain this many times in a row, the lines say so
   const views = new Map();  // job id -> what the server last said of it
   const songJob = new Map();  // song id -> the newest job of the song this page shows
@@ -789,7 +788,7 @@
     return old;
   };
   const failure = (answer) => ({ line: { tone: "failed", text: (answer.body && answer.body.error) ||
-    "caracole serve answered " + answer.status + ": reload the page." } });
+    "caracole serve answered " + answer.status + ". Reload the page." } });
   // A form, posted as the page's script: the answer is the job, or {error}, never a page.
   const postTo = (path, body) => fetch(path, {
     method: "POST", body, headers: { Accept: "application/json" },
@@ -799,19 +798,19 @@
 
   // A song not found: caracole serve's picker page shows what `caracole search` finds for it.
   const lookLink = (s, cls) => {
-    const look = el("a", cls || "btn", "Look in the index");
+    const look = el("a", cls || "btn", "Look in index");
     look.href = "/review?song=" + Number(s.id);
-    look.setAttribute("aria-label", "Look for " + String(s.title) + " by " + String(s.artist) + " in the index");
-    look.title = "What caracole search finds for it in the offline Ultimate Guitar index, to pick from";
+    look.setAttribute("aria-label", "Look for " + String(s.title) + " by " + String(s.artist) + " in index");
+    look.title = "Our copy of UG's index, to pick from";
     return look;
   };
 
   // A song not found, on the file, which can't search: the line that lists its search hits, numbered as
   // `caracole review --song … --pick N` takes them.
   const notFoundHint = (s) => {
-    const hint = el("p", "pick-hint", "Not in the offline Ultimate Guitar index under this name: ");
+    const hint = el("p", "pick-hint", "Not in our copy of UG's index under this name. ");
     hint.appendChild(el("code", null, "caracole review --song " + shellQuote(String(s.display))));
-    hint.appendChild(document.createTextNode(" lists what caracole search finds for it, to pick one."));
+    hint.appendChild(document.createTextNode(" lists what it finds, to pick one."));
     return hint;
   };
 
@@ -837,7 +836,7 @@
     row.appendChild(pick);
     if (c.href) {
       const page = link({ label: "UG", href: c.href }, "choice-link", true);
-      page.setAttribute("aria-label", String(c.artist) + " – " + String(c.title) + " on Ultimate Guitar, in a new tab");
+      page.setAttribute("aria-label", String(c.artist) + " – " + String(c.title) + " on UG, new tab");
       row.appendChild(page);
     }
     return row;
@@ -853,7 +852,7 @@
     pick.appendChild(radio);
     const text = el("span", "choice-text");
     text.appendChild(el("span", "choice-name", "None of these"));
-    text.appendChild(el("span", "choice-why", "caracole drops them for good and goes on looking for the song"));
+    text.appendChild(el("span", "choice-why", "Dropped for good. We keep looking for the song."));
     pick.appendChild(text);
     row.appendChild(pick);
     return row;
@@ -862,7 +861,7 @@
   // to pick from), or, on the file, the line that lists a song not found's search hits; else nothing (null).
   const unpicked = (s) => {
     if (SHOWS.review(s)) {
-      const note = el("p", "note", "caracole isn't sure about this match: see the ");
+      const note = el("p", "note", "Unsure of this match. See the ");
       const todo = el("a", null, "to-do page");
       todo.href = "_todo.md";
       note.appendChild(todo);
@@ -874,7 +873,7 @@
   const makePicker = (s) => {
     const cands = listOf(s.candidates).filter((c) => c && c.ref);
     const box = el("details", "picker");
-    const question = "Which Ultimate Guitar song is “" + String(s.title) + "” by " + String(s.artist) + "?";
+    const question = "Which UG song is “" + String(s.title) + "” by " + String(s.artist) + "?";
     const job = server ? jobOfSong(s.id) : null;
     const pickable = Boolean(server) && !busy.has(Number(s.id)) && !(job && isActive(job));
     const many = plural(cands.length, "candidate");
@@ -887,13 +886,13 @@
       for (const c of cands) list.appendChild(choiceRow(c, false));
       box.appendChild(list);
       if (server) {
-        box.appendChild(el("p", "pick-hint", "A request for this song is running: pick one once it ends."));
+        box.appendChild(el("p", "pick-hint", "This song is being fetched. Pick once it ends."));
       } else {
-        const hint = el("p", "pick-hint", "Pick one with ");
+        const hint = el("p", "pick-hint", "Pick with ");
         hint.appendChild(el("code", null, "caracole review --song " + shellQuote(String(s.display))));
         hint.appendChild(document.createTextNode(": its number, or "));
         hint.appendChild(el("code", null, "n"));
-        hint.appendChild(document.createTextNode(" for none of these."));
+        hint.appendChild(document.createTextNode(" for none."));
         box.appendChild(hint);
       }
       return box;
@@ -913,14 +912,14 @@
     fetch.setAttribute("value", "1");
     fetch.setAttribute("checked", "");
     now.appendChild(fetch);
-    now.appendChild(document.createTextNode("Fetch it now"));
+    now.appendChild(document.createTextNode("Fetch at once"));
     row.appendChild(now);
     const go = el("button", "btn primary", "Pick");
     go.type = "submit";
     row.appendChild(go);
     form.appendChild(row);
-    form.appendChild(el("p", "pick-hint", "Your answer goes into overrides.toml, as caracole review writes it. " +
-      "Fetch it now then asks Ultimate Guitar for the song picked; None of these fetches nothing."));
+    form.appendChild(el("p", "pick-hint", "Saved in overrides.toml. " +
+      "Fetch at once asks UG for the song picked; None of these fetches nothing."));
     box.appendChild(form);
     postInPlace(form, go, s);
     // Opened, the picker takes the focus to its candidates: the arrow keys then move between them.
@@ -948,11 +947,11 @@
       render();
       save();
       input.focus();
-    }, "Show every song, not only those with " + progNumerals(state.prog)));
+    }, "Show every song, not only " + progNumerals(state.prog)));
   };
   // The song's progressions, as it plays them, for its card: each shows the songs that play it too.
   const progressionsOf = (s) => card.progressions(progsOf(s).map((p) => ({ text: String(p.plays || progLabel(p.key)),
-    said: "Your songs with " + progSaid(p.key), go: () => setProg(p.key) })));
+    said: "Songs with " + progSaid(p.key), go: () => setProg(p.key) })));
 
   // Lines: a song a line (resultRow's dense form, from ROWS_SCRIPT: the seam the module docstring describes), in
   // its artist's group. A line is an article titled by its h3; the A-Z strip moves the focus to its group.
@@ -968,7 +967,7 @@
       if (job && job.kind === "remove") return held(null);
       const going = el("a", "line-busy", "Removing…");
       going.href = "#tab=requests";
-      going.title = "See the requests";
+      going.title = "See requests";
       return held(going);
     }
     if (server && s.status === "wanted") {
@@ -979,7 +978,7 @@
         const pick = el("button", "btn small line-pick", "Pick the match");
         pick.type = "button";
         pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
-        pick.title = "Which Ultimate Guitar song this is: caracole isn't sure";
+        pick.title = "Which UG song is this";
         pick.addEventListener("click", () => showPicker(picker));
         return held(pick);
       }
@@ -1034,8 +1033,8 @@
   // Each as a tag names it, and as a sentence does ("with a harmonica tab or a score").
   const INST_TAG = { sheet: "Chord sheet", guitar: "Guitar tab", ukulele: "Ukulele", harmonica: "Harmonica",
     score: "Score" };
-  const INST_SAID = { sheet: "a chord sheet", guitar: "a guitar tab", ukulele: "ukulele chords",
-    harmonica: "a harmonica tab", score: "a score" };
+  const INST_SAID = { sheet: "chord sheet", guitar: "guitar tab", ukulele: "ukulele chords",
+    harmonica: "harmonica tab", score: "score" };
   // A song's facts, under its line's chevron: the key in words and where it came from, the PDF's transposition, the
   // lyrics, when the song came, and its other artists.
   const factsOf = (s) => {
@@ -1044,12 +1043,12 @@
     const shift = Number(s.transpose) || 0;
     if (shift) {
       const t = el("span", "transpose", (shift > 0 ? "+" : "−") + Math.abs(shift));
-      t.title = "The PDF is transposed " + (shift > 0 ? "up " : "down ") + Math.abs(shift) +
+      t.title = "PDF transposed " + (shift > 0 ? "up " : "down ") + Math.abs(shift) +
         " semitone" + (Math.abs(shift) === 1 ? "" : "s");
       facts.appendChild(t);
     }
     if (label(LYRICS_TEXT, s.lyrics)) facts.appendChild(el("span", "lyrics", label(LYRICS_TEXT, s.lyrics)));
-    if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
+    if (s.added) facts.appendChild(el("span", "added", "Added " + shortDate(s.added)));
     const others = listOf(s.artists).slice(1).map(String);
     if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
     return facts.childNodes.length ? facts : null;
@@ -1062,7 +1061,7 @@
       document.dispatchEvent(new CustomEvent("caracole:pick", { detail: { id: Number(s.id) } }));
     }, "Add " + String(s.title) + " by " + String(s.artist) + " to a songbook");
     go.prepend(glyph("book"));
-    go.title = "Pick it, and any other songs, for a songbook";
+    go.title = "Pick it, and others, for a songbook";
     return go;
   };
   // A post of caracole serve's versions routes for a song, by its id (``action``: /versions/choose, /clear or
@@ -1094,21 +1093,21 @@
     };
     return {
       choose: (v, ver) => (free() ? versionsForm(s, "/versions/choose", "Use this one", "Use " + ver + " of " + names,
-        "Make it the sheet the title opens, as caracole versions --choose does: a [pin] in overrides.toml",
+        "Makes it the sheet the title opens: a [pin] in overrides.toml",
         { tab: String(v.tab) }) : null),
-      clear: () => (free() ? versionsForm(s, "/versions/clear", "Back to caracole's pick",
-        "Back to caracole's pick for " + names,
-        "Take your choice out of [pin], as caracole versions --clear does: caracole picks the sheet again") : null),
+      clear: () => (free() ? versionsForm(s, "/versions/clear", "Back to our pick",
+        "Back to our pick for " + names,
+        "Takes your choice out of [pin]. We pick the sheet again.") : null),
       keepMore: (rest, n) => {
         if (!free() || !(n > 0)) return null;
         const some = n < rest;
         return versionsForm(s, "/versions/keep-more", some ? "Fetch " + n + " more" : "Fetch them",
           "Fetch " + (some ? n + " more versions" : rest === 1 ? "the version" : "the " + rest + " versions") + " of " +
-          title + " from Ultimate Guitar",
-          "Keeps them beside the sheet, one request each at a lookup's pace, as caracole versions --keep-more does");
+          title + " from UG",
+          "Keeps them beside the sheet, 1 request each");
       },
       useLaCuerda: (x, ver) => (free() ? lookupForm(s, "Use this one", "Use LaCuerda's " + ver + " of " + names,
-        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", String(x.href)) : null),
+        "Fetches the song and keeps this LaCuerda sheet", String(x.href)) : null),
     };
   };
   // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
@@ -1156,13 +1155,13 @@
     const others = listOf(s.files).filter((f) => f && !claimed.has(f) && f !== info);
     if (others.length) more.push({ heading: "Files", links: others });
     if (server && !server.guitar && listOf(s.files).some((f) => f && typeof f.guitarPage === "string" && f.guitarPage)) {
-      more.push(el("p", "note", "caracole serve can show Guitar Pro files in the browser once it has alphaTab " +
-        "(CARACOLE_ALPHATAB_DIR): until then they are downloads."));
+      more.push(el("p", "note", "Guitar Pro files are downloads until caracole serve has alphaTab " +
+        "(CARACOLE_ALPHATAB_DIR)."));
     }
     const progs = progressionsOf(s);
     if (progs) more.push(progs);
     const elsewhere = card.findElsewhere([{ heading: "Find the chords", links: s.links },
-      { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track for an auto sheet", links: s.buy }]);
+      { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track, for an auto sheet", links: s.buy }]);
     if (elsewhere) more.push(elsewhere);
     const control = serverAction(s, picker);
     const action = control.held ? control.action : null;
@@ -1251,7 +1250,7 @@
     } else {
       heading.appendChild(filter && mine ? artistFilter(name, name, only) : el("span", "artist-name", name));
     }
-    const said = [c.theirs ? String(c.theirs) : "", mine ? "you have " + mine : "",
+    const said = [c.theirs ? String(c.theirs) : "", mine ? "yours " + mine : "",
       Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
       Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
       Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "",
@@ -1360,7 +1359,7 @@
     if (state.artist) words.push("of " + artistName(state.artist));
     if (state.inst) words.push("with " + instsChosen().map((x) => INST_SAID[x]).join(" or "));
     if (keyChosen()) words.push("in " + keySaid());
-    if (state.show === "review") words.push("needing review");
+    if (state.show === "review") words.push("needs review");
     return words.join(" ");
   };
   const filterCount = byId("filter-count");
@@ -1419,7 +1418,8 @@
     };
     if (by.wanted) stat(by.wanted, "wanted");
     if (by.ignored) stat(by.ignored, "ignored");
-    input.placeholder = "Search " + plural(every.length, "song") + (server && !(narrow && narrow.matches) ? ", or the sites" : "");
+    input.placeholder = server && !(narrow && narrow.matches) ? "Search songs and sites"
+      : "Search " + plural(every.length, "song");
     const when = String(data.generated || "").replace("T", " ").slice(0, 16);
     if (when) byId("updated").textContent = "Updated by caracole " + when + " UTC. ";
   };
@@ -1495,14 +1495,14 @@
     filterButton.classList.toggle("on", on > 0);
     filterCount.hidden = !on;
     filterCount.textContent = on ? String(on) : "";
-    filterButton.setAttribute("aria-label", on ? "Filter, " + on + " on" : "Filter");
+    filterButton.setAttribute("aria-label", on ? "Filter " + on : "Filter");
   };
   // How many songs the list shows, of how many; and in the panel, "4 songs", or on a phone "Show 4 songs".
   const tell = () => {
     const total = songs.filter(counted).length;
     const n = shownNow.filter((i) => counted(songs[i])).length;
     count.hidden = n === total;
-    count.textContent = n === total ? "" : n + " of " + plural(total, "song");
+    count.textContent = n === total ? "" : n + "/" + plural(total, "song");
     filterLive.textContent = plural(n, "song");
     showN.textContent = "Show " + plural(n, "song");
   };
@@ -1564,8 +1564,8 @@
       if (runs.length) list.appendChild(groups);
     } else if (shown.length) {
       const flat = el("section", "flat");
-      flat.appendChild(el("h2", "visually-hidden", state.sort === "title" ? "Your songs by title"
-        : "Your songs, the newest first"));
+      flat.appendChild(el("h2", "visually-hidden", state.sort === "title" ? "Songs by title"
+        : "Newest first"));
       const box = el("div", "lines");
       for (const i of shown) {
         const line = lineOf(i);
@@ -1588,10 +1588,10 @@
     jump.hidden = firsts.size < 2 || shown.length < JUMP_FROM;
 
     if (!songs.length) {
-      list.appendChild(el("p", "empty", "No songs yet."));
+      list.appendChild(el("p", "empty", "No songs"));
       const hint = el("p", "empty-hint", "Add a line to wanted.txt, or run ");
       hint.appendChild(el("code", null, "caracole add ARTIST TITLE"));
-      hint.appendChild(document.createTextNode("; the next run lists the song here."));
+      hint.appendChild(document.createTextNode(". The next run lists it here."));
       list.appendChild(hint);
     } else if (!shown.length && filtered() && (loose(fits) || !state.q)) {
       // The filters hide what the search finds (or every song): say which, every one, and offer them all.
@@ -1608,12 +1608,12 @@
     } else if (!shown.length && state.prog) {
       // The progression hides them: the line above says which, with Show all.
       list.appendChild(el("p", "empty", state.q ? "No songs with " + progNumerals(state.prog) + " match “" + state.q + "”."
-        : "No songs of yours play " + progNumerals(state.prog) + "."));
+        : "None of your songs play " + progNumerals(state.prog) + "."));
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       if (!query.keys.length && server) {  // the offline indexes have no keys
         // Back from the sites' results with Escape: the way to them again.
-        if (youtubeVideo(state.q)) list.appendChild(button("Add this YouTube video as a song", "primary", () => enterAll()));
+        if (youtubeVideo(state.q)) list.appendChild(button("Add video as song", "primary", () => enterAll()));
         else if (typedEnough(state.q)) list.appendChild(button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll()));
       } else if (!query.keys.length) {
         list.appendChild(youtubeVideo(state.q) ? fileVideoAnswer(state.q.trim()) : fileAnswer(state.q.trim()));
@@ -2003,13 +2003,13 @@
     drawCounts();
     if (server && state.all) return;  // the search of the sites says how it goes
     else if (!q) say("");  // before anything is typed the placeholder says what the bar searches
-    else if (key) say(none ? "None of yours match: the sites know no keys" : "A key filters your songs alone: the sites know no keys");
-    else if (server && !typedEnough(q)) say(none ? "None of yours match: three letters search the sites too"
-      : "Three letters or more search the sites too");
-    else if (server) say(none ? "None of yours match: Enter searches the sites" : "Your songs alone: Enter searches the sites too");
-    else if (none) say("None of yours match: see the line below");
-    else if (state.all) say("The sites need caracole serve: run the line below");
-    else say("Enter: the line that searches the sites");
+    else if (key) say(none ? "No local or remote matches" : "Filter your songs");
+    else if (server && !typedEnough(q)) say(none ? "No matches" : "3 letters or more search the sites too");
+    else if (server) say(none ? "None of yours match · Enter searches the sites"
+      : "Your songs only · Enter searches the sites too");
+    else if (none) say("None of yours match · see the line below");
+    else if (state.all) say("The sites need caracole serve · run the line below");
+    else say("Search sites");
   };
   // Each word in single quotes, as the Select bar copies its command: on the file, Copy selects it too.
   const copyText = (code, copy) => {
@@ -2025,17 +2025,16 @@
   // The file's answer to Enter: what to run where caracole runs, since searching the sites needs caracole serve.
   const fileAnswer = (q) => {
     const box = el("div", "file-answer");
-    box.appendChild(el("p", null, "Searching Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore needs caracole serve. " +
-      "Where caracole runs, this searches its copies of Ultimate Guitar's and LaCuerda's indexes:"));
+    box.appendChild(el("p", null, "Searching UG, LaCuerda, gtptabs and MuseScore needs caracole serve."));
     const line = el("div", "command");
     const code = el("code", null, "caracole search " + shellNames(q));
-    const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
+    const copy = button("Copy", "small", () => copyText(code, copy), "Copy line");
     line.appendChild(code);
     line.appendChild(copy);
     box.appendChild(line);
-    const then = el("p", "hint", "Each hit comes with the line that adds it; ");
+    const then = el("p", "hint", "Each hit comes with the line that adds it. ");
     then.appendChild(el("code", null, "caracole get 'Artist - Title'"));
-    then.appendChild(document.createTextNode(" looks one up now."));
+    then.appendChild(document.createTextNode(" fetches one."));
     box.appendChild(then);
     return box;
   };
@@ -2043,10 +2042,10 @@
   // The file's answer to a YouTube video's link: the command that adds its song and makes its sheet.
   const fileVideoAnswer = (link) => {
     const box = el("div", "file-answer");
-    box.appendChild(el("p", null, "A YouTube video: where caracole runs, this adds its song and makes its sheet:"));
+    box.appendChild(el("p", null, "A YouTube video. Where caracole runs, this adds its song and makes its sheet:"));
     const line = el("div", "command");
     const code = el("code", null, "caracole youtube --song 'Artist - Title' --url " + shellQuote(link) + " --sheet");
-    const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
+    const copy = button("Copy", "small", () => copyText(code, copy), "Copy line");
     line.append(code, copy);
     box.appendChild(line);
     return box;
@@ -2288,11 +2287,11 @@
       go.setAttribute("aria-label", aria(left));
     };
     more(m.tail.ug, Number(m.ug && m.ug.songs) - m.ugListed, m.name, (n) => "List " + n + " more songs by " + m.name +
-      " on Ultimate Guitar");
+      " on UG");
     more(m.tail.lc, m.lcListed ? 0 : Number(m.lacuerda && m.lacuerda.known) - listed("lacuerda"), m.name + " on LaCuerda",
       (n) => "List " + n + " more songs by " + m.name + " on LaCuerda");
     more(m.tail.ht, m.htListed ? 0 : Number(m.harptabs && m.harptabs.held) - listed("harptabs"),
-      m.name + " on harptabs.com", (n) => "List " + n + " more songs by " + m.name + " on harptabs.com");
+      m.name + " on harptabs.com", (n) => "List " + n + " more songs by " + m.name + " on harptabs");
     return m.tail.box.childNodes.length ? m.tail.box : null;
   };
   // "+ N more": the artist's next songs, in their group, each a line as the others are; the focus stays on the button,
@@ -2302,7 +2301,7 @@
     const go = source === "ug" ? m.tail.ug : source === "harptabs" ? m.tail.ht : m.tail.lc;
     const before = new Set(m.items);
     go.disabled = true;
-    say("Listing " + m.name + "'s songs…");
+    say(m.name + " songs");
     const listing = source === "ug" ? artistPage(String(m.ug.artist_key || ""), m.ugOffset)
       : source === "harptabs" ? sitePage({ harptabs: String(m.harptabs.path || "") })
       : sitePage({ slug: String(m.lacuerda.slug || "") });
@@ -2314,7 +2313,7 @@
         for (const h of got) addSong(was.model, "ug", h, m).meant = false;  // listed now: found, no guess
         m.ugOffset += got.length;
         m.ugListed = got.length ? Math.max(m.ugListed, m.ugOffset) : Number(m.ug.songs);
-        say(m.name + ": " + many(page.total, "song") + " on Ultimate Guitar");
+        say(m.name + ": " + many(page.total, "song") + " on UG");
       } else if (source === "harptabs") {
         listHarptabs(m, page);
       } else {
@@ -2345,20 +2344,19 @@
       m.tail.htOffer.remove();
       m.tail.htOffer = null;
     }
-    say(String(page.artist) + ": " + many(objects(page.songs).length, "song") + " on harptabs.com");
+    say(String(page.artist) + ": " + many(objects(page.songs).length, "song") + " on harptabs");
   };
   // A harptabs.com artist whose page caracole has never read: the button that reads it (a request, a job of its own),
   // then lists their songs in their group.
   const harpOffer = (m) => {
     const name = String(m.harptabs.artist || m.name);
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on harptabs.com yet. Reading it is one " +
-      "request to harptabs.com, at a lookup's pace."));
-    box.appendChild(button("Read their page", "small primary", (e) => readThenShow(
+    box.appendChild(el("p", null, name + "'s page on harptabs not read yet. Reading it costs 1 request."));
+    box.appendChild(button("Read page", "small primary", (e) => readThenShow(
       { harptabs: String(m.harptabs.path || "") }, e.currentTarget, box, (page) => {
         listHarptabs(m, page);
         drawGroups();
-      }), "Read the page of " + name + " on harptabs.com"));
+      }), "Read " + name + "'s page on harptabs"));
     return box;
   };
   // An artist whose page caracole has never read: how many songs LaCuerda lists, and the button that reads it (a
@@ -2366,13 +2364,13 @@
   const readOffer = (m) => {
     const name = String(m.lacuerda.artist || m.name);
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on LaCuerda yet, which lists " +
-      many(m.lacuerda.songs, "song") + ". Reading it is one request to LaCuerda, at a lookup's pace."));
-    box.appendChild(button("Read their page", "small primary", (e) => readThenShow({ slug: String(m.lacuerda.slug || "") },
+    box.appendChild(el("p", null, name + "'s page on LaCuerda not read yet: " +
+      many(m.lacuerda.songs, "song") + " listed. Reading it costs 1 request."));
+    box.appendChild(button("Read page", "small primary", (e) => readThenShow({ slug: String(m.lacuerda.slug || "") },
       e.currentTarget, box, (page) => {
         listLaCuerda(m, page);
         drawGroups();
-      }), "Read the page of " + name + " on LaCuerda"));
+      }), "Read " + name + "'s page on LaCuerda"));
     return box;
   };
   // A name LaCuerda's index has no artist by, read by that name (Ask LaCuerda, under the groups or on the card of a
@@ -2395,7 +2393,7 @@
     const was = answer;
     const ug = s.source !== "lacuerda" && s.source !== "harptabs";
     go.disabled = true;
-    say("Listing " + String(s.artist || "") + "'s songs…");
+    say(String(s.artist || "") + " songs");
     const listing = ug ? artistPage(String(s.artist_key || ""), 0)
       : sitePage(s.source === "harptabs" ? { harptabs: String(s.path || "") } : { slug: String(s.slug || "") });
     listing.then((page) => {
@@ -2410,7 +2408,7 @@
         for (const h of got) addSong(model, "ug", h, g).meant = false;  // listed now: found, no guess
         g.ugOffset = got.length;
         g.ugListed = got.length;
-        say(String(page.artist) + ": " + many(page.total, "song") + " on Ultimate Guitar");
+        say(String(page.artist) + ": " + many(page.total, "song") + " on UG");
       } else if (s.source === "harptabs") {
         g.harptabs = { artist: page.artist, path: page.path, songs: page.listed, known: page.total,
           held: objects(page.songs).length, read: page.read };
@@ -2439,7 +2437,7 @@
       state.inst ? "with " + instsChosen().map((x) => INST_SAID[x]).join(" or ") : "",
       keyChosen() ? "in " + keySaid() : "",
       state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
-    return parts.length ? "Your songs here: " + parts.join(" · ") : "";
+    return parts.length ? "Yours here: " + parts.join(" · ") : "";
   };
   // Show all of yours: every status, instrument, key, artist and progression, here and in the list; the focus to the
   // box, as the button goes with its note.
@@ -2548,7 +2546,7 @@
     }
     if (model && model.harps.length) {  // harptabs.com's harmonica tabs: a title alone too
       if (!model.harpLines) model.harpLines = model.harps.map(titleLine);
-      box.appendChild(artistGroup({ name: "harptabs.com", search: false }, model.harpLines,
+      box.appendChild(artistGroup({ name: "harptabs", search: false }, model.harpLines,
         { note: many(model.harps.length, "harmonica tab") + " by that title" }));
     }
     const missed = foundNothing(model);
@@ -2703,7 +2701,7 @@
     const meta = [String(video.channel || ""), ytLength(video.duration)].filter(Boolean).join(" · ");
     if (meta) text.appendChild(el("p", "yt-meta", meta));
     row.appendChild(text);
-    row.appendChild(button("Make the sheet", "small primary", () => {
+    row.appendChild(button("Make sheet", "small primary", () => {
       const read = answer && answer.q === q ? answer.data : {};
       prefill(read.lead, read.names);
       const form = document.querySelector("form.request-form");
@@ -2827,9 +2825,9 @@
     };
     const artist = field("artist", "Artist");
     const title = field("title", "Title");
-    const go = el("button", "btn primary", "Add and make the sheet");
+    const go = el("button", "btn primary", "Add and make sheet");
     go.type = "submit";
-    go.title = "Adds the song, takes the audio, works out the chords (a few minutes)";
+    go.title = "Adds the song, takes the audio, works out the chords. A few minutes.";
     form.appendChild(go);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -2845,7 +2843,7 @@
       set("duration", "");
       set("youtube", pasted);  // as pasted: the server reads its video, and keeps its plain address
       request.requestSubmit();
-      form.replaceChildren(el("p", "hint", "Added: its line above says how it goes."));
+      form.replaceChildren(el("p", "hint", "Added. Its line above says how it goes."));
     });
     box.append(media, note, form);
     const fill = (data) => {
@@ -2889,8 +2887,8 @@
       if (!artist.dataset.typed && g.artist) artist.value = String(g.artist);
       if (!title.dataset.typed && g.title) title.value = String(g.title);
       note.textContent = d.state === "auto" ? "Reading the video…"
-        : d.state === "found" ? (song ? "In your library as " + String(song.display || "") + "." : "Check the name, then add it.")
-        : "Can't read the video" + (d.why ? " (" + String(d.why) + ")" : "") + ": name it, then add it.";
+        : d.state === "found" ? (song ? "In your logbook as " + String(song.display || "") + "." : "Check the name, then add it.")
+        : "Couldn't read the video" + (d.why ? " (" + String(d.why) + ")" : "") + ". Name it, then add it.";
     };
     return { box, fill, focus: () => (artist.value ? go : artist).focus() };
   };
@@ -2902,7 +2900,7 @@
       linkPanel.fill(ok ? body : { state: "failed", why: body && body.error ? String(body.error) : "" });
       if (ok && body && body.state === "auto" && read && !linkRead.has(vid)) readVideo(vid);
     }, () => {
-      if (linkFor === vid && linkPanel) linkPanel.fill({ state: "failed", why: "caracole serve can't be reached" });
+      if (linkFor === vid && linkPanel) linkPanel.fill({ state: "failed", why: "no answer from caracole serve" });
     });
   // The video read now (POST youtube/video, a job), then followed: the panel asks again once its title is known
   // (its name), and once the job is over (its thumbnail).
@@ -2935,7 +2933,7 @@
   };
   const showLink = (vid, pasted) => {
     linkMode(true);
-    say("A YouTube video: add it as a song");
+    say("Extract from YouTube video");
     if (linkFor === vid && linkPanel) return;
     linkFor = vid;
     linkPanel = panelFor(vid, pasted);
@@ -2967,7 +2965,7 @@
     const mine = asked;
     if (asking) asking.abort();
     asking = new AbortController();
-    say("Searching the sites…", true);
+    say("Searching sites", true);
     searching(true);
     fetch("api/search?q=" + encodeURIComponent(q) + "&box=" + SEARCH_BOX, {
       signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },
@@ -3020,7 +3018,7 @@
     const ytLine = server && !data.short ? ytShow(data.youtube, q) : null;
     ytBox.replaceChildren(...(ytLine ? [ytLine] : []));
     if (data.short) {
-      say("Type three letters or more to search the sites");
+      say("3 letters or more to search the sites");
       return;
     }
     // What each site found is the marks under the box, drawn with the groups (drawCounts).
@@ -3223,7 +3221,7 @@
     const name = item.querySelector(".tray-song");
     if (typeof view.sheet === "string" && view.sheet && name.tagName !== "A") {
       const opens = link({ label: view.display || "", href: view.sheet }, "tray-song", false);
-      opens.title = "Open its sheet";
+      opens.title = "Open sheet";
       name.replaceWith(opens);
     }
     // One Details link, the list's own: a line here says how its request goes, and its song's links the rest.
@@ -3231,7 +3229,8 @@
     showLine(item.querySelector(".progress"), { line: Object.assign({}, line, { details: null }) });
     const shown = Array.from(trayItems.keys()).map((n) => views.get(n)).filter(Boolean);
     const going = shown.filter(isActive).length;
-    traySum.textContent = plural(shown.length, "request") + (going ? " · " + going + " to go" : " · all done");
+    traySum.textContent = going ? shown.length + "/" + going + " requests to go"
+      : plural(shown.length, "request") + " · done";
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
   };

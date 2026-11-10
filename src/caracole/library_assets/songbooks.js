@@ -19,6 +19,9 @@
   }
   if (!panel || !tabBooks || !tabs) return;
   const listOf = (value) => (Array.isArray(value) ? value : []);
+  // A day as songbook_section.py gives it, "2026-10-18", as the pages write one: dd/mm/yy.
+  const dayOf = (text) => String(text).replace(/^(\d{4})-(\d{2})-(\d{2})$/,
+    (all, y, m, d) => d + "/" + m + "/" + y.slice(2));
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -116,9 +119,9 @@
     else p.textContent = String(view && view.line && view.line.text || "");
   };
   const failed = (text) => ({ line: { tone: "failed", text } });
-  const UNREACHABLE = "caracole serve can't be reached: is it running?";
+  const UNREACHABLE = "No answer from caracole serve. Is it running?";
   const failure = (reply) => (reply.body && reply.body.error) || "caracole serve answered " + reply.status +
-    ": reload the page.";
+    ". Reload the page.";
   const postTo = (path, body) => fetch(path, {
     method: "POST", body, headers: { Accept: "application/json" },
   }).then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })));
@@ -152,7 +155,7 @@
     showTab("library");
     document.dispatchEvent(new CustomEvent("caracole:new-songbook"));
   });
-  newBook.title = "Pick its songs in your library, then name it";
+  newBook.title = "Pick its songs in the logbook, then name it";
   side.append(lines, sideEmpty, sideError, newBook);
   inner.appendChild(side);
   panel.appendChild(inner);
@@ -164,7 +167,7 @@
   };
   const metaOf = (b) => [plural(Number(b.songs) || 0, "song"),
     Number(b.missing) ? b.missing + " without a sheet" : "",
-    b.changed ? "changed " + b.changed : b.failed ? "couldn't be made" : b.pending ? "on its way" : "not made yet"]
+    b.changed ? "made " + dayOf(b.changed) : b.failed ? "not made" : b.pending ? "on its way" : "not made yet"]
     .filter(Boolean).join(" · ");
   const gone = new Set();  // what a change left on the page, until your next click or key: nothing moves meanwhile
   const sweep = () => {
@@ -212,8 +215,8 @@
     lines.hidden = !kept.length;
     newBook.hidden = !songs.length;  // its songs are picked in the library: with none, there is nothing to pick
     sideEmpty.textContent = books().length || shelf.error ? "" : !songs.length
-      ? "No songbook yet. Your library has no songs to pick from: add one first."
-      : "No songbook yet: + New songbook picks its songs in your library.";
+      ? "No songbook yet. Your logbook has no songs to pick from: add one first."
+      : "No songbook yet. + New songbook picks its songs from your logbook.";
     sideEmpty.hidden = !sideEmpty.textContent;
     sideError.textContent = shelf.error ? String(shelf.error) : "";
     sideError.hidden = !shelf.error;
@@ -267,8 +270,8 @@
     const file = typeof g.download === "string" && g.download ? g.download : song;
     a.href = relativeHref(page || href);
     if (!page && typeof g.download === "string" && g.download) a.setAttribute("download", g.download);
-    a.setAttribute("aria-label", "Guitar Pro tab: " + file + (page ? ", open it in the browser" : ", download it"));
-    a.title = page ? "Guitar Pro tab: open it in the browser" : "Guitar Pro tab: download " + file;
+    a.setAttribute("aria-label", "Guitar Pro tab " + file + (page ? ": open" : ": download"));
+    a.title = page ? "Open the Guitar Pro tab" : "Download " + file;
     a.appendChild(guitarGlyph());
     return a;
   };
@@ -281,8 +284,8 @@
     if (e.pending) li.classList.add("pending");
     if (!readOnly) {
       const grip = button(null, "grip", null, "Move " + title + ", " + e.n + " of " + total +
-        ": drag it, or press ↑ or ↓");
-      grip.title = "Drag it to its place, or press ↑ or ↓";
+        ": drag, or press ↑ or ↓");
+      grip.title = "Drag it, or press ↑ or ↓";
       const dots = el("span", null, "⠿");
       dots.setAttribute("aria-hidden", "true");
       grip.appendChild(dots);
@@ -311,12 +314,12 @@
       const whose = e.own ? where + ", its own version" : where + " here";
       if (readOnly || !e.at) {
         const chip = el("span", "plays", where);
-        chip.title = e.own ? "As its own version plays it" : "Where this songbook plays it";
+        chip.title = e.own ? "Its own version" : "Where this songbook plays it";
         slot.appendChild(chip);
       } else {
         const chip = button(where, "plays" + (e.own ? "" : " set"), (ev) => edit(lineOf(ev), e),
-          title + " plays in " + whose + ": change it");
-        chip.title = "Where this songbook plays it: its key, mode, capo and instrument";
+          title + " plays in " + whose + ": change");
+        chip.title = "Key, mode, capo and instrument here";
         chip.setAttribute("aria-expanded", "false");
         if (e.pending) chip.disabled = true;
         slot.appendChild(chip);
@@ -331,8 +334,8 @@
     if (!readOnly) {
       const act = el("div", "set-act");
       if (e.get && server) {
-        const get = button("Get it", "btn small set-get", (ev) => getOne(lineOf(ev), e), "Get " + title + " now");
-        get.title = "Looks it up now, as caracole get does, then makes the songbook again";
+        const get = button("Fetch", "btn small set-get", (ev) => getOne(lineOf(ev), e), "Fetch " + title);
+        get.title = "Fetches it, as caracole get does, then remakes the songbook";
         act.appendChild(get);
       }
       li.appendChild(act);
@@ -373,7 +376,7 @@
       const grip = li.querySelector(".grip");
       const title = li.querySelector("h3") ? li.querySelector("h3").textContent : "";
       if (grip) grip.setAttribute("aria-label", "Move " + title + ", " + (i + 1) + " of " + shown.length +
-        ": drag it, or press ↑ or ↓");
+        ": drag, or press ↑ or ↓");
     });
   };
   let moving = 0;  // a drag, or ↑ and ↓ waiting to be sent: the set list isn't drawn again under it
@@ -416,7 +419,7 @@
     const setting = "--key G --mode dorian --capo 0";  // before "--", when the names need it
     const names = shellNames(b.name, song);
     const box = el("div", "book-commands");
-    box.appendChild(el("p", "hint", "This page changes nothing: where caracole runs, these do (or edit songbooks.toml):"));
+    box.appendChild(el("p", "hint", "This page changes nothing. Where caracole runs, these do (or edit songbooks.toml):"));
     const list = el("ul", "commands");
     for (const [what, command] of [
       ["Add a song", "caracole songbook add " + shellNames(b.name, "ARTIST - TITLE")],
@@ -448,16 +451,16 @@
       const go = el("button", "btn small", label);
       go.type = "button";
       go.disabled = true;
-      go.title = "Its files come once it is made.";
+      go.title = "Its files come once it's made.";
       return go;
     };
     const parts = links.length ? links : coming ? listOf(shelf.fileLabels).map((label) => soon(String(label)))
-      : [el("p", "hint", b.failed ? "Not made: + New songbook can make it again."
-        : b.pending ? "Its files come once it is made."
-        : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
+      : [el("p", "hint", b.failed ? "Not made. + New songbook makes it again."
+        : b.pending ? "Its files come once it's made."
+        : "Not made yet: caracole render or caracole songbook render makes its files.")];
     if (b.failed && !links.length) {
       const name = b.name;
-      parts.push(button("Forget it", "btn small book-forget", () => {
+      parts.push(button("Forget", "btn small book-forget", () => {
         letGo(name);
         const li = Array.from(lines.children).find((x) => x.dataset.book === name);
         if (li) li.remove();  // gone at your tap: nothing says so where it was
@@ -479,7 +482,7 @@
     }
     if (was && gone.has(was)) parts.push(was);
     if (toGet && server && !readOnly) {
-      const label = toGet === 1 ? "Get the missing song now" : "Get the " + toGet + " missing songs now";
+      const label = toGet === 1 ? "Fetch the missing song" : "Fetch the " + toGet + " missing songs";
       if (coming) {
         const box = el("div", "get-missing");  // as the form will hold it
         box.appendChild(soon(label));
@@ -490,7 +493,7 @@
         form.setAttribute("action", "/songbook/get");
         const go = el("button", "btn small", label);
         go.type = "submit";
-        go.title = "Looks each one up now, as caracole get does, then makes the songbook again";
+        go.title = "Fetches each, as caracole get does, then remakes the songbook";
         form.appendChild(go);
         parts.push(form);
       }
@@ -521,7 +524,7 @@
     const box = el("input");
     box.type = "checkbox";
     box.required = true;
-    sure.append(box, document.createTextNode(" Delete it, and the files caracole made of it"));
+    sure.append(box, document.createTextNode(" Delete it and the files we made of it"));
     const drop = el("button", "btn small", "Delete " + name);
     drop.type = "submit";
     del.append(sure, drop);
@@ -588,7 +591,7 @@
     book.dataset.songbook = b.name;
     showTitle(b.name);
     book.querySelector(".book-meta").textContent = metaOf(b)
-      .replace(/ · changed .*| · not made yet| · on its way| · couldn't be made/, "");
+      .replace(/ · made .*| · not made yet| · on its way| · not made/, "");
     drawFiles(b, readOnly);
     if (!moving) drawSet(b, readOnly);
     const adder = book.querySelector(".add-song");
@@ -805,7 +808,7 @@
       });
     }
     const actions = el("div", "actions");
-    const go = el("button", "btn small primary", "Play it here");
+    const go = el("button", "btn small primary", "Play here");
     go.type = "submit";
     actions.appendChild(go);
     if (!e.own) {
@@ -820,7 +823,7 @@
       if (chip) chip.focus();
     }));
     form.appendChild(actions);
-    if (keyless) form.appendChild(el("p", "hint", "No key caracole can read in its sheet: its capo alone."));
+    if (keyless) form.appendChild(el("p", "hint", "No key we can read in its sheet: capo only."));
     const close = () => {
       form.remove();
       li.classList.remove("editing");
@@ -1035,7 +1038,7 @@
     input.type = "search";
     input.id = "add-q";
     label.htmlFor = input.id;
-    input.placeholder = "Your songs, or any song the indexes have";
+    input.placeholder = "Your songs, or any the indexes have";
     input.autocomplete = "off";
     input.setAttribute("autocapitalize", "off");
     input.setAttribute("autocorrect", "off");
