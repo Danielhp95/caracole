@@ -14,8 +14,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import kotlinx.serialization.json.JsonArray
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 /** :server's milestone-5 and 6 declarations (skeleton-m5m6's): the phone's own job kinds and their words, the neutral
@@ -38,15 +38,15 @@ class M6SkeletonTest {
         for (kind in PhoneKinds.ALL.values) assertEquals(kind.kind + ":", kind.key)
     }
 
-    @Test fun theSongbooksSeamsAreNeutralUntilTheirLanesLand() {
+    @Test fun theSongbooksSeamsAreTheirLanesOnceTheyLand() {
         TestDb.fresh(tmp.root).use { database ->
             val store = LibraryStore(File(tmp.root, "library"))
-            database.read { db ->
-                val pages = SongbookPagesImpl(database, store)
+            database.writeBlocking { db ->
+                val pages = SongbookPagesImpl(database, store, null) { "build" }
                 assertEquals(SongbookStats(), pages.render(db, null))
-                // The lookup's songbooks stage reaches none of milestone 6's code while the pages are neutral.
-                assertSame(SongbookPages.NONE, pages.seam)
-                assertNull(SongbookSection.data(db, store))
+                // The lookup's songbooks stage makes the songbooks' pages (songbook-entries).
+                assertSame<SongbookPages>(pages, pages.seam)
+                assertEquals(JsonArray(emptyList()), SongbookSection.data(db, store, null, null)!!["books"])
             }
         }
         assertEquals(Version(), Entry("A - T", "T", "A").version)

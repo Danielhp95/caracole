@@ -33,7 +33,9 @@ data class AppConfig(val csrf: String, val secret: String, val allowed: Set<Stri
  *   then `under` one; then [stubs] alike: a stub answers only where no module does), a script-only one checked as a
  *   write and for the token header (403), else a library file ([files]; 404); a POST: its route (404), the
  *   cross-origin check (403), a form (415), no longer than the route's limit (413), at most 20 fields, UTF-8 (400),
- *   the form token (403, which tells the page's script to reload); any other method 405.
+ *   the form token (403, which tells the page's script to reload); a `json` or `bytes` route's body (Route.body) its
+ *   kind's ([document]: the token in its header, 403; its content type, 415; its limit, 413; JSON, 400); any other
+ *   method 405.
  * - A route's [Refused] is the message page, whose data, `{"error": …}` (and `"reload": true`), a page's script
  *   gets instead (Accept: application/json), with its status; a job queued ([queued]) is a 303 to the browser and
  *   its view to the script, as 200.
@@ -51,9 +53,12 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             val found = LinkedHashMap<Pair<String, String>, Route>()
             for (route in routes) {
                 require(route.method == "GET" || route.method == "POST") { "${route.method} ${route.path}: GET or POST" }
-                require(if (route.method == "GET") route.get != null else route.post != null) {
-                    "${route.method} ${route.path} has no answer"
-                }
+                require(route.body in Route.BODY_TYPES) { "${route.method} ${route.path}: a body of form, json or bytes" }
+                require(when {
+                    route.method == "GET" -> route.get != null
+                    route.body == Route.FORM -> route.post != null
+                    else -> route.document != null
+                }) { "${route.method} ${route.path} has no answer" }
                 require(found.put(route.method to route.path, route) == null) {
                     "${route.method} ${route.path} is answered twice ($what)"
                 }
@@ -156,6 +161,12 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             "POST" -> {
                 val route = routeFor("POST", path)
                     ?: return message(404, "Not here", "There's nothing to send to at this address.")
+                if (route.body != Route.FORM) {
+                    return when (val document = document(request, route)) {
+                        is Response -> document
+                        else -> route.document!!.answer(request, document)
+                    }
+                }
                 when (val form = form(request, route)) {
                     is Response -> form
                     else -> {
@@ -203,6 +214,35 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             return refused
         }
         return form
+    }
+
+    /**
+     * The body of a POST that isn't a form (web/app.py's `_document`): its bytes, or its JSON (PyJson.loads of its
+     * UTF-8, as json.loads reads it), or why it is refused: another site's (403); no form token in its header (403,
+     * with `reload`: a token older than the server, which its state gives again); another content type than its
+     * kind's (415); too long (413); JSON that can't be read (400).
+     */
+    private fun document(request: Request, route: Route): Any {
+        val headers = request.headers
+        if (!Security.crossOriginOk("POST", headers, headers["host"])) return message(403, "Refused", ANOTHER_SITE)
+        if (!Security.sameToken(headers[TOKEN_HEADER], config.csrf)) {
+            val refused = message(403, "Refused", "This is older than the server, or not from it: read its form token " +
+                                                  "again and try again.")
+            refused.data = JsonObject(refused.data.orEmpty() + ("reload" to JsonPrimitive(true)))
+            return refused
+        }
+        val type = Route.BODY_TYPES.getValue(route.body)
+        if (PyText.lower(PyText.strip((headers["content-type"] ?: "").substringBefore(';'))) != type) {
+            return message(415, "Not what it reads", "caracole reads only $type here.")
+        }
+        if (request.body.size > route.limit) return message(413, "Too long", "That is too long.")
+        if (route.body == Route.BYTES) return request.body
+        val text = PyText.utf8(request.body) ?: return message(400, "Not JSON", "That can't be read as JSON.")
+        return try {
+            PyJson.loads(text)
+        } catch (e: IllegalArgumentException) {
+            message(400, "Not JSON", "That can't be read as JSON.")
+        }
     }
 
     /** A library file (LibraryFiles: the phone's folder, then the mirror), else 404. */
