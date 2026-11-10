@@ -26,30 +26,31 @@ Key does, by the tonic's pitch class and the mode, so "Gb minor" finds "F#
 minor".
 
 The songs are dense lines (``resultRow``'s ``dense`` form, ROWS_SCRIPT's), a
-song a line on a laptop, about thirty to its screen, two lines a song on a
-phone. By artist, the order the page opens in, they are grouped under their
-artist's name, artists A to Z, each group's header saying how many of their
+song a row, on a laptop and on a phone, about twenty to a laptop's screen; on a phone a
+status a song needs (Needs review) is a row of its own under it. By artist, the order the page opens in, they
+are grouped under their artist's name, artists A to Z, each group's header saying how many of their
 songs you have, whatever the search or a filter leaves out ("Soda Stereo · you
 have 2"); by title or by when they came,
 they stand alone, each with its artist. A line holds the song's title, which
-opens its sheet (its viewer, else its PDF, else its text), its status when it
-needs something (Wanted, Needs review, Ignored: a found song says nothing), which
-sites have it, had nothing for it or weren't asked yet (``sites``, song_sites.py:
-a site's mark each, rows.js ``siteMarks``), what it holds, a glyph each (its sheet, a Guitar Pro file or a tab, a
-harmonica tab, its lyrics, a score: rows.js ``glyph``, read from its files and
-``instruments``), its key as a chip and its main action: Open, or, served, Fetch
-now or Pick the match. Everything else a song has is under its chevron, which
+opens its card as its chevron does, and right after it a button for each thing it holds to play from, none of
+them first (card.js ``plays``: its sheet, its Guitar Pro file, its text tab, its harmonica tab, its tabs of game
+music, a score: read from its files and ``instruments``), each opening it at once (its viewer, its harmonica tab's
+page, the Guitar Pro page, the file), its instrument's glyph marked with the sites its versions came from and
+counting them; its status when it needs something (Wanted, Needs review, Ignored: a found song says nothing), its
+key as a chip and, served, its main action, where it has one: Fetch now's download glyph, or Pick the match.
+Everything else a song has is under its chevron, which
 unfolds it in place as a card (library_assets/card.js): its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from; a tile for each thing it holds, read
-from its ``files``: its sheet, its Guitar Pro file or text tab, its harmonica tab,
-its lyrics, a score you filed, each with its formats as downloads (a harmonica tab with its
+from its ``files``, every one alike: its sheet, its Guitar Pro file, its text tab, its harmonica tab, its tabs of
+game music, its lyrics, a score you filed, each with its formats as downloads (a harmonica tab with its
 page beside it, ``harmonicaPage``: render.py's ``harmonica-N.html``, opens that page, its text a download) (the sheet's PDF
 exports among them, each file's ``version``) and its versions per source as chips,
 which open a drawer: Ultimate Guitar's (``versions``: those kept, the one and those
 beside it, sheet_versions.py's, each opening its viewer page, and those not kept
 counted), LaCuerda's (``lacuerdaVersions``), the auto sheet beside a human one
-(``autoSheet``), a source's files; its progressions, its MuseScore pages, its search
+(``autoSheet``), a source's files; which sites have it, had nothing for it or weren't asked yet (``sites``,
+song_sites.py: a site's mark each, rows.js ``siteMarks``); its progressions, its MuseScore pages, its search
 and buy links, Add to a songbook… (the Select mode, the song picked) and, served,
 Fetch again and Use LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda
 row of it: each the ``POST /lookup`` the lookup page sends for the song) and
@@ -76,7 +77,7 @@ Each file and link, and a site's song's line, shows where it came from (icons.py
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
 ``data:`` alone), else the site's lettered badge, or a glyph for the audio
 model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
-A song of yours says on its line what it holds instead. An auto sheet made from the audio caracole took from
+A song of yours' line marks each of its buttons with them instead. An auto sheet made from the audio caracole took from
 YouTube shows YouTube's on its files (``icons.kept_sources``), and its line's panel the video.
 
 The seam for lists the page doesn't make itself (the results of caracole
@@ -84,19 +85,19 @@ serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
 ``ROWS_STYLE`` as this page does, and gets each song's files from
 ``result_cards``): ``window.caracole.resultRow(result)`` returns a row
 element, to put in a ``<div class="rows">``, or with ``dense``, a line as a
-song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-holds`` or
-``.line-sources``, ``.line-key``, ``.line-action``, ``.line-more``), to put in a ``<div
-class="lines">``. ``result`` is a plain object, every field optional:
+song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-sources``,
+``.line-key``, ``.line-action``, ``.line-more``), to put in a ``<div class="lines">``.
+``result`` is a plain object, every field optional:
 
 - ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
   shows it filters (a funnel after the name), as a group's name is; a line shows its
   artist only where no artist's group holds it;
-- ``href``: what the title opens (the song's sheet, as its button does), the same way as
-  ``action``'s link; out of the Tab order, since the button says what it opens;
+- ``href``: what the title opens, the same way as ``action``'s link; out of the Tab order,
+  since the button says what it opens;
+- ``plays``, for a line: a Node put right after its title (a song of yours' buttons, one for
+  each thing it holds to play from: card.js ``plays``);
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…), or, for
-  a line, ``sources``, several, each marked once; or, for a song of yours, ``holds``, what it
-  holds (rows.js ``HOLDS``: "sheet", "auto", "ukulele", "guitar", "tab", "harmonica", "lyrics",
-  "score"), a glyph each named for a screen reader, in place of any mark;
+  a line, ``sources``, several, each marked once;
 - ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
 - ``status``, which its ``data-status`` gets; ``badges``: ``[{kind, text}]``,
   ``kind`` a badge class (found, wanted, review, auto…); ``facts``: a line of text;
@@ -172,7 +173,8 @@ run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
 request form sits under the results, filled in from the query (where they found nothing, once Request opens it).
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
-search of the sites as you type, a form to request a song, a "Fetch now" button on each wanted song, a "Remove"
+search of the sites as you type, a form to request a song, a Fetch now button (the download glyph) on each wanted
+song, a "Remove"
 button under each song's "⋯" (it counts down five seconds, with Undo, before it sends anything), and a
 CSP that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
