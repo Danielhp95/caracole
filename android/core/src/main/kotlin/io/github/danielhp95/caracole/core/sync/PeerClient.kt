@@ -16,10 +16,12 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 
-/** /api/peer/state, as the phone reads it. */
+/** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
-                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null) {
+                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
+                     val kept: Kept = emptyMap()) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
@@ -31,6 +33,10 @@ data class PeerState(val format: Int, val server: String?, val caracole: String,
     }
 }
 
+/** A site's index as `GET /api/sync/indexes` counts it: its newest read (null: never) and the tabs it tracks, the
+ * rows of its first table (index_transfer.tab_counts). */
+data class IndexCount(val read: String?, val tabs: Long)
+
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
 class PeerError(message: String, val status: Int? = null, cause: Throwable? = null) : Exception(message, cause)
@@ -40,7 +46,7 @@ class PeerError(message: String, val status: Int? = null, cause: Throwable? = nu
  * nothing to the network): one request at a time, through mirror's [Http] (no redirect followed, no cookie).
  *
  * - **Reads** (`Accept: application/json`): [state], with a 60 s read timeout (a library's every song is read to
- *   answer); [unit], its document checked to be of format 2 and of the id asked; [file], its bytes checked against
+ *   answer); [unit], its document checked to be of [Units.FORMAT] and of the id asked; [file], its bytes checked against
  *   the SHA-256 the unit gives; [job], the computer's request as `GET /api/jobs/<id>` gives it.
  * - **The push**: [pushNew], [pushFile] and [push], each with the form token in the header `X-Caracole-Form-Token`
  *   (caracole serve's `json` and `bytes` routes) and no Origin or Sec-Fetch-Site, which a non-browser never sends. A
@@ -186,6 +192,26 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         }
     }
 
+    /** GET /api/sync/indexes: each of the computer's site indexes, its newest read and its tabs, by site; a PeerError
+     * for a computer that doesn't count them (404: older than the app) or an answer the phone can't read. */
+    fun indexes(): Map<String, IndexCount> {
+        val answer = get(SYNC_INDEXES_PATH)
+        if (answer.status == 404) {
+            throw PeerError("The caracole at $address doesn't count its indexes: it may be older than the app.", 404)
+        }
+        if (answer.status != 200) throw refused(answer)
+        val sites = ((answer.json() as? JsonObject)?.get("indexes") as? JsonObject)
+            ?: throw PeerError("The caracole at $address answered its indexes with something the phone can't read.", 200)
+        return sites.entries.associateTo(LinkedHashMap()) { (site, value) ->
+            val counted = value as? JsonObject
+            val tabs = (counted?.get("tabs") as? JsonPrimitive)?.takeIf { !it.isString }?.contentOrNull?.toLongOrNull()
+            if (counted == null || tabs == null) {
+                throw PeerError("The caracole at $address answered its indexes with something the phone can't read.", 200)
+            }
+            site to IndexCount(Documents.text(counted["read"]), tabs)
+        }
+    }
+
     /** GET /api/peer/unit: the unit's document (its `unit_document`'s `"unit"`), null for a unit it hasn't got. */
     override fun unit(id: String): JsonObject? {
         val answer = get(UNIT_PATH + "?id=" + Documents.quote(id))
@@ -287,6 +313,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_PATH = "/peer/push"
         const val INDEX_PUSH_PATH = "/peer/index"
         const val JOBS_PATH = "/api/jobs/"
+        const val SYNC_INDEXES_PATH = "/api/sync/indexes"
         const val TOKEN_HEADER = "X-Caracole-Form-Token"
 
         /** peer_sync.PEER_TIMEOUT: a caracole reads every song of its library to answer its state. */

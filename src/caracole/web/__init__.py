@@ -45,7 +45,9 @@ A small server from the standard library (``http.server``), in these parts:
   caracole wrote links to, as the server sends each), peer_routes.py
   (``/api/peer/``, this library's units for another caracole to compare and
   take, and ``POST /peer/pull``, its units taken: peer_sync.py), sync_routes.py (the Sync tab: another
-  caracole's library compared with this one, and ``caracole peer sync`` queued with your choices) and youtube_routes.py (a
+  caracole's library compared with this one, and ``caracole peer sync`` queued with your choices),
+  sync_file_routes.py (Export, this library's ``.caracole`` file made and sent once, and Import a file, one sent
+  here in parts and staged for ``caracole peer import``: peer_file.py, peer_import.py) and youtube_routes.py (a
   song's auto sheet from a YouTube video pasted on the library page: ``caracole
   youtube --sheet`` queued).
   pages.py: the pages it writes itself (a song's picker, Remove's question, errors).

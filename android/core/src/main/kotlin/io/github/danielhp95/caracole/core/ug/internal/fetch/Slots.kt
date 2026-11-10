@@ -136,13 +136,14 @@ internal object Slots {
     }
 
     /** `_keep_text`: a sheet or tab kept, the text without UG's markup and the version's JSON with the raw content
-     * and the page's `meta`, where UG gives the capo. */
+     * and the page's `meta`, where UG gives the capo; its `version` UG's raw record without [UgFetch.KEPT_WITHOUT]. */
     fun keepText(run: SongRun, versionId: Long, page: UgTabPage, names: Pair<String, String>, rank: Int = 1) {
         val content = page.content!!
         val url = Versions.get(run.db, versionId)!!.url
         keep(run, versionId, names.first, UgPage.stripMarkup(content).toByteArray(Charsets.UTF_8), rank)
         val body = JsonObject(linkedMapOf(
-            "version" to page.tab.raw, "content" to JsonPrimitive(content), "url" to JsonPrimitive(url),
+            "version" to JsonObject(page.tab.raw.filterKeys { it !in UgFetch.KEPT_WITHOUT }),
+            "content" to JsonPrimitive(content), "url" to JsonPrimitive(url),
             "meta" to page.meta,
         ))
         keep(run, versionId, names.second, Pages.keptJson(body), rank)

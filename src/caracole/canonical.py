@@ -15,9 +15,10 @@ module by tests/conformance/vectors/canonical/).
   and return alone; no raw control character in a string; no ``01``, ``+1``, ``.5``, ``1.`` or BOM; no integer of
   more than 4300 digits; NaN and the infinities read; the last of a repeated key wins), but a non-integral number
   kept as its literal (``Literal``), never a float; a ValueError when the text isn't JSON.
-- ``stored_hash(text)``, H(text), for ``versions.raw`` and ``songs.lyrics_json``: None for None; D of what ``read``
-  reads; else (not JSON, or not canonicalizable) the SHA-256 of the text's own bytes,
-  ``text.encode("utf-8", "surrogatepass")``.
+- ``stored_hash(text, without=())``, H(text), for ``versions.raw`` and ``songs.lyrics_json``: None for None; D of
+  what ``read`` reads, with the members ``without`` names taken out of it when it is an object (UG's ratings and
+  votes of a version's raw record: ``peer_sync.VOLATILE_RAW``); else (not JSON, or not canonicalizable) the SHA-256
+  of the text's own bytes, ``text.encode("utf-8", "surrogatepass")``.
 
 The standard library alone.
 """
@@ -29,7 +30,7 @@ import json
 import math
 import re
 from json.encoder import encode_basestring
-from typing import Any
+from typing import Any, Iterable
 
 MAX_EXPONENT = 1000  # a literal's written exponent beyond ±this: not canonicalizable
 MAX_DEPTH = 512  # arrays and objects nested deeper: not canonicalizable (json.loads's own limit is its C stack)
@@ -162,11 +163,17 @@ def read(text: str) -> Any:
     return json.loads(text, parse_float=Literal)
 
 
-def stored_hash(text: str | None) -> str | None:
-    """H(text): D of the JSON ``text`` holds, else the SHA-256 of its own bytes; None for None."""
+def stored_hash(text: str | None, without: Iterable[str] = ()) -> str | None:
+    """H(text): D of the JSON ``text`` holds, else the SHA-256 of its own bytes; None for None. ``without`` names
+    members of an object the text holds that are no part of its hash: taken out of it before D (an object's own
+    members alone, never one within them; a text that holds no object is hashed whole)."""
     if text is None:
         return None
+    drop = frozenset(without)
     try:
-        return digest(read(text))
+        value = read(text)
+        if drop and isinstance(value, dict):
+            value = {key: item for key, item in value.items() if key not in drop}
+        return digest(value)
     except (ValueError, RecursionError):  # not JSON (NotCanonical among them), or deeper than json.loads reads
         return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()

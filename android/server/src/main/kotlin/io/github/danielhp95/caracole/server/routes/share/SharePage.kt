@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.routes.share
 
 import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.share.ShareLinks
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.LibraryName
 import io.github.danielhp95.caracole.server.http.MessagePage
@@ -10,13 +11,14 @@ import io.github.danielhp95.caracole.server.http.Response
  * What the page of a song shared to the app shows ([SharePage]): the app that shared it ([app], null for one caracole
  * doesn't know), what it sent ([sent], each extra's text, for the owner to see), the text that names the song
  * ([said]), the names read from it ([names], read_names'; null when they can't be), the link alone ([link]) when it
- * names none, whether the names were typed ([typed], Edit's), the best match ([best]) and the others ([others]), a
- * note on what the phone could search ([note]), and the Edit form's fields ([artist], [title]).
+ * names none, whether the names were typed ([typed], Edit's), what the link's service said of it ([read], asked once:
+ * ShareLinks; null for a link of no service caracole asks, or none), the best match ([best]) and the others
+ * ([others]), a note on what the phone could search ([note]), and the Edit form's fields ([artist], [title]).
  */
 internal data class ShareView(
     val app: String?, val sent: List<Pair<String, String>>, val said: String?, val names: Pair<String, String>?,
     val link: String?, val typed: Boolean, val best: SongLine?, val others: List<SongLine>, val note: String?,
-    val artist: String, val title: String,
+    val artist: String, val title: String, val read: ShareLinks.Read? = null,
 )
 
 /**
@@ -38,7 +40,7 @@ internal object SharePage {
 
     private fun body(v: ShareView, csrf: String): String = buildString {
         append(read(v))
-        if (v.sent.isNotEmpty()) append(sent(v))
+        if (v.sent.isNotEmpty() || v.read is ShareLinks.Read.Named) append(sent(v))
         val best = v.best
         if (best != null) {
             append("<h2 class=\"sub\">The best match</h2>\n<ul class=\"readings\">\n")
@@ -57,11 +59,21 @@ internal object SharePage {
         append("<p class=\"confirm\"><a class=\"btn\" href=\"$CANCEL\">Cancel</a></p>\n")
     }
 
-    /** What caracole read, or why it read nothing. */
+    /** What caracole read, or why it read nothing: from the text, or from the link's service, asked once. */
     private fun read(v: ShareView): String {
         val sender = v.app ?: "The app"
+        val asked = v.read
+        val link = v.link?.let { "<code>${esc(it)}</code>" }.orEmpty()
         val text = when {
             v.names != null && v.typed -> "caracole searched for <strong>${esc(dashed(v.names))}</strong>."
+            asked is ShareLinks.Read.Named && v.names != null ->
+                "Read from ${esc(asked.service.source)}: <strong>${esc(dashed(v.names))}</strong>."
+            asked is ShareLinks.Read.Named -> "Read from ${esc(asked.service.source)}: <strong>“${esc(v.said.orEmpty())}”" +
+                "</strong>, but caracole can't tell who its artist is: edit the names if they're wrong."
+            asked is ShareLinks.Read.NoSong -> "$sender shared a link that names no song ($link): ${esc(asked.why)}. Type " +
+                "the artist and the title."
+            asked is ShareLinks.Read.NotRead -> "$sender shared a link alone ($link), and caracole couldn't read it: " +
+                "${esc(asked.why)}. Type the artist and the title, or share it again later."
             v.names != null -> "caracole read <strong>${esc(dashed(v.names))}</strong>."
             v.said != null && v.typed -> "caracole searched for <strong>“${esc(v.said)}”</strong>, but can't tell " +
                 "who its artist is: type both names."
@@ -75,10 +87,15 @@ internal object SharePage {
         return "<p class=\"lede\">$text</p>\n"
     }
 
-    /** What the app sent, folded: each extra as it came. */
+    /** What the app sent, folded: each extra as it came, and what the link's service said of it. */
     private fun sent(v: ShareView): String = buildString {
         append("<details class=\"picker\"><summary>What ${esc(v.app ?: "the app")} sent</summary>\n<ul class=\"plan\">\n")
         for ((what, text) in v.sent) append("<li>${esc(what)}: <code>${esc(text)}</code></li>\n")
+        (v.read as? ShareLinks.Read.Named)?.let { named ->
+            val source = named.service.source.replaceFirstChar { c -> if (c in 'a'..'z') c - 32 else c }
+            val said = if (named.video) "${named.title}, by ${named.artist}" else "${named.artist} – ${named.title}"
+            append("<li>${esc(source)}: <code>${esc(said)}</code></li>\n")
+        }
         append("</ul>\n</details>\n")
     }
 

@@ -86,7 +86,8 @@ VIEWS = [
     sync_view("running", {"compare": ("done", "8 differences"), "take": ("done", "took 3"),
                           "give": ("running", "4 changes")}),
     sync_view("done", {"compare": ("done", "8 differences"), "take": ("done", "took 3"), "give": ("done", "gave 4"),
-                       "agree": ("done", "312 units the two agree on")}, UNITS),
+                       "agree": ("done", "312 units the two agree on"),
+                       "index": ("skipped", "no index is newer on either side")}, UNITS),
 ]
 
 
@@ -272,7 +273,7 @@ def test_the_tab_compares_draws_by_kind_waits_for_every_conflict_and_syncs_with_
         fake.at = 1
         assert page.wait("document.getElementById('sync-job-line').textContent === 'Taking what changed there…'")
         assert page.js("Array.from(document.querySelectorAll('#sync-steps .step-chip')).map((c) => c.textContent)") == [
-            "✓ Compare: done", "Take: running", "Give: waiting", "Agree: waiting"]
+            "✓ Compare: done", "Take: running", "Give: waiting", "Agree: waiting", "Indexes: waiting"]
         assert page.js("document.getElementById('sync-job-detail').textContent") == "3 changes"
         assert page.js("document.querySelector('#sync-steps [aria-current=step]').textContent") == "Take: running"
         assert page.js("document.getElementById('sync-reload').hidden") is True
