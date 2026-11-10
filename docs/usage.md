@@ -108,6 +108,18 @@ delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 enabled = true                    # false: suggestions come without thumbnails
 budget = 20
 delay = [0, 0]                    # no wait: right after the search
+[providers.itunes]                # Apple's catalogue: an Apple Music link shared to the phone, one lookup
+enabled = true                    # false: the phone asks Apple nothing; the link is said to name no song it read
+lookup_requests = 1               # a shared link's requests, at most; the phone alone asks it, at a lookup's pace
+[providers.spotify]               # a Spotify link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a spotify.link short link's hop, then the page
+[providers.tidal]                 # a TIDAL link shared to the phone: the track's page
+enabled = true
+lookup_requests = 2               # a tidal.link short link's hop, then the page
+[providers.youtube-oembed]        # a YouTube or YouTube Music link shared to the phone: its oEmbed, never yt-dlp
+enabled = true
+lookup_requests = 1
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -203,7 +215,11 @@ other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
 `harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
-the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
+the library page suggests for a search), and `itunes`, `spotify`, `tidal` and `youtube-oembed`, the
+services the phone asks once about a link shared to it that names no song (your choice of 10 November
+2026; android/README.md, "Sharing a song from a music app"): no run or command of the computer asks
+them, so they have no `budget` and no line in the to-do page's Provider health, and the phone takes
+their switches and lookup settings at a sync. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's and its image host's go unused: a lookup runs no yt-dlp; Megalobiz's `lookup_delay` is
 0.5–0.75 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: caracole's
@@ -234,11 +250,13 @@ robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image 
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
 video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
 two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
-gametabs.net, YouTube and YouTube's image host can be turned
+gametabs.net, YouTube, YouTube's image host and the phone's four services of a shared link can be turned
 off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
+`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
+`[providers.spotify]`, `[providers.tidal]` or `[providers.youtube-oembed]`, caracole sends
 that site nothing, the nightly run skips
-its step, and the to-do page's Provider health says it is off. The other three
+its step, and the to-do page's Provider health says it is off (the phone's services have no step and no line there:
+the phone's share page says it). The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
 [Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
@@ -2358,39 +2376,41 @@ It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
 pinyin), with how many of their songs you have ("Soda Stereo · you have 2",
 all of them, whatever the search or a filter leaves out), and their songs A to
-Z under it. A line is a song, one line each on a laptop, 24 px tall with a
-mouse (its buttons no smaller than a pointer needs): read down under the
-search box, a laptop's screen holds twenty-odd lines with their artists'
-names. On a phone a found song is one line too, its title, its key and its
-button, and a song that needs something says so under its title. A line has the
-song's title, which opens its sheet (the sheet viewer, see [The sheet
-viewer](#the-sheet-viewer), else the PDF, else the text); its status when it
-needs something, one word: Wanted, Needs review when caracole isn't sure of the
-match, or Ignored (a found song, nearly every one, says nothing); which sites
-have the song, each site that is on a small mark of its own (Ultimate Guitar,
-LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net, MuseScore, and
-YouTube for a song caracole takes the audio of): in its colours where the site
-has it (MuseScore's a possible match, by the title), grey where it was asked and
-had nothing, fainter on a dashed edge where it wasn't asked yet, its tooltip
-saying which ("Ultimate Guitar: nothing for it (looked 2026-10-16)"), so a song
-Ultimate Guitar's index has no chords for, once marked "Not found", shows where
-its harmonica tab came from (every mark whole, in one row, but four a row in a
-window 720 to 900 px wide, where the line is two rows of them tall, so the
-title keeps its room; under the title on a phone); what it holds, a small icon each, named
-by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
-own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
-Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab", from
-Ultimate Guitar or gametabs.net), a harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
-key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
-see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
-text), or, on the page `caracole serve` serves, Fetch now for a wanted song
-(Pick the match for one that needs review first, and Removing… while caracole
-removes it); and a chevron, which unfolds the song in place, turned while it is
-open. An auto sheet says so by its icon, by its button's tooltip, "Auto sheet
-PDF", and to a screen reader by the button's name, "Open PDF of Creep by
-Radiohead, an auto sheet". Where each file came from, each site's own icon
-says beside the file under the chevron (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file
-gtptabs.com's: see [Where each file came from](#where-each-file-came-from)).
+Z under it. A line is a song, one row each, on a laptop and on a phone: read
+down under the search box, a laptop's screen holds about twenty lines with their
+artists' names, and a song that needs something says so under its title on a
+phone. A line has the song's title, then, right after it, a button for each
+thing the song has to play from, none of them first: its **chord sheet** (its
+own colour for an auto sheet, a ukulele for Ultimate Guitar's Ukulele Chords),
+its **Guitar Pro** file, its **guitar tab** (Ultimate Guitar's text tab), its
+**harmonica tab**, its **game music tab** (gametabs.net's) and a **score** you
+filed. A tap on one opens that one at once: the sheet viewer (see [The sheet
+viewer](#the-sheet-viewer), else the PDF, else the text), the Guitar Pro file
+in the browser when `caracole serve` shows it there (else a download), the
+harmonica tab's page, the text, the score. Each shows its instrument, the
+marks of the sites its versions came from at its foot (two at most, the one in
+use first), and how many versions the card lists of it at its corner when more
+than one; its name says all of it, to a screen reader and as a tooltip ("Open
+the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
+file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
+title leaves too little room for them, they wrap to a second row beside it, and
+a long title is cut short first. The lyrics have no button: their tile, under
+the chevron, says where they came from. Then its status when it needs
+something, one word: Wanted, Needs review when caracole isn't sure of the match,
+or Ignored (a found song, nearly every one, says nothing); its key, in a small
+box ("Am"; a screen reader hears "Key A minor (from the tab)", see [The song's
+key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
+**Fetch now**, a download icon in the accent, which looks the song up then and
+not before (Pick the match for one that needs review first, and Removing…
+while caracole removes it); and a chevron, which unfolds the song in place,
+turned while it is open. The title opens it too. A song you have has no
+button to fetch it again on its line: **Fetch again** is in its card. From
+720 px the line is one row of columns, the title and its buttons first, then
+the artist (sorted by title or by when added), the status, Fetch now, the key
+and the chevron, so that the keys and the chevrons line up. Where each file
+came from, each site's own icon says beside the file under the chevron too
+(the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
+[Where each file came from](#where-each-file-came-from)).
 
 Its chevron opens the song in place, as a card over the list, which the
 chevron closes again. At its top, its key in words and where it came from ("Key
@@ -2403,24 +2423,24 @@ YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
 it; and, served, Look in the index.
 
-Then what you play from it, a tile each (from 720 px a row each: its name and version, the source it
-came from with that source's mark, its formats at the end), in this order: its **Chord sheet**
-(the accent's; **Auto sheet** in its own colour when that is its only sheet,
+Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
+version, the source it came from with that source's mark, its formats at the end), in the order of the
+line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
-file (**Guitar tab** when it has a text tab and no Guitar Pro file), its
+file, its **Guitar tab** (a text tab), its
 **Harmonica tab**, its **Game music tab** (gametabs.net's, `gametab-N.txt`), its
 **Lyrics** and a **Score** you filed. A tile's body opens
 what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
-the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
+the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
 in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's
 PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text
 and ChordPro, then its PDF exports, each by its version (`PDF · G
 Dorian, capo 0`: see `caracole render --version` and Export PDF of this
-version); a Guitar Pro file's, and the text tab; the lyrics' Text and Timed
+version); a Guitar Pro file's; the text tab's; the lyrics' Text and Timed
 (.lrc); each score's format. A tile with more than one version is drawn as a
 small stack. A Guitar Pro or Power Tab file, and a score but its PDF, downloads
 under its song's name (`Eagles - Hotel California (2).ptb`).
@@ -2457,6 +2477,15 @@ ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
 file, Open where the page shows it, and Download. A harmonica tab with its page
 beside it opens that page, from its tile and its row, its text a download.
 
+Under the tiles, **On the sites**: each site that is on, a small mark of its own
+(Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net,
+MuseScore, and YouTube for a song caracole takes the audio of): in its colours
+where the site has the song (MuseScore's a possible match, by the title), grey
+where it was asked and had nothing, fainter on a dashed edge where it wasn't
+asked yet, its tooltip saying which ("Ultimate Guitar: nothing for it (looked
+2026-10-16)"), so a song Ultimate Guitar's index has no chords for, once marked
+"Not found", shows where its harmonica tab came from.
+
 Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
 your songs with that progression (below): four show, a long string of numerals
 cut short in its chip (the whole of it in its tooltip), the rest behind **+2**;
@@ -2467,10 +2496,8 @@ foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
 songbook…** (see Songbooks, below), for a song the page had when it was loaded
 (one that Get it or a request brought since has it once the page is loaded
 again); and at the far end a **⋯** that opens info.json, a quiet download, and,
-served, **Remove**, in red (Escape, or a press elsewhere, closes it). When Fetch
-now has the line's button, the sheet's tile opens it all the
-same, as its title does. A line drawn again (a request over) keeps its card
-open, its drawer closed.
+served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
+drawn again (a request over) keeps its card open, its drawer closed.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
@@ -2538,7 +2565,7 @@ tap: a Chord sheet (a human or an auto sheet), a Guitar tab (a Guitar Pro
 file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
 (a harmonica tab) or a Score you filed, each with how many songs have it
 (one no song has, greyed, can't be tapped), and while one is on, each line's
-icon of it is in the accent (the group shows once a song has something but a
+button of it is filled with the accent (the group shows once a song has something but a
 chord sheet; the search's rows of the sites stay, whatever they are for); its
 **Key**, there once a song has a key, is Any, Major or Minor, then the twelve
 tonics in circle-of-fifths order (C G D A E B F♯ D♭ A♭ E♭ B♭ F, each named
@@ -2570,9 +2597,9 @@ sites have too, under the same artist headers, with Get it, and a form to
 request a song by name (see below).
 
 On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
-at least 44 pixels each way, for a thumb, and so are each line's button and
-chevron (its title, beside them, is as tall): a phone shows about eleven songs to a
-screen. With a mouse they keep their compact sizes. Fields, menus and the
+at least 44 pixels each way, for a thumb, and so are each line's buttons, its
+Fetch now and its chevron (its title, beside them, is as tall): a phone shows
+about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
 their soft border, and so does the search box. The pages `caracole serve`
@@ -2587,9 +2614,9 @@ toolbar beside the search has no button for it. It puts a box at the start of
 each song's line: tick songs in the order they go in the songbook (each box
 shows its place, and a screen reader says it: "Pick Creep by Radiohead, 2nd").
 A tap anywhere on a line ticks it, or unticks it: while you select, each line's
-button and chevron are put away, a request's line still says how it goes but
-without its links (Details), and a tap on its title opens nothing, so a tick
-never opens a file by mistake. Search, filter and sort between ticks; the bar
+Fetch now and chevron are put away, a request's line still says how it goes but
+without its links (Details), and a tap on its title or its buttons opens nothing,
+so a tick never opens a file by mistake. Search, filter and sort between ticks; the bar
 at the bottom counts them, `3 selected`. Give the songbook a name and tap Make
 songbook, or pick a songbook there is in the menu (instead of New songbook) to
 Add to it; Clear unticks them all. The × at the start of the bar leaves the
@@ -2734,6 +2761,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   muted, two lines of it; **More** opens the rest, and works without
   JavaScript too. Printed, all of it prints. Chords or a verse before the
   first section are the song, and nothing is folded then.
+- **Printed** (the browser's Print), a sheet, a songbook's song and a
+  harmonica tab's page print in the light colours, even from a screen in dark
+  mode, with a 15 mm margin on every side of the paper, and without the bar,
+  the settings or the links.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
   window to show it whole in two columns is shown in two, side by side; a
@@ -4016,9 +4047,9 @@ the library, sent as they are: they carry no badge.
   names, or to a song's title (as [caracole search](#caracole-search) chooses
   them), each comes first as an artist's band of its own, "Stephen Foster · 7
   songs on UG · you have 1", a song suggested a line in its artist's band, as
-  the search's lines are (its title, its sites' marks, and Get it where Open
-  is, which looks it up as a result's Get it does; your own line, which opens
-  it, for a song you have), your songs of theirs under it as an artist's are,
+  the search's lines are (its title, its sites' marks, and Get it, which looks
+  it up as a result's Get it does; your own line, its buttons opening what it
+  holds, for a song you have), your songs of theirs under it as an artist's are,
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
   index holds, or the offer to read their page), with no request; what a
@@ -4078,7 +4109,10 @@ the library, sent as they are: they carry no badge.
   below); ↓ goes from the box to the first result's button. The address keeps
   it (`#q=wonderwall&all=1`).
 
-  **Get it** on a line looks the song up at once: as Ultimate Guitar's song
+  **Get it**, the download icon at a line's end (named "Get Oasis - Wonderwall
+  from Ultimate Guitar" to a screen reader and as a tooltip; **Get it again**
+  for a song of yours the page has no line of, **Add again** for one you
+  removed), looks the song up at once, and nothing before it is pressed: as Ultimate Guitar's song
   when the line has one, as `caracole get --ug …` does, recording the pick in
   overrides.toml (`[match]`), so nothing waits for a review, and its
   gtptabs.com stage downloads the Guitar Pro file for a song that has none;
@@ -4094,12 +4128,12 @@ the library, sent as they are: they carry no badge.
   line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
   done"), with the lookup's steps as chips under it, as on a song's line
   (below), and once the sheet is kept the line is the song's own line, yours,
-  its sheet its button: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
+  its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
-  song of yours whose title opens its sheet keeps opening it; and on the file,
-  with no caracole serve, no name gets anything. **An artist's name searches
+  song of yours' title opens its card; and on the file, with no caracole serve,
+  no name gets anything. **An artist's name searches
   for them**: a click on "C Tangana", over the results, over your songs in the
   list, or beside a line's title, puts their name in the search box and
   searches it as typing it would (their group first, with their songs, as a
@@ -5386,7 +5420,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
-      sheet.json            the same version as the source gave it
+      sheet.json            the same version as the source gave it (Ultimate Guitar's without its rating and votes)
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
       sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
@@ -5822,7 +5856,7 @@ different things, is a conflict for you to settle. Before then, a unit on one si
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
 
-Two caracoles sync in one format, format 2, which every answer of theirs names: a caracole of another format is
+Two caracoles sync in one format, format 3, which every answer of theirs names: a caracole of another format is
 refused, and says so. What each remembers it agreed on is kept in that format too, and a caracole of an earlier
 format remembered it in its own, which this one doesn't read: the first sync after the upgrade compares as a first
 sync, a unit on one side alone that side's and one both hold differently a conflict, with no history to say which
@@ -5830,7 +5864,10 @@ side changed it. A song one side removed since the two last synced then shows as
 here's for it. Each answer also says the time on its side's clock, which both sides stamp what they agree on with,
 and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
 they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
-other spaces, `4.50` for `4.5`) agree on it.
+other spaces, `4.50` for `4.5`) agree on it; and a version from Ultimate Guitar without its rating and votes, which
+change from one day to the next (format 3: format 2 counted them). Nor does the `sheet.json`, `tab.json` or
+`version-<tab>.json` caracole keeps of a version from Ultimate Guitar hold them, so a tab both caracoles read on two
+days is the same on both; one kept before holds them until caracole keeps it again.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what
@@ -5988,9 +6025,8 @@ commas, all three by default. A difference outside them is neither taken nor giv
 lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
 
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"). caracole serve's Sync tab compares without them: its Sync, `peer sync
---compared HASH` with the tab's hash, does what the tab showed, a unit kept here a conflict settled by your choice or
-`--prefer`.
+chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+is given there, with no question asked.
 
 ### The Sync tab
 
@@ -6018,6 +6054,32 @@ change left as it was"), then offers **Reload**. The sync is a request like any,
 sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
 comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
 two agree on, and the other side's address and name, which `GET /api/sync` lists.
+
+What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
+is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
+
+- `GET /api/sync`: this caracole's id and library's name, `device` (`computer`; the phone's says `phone`), its songs
+  and songbooks counted (`songbooks` is null while songbooks.toml can't be read: that stops the songbooks alone), the
+  address it last synced with and every caracole it synced with before.
+- `POST /sync/test` (`address`): asks the other caracole for its state, one request, and changes nothing on either
+  side. It answers its songs, its songbooks, the newest read of its site indexes, when this one last synced with it,
+  and says it: "Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26" (the day in the server's zone), or
+  "…, no indexes". Refused as Compare is: not an address (400), nothing answering (502), this very caracole (409).
+- `POST /sync/compare` also gives each song's artist and title, what each side did to each unit since the two last
+  agreed (new, changed, gone, or nothing), its part (library or songbooks), the songbooks either side has that list
+  it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
+  whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
+- `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
+  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
+  page's own script may ask it (the form token in its header).
+- `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
+  it gives the computer its index pages.
+- `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and
+  queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
+  `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
+
+The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 

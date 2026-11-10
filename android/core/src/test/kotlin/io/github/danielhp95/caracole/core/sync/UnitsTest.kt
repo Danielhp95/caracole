@@ -47,6 +47,12 @@ class UnitsTest {
 
     @After fun close() = opened.values.forEach { it.first.close() }
 
+    @Test fun whatAUgRawRecordIsHashedWithoutIsWhatItsKeptJsonLeavesOut() {
+        // A unit hashes each kept file's bytes: the version's JSON kept beside a UG sheet (Slots.keepText) leaves out
+        // what the raw record's hash does, or a tab read on two days would differ still.
+        assertEquals(io.github.danielhp95.caracole.core.ug.UgFetch.KEPT_WITHOUT, Units.VOLATILE_RAW.getValue("ug"))
+    }
+
     /** The fixture [name] (sync/fixtures/<name>.jsonl) in a database of its own, and its library folder. */
     private fun fixture(name: String): Pair<Database, File> = opened.getOrPut(name) {
         val dir = tmp.newFolder(name)
@@ -224,6 +230,36 @@ class UnitsTest {
                              })
                 assertEquals(Units.digestOf(db, id), Units.valueOfDocument(id, document)?.let(Canonical::digest))
             }
+        }
+    }
+
+    @Test fun aUgVersionsRatingsAndVotesAreNoPartOfItsUnitAndAnotherSitesAre() {
+        val dir = tmp.newFolder("volatile")
+        TestDb.fresh(dir).use { database ->
+            database.writeBlocking { db -> Fixtures.load(db, "sync/fixtures/rich.jsonl", File(dir, "library").apply { mkdirs() }) }
+            val id = "song/radiohead/creep"
+            fun digest(provider: String, raw: String): Pair<String?, String?> {
+                database.writeBlocking { db -> db.execute("UPDATE versions SET provider = ?, raw = ? WHERE song_id = 1", provider, raw) }
+                return database.read { db ->
+                    val raws = (Units.value(db, id)!!.jsonObject.getValue("versions") as JsonArray).map {
+                        it.jsonObject.getValue("raw").jsonPrimitive.content
+                    }
+                    assertEquals(Units.digestOf(db, id), Units.valueOfDocument(id, Units.document(db, tmp.root, id))?.let(Canonical::digest))
+                    Units.digestOf(db, id) to raws.single()
+                }
+            }
+            val read = digest("ug", """{"id": 101, "rating": 4.5, "votes": 10, "content": "x"}""")
+            assertEquals(read, digest("ug", """{"votes": 12, "content": "x", "id": 101, "rating": 4.71}"""))
+            assertEquals(read, digest("ug", """{"id": 101, "content": "x"}"""))
+            assertEquals(Canonical.hashStoredJson("""{"id": 101, "content": "x"}"""), read.second)
+            assertTrue(read != digest("ug", """{"id": 101, "rating": 4.5, "votes": 10, "content": "y"}"""))
+            // Another site's raw counts whole; and UG's rating within a member, or of a raw that holds no object.
+            for ((provider, raw) in listOf("lacuerda" to """{"rating": 4.5, "votes": 10}""", "ug" to """[{"rating": 4.5}]""",
+                                           "ug" to "not json")) {
+                assertEquals(Canonical.hashStoredJson(raw), digest(provider, raw).second, "$provider $raw")
+            }
+            assertEquals(Canonical.hashStoredJson("""{"meta": {"rating": 4.5}}"""),
+                         digest("ug", """{"meta": {"rating": 4.5}, "votes": 1}""").second)
         }
     }
 

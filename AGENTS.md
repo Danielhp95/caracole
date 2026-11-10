@@ -346,8 +346,8 @@ Below the table, a section for each step whose modules have more to say.
 - library_page.py: `index.html`.
 - library_assets/.
 - songbook_section.py: its Songbooks tab's data.
-- song_sites.py: which sites have each song, had nothing or weren't asked yet: its line's marks, rows.js
-  `siteMarks`.
+- song_sites.py: which sites have each song, had nothing or weren't asked yet: its card's marks, rows.js
+  `siteMarks` (card.js `sitesOf`).
 
 #### backup
 
@@ -429,9 +429,15 @@ Below the table, a section for each step whose modules have more to say.
   - never what caracole makes of one, nor what a lookup finds again.
 - Each unit's `digest` is its canonical JSON's SHA-256 (canonical.py's `digest`), a version's raw record and a song's
   lyrics hashed canonicalized (`stored_hash`), so the phone's Kotlin gets the same digest of the same record.
-- **FORMAT 2** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
-  (`{"format": 2, "units": …}`): a base of another format reads as none, so the first sync after a format bump
-  compares as a first sync (no shim).
+  - A version's raw record is hashed without what `VOLATILE_RAW` names for its provider (`stored_hash`'s `without`):
+    UG's ratings and votes, the owner's choice of 2026-11-03 ("Don't count them for the sync"); the version's JSON
+    kept beside a UG sheet or tab (`sheet.json`, `tab.json`, `version-<tab>.json`) holds neither
+    (ug/fetch.py `KEPT_WITHOUT`, the phone's `Slots.keepText` alike), so a tab read on both sides on two days is no
+    conflict (`test_fetch.py::test_a_tab_read_on_two_days_is_kept_alike_and_is_one_song_to_a_sync`). A JSON kept
+    before that holds them until the fetch keeps it again.
+- **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
+  (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
+  compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -522,9 +528,9 @@ Below the table, a section for each step whose modules have more to say.
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
-  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s), or
-    without them, as caracole serve's Sync tab compares (sync_routes.py `_compared`), so the tab's Sync does what it
-    showed (commands/peer.py `_Compared.named`).
+  - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s, and
+    caracole serve's Sync tab's, sync_routes.py `_compared`), or without them, a comparison made before them
+    (commands/peer.py `_Compared.named`).
 - Written for the phone: `vectors/sync/file.jsonl`, `vectors/sync/files/*.caracole` (`full`, `songbooks`, `indexes`,
   `left`) and the fixtures `file_conflict` and `file_indexed` (tests/test_conformance_sync_file.py), which the Kotlin
   sync ports: an export, a file read and refused, a unit taken from one, an import.
@@ -813,10 +819,14 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
-- A song of yours closes to a line of what it holds (rows.js `holds`, each a `glyph`: inline SVG made with
-  `createElementNS`, the one address the page names) and opens as a card (card.js `caracoleCard`, card.css):
-  - a tile for each thing to play from, each source's versions a chip whose drawer reads the page's data alone, never
-    a request;
+- A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
+  `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
+  came from, how many; the lyrics none), Fetch now's download glyph where it has one (rows.js `fetchIcon`, a site's
+  song's Get it too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
+  its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
+    data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 
@@ -1018,10 +1028,28 @@ It is rows.js's, shared by both pages:
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
-- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html):
-  `GET /api/sync`, `POST /sync/compare` (one `GET /api/peer/state` of the other caracole, kept 10 minutes) and `POST
-  /sync/apply` (`caracole peer sync --push --compared HASH --choose=…` queued, a job of kind `sync`). The phone
-  answers the same three routes with the same shapes (vectors/web/sync_routes.jsonl).
+- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html), the
+  sync redesign's §3.4.1:
+  - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
+  - `POST /sync/test`: one `GET /api/peer/state` of the other caracole, nothing written, its counts, newest index read
+    and the last sync in words (`tested_words`), refused as a comparison is;
+  - `POST /sync/compare`: one `GET /api/peer/state`, then a `GET /api/peer/unit` for each songbook that differs and
+    the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
+    difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
+    `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
+    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
+    conflict it proposes chosen first);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
+    of another `source` than a peer's, a file's, refused);
+  - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
+    phone, a client, reads;
+  - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)
+    with no side refused, then `caracole peer sync --push [--parts=…] --compared HASH --choose=…` queued, a job of
+    kind `sync`.
+  - The phone's server/routes/SyncRoutes.kt answers the six alike (SyncJson; vectors/web/sync_routes.jsonl, under
+    UTC, which `WebReplay.syncRoutes` replays with the other side's `peer_units`), but its `device` `phone` and the
+    computer's `kind` `computer`; `tested` is Settings' Test too, and `alone(address)` the unattended sync (the three
+    parts, `Conflicts.LEAVE`, none queued while one with that address waits or runs).
 - **sync_file_routes.py** is the sync's Export and Import a file: `GET /api/sync/sizes` (what an export would hold:
   the library's bytes, its songbooks, the indexes' bytes by SQLite's dbstat, `peer_file.indexes_size`, and their
   tabs), `POST /sync/export` (`peer_file.export_file` of the parts named into `cache_dir/peer/`, one at a time) and
@@ -1381,18 +1409,36 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
     answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
-  - `ArtistPages`: the artist-page route's seam, ug-fetch-artist's (it replaces the skeleton's `ArtistRoute.find`,
-    which nothing calls), `artist_is_known` whole; until it lands its route and lists answer as Python's list cut short
-    does: no request, the song marked dirty and left unchecked, never clean.
+  - `ArtistPages`: the artist-page route (ug-fetch-artist's, below).
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
-  beside it: …"), `_ug_ready`'s skips ("not on the phone yet" where Python reads the artist's page), and what asking
-  came to in `LookupWords.end`'s words; the envelope (InteractiveAsk) marks the song owed a fetch (`_owed`), and the
-  frame (LookupRun) asks the ug stage within `after_the_sheet`, and LaCuerda after a sheet stage that kept none.
+  beside it: …"), `_ug_ready`'s skips (none for a song the index can't settle whose artist's page is known,
+  `ArtistRoute.artistIsKnown`), and what asking came to in `LookupWords.end`'s words; the envelope (InteractiveAsk)
+  marks the song owed a fetch (`_owed`), and the frame (LookupRun) asks the ug stage within `after_the_sheet`, and
+  LaCuerda after a sheet stage that kept none.
 - tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_sheet.jsonl and ug_keep.jsonl, scenario records, and
   ug_sheet_stages.jsonl, get.py's words for the two stages and `_ug_ready`'s answers (`UgFetchReplay`, area
   `ug-fetch`).
-- UG's artist pages (ug-fetch-artist): not built yet.
+- UG's artist pages (ug-fetch-artist): a song the index can't place looked up on its artist's UG page, ug/fetch.py's
+  route, in internal/fetch/`ArtistPages` (`processSong` calls it, as `process_song` calls `_artist_page_route`):
+  - the page's address: `[artist_url]`, a tab page there read once for the page it links to (kv
+    `ug:pasted_tab:<tab>`, or what is wrong with it: `ArtistRoute.pastedPageProblem`), a learned one (kv
+    `ug:artist_url:<artist key>`), else `LEARN_TRIES` slugged tabs of the artist read for it;
+  - the chords list, then those its filter bar offers (the unfiltered page when a list answers 404, a 404 there a
+    page gone), `artistPagesPerKind` pages a kind, 30 days from the cache (a stale copy no answer: BudgetExhausted
+    once the budget is spent), every page stored for searches (`ArtistTabs.store`, `Reads.note`d for the computer);
+    a block, an error or a page that won't parse raised, never a miss (no `ug:artist_page_checked:`);
+  - titles as `_best_title` takes them (`TITLE_MATCH` 90, `TITLE_MARGIN` 8), a `[reject]`ed song out first, the
+    match written with step `artist_page`; the lists of a song matched there, or of one whose index tabs hold no
+    chords, read as its versions; `ArtistRoute.artistIsKnown` what the UG stages ask first.
+- `versions --keep` and `--keep-more` (ug-fetch-artist): core/lookup/sites/`VersionsCommands`, versions_cmd.py's
+  `keep` and `keep_more` through a `CommandContext` and the song's `LibraryStore` (the `[block]`, gone and "the
+  sheet already" checks, `KeepRefused` its `fail`, exit 1; `keepVersion`; `_stopped`'s words; `Health.recordOk` only
+  after a request; keep-more in `SheetVersions.mayKeep`'s rank order through one client, `noteUnkeepable`, "kept N of
+  M"), saying its `pdf` and `pages` stages where versions_cmd.py makes the song's pages, its last line returned, which
+  lane lookup's VersionsRunner says after them.
+- tests/test_conformance_ug_fetch.py writes vectors/lookup/ug_artist.jsonl and commands_versions.jsonl too (the
+  same `UgFetchReplay`).
 - core.match's `Matcher`: match.py for a lookup's song (`matchAll`, `candidatesOf`; the ladder, `Ladder`; the index
   as it reads it, `IndexView`), each answer Python's for the same index and overrides.
   - Its scores are core.fuzz's: `ratio` and `extract`, `osaDistance` and `extractDistance` (rapidfuzz's OSA, the typo
@@ -1444,8 +1490,75 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     stored and its kv in one savepoint, the count it states Python's int of any size;
   - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
     vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
-- LaCuerda's sheets (lacuerda-sheets): not built yet.
-- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+- LaCuerda's sheets (lacuerda-sheets):
+  - `LaCuerdaSheets`, lacuerda_fetch.py for a lookup's songs (`only`): `_to_try` and `mayAsk`, the artist's slugs in
+    `_artist_songs`' order (a slug given first, the listings' `artistSlugs`, then `artistSlugCandidates`; a 404 or
+    "aqui llega:" moving on), each page cached 30 days (a stale copy no answer once the budget is spent), your pick's
+    page, `_record` and `_keep` (`sheet.json` as `json.dumps(indent=2)` and a newline, then `sheet.txt`; no
+    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage` (its `first`, which
+    Python's lacks, asked in place of the name written as a slug). The songs re-keyed first, as `list_songs` does.
+    Each page stored is noted for the next push. Python's nightly parts are left out: the popular artists' pages, the
+    listings pass, the handoffs, info.json;
+  - core.lookup.sites' `LaCuerdaPickStage` and `LaCuerdaStage`: get.py's `lacuerda()` through the stage's asking, its
+    words for what the pass came to, and `LookupWords.end`'s for what asking came to;
+  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (with `progress`, its default, the
+    search's `--progress` lines said; the last returned), the cooldown and the gate checked as Python checks them,
+    the block and the error recorded by the asking, a good run by `LookupWords.lookupRunOf`'s run, which the runner's
+    asking logs under; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and
+    stores no cached page first (`backfill_cached`: the phone stores each page as it reads it);
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
+    page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
+    LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
+- harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
+  lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
+  sitemap and makes no artist pass):
+  - its pages read as selectolax reads them (core.html), their JSON-LD by `PyJson.loads` (a value's `str()` as
+    Python's), their counts by `PyFloat` and `PyInt`, whole as Python's int: one past SQLite's integers is its
+    OverflowError only where it is written (`HarpTabsPages.sqliteInteger`), never on a page passed over;
+  - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
+    `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
+  - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
+    `harptabs`, the page's path);
+  - the lookup's harptabs stage (`HarpTabsStage`, the rest of what asking came to `LookupWords.end`'s) and
+    `caracole harptabs --artist` (`HarpTabsCommands.artist`, its one line, commands/lyrics.py's words), through
+    StageContext's and CommandContext's asking;
+  - tests/test_conformance_harptabs.py writes vectors/sites/harptabs.jsonl, vectors/lookup/harptabs.jsonl,
+    harptabs_artist.jsonl and commands_harptabs.jsonl: `HarpTabsReplay` (asking through `InteractiveAsk` over each
+    record's client, each request with caracole's own user agent, the pages noted beside Python's rows).
+- gametabs.net (gametabs): core.sites' `GameTabsPages` (gametabs.py's tab and game pages read through core.html,
+  `parseTabPage` and `parseGamePage`) and `GameTabsFetch` (gametabs_fetch.py for a lookup's song alone, no sitemap
+  or game page read), and the lookup's gametabs stage (core/lookup/sites/GameTabs.kt, get.py's words, the envelope's
+  `LookupWords.end`'s).
+  - A `data-tab` value as gametabs.py reads it: Python's truth and `str()` of each JSON value, its ints unbounded
+    (`BigInteger`), each as the float Python makes of it (the nearest, a tie to the even one, whatever the platform's
+    `BigInteger.toDouble` rounds), one too large for a float an OverflowError as `math.isfinite` raises; a version's
+    votes are the views as SQLite holds them (64 bits, sqlite3's OverflowError past them).
+  - Candidates by game (its slug's key, its page's name) or composer, `CANDIDATES` (4) at most, the most viewed
+    first, then by path in code points; the most viewed page that fits kept as `gametab-N.txt`, a pick
+    (`[gametabs]`) read alone; kv `gametabs:checked:<id>` and `:pick`, of the lookup's song alone; the game pages'
+    title keys made again first (`SiteKeys.gametabsEnsureCurrentKeys`, kv `gametabs:games:keys`), as the computer's
+    pass does.
+  - tests/test_conformance_gametabs.py writes vectors/sites/gametabs.jsonl (the parsers over tests/fixtures/gametabs,
+    helpers/gametabs_site.py's pages and an edge set; `title_key`, `game_forms`, `song_forms`, `fits`) and
+    vectors/lookup/gametabs.jsonl (the pass's scenarios, each request with caracole's user agent): `GameTabsReplay`.
+- gtptabs.com and MuseScore (tab-files), core.sites' `GtpTabsPages`, `GtpTabsFetch` and `MuseScorePages`: gtptabs.py's,
+  gtptabs_fetch.py's and musescore.py's rules for a lookup's song, every regex PyRegex's.
+  - `GtpTabsPages.parseArtistPage`: an artist page through core.html's tree, its link text collapsed as `split()`
+    does, the size and upload-number regexes Python's.
+  - `GtpTabsFetch.gtptabsFiles`: the pass with `refresh_index=False` (the computer's index, no sitemap read), its
+    candidates (internal `GtpPass`: by the artist keys, "Last, First" and without hyphens; sorted by (-stars,
+    version, id)), artist pages cached 30 days (a stale copy BudgetExhausted), three downloads at most past the
+    cache, the file kept as the lowest free `guitar-N` (Kept, Versions, Numbering), kv `gtptabs:checked:` and
+    `gtptabs:unusable:`, `PagesNotFiles`; never a replace or a delete; no info.json (M5's).
+  - `sniff` reads a Guitar Pro 7 zip's central directory as CPython's zipfile does (internal `ZipNames`: the end
+    records, zip64's, cp437 and UTF-8 names, the Unicode Path field), never java.util.zip's stream; inbox-share
+    reuses it.
+  - `titlePage`, the Requests tab's; `MuseScorePages.songPages`, links from the index alone, with no client.
+  - The lookup's gtptabs stage (core/lookup/sites/GtpTabs.kt, `GtpTabsStage`) in get.py's words, the envelope's
+    `LookupWords.end`.
+  - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
+    lookup/gtptabs.jsonl (its stage records asked through InteractiveAsk with the records' clients):
+    `TabFilesReplay`, area `tab-files`.
 
 ##### The Requests tab on the phone
 
@@ -1511,6 +1624,49 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `SettingsReplay` (area `settings`) replays vectors/sync/settings.jsonl (each caracole.toml's document taken, then
   read as config.py holds it) and settings_take.jsonl (the take rule by rule), each take through `PeerState.read` and
   `SyncEngine.takeSettings`.
+
+##### Syncing on the phone
+
+- **The rules** are peer_sync.py's, replayed (`SyncReplay`, area `sync`): `Compare`'s kept answers (`keptOf`,
+  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` dropping each agreed unit's, the base written with a
+  `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
+  `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
+  scope.jsonl.
+- **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
+  `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
+  either side's songbooks `listed` (each songbook difference's document asked of the computer once,
+  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
+  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents (a
+  file's none of a unit it left out or of a part it doesn't hold, `FileSource.says`) and `tested` what the computer
+  holds (its state read once, nothing changed).
+- **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
+  (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
+  songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
+  is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
+  `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
+  peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
+  `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
+  format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
+  whole), compared within the parts it holds
+  (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
+  `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
+  "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
+  - Its zip is read by `Zip`, CPython 3.14's zipfile by hand (the end records, zip64's too, the central directory,
+    names in UTF-8 or cp437, each member's local header, its data stored or inflated, its CRC-32 at its end), never
+    java.util.zip.ZipFile, which Android refuses at open for a name with `..` or a name twice (ZipPathValidator),
+    where peer_file says which member is wrong: file.jsonl's zips made by hand hold it to Python's, on the device too.
+  - Its JSON members are read as `json.loads(bytes)` reads them (`SyncFiles.json`: json.detect_encoding's UTF-8,
+    UTF-16 or UTF-32, lone surrogates passed).
+- **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
+  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
+  its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
+  after its merge job, none from a computer that doesn't count them.
+- A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
+  `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
+  `PageSource`, none until one is wired).
+- What the phone says otherwise: the report leaves out a site whose merge moved its progress records alone (no row
+  taken, its count the same), as IndexTransfer's `Merged` says what changed of the merge whole (`SyncEngine.taken`).
 
 ##### :viewer
 
@@ -1581,7 +1737,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
   - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
     kept whole).
-- A sheet's versions and progressions (version-progressions): not built yet.
+- A sheet's versions and progressions (version-progressions): `viewer.version`'s `Versions`, viewer/version.py's page
+  side function for function, and render.py's `own_version` (`ownVersion`); `apply_version`, a sheet's ChordPro for
+  chordpro's PDF of a version, is the computer's alone.
+  - `fromQuery` and `query`, a version as the viewer's address reads and writes it (Python's parse_qsl, JavaScript's
+    Number(), URLSearchParams' bytes); `playedKey`, `forInstrument`, `label` and `playedLabel`; `settingProblem` in
+    Python's words and reprs, of any value a form or a file gives; `inSetting`; `keyVersion` (an
+    IllegalArgumentException with key_version's words, which `Overrides.read` and `OverrideWriters.addVersion` take as
+    their check), `inKey`, `entry` and `KeyVersion.query` and `label`, byte for byte, as `[version]` is in a song's
+    sync unit.
+  - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
+    text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
+    library-cards' to wire (Found.kt).
+  - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
+    tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
+    (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of
+    room.
+  - Where Kotlin holds less than Python: a chord's index, a shape's number or a swap's root or bass past an Int, in an
+    address, is dropped, and a record's song id past a Long is none.
 - A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
   - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
     harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
@@ -1607,9 +1781,69 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     ones, parsed and read as another reading's pin says (layout/'s small tabs whole, the rest by digest, for the
     viewer's budget), its rows' parts as lengths, its lines and words, `align` on drawn rows, and `_cuts` on drawn
     words, on ties that each of its numbers decides (`TIED_CUTS`) and on MAX_CUTS's edges.
-- The sheet page (pages): not built yet.
-- A harmonica tab's page (harmonica-page): not built yet.
-- The phone's own pages, `PhoneRender` (phone-render): not built yet.
+- The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
+  writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
+  inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
+    writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
+    a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
+    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
+    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - A page record is the generator's `page_out` and `PagesReplay.out`: `sha256` and `size` of the whole page, `body`
+    and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
+    digits each), so that it pins the members' order too; another lane's page records take that shape.
+  - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
+    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
+    Chromium's print emulation).
+- A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
+  `build` writes `build_harmonica_viewer`'s page on SheetPage's frame (`page`, `namesTable`, `isChinese`, `zhAttr`,
+  `artistLine`, `words`, `LIBRARY_PAGE`; `ViewerAssets.Page.HARMONICA`), its data's members in Python's order (`groups` and `rows` filled as the tab
+  is written), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
+  `viewer.harpfit.HarpFit`, harpfit.py: `pitch`, `words`, `sheetLines`, `recordFit` (PySequence.SequenceMatcher, the
+  fits by share then harp), `choose` and `Choice.tabsHarp`, and render.py's `_tab_harps` as `tabHarps` (each
+  `HarmonicaTab` a kept tab as render.py reads it; one it can't read, a refused pin among them, gives no harp), the
+  harps a sheet's viewers start on (`harpTabs`).
+  - Its constants are data/caracole/viewer/harmonica_page.json (harpfit.py's, and harptab_page.py's `_BAR`,
+    `_BAR_RAW`, `_PILL`, `_SAID`…), written by tests/test_conformance_viewer_harmonica.py; its numbers as Python
+    writes them (`round(q, 2)` a PyJson float; `{share:.0%}`, `{views/1000:.0f}k`, `{views/1e6:.1f}M`,
+    `{rating:.1f}★` and `({q:.2f})` through PyFormat), a fact counted only where Python's `isinstance` takes it.
+  - `HarmonicaPageReplay` (area `harmonica-page`): vectors/viewer/harpfit.jsonl (pitch, words, a sheet's sung lines,
+    each tab's fit and choices, `_tab_harps`), harmonica_pages.jsonl (the parts, and every page as digests: the page,
+    its header, tab, foot and bar, each data member, the overlay's two) and harmonica_pages_whole.jsonl (a small page
+    whole, the files it inlines by name); the texts that are no fixture in harpfit_texts.jsonl.
+- The phone's own pages, `PhoneRender` (phone-render): render.py's page path with no PDF, for the songs no mirror
+  page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
+  render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
+  the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
+  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port), after `PlainLyrics`
+  (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its progressions, script
+  and info.json alone, the phone's own pages of it forgotten.
+  - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
+    made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`
+    (`unit`, `build`, `script`, which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's
+    kv `songbook:<folder>`.
+  - `InfoJson` is library.write_info, its `render` null whatever kv `render:<id>` holds; `RenderBuild` is the app's
+    version and, on the phone, the APK's `classes*.dex` and `caracole/` entries by name, size and CRC-32, so every
+    APK whose code or tables changed makes the pages again (elsewhere each viewer asset and runtime data file the
+    pages read, hashed, each listed and held to its folder by PhoneRenderTest).
+  - `render` is the lookup's pdf stage (in its write, its `between` never the queue's), its failed detail render.py's
+    log line, the phone's alone; `renderStale` the render job's, a write a song, `between` two
+    (JobContext.yieldToQueued: PhoneRenderJobTest on the real queue), passing over a song a lookup made meanwhile, then
+    kv `phone:render-build`; a song's pass that fails, on a bug too ("a bug in caracole"), costs the others nothing
+    and is stamped all the same.
+  - `stale` is the start's, one query (a song this build never made, or kv `phone:render-build` not this build's);
+    `afterSync` reads every song's digest, inside the sync's job, and `owe`s (that kv forgotten) what moved, as a change
+    on the phone that makes no page of its song does.
+  - tests/helpers/phone_render.py is the reference (render_all with `_render_sheet_pdf`, `_render_traditional` and
+    `_remake_exports` making nothing, `_write_viewer` linking no PDF, `_drop_human_outputs` the phone's and no PDF's
+    record read, whatever PDFs the library holds; then the phone's records and info.json);
+    tests/test_conformance_viewer_render.py writes vectors/viewer/render.jsonl (fixture libraries and steps: renders, a
+    file dropped, one deleted), which `RenderReplay` (area `render`) replays: the names, each pass's info.json and
+    units, and every step whole.
 
 ##### The phone's written pages
 
@@ -1624,6 +1858,35 @@ Not built yet. (written-pages.)
 ##### Guitar Pro on the phone
 
 Not built yet. (guitar-alphatab.)
+
+##### A song shared to the app
+
+- A music app's Share of a song is `ShareLinkActivity`'s (SEND of text/plain alone, its own intent filter; files are
+  ShareActivity's): its extras logged under `caracole-share` (`SharedLink.said`), then the library screen loads
+  `GET /share` with them (`SharedLink.page`; MainActivity takes a share page alone from an intent, and Cancel,
+  `/share/cancel`, as `leaveShare`: the history before the share, the sender in front).
+- core.share's `SharedText.read`, the one place that knows each app's words, before read_names: the app (package,
+  link host, words), the first link, each app's shape (`SHAPES`: Deezer's, Shazam's, SoundCloud's… as "Artist -
+  Title"), else the text less its links and an app's name, with no request. tests/fixtures/share/shares.jsonl holds
+  each app's shapes and where they were found (SharedTextTest).
+- A text that names no song but a link of Apple Music's, Spotify's, TIDAL's, YouTube's or YouTube Music's is read by
+  asking its service once, the owner's choice of 2026-11-10 (Politeness, "A shared link read by asking its service
+  once"):
+  - core.share's `ShareLinks.of`: what the link is, with no request (a song's id, a short link, or an album, a
+    playlist, an artist… that names no song, said so); `answer`, what the service's answer names (Apple's lookup,
+    Spotify's and TIDAL's track page, YouTube's oEmbed: a video's title and channel, read by read_names as a pasted
+    video's), a page that won't parse a `ShareParseError`, never a miss;
+  - `ShareAsk`: off, the cache's answer with no request and no write, else one ask through the lookup's envelope
+    (`InteractiveAsk`, run `lookup:share:…`) inside one write (server's `ShareReader`), its words one line;
+  - ShareLinksTest and ShareAskTest, over the services' answers to caracole of 2026-11-10 (tests/fixtures/itunes/,
+    spotify/, tidal/, youtube/).
+- server's `ShareRoutes` is the phone's own page, which caracole serve has none of:
+  - the names through `SongNames.readNames` (a link's service's, "Read from Spotify's page: …"), searched as
+    `/api/search` searches (`SearchRoutes.answer`);
+  - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
+  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+    and policy (`MessagePage.html`: no script).
+- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
 
 ##### Files shared to the app
 
@@ -1919,6 +2182,32 @@ picks one).
 - Then `BudgetExhausted`: the rest waits for the nightly run.
 - Nothing else is looser for a lookup, and a lookup never runs yt-dlp.
 
+#### A shared link read by asking its service once
+
+- The owner's choice of 2026-11-10: a link shared to the phone whose text names no song (core.share's `SharedText`)
+  is read by asking its service once, one request a shared link, at a lookup's pace and nothing looser (core.share's
+  `ShareLinks`, `ShareAsk`):
+  - Apple Music: `itunes.apple.com/lookup?id=…&country=…`, provider `itunes` (Apple documents about 20 calls a minute
+    for it);
+  - Spotify: the track's page, `open.spotify.com/track/<id>`, provider `spotify`, which names the artist to
+    caracole's own user agent (checked by hand on 2026-11-10; its oEmbed names the title alone, and is unasked);
+  - TIDAL: the track's page, `tidal.com/track/<id>`, provider `tidal`;
+  - YouTube and YouTube Music: YouTube's oEmbed, `www.youtube.com/oembed?url=…&format=json`, provider
+    `youtube-oembed`, never yt-dlp's `youtube`.
+- Each asks the one URL the link's id names: one request, or two for a short link (`spotify.link`,
+  `spotify.app.link`, `tidal.link`), whose redirect, to another site, is its answer (a redirect whose status the
+  caller accepts is never followed: http.py and core.http alike, client.jsonl's session). An album's, a playlist's or
+  an artist's link names no song, said with no request. Deezer's shares carry their names (its API's robots.txt is
+  closed: never asked); a Navidrome or Subsonic server's link is never asked.
+- Their policies (config.py, `SHARE_PROVIDERS`): no budget, no bulk work (no run or command of the computer asks
+  them, pipeline.py and the to-do page's health leave them out), `lookup_requests` what a share needs (1, Spotify's
+  and TIDAL's 2), within `lookup_per_hour` with every lookup's (run `lookup:share:…`), at `lookup_delay`.
+- Each is switchable (`config.SWITCHABLE`, `enabled = false`, which the phone takes from the computer at a sync), on
+  by default.
+- The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
+  counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
+- Nothing is sent to a tab site before Get it.
+
 #### Either pace
 
 - One request at a time per provider (a synchronous client, and the lock below), redirect hops included.
@@ -1945,8 +2234,9 @@ picks one).
 #### Turning a provider off
 
 - Only a provider in `config.SWITCHABLE` (`megalobiz`, `azlyrics`, `gtptabs`, `musescore`, `harptabs`, `gametabs`,
-  `youtube`, `ytimg`) can be turned off (`enabled = false`): then it gets no client and its step is skipped (`ytimg`
-  off: a suggested video's row without its thumbnail).
+  `youtube`, `ytimg`, and a shared link's `itunes`, `spotify`, `tidal`, `youtube-oembed`) can be turned off
+  (`enabled = false`): then it gets no client and its step is skipped (`ytimg` off: a suggested video's row without
+  its thumbnail; a shared link's service off: the phone's share page says so, and asks it nothing).
 
 #### Blocks
 
@@ -1973,11 +2263,16 @@ picks one).
   - nor gametabs.net's `/api/`, `/tabs?*` (its filters) or `/preparing-tab-file-download` (every attachment, behind a
     login);
   - nor azlyrics.com's `/search/`, `/suggest/`, `/song/` or `/lyricsdb/` (tests/fixtures/azlyrics/robots.txt);
-  - nor i.ytimg.com's `/sb/`.
+  - nor i.ytimg.com's `/sb/`;
+  - nor, for a link shared to the phone, itunes.apple.com's `/*/lookup?`, `/search*` and `/WebObjects/*`,
+    open.spotify.com's `/embed/`, `/download/` and `/local/`, spotify.link's and spotify.app.link's `/_r/`, or
+    www.youtube.com's `/results`, `/youtubei/`, `/api/` and the rest of its `User-agent: *` group (tidal.com's and
+    tidal.link's close nothing).
 - A rule's `$` ends it (`/*.php$`).
 - A host's rules are the `User-agent: *` group of its live robots.txt (tests/fixtures/gtptabs/,
   tests/fixtures/musescore/robots.txt, tests/fixtures/harptabs/robots.txt, tests/fixtures/gametabs/robots.txt and
-  tests/fixtures/youtube/ytimg-robots.txt, checked by hand on 2026-10-29).
+  tests/fixtures/youtube/ytimg-robots.txt, checked by hand on 2026-10-29; tests/fixtures/itunes/, spotify/, tidal/
+  and youtube/www-robots.txt on 2026-11-10).
 - LaCuerda's robots.txt is empty, and so are LRCLIB's and Megalobiz's API hosts' (none; megalobiz.com's, whose favicon
   caracole asks, closes only accounts and editors: tests/fixtures/megalobiz/robots.txt).
 
@@ -2040,6 +2335,8 @@ picks one).
   - a stop or Ctrl-C stops its process group too;
   - a bot check, an HTTP 429 or 403, a rate limit or a captcha is `ProviderBlocked`, honoured like any block
     (tests/test_youtube.py).
+- YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
+  yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.
 
 #### The second exception: a site whose terms forbid automated access, where the owner chose it
@@ -2124,6 +2421,20 @@ picks one).
 - An export (`caracole peer export`, the Sync tab's Export, the phone's) holds what this site gave too, to share as the
   owner likes: the owner's choice of 2026-11-03 ("ignore the privacy, share everything"); caracole itself sends it
   nowhere.
+
+##### Spotify and TIDAL, for a link shared to the phone
+
+- Spotify's User Guidelines forbid "crawling" or "scraping", "whether manually or by automated means, or otherwise
+  using any automated means (including bots, scrapers, and spiders), to view, access or collect information", and
+  TIDAL's Content Guidelines, part of its terms, say the same in the same words (both as a web search quoted them on
+  2026-11-10); the owner chose on 2026-11-10 that the phone reads one of their track pages for a link shared to it
+  (A shared link read by asking its service once, above), and, told these terms the same day, kept both on ("don't
+  turn tidal and spotify off").
+- One page a shared link (its short link's hop besides), at a lookup's pace, robots.txt honoured (both open their
+  track pages), cached; only the song's two names are read of it, for the share page and a lookup the owner taps.
+- Apple's lookup is its documented public API and YouTube's oEmbed a public endpoint for any client; YouTube's terms
+  forbid automated access but for search engines by its robots.txt, with its permission or as the law permits, so
+  its oEmbed is asked by the same choice of the owner's, one request a video.
 
 #### The cache
 

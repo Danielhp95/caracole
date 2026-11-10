@@ -85,20 +85,6 @@ const caracoleRows = (icons, does) => {
     }
     return svg;
   };
-  // What a song of yours holds, as its line says it (``holds``): each thing's glyph and its name. Its sheet is a chord
-  // sheet, the auto one, or UG's Ukulele Chords; its guitar's, a Guitar Pro file, else a text tab.
-  const HOLDS = { sheet: ["sheet", "Chord sheet"], auto: ["sheet", "Auto sheet"], ukulele: ["ukulele", "Ukulele chords"],
-    guitar: ["guitar", "Guitar Pro"], tab: ["guitar", "Guitar tab"], harmonica: ["harmonica", "Harmonica tab"],
-    lyrics: ["lyrics", "Lyrics"], score: ["score", "Score"] };
-  const holdsOf = (holds) => {
-    const box = el("span", "line-holds");
-    for (const name of listOf(holds).filter((n, i, all) => own.call(HOLDS, n) && all.indexOf(n) === i)) {
-      const drawn = glyph(HOLDS[name][0], HOLDS[name][1]);
-      if (name === "auto") drawn.classList.add("auto");
-      box.appendChild(drawn);
-    }
-    return box;
-  };
   // Its site's own icon, inlined as a data: URI, else its lettered badge; a glyph for the audio model
   // and the inbox (icons.py). Each is named for a screen reader: "from LaCuerda".
   const ICONS = icons && typeof icons === "object" ? icons : {};
@@ -124,8 +110,9 @@ const caracoleRows = (icons, does) => {
     mark.dataset.source = key;
     return mark;
   };
-  // Which sites have a song of yours (``sites``, song_sites.py): each site's mark, in its colours where the site has
-  // it, grey where it had nothing, fainter and dashed where it wasn't asked yet; its tooltip and its name say which.
+  // Which sites have a song of yours (``sites``, song_sites.py), as its card shows them (card.js): each site's mark, in
+  // its colours where the site has it, grey where it had nothing, fainter and dashed where it wasn't asked yet; its
+  // tooltip and its name say which.
   const SITE_STATES = ["have", "none", "unasked"];
   const siteMarks = (sites) => {
     const box = el("span", "line-sites");
@@ -286,12 +273,12 @@ const caracoleRows = (icons, does) => {
   const mainAction = (r) => (r.action instanceof Node ? r.action
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
-  // ``href`` says; then the artist (where no group above names it: ``onSearch`` and ``onArtist`` make it what a
-  // group's name is, artistOf), the status's badges, which sites have a song of yours (``sites``, siteMarks), what it
-  // holds (``holds``, HOLDS' names, its glyphs)
-  // or else the marks of where a site's song came from (``sources``, else ``source``); its key, as a chip; its main
-  // action and its chevron. One line from 720px; on a phone the title, the key, the action and the chevron, and under
-  // them the artist and the badges, when there are any.
+  // ``href`` says, and right after it ``plays``, a song of yours' button for each thing to play from (card.js plays:
+  // none of them first); then the artist (where no group above names it: ``onSearch`` and ``onArtist`` make it what a
+  // group's name is, artistOf), the status's badges, and a site's song's marks of where it came from (``sources``,
+  // else ``source``); its key, as a chip; its main action and its chevron. One line from 720px; on a phone the title
+  // and its buttons, the action, the key and the chevron, and under them the artist and the badges, when there are
+  // any.
   const denseLine = (r) => {
     const title = String(r.title || "");
     const artist = String(r.artist || "");
@@ -306,6 +293,7 @@ const caracoleRows = (icons, does) => {
       named.className = "line-title";
     } else {
       named.appendChild(heading);
+      if (r.plays instanceof Node) named.appendChild(r.plays);  // never inside a link: each is one of its own
     }
     line.appendChild(named);
     const meta = el("div", "line-meta");
@@ -319,22 +307,13 @@ const caracoleRows = (icons, does) => {
       facts.title = String(r.facts);  // the whole of it, where its column cuts it short
     }
     if (status.childNodes.length) meta.appendChild(status);
-    if (Array.isArray(r.sites)) {
-      const sites = siteMarks(r.sites);
-      if (sites.childNodes.length) meta.appendChild(sites);
+    const marks = el("span", "line-sources");
+    const sources = listOf(r.sources).length ? listOf(r.sources) : [r.source];
+    for (const key of sources.filter((k, n) => sources.indexOf(k) === n)) {
+      const mark = sourceMark(key);
+      if (mark) marks.appendChild(mark);
     }
-    if (Array.isArray(r.holds)) {
-      const holds = holdsOf(r.holds);
-      if (holds.childNodes.length) meta.appendChild(holds);
-    } else {
-      const marks = el("span", "line-sources");
-      const sources = listOf(r.sources).length ? listOf(r.sources) : [r.source];
-      for (const key of sources.filter((k, n) => sources.indexOf(k) === n)) {
-        const mark = sourceMark(key);
-        if (mark) marks.appendChild(mark);
-      }
-      if (marks.childNodes.length) meta.appendChild(marks);
-    }
+    if (marks.childNodes.length) meta.appendChild(marks);
     line.appendChild(meta);
     if (typeof r.key === "string" && r.key) line.appendChild(keyMark("line-key", r));
     const action = el("div", "line-action");
@@ -387,6 +366,18 @@ const caracoleRows = (icons, does) => {
     b.type = "button";
     if (aria) b.setAttribute("aria-label", aria);
     b.addEventListener("click", onclick);
+    return b;
+  };
+  // A line's button that looks a song up now (a song of yours' Fetch now, a site's song's Get it, Add again): the
+  // download glyph alone, in the accent, named ``aria`` for a screen reader and the pointer's tooltip; ``onclick``
+  // what it does, or none for a form's submit button (library.js fetchForm). Nothing is sent before it is pressed.
+  const fetchIcon = (aria, onclick) => {
+    const b = el("button", "btn small primary line-fetch");
+    b.type = onclick ? "button" : "submit";
+    b.setAttribute("aria-label", aria);
+    b.title = aria;
+    b.appendChild(glyph("download"));
+    if (onclick) b.addEventListener("click", onclick);
     return b;
   };
   // A hit's song name that does what its Get it does (``main``, the button of the row or line ``item``): a button in
@@ -703,16 +694,15 @@ const caracoleRows = (icons, does) => {
     let main;
     if (gone) {
       const back = { artist, title };
-      main = button("Add again", "small primary", (e) => a.again(back, display, here(), e.currentTarget),
-        "Add " + display + " again");
+      main = fetchIcon("Add " + display + " again", (e) => a.again(back, display, here(), e.currentTarget));
       main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
     } else {
       const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : game ? pick(game)
         : pick(sheet);
-      main = button(mine ? "Get it again" : "Get it", "small primary", (e) => a.get(chosen, display, here(), e.currentTarget),
-        (mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar" : chords ? " from LaCuerda"
-          : harp ? " with its harmonica tab from harptabs.com" : game ? " with its tab from gametabs.net"
-          : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
+      main = fetchIcon((mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar"
+        : chords ? " from LaCuerda" : harp ? " with its harmonica tab from harptabs.com"
+          : game ? " with its tab from gametabs.net" : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""),
+      (e) => a.get(chosen, display, here(), e.currentTarget));
       main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
         : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
         : harp ? "Looks the song up now, and keeps this harptabs.com tab"
@@ -1341,8 +1331,8 @@ const caracoleRows = (icons, does) => {
     if (why) line.appendChild(why);
     return line;
   };
-  return { resultRow, sourceMark, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly, button, many,
-    counts, opener, instrumentBadges, ugHit, artistHit,
+  return { resultRow, sourceMark, siteMarks, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly,
+    button, fetchIcon, many, counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     songsOn, meantName, didYouMean, countMarks, countsSaid, nothingFound, notesLine };
 };

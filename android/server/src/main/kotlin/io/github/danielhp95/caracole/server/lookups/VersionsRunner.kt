@@ -92,7 +92,10 @@ class VersionsRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
             val (c, ask) = LookupJobs.context(parts, db, args, context, LookupJobs.now(parts),
                                               pages = LookupJobs.CommandPages(parts, db, song, made))
             val said = try {
-                if (tab != null) VersionsCommands.keep(c, song, tab) else VersionsCommands.keepMore(c, song)
+                if (tab != null) VersionsCommands.keep(c, parts.store, song, tab)
+                else VersionsCommands.keepMore(c, parts.store, song)
+            } catch (e: VersionsCommands.KeepRefused) {
+                throw CommandExit(1, e.message.orEmpty())  // versions_cmd.py's fail: exit 1, its words
             } finally {
                 ask.close()
             }

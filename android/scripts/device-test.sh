@@ -7,7 +7,8 @@
 #                   list: every one
 #   --app           the app's classes: EndToEndTest, PinchTest, SyncTabTest and PhoneEndToEndTest, each against a
 #                   computer of its own (tests.helpers.e2e_library in a fresh folder), as the M1-3 integration ran them
-#   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest...), with DIR its computer's folder
+#   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest..., or in full:
+#                   io.github.danielhp95.caracole.NoSitesTest), with DIR its computer's folder
 #   --computer DIR  one computer for every class that names none
 #   --sites S       the fake sites server for the classes (lane lookups-e2e fills this branch)
 #
@@ -33,7 +34,7 @@ computer=""
 sites=""
 classes=()
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -179,6 +180,7 @@ for spec in "${classes[@]:-}"; do
     name="${spec%%=*}"
     dir=""
     if [ "$spec" != "$name" ]; then dir="${spec#*=}"; else dir="$computer"; fi
+    name="${name#"$app_id".}"  # a class named in full is the same class
     run_with_computer "$name" "$dir"
 done
 
