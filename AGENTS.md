@@ -346,8 +346,8 @@ Below the table, a section for each step whose modules have more to say.
 - library_page.py: `index.html`.
 - library_assets/.
 - songbook_section.py: its Songbooks tab's data.
-- song_sites.py: which sites have each song, had nothing or weren't asked yet: its line's marks, rows.js
-  `siteMarks`.
+- song_sites.py: which sites have each song, had nothing or weren't asked yet: its card's marks, rows.js
+  `siteMarks` (card.js `sitesOf`).
 
 #### backup
 
@@ -813,10 +813,14 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
-- A song of yours closes to a line of what it holds (rows.js `holds`, each a `glyph`: inline SVG made with
-  `createElementNS`, the one address the page names) and opens as a card (card.js `caracoleCard`, card.css):
-  - a tile for each thing to play from, each source's versions a chip whose drawer reads the page's data alone, never
-    a request;
+- A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
+  `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
+  came from, how many; the lyrics none), Fetch now's download glyph where it has one (rows.js `fetchIcon`, a site's
+  song's Get it too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
+  its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
+    data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 
