@@ -1887,7 +1887,30 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 - Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
 - A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
-- Export PDF and Make this my version (export-print): not built yet.
+- Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
+  and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.
+  - A viewer is the library's where the phone recorded writing it (`WrittenPages.written`, render.written_file's kv
+    `render:files:<id>`) or the mirror holds it under the song's unit (`ExportRoutes.mirrorOf`, the cards' mirror),
+    the computer's pages being most of what the phone shows (PhoneRender forgets its own of a song the mirror serves).
+  - `Exports` and `ExportSheet` (server/routes/ExportSheet.kt) are render.py's export half: `export_version`,
+    `export_query`, `export_traditional`, `export_viewer`, `export_sheet` over `_export_source`; its sheet is the one
+    the phone's viewer shows, its ChordPro PhoneRender's `.cho` byte for byte (ExportRoutesTest).
+  - Making no PDF, the phone names any version the viewer's code can read, where caracole serve refuses one whose PDF
+    can't be made (500).
+  - `mine=1` (a GET, never a HEAD) queues `render --song=… --version=… --mine` under `export:<key>:<version>:mine`:
+    the phone's one write with no form token (ExportRoutesTest posts every other without it). `RenderRunner` writes
+    `ExportSheet.kept` through `OverrideWriters.addVersion` (checked by `Versions.keyVersion`), then makes the song's
+    pages (PhoneParts.pages, PhoneRender: a song the mirror served gets the phone's own, its unit's digest moved) and
+    the songbooks (PhoneParts.songbooks) again; plain `render`, each song in a write of its own, the queued lookups
+    let go between two; `--version` alone, a PDF beside the sheet, is the computer's.
+  - The app's `Printer`: the server asked in-process (`ask`, as LocalFiles asks), then `PrintManager.print(name,
+    web.createPrintDocumentAdapter(name), A4)` on the WebView shown, on the UI thread; nothing kept. PrintTest, on an
+    emulator alone (it stops the print spooler), checks the job, a link the page follows through MainActivity's hook,
+    and runs the WebView's adapter as the print spooler would (android.print's `PrintedPdf`, the callbacks'
+    constructors being that package's): an A4 PDF.
+  - vectors/web/export.jsonl, tests/test_conformance_export.py (caracole serve's route, `version_pdf` giving the label
+    alone, checked against `_export_text`'s; a message's library folder `{library}`, a reader's own words on a file
+    left out, `prefix`), `ExportReplay` (area `export`).
 
 ##### Guitar Pro on the phone
 
