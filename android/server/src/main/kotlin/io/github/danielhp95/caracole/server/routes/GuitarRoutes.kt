@@ -26,8 +26,10 @@ import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.page.PhonePageData
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
@@ -94,10 +96,10 @@ class GuitarRoutes(
         }
         val (file, song) = kept
         val data = readLibraryFile(path) ?: throw Refused(404, "Not in the library", GONE)
-        if (data.size > MAX_FILE) throw Refused(413, "Too large", TOO_LARGE)
+        if (data.size > MAX_FILE) throw tooLarge()
         val html = GuitarPage.build(
             title = song.title, artist = song.artists.ifEmpty { listOf(song.artist) }.joinToString(", "),
-            songId = song.id, path = path, label = "Guitar Pro ${file.number}", data = data, at = at,
+            songId = song.id, path = path, label = "Guitar Pro ${file.wholeNumber}", data = data, at = at,
             sheet = viewerOf(song), libraryName = libraryName(),
         )
         // A sandbox, an origin of its own; downloads, for its Download link (the file is sent as an attachment).
@@ -146,6 +148,8 @@ class GuitarRoutes(
      * files.read_library_file's bytes: the parts of the `/`-separated [path] checked (no empty part, `.`, `..`, hidden
      * name or NUL, nothing under the phone's state), a kind of file the library serves ([FileTypes]), each folder on
      * the way opened as no link, the file a regular file and no link, at most [FileTypes.MAX_BYTES]; null otherwise.
+     * Beyond Python: a file past [MAX_FILE] is refused (413, as `guitar` refuses its bytes) before it is read, and
+     * no more than one byte past it is read of one that grew since, so the phone never holds 64 MiB to refuse it.
      */
     private fun readLibraryFile(path: String): ByteArray? {
         val names = path.split('/')
@@ -163,12 +167,25 @@ class GuitarRoutes(
             val file = at.resolve(names.last())
             val info = Files.readAttributes(file, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
             if (!info.isRegularFile || info.size() > FileTypes.MAX_BYTES) return null
-            Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readBytes() }
+            if (info.size() > MAX_FILE) throw tooLarge()
+            Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { readAtMost(it, MAX_FILE + 1) }
         } catch (e: IOException) {
             null
         } catch (e: InvalidPathException) {
             null
         }
+    }
+
+    /** At most [limit] bytes of [input], all of it if it holds fewer. */
+    private fun readAtMost(input: InputStream, limit: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        while (out.size() < limit) {
+            val n = input.read(buffer, 0, minOf(buffer.size, limit - out.size()))
+            if (n < 0) break
+            out.write(buffer, 0, n)
+        }
+        return out.toByteArray()
     }
 
     /** files._is_hidden: whether [names] is a path in the phone's state folder, where that is inside the library. */
@@ -224,8 +241,12 @@ class GuitarRoutes(
         private const val TOO_LARGE = "That Guitar Pro file is too large to show here: download it instead."
 
         private fun notKept() = Refused(404, "Not a Guitar Pro file", NOT_KEPT)
+        private fun tooLarge() = Refused(413, "Too large", TOO_LARGE)
 
-        /** The mirror the phone's library page reads (its cards' copy of the computer's pages), if any. */
+        /** The mirror the phone's library page reads (its cards' copy of the computer's pages), if any. PhoneParts
+         * names no mirror (the skeleton's), so it is reached through the cards (library-cards' classes): a card source
+         * of another kind, or one that holds its mirror otherwise, makes a mirror-only song's Guitar Pro link the
+         * refusal, never its file, until PhoneParts gives the mirror itself (GuitarPageTest's mirror case says so). */
         private fun mirrorOf(parts: PhoneParts): Mirror? = when (val cards = parts.cards) {
             is PhonePageData -> cards.mirror.mirror
             is MirrorPageData -> cards.mirror

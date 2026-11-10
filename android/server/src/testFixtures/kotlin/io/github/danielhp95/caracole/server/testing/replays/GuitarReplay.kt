@@ -251,7 +251,7 @@ object GuitarReplay : AreaReplay {
         misses.expect("guitar_files", kw, r["out"]) {
             JsonArray(test.database.read { db -> GuitarFiles.of(db, songId, path) }.map { f ->
                 JsonArray(listOf(JsonPrimitive(f.songId), JsonPrimitive(f.name), JsonPrimitive(f.path),
-                                 JsonPrimitive(f.number), JsonPrimitive(f.inBrowser)))
+                                 JsonPrimitive(f.wholeNumber), JsonPrimitive(f.inBrowser)))
             })
         }
     }

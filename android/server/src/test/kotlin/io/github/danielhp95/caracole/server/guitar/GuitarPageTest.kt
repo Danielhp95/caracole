@@ -39,7 +39,7 @@ import kotlin.test.assertTrue
  * The Guitar Pro page on the phone (GuitarRoutes, GuitarPage, AlphaTabBundle, :core's GuitarFiles): caracole serve's
  * answers for the same library and files (GuitarReplay over vectors/web/guitar.jsonl, alphaTab 1.8.4's own bundle
  * among them), and what the phone does otherwise: the APK's bundle named by the app's resource, never served by the
- * server itself, and a name of N past an Int left out.
+ * server itself, and a name of N past an Int kept by its whole N, as Python's int keeps it.
  */
 class GuitarPageTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -159,20 +159,28 @@ class GuitarPageTest {
         }
     }
 
-    @Test fun aNumberPastAnIntIsLeftOutAndOnePastPythonsDigitsRaisesAsInt() {
+    @Test fun aNumberPastAnIntIsKeptInItsWholeOrderAndLabelAndOnePastPythonsDigitsRaisesAsInt() {
+        // GuitarFiles.of (phone-render's port, this lane's declaration): Python's int has no bound, so a name past an
+        // Int is a file still, ordered and labelled by its whole N; its Int `number` is Int.MAX_VALUE.
         val dir = tmp.newFolder()
-        TestApp(dir).use { test ->
+        val at = AlphaTabBundle.load(STANDINS)
+        TestApp(dir, modules = { db -> listOf(GuitarRoutes(TestParts.of(db, dir, scope), alphaTab = { at }, libraryName = { LibraryName.phone("") })) }).use { test ->
             val store = LibraryStore(test.libraryDir)
             test.database.writeBlocking { db ->
                 val song = store.add(db, "caracole tests", "Numbers", now = STAMP)
                 for ((tab, name) in listOf("1" to "guitar-2147483648.gp5", "2" to "guitar-2147483647.gp5", "3" to "guitar-1.gp")) {
                     val version = Versions.upsert(db, "gtptabs", tab, song.id, "guitar", "guitar-pro", 4.0, 0, 1, null,
                                                   "https://gtptabs.com/tabs/$tab.html", JsonObject(emptyMap()), STAMP)
-                    Kept.keepFile(db, store, song, version, name, name.toByteArray(), 1, STAMP)
+                    Kept.keepFile(db, store, song, version, name, SYNTHETIC + name.toByteArray(), 1, STAMP)
                 }
             }
             val found = test.database.read { db -> GuitarFiles.of(db) }
-            assertEquals(listOf("guitar-1.gp" to 1, "guitar-2147483647.gp5" to Int.MAX_VALUE), found.map { it.name to it.number })
+            assertEquals(listOf("guitar-1.gp", "guitar-2147483647.gp5", "guitar-2147483648.gp5"), found.map { it.name })
+            assertEquals(listOf(1, Int.MAX_VALUE, Int.MAX_VALUE), found.map { it.number })
+            assertEquals(listOf("1", "2147483647", "2147483648"), found.map { it.wholeNumber.toString() })
+            val page = test.get(target(found.last().path))
+            assertEquals(200, page.status)
+            assertTrue("<title>Phone · Numbers · Guitar Pro 2147483648 · caracole</title>" in page.text, page.text.take(2000))
             test.database.writeBlocking { db ->
                 val song = store.add(db, "caracole tests", "Too Many Digits", now = STAMP)
                 val version = Versions.upsert(db, "gtptabs", "9", song.id, "guitar", "guitar-pro", 4.0, 0, 1, null,
