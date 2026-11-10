@@ -177,18 +177,19 @@ started again.
   hold greyed ("Not in this file"), and nothing goes back (a file takes nothing). Refused: this library's own
   export, and a file no newer than the last sync with its caracole ("Nothing in this file is newer than your sync
   with studio on 03/11/26").
+
 **Sync on Wi-Fi by itself** (Settings) is this sync, unattended: every 6 hours on an unmetered network, the three
 parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
 sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
 something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
 the bar's line says so ("Up to date: 1 taken, 2 given" at its end). When it left conflicts, a notification on its
-own channel, Syncs, says so ("2 songs changed on both sides: tap to choose"), and its tap opens the sheet, at the
-cards. A sync with the computer already on its way (one from the sheet) is left to finish, and this one does
+own channel, Syncs, says so ("2 songs changed on both sides: tap to choose"), and its tap opens the sheet, whose
+cards ask. A sync with the computer already on its way (one from the sheet) is left to finish, and this one does
 nothing.
 
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
-`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
-reason; upgrade caracole there.
+`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused as the two are compared,
+with the reason; upgrade caracole there.
 
 **Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your
 library at once, and the computer's next run fetches it after a sync gives it there: the phone asks no site. Its
