@@ -2358,39 +2358,41 @@ It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
 pinyin), with how many of their songs you have ("Soda Stereo · you have 2",
 all of them, whatever the search or a filter leaves out), and their songs A to
-Z under it. A line is a song, one line each on a laptop, 24 px tall with a
-mouse (its buttons no smaller than a pointer needs): read down under the
-search box, a laptop's screen holds twenty-odd lines with their artists'
-names. On a phone a found song is one line too, its title, its key and its
-button, and a song that needs something says so under its title. A line has the
-song's title, which opens its sheet (the sheet viewer, see [The sheet
-viewer](#the-sheet-viewer), else the PDF, else the text); its status when it
-needs something, one word: Wanted, Needs review when caracole isn't sure of the
-match, or Ignored (a found song, nearly every one, says nothing); which sites
-have the song, each site that is on a small mark of its own (Ultimate Guitar,
-LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net, MuseScore, and
-YouTube for a song caracole takes the audio of): in its colours where the site
-has it (MuseScore's a possible match, by the title), grey where it was asked and
-had nothing, fainter on a dashed edge where it wasn't asked yet, its tooltip
-saying which ("Ultimate Guitar: nothing for it (looked 2026-10-16)"), so a song
-Ultimate Guitar's index has no chords for, once marked "Not found", shows where
-its harmonica tab came from (every mark whole, in one row, but four a row in a
-window 720 to 900 px wide, where the line is two rows of them tall, so the
-title keeps its room; under the title on a phone); what it holds, a small icon each, named
-by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
-own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
-Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab", from
-Ultimate Guitar or gametabs.net), a harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
-key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
-see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
-text), or, on the page `caracole serve` serves, Fetch now for a wanted song
-(Pick the match for one that needs review first, and Removing… while caracole
-removes it); and a chevron, which unfolds the song in place, turned while it is
-open. An auto sheet says so by its icon, by its button's tooltip, "Auto sheet
-PDF", and to a screen reader by the button's name, "Open PDF of Creep by
-Radiohead, an auto sheet". Where each file came from, each site's own icon
-says beside the file under the chevron (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file
-gtptabs.com's: see [Where each file came from](#where-each-file-came-from)).
+Z under it. A line is a song, one row each, on a laptop and on a phone: read
+down under the search box, a laptop's screen holds about twenty lines with their
+artists' names, and a song that needs something says so under its title on a
+phone. A line has the song's title, then, right after it, a button for each
+thing the song has to play from, none of them first: its **chord sheet** (its
+own colour for an auto sheet, a ukulele for Ultimate Guitar's Ukulele Chords),
+its **Guitar Pro** file, its **guitar tab** (Ultimate Guitar's text tab), its
+**harmonica tab**, its **game music tab** (gametabs.net's) and a **score** you
+filed. A tap on one opens that one at once: the sheet viewer (see [The sheet
+viewer](#the-sheet-viewer), else the PDF, else the text), the Guitar Pro file
+in the browser when `caracole serve` shows it there (else a download), the
+harmonica tab's page, the text, the score. Each shows its instrument, the
+marks of the sites its versions came from at its foot (two at most, the one in
+use first), and how many versions the card lists of it at its corner when more
+than one; its name says all of it, to a screen reader and as a tooltip ("Open
+the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
+file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
+title leaves too little room for them, they wrap to a second row beside it, and
+a long title is cut short first. The lyrics have no button: their tile, under
+the chevron, says where they came from. Then its status when it needs
+something, one word: Wanted, Needs review when caracole isn't sure of the match,
+or Ignored (a found song, nearly every one, says nothing); its key, in a small
+box ("Am"; a screen reader hears "Key A minor (from the tab)", see [The song's
+key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
+**Fetch now**, a download icon in the accent, which looks the song up then and
+not before (Pick the match for one that needs review first, and Removing…
+while caracole removes it); and a chevron, which unfolds the song in place,
+turned while it is open. The title opens it too. A song you have has no
+button to fetch it again on its line: **Fetch again** is in its card. From
+720 px the line is one row of columns, the title and its buttons first, then
+the artist (sorted by title or by when added), the status, Fetch now, the key
+and the chevron, so that the keys and the chevrons line up. Where each file
+came from, each site's own icon says beside the file under the chevron too
+(the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
+[Where each file came from](#where-each-file-came-from)).
 
 Its chevron opens the song in place, as a card over the list, which the
 chevron closes again. At its top, its key in words and where it came from ("Key
@@ -2403,24 +2405,24 @@ YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
 it; and, served, Look in the index.
 
-Then what you play from it, a tile each (from 720 px a row each: its name and version, the source it
-came from with that source's mark, its formats at the end), in this order: its **Chord sheet**
-(the accent's; **Auto sheet** in its own colour when that is its only sheet,
+Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
+version, the source it came from with that source's mark, its formats at the end), in the order of the
+line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
-file (**Guitar tab** when it has a text tab and no Guitar Pro file), its
+file, its **Guitar tab** (a text tab), its
 **Harmonica tab**, its **Game music tab** (gametabs.net's, `gametab-N.txt`), its
 **Lyrics** and a **Score** you filed. A tile's body opens
 what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
-the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
+the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
 in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's
 PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text
 and ChordPro, then its PDF exports, each by its version (`PDF · G
 Dorian, capo 0`: see `caracole render --version` and Export PDF of this
-version); a Guitar Pro file's, and the text tab; the lyrics' Text and Timed
+version); a Guitar Pro file's; the text tab's; the lyrics' Text and Timed
 (.lrc); each score's format. A tile with more than one version is drawn as a
 small stack. A Guitar Pro or Power Tab file, and a score but its PDF, downloads
 under its song's name (`Eagles - Hotel California (2).ptb`).
@@ -2457,6 +2459,15 @@ ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
 file, Open where the page shows it, and Download. A harmonica tab with its page
 beside it opens that page, from its tile and its row, its text a download.
 
+Under the tiles, **On the sites**: each site that is on, a small mark of its own
+(Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net,
+MuseScore, and YouTube for a song caracole takes the audio of): in its colours
+where the site has the song (MuseScore's a possible match, by the title), grey
+where it was asked and had nothing, fainter on a dashed edge where it wasn't
+asked yet, its tooltip saying which ("Ultimate Guitar: nothing for it (looked
+2026-10-16)"), so a song Ultimate Guitar's index has no chords for, once marked
+"Not found", shows where its harmonica tab came from.
+
 Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
 your songs with that progression (below): four show, a long string of numerals
 cut short in its chip (the whole of it in its tooltip), the rest behind **+2**;
@@ -2467,10 +2478,8 @@ foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
 songbook…** (see Songbooks, below), for a song the page had when it was loaded
 (one that Get it or a request brought since has it once the page is loaded
 again); and at the far end a **⋯** that opens info.json, a quiet download, and,
-served, **Remove**, in red (Escape, or a press elsewhere, closes it). When Fetch
-now has the line's button, the sheet's tile opens it all the
-same, as its title does. A line drawn again (a request over) keeps its card
-open, its drawer closed.
+served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
+drawn again (a request over) keeps its card open, its drawer closed.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
@@ -2538,7 +2547,7 @@ tap: a Chord sheet (a human or an auto sheet), a Guitar tab (a Guitar Pro
 file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
 (a harmonica tab) or a Score you filed, each with how many songs have it
 (one no song has, greyed, can't be tapped), and while one is on, each line's
-icon of it is in the accent (the group shows once a song has something but a
+button of it is filled with the accent (the group shows once a song has something but a
 chord sheet; the search's rows of the sites stay, whatever they are for); its
 **Key**, there once a song has a key, is Any, Major or Minor, then the twelve
 tonics in circle-of-fifths order (C G D A E B F♯ D♭ A♭ E♭ B♭ F, each named
@@ -2570,9 +2579,9 @@ sites have too, under the same artist headers, with Get it, and a form to
 request a song by name (see below).
 
 On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
-at least 44 pixels each way, for a thumb, and so are each line's button and
-chevron (its title, beside them, is as tall): a phone shows about eleven songs to a
-screen. With a mouse they keep their compact sizes. Fields, menus and the
+at least 44 pixels each way, for a thumb, and so are each line's buttons, its
+Fetch now and its chevron (its title, beside them, is as tall): a phone shows
+about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
 their soft border, and so does the search box. The pages `caracole serve`
@@ -2587,9 +2596,9 @@ toolbar beside the search has no button for it. It puts a box at the start of
 each song's line: tick songs in the order they go in the songbook (each box
 shows its place, and a screen reader says it: "Pick Creep by Radiohead, 2nd").
 A tap anywhere on a line ticks it, or unticks it: while you select, each line's
-button and chevron are put away, a request's line still says how it goes but
-without its links (Details), and a tap on its title opens nothing, so a tick
-never opens a file by mistake. Search, filter and sort between ticks; the bar
+Fetch now and chevron are put away, a request's line still says how it goes but
+without its links (Details), and a tap on its title or its buttons opens nothing,
+so a tick never opens a file by mistake. Search, filter and sort between ticks; the bar
 at the bottom counts them, `3 selected`. Give the songbook a name and tap Make
 songbook, or pick a songbook there is in the menu (instead of New songbook) to
 Add to it; Clear unticks them all. The × at the start of the bar leaves the
@@ -2734,6 +2743,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   muted, two lines of it; **More** opens the rest, and works without
   JavaScript too. Printed, all of it prints. Chords or a verse before the
   first section are the song, and nothing is folded then.
+- **Printed** (the browser's Print), a sheet, a songbook's song and a
+  harmonica tab's page print in the light colours, even from a screen in dark
+  mode, with a 15 mm margin on every side of the paper, and without the bar,
+  the settings or the links.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
   window to show it whole in two columns is shown in two, side by side; a
@@ -4016,9 +4029,9 @@ the library, sent as they are: they carry no badge.
   names, or to a song's title (as [caracole search](#caracole-search) chooses
   them), each comes first as an artist's band of its own, "Stephen Foster · 7
   songs on UG · you have 1", a song suggested a line in its artist's band, as
-  the search's lines are (its title, its sites' marks, and Get it where Open
-  is, which looks it up as a result's Get it does; your own line, which opens
-  it, for a song you have), your songs of theirs under it as an artist's are,
+  the search's lines are (its title, its sites' marks, and Get it, which looks
+  it up as a result's Get it does; your own line, its buttons opening what it
+  holds, for a song you have), your songs of theirs under it as an artist's are,
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
   index holds, or the offer to read their page), with no request; what a
@@ -4078,7 +4091,10 @@ the library, sent as they are: they carry no badge.
   below); ↓ goes from the box to the first result's button. The address keeps
   it (`#q=wonderwall&all=1`).
 
-  **Get it** on a line looks the song up at once: as Ultimate Guitar's song
+  **Get it**, the download icon at a line's end (named "Get Oasis - Wonderwall
+  from Ultimate Guitar" to a screen reader and as a tooltip; **Get it again**
+  for a song of yours the page has no line of, **Add again** for one you
+  removed), looks the song up at once, and nothing before it is pressed: as Ultimate Guitar's song
   when the line has one, as `caracole get --ug …` does, recording the pick in
   overrides.toml (`[match]`), so nothing waits for a review, and its
   gtptabs.com stage downloads the Guitar Pro file for a song that has none;
@@ -4094,12 +4110,12 @@ the library, sent as they are: they carry no badge.
   line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
   done"), with the lookup's steps as chips under it, as on a song's line
   (below), and once the sheet is kept the line is the song's own line, yours,
-  its sheet its button: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
+  its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
-  song of yours whose title opens its sheet keeps opening it; and on the file,
-  with no caracole serve, no name gets anything. **An artist's name searches
+  song of yours' title opens its card; and on the file, with no caracole serve,
+  no name gets anything. **An artist's name searches
   for them**: a click on "C Tangana", over the results, over your songs in the
   list, or beside a line's title, puts their name in the search box and
   searches it as typing it would (their group first, with their songs, as a

@@ -212,8 +212,8 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
             "Lyrics: running")
         fits(page, line)
         runner.go()
-        # Ready: the chips fold away and nothing takes their place; the line is the song's, found, its Open opening
-        # its sheet. Its request line says Ready to a screen reader alone, which hears the request end.
+        # Ready: the chips fold away and nothing takes their place; the line is the song's, found, its sheet's button
+        # opening it. Its request line says Ready to a screen reader alone, which hears the request end.
         assert page.wait(f"document.querySelector('{line} .progress').dataset.tone === 'ready'", timeout=15)
         assert page.js(f"document.querySelector('{line} .step-chips')") is None
         assert page.js(f"document.querySelector('{line} .progress').textContent") == "Ready"
@@ -222,9 +222,9 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
         # Found, it needs no badge: its status is the line's alone, as the page's filters read it.
         assert page.js(f"document.querySelector('{line}').dataset.status") == "found"
         assert page.js(f"document.querySelector('{line} .line-status .badge')") is None
-        assert page.wait(f"document.querySelector('{line} .line-action a').textContent === 'Open PDF'")
-        # The focus, on the request line since Fetch now, is on the Open that took Fetch now's place.
-        assert page.js("document.activeElement.textContent") == "Open PDF"
+        assert page.wait(f"!!document.querySelector('{line} .line-plays a.play-sheet')")
+        # The focus, on the request line since Fetch now, is on the first of its buttons, its sheet's.
+        assert page.js("document.activeElement.classList.contains('play-sheet')") is True
         assert page.js(f"document.querySelector('{line}').contains(document.activeElement)")
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
 
@@ -273,11 +273,11 @@ def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_you
         wait_for(page, said(row), ["Fetching the lyrics from LRCLIB…", "4 of 7 done"])
         fits(page, row)
         runner.go()
-        # Over, and Ready: the row is the song's own line, yours, its Open its sheet's; no steps, no Ready · Open sheet.
+        # Over, and Ready: the row is the song's own line, yours, its sheet's button on it; no steps, no Ready · Open
+        # sheet.
         line = "document.querySelector('#results .progress').closest('article')"
         assert page.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=15)
-        assert page.wait(f"{line}.querySelector('.line-action a') && "
-                         f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")
+        assert page.wait(f"!!{line}.querySelector('.line-plays a.play-sheet')")
         assert page.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
         assert page.js(f"{line}.querySelector('.step-chips')") is None
         assert page.js(f"{line}.querySelector('.progress a')") is None
