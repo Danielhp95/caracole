@@ -227,16 +227,16 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
     doc = sync.state_document("abc", "0.1.0", "Phone", {"song/a": sync.Unit("song/a", "A - B", "d")})
     assert read("http://phone:8737", answer(200, {"json": doc})).server == "abc"
     assert asked == ["http://phone:8737/api/peer/state?peer=me"]
-    with pytest.raises(sync.PeerError, match="not as a caracole that syncs"):
+    with pytest.raises(sync.PeerError, match="not as a caracole that shares"):
         read("http://phone:8737", answer(404, {"text": "nope"}))
-    with pytest.raises(sync.PeerError, match="answered 503: overrides.toml can't be read"):
+    with pytest.raises(sync.PeerError, match="answered 503: Can't read overrides.toml"):
         read("http://phone:8737", answer(503, {"json": {"error": "Can't read overrides.toml"}}))
     with pytest.raises(sync.PeerError, match="not a caracole sync state"):
         read("http://phone:8737", answer(200, {"json": {"format": 99}}))
 
     def refused(request):
         raise httpx.ConnectError("refused")
-    with pytest.raises(sync.PeerError, match="Nothing answered at http://phone:8737"):
+    with pytest.raises(sync.PeerError, match="No answer at http://phone:8737"):
         read("http://phone:8737", httpx.MockTransport(refused))
 
 
@@ -575,7 +575,7 @@ def test_a_document_missing_what_the_take_reads_is_left_and_the_rest_taken(libra
     done = sync.apply_units(here.conn, here.cfg, source, wanted, NOW)
     assert done.taken == ["block/1"]
     assert sorted(u for u, _ in done.left) == sorted(change)
-    assert all(why.startswith("its document can't be read") for _, why in done.left), done.left
+    assert all(why.startswith("its entry can't be read") for _, why in done.left), done.left
     assert {u: d for u, d in here.digests().items() if u != "block/1"} == before
     assert find_song(here.conn, creep.key) is None and find_song(here.conn, karma.key) is None
     assert (here.cfg.wanted_file.read_bytes() if here.cfg.wanted_file.exists() else None) == wanted_txt

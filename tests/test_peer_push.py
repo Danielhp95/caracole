@@ -129,7 +129,7 @@ def test_a_push_new_that_isnt_one_is_refused(served, cfg, conn):
         assert status == 400 and "error" in json.loads(body), doc
     own = sync.own_id(conn)
     status, answer = served.new([], sender=own)
-    assert status == 400 and "this caracole" in answer["error"]
+    assert status == 400 and "this same scribe" in answer["error"]
     assert pushes(cfg) == []
 
 
@@ -207,7 +207,7 @@ def test_a_push_left_an_hour_goes_as_another_push_sends_a_file_and_as_the_server
 def test_a_push_that_cant_be_staged_says_so_never_that_the_database_cant_be_read(served, cfg, conn):
     (cfg.state_dir / "peer").write_text("not a folder", encoding="utf-8")
     status, answer = served.new([])
-    assert status == 503 and "couldn't be opened" in answer["error"] and "database" not in answer["error"]
+    assert status == 503 and "Couldn't open the push" in answer["error"] and "database" not in answer["error"]
 
 
 def test_a_push_a_take_holds_is_never_deleted_however_old(cfg):
@@ -448,7 +448,7 @@ def test_one_copy_of_the_indexes_is_out_at_a_time_and_a_head_makes_none(served, 
     response = peer_routes.index(served.app, type("Asked", (), {"method": "GET"})(), {})  # sent to no one yet
     try:
         status, _, body = served.ask("GET", "/api/peer/index", token=None)
-        assert status == 503 and "Another copy" in json.loads(body)["error"] and made == [1]
+        assert status == 503 and "Another index copy" in json.loads(body)["error"] and made == [1]
     finally:
         response.stream.close()
     assert served.ask("GET", "/api/peer/index", token=None)[0] == 200
@@ -634,12 +634,12 @@ def test_a_push_is_refused_for_a_document_its_digest_isnt_a_file_never_sent_or_a
 
     doc = push_document(phone, pusher, found)
     status, answer = send(push, doc)
-    assert status == 400 and "never sent" in answer["error"]
+    assert status == 400 and "never came" in answer["error"]
     other = push_document(phone, pusher, found)
     other["take"][0]["unit"]["names"]["album"] = "Pablo Honey"  # not what its digest says
     assert send(push, other)[1]["error"].endswith("its document isn't what its digest says.")
-    assert send(push, doc, token="old") == (403, {"error": "This is older than the server, or not from it: read its "
-                                                           "form token again and try again.", "reload": True})
+    assert send(push, doc, token="old") == (403, {"error": "Older than the server, or not from it. Read its form "
+                                                           "token again and retry.", "reload": True})
     for bad in ("../" + push[3:], push.upper(), "", "f" * 16):
         assert send(bad, doc)[0] == 400, bad
     assert computer.app.queue.snapshot() == [] and not (
@@ -686,7 +686,7 @@ def test_a_take_is_given_a_push_of_this_state_folder_alone_and_deletes_no_other(
 
     opened = pusher.push_new(sync.make_id(phone.conn), [])[0]  # open, never sent: no take of it
     result = run(computer, "peer", "take", "--", str(computer.cfg.state_dir / "peer" / f"push-{opened}"))
-    assert result.exit_code == 1 and "never sent" in result.output
+    assert result.exit_code == 1 and "That push is gone" in result.output
     assert pushes(computer.cfg) == [f"push-{opened}"]
 
 

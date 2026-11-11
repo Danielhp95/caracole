@@ -1076,10 +1076,9 @@ def shared_folder(conn):
                         "sheet.txt")
 
 
-SHARED = ("Rodrigo - Concierto, part two's sheet.txt isn't kept: its folder is Rodrigo - Concierto, part one's too "
-          "(their names make one folder), whose sheet.txt is there. Nothing is written over it, and the song waits "
-          "until the folder is its own: remove one of the two (caracole remove), and ask for it again under a "
-          "shorter title.")
+SHARED = ("Rodrigo - Concierto, part two's sheet.txt isn't kept: Rodrigo - Concierto, part one shares its folder "
+          "(their names make one), and its sheet.txt is there. Nothing written over it. The song waits for a folder "
+          "of its own: remove one of the two (caracole remove), then ask again under a shorter title.")
 
 
 def test_the_fetch_and_lacuerda_steps_say_which_song_waits_for_a_folder_another_songs_name_makes(
@@ -1248,7 +1247,7 @@ def test_without_auto_chords_the_youtube_step_asks_nothing_and_gets_no_runner(co
     finally:
         made.close()
     report = run_pipeline(plain, conn=conn, services=services(Outbox()), steps=youtube_step(), now=NOW)
-    assert report.ok and report.steps["youtube"].startswith("skipped: this caracole was built without auto-chords")
+    assert report.ok and report.steps["youtube"].startswith("skipped: built without auto-chords")
     assert fake.argvs() == [] and "YouTube" not in report.summary()
 
 

@@ -104,15 +104,15 @@ def test_the_page_says_how_the_tab_is_read_and_offers_each_reading_best_first(ap
             in said)
     found = forms(response)
     assert [(action, button) for action, _, button in found] == [
-        ("/harmonica/pin", "Use its legend"), ("/harmonica/pin", "Read it as letters"),
-        ("/harmonica/pin", "Read it as brackets"), ("/harmonica/pin", "Read it as signs after"),
-        ("/harmonica/pin", "Read it as barrett"), ("/harmonica/pin", "As harptabs writes it")]
+        ("/harmonica/pin", "Use its legend"), ("/harmonica/pin", "Read as letters"),
+        ("/harmonica/pin", "Read as brackets"), ("/harmonica/pin", "Read as signs after"),
+        ("/harmonica/pin", "Read as barrett"), ("/harmonica/pin", "As harptabs writes it")]
     assert found[1][1] == {"csrf": "tok", "page": PAGE, "as": "letters"}
     assert found[5][1]["as"] == "signs"
     rows = re.findall(r'<li class="reading( now)?">(.*?)</li>', text(response), re.S)
     assert [bool(now) for now, _ in rows] == [True, False, False, False, False, False]  # the one it is read by
     assert "Q 0.86" in unescape(re.sub(r"<[^>]+>", " ", rows[1][1]))
-    assert f'<a class="btn" href="/{quote(FOLDER)}/harmonica-1.html">Back to the tab</a>' in text(response)
+    assert f'<a class="btn" href="/{quote(FOLDER)}/harmonica-1.html">Back to tab</a>' in text(response)
     assert "Back to our guess" not in said  # nothing pinned
 
 
@@ -135,7 +135,7 @@ def test_a_pin_is_a_command_queued_and_the_page_says_how_it_goes(app, runner, sp
                              "Spokey Dokey"]]
     after = get(app, location)
     said = shown(after)
-    assert "Done: read as b blow · d draw · * bend · - joins, as you set it." in said
+    assert "Done · read as b blow · d draw · * bend · - joins, as you set it." in said
     assert "Now: b blow · d draw · * bend · - joins, as you set it" in said
     assert [button for _, _, button in forms(after)][-1] == "Back to our guess"
     assert f'href="/{quote(FOLDER)}/harmonica-1.html"' in text(after)
@@ -154,7 +154,7 @@ def test_a_table_and_the_guess_again_are_commands_too(app, runner, spokey):
     app.queue.run_pending()
     assert runner.calls[-1] == ["harmonica", "--tab=harmonica-1.txt", "--clear", "--", "Cowboy Bebop",
                                 "Spokey Dokey"]
-    assert "Done: caracole guesses how it is read again." in shown(get(app, dict(response.headers)["Location"]))
+    assert "Done · we guess its reading again." in shown(get(app, dict(response.headers)["Location"]))
 
 
 @pytest.mark.parametrize("page", [
@@ -171,10 +171,10 @@ def test_what_cant_be_done_is_refused_and_nothing_queued(app, runner, spokey):
     assert post(app, "/harmonica/pin", {"page": PAGE, "as": "{not json"}).status == 400
     assert post(app, "/harmonica/pin", {"page": PAGE, "as": json.dumps({"*": "squeak"})}).status == 400
     refused = post(app, "/harmonica/clear", {"page": PAGE})
-    assert refused.status == 409 and "caracole guesses how it is read already" in shown(refused)
+    assert refused.status == 409 and "We guess its reading already" in shown(refused)
     add_harmonica(app.cfg.overrides_file, DISPLAY, "harmonica-1.txt", "letters")
     same = post(app, "/harmonica/pin", {"page": PAGE, "as": "letters"})
-    assert same.status == 409 and "It is read so already" in shown(same)
+    assert same.status == 409 and "Read that way already" in shown(same)
     assert post(app, "/harmonica/pin", {"page": PAGE, "as": "letters"}, csrf="other").status == 403
     app.queue.run_pending()
     assert runner.calls == []

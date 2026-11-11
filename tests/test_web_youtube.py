@@ -159,7 +159,7 @@ def test_where_no_chords_can_be_made_it_says_why_and_queues_nothing(cfg, queue, 
 @pytest.mark.parametrize("case,said", [
     ("human", "Nick Cani - Vikingos veganos already has a sheet."),
     ("ignored", "Nick Cani - Vikingos veganos is ignored in overrides.toml."),
-    ("purchase", "Nick Cani - Vikingos veganos has bought audio in Music/: auto-chords uses that."),
+    ("purchase", "Nick Cani - Vikingos veganos has bought audio in Music/; auto-chords uses that."),
 ])
 def test_a_song_youtube_isnt_for_is_refused(able, queue, conn, case, said):
     song = add_song(conn, "Nick Cani", "Vikingos veganos")
@@ -300,7 +300,7 @@ def test_the_search_of_youtube_is_refused_where_its_gate_refuses_it(able, queue,
     assert post(app, "/youtube/search", {"q": "Estopa - Como Camarón"}, accept="application/json").status == 409
     record_block(conn, "youtube", datetime.now(UTC), "bot check")
     refused = post(app, "/youtube/search", {"q": "Someone - Something"}, accept="application/json")
-    assert refused.status == 429 and "paused after a block" in answer(refused)["error"]
+    assert refused.status == 429 and "turned us back" in answer(refused)["error"]
     assert queue.snapshot() == []
 
 

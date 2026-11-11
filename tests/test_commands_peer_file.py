@@ -311,7 +311,7 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(libraries, tm
     studio.song(version="key=Gm&capo=0")
     out = run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole")))
     assert out.exit_code == 0, out.output
-    assert "Left song/radiohead/creep: a conflict: choose a side for it" in out.output
+    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
     assert sync.kept_of(studio.conn, desk.id()) == {}
     out = run(studio, "peer", "import", "--yes", "--prefer", "there", str(exported(desk, tmp_path / "e.caracole")))
     assert out.exit_code == 0, out.output
@@ -426,7 +426,7 @@ def test_an_import_that_cant_back_up_first_takes_nothing_and_still_reports(libra
 
     monkeypatch.setattr(backup, "make", full)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
-    assert out.exit_code == 1 and "Nothing taken: the database couldn't be backed up first: no room" in out.output
+    assert out.exit_code == 1 and "Nothing taken: couldn't back up the database first: no room" in out.output
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
     assert report["with"]["name"] == "Desk" and report["indexes"] == []
     assert studio.songs() == set() and sync.base_of(studio.conn, desk.id()) is None

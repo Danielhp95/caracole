@@ -204,7 +204,7 @@ def test_only_a_guitar_pro_file_caracole_keeps_is_shown(app, conn, cfg):
                   path + "\n", "", "state/caracole.sqlite"):
         response = get(app, guitar_url(asked))
         assert response.status == 404, asked
-        assert "That isn't a Guitar Pro file caracole keeps" in unescape(text(response))
+        assert "Not a Guitar Pro file in the book" in unescape(text(response))
     assert get(app, "/guitar").status == 404
     assert get(app, guitar_url(path) + "&" + urlencode({"file": path})).status == 404  # one file, not two
 
@@ -217,7 +217,7 @@ def test_a_link_in_place_of_the_file_or_of_its_folder_is_refused(app, conn, cfg,
     file.unlink()
     file.symlink_to(elsewhere)
     response = get(app, guitar_url(path))
-    assert response.status == 404 and "isn't in the library any more" in unescape(text(response))
+    assert response.status == 404 and "is gone from the book" in unescape(text(response))
     # The song's folder a link to another folder, the file in it: still refused.
     file.unlink()
     folder = song_dir(cfg.library_dir, song)
@@ -231,7 +231,7 @@ def test_a_file_gone_from_the_library_says_so(app, conn, cfg):
     _, path = song_with_gp(conn, cfg)
     (cfg.library_dir / path).unlink()
     response = get(app, guitar_url(path))
-    assert response.status == 404 and "isn't in the library any more" in unescape(text(response))
+    assert response.status == 404 and "is gone from the book" in unescape(text(response))
 
 
 # --- the links to it --------------------------------------------------------------------------------------------
