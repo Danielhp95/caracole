@@ -1,12 +1,14 @@
 package io.github.danielhp95.caracole.core.songbooks
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.StoredSongbook
+import io.github.danielhp95.caracole.core.library.internal.Rekey
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyUnicode
@@ -252,17 +254,40 @@ object Songbooks {
         }
     }
 
-    /** songbook.set_song_setting, its setting checked by [problem] (check_setting through the viewer's
-     * Versions.settingProblem, which :core can't see). */
-    fun set(db: Db, name: String, entry: String, setting: Setting?, problem: (Setting) -> String?): Unit =
-        TODO("lane songbook-entries")
+    /**
+     * songbook.set_song_setting: give the first song of the songbook that [entry] names ([sameEntry]) its [setting],
+     * in its place; null, or a setting that says nothing, takes it off, and the song says nothing again. The setting
+     * is checked first, before the songbook is looked for (songbook.check_setting: [problem] is the viewer's
+     * Versions.settingProblem of its parts, which :core can't see), refused as "a setting: <why>"; then the
+     * songbook, by its name in any case; then the song. The other songs, and the songbook's place, stay as they are.
+     */
+    fun set(db: Db, name: String, entry: String, setting: Setting?, problem: (Setting) -> String?) {
+        val given = setting?.takeUnless { it == Setting() }
+        given?.let(problem)?.let { throw SongbookError("a setting: $it") }
+        db.savepoint(SAVEPOINT) {
+            val held = header(db, name)
+            val songs = held.songs.toMutableList()
+            val at = songs.indexOfFirst { sameEntry(textOf(it), entry) }
+            if (at < 0) {
+                throw SongbookError("\"$entry\" isn't in the songbook \"${held.name}\": caracole songbook show lists " +
+                                    "its songs")
+            }
+            val now = stored(SongbookSong(textOf(songs[at]), given))
+            if (now != songs[at]) {
+                songs[at] = now
+                SongbookStore.replace(db, held, JsonArray(songs))
+            }
+        }
+    }
 
     /** songbook.songbooks_listing: the songbooks of [books] whose entries name [song], each found as
      * [findEntrySong] finds it, never by a search (get.py's songbooks stage; SongbookEntries' songs_to_get).
-     * find_song re-keys the library on every call (ensure_current_keys) and [findEntrySong] doesn't, so whatever
-     * lists (this, and songs_to_get) runs LibraryStore.ensureCurrentKeys in the same write first, with a test of a
-     * song whose stored key is a KEY_VERSION behind. */
-    fun listing(db: Db, books: List<Songbook>, song: SongRow): List<Songbook> = TODO("lane songbook-entries")
+     * find_song re-keys the library on every call (ensure_current_keys) and [findEntrySong] doesn't, so this re-keys
+     * it first (LibraryStore.ensureCurrentKeys's, in the caller's write), as SongbookEntries.entries does. */
+    fun listing(db: Db, books: List<Songbook>, song: SongRow): List<Songbook> {
+        Rekey.ensure(db, Stamps.now())
+        return books.filter { book -> book.songs.any { findEntrySong(db, it.text)?.id == song.id } }
+    }
 
     /** songbook.rename_songbook: give the songbook another name ([checkName]'s, checked first), in its place, its
      * songs as they are; the songbook renamed. Its own name and folder are its to take again (a case, a slash for a

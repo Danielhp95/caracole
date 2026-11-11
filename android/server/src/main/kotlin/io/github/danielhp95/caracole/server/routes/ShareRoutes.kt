@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.share.ShareLinks
 import io.github.danielhp95.caracole.core.share.SharedText
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
@@ -29,14 +30,28 @@ import kotlinx.serialization.json.JsonPrimitive
  *     GET /share?artist=&title=&app=                 the names typed (its Edit), searched again
  *     GET /share/cancel                              Cancel: the library page (303); the app leaves the share instead
  *
- * Nothing is asked of any site, nor of the music app: the names come of the text alone (SharedText, then
- * SongNames.readNames, the one parser of a free text), and the search is /api/search's (SearchRoutes.answer: your
- * library and the offline indexes). The page ([SharePage]) offers the best match, its sites and your song when the
+ * The names come of the text (SharedText, then SongNames.readNames, the one parser of a free text), and the search
+ * is /api/search's (SearchRoutes.answer: your library and the offline indexes). A text that names no song but a link
+ * of Apple Music's, Spotify's, TIDAL's, YouTube's or YouTube Music's is read by asking its service once, the owner's
+ * choice of 2026-11-10 ([links]: ShareLinks, ShareAsk, at a lookup's pace, inside one write as a lookup's runner
+ * asks; its cached answer first, with no request and no write), and that page's names are read as the text's would
+ * be. Nothing is asked of a tab site: the page ([SharePage]) offers the best match, its sites and your song when the
  * library has it, and Fetch posts the library page's own `POST /lookup`, the one that asks the sites, at a lookup's
  * pace, once the owner taps it.
  */
 class ShareRoutes(private val database: Database, private val search: SearchRoutes, private val csrf: String,
-                  private val libraryName: () -> String = { "" }) : RouteModule {
+                  private val libraryName: () -> String = { "" }, private val links: LinkReader = LinkReader.NONE) :
+    RouteModule {
+    /** What a shared link's service says of it ([ShareLinks.Read]), asked once; [NONE] asks nothing (the link is
+     * read as no song's, with nothing said). */
+    fun interface LinkReader {
+        fun read(linked: ShareLinks.Linked): ShareLinks.Read?
+
+        companion object {
+            val NONE: LinkReader = LinkReader { null }
+        }
+    }
+
     override val routes: List<Route> = listOf(
         Route("GET", "/share", "a song shared to the app (text, subject, extra_title, from; or artist, title, app): " +
                   "what it names, searched in your library and the offline indexes, and Fetch", get = GetAnswer {
@@ -57,7 +72,7 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         val title = field(asked, "title")
         val app: String?
         val sent: List<Pair<String, String>>
-        val said: String?
+        var said: String?
         val link: String?
         if (typed) {
             app = field(asked, "app").ifEmpty { null }
@@ -74,19 +89,25 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
             said = shared.said
             link = shared.link
         }
+        // A link alone of a service caracole may ask: its answer's names, as a text that said them would give them.
+        val read = if (typed || said != null) null else link?.let { ShareLinks.of(it) }?.let { links.read(it) }
+        val named = read as? ShareLinks.Read.Named
+        if (named != null) said = if (named.video) named.title else "${named.artist} - ${named.title}"
+        val text = said
         val names = when {
             typed && artist.isNotEmpty() && title.isNotEmpty() -> artist to title
-            said != null -> database.read { db -> SongNames.readNames(db, said, songs) }
+            named?.video == true -> database.read { db -> SongNames.readNames(db, named.title, songs, channel = named.artist) }
+            text != null -> database.read { db -> SongNames.readNames(db, text, songs) }
             else -> null
         }
         // The names read, else the text as read_names cleans it (a video's words gone), as the search box would take it.
-        val q = SearchQuery.of(names?.let { "${it.first} ${it.second}" } ?: said?.let { SongNames.clean(it).ifEmpty { it } }.orEmpty())
+        val q = SearchQuery.of(names?.let { "${it.first} ${it.second}" } ?: text?.let { SongNames.clean(it).ifEmpty { it } }.orEmpty())
         val answer = if (SearchQuery.short(q)) null else search.answer(q)
         val lines = answer?.let { SongLine.of(it) }.orEmpty()
         val best = answer?.let { SongLine.best(it, lines, names) }
         val ugEmpty = (answer?.get("hint") as? JsonPrimitive)?.content == Looked.UG_EMPTY
         return ShareView(
-            app = app, sent = sent, said = said, names = names, link = link, typed = typed, best = best,
+            app = app, sent = sent, said = said, names = names, link = link, typed = typed, read = read, best = best,
             others = lines.filter { it !== best }.take(OTHERS), note = if (ugEmpty) NO_INDEX else null,
             artist = names?.first ?: artist, title = names?.second ?: if (typed) title else said.orEmpty(),
         )

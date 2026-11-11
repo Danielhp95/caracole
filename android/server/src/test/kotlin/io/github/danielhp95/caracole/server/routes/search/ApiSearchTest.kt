@@ -57,15 +57,17 @@ class ApiSearchTest {
 
     @Test
     fun the_vectors_were_made_with_what_the_phone_answers_null() {
-        // progression and YouTube: null in every full answer; LaCuerda's own search too, as WebApp(searches_lacuerda=
-        // False) answers it (its gate is vectors/web/api_search_gate.jsonl's); LaCuerda's unlisted page the phone's.
+        // YouTube: null in every full answer; LaCuerda's own search too, as WebApp(searches_lacuerda=False) answers it
+        // (its gate is vectors/web/api_search_gate.jsonl's); LaCuerda's unlisted page the phone's; a progression typed
+        // or named said as caracole serve says it, of no song of a fixture (ProgressionTest has songs that play one).
         val full = records.map { it.out!!.jsonObject.getValue("json").jsonObject }.filter { "looked" in it }
         assertTrue(full.isNotEmpty())
         for (answer in full) {
-            for (name in listOf("progression", "lacuerda_search", "youtube")) {
+            for (name in listOf("lacuerda_search", "youtube")) {
                 assertEquals("null", answer.getValue(name).toString(), "$name of ${answer["query"]}")
             }
         }
+        assertTrue(full.any { it.getValue("progression").toString() != "null" }, "a progression said")
         assertTrue(full.any { it.getValue("lacuerda_unlisted").toString() != "null" }, "a LaCuerda page offered")
         assertEquals(KEYS.sorted(), full.first().keys.toList().sorted())
     }

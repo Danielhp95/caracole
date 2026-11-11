@@ -1,7 +1,10 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.http.HttpAnswer
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.http.TransportError
+import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.Phone
@@ -30,8 +33,10 @@ import kotlin.test.assertTrue
 /**
  * The page of a song shared to the app (`GET /share`), over the phone as the app assembles it and the search corpus's
  * `ug` fixture (your Radiohead - Creep, found; the index's Eagles - Hotel California and Radiohead - Karma Police, not
- * yours): what it read, the best match, Get it as the library page's `POST /lookup`, Open, Edit and Cancel; and no
- * site asked for any of it.
+ * yours): what it read, the best match, Get it as the library page's `POST /lookup`, Open, Edit and Cancel; no tab
+ * site asked for any of it; and a link alone of Spotify's, Apple Music's or YouTube Music's read by asking its
+ * service once (the answers each gave caracole on 2026-11-10, tests/fixtures/spotify/, itunes/, youtube/), its
+ * failures said in one line.
  */
 class ShareRoutesTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -45,13 +50,15 @@ class ShareRoutesTest {
         override fun remember(address: String) = Unit
     }
 
-    /** The phone over [fixture] (none: an empty database), every request to a site counted, and refused. */
-    private fun phone(fixture: String? = "ug"): Phone {
+    /** The phone over [fixture] (none: an empty database), every request to a site counted, and refused but those
+     * [sites] answers ("GET url" to its answer). */
+    private fun phone(fixture: String? = "ug", sites: Map<String, HttpAnswer> = emptyMap()): Phone {
         val database = TestDb.fresh(tmp.newFolder())
         if (fixture != null) database.writeBlocking { Fixtures.load(it, "search/fixtures/$fixture.jsonl") }
         val counting = Transport { request ->
             asked.incrementAndGet()
-            throw TransportError("refused", "no site in a test: ${request.url}")
+            sites["${request.method} ${request.url}"]
+                ?: throw TransportError("refused", "no site in a test: ${request.url}")
         }
         return Phone(PhoneDeps(database, tmp.newFolder(), tmp.newFolder(), null, scope, NoAddress, TestApp.SECRET,
                                TestApp.CSRF, transport = { counting }, searchesLacuerda = false)).also { phone = it }
@@ -141,18 +148,92 @@ class ShareRoutesTest {
         assertEquals(listOf("csrf" to TestApp.CSRF, "song" to "1", "ug" to "radiohead/creep"), forms(best, "/lookup").single())
     }
 
-    @Test fun `a link alone names no song, and nothing is searched or asked`() {
+    @Test fun `a link alone of a service caracole doesn't ask names no song, and nothing is searched or asked`() {
         val phone = phone()
-        val html = page(phone.get(share("text" to "https://open.spotify.com/track/4u7EnebtmKWzUH433cf5Qv?si=0f3",
-                                        "from" to "com.spotify.music")))
-        assertTrue("<h1>Shared from Spotify</h1>" in html, shown(html))
-        assertTrue("Spotify shared a link alone, which names no song: <code>https://open.spotify.com/track/" +
-                       "4u7EnebtmKWzUH433cf5Qv?si=0f3</code>. caracole doesn't ask Spotify what it is" in html, shown(html))
+        val html = page(phone.get(share("text" to "https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm", "from" to "deezer.android.app")))
+        assertTrue("<h1>Shared from Deezer</h1>" in html, shown(html))
+        assertTrue("Deezer shared a link alone, which names no song: <code>https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm" +
+                       "</code>. caracole doesn't ask Deezer what it is" in html, shown(html))
         assertTrue("<details class=\"picker\" open><summary class=\"btn\">Edit</summary>" in html, "Edit, open")
         assertFalse("The best match" in html)
         assertEquals(emptyList(), forms(html, "/lookup"), "no Get it without names")
         assertTrue("<a class=\"btn\" href=\"/share/cancel\">Cancel</a>" in html)
         assertEquals(0, asked.get())
+    }
+
+    private val spotifyTrack = "https://open.spotify.com/track/4u7EnebtmKWzUH433cf5Qv"
+    private val spotifyPage = HttpAnswer(200, listOf("content-type" to "text/html; charset=utf-8"),
+                                         Corpus.fixture("spotify/track.html"))
+
+    @Test fun `a Spotify link alone is read from its page, asked once, and Get it looks up its names`() {
+        val phone = phone(sites = mapOf("GET $spotifyTrack" to spotifyPage))
+        val target = share("text" to "$spotifyTrack?si=0f3c1c4d5e6f4a7b", "from" to "com.spotify.music")
+        val html = unescape(page(phone.get(target)))
+        assertTrue("<h1>Shared from Spotify</h1>" in html, shown(html))
+        assertTrue("Read from Spotify's page: <strong>Queen – Bohemian Rhapsody</strong>." in html, shown(html))
+        assertTrue("<li>Spotify's page: <code>Queen – Bohemian Rhapsody - Remastered 2011</code></li>" in html, shown(html))
+        assertEquals(listOf(listOf("csrf" to TestApp.CSRF, "artist" to "Queen", "title" to "Bohemian Rhapsody")),
+                     forms(html, "/lookup"), "Get it by the names the page gave")
+        assertTrue("name=\"artist\" value=\"Queen\"" in html && "name=\"title\" value=\"Bohemian Rhapsody\"" in html)
+        assertEquals(1, asked.get(), "one request: the track's page")
+        val events = phone.parts.database.read { db ->
+            db.query("SELECT run, provider, decision FROM events") { r -> Triple(r.text(0), r.text(1), r.text(2)) }
+        }
+        assertEquals(listOf("spotify" to "ok"), events.map { it.second to it.third })
+        assertTrue(events.single().first!!.startsWith("lookup:share:"), "a lookup's run: the hour's lookup_per_hour counts it")
+        // The page loaded again, or the link shared again: the cache's answer, no request.
+        assertEquals(html, unescape(page(phone.get(target))))
+        assertEquals(1, asked.get())
+    }
+
+    @Test fun `an album's link names no song, said with no request`() {
+        val phone = phone()
+        val html = page(phone.get(share("text" to "https://open.spotify.com/album/1GbtB4zTqAsyfZEsm1RZfx?si=1")))
+        assertTrue("Spotify shared a link that names no song (<code>https://open.spotify.com/album/1GbtB4zTqAsyfZEsm1RZfx?si=1" +
+                       "</code>): a link to an album. Type the artist and the title." in html, shown(html))
+        assertTrue("<details class=\"picker\" open><summary class=\"btn\">Edit</summary>" in html, "Edit, open")
+        assertEquals(0, asked.get())
+    }
+
+    @Test fun `a service that fails is said in one line, Edit open, and nothing read as a miss`() {
+        val phone = phone()
+        val html = page(phone.get(share("text" to "$spotifyTrack?si=0f3", "from" to "com.spotify.music")))
+        assertTrue("Spotify shared a link alone (<code>$spotifyTrack?si=0f3</code>), and caracole couldn't read it: asking " +
+                       "Spotify failed (refused: no site in a test: $spotifyTrack). Type the artist and the title, or share " +
+                       "it again later." in html, shown(html))
+        assertTrue("<details class=\"picker\" open><summary class=\"btn\">Edit</summary>" in html, "Edit, open")
+        assertEquals(emptyList(), forms(html, "/lookup"))
+        assertEquals(1, asked.get())
+        assertFalse("names no song" in html, "an error is no answer")
+    }
+
+    @Test fun `a service turned off on the computer is asked nothing`() {
+        val phone = phone(sites = mapOf("GET $spotifyTrack" to spotifyPage))
+        phone.parts.database.writeBlocking { db ->
+            db.kvSet(PhoneConfig.SETTINGS_KV, """{"providers": {"spotify": {"enabled": false}}}""")
+        }
+        val html = unescape(page(phone.get(share("text" to spotifyTrack))))
+        assertTrue("caracole couldn't read it: reading Spotify's links is off ([providers.spotify] enabled = false in the " +
+                       "computer's caracole.toml, which the phone took at its last sync)." in html, shown(html))
+        assertEquals(0, asked.get())
+    }
+
+    @Test fun `an Apple Music link is read from Apple's catalogue, a YouTube Music one from its video's title and channel`() {
+        val apple = "https://itunes.apple.com/lookup?id=1440833334&country=us"
+        val oembed = "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DfJ9rUzIMcZQ&format=json"
+        val phone = phone(sites = mapOf(
+            "GET $apple" to HttpAnswer(200, emptyList(), Corpus.fixture("itunes/lookup-song.json")),
+            "GET $oembed" to HttpAnswer(200, emptyList(), Corpus.fixture("youtube/oembed.json")),
+        ))
+        val am = unescape(page(phone.get(share("text" to "https://music.apple.com/us/album/love-me-do/1440833098?i=1440833334"))))
+        assertTrue("<h1>Shared from Apple Music</h1>" in am, shown(am))
+        assertTrue("Read from Apple Music's catalogue: <strong>The Beatles – Love Me Do</strong>." in am, shown(am))
+        val ytm = unescape(page(phone.get(share("text" to "https://music.youtube.com/watch?v=fJ9rUzIMcZQ&si=Qx1",
+                                                "from" to "com.google.android.apps.youtube.music"))))
+        assertTrue("Read from the video's title on YouTube Music: <strong>Queen – Bohemian Rhapsody</strong>." in ytm, shown(ytm))
+        assertTrue("<li>The video's title on YouTube Music: <code>Queen – Bohemian Rhapsody (Official Video Remastered), " +
+                       "by Queen Official</code></li>" in ytm, shown(ytm))
+        assertEquals(2, asked.get(), "one request each")
     }
 
     @Test fun `Edit searches the names as typed, never read again`() {

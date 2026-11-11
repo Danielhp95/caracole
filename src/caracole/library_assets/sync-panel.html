@@ -1,40 +1,30 @@
 <section class="view sync" id="sync" role="tabpanel" aria-labelledby="tab-sync" hidden>
-<div class="sync-head">
-  <h2>Share logs with another horde</h2>
-  <p class="sync-intro">Lay your book beside another horde's, choose where each difference goes, then share: each
-    book takes what the other wrote.</p>
-</div>
-<form class="sync-with" id="sync-with">
-  <label class="sync-field" for="sync-address">Their address <em>their caracole serve</em></label>
-  <div class="sync-row">
-    <input id="sync-address" name="address" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
-      autocorrect="off" spellcheck="false" placeholder="http://192.168.1.20:8737">
-    <button type="submit" class="btn primary" id="sync-compare">Compare</button>
-  </div>
-</form>
-<div class="sync-peers" id="sync-peers" hidden>
-  <p class="sync-sub" id="sync-peers-head">Hordes met before</p>
-  <ul class="sync-peer-list" id="sync-peer-list" aria-labelledby="sync-peers-head"></ul>
-</div>
-<p class="sync-status" id="sync-status" role="status"></p>
-<div class="sync-found" id="sync-found" hidden>
-  <p class="sync-sides" id="sync-sides"></p>
-  <div class="sync-bulk" id="sync-bulk" role="group" aria-label="Every conflict at once" hidden>
-    <button type="button" class="btn" id="sync-all-here">Keep all ours</button>
-    <button type="button" class="btn" id="sync-all-there">Take all theirs</button>
-  </div>
-  <div class="sync-groups" id="sync-groups"></div>
-  <div class="sync-go">
-    <p class="sync-plan" id="sync-plan" aria-live="polite"></p>
-    <button type="button" class="btn primary" id="sync-go" disabled>Share</button>
-  </div>
-</div>
-<div class="sync-job" id="sync-job" hidden>
-  <p class="sync-job-name" id="sync-job-name"></p>
-  <p class="sync-job-line" id="sync-job-line" role="status" tabindex="-1"></p>
-  <ol class="step-chips" id="sync-steps" aria-label="Steps"></ol>
-  <p class="sync-job-detail" id="sync-job-detail"></p>
-  <div class="sync-outcome" id="sync-outcome" hidden></div>
-  <button type="button" class="btn primary" id="sync-reload" hidden>Reload</button>
+<h2 class="visually-hidden">Share</h2>
+<div class="sync-panels">
+<section class="sync-panel" aria-labelledby="sync-with-head">
+  <h3 class="sync-panel-head" id="sync-with-head"><span class="sync-icon" data-icon="rack"></span>Sync with a server</h3>
+  <form class="sync-with" id="sync-with">
+    <label class="visually-hidden" for="sync-address">Its address, caracole serve's there</label>
+    <div class="sync-row">
+      <input id="sync-address" name="address" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
+        autocorrect="off" spellcheck="false" placeholder="http://192.168.1.20:8737" list="sync-peers">
+      <button type="button" class="btn" id="sync-test">Test</button>
+    </div>
+    <datalist id="sync-peers"></datalist>
+  </form>
+  <p class="sync-tested" id="sync-tested" role="status"></p>
+  <p class="sync-last" id="sync-last"></p>
+  <div class="sync-panel-go"><button type="button" class="btn primary" id="sync-start">Sync</button></div>
+</section>
+<section class="sync-panel" aria-labelledby="sync-export-head">
+  <h3 class="sync-panel-head" id="sync-export-head"><span class="sync-icon" data-icon="export"></span>Export</h3>
+  <p class="sync-panel-said">This library in one file, for another server or a phone: to share, or to keep.</p>
+  <div class="sync-panel-go"><button type="button" class="btn primary" id="sync-export">Export</button></div>
+</section>
+<section class="sync-panel" aria-labelledby="sync-import-head">
+  <h3 class="sync-panel-head" id="sync-import-head"><span class="sync-icon" data-icon="import"></span>Import a file</h3>
+  <p class="sync-panel-said">A file a phone or a server exported, synced as if its caracole were here.</p>
+  <div class="sync-panel-go"><label class="btn primary" for="sync-file" id="sync-choose">Choose a file</label></div>
+</section>
 </div>
 </section>

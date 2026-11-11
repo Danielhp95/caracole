@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.ug.internal.fetch.SongFetch
 import io.github.danielhp95.caracole.core.ug.internal.fetch.Slots
@@ -14,7 +15,7 @@ import java.time.Instant
  * - **Candidates**: the song's tabs in the offline index, at their slugged URLs, and its pins, which replace the kind
  *   group they belong to and are read at the slugged address you pasted; blocked ids never compete, nor a tab at a URL
  *   robots.txt closes, nor one UG redirects there (RobotsClosed: neither gone nor unreadable). A not-found song is
- *   looked up on its artist's UG page, lane ug-fetch-artist's seam (internal/fetch/ArtistPages.kt).
+ *   looked up on its artist's UG page, as `_artist_page_route` does ([ArtistRoute], internal/fetch/ArtistPages.kt).
  * - **Ratings**: for each kind group (chords; tabs; ukulele) the page of the lowest unrated id, a slug naming no part
  *   first, up to `maxPagesPerGroup` pages (`guitarPagesPerGroup` for the tabs).
  * - **Slots**, one at a time: the sheet (the top `scoredSheets` chords versions scored for lyric coverage, ranked
@@ -40,6 +41,11 @@ object UgFetch {
     val SHEET_FILES: List<String> = listOf("sheet.txt", "sheet.json")
     val TAB_FILES: List<String> = listOf("tab.txt", "tab.json")
 
+    /** ug/fetch.py's KEPT_WITHOUT: what a kept version's JSON leaves out of UG's raw record, the tab's rating and votes
+     * as they are the day its page is read, so that one tab read on two days, here or by the computer, is kept in the
+     * same bytes (a sync's digest leaves them out of the raw record too: Units.VOLATILE_RAW). */
+    val KEPT_WITHOUT: Set<String> = setOf("rating", "votes")
+
     /** A tab page that won't parse, even fetched again, is asked for again after a week, then after twice as long each
      * time it still won't, 90 days at most. */
     val UNREADABLE_RETRY: Duration = Duration.ofDays(7)
@@ -59,6 +65,18 @@ object UgFetch {
 
     /** needs_artist_page: whether the index can't settle the song, so its artist's UG page should be read. */
     fun needsArtistPage(song: SongRow): Boolean = SongFetch.needsArtistPage(song)
+
+    /** ARTIST_PAGE_MAX_AGE: an artist's page read for a song is read for it again after this (fetch_due's). */
+    val ARTIST_PAGE_MAX_AGE: Duration = Duration.ofDays(30)
+
+    /** fetch_due: whether a run would fetch the song at [now] (songs_to_fetch for one song): matched and dirty, or its
+     * `[block]` changed since its fetch (kv `ug:blocked:<id>`); due on its artist's UG page, which can be found, not
+     * read for it within [artistPageMaxAge] (kv `ug:artist_page_checked:<id>`); not matched, still keeping what an
+     * earlier match kept; or accepted, its artist's page due again. Read only: the to-do page's buy list, the library
+     * page's cards (todo.songs_to_buy). */
+    fun fetchDue(db: Db, song: SongRow, overrides: Overrides, now: Instant,
+                 artistPageMaxAge: Duration = ARTIST_PAGE_MAX_AGE): Boolean =
+        SongFetch.fetchDue(db, song, overrides, now, artistPageMaxAge)
 
     /** sheet_group: the UG kinds the song's sheet comes from (ukulele chords for a UG ukulele sheet, else chords). */
     fun sheetGroup(db: Db, songId: Long): List<String> = Slots.sheetGroup(db, songId)

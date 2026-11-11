@@ -15,6 +15,23 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- No backup: the copy comes from caracole serve again, and nothing goes to anyone's cloud. -->
+    <!-- The music apps a shared song may come from, so a share names its sender (Android hides other apps by
+         default; core.share.SharedText reads some apps' text by who sent it, Audile's title first). -->
+    <queries>
+        <package android:name="com.spotify.music" />
+        <package android:name="com.spotify.lite" />
+        <package android:name="deezer.android.app" />
+        <package android:name="com.apple.android.music" />
+        <package android:name="com.aspiro.tidal" />
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.mrsep.musicrecognizer" />
+        <package android:name="com.shazam.android" />
+        <package android:name="com.soundcloud.android" />
+        <package android:name="com.musixmatch.android.lyrify" />
+        <package android:name="org.moire.ultrasonic" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

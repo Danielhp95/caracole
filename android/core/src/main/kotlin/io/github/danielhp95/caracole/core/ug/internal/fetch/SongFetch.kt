@@ -1,11 +1,16 @@
 package io.github.danielhp95.caracole.core.ug.internal.fetch
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.match.Match
+import io.github.danielhp95.caracole.core.py.PyInt
+import io.github.danielhp95.caracole.core.py.PyRe
+import io.github.danielhp95.caracole.core.py.PyRegex
+import io.github.danielhp95.caracole.core.ug.ArtistRoute
 import io.github.danielhp95.caracole.core.ug.FetchContext
 import io.github.danielhp95.caracole.core.ug.IndexTab
 import io.github.danielhp95.caracole.core.ug.SheetVersions
@@ -17,7 +22,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import java.math.BigInteger
+import java.time.DateTimeException
+import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 
 /** ug/fetch.py's one song: `process_song`, `_finish`, `keep_version`, `checked_since` and what they read. */
@@ -47,7 +58,7 @@ internal object SongFetch {
         } else if (song.matchDecision !in setOf("accept", "pinned")) {
             dropUndone(run)
             return unfinished()
-        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ARTIST_PAGE_KINDS)) {
+        } else if (song.matchStep == Match.ARTIST_PAGE && !ArtistPages.versions(run, ArtistRoute.ARTIST_PAGE_KINDS)) {
             return unfinished()
         }
         val tabs = songIndexTabs(ctx.db, song, ctx.overrides.block)
@@ -90,9 +101,6 @@ internal object SongFetch {
         return SongFetchOutcome(given.id, sheet, tab, ctx.client.requestsMade - start, settled = true,
                                 keptVersions = run.keptVersions)
     }
-
-    /** ARTIST_PAGE_KINDS: the artist page's lists read, the sheet's first. */
-    private val ARTIST_PAGE_KINDS = listOf("chords", "tabs")
 
     /**
      * `_finish`: every slot is done: the status refreshed and the song marked checked. A song with a page that
@@ -234,5 +242,82 @@ internal object SongFetch {
         if (song.matchDecision in setOf("accept", "pinned")) return false
         val checked = db.kvGet("ug:artist_page_checked:${song.id}")?.let(Pages::parseIso) ?: return false
         return checked >= from
+    }
+
+    // --- fetch_due: whether a run would fetch the song (the to-do page's and the cards' buy list) -------------------
+
+    /** `fetch_due`: `songs_to_fetch` for one song: matched and dirty (or its `[block]` changed since), due on its
+     * artist's UG page, an undone match still kept, or an accepted song's artist page due again. */
+    fun fetchDue(db: Db, song: SongRow, overrides: Overrides, now: Instant, maxAge: Duration): Boolean {
+        if (ignored(song, overrides)) return false
+        val matched = song.matchDecision == "accept" || song.matchDecision == "pinned"
+        val dirty = matched && (song.ugDirty || blockChanged(db, song, overrides.block))
+        val due = needsArtistPage(song) && !checkedWithin(db, song.id, now, maxAge) &&
+            ArtistRoute.artistIsKnown(db, song, overrides)
+        val undone = !matched && undone(db, song.id)
+        return dirty || due || undone || recheckDue(db, song, overrides, now, maxAge)
+    }
+
+    /** `_block_changed`: a tab the song keeps (as sheet.txt or tab.txt) or picks blocked since its fetch, or a tab the
+     * fetch left out (kv `ug:blocked:<id>`) no longer blocked. A tab id there is compared as Python's int (a bool its
+     * 0 or 1, anything else never in [block]); a kept version's id that isn't one an error, int()'s ValueError. */
+    private fun blockChanged(db: Db, song: SongRow, block: Set<Long>): Boolean {
+        val leftOut = db.kvGet(leftOutKey(song.id))?.let { PyJson.loads(it) } as? JsonArray ?: JsonArray(emptyList())
+        val blocked = block.mapTo(HashSet(), BigInteger::valueOf)
+        if (leftOut.any { t -> (t as? JsonPrimitive)?.let(::pythonInt).let { it == null || it !in blocked } }) {
+            return true
+        }
+        if (block.isEmpty()) return false
+        val rows = db.query(
+            "SELECT v.tab_id FROM versions v WHERE v.song_id = ? AND v.provider = ? AND (v.pick_rank IS NOT NULL " +
+                "OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND $KEPT_TEXT_SQL))",
+            song.id, UgFetch.PROVIDER, *KEPT_TEXT.toTypedArray(),
+        ) { it.text(0)!! }
+        return rows.any { tab ->
+            (PyInt.parse(tab) ?: throw IllegalArgumentException("invalid literal for int() with base 10: '$tab'")) in blocked
+        }
+    }
+
+    /** A JSON number as Python's int compares it (True is 1); null for anything that is no int. */
+    private fun pythonInt(p: JsonPrimitive): BigInteger? = when {
+        p.isString -> null
+        p.booleanOrNull != null -> if (p.booleanOrNull == true) BigInteger.ONE else BigInteger.ZERO
+        else -> p.content.toBigIntegerOrNull()
+    }
+
+    /** `_last_checked`: when the song was last looked up on its artist's UG page (kv `ug:artist_page_checked:<id>`),
+     * read as `_parse_iso`'s strptime reads it: a time it can't read is its ValueError, an IllegalArgumentException. */
+    private fun lastChecked(db: Db, songId: Long): Instant? =
+        db.kvGet("ug:artist_page_checked:$songId")?.let(::strptime)
+
+    /** `_parse_iso`: `strptime(value, "%Y-%m-%dT%H:%M:%SZ")` in UTC (each field a run of Python's `\d`, %Y four of
+     * them, the others one or two); anything else its ValueError, an IllegalArgumentException. */
+    private fun strptime(value: String): Instant {
+        val m = PyRe.fullmatch(STRPTIME, value) ?: throw IllegalArgumentException("time data '$value' does not match format")
+        val f = m.groupValues.drop(1).map { PyInt.parse(it)!!.toInt() }
+        return try {
+            LocalDateTime.of(f[0], f[1], f[2], f[3], f[4], f[5]).toInstant(ZoneOffset.UTC)
+        } catch (e: DateTimeException) {
+            throw IllegalArgumentException(e.message, e)
+        }
+    }
+
+    private val STRPTIME: Regex by lazy {
+        PyRegex.compile("""(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{1,2}):(\d{1,2})Z""")
+    }
+
+    /** `_checked_within`. */
+    private fun checkedWithin(db: Db, songId: Long, now: Instant, maxAge: Duration): Boolean {
+        val checked = lastChecked(db, songId) ?: return false
+        return Duration.between(checked, now) < maxAge
+    }
+
+    /** `_recheck_due`: an accepted song whose artist's UG page is due again (accepted there, or its index tabs hold no
+     * chords UG still has), once [maxAge] has passed since it was read for it. */
+    private fun recheckDue(db: Db, song: SongRow, overrides: Overrides, now: Instant, maxAge: Duration): Boolean {
+        if (song.matchDecision != "accept") return false
+        val checked = lastChecked(db, song.id) ?: return false
+        if (Duration.between(checked, now) < maxAge) return false
+        return song.matchStep == Match.ARTIST_PAGE || liveChords(db, song, songIndexTabs(db, song, overrides.block)).isEmpty()
     }
 }

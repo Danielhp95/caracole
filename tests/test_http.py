@@ -250,11 +250,11 @@ def test_robots_disallows_names_the_rule_for_other_modules():
     assert [u for u in READ_BY_CARACOLE if robots_disallows(u)] == []
 
 
-def robots_groups(fixture: str) -> dict[str, list[str]]:
-    """The Disallow lines of each User-agent group of a captured robots.txt."""
+def robots_groups(fixture: str, name: str = "robots.txt") -> dict[str, list[str]]:
+    """The Disallow lines of each User-agent group of a captured robots.txt (``name`` in the fixture's folder)."""
     from pathlib import Path
 
-    text = (Path(__file__).parent / "fixtures" / fixture / "robots.txt").read_text(encoding="utf-8")
+    text = (Path(__file__).parent / "fixtures" / fixture / name).read_text(encoding="utf-8")
     groups: dict[str, list[str]] = {}
     agent = None
     for line in text.splitlines():
@@ -445,6 +445,21 @@ def test_a_redirect_between_the_hosts_of_one_site_is_followed(tmp_path):
     client, rec = make_client(tmp_path, moved(WWW + "/artist/a_1"))
     assert client.get(OLD).status == 200
     assert [str(r.url) for r in rec.requests] == [OLD, WWW + "/artist/a_1"]
+
+
+def test_a_redirect_the_caller_accepts_is_its_answer_never_followed(tmp_path):
+    # A short link's one hop (the phone's spotify.link, whose redirect is to another site): its Location is the
+    # answer, kept with it; a 3xx is never cached, so the next get asks again.
+    events = []
+    client, rec = make_client(tmp_path, moved("https://open.spotify.com/track/x", status=307), events=events)
+    for _ in range(2):
+        answer = client.get(OLD, accept=(200, 307))
+        assert (answer.status, answer.headers["location"], answer.from_cache) == (307, "https://open.spotify.com/track/x",
+                                                                                  False)
+    assert [str(r.url) for r in rec.requests] == [OLD, OLD] and client.requests_made == 2
+    assert [(e.url, e.status, e.decision) for e in events] == [(OLD, 307, "ok"), (OLD, 307, "ok")]
+    with pytest.raises(ProviderError, match="redirect to another site"):
+        client.get(OLD)  # not accepted: followed as ever, and refused off the site
 
 
 def test_500_is_error_and_not_cached(tmp_path):
@@ -1005,6 +1020,32 @@ def test_a_request_that_gets_no_answer_says_what_happened(tmp_path, caplog, monk
     assert request_lines(caplog) == [
         "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → ReadTimeout after 30.00 s (1 of 60 requests)",
     ]
+
+
+def test_a_shared_links_services_rules_are_the_user_agent_star_group_of_each_robots_txt():
+    # Each host the phone asks about a link shared to it (config.SHARE_PROVIDERS), its robots.txt as it was live on
+    # 10 November 2026, read with caracole's own user agent: the `*` group's Disallow lines, its Allow lines (Spotify's
+    # "Allow: /", Apple's viewMultiRoom) aside, as for every site.
+    from caracole.http import ROBOTS_DISALLOW, robots_disallows
+
+    assert ROBOTS_DISALLOW["itunes.apple.com"] == tuple(robots_groups("itunes")["*"])
+    assert ROBOTS_DISALLOW["open.spotify.com"] == tuple(robots_groups("spotify")["*"])
+    assert ROBOTS_DISALLOW["spotify.link"] == ROBOTS_DISALLOW["spotify.app.link"] == tuple(
+        robots_groups("spotify", "link-robots.txt")["*"])
+    assert ROBOTS_DISALLOW["www.youtube.com"] == tuple(robots_groups("youtube", "www-robots.txt")["*"])
+    # tidal.com's `*` group allows all (its AI crawlers' groups close it to them alone), and Bitly's tidal.link has an
+    # empty Disallow: no rule for either.
+    assert robots_groups("tidal")["*"] == [] and robots_groups("tidal", "link-robots.txt")["*"] == [""]
+    assert not {"tidal.com", "www.tidal.com", "listen.tidal.com", "tidal.link"} & set(ROBOTS_DISALLOW)
+    # What the phone asks is open; the neighbours it never asks are closed.
+    for url in ("https://itunes.apple.com/lookup?id=1440833334&country=us", "https://open.spotify.com/track/4u7EnebtmKWzUH433cf5Qv",
+                "https://open.spotify.com/oembed?url=x", "https://spotify.link/j7xk2xnhzDb", "https://tidal.com/track/196435445",
+                "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DfJ9rUzIMcZQ&format=json"):
+        assert robots_disallows(url) is None, url
+    assert robots_disallows("https://itunes.apple.com/us/lookup?id=1") == "/*/lookup?"
+    assert robots_disallows("https://itunes.apple.com/search?term=x") == "/search*"
+    assert robots_disallows("https://open.spotify.com/embed/track/4u7EnebtmKWzUH433cf5Qv") == "/embed/"
+    assert robots_disallows("https://www.youtube.com/results?search_query=x") == "/results"
 
 
 def test_azlyrics_rules_are_the_user_agent_star_group_of_its_robots_txt():

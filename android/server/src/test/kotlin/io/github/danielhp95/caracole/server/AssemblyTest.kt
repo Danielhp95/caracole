@@ -1,8 +1,8 @@
 package io.github.danielhp95.caracole.server
 
 import io.github.danielhp95.caracole.core.lookup.RenderStats
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
+import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.jobs.Command
@@ -11,6 +11,8 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.routes.ShareRoutes
+import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
+import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -26,6 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -44,7 +47,7 @@ class AssemblyTest {
         val scope = CoroutineScope(SupervisorJob())
         try {
             return TestDb.fresh(tmp.root).use { database ->
-                val deps = PhoneDeps(database, tmp.newFolder("library"), tmp.newFolder("state"), null, scope,
+                val deps = PhoneDeps(database, tmp.newFolder("library"), File(tmp.root, "state").apply { mkdirs() }, null, scope,
                                      NoAddress, secret = "s".repeat(64), csrf = "tok", transport = { RefusingTransport })
                 block(Phone(deps, render?.invoke(deps)))
             }
@@ -71,9 +74,10 @@ class AssemblyTest {
     }
 
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
-        assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "LibraryRoutes",
-                            "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes", "ReviewRoutes",
-                            "ExportRoutes", "GuitarRoutes", "ShareRoutes"), phone.modules.map { it::class.simpleName })
+        assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
+                            "LibraryRoutes", "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes",
+                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
+                     phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
         assertEquals(emptyMap(), twice)
@@ -95,6 +99,11 @@ class AssemblyTest {
             "ReviewRoutes" to listOf("GET /review", "POST /review"),
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
+            "SyncRoutes" to listOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
+                                   "GET /api/sync/indexes", "POST /sync/apply"),
+            "SyncFileRoutes" to listOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",
+                                       "POST /sync/import/open", "POST /sync/import/part", "POST /sync/import/compare",
+                                       "POST /sync/import/drop"),
         )
         // The phone's own page of a song shared to the app, which caracole serve has none of.
         assertEquals(listOf("GET /share", "GET /share/cancel"),
@@ -110,15 +119,28 @@ class AssemblyTest {
         }
     }
 
+    @Test fun theSyncIsTheAppsAndHandsAFilesComparisonToTheFilesRoutes() = phone { phone ->
+        assertSame(phone.modules.filterIsInstance<SyncRoutes>().single(), phone.sync, "the app's unattended sync's")
+        assertSame(phone.modules.filterIsInstance<SyncFileRoutes>().single(), phone.sync.files,
+                   "Sync on a file's comparison queues its import")
+    }
+
+    @Test fun anExportAnEarlierStartLeftIsClearedAsThePhoneStarts() {
+        val left = File(tmp.root, "state/cache/peer").apply { mkdirs() }.let { File(it, "export-0123456789abcdef.caracole") }
+        left.writeBytes(ByteArray(1))
+        phone { assertTrue(!left.exists(), "no earlier start's export can be asked for") }
+    }
+
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
         // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
-        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code.
+        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code; both have
+        // (phone-render, songbook-entries).
         assertSame(phone.render.seam, phone.parts.pages)
         assertSame(phone.songbookPages.seam, phone.parts.songbooks)
-        assertSame(SongPages.NONE, phone.parts.pages)
-        assertSame(SongbookPages.NONE, phone.parts.songbooks)
+        assertSame(phone.render, phone.parts.pages)
+        assertSame<SongbookPages>(phone.songbookPages, phone.parts.songbooks)
         assertTrue(phone.parts.cards is PhonePageData)
-        // Nothing is stale while the phone's render is neutral, so its start queues no render job, nor does a take.
+        // A library with no song owes no page, so its start queues no render job, nor does a take that brought none.
         phone.start()
         phone.afterSync()
         assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind })
@@ -149,6 +171,31 @@ class AssemblyTest {
             val job = phone.queue.snapshot().single()
             assertEquals("render:build-1", job.spec.key)
             assertEquals(Job.DONE, runBlocking { phone.queue.await(job.id) }.state)
+        }
+    }
+
+    @Test fun theRenderJobAndATakeMakeAgainTheSongbookPagesThePhoneMadeAtItsBuild() {
+        phone(render = { Owing(it, stale = true) }) { phone ->
+            val database = phone.parts.database
+            val gig = File(phone.parts.store.libraryDir, "_songbooks/Gig/songbook.html")
+            database.writeBlocking { db ->
+                Songbooks.make(db, "Gig", listOf("Muse - Hysteria"))
+                Songbooks.make(db, "Picnic", listOf("Muse - Hysteria"))
+                phone.songbookPages.render(db, setOf("Gig"))
+            }
+            val made = gig.readText()
+            // a take that owes no page: the songbook pages the phone made are made again where they moved
+            gig.writeText("changed on a device")
+            phone.afterSync()
+            assertEquals(made, gig.readText())
+            // the render job ends with them too
+            gig.writeText("changed on a device")
+            phone.start()
+            val job = phone.queue.snapshot().single()
+            assertEquals(Job.DONE, runBlocking { phone.queue.await(job.id) }.state)
+            assertEquals(made, gig.readText())
+            // a songbook the phone made no page of keeps the computer's
+            assertFalse(File(phone.parts.store.libraryDir, "_songbooks/Picnic").exists())
         }
     }
 

@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole.e2e
 
-import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.http.RoutedTransport
+import io.github.danielhp95.caracole.core.http.Transport
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncUnit
@@ -15,6 +17,7 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,9 +37,11 @@ import kotlin.time.Duration.Companion.minutes
  * library folder, its state, the mirror), so that what one phase leaves the next finds; the computer it syncs with
  * at [server]. It is driven through its App as the WebView's requests come, made by TestApp's request builder: the
  * launch's cookie and the Host, then a page's link ([get]), its script's read ([script]: JSON, the form token in its
- * header) or its form ([post]: the token in the body, from the page's own origin).
+ * header) or its form ([post]: the token in the body, from the page's own origin). Its sites are the fake sites server
+ * at [sites] (RoutedTransport: tests/helpers/fake_sites.py), or, with none, a transport that refuses every one.
  */
-class ScenarioPhone(val home: File, val server: String) : AutoCloseable {
+class ScenarioPhone(val home: File, val server: String, val sites: String? = null,
+                    render: ((PhoneDeps) -> PhoneRender)? = null) : AutoCloseable {
     val database: Database = Database(File(home.apply { mkdirs() }, "caracole.sqlite"))
     val libraryDir: File = File(home, "library").apply { mkdirs() }
     val stateDir: File = File(home, "state").apply { mkdirs() }
@@ -52,9 +57,12 @@ class ScenarioPhone(val home: File, val server: String) : AutoCloseable {
         override fun remember(address: String) = file.writeText(address)
     }
 
-    /** Every site refuses: the scenario's lookups (still neutral) send nothing to one. */
-    val phone: Phone = Phone(PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET,
-                                       TestApp.CSRF, transport = { RefusingTransport }))
+    /** The fake sites, every request to one of them sent there; else every site refuses, and nothing is sent. */
+    private val transport: Transport = sites?.let(::RoutedTransport) ?: RefusingTransport
+
+    /** The phone, its pages made by [render]'s PhoneRender where one is given (phase 7's), else the app's. */
+    val phone: Phone = PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET, TestApp.CSRF,
+                                 transport = { transport }).let { deps -> Phone(deps, render?.invoke(deps)) }
 
     /** A GET as the WebView makes it: a page's link, or its address typed. */
     fun get(target: String): Response = handle("GET", target, mapOf("sec-fetch-site" to "same-origin"))

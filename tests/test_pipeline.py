@@ -776,6 +776,19 @@ def test_the_runs_clients_keep_the_pause_after_another_caracoles_last_request(co
     assert low - 4 <= pause <= high - 3
 
 
+def test_a_run_makes_no_client_for_the_services_a_link_shared_to_the_phone_is_read_from(conn, cfg):
+    # Apple's catalogue, Spotify's, TIDAL's and YouTube's oEmbed are the phone's alone (config.SHARE_PROVIDERS): no
+    # run asks them, so none gets a client, whatever their switches say.
+    from caracole.config import SHARE_PROVIDERS
+    from caracole.pipeline import make_services
+
+    made = make_services(cfg, conn, "2026-10-18T03:30:00Z")
+    for client in made.clients.values():
+        client.close()
+    assert not set(SHARE_PROVIDERS) & set(made.clients)
+    assert not set(SHARE_PROVIDERS) & set(PROVIDERS)
+
+
 def test_a_run_lets_go_of_the_lock_its_clients_held(conn, cfg):
     # Its own clients hold caracole's lock; once the run is over, another caracole may go on.
     report = run_pipeline(cfg, conn=conn, steps=[step("todo")], now=NOW)

@@ -33,7 +33,8 @@ class UnitError(message: String) : Exception(message)
  * the value its digest is of (Canonical.digest) and the label the owner reads, exactly as the computer gives them
  * for the same library:
  *
- * - `song/<key>`: a song's names, decisions, versions (by provider and tab, in SQLite's order), kept files' hashes
+ * - `song/<key>`: a song's names, decisions, versions (by provider and tab, in SQLite's order; a raw record hashed
+ *   without [VOLATILE_RAW]'s members), kept files' hashes
  *   and every overrides.toml entry about it (phone_overrides, [OverridesStore.songEntries]), "Artist - Title";
  * - `removed/<key>`: a tombstone's names, "Artist - Title (removed)";
  * - `songbook/<name key>`: a songbook's name and songs (phone_songbooks, [SongbookStore]), "songbook Name";
@@ -51,7 +52,14 @@ class UnitError(message: String) : Exception(message)
  * side alone.
  */
 object Units {
-    const val FORMAT = 2
+    /** peer_sync.FORMAT: of every document a side answers and of the base it keeps. FORMAT 3 hashes a version's raw
+     * record without what [VOLATILE_RAW] names, which FORMAT 2 hashed. */
+    const val FORMAT = 3
+
+    /** peer_sync.VOLATILE_RAW: what a version's raw record holds that is no part of its unit, by provider. UG's tab
+     * page gives a tab's rating and votes as they are the day it is read, so two sides that read one tab on two days
+     * hold one version. */
+    val VOLATILE_RAW: Map<String, Set<String>> = mapOf("ug" to setOf("rating", "votes"))
 
     /** Every unit of this library, by id: its songs (newest added first), its tombstones, its songbooks in their
      * order, its aliases, artists' pages and blocked tabs. */

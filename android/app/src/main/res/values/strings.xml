@@ -2,8 +2,11 @@
 <resources>
     <string name="app_name">caracole</string>
     <string name="settings">Settings</string>
-    <string name="sync_now">Copy pages</string>
-    <string name="sync_with_computer">Share logs</string>
+    <string name="sync">Sync</string>
+    <string name="no_picker">No app on this phone picks a file.</string>
+    <string name="export_gone">That export was sent already, or is too old: export again.</string>
+    <string name="export_refused">The phone\'s caracole didn\'t give the export (HTTP %1$d).</string>
+    <string name="export_failed">The export couldn\'t be copied for the share sheet: %1$s</string>
     <string name="library">Library</string>
     <string name="more">More</string>
 
@@ -11,13 +14,13 @@
     <string name="address_hint">http://192.168.1.20:8737</string>
     <string name="test">Test</string>
     <string name="testing">Asking the computer…</string>
-    <string name="answered">Answered · %1$d files, %2$s</string>
-    <string name="answered_skipped">Answered · %1$d files, %2$s · %3$d listed wrong, left out</string>
-    <string name="last_sync">Last copy</string>
-    <string name="never_synced">No pages copied yet.</string>
     <string name="storage">Storage: %1$s</string>
-    <string name="wifi_sync">Copy pages on Wi-Fi</string>
-    <string name="wifi_sync_hint">Every 6 h on unmetered Wi-Fi, when the computer answers at the address. Otherwise nothing.</string>
+    <string name="wifi_sync">Share logs on Wi-Fi</string>
+    <string name="wifi_sync_hint">Every 6 hours on Wi-Fi (an unmetered network), when the computer answers at the address: your songs, songbooks and site indexes synced both ways, and what changed on both sides left for you to choose, with a notification. When nothing answers there, it does nothing.</string>
+    <string name="export">Export</string>
+    <string name="export_hint">This library in one file: to share with another caracole, or to keep</string>
+    <string name="import_file_row">Import a file</string>
+    <string name="import_file_hint">A file another caracole exported: synced as if it were here</string>
     <string name="text_size_label">Text size</string>
     <string name="text_size">%1$d%%</string>
     <string name="text_size_said">Text size %1$d%%</string>
@@ -25,31 +28,25 @@
     <string name="reset_text_size">Reset text size to 100%</string>
     <string name="text_size_hint">Pinch a page: apart for larger, together for smaller, 50% to 250% of Android\'s font size. A sheet\'s Aa adds to it.</string>
     <string name="open_library">Open Library</string>
-    <string name="offline_note">Offline, the phone shows the computer\'s pages: the logbook, each sheet\'s viewer (key, capo, diagrams, harmony), songbooks, and PDFs and Guitar Pro files, which open in another app. With the computer\'s indexes imported, search finds the sites\' songs too. Export PDF and choosing versions need the computer, in a browser.</string>
+    <string name="offline_note">Offline, the phone shows the computer\'s pages: the logbook, each sheet\'s viewer (key, capo, diagrams, harmony), songbooks, and PDFs and Guitar Pro files, which open in another app. With the computer\'s site indexes, which a sync brings, search finds the sites\' songs too. Export PDF and choosing versions need the computer, in a browser.</string>
 
-    <string name="import_label">Import indexes</string>
-    <string name="import_computer">From the computer</string>
-    <string name="import_file">From a file</string>
-    <string name="import_hint">The computer\'s indexes of UG, LaCuerda and the other sites, merged into the phone\'s, so search finds their songs with the computer off. From the computer: at the address above. From a file: a caracole index export copied to the phone.</string>
-    <string name="never_imported">No index imported yet.</string>
-    <string name="import_title">Importing indexes</string>
-    <string name="import_starting">Getting the index…</string>
-    <string name="import_downloading">Downloading · %1$s</string>
-    <string name="import_downloading_of">Downloading · %1$s of %2$s</string>
-    <string name="import_copying">Copying the file…</string>
-    <string name="import_merging">Merging the index…</string>
-    <string name="import_no_picker">No app here picks files.</string>
-    <string name="import_under_way">An import is already running. Wait for it.</string>
-    <string name="import_not_started">Import not started · %1$s</string>
     <string name="jobs_channel">Background work</string>
+    <string name="syncs_channel">Syncs</string>
+    <!-- Sync on Wi-Fi's notification of the conflicts it left (Notifications.conflictsLeft): every one a song's, else
+         any unit's. -->
+    <plurals name="conflicts_left">
+        <item quantity="one">%d song changed on both sides: tap to choose</item>
+        <item quantity="other">%d songs changed on both sides: tap to choose</item>
+    </plurals>
+    <plurals name="conflicts_left_changes">
+        <item quantity="one">%d change on both sides: tap to choose</item>
+        <item quantity="other">%d changes on both sides: tap to choose</item>
+    </plurals>
     <string name="working">Working…</string>
 
-    <string name="syncing_asking">Copying pages · asking the computer…</string>
-    <string name="syncing">Copying pages · %1$d of %2$d files</string>
-    <string name="up_to_date">Up to date</string>
-    <string name="up_to_date_changes">Up to date · %1$s</string>
+    <string name="syncing">Syncing with the computer…</string>
 
-    <string name="missing">That file isn\'t on the phone. Copy pages again.</string>
+    <string name="missing">That file isn\'t on the phone. Sync again.</string>
     <string name="not_served">The phone didn\'t serve that file (HTTP %1$d).</string>
     <string name="no_server">Couldn\'t start · %1$s</string>
     <string name="no_cookie">Couldn\'t set the page\'s cookie. The logbook can\'t open.</string>
@@ -61,8 +58,31 @@
     <!-- Milestone 6's hooks (each its lane's: backups and alerts alerts-backups', printing export-print's). -->
     <string name="backups_label">Backups</string>
     <string name="backups_open">Backups</string>
-    <string name="backups_hint">Copies of the phone\'s book, to restore from. Not on the phone yet.</string>
-    <string name="backups_not_built">Backups aren\'t on the phone yet.</string>
+    <string name="backups_hint">Copies of the phone\'s book, to restore from. Made by hand, every day and before each sync.</string>
+    <string name="backups_about">Each backup holds the phone\'s songs, versions, songbooks and kept files (the indexes are imported again, not backed up). Three of each kind are kept: by hand, daily (while the phone is idle) and before a sync. A restore puts the library back as it was, and keeps the cooldowns, pace and settings the phone has now; the next sync gives the restored library to the computer.</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backups_none">No backup yet.</string>
+    <string name="backup_row">%1$s · %2$s · %3$s</string>
+    <string name="backup_row_missing">%1$s · %2$d of its files not kept</string>
+    <string name="backup_by_hand">By hand</string>
+    <string name="backup_daily">Daily</string>
+    <string name="backup_before_sync">Before a sync</string>
+    <string name="backup_other">Backup</string>
+    <string name="backup_export">Export…</string>
+    <string name="backup_restore">Restore…</string>
+    <string name="backup_working">Backing up the library…</string>
+    <string name="backup_restoring">Restoring the library…</string>
+    <string name="backup_exporting">Exporting the backup…</string>
+    <string name="backup_exported">Exported.</string>
+    <string name="backup_export_failed">Not exported: %1$s</string>
+    <string name="backup_no_picker">No app on this phone picks where a file goes.</string>
+    <string name="backup_queue_full">The phone\'s queue is full: try again in a moment.</string>
+    <string name="backup_restore_title">Restore the library of %1$s?</string>
+    <string name="backup_restore_message">The songs, their versions, songbooks and kept files go back to what this backup holds, and what changed since is gone from the phone. The cooldowns, pace and settings stay as they are now.</string>
+    <string name="backup_restore_yes">Restore</string>
     <string name="alerts_channel">Alerts</string>
-    <string name="print_not_built">Export PDF isn\'t on the phone yet.</string>
+    <string name="alert_blocked">caracole: %1$s blocked</string>
+    <string name="alert_cooling">Cooling down until %1$s.</string>
+    <string name="print_refused">The phone\'s caracole didn\'t name that version (HTTP %1$d).</string>
+    <string name="print_failed">The sheet couldn\'t be printed: %1$s</string>
 </resources>

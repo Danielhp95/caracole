@@ -12,7 +12,8 @@ Every text is data, which the script puts in the page with ``textContent``.
 - ``books``: each songbook, in songbooks.toml's order: its ``name``; ``songs``, how many; ``missing``, how
   many have no sheet in it (not in the logbook, or no sheet yet); ``changed``, the day (UTC) caracole last
   wrote one of its files, None before it made any; ``files``, those it made, as links relative to
-  index.html, percent-encoded (``label``: "PDF", "Phone page", "ChordPro", in that order); and ``set``, its
+  index.html, percent-encoded (``label``: "PDF", "Phone page", "ChordPro", in that order; of the files a caracole
+  makes, its ``files`` argument: the computer's ``FILES``, the phone's its page alone); and ``set``, its
   songs in order, each with its place (``n``), its entry as songbooks.toml writes it (``entry``, which the
   forms name it by), its identity ``key`` (its song's, else its entry's: what the page knows a search's
   result in it by), its ``title`` and ``artist``, its song's ``id`` (None for one not in the library),
@@ -45,6 +46,7 @@ import logging
 import os
 import sqlite3
 import stat
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,14 +63,18 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# A songbook's files, as its tab links them: the PDF, the page for the phone, the ChordPro file.
+# A songbook's files, as its tab links them: the PDF, the page for the phone, the ChordPro file. The phone makes
+# the page alone (its ``files``: ``[("songbook.html", "Phone page")]``), never chordpro's PDF or .cho.
 FILES = (("songbook.pdf", "PDF"), ("songbook (Traditional).pdf", "PDF, Traditional"), ("songbook.html", "Phone page"),
          ("songbook.cho", "ChordPro"))
 
 
-def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
+def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, *,
+                   files: Sequence[tuple[str, str]] = FILES) -> dict[str, Any]:
     """The songbooks as the Songbooks tab draws them (see the module's docstring). A songbooks.toml that can't
-    be read is said (``error``), and costs the rest of the page nothing."""
+    be read is said (``error``), and costs the rest of the page nothing. ``files`` are the songbook's files a caracole
+    makes, each ``(name, label)`` in the order the tab links them (the computer's, ``FILES``): its ``files``, those of
+    them in the folder, and ``fileLabels``, their labels."""
     from caracole.songbook import CAPO_MAX, SongbookError, load_songbooks, songbooks_file
     from caracole.viewer.instruments import INSTRUMENTS
     from caracole.viewer.theory import MODES, spelling
@@ -76,24 +82,25 @@ def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) 
 
     shared: dict[str, Any] = {"keys": spelling(None), "modes": [[m, MODE_NAMES[m]] for m in MODES],
                               "capoMax": CAPO_MAX, "instruments": [[i.id, i.name, i.capo] for i in INSTRUMENTS],
-                              "fileLabels": [label for _, label in FILES]}
+                              "fileLabels": [label for _, label in files]}
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))
     except SongbookError as e:
         return {"books": [], "error": f"songbooks.toml can't be read: {e}. Fix it and the songbooks return; "
                                       "each keeps its files meanwhile.", **shared}
     guitar = _Guitar.read(conn) if books else _Guitar({}, {})
-    return {"books": [_book(conn, cfg, overrides, book, guitar) for book in books], "error": None, **shared}
+    return {"books": [_book(conn, cfg, overrides, book, guitar, files) for book in books], "error": None, **shared}
 
 
-def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any, guitar: _Guitar) -> dict[str, Any]:
+def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any, guitar: _Guitar,
+          files: Sequence[tuple[str, str]] = FILES) -> dict[str, Any]:
     from caracole.library_page import sheet_href  # which imports this module
     from caracole.songbook import FOLDER, entry_keys, songbook_entries, songs_to_get
 
     entries = songbook_entries(conn, cfg.library_dir, overrides, book)
     getting = {song.id for song in songs_to_get(entries, overrides)}
     folder = cfg.library_dir / FOLDER / book.folder
-    made = _made(folder)
+    made = _made(folder, files)
     base = f"{FOLDER}/{quote(book.folder, safe='')}"
     songs = []
     for n, e in enumerate(entries, start=1):
@@ -111,7 +118,7 @@ def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any
         "name": book.name, "songs": len(entries), "missing": sum(1 for e in entries if e.missing),
         "changed": datetime.fromtimestamp(newest, UTC).strftime("%Y-%m-%d") if newest is not None else None,
         "files": [{"name": name, "label": label, "href": f"{base}/{quote(name)}"}
-                  for name, label in FILES if name in made],
+                  for name, label in files if name in made],
         "set": songs,
     }
 
@@ -158,10 +165,11 @@ def _regular(path: Path) -> bool:
         return False
 
 
-def _made(folder: Any) -> dict[str, float]:
-    """The songbook's files there are, regular files alone (no link followed), each with when it was written."""
+def _made(folder: Any, files: Sequence[tuple[str, str]] = FILES) -> dict[str, float]:
+    """The songbook's files of ``files`` there are, regular files alone (no link followed), each with when it was
+    written."""
     found = {}
-    for name, _ in FILES:
+    for name, _ in files:
         try:
             info = os.lstat(folder / name)
         except OSError:

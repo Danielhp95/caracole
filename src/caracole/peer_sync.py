@@ -11,7 +11,7 @@ chosen to take: a pull, the side that takes a unit asking the other for it, or a
 - ``song/<identity key>``: a song, by ``songs.key``: its names as its wanted.txt line gives them (artist, title,
   album, duration, variant), its record's decisions (status, review, the match, its lyrics: their status and a
   hash of their JSON), its versions (provider, tab, slot, kind, label, pick, gone, the URL, a hash of the raw
-  record's JSON), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
+  record's JSON, UG's without its ratings and votes: ``VOLATILE_RAW``), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
   (``overrides.SONG_TABLES``, ``[ignore]`` among them: ``overrides.song_entries``);
 - ``removed/<identity key>``: a tombstone of ``caracole remove``;
 - ``songbook/<name key>``: a songbook, its name and its songs in order, each with its setting;
@@ -28,14 +28,15 @@ so that two caracoles that wrote one record in two texts agree; its ``label`` wh
 /api/peer/unit`` answers) holds everything another side needs to take it, and its value, the digest's, is read back
 from it alone (``value_of_document``), so a side checks what it is given before it takes it.
 
-**FORMAT 2** (``FORMAT``) is of every document a side answers (the state, a unit, a push), and of the base each
-side keeps. A side refuses a document of another format; a base kept by another format is no base (``base_of``),
-so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
+**FORMAT 3** (``FORMAT``) is of every document a side answers (the state, a unit, a push), and of the base each
+side keeps. It hashes a version's raw record without UG's ratings and votes, which FORMAT 2 hashed, so that a tab
+one side read again a day later no longer differs. A side refuses a document of another format; a base kept by another format
+is no base (``base_of``), so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
 was made by its side's clock (``now``), which both sides stamp their agreement with, and the newest read of each of
 its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
 
 **Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
-it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 2, "units": {unit:
+it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
 [digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
 makes; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the two counts
 (``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it. A
@@ -101,7 +102,7 @@ from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 from caracole import canonical
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
-FORMAT = 2  # of every document a side answers, and of the base it keeps: changes only with their shapes
+FORMAT = 3  # of every document a side answers, and of the base it keeps: changes with their shapes and digests
 ID_KEY = "sync:id"
 # kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed,
 # and "kept": {unit: [digest here, digest there, when]}, the answers an import remembered (none: no member)
@@ -123,6 +124,9 @@ VERSION_COLUMNS = ("provider", "tab_id", "slot", "kind", "rating", "votes", "ver
 # The per-song kv a song unit carries (songs._PER_SONG_KV's): which kept versions are yours, and which can't be.
 CARRIED_KV = ("sheet_versions:yours:", "sheet_versions:unkeepable:", "sheet_versions:same:")
 LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
+# What a version's raw record holds that is no part of its unit, by provider: UG's tab page gives a tab's rating and
+# votes as they are the day it is read, so two caracoles that read one tab on two days hold one version (FORMAT 3).
+VOLATILE_RAW = {"ug": ("rating", "votes")}
 # Why a unit is left: either side holds it otherwise than when the two were compared.
 CHANGED_HERE = "changed here since compared"
 CHANGED_THERE = "changed there since compared"
@@ -167,6 +171,12 @@ def _stored_hash(text: str | None) -> str | None:
     JSON it holds, so that two texts of one record (its keys in another order, other spaces, ``4.50`` for ``4.5``)
     hash alike, else of its bytes (``canonical.stored_hash``)."""
     return canonical.stored_hash(text)
+
+
+def _raw_hash(provider: Any, raw: str | None) -> str | None:
+    """A version's raw record as a unit's value holds it: ``_stored_hash``'s, without the members ``VOLATILE_RAW``
+    names for its provider (UG's ratings and votes)."""
+    return canonical.stored_hash(raw, VOLATILE_RAW.get(provider, ()) if isinstance(provider, str) else ())
 
 
 # --- who this side is, and when it last agreed with a peer -------------------------------------------------------
@@ -378,7 +388,7 @@ def song_value(conn: sqlite3.Connection, song, overrides) -> dict[str, Any]:
     status, review, decision, match_artist, match_song, lyrics_status, lyrics_json = row
     versions = [
         {"provider": provider, "tab": tab_id, "slot": slot, "kind": kind, "label": label, "pick": pick_rank,
-         "gone": bool(gone), "url": url, "raw": _stored_hash(raw)}
+         "gone": bool(gone), "url": url, "raw": _raw_hash(provider, raw)}
         for provider, tab_id, slot, kind, label, pick_rank, gone, url, raw in conn.execute(
             "SELECT provider, tab_id, slot, kind, label, pick_rank, gone, url, raw FROM versions WHERE song_id = ? "
             "ORDER BY provider, tab_id", (song.id,))
@@ -614,7 +624,8 @@ def _song_value_of(doc: Mapping[str, Any]) -> dict[str, Any]:
             raise TypeError("a raw record that isn't text")
         versions.append({"provider": version["provider"], "tab": version["tab_id"], "slot": version["slot"],
                          "kind": version["kind"], "label": version["label"], "pick": version["pick_rank"],
-                         "gone": bool(version["gone"]), "url": version["url"], "raw": _stored_hash(raw)})
+                         "gone": bool(version["gone"]), "url": version["url"],
+                         "raw": _raw_hash(version["provider"], raw)})
         for f in version["files"]:
             files[_text(f["name"])] = f["sha256"]
     lyrics_json = record["lyrics_json"]
@@ -872,7 +883,12 @@ STATE_PATH = "/api/peer/state"
 UNIT_PATH = "/api/peer/unit"
 FILE_PATH = "/api/peer/file"
 PULL_PATH = "/peer/pull"
+INDEX_PATH = "/api/peer/index"
+INDEXES_PATH = "/api/sync/indexes"
 PEER_TIMEOUT = 60.0  # seconds: a phone's caracole reads every song of its library to answer
+INDEX_MAX = 8 * 1024 ** 3  # the bytes of another caracole's indexes read at most (peer_file.IMPORT_MAX's)
+INDEX_WAIT = 600.0  # seconds its first byte may take: it copies its indexes whole before it sends one
+_CHUNK = 1024 * 1024  # what its indexes are written by, never whole in memory
 
 
 class PeerError(Exception):
@@ -912,8 +928,8 @@ def peer_address(text: str) -> str:
 
 class Peer:
     """Another ``caracole serve``, asked over HTTP, one request at a time: its state, a unit, a file (a
-    ``UnitSource``), and a pull of this side's units (``ask_to_pull``, a form posted as its pages post one).
-    ``transport`` is httpx's, for tests."""
+    ``UnitSource``), its site indexes (``index``) and what they hold (``indexes``), and a pull of this side's units
+    (``ask_to_pull``, a form posted as its pages post one). ``transport`` is httpx's, for tests."""
 
     def __init__(self, address: str, *, transport=None):
         import httpx
@@ -986,6 +1002,52 @@ class Peer:
             raise PeerError(f"{self.address} sent {name} changed since compared. "
                             "The song stays as it was here.")
         return response.content
+
+    def index(self, to: Path, sites: Sequence[str]) -> None:
+        """``GET /api/peer/index``: its site indexes of ``sites`` (every one with none), as ``caracole index export``
+        writes them, streamed into a new file at ``to`` (0600), ``INDEX_MAX`` at most; PeerError when it can't be
+        asked, answers otherwise or sends more, nothing left at ``to``."""
+        import httpx
+
+        params = {"sites": ",".join(sites)} if sites else None
+        fd = os.open(to, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with open(fd, "wb") as out, self._client.stream(
+                    "GET", self.address + INDEX_PATH, params=params, headers={"Accept": "application/json"},
+                    timeout=httpx.Timeout(PEER_TIMEOUT, read=INDEX_WAIT)) as got:
+                if got.status_code != 200:
+                    got.read()
+                    raise self._refused(got)
+                written = 0
+                for chunk in got.iter_bytes(_CHUNK):
+                    written += len(chunk)
+                    if written > INDEX_MAX:
+                        raise PeerError(f"The caracole at {self.address} sent more than 8 GiB of indexes.")
+                    out.write(chunk)
+        except httpx.HTTPError as e:
+            Path(to).unlink(missing_ok=True)
+            raise PeerError(f"The caracole at {self.address} stopped sending its indexes: {e}") from None
+        except BaseException:
+            Path(to).unlink(missing_ok=True)
+            raise
+
+    def indexes(self) -> dict[str, dict[str, Any]]:
+        """``GET /api/sync/indexes``: each site's index there, ``{site: {"read", "tabs"}}`` (its newest read, None for
+        never, and the tabs it tracks), the sites it names that aren't a time's or a count's left out; PeerError when
+        it can't be asked or answers otherwise (an older caracole serve, 404)."""
+        response = self._get(INDEXES_PATH)
+        if response.status_code != 200:
+            raise self._refused(response)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        found = data.get("indexes") if isinstance(data, Mapping) else None
+        if not isinstance(found, Mapping):
+            raise PeerError(f"The caracole at {self.address} answered its indexes with something it can't read.")
+        return {site: {"read": entry.get("read"), "tabs": entry["tabs"]} for site, entry in found.items()
+                if isinstance(site, str) and isinstance(entry, Mapping) and type(entry.get("tabs")) is int
+                and (entry.get("read") is None or isinstance(entry.get("read"), str))}
 
     def ask_to_pull(self, here: str, units: Sequence[str], token: str) -> int:
         """Ask it to take ``units`` from this side, at ``here`` (an address it can reach): its form posted with its

@@ -67,7 +67,7 @@ class PageRoutesTest {
             assertEquals(listOf(calorro, -1L), data.getValue("songs").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.long })
             assertEquals(TestApp.CSRF, data.getValue("server").jsonObject.getValue("csrf").jsonPrimitive.content)
             assertTrue("<title>Phone · caracole</title>" in html, "the badge and caracole: no name before a sync gives one")
-            assertTrue(page.assets.template("sync-tab.html") in html)
+            assertTrue(page.assets.template("sync-sheet.html") in html && "id=\"tab-sync\"" !in html, "the sheet, no tab")
             // The page is the page of the data it carries, for these controls: nothing of the route's own in it.
             assertEquals(page.served(data, ServerControls(TestApp.CSRF, sync = true), ""), html)
         }

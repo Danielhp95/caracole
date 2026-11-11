@@ -284,15 +284,20 @@ def peer_outcome(job: Job) -> dict[str, Any] | None:
     """What a sync or a take did, once it is over (None while it waits or runs): the units it took here (``taken``),
     gave there (``given``) and left as they were, each with why (``left``), as its command said them (``Job.units``);
     how many units the two agree on now (``agreed``, its agree stage's count; None when it didn't agree), and the sites
-    whose indexes it brought up to date (``indexed``: none on a computer, the phone's sync's)."""
+    whose indexes it brought up to date (``indexed``: none on a computer, the phone's sync's); and, when its command
+    said one at its end, its ``report`` (``Job.report``: whom it synced with, when, the parts and each index taken
+    or given), for the Sync tab's summary, so the view of a job with none is as it was."""
     if job.active:
         return None
     agree = next((s for s in job.stages if s.name == "agree" and s.state == "done"), None)
     count = _AGREED.match(agree.detail.strip()) if agree is not None else None
-    return {"taken": [u for u, said, _ in job.units if said == "taken"],
-            "given": [u for u, said, _ in job.units if said == "given"],
-            "left": [[u, why] for u, said, why in job.units if said == "left"],
-            "agreed": int(count[1]) if count else None, "indexed": []}
+    outcome = {"taken": [u for u, said, _ in job.units if said == "taken"],
+               "given": [u for u, said, _ in job.units if said == "given"],
+               "left": [[u, why] for u, said, why in job.units if said == "left"],
+               "agreed": int(count[1]) if count else None, "indexed": []}
+    if job.report is not None:
+        outcome["report"] = job.report
+    return outcome
 
 
 def _songbooks(app: WebApp, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:

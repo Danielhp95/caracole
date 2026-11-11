@@ -201,7 +201,7 @@ def test_a_pull_of_a_song_spelled_otherwise_here_takes_the_peers_names_and_the_t
     assert [line.split(" | ")[0] for line in here.cfg.wanted_file.read_text(encoding="utf-8").splitlines()
             if line and not line.startswith("#")] == [CREEP]  # its line, as the peer writes the song
     stored = json.loads(db.kv_get(here.conn, sync.BASE_KEY + sync.own_id(there.conn)))
-    assert stored["format"] == 2 and stored["units"][f"song/{song.key}"][0] == here.units()[f"song/{song.key}"].digest
+    assert stored["format"] == 3 and stored["units"][f"song/{song.key}"][0] == here.units()[f"song/{song.key}"].digest
     assert "Nothing differs." in run(here, "peer", "diff", HOST).output
 
 
@@ -359,7 +359,7 @@ def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
     assert [(e["stage"], e["state"]) for e in events if "stage" in e] == [
         ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
-        ("give", "done"), ("agree", "running"), ("agree", "done")]
+        ("give", "done"), ("agree", "running"), ("agree", "done"), ("index", "skipped")]
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
         (unit["Radiohead - Creep"], "left", "skipped, as chosen"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])

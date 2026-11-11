@@ -50,7 +50,8 @@ file, and none of it loads anything from the network.
   line.
 
 - tabs.js, before songbooks.js: the page's tabs (body.html's tablist in the masthead: Library, Songbooks, Sites and,
-  served, Requests, the last), each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
+  served, Requests, then Sync on caracole serve's, the last; from 720 px Sites, Requests and Sync on the right: sync.css),
+  each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
   address (none for the library); clicked, or with the tablist's keys, a tab shows its panel and hides the others,
   as a link to the page that names a tab does (a request line's Details), and Back to an address that names another.
   Its seam, ``window.caracoleTabs`` (``show``, ``current``), and "caracole:tab", which every tab's script hears: a
@@ -65,10 +66,18 @@ file, and none of it loads anything from the network.
   when it changed, its Output as you left it); its Cancel, Try again and Get it from there post with fetch(), the
   request they queue followed on its song's line (``caracoleLibrary.track``).
 
-- sync.css, sync.js, sync-tab.html and sync-panel.html: the Sync tab (``#tab=sync``), before Requests, on a page
-  whose server syncs (``WebControls.sync``; the phone's server always): the tab and its panel are these templates,
-  put in as they are, so the page is the same pure function of these files on the computer and on the phone (the
-  phone's server builds it from a copy of this folder). Not built yet: its panel says so.
+- sync.css, sync-words.js, sync.js, sync-tab.html, sync-panel.html and sync-sheet.html: the sync with another
+  caracole, one flow written once for both devices (``WebControls.sync``). On caracole serve's page, the Sync tab
+  (``#tab=sync``), the last, after Requests: its panel's three panels, Sync with a server (its address, Test, the last
+  sync, Sync), Export and Import a file; on the phone's, no tab (its app's sync button opens the sheet). Both have the
+  sheet (sync-sheet.html, a ``<dialog>``), which ``#sheet=sync``, ``#sheet=export`` and ``#sheet=import`` open at that
+  flow (and ``#tab=sync`` on a page with no Sync tab): what to sync (Library, Songbooks, Site indexes, what waits in
+  each), a card for each conflict (each side's version, as sync-words.js tells two unit documents apart), the sync
+  followed to its end, and what it did, a section a kind of change. Export makes the library's file and downloads it;
+  Import a file sends one in parts, then syncs with it as with another caracole. sync-words.js
+  (``window.caracoleSyncWords``) answers texts alone: how two versions differ, each change, the numbers and dates.
+  The templates are put in as they are, so the page is the same pure function of these files on the computer and on
+  the phone (the phone's server builds it from a copy of this folder).
 
 - drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
   library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its
@@ -76,8 +85,8 @@ file, and none of it loads anything from the network.
   the library shown though you left the Songbooks tab open); two seconds on, it shows all the same.
 
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
-  ``__BLANKS__`` library_page.py fills in (``assemble_page``): the policy, the style and, served, the Sync tab and its
-  panel where the server syncs, the Requests tab and its panel,
+  ``__BLANKS__`` library_page.py fills in (``assemble_page``): the policy, the style and, served, the Requests tab and
+  its panel, the Sync tab, its panel and the sheet where the server syncs,
   the request form and the songs just requested. body.html also holds the guitar a set list marks a
   song with a Guitar Pro file by (``#guitar-glyph``, an inline SVG in a template songbooks.js clones:
   the HTML parser gives it its namespace).

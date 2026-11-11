@@ -37,7 +37,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *   then written as the document says.
  * - When the library writes the song's artist's folder otherwise in case alone, every song of that artist takes the
  *   peer's spelling and the folder is renamed once ([respell]); a song whose folder changes takes caracole's files
- *   along.
+ *   along, but for the phone's own pages of it, which go (made of the song as it was: Removal.phonesWritten), its
+ *   next render making them again where it is now.
  * - In one savepoint: its names, its record's columns (SONG_COLUMNS), its versions and kept files' rows, its carried
  *   kv re-keyed to its id here, its overrides entries, its tombstone forgotten; then its files and its lyrics'
  *   files, those no longer kept going once the take is done. The folders' changes are undone when the savepoint is.
@@ -79,9 +80,12 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         val current = here?.let { song ->
             SafeName.songFolder(if (respelledHere) names.artist else song.artist, song.title).toList()
         }
+        // The phone's own pages of it go rather than move: made of the song as it was (Removal.phonesWritten).
+        val superseded = if (here != null && current != newParts) Removal.phonesWritten(db, store.libraryDir, here)
+        else emptyList()
         val moving = if (here != null && current != newParts) {
             try {
-                Removal.caracolesFiles(db, store.libraryDir, here).toSet()
+                Removal.caracolesFiles(db, store.libraryDir, here).toSet() - superseded.toSet()
             } catch (e: IllegalStateException) {
                 throw UnitError("its folder can't be moved: ${e.message}")
             }
@@ -104,6 +108,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                 }
                 val respelled = respell(folders, respell, names.artist)
                 if (current != null && current != newParts) {
+                    for (name in superseded) folders.remove(current, name)
                     folders.moveFiles(current, newParts, moving)
                     dropRenderRecords(song.id)
                 }
@@ -230,9 +235,12 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
     }
 
     /** peer_sync._respell: [songs] written as [artist] (their artist, and the first of their artists where it was the
-     * same), their artist's folder renamed once, their kept files' paths with it, their render records dropped. */
+     * same), their artist's folder renamed once, their kept files' paths with it, their render records dropped; on the
+     * phone, each one's own pages deleted from where the folder went, made of the song as it was spelled
+     * (Removal.phonesWritten). */
     private fun respell(folders: Folders, songs: List<SongRow>, artist: String): List<SongRow> {
         val new = SafeName.safeName(artist)
+        val superseded = songs.associate { it.id to Removal.phonesWritten(db, store.libraryDir, it) }
         for (old in songs.map { SafeName.safeName(it.artist) }.toSet().sortedWith(Canonical.KEY_ORDER)) {
             folders.moveFolder(old, new)
         }
@@ -251,6 +259,8 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                                fileId)
                 }
             }
+            val folder = SafeName.songFolder(artist, song.title).toList()
+            for (name in superseded.getValue(song.id)) folders.remove(folder, name)
             dropRenderRecords(song.id)
         }
         return songs

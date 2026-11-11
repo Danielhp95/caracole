@@ -14,13 +14,19 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   goes there: pushed (``--push``, peer_push.py, as the phone pushes), or asked of the other to pull (``--here``, this
   side's address as the other reaches it), or, with neither, the line to run there. ``--compared HASH`` refuses,
   before any change, a comparison that isn't the one the choices were made on (``peer_sync.compared_hash``: the
-  Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it, or,
-  once one was, without them, as caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), so that a
-  Sync from the tab does what the tab showed. Then it keeps what the two agree on, and the peer's address and name
+  Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it and
+  caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), or, once one was, without them, a comparison
+  made before them, so that a Sync does what was shown. Then it keeps what the two agree on, and the peer's address and name
   (kv ``sync:peer:<id>``,
-  ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. ``--progress``: get.py's JSON lines, its stages
-  compare, take, give and agree (web/jobs.py ``PEER_SYNC_STAGES``), and ``{"event": "unit", "id", "outcome",
-  "why"}`` for each unit taken, given or left.
+  ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. Then, with the indexes among its parts, each site's
+  index goes the way of the later read: one the other side read more recently is taken (``GET /api/peer/index``,
+  merged as ``caracole index merge`` merges, its backup first), and one this side read more recently given, sent to
+  the other's Import a file as its page sends one (peer_import.py ``Uploader``: open, parts, compare, then Sync of the
+  indexes alone), and its import waited for. ``--progress``: get.py's JSON lines, its stages compare, take, give,
+  agree and index (web/jobs.py ``PEER_SYNC_STAGES``), ``{"event": "unit", "id", "outcome", "why"}`` for each unit
+  taken, given or left, and at its end ``{"event": "report", "report": …}``, what it did for the Sync tab's summary
+  (each index taken or given, its tabs before and after). It exits 1 when the indexes couldn't be brought up to
+  date, once the rest is done.
 - ``caracole peer take DIR`` takes a push another caracole sent (peer_push.py), staged by caracole serve in DIR
   (``state_dir/peer/push-<id>``, ``POST /peer/push`` queues it): its stages check (the push read, each document what
   its digest says), take (a backup first, then each unit as a pull takes one, left when it changed on this side
@@ -248,6 +254,12 @@ def register(app: typer.Typer) -> None:
         said.stage("agree", "running")
         agreed = _agree(cfg, address)
         said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on")
+        indexed, failed = _sync_indexes(cfg, address, state, wanted_parts, said)
+        said.report({"with": {"name": state.name, "kind": "server", "address": address},
+                     "at": utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "parts": list(wanted_parts),
+                     "indexes": indexed})
+        if failed:
+            raise typer.Exit(1)
 
     @peer_app.command("take")
     def take_cmd(
@@ -449,9 +461,9 @@ class _Compared:
         return self.base is not None
 
     def named(self, hash_: str) -> list | None:
-        """The comparison ``hash_`` names (``peer_sync.compared_hash``): this one, or, once an import remembered an
-        answer, the same made without the answers, as caracole serve's Sync tab compares (web/sync_routes.py
-        ``_compared``); None for neither, a comparison the two no longer agree with."""
+        """The comparison ``hash_`` names (``peer_sync.compared_hash``): this one, as caracole serve's Sync tab
+        compares too (web/sync_routes.py ``_compared``), or, once an import remembered an answer, the same made
+        without the answers; None for neither, a comparison the two no longer agree with."""
         from caracole import peer_sync as sync
 
         if sync.compared_hash(self.found) == hash_:
@@ -631,6 +643,138 @@ def _agree(cfg, address: str) -> int:
         kv_set_json(conn, peer_push.PEER_KEY + after.server, {"address": address, "name": after.name,
                                                               "synced_at": at})
     return agreed
+
+
+NO_INDEX = "no index is newer on either side"
+INDEXES_LEFT_OUT = "Site indexes aren't synced this time"
+
+
+def _sync_indexes(cfg, address: str, state, parts: tuple[str, ...], said: _Said) -> tuple[list[dict], bool]:
+    """``peer sync``'s index stage, with ``"indexes"`` among ``parts``: each site the other side read more recently
+    than this one (its state's ``indexes``, as compared) taken (``_take_indexes``), and each this side read more
+    recently given (``_give_indexes``), so that each side ends with the later; skipped with nothing newer on either
+    side. Returns the report's ``indexes`` (each site taken or given, its tabs before and after, its newest read)
+    and whether a part of it failed, said in its stage's words."""
+    from caracole import backup, index_transfer
+    from caracole import peer_sync as sync
+    from caracole.web.sync_routes import _waiting
+
+    if "indexes" not in parts:
+        said.stage("index", "skipped", INDEXES_LEFT_OUT)
+        return [], False
+    with closing(open_db(cfg)) as conn:
+        waiting = _waiting(index_transfer.newest(conn), state.indexes)
+    take = [w["site"] for w in waiting if w["newer"] == "there"]
+    give = [w["site"] for w in waiting if w["newer"] == "here"]
+    if not take and not give:
+        said.stage("index", "skipped", NO_INDEX)
+        return [], False
+    said.stage("index", "running", ", ".join(
+        part for part in (f"taking {len(take)}" if take else "", f"giving {len(give)}" if give else "") if part))
+    done: list[dict] = []
+    try:
+        if take:
+            done += _take_indexes(cfg, address, take)
+        if give:
+            done += _give_indexes(cfg, address, state, give)
+    except (sync.PeerError, index_transfer.TransferError, backup.BackupError, OSError) as e:
+        said.stage("index", "failed", str(e))
+        typer.echo(f"The indexes weren't brought up to date: {e}")
+        return done, True
+    taken = sum(1 for d in done if d["direction"] == "taken")
+    given = sum(1 for d in done if d["direction"] == "given")
+    said.stage("index", "done", ", ".join(
+        part for part in (f"took {_indexes(taken)}" if take else "", f"gave {_indexes(given)}" if give else "")
+        if part))
+    typer.echo(f"Indexes: took {taken}, gave {given}.")
+    return done, False
+
+
+def _indexes(n: int) -> str:
+    return f"{n} {'index' if n == 1 else 'indexes'}"
+
+
+def _private_folder(cfg):
+    """``cache_dir/peer``, 0700: where an index taken or given is copied while it moves, then deleted."""
+    import os
+
+    folder = cfg.cache_dir / "peer"
+    cfg.cache_dir.mkdir(parents=True, exist_ok=True)
+    folder.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(folder, 0o700)
+    return folder
+
+
+def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
+    """A report's ``indexes`` of the sites a merge took something of: each site's first table's rows before and
+    after (``index_transfer.SITES[site].tables[0]``), and its newest read now."""
+    from caracole import index_transfer
+
+    taken = []
+    for site in merged.sites:
+        if not site.changed:
+            continue
+        first = index_transfer.SITES[site.site].tables[0]
+        before, after = site.rows.get(first, (0, 0))
+        taken.append({"site": site.site, "title": index_transfer.SITES[site.site].title, "direction": "taken",
+                      "before": before, "after": after, "read": newest.get(site.site)})
+    return taken
+
+
+def _take_indexes(cfg, address: str, sites: list[str]) -> list[dict]:
+    """The other side's indexes of ``sites`` taken: streamed into ``cache_dir/peer`` (``Peer.index``), merged
+    under caracole's lock (``index_transfer.merge``, its backup first), then deleted; the report's entries."""
+    import secrets
+
+    from caracole import index_transfer
+    from caracole import peer_sync as sync
+
+    path = _private_folder(cfg) / f"sync-indexes-{secrets.token_hex(6)}.sqlite"
+    try:
+        with sync.Peer(address, transport=transport_for_peer()) as peer:
+            peer.index(path, sites)
+        with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
+            merged = index_transfer.merge(conn, path, sites, state_dir=cfg.state_dir, now=utcnow())
+            return _taken_entries(merged, index_transfer.newest(conn))
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def _give_indexes(cfg, address: str, state, sites: list[str]) -> list[dict]:
+    """This side's indexes of ``sites`` given: exported into ``cache_dir/peer`` (``index_transfer.export``, no
+    lock), sent to the other side's Import a file (``peer_import.Uploader``: its routes, as its page sends a file),
+    compared and synced there, of the indexes alone, and waited for, then deleted; the report's entries, each site's
+    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now."""
+    import secrets
+
+    from caracole import index_transfer, peer_file, peer_import, peer_push
+    from caracole import peer_sync as sync
+
+    now = utcnow()
+    path = _private_folder(cfg) / f"give-indexes-{secrets.token_hex(6)}.sqlite"
+    name = peer_file.file_name(cfg.library_name, now.astimezone())[:-len(peer_file.SUFFIX)] + ".sqlite"
+    with closing(open_db(cfg)) as conn:
+        me = sync.own_id(conn)
+        index_transfer.export(conn, path, sites, now=now)
+    try:
+        with peer_import.Uploader(address, transport=transport_for_peer(), token=state.token, asking=me) as there:
+            before = there.indexes()
+            import_id = there.upload(path, name=name)
+            try:
+                job_id = there.apply(there.compare(import_id)["comparison"], ["indexes"])
+            except BaseException:
+                there.drop(import_id)
+                raise
+            job = peer_push.wait_for(there, job_id, sleep=_sleep)
+            if job["state"] != "done":
+                raise sync.PeerError(f"The caracole at {address} didn't merge the indexes given: its request "
+                                     f"{job_id} there ended {job['state']}, in its Requests tab.")
+            after = there.indexes()
+    finally:
+        path.unlink(missing_ok=True)
+    return [{"site": site, "title": index_transfer.SITES[site].title, "direction": "given",
+             "before": before.get(site, {}).get("tabs", 0), "after": after.get(site, {}).get("tabs", 0),
+             "read": after.get(site, {}).get("read")} for site in sites]
 
 
 def _take(cfg, folder, said: _Said) -> None:
@@ -908,15 +1052,7 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
     finally:
         if copy is not None:
             copy.unlink(missing_ok=True)
-    newest = index_transfer.newest(conn)
-    taken = []
-    for site in merged.sites:
-        if not site.changed:
-            continue
-        first = index_transfer.SITES[site.site].tables[0]
-        before, after = site.rows.get(first, (0, 0))
-        taken.append({"site": site.site, "title": index_transfer.SITES[site.site].title, "direction": "taken",
-                      "before": before, "after": after, "read": newest.get(site.site)})
+    taken = _taken_entries(merged, index_transfer.newest(conn))
     said.stage("index", "done", f"{len(taken)} {'index' if len(taken) == 1 else 'indexes'} merged" if taken
                else "nothing read more recently")
     return taken

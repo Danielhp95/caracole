@@ -131,7 +131,7 @@ object Status {
     )
 
     /** A sync's or a take's command (its first step's `caracole peer` subcommand), as the page names its kind. */
-    internal val PEER_KINDS = mapOf("sync" to "sync", "take" to "peer-push", "pull" to "peer-pull")
+    internal val PEER_KINDS = mapOf("sync" to "sync", "take" to "peer-push", "pull" to "peer-pull", "import" to "sync")
     const val INDEX_MERGE_KIND = "index-merge"
 
     /** How each says it is done (status.py's _PEER_DONE). */

@@ -7,10 +7,10 @@ import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.SiteStage
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
+import io.github.danielhp95.caracole.core.ug.ArtistRoute
 import io.github.danielhp95.caracole.core.ug.FetchContext
 import io.github.danielhp95.caracole.core.ug.SongFetchOutcome
 import io.github.danielhp95.caracole.core.ug.UgFetch
-import io.github.danielhp95.caracole.core.ug.internal.fetch.ArtistPages
 
 /**
  * get.py's sheet stage from Ultimate Guitar (`_sheet_from_ug`'s UG pass): the song's first pass, one versions page
@@ -48,16 +48,13 @@ internal object UgStages {
     private const val FIRST_SCORED = 1
 
     /**
-     * `_ug_ready`: why Ultimate Guitar has nothing to fetch for the song, or null when it has. Where Python reads the
-     * song's artist page (a song the index can't settle whose artist page can be found, `artist_is_known`), the phone
-     * says it can't yet ([NotYet.WORDS]) until lane ug-fetch-artist fills ArtistPages' route and makes this null.
+     * `_ug_ready`: why Ultimate Guitar has nothing to fetch for the song, or null when it has: a song the index can't
+     * settle is asked of UG when its artist's page can be found (`artist_is_known`), which may list it (A6).
      */
     fun notReady(ctx: StageContext): String? {
         val song = ctx.song
         if (song.matchDecision in setOf("accept", "pinned")) return null
-        if (UgFetch.needsArtistPage(song) && ArtistPages.artistIsKnown(ctx.db, song, ctx.overrides)) {
-            return NotYet.WORDS  // ug-fetch-artist: null, its artist's UG page may list it (A6)
-        }
+        if (UgFetch.needsArtistPage(song) && ArtistRoute.artistIsKnown(ctx.db, song, ctx.overrides)) return null
         if (song.matchDecision == "review") return REVIEW
         return LookupWords.NOT_IN_INDEX
     }

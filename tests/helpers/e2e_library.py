@@ -22,7 +22,18 @@ pages written. With it the goal's changes (docs/android_port.md): ``[version]`` 
 (``CHANGED``), and two songs whose sheet the owner chose among their two UG versions, ``[pin]`` (``CHOSEN``).
 
 The songs are traditional or long out of copyright (one Chinese, one artist's name accented), and their charts are
-made up here, chords over words that are no song's.
+made up here, chords over words that are no song's. The Chinese song's chart sings made-up Chinese words (``CHINESE``,
+in Simplified characters), so that its page carries the readings Pinyin shows (the data's ``pinyin``) and its words
+in either script (``hanzi``), as a sheet whose words hold no Chinese never does whatever its title: the sheet the
+device's pinches try with Pinyin on. One song keeps a harmonica tab as harptabs.com's is kept (``HARMONICA``: its
+``harmonica-1.txt``, made up, and the page render.py writes beside it, ``harmonica-1.html``).
+
+``Computer.phone_pages(keys, into)`` is the phone's reference for its songs' pages (milestone 5's check): render.py's
+page path with no PDF (tests/helpers/phone_render.py) run on a copy of the computer in ``into``, so that the pages
+the phone made of its own lookups, and the records it kept of them (``Pages``), are compared, byte for byte, with
+what Python writes for the same inputs once the computer has taken them. The fake sites' Chinese song sings the
+Chinese song's words (``chinese_words``), and their harmonica tab is this one's (``harmonica_tab``), so that the
+device's checks of a page hold of the computer's and of the phone's alike.
 
 ``scenario.json`` tells the Kotlin phases (android/e2e's PhoneScenarioTest) which songs the scenario does what with:
 ``songs`` (the 20: artist, title, identity key), ``changed`` (the keys of each overrides.toml table the goal's changes
@@ -30,8 +41,17 @@ fill: what the phone's ``phone_overrides`` holds once it took them), ``index`` (
 got, the query that finds it, and its names and identity key as search.py's ``search_index`` gives them),
 ``index_tables`` (the tables ``caracole index export`` writes, index_transfer.py's ``SITES``), ``requests`` (the songs
 the phone asks for by name, ``fetch`` 1 and 0), ``removed`` (R and C1, which the phone removes), ``transposed`` (C1
-and C2, whose ``[transpose]`` the computer changes while the phone is away) and ``adds`` (the songs the computer adds
-meanwhile, ``after_the_phone_left``).
+and C2, whose ``[transpose]`` the computer changes while the phone is away), ``adds`` (the songs the computer adds
+meanwhile, ``after_the_phone_left``), ``lookups`` (the fake sites' document of their scenario, ``fake_sites.document``
+over this library's index: the songs only the fake sites have pages of, whose slugged tabs UG's index lists here too,
+each with its part in the lookups phase) and ``settings`` (what ``change_settings`` makes caracole.toml say once the
+phone has looked them up: ``SETTINGS``, which the next sync gives the phone).
+
+``computer.against(sites, "get", "Artist - Title")`` runs a caracole command on the library with every site it asks
+the fake sites server at ``sites`` (tests/helpers/fake_sites.py), so that the computer looks a song up as the phone
+does; ``provider`` and ``events`` read its health record of a site and the requests it counted, ``politeness``
+everything of its own politeness (its events whole, and the kv records that gate its requests), and ``index_merges``
+the merges of index pages its caracole serve queued (``POST /peer/index``), from its request history.
 
 ``python -m tests.helpers.e2e_library serve DIR PORT`` (in nix develop, from the repository's root) builds the library
 in DIR when DIR holds none, exports its index to DIR/index.sqlite (what ``GET /api/peer/index`` gives the phone, and
@@ -53,8 +73,9 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -111,6 +132,12 @@ CHANGED = {
 }
 # The songs whose sheet the owner chose: their second UG version, pinned.
 CHOSEN = (("Traditional", "Greensleeves"), ("Traditional", "Molly Malone"))
+# The Chinese song, whose chart sings made-up Chinese words: its page carries pinyin, and either script.
+CHINESE = ("Traditional", "茉莉花")
+# A harmonica tab, made up, kept as harptabs.com's is (harptabs_fetch.py): its key and harp chips, as its page names
+# them, and its page's id.
+HARMONICA = ("Stephen Foster", "Oh! Susanna")
+HARMONICA_TAB = (6001, "C", "Diatonic")
 # Lyrics as LRCLIB gives them, made up.
 LYRICS = (("Traditional", "Wayfaring Stranger"), ("Stephen Foster", "Beautiful Dreamer"),
           ("Traditional", "Wild Mountain Thyme"))
@@ -147,6 +174,11 @@ REQUESTS = (("Traditional", "Black Is the Color", "1"), ("Traditional", "Down in
 REMOVED = {"R": ("Traditional", "Barbara Allen"), "C1": ("Traditional", "The Parting Glass")}  # on the phone
 TRANSPOSED = {"C1": (("Traditional", "The Parting Glass"), 4), "C2": (("Traditional", "The Water Is Wide"), -3)}
 ADDS = (("Traditional", "Red River Valley"), ("Traditional", "Home on the Range"), ("Joseph Brackett", "Simple Gifts"))
+# The lookups phase's (§9's M4 check): the fake sites' scenario, whose slugged songs UG's index lists too, and what the
+# computer's caracole.toml says once the phone has looked them up, which the next sync gives the phone.
+LOOKUPS = "lookups"
+SETTINGS = "\n[match]\naccept = 92\n\n[providers.megalobiz]\nlookup_requests = 4\n"
+SETTINGS_SAID = {"match": {"accept": 92}, "providers": {"megalobiz": {"lookup_requests": 4}}}
 
 
 def slug(name: str) -> str:
@@ -160,16 +192,53 @@ def tab_url(artist: str, title: str, tab: int) -> str:
 
 
 def chart(title: str, chords: Sequence[str], version: int = 1) -> str:
-    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words."""
+    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words
+    (``words``)."""
     lines = []
     for section in ("Verse 1", "Chorus", "Verse 2"):
         lines.append(f"[{section}]")
         for n in range(4):
             first, second = chords[n % len(chords)], chords[(n + 1) % len(chords)]
             lines.append(f"[tab][ch]{first}[/ch]" + " " * (16 - len(first)) + f"[ch]{second}[/ch]")
-            lines.append(f"Words of {section.lower()} for the test, line {n + 1}, take {version}[/tab]")
+            lines.append(words(title, section, n, version) + "[/tab]")
     lines.insert(0, f"{title}: a chart made up for caracole's tests")
     return "\r\n".join(lines) + "\r\n"
+
+
+# The Chinese chart's parts and its lines' numbers, as its made-up words name them.
+CHINESE_PARTS = {"Verse 1": "第一段", "Chorus": "副歌", "Verse 2": "第二段"}
+CHINESE_NUMBERS = "一二三四"
+
+
+def words(title: str, section: str, n: int, version: int = 1) -> str:
+    """The made-up words of line ``n`` of a chart's ``section``: for the Chinese song (``CHINESE``), Chinese in
+    Simplified characters, most of which Traditional writes otherwise (这 這, 为 為, 测试 測試, 编 編, 词 詞), so that
+    the viewer's Chinese characters change the words shown, each with its reading."""
+    if title == CHINESE[1]:
+        return chinese_words(section, n)
+    return f"Words of {section.lower()} for the test, line {n + 1}, take {version}"
+
+
+def chinese_words(section: str, n: int) -> str:
+    """The made-up Chinese words of line ``n`` of a chart's ``section`` (``words``'s for the Chinese song; the fake
+    sites' Chinese song sings them too, tests/helpers/fake_sites.py's ``chinese``)."""
+    return f"这是为测试编的歌词，{CHINESE_PARTS[section]}第{CHINESE_NUMBERS[n]}行"
+
+
+def harmonica_tab(title: str) -> str:
+    """A harmonica tab in harptabs.com's way, made up: a title line, then rows of holes for a C harp, each hole over
+    a word of the made-up words under it, blown (``4``) or drawn (``-4``)."""
+    rows = (("4", "4", "5", "6", "6", "-6", "6", "5"), ("4", "-4", "5", "5", "-4", "4", "-4", "4"),
+            ("4", "4", "5", "6", "6", "-6", "6", "5"), ("4", "-4", "5", "5", "-4", "-4", "4", "4"))
+    out = [f"{title}: a harmonica tab made up for caracole's tests", ""]
+    for n, holes in zip(("one", "two", "three", "four"), rows):
+        lyric = f"made up words of row {n} for harp"
+        starts = [i for i, ch in enumerate(lyric) if ch != " " and (i == 0 or lyric[i - 1] == " ")]
+        line = [" "] * (len(lyric) + 4)
+        for at, hole in zip(starts, holes):
+            line[at:at + len(hole)] = hole
+        out += ["".join(line).rstrip(), lyric, ""]
+    return "\n".join(out)
 
 
 # --- the computer ---------------------------------------------------------------------------------------------------
@@ -277,6 +346,133 @@ class Computer:
         finally:
             conn.close()
 
+    def against(self, sites: str, *args: str, timeout: float = 300) -> str:
+        """``caracole ARGS`` on this library with every site it asks the fake sites at ``sites``
+        (``python -m tests.helpers.fake_sites caracole``), which must succeed; what it printed."""
+        command = [sys.executable, "-m", "tests.helpers.fake_sites", "caracole", sites, "--config", str(self.config),
+                   *args]
+        done = subprocess.run(command, env=self.env(), cwd=REPO, capture_output=True, text=True, check=False,
+                              timeout=timeout)
+        if done.returncode != 0:
+            raise RuntimeError(f"caracole {' '.join(args)} (the fake sites) exited {done.returncode}:\n{done.stdout}\n"
+                               f"{done.stderr}")
+        return done.stdout
+
+    def change_settings(self) -> None:
+        """``SETTINGS`` at the end of caracole.toml: what the owner changes while the phone looks songs up."""
+        with self.config.open("a", encoding="utf-8") as toml:
+            toml.write(SETTINGS)
+
+    def provider(self, name: str) -> dict | None:
+        """kv ``provider:<name>``, health.py's record of the site (its cooldown and strikes), or None."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return db.kv_get_json(conn, f"provider:{name}")
+        finally:
+            conn.close()
+
+    def events(self) -> list[tuple[str, str]]:
+        """Every request this caracole counted (``events``): its provider and URL."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return [tuple(r) for r in conn.execute("SELECT provider, url FROM events ORDER BY id")]
+        finally:
+            conn.close()
+
+    def politeness(self) -> dict:
+        """Everything of this caracole's own politeness: every ``events`` row, whole, and the kv records of its pace
+        (``http:last_request:``), its health (``provider:``) and its lookups (``lookup:``), which no sync may change
+        (the owner's choice: each caracole's politeness is its own)."""
+        from caracole import db
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            return {"events": [tuple(r) for r in conn.execute("SELECT * FROM events ORDER BY id")],
+                    "kv": dict(conn.execute("SELECT key, value FROM kv WHERE key LIKE 'http:last_request:%' "
+                                            "OR key LIKE 'provider:%' OR key LIKE 'lookup:%' ORDER BY key"))}
+        finally:
+            conn.close()
+
+    def index_merges(self) -> dict[int, str]:
+        """The merges of index pages another caracole pushed (``POST /peer/index``, web/jobs.py's
+        ``index_merge_job``) that caracole serve queued: each one's state, by its id, as its request history
+        (``state_dir/requests.jsonl``, web/history.py) last says it."""
+        from caracole.web.jobs import INDEX_MERGE
+
+        history = self.cfg().state_dir / "requests.jsonl"
+        states: dict[int, str] = {}
+        if history.is_file():
+            for line in history.read_text(encoding="utf-8").splitlines():
+                try:
+                    job = json.loads(line)
+                except ValueError:
+                    continue  # a line cut short, as the history skips it
+                if isinstance(job, dict) and str(job.get("song_key", "")).startswith(INDEX_MERGE):
+                    states[int(job["id"])] = str(job.get("state"))
+        return states
+
+    def phone_pages(self, keys: Collection[str], into: Path) -> Pages:
+        """The pages the phone writes of the songs of identity keys ``keys``, as Python writes them for the same
+        inputs: render.py's page path with no PDF (tests/helpers/phone_render.py's ``phone_render``, the phone's
+        reference) over a copy of this computer made in ``into`` (``into/computer/``: its database copied whole, its
+        library and overrides.toml, a caracole.toml naming the copy's folders), this computer untouched. Each file
+        the pass recorded of those songs (kv ``render:files:<id>``: a viewer, a kept version's, a harmonica tab's
+        page, the sheet's .cho) and each one's info.json, its bytes by its path in the library; and the records the
+        pass kept of each song (``Pages.records``)."""
+        import shutil
+        import sqlite3
+
+        from caracole import db
+        from caracole.library import song_dir
+        from caracole.progressions import KV as PROGRESSIONS
+        from caracole.render import FILES_KEY
+        from caracole.songs import find_song
+        from helpers.phone_render import phone_key, phone_render
+
+        copy = Computer(into)
+        if copy.root.exists():
+            raise FileExistsError(f"{copy.root} is there already: the reference is made on a copy of its own")
+        cfg = self.cfg()
+        shutil.copytree(cfg.library_dir, copy.root / cfg.library_dir.relative_to(self.root), symlinks=True)
+        (copy.root / "home").mkdir()
+        copy.config.write_text(self.config.read_text(encoding="utf-8").replace(str(self.root), str(copy.root)),
+                               encoding="utf-8")
+        mine = copy.cfg()
+        mine.db_path.parent.mkdir(parents=True, exist_ok=True)
+        source = sqlite3.connect(cfg.db_path)
+        try:  # the database whole, as one read sees it, whatever serve writes meanwhile
+            source.execute("VACUUM INTO ?", (str(mine.db_path),))
+        finally:
+            source.close()
+        conn = db.connect(mine.db_path)
+        try:
+            songs = []
+            for key in keys:
+                song = find_song(conn, key)
+                if song is None:
+                    raise LookupError(f"no song {key!r} in the computer's library")
+                songs.append(song)
+            done = phone_render(conn, mine, song_ids=[song.id for song in songs])
+            if done.failed:
+                raise RuntimeError(f"the phone's reference failed on {done.failed}")
+            pages, records, folders = {}, {}, {}
+            for song in songs:
+                folder = song_dir(mine.library_dir, song)
+                folders[song.key] = folder.relative_to(mine.library_dir).as_posix()
+                files = db.kv_get_json(conn, f"{FILES_KEY}{song.id}", default={}) or {}
+                for name in [*sorted(files), "info.json"]:
+                    pages[(folder / name).relative_to(mine.library_dir).as_posix()] = (folder / name).read_bytes()
+                records[song.key] = {"files": files, "phone": db.kv_get_json(conn, phone_key(song.id)),
+                                     "progressions": db.kv_get_json(conn, f"{PROGRESSIONS}{song.id}")}
+            conn.commit()
+            return Pages(pages, records, folders)
+        finally:
+            conn.close()
+
     def after_the_phone_left(self) -> None:
         """What the owner does on the computer while the phone is away (§9's step 5): ``caracole add`` adds ``ADDS``,
         and C1's and C2's ``[transpose]`` change (overrides.toml's writer, ``put_song_entries``, keeping their other
@@ -291,6 +487,20 @@ class Computer:
             entries = song_entries(load_overrides(cfg.overrides_file), override_key(display))
             put_song_entries(cfg.overrides_file, display, {**entries, "transpose": semitones})
             self.caracole("render", "--song", display)
+
+
+@dataclass(frozen=True)
+class Pages:
+    """The pages a pass of the phone's renders made of some songs (``Computer.phone_pages``, and the phone's own the end
+    to end reads): ``pages``, each page recorded and each song's info.json, its bytes by its path in the library; and
+    ``records``, by each song's identity key, what the pass recorded of it: kv ``render:files:<id>`` (``files``: each
+    page's SHA-256, size and the song unit's digest it was made at), kv ``render:<id>:phone`` (``phone``: that digest,
+    the build that made it, its sheet's script) and kv ``render:progressions:<id>`` (``progressions``); and
+    ``folders``, each song's folder in the library."""
+
+    pages: dict[str, bytes]
+    records: dict[str, dict]
+    folders: dict[str, str]
 
 
 def wait_until_answering(url: str, server: subprocess.Popen, log: Path, timeout: float) -> None:
@@ -359,6 +569,7 @@ def build(dir: Path) -> Computer:
     from caracole.versions import upsert_version
     from caracole.viewer.version import Setting
     from caracole.wanted import append_wanted, sync_wanted
+    from helpers import fake_sites
     from helpers.guitar import SYNTHETIC, keep_guitar
     from helpers.ug_pages import version_dict
 
@@ -407,6 +618,7 @@ def build(dir: Path) -> Computer:
             refresh_status(conn, song.id, ignored=False)
             write_info(conn, cfg.library_dir, get_song(conn, song.id))
         sitemap += [(a, s, INDEX_TAB + n) for n, (a, s) in enumerate(INDEX)]
+        sitemap += fake_sites.index_rows(LOOKUPS)  # the songs only the fake sites have pages of
 
         sitemaps = computer.root / "sitemaps"
         sitemaps.mkdir()
@@ -416,6 +628,7 @@ def build(dir: Path) -> Computer:
             f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{urls}</urlset>\n", encoding="utf-8")
         build_index(conn, None, NOW, from_dir=sitemaps)
+        fake_sites.store_harptabs(conn, NOW, LOOKUPS)  # the fake sites' harmonica tab, and its artist's page
         # gtptabs.com's sitemapGoogle1.xml of these pages, stored as site_index.refresh stores a sitemap it read (its
         # rows and its record, which index_transfer's merge compares), and its index read whole.
         site_index._store(conn, gtptabs_fetch.SITE, "1", [parse_page_url(u) for u in GTPTABS],
@@ -432,6 +645,7 @@ def build(dir: Path) -> Computer:
 
         keep_guitar(conn, cfg, find_song(conn, identity_key(*GUITAR)), SYNTHETIC.read_bytes(), name="guitar-1.gp",
                     tab="7701")
+        keep_harmonica(conn, cfg, find_song(conn, identity_key(*HARMONICA)))
 
         # The goal's changes, before the renders that play them.
         for (artist, title), (version, semitones) in CHANGED.items():
@@ -453,10 +667,29 @@ def build(dir: Path) -> Computer:
         write_pages(conn, cfg, overrides, NOW)
         conn.commit()
         found = index_song(conn)
+        lookups = fake_sites.document(conn, LOOKUPS)
     finally:
         conn.close()
-    write_scenario(computer, found)
+    write_scenario(computer, found, lookups)
     return computer
+
+
+def keep_harmonica(conn, cfg, song) -> None:
+    """``HARMONICA``'s tab kept as harptabs_fetch.py's ``_keep`` keeps one: its version (provider harptabs, kind
+    harmonica, the page's chips in its raw) and ``harmonica-1.txt``, which render.py gives its page."""
+    from caracole.harptabs import PROVIDER, page_url
+    from caracole.inbox import HARMONICA_KIND
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    tab, key, harp = HARMONICA_TAB
+    raw = {"title": song.title, "artist": song.artist, "key": key, "harp": harp, "difficulty": "Beginner",
+           "views": 1200, "rating": 4.5}
+    vid = upsert_version(conn, provider=PROVIDER, tab_id=str(tab), song_id=song.id, slot="guitar", kind=HARMONICA_KIND,
+                         rating=4.5, votes=1200, version=1, label=None, url=page_url(f"tab/{tab}/{slug(song.title)}"),
+                         raw=raw, now=FETCHED)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="harmonica-1.txt",
+              data=harmonica_tab(song.title).encode("utf-8"), rank=1)
 
 
 def index_song(conn) -> dict:
@@ -472,9 +705,10 @@ def index_song(conn) -> dict:
             "key": identity_key(hit.artist, hit.title)}
 
 
-def write_scenario(computer: Computer, index: dict) -> None:
+def write_scenario(computer: Computer, index: dict, lookups: dict) -> None:
     """scenario.json: what the Kotlin phases need to know of the scenario's songs (this module's docstring), with
-    ``index``, ``index_song``'s. Written last, so a folder that has it holds a library built whole."""
+    ``index``, ``index_song``'s, and ``lookups``, the fake sites' document of their scenario over this library's
+    index. Written last, so a folder that has it holds a library built whole."""
     from caracole.index_transfer import SITES
     from caracole.normalize import identity_key
 
@@ -497,6 +731,8 @@ def write_scenario(computer: Computer, index: dict) -> None:
         "removed": {name: named(*song) for name, song in REMOVED.items()},
         "transposed": {name: named(*song, transpose=n) for name, (song, n) in TRANSPOSED.items()},
         "adds": [named(a, t) for a, t in ADDS],
+        "lookups": lookups,
+        "settings": SETTINGS_SAID,
     }
     (computer.dir / "scenario.json").write_text(json.dumps(scenario, ensure_ascii=False, indent=1) + "\n",
                                                 encoding="utf-8")

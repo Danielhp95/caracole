@@ -298,7 +298,8 @@ class JobNotRepeatable(val id: Int) : Exception("request $id can't be run again:
  * - [again]: a job over queued again, its commands as they were (Try again: a search the page sent asked by hand now,
  *   a lookup made with its songbooks).
  * - A job runs its run, then its commands one after another, each by its runner ([commands]), its steps' states as
- *   caracole serve's: a command that throws fails its step (its `error:` line said, its code [CommandExit]'s or 1),
+ *   caracole serve's: a command that throws fails its step (its `error:` line said, none for a [CommandExit] of no
+ *   words, typer.Exit's; its code [CommandExit]'s or 1),
  *   the job's running stage failed and the rest skipped. A run that throws fails its job as milestone 3's did: the
  *   first line of what it threw said (`error: …`) and the words of its stage that ran (else the first that waited),
  *   failed. The worker goes on. One the scope's end stops is interrupted, its step and stage that ran so too, whatever
@@ -626,7 +627,8 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                     end(job, Job.INTERRUPTED)
                     throw e as? CancellationException ?: CancellationException("the queue stopped").apply { initCause(e) }
                 }
-                context.say("error: ${said(e)}")
+                // an exit with no words is typer.Exit's: its command said why itself, and writes no error line
+                if (e !is CommandExit || !e.message.isNullOrEmpty()) context.say("error: ${said(e)}")
                 (e as? CommandExit)?.code ?: 1
             }
             synchronized(lock) {

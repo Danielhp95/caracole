@@ -8,7 +8,7 @@ import java.net.URI
 import java.util.Collections
 
 /**
- * Every HTTP request this JVM sends, counted with its path: mirror's Http (which PeerClient and the mirror's sync send
+ * Every HTTP request this JVM sends, counted with its host and its path: mirror's Http (which PeerClient and the mirror's sync send
  * through) is java.net's HttpURLConnection, which asks the default ProxySelector for its way before each connection,
  * whatever its host. Installed before the phone is made, it answers "no proxy" to an http or https address, recording
  * it, and hands anything else (a plain socket's `socket://`) to the selector it replaced.
@@ -24,7 +24,11 @@ object Requests : ProxySelector() {
     val count: Int get() = sent.size
 
     /** The path of each request sent since [reset], in the order they were sent. */
-    val paths: List<String> get() = synchronized(sent) { sent.toList() }
+    val paths: List<String> get() = synchronized(sent) { sent.map { it.substringAfter(' ') } }
+
+    /** The host and port (`host:port`, the scheme's port when the URI names none) of each request sent since
+     * [reset], in the order they were sent. */
+    val hosts: List<String> get() = synchronized(sent) { sent.map { it.substringBefore(' ') } }
 
     fun install() {
         if (getDefault() !== this) setDefault(this)
@@ -33,8 +37,10 @@ object Requests : ProxySelector() {
     fun reset() = sent.clear()
 
     override fun select(uri: URI): List<Proxy> {
-        if (uri.scheme?.lowercase() in WEB) {
-            sent.add(uri.rawPath.orEmpty())
+        val scheme = uri.scheme?.lowercase()
+        if (scheme in WEB) {
+            val port = if (uri.port >= 0) uri.port else if (scheme == "https") 443 else 80
+            sent.add("${uri.host.orEmpty().lowercase()}:$port ${uri.rawPath.orEmpty()}")
             return listOf(Proxy.NO_PROXY)
         }
         return before?.select(uri) ?: listOf(Proxy.NO_PROXY)
