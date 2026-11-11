@@ -6,8 +6,9 @@
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
-#   --app           the app's classes: EndToEndTest, PinchTest, SyncTabTest and PhoneEndToEndTest, each against a
-#                   computer of its own (tests.helpers.e2e_library in a fresh folder), as the M1-3 integration ran them
+#   --app           the app's classes: EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest and
+#                   PhoneEndToEndTest, each against a computer of its own (tests.helpers.e2e_library in a fresh
+#                   folder)
 #   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest..., or in full:
 #                   io.github.danielhp95.caracole.NoSitesTest), with DIR its computer's folder
 #   --computer DIR  one computer for every class that names none
@@ -211,7 +212,7 @@ run_with_computer() {
 
 if [ "$want_app" = 1 ]; then
     base="$(mktemp -d "${TMPDIR:-/tmp}/caracole-device-XXXXXX")"
-    for name in EndToEndTest PinchTest SyncTabTest PhoneEndToEndTest; do
+    for name in EndToEndTest PinchTest SyncSheetTest ExportImportTest PhoneEndToEndTest; do
         run_with_computer "$name" "${computer:-$base/$name}"
     done
 fi

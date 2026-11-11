@@ -1273,8 +1273,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
 - `:app`: the Android app on its own server (`Caracole.kt`: one `Phone` a process, its server on
   `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
-  loads that exact origin alone, `mirror.Links`); Settings' Import indexes (from the computer's `GET /api/peer/index`
-  or a file, a foreground job); the Sync tab's sync in a foreground service (`SyncService`).
+  loads that exact origin alone, `mirror.Links`); the bar's sync button, the library page's sync sheet
+  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
+  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
+  sync among it, in a foreground service (`SyncService`).
 - `:viewer` (plain JVM, milestone 5): the page builder, viewer/ in Kotlin, with viewer/'s `.js`, `.css` and voicings
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
@@ -1294,7 +1297,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`.
 
 ##### core.http, core.health, core.config
 

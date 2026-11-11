@@ -16,8 +16,10 @@ import java.net.URI
 
 /** What the phone's server answered for a file another app is to open. */
 sealed interface Fetched {
-    /** The file: its [type] (without parameters, "application/pdf"), its [length] and its bytes, read by [open]. */
-    class File(val type: String, val length: Long, private val bytes: () -> InputStream) : Fetched {
+    /** The file: its [type] (without parameters, "application/pdf"), its [length], the server's Content-Disposition
+     * ([disposition], null for none: an export's names the file) and its bytes, read by [open]. */
+    class File(val type: String, val length: Long, val disposition: String? = null,
+               private val bytes: () -> InputStream) : Fetched {
         fun open(): InputStream = bytes()
     }
 
@@ -34,8 +36,12 @@ class LocalFiles(private val handle: (Request) -> Response, origin: URI, private
     private val host = origin.rawAuthority
 
     /** The file at [path] in the library ("Estopa/Tu calorro/sheet.pdf"). */
-    fun get(path: String): Fetched {
-        val response = handle(Request("GET", Links.target(path), mapOf(
+    fun get(path: String): Fetched = at(Links.target(path))
+
+    /** The file the server answers at [target], a path and query as sent ("/api/sync/export?export=…": an export of
+     * the sync sheet's, Exports'). */
+    fun at(target: String): Fetched {
+        val response = handle(Request("GET", target, mapOf(
             "host" to host,
             "cookie" to "${Security.SECRET_COOKIE}=$secret",
             "sec-fetch-site" to "same-origin",
@@ -44,10 +50,11 @@ class LocalFiles(private val handle: (Request) -> Response, origin: URI, private
         val type = response.headers.lastOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
             ?.substringBefore(';')?.trim()?.lowercase()?.ifEmpty { null } ?: ANY_FILE
         if (response.status != 200 || type in PAGES) return Fetched.Refused(response.status, said(response, type))
+        val disposition = response.headers.lastOrNull { it.first.equals("Content-Disposition", ignoreCase = true) }?.second
         return when (val body = response.body) {
-            Body.Empty -> Fetched.File(type, 0) { ByteArrayInputStream(ByteArray(0)) }
-            is Body.Bytes -> Fetched.File(type, body.bytes.size.toLong()) { ByteArrayInputStream(body.bytes) }
-            is Body.FromFile -> Fetched.File(type, body.length) { FileInputStream(body.file) }
+            Body.Empty -> Fetched.File(type, 0, disposition) { ByteArrayInputStream(ByteArray(0)) }
+            is Body.Bytes -> Fetched.File(type, body.bytes.size.toLong(), disposition) { ByteArrayInputStream(body.bytes) }
+            is Body.FromFile -> Fetched.File(type, body.length, disposition) { FileInputStream(body.file) }
         }
     }
 
