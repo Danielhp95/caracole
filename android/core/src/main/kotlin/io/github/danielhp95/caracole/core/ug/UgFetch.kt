@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.ug
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.ug.internal.fetch.SongFetch
 import io.github.danielhp95.caracole.core.ug.internal.fetch.Slots
@@ -64,6 +65,18 @@ object UgFetch {
 
     /** needs_artist_page: whether the index can't settle the song, so its artist's UG page should be read. */
     fun needsArtistPage(song: SongRow): Boolean = SongFetch.needsArtistPage(song)
+
+    /** ARTIST_PAGE_MAX_AGE: an artist's page read for a song is read for it again after this (fetch_due's). */
+    val ARTIST_PAGE_MAX_AGE: Duration = Duration.ofDays(30)
+
+    /** fetch_due: whether a run would fetch the song at [now] (songs_to_fetch for one song): matched and dirty, or its
+     * `[block]` changed since its fetch (kv `ug:blocked:<id>`); due on its artist's UG page, which can be found, not
+     * read for it within [artistPageMaxAge] (kv `ug:artist_page_checked:<id>`); not matched, still keeping what an
+     * earlier match kept; or accepted, its artist's page due again. Read only: the to-do page's buy list, the library
+     * page's cards (todo.songs_to_buy). */
+    fun fetchDue(db: Db, song: SongRow, overrides: Overrides, now: Instant,
+                 artistPageMaxAge: Duration = ARTIST_PAGE_MAX_AGE): Boolean =
+        SongFetch.fetchDue(db, song, overrides, now, artistPageMaxAge)
 
     /** sheet_group: the UG kinds the song's sheet comes from (ukulele chords for a UG ukulele sheet, else chords). */
     fun sheetGroup(db: Db, songId: Long): List<String> = Slots.sheetGroup(db, songId)

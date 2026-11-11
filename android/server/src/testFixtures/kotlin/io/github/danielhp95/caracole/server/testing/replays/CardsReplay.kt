@@ -14,6 +14,8 @@ import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.WebJson
 import io.github.danielhp95.caracole.server.testing.json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -31,7 +33,11 @@ import java.time.Instant
  * - every `song_cards` record: PhonePageData's cards of every song (Songs.list's order) or of the songs it names, at
  *   its time, with the providers it turns off, against library_page.song_cards' whole;
  * - every `build_library_page` record: PhonePageData's page data with no mirror, but its `sites` (the mirror's);
+ * - every `result_cards` record: PhonePageData's result cards of the songs it names, /api/search's rows';
  * - every `/api/search` record: the answer's `progression` and its `library` rows' id, via and score.
+ *
+ * Each answer is compared whole; a `song_cards` record's cards also by their members' order, which the vector says
+ * apart (its `members`: a line's keys sort), `_song` field for field and every object in a card.
  */
 object CardsReplay : AreaReplay {
     override val area = "cards"
@@ -40,9 +46,10 @@ object CardsReplay : AreaReplay {
 
     const val SONG_CARDS = "caracole.library_page.song_cards"
     const val PAGE_DATA = "caracole.library_page.build_library_page"
+    const val RESULT_CARDS = "caracole.library_page.result_cards"
     const val SEARCH = "caracole.web.app.WebApp.handle"
 
-    override fun replay(misses: Misses) = replay(misses, setOf(SONG_CARDS, PAGE_DATA, SEARCH))
+    override fun replay(misses: Misses) = replay(misses, setOf(SONG_CARDS, PAGE_DATA, RESULT_CARDS, SEARCH))
 
     /** The records of the functions [fns] alone (ProgressionTest's: [SEARCH]). */
     fun replay(misses: Misses, fns: Set<String>) {
@@ -82,13 +89,22 @@ object CardsReplay : AreaReplay {
                     }
                 }
                 val said = "$library song_cards at ${text(record, "now")}, ${ids ?: "every song"}, off $off"
-                compare(misses, said, record.getValue("out"), made)
+                compare(misses, said, record.getValue("out"), made, record["members"])
             }
             PAGE_DATA -> {
                 val data = PhonePageData(MirrorPageData(null), store, { PhoneConfig.DEFAULTS })
                 val made = app.database.read { db -> data.data(db, text(record, "now")) }
                 compare(misses, "$library's page data", record.getValue("out"), JsonObject(made - "sites"))
                 misses.check(made["sites"] == JsonArray(emptyList())) { "$library's page data: no mirror, no sites" }
+            }
+            RESULT_CARDS -> {
+                val ids = record.getValue("songs").jsonArray.map { it.jsonPrimitive.long }
+                val made = app.database.read { db ->
+                    val songs = Songs.list(db)
+                    val results = cards(store).results(db, ids.map { id -> songs.first { it.id == id } })
+                    JsonArray(ids.map { results.getValue(it) })
+                }
+                compare(misses, "$library result_cards", record.getValue("out"), made)
             }
             SEARCH -> {
                 val target = record.getValue("args").jsonArray[1].jsonPrimitive.content
@@ -113,10 +129,31 @@ object CardsReplay : AreaReplay {
     private fun configWithout(off: List<String>): PhoneConfig = PhoneConfig.DEFAULTS.copy(
         providers = PhoneConfig.DEFAULTS.providers.mapValues { (name, p) -> if (name in off) p.copy(enabled = false) else p })
 
-    private fun compare(misses: Misses, said: String, want: kotlinx.serialization.json.JsonElement,
-                        got: kotlinx.serialization.json.JsonElement) {
-        val difference = WebJson.difference(want, got)
+    private fun compare(misses: Misses, said: String, want: JsonElement, got: JsonElement, members: JsonElement? = null) {
+        val difference = WebJson.difference(want, got) ?: members?.let { order(got, it, "") }
         misses.check(difference == null) { "$said: $difference" }
+    }
+
+    /** Where an object of [got] holds its members in another order than [members] says Python's do (the generator's
+     * `_members`: an object's `[keys]` or `[keys, {key: members}]`, a list's its items', null for a value of none), or
+     * null. */
+    private fun order(got: JsonElement, members: JsonElement, at: String): String? = when {
+        members is JsonNull -> null
+        got is JsonObject -> {
+            val said = members.jsonArray
+            val keys = said[0].jsonArray.map { it.jsonPrimitive.content }
+            if (got.keys.toList() != keys) {
+                "$at: members ${got.keys.toList()}, Python's $keys"
+            } else {
+                (said.getOrNull(1) as? JsonObject)?.entries
+                    ?.firstNotNullOfOrNull { (key, inner) -> got[key]?.let { order(it, inner, "$at.$key") } }
+            }
+        }
+        got is JsonArray -> {
+            val said = members.jsonArray
+            got.indices.firstNotNullOfOrNull { i -> said.getOrNull(i)?.let { order(got[i], it, "$at[$i]") } }
+        }
+        else -> null
     }
 
     private fun text(o: JsonObject, name: String): String = o.getValue(name).jsonPrimitive.content

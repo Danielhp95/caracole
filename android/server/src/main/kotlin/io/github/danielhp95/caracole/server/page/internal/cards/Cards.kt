@@ -2,6 +2,8 @@ package io.github.danielhp95.caracole.server.page.internal.cards
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.inbox.GuitarFiles
+import io.github.danielhp95.caracole.core.inbox.HarmonicaFiles
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
@@ -9,12 +11,15 @@ import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sites.MuseScorePages
 import io.github.danielhp95.caracole.core.ug.SheetVersion
 import io.github.danielhp95.caracole.core.ug.SheetVersions
 import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.server.page.CardText
 import io.github.danielhp95.caracole.viewer.chinese.Hanzi
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.sheet.MusicKeys
 import io.github.danielhp95.caracole.viewer.sheet.SongKey
 import io.github.danielhp95.caracole.viewer.version.Versions
@@ -42,11 +47,21 @@ import java.time.Instant
  * where its audio stands, and its sites name YouTube for none. [names] gives each song's folder's files (the
  * folder's, as `_file_names` lists it, and those the mirror serves of it: PhonePageData's).
  *
+ * **What no sync carries.** A card says some things of inputs that are the computer's alone: the export PDFs made of
+ * the sheet (kv `render:export:<id>`), what its PDF is moved by (kv `render:<id>`), the misses of gtptabs.com,
+ * harptabs.com and gametabs.net (kv `<site>:checked:<id>`), UG's left-out tabs and artist-page reads (fetch_due's
+ * kv), a purchase linked from Music/ (`audio_path`) and its YouTube route. For a song [computers] gives the computer's
+ * card of (one the mirror lists as the phone holds it: PhonePageData's), those are the computer's card's
+ * ([COMPUTERS]: `transpose`, `buy`, `youtube`, `youtubeSheet`, `sites`, and the files' exports by its `version`
+ * entries), as are its `progressions` and `hanzi` while the phone has recorded none of its own; any other song's card
+ * says what the phone knows.
+ *
  * Reads only, through [db]; [now] is the buy list's time (fetch_due's ages).
  */
 internal class Cards(private val db: Db, private val libraryDir: File, private val config: PhoneConfig,
                      private val overrides: Overrides, private val now: Instant,
-                     private val names: (SongRow) -> Set<String> = { folderNames(libraryDir, it) }) {
+                     private val names: (SongRow) -> Set<String> = { folderNames(libraryDir, it) },
+                     private val computers: (SongRow) -> JsonObject? = { null }) {
 
     /** song_cards: the cards of [songs], or of every song (Songs.list's order) with [only] false. */
     fun cards(songs: List<SongRow>, only: Boolean): List<JsonObject> {
@@ -55,6 +70,7 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
         val origins = Sources.keptSources(db)
         val ukulele = ukuleleSheets()
         val exports = exports()
+        val theirs = songs.associate { it.id to computers(it) }
         val keys = songs.associate { it.id to MusicKeys.songKey(db, libraryDir, it.id) }
         val audio = audioPaths(songs)
         val toBuy = ToBuy.songsToBuy(db, songs, overrides, now, audio).mapTo(HashSet()) { it.id }
@@ -66,24 +82,77 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
         val made = songs.map { s ->
             val folder = names(s)
             val path = audio[s.id]
+            val computer = theirs[s.id]
             song(s, folder, keys[s.id], s.id in toBuy, sources[s.id].orEmpty(), pages[s.id].orEmpty(),
-                 origins[s.id].orEmpty(), exports[s.id].orEmpty(), pdfTranspose(s), met[s.id].orEmpty(), ug[s.id],
+                 origins[s.id].orEmpty(), computer?.let(::exportsOf) ?: exports[s.id].orEmpty(),
+                 computer?.let(::transposeOf) ?: pdfTranspose(s), met[s.id].orEmpty(), ug[s.id],
                  browsable[s.id], s.id in ukulele, !path.isNullOrEmpty() && path !in fromYoutube)
         }.map { LinkedHashMap<String, JsonElement>(it) }
         addPicks(songs, made)
         addSites(songs, made, origins, met, pages)
         val played = Progressions.library(db)
+        val chinese = PhoneRender.chineseSongs(db)  // render.chinese_songs, the phone's records (kv render:<id>:phone)
         for ((song, card) in songs.zip(made)) {
-            card["progressions"] = played[song.id] ?: JsonArray(emptyList())
-            if (Producers.rendered(db, song.id)?.second != null) {  // render.chinese_songs, the phone's records
+            val computer = theirs[song.id]
+            card["progressions"] = played[song.id] ?: computer?.get("progressions")?.takeIf { it is JsonArray }
+                ?: JsonArray(emptyList())
+            if (song.id in chinese) {
                 val title = (card.getValue("title") as JsonPrimitive).content
                 val artist = (card.getValue("artist") as JsonPrimitive).content
                 val either = Hanzi.names(listOf(title, artist))
                 if (either.values.any { it.isNotEmpty() }) card["hanzi"] = json(either)
+            } else if (computer?.get("hanzi") is JsonObject && WrittenPages.rendered(db, song.id) == null) {
+                card["hanzi"] = computer.getValue("hanzi")  // the computer's, until the phone records the song's script
+            }
+            if (computer != null) {
+                for (field in COMPUTERS) computer[field]?.let { if (field in card) card[field] = it }
             }
         }
         return made.map { JsonObject(it) }
     }
+
+    /**
+     * library_page.result_cards: what a list the page doesn't make itself (/api/search's rows) shows of each song as
+     * its line does: its files as the line has them but with no site's name (`links`: `_files` with no sources), where
+     * its sheet came from (`source`), its key and what it holds for one instrument. By song id, in [songs]' order.
+     */
+    fun results(songs: List<SongRow>): Map<Long, JsonObject> {
+        val origins = Sources.keptSources(db)
+        val exports = exports()
+        val browsable = guitarPages()
+        val ukulele = ukuleleSheets()
+        val out = LinkedHashMap<Long, JsonObject>()
+        for (s in songs) {
+            val folder = names(s)
+            val made = computers(s)?.let(::exportsOf) ?: exports[s.id].orEmpty()
+            val files = files(s, folder, emptyMap(), origins[s.id].orEmpty(), made, browsable[s.id], s.id in ukulele)
+            val key = MusicKeys.songKey(db, libraryDir, s.id)
+            out[s.id] = JsonObject(linkedMapOf(
+                "links" to JsonArray(files),
+                "source" to (files.firstOrNull { it["primary"] == JsonPrimitive(true) }?.get("source") ?: JsonNull),
+                "key" to (key?.key?.let(::JsonPrimitive) ?: JsonNull),
+                "instruments" to JsonArray(instrumentsOf(folder, s.id in ukulele).map(::JsonPrimitive)),
+            ))
+        }
+        return out
+    }
+
+    /** The computer's card's exports of the sheet: each file it lists with a `version` (`_files`' export entries),
+     * by name, its version's label. */
+    private fun exportsOf(card: JsonObject): Map<String, String> {
+        val found = LinkedHashMap<String, String>()
+        for (file in (card["files"] as? JsonArray).orEmpty()) {
+            val f = file as? JsonObject ?: continue
+            val name = (f["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: continue
+            val label = (f["version"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: continue
+            if (Sources.isExport(name)) found[name] = label
+        }
+        return found
+    }
+
+    /** The computer's card's `transpose`, what its PDF is moved by; null for none that is an int. */
+    private fun transposeOf(card: JsonObject): Long? =
+        (card["transpose"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toLongOrNull()
 
     // --- one song ------------------------------------------------------------------------------------------------
 
@@ -176,7 +245,7 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
         val versions = made.associate { (label, n) -> n to label }
         val title = Normalize.cleanTitle(song.title)
         return ordered.map { n ->
-            val page = Producers.harmonicaPage(n)?.takeIf { it in names }
+            val page = HarmonicaFiles.page(n)?.takeIf { it in names }
             JsonObject(linkedMapOf<String, JsonElement>(
                 "name" to JsonPrimitive(n),
                 "label" to JsonPrimitive(labels[n]?.takeIf { it.isNotEmpty() } ?: CardText.label(n, sources[n])),
@@ -346,16 +415,16 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
     /** library_page._musescore_links: the song's MuseScore pages, each a possible match, none for an ignored song. */
     private fun museScoreLinks(song: SongRow): List<JsonObject> {
         if (song.status == "ignored" || song.key in overrides.ignore) return emptyList()
-        return Producers.museScorePages(db, song).map { p ->
+        return MuseScorePages.songPages(db, song).map { p ->
             JsonObject(linkedMapOf("label" to JsonPrimitive("${p.path.removePrefix("song/")} (possible match)"),
-                                   "href" to JsonPrimitive("$MUSESCORE/${p.path}"), "source" to JsonPrimitive("musescore")))
+                                   "href" to JsonPrimitive(p.url), "source" to JsonPrimitive("musescore")))
         }
     }
 
     /** library_page.guitar_pages: the address of the Guitar Pro page of each file it shows, by song and name. */
     private fun guitarPages(): Map<Long, Map<String, String>> {
         val found = HashMap<Long, LinkedHashMap<String, String>>()
-        for (f in Producers.guitarFiles(db)) {
+        for (f in GuitarFiles.of(db)) {
             if (f.inBrowser) found.getOrPut(f.songId) { LinkedHashMap() }[f.name] = "guitar?" + PyUrl.urlencode(listOf("file" to f.path))
         }
         return found
@@ -455,7 +524,10 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
         private val DOWNLOADED_FROM = mapOf("gtptabs" to "gtptabs.com", "harptabs" to "harptabs.com",
                                             "gametabs" to "gametabs.net")
         private const val EXPORT_KV = "render:export:"
-        private const val MUSESCORE = "https://musescore.com"
+
+        /** The fields of a card made of what no sync carries, the computer's card's for a song it holds as the phone
+         * does (the class's docstring). */
+        private val COMPUTERS = listOf("transpose", "buy", "youtube", "youtubeSheet", "sites")
         private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
 
         /** library_page._file_names: the regular files of the song's folder (a link followed, as Path.is_file

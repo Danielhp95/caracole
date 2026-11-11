@@ -6,14 +6,18 @@
   ``helpers.corpus.dump_fixture``'s records of its database and its folder (its overrides as the phone holds them,
   ``phone_overrides`` rows, beside the computer's overrides.toml as written, ``overrides``), stamped alike every run;
 - ``{"fn": "caracole.library_page.song_cards", "library": NAME, "now": STAMP, "songs": [ids] | null,
-  "config": {"off": [provider, ...]}, "out": [card, ...]}``: ``song_cards`` of every song (``songs`` null) or of
-  those, at ``now``, with the providers ``off`` turned off (``Config.provider(...).enabled`` false), each card as the
-  page's data holds it (``key``, ``files`` with their sources, guitar and harmonica pages and download names, UG's
-  ``versions`` and LaCuerda's, the auto sheet, a review's ``candidates`` with search.index_song, ``notFound``,
-  ``sites`` with the misses' kv, MuseScore's links, ``links`` and ``buy`` by todo.songs_to_buy, ``hanzi``,
-  ``progressions``);
+  "config": {"off": [provider, ...]}, "out": [card, ...], "members": [...]}``: ``song_cards`` of every song (``songs``
+  null) or of those, at ``now``, with the providers ``off`` turned off (``Config.provider(...).enabled`` false), each
+  card as the page's data holds it (``key``, ``files`` with their sources, guitar and harmonica pages and download
+  names, UG's ``versions`` and LaCuerda's, the auto sheet, a review's ``candidates`` with search.index_song,
+  ``notFound``, ``sites`` with the misses' kv, MuseScore's links, ``links`` and ``buy`` by todo.songs_to_buy,
+  ``hanzi``, ``progressions``), and each card's members in their order (``_members``: a line's keys sort, so the
+  order the page's data writes them in is said apart);
 - ``{"fn": "caracole.library_page.build_library_page", "library": NAME, "now": STAMP, "out": DATA}``: the page's
   data with no controls (the file's), but its ``sites``, the Sites tab's, which the phone takes from the mirror;
+- ``{"fn": "caracole.library_page.result_cards", "library": NAME, "songs": [ids], "out": [card, ...]}``: what
+  /api/search's rows show of each song (``links``: its files with no site's name, ``source``, ``key``,
+  ``instruments``), a card a song in ``songs``' order;
 - ``{"fn": "caracole.web.app.WebApp.handle", "library": NAME, "args": ["GET", PATH], "out": {"progression",
   "library"}}``: /api/search's ``progression`` for a query over the library and its ``library`` rows (``[id, via,
   score]``), those the progression adds after your songs the words found.
@@ -42,7 +46,7 @@ from urllib.parse import urlencode
 from caracole import canonical
 from caracole.db import kv_delete, kv_set, kv_set_json
 from caracole.library import keep_file, song_dir
-from caracole.library_page import build_library_page, song_cards
+from caracole.library_page import build_library_page, result_cards, song_cards
 from caracole.overrides import (
     SONG_TABLES,
     add_block,
@@ -348,11 +352,15 @@ def records(tmp_path: Path) -> list[dict[str, Any]]:
             cards = song_cards(conn, _off(cfg, off), overrides, now, only)
             out.append({"fn": "caracole.library_page.song_cards", "library": name, "now": _stamp(now),
                         "songs": None if only is None else [s.id for s in only], "config": {"off": list(off)},
-                        "out": cards})
+                        "out": cards, "members": [_members(c) for c in cards]})
         html = build_library_page(conn, cfg, overrides, NOW)
         data = json.loads(html.split('<script type="application/json" id="songs">', 1)[1].split("</script>", 1)[0])
         out.append({"fn": "caracole.library_page.build_library_page", "library": name, "now": _stamp(NOW),
                     "out": {k: v for k, v in data.items() if k != "sites"}})
+        if name == "full":
+            results = result_cards(conn, cfg, songs)
+            out.append({"fn": "caracole.library_page.result_cards", "library": name, "songs": [s.id for s in songs],
+                        "out": [results[s.id] for s in songs]})
         if name == "full":
             for q in QUERIES:
                 answer = _search(cfg, q)
@@ -362,6 +370,19 @@ def records(tmp_path: Path) -> list[dict[str, Any]]:
                                     "library": [[r["id"], r["via"], r["score"]] for r in answer["library"]]}})
         conn.close()
     return out
+
+
+def _members(value: Any) -> Any:
+    """The members of an object and of each object in it, however deep, in their order: an object's ``["<key>",
+    ...]`` its keys, then ``{"<key>": members}`` of each value that holds an object; a list's, of its items, where
+    any holds one; None for a value that holds none."""
+    if isinstance(value, dict):
+        inner = {k: m for k, v in value.items() if (m := _members(v)) is not None}
+        return [list(value), inner] if inner else [list(value)]
+    if isinstance(value, list):
+        items = [_members(v) for v in value]
+        return items if any(m is not None for m in items) else None
+    return None
 
 
 def _stamp(t: datetime) -> str:
@@ -385,6 +406,11 @@ def test_the_libraries_hold_what_each_card_says_something_of(tmp_path):
     assert {"guitarPage", "harmonicaPage", "download", "version"} <= {k for f in files for k in f}
     states = {m["state"] for c in cards for m in c["sites"]}
     assert states == {"have", "none", "unasked"}
+    results = [c for r in made if r.get("fn") == "caracole.library_page.result_cards" for c in r["out"]]
+    labels = {f["label"] for c in results for f in c["links"]}
+    # A file downloaded from a site says no site's name in a result's line, as it does on the page's
+    assert {"Guitar Pro 1", "Harmonica tab 1"} <= labels
+    assert not any(label.endswith(("gtptabs.com", "harptabs.com", "gametabs.net")) for label in labels)
     progression = [r for r in made if r.get("fn") == "caracole.web.app.WebApp.handle"]
     assert any(r["out"]["progression"] and r["out"]["progression"]["songs"] for r in progression)
     assert any(via == "progression" for r in progression for _, via, _ in r["out"]["library"])
