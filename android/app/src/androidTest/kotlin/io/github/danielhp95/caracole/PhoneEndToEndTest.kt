@@ -294,7 +294,7 @@ class PhoneEndToEndTest {
             // A song removed with its line's Remove: its card gone once the page is loaded again.
             val gone = cards(main).let { all -> (0 until all.length()).map { all.getJSONObject(it) } }
                 .first { it.optString("title") == REMOVED.second && it.optString("artist") == REMOVED.first }
-            val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from caracole")}]"
+            val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from your logbook")}]"
             assertTrue("its Remove", js("document.querySelector(${JSONObject.quote(remove)}) !== null") == true)
             val beforeRemoval = Caracole.started()!!.queue.snapshot().map { it.id }.toSet()
             js("document.querySelector(${JSONObject.quote(remove)}).click()")
