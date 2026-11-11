@@ -80,7 +80,7 @@ def test_get_says_where_the_sheet_is_as_soon_as_it_is_kept(config, sites, conn, 
     assert str(sheet) in lines[at] and "from UG" in lines[at] and "readable after" in lines[at]
     assert any(line.startswith("Lyrics: found") for line in lines[at:])  # after the sheet
     # Megalobiz's search too, for timed lyrics LRCLIB's plain ones lack: it has none here.
-    assert lines[-1].startswith("Done in ") and "5 requests" in lines[-1] and "Megalobiz 1" in lines[-1]
+    assert lines[-1].startswith("Done in ") and "5 asks" in lines[-1] and "Megalobiz 1" in lines[-1]
     assert find_song(conn, "radiohead/creep").status == "found"
 
 
@@ -107,7 +107,7 @@ def test_get_progress_writes_a_json_line_per_stage_for_caracole_serve(config, si
     assert result.exit_code == 0, result.output
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
     assert events[0] == {"stage": "song", "state": "running", "detail": ""}
-    assert {"stage": "sheet", "state": "done", "detail": "tab 101 from Ultimate Guitar"} in events
+    assert {"stage": "sheet", "state": "done", "detail": "tab 101 from UG"} in events
     readable = next(e for e in events if "files" in e)
     assert readable["files"]["sheet"] == "Radiohead/Creep/sheet.txt" and readable["seconds"] >= 0
     song = next(e for e in events if "song" in e)
@@ -228,7 +228,7 @@ def test_get_of_a_song_ignored_in_overrides_toml_exits_1(config, sites, conn, tm
     (tmp_path / "library" / "overrides.toml").write_text('[ignore]\nsongs = ["Radiohead - Creep"]\n',
                                                          encoding="utf-8")
     result = get(config, "Radiohead - Creep")
-    assert result.exit_code == 1 and "ignored in overrides.toml" in result.output
+    assert result.exit_code == 1 and "is ignored (overrides.toml [ignore])" in result.output
     assert sites.requests == []
 
 
@@ -237,7 +237,7 @@ def test_a_block_exits_0(config, sites, conn):
     sites.pages[f"{TAB}radiohead/creep-chords-101"] = (403, "Forbidden")
     result = get(config, "Radiohead - Creep")
     assert result.exit_code == 0, result.output
-    assert "blocked caracole" in result.output and "Nothing was marked not found" in result.output
+    assert "turned us back" in result.output and "Nothing marked not on the sites" in result.output
 
 
 @pytest.mark.slow
