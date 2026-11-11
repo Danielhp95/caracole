@@ -35,18 +35,25 @@ document.addEventListener("securitypolicyviolation", (e) => window.caracoleViola
 RENDERED = "Number(document.documentElement.dataset.rendered) >= 1 && !!document.querySelector('#score canvas')"
 
 
-@pytest.fixture
-def served(cfg, conn):
-    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is the synthetic score; the address
-    of its Guitar Pro page."""
+def serving(cfg, conn, data):
+    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is ``data``: it, its base address and
+    the address of its Guitar Pro page (the caller shuts the server down)."""
     cfg = replace(cfg, alphatab_dir=alphatab_dir())
     song = add_song(conn, "caracole tests", "Synthetic Study")
-    path = keep_guitar(conn, cfg, song, SYNTHETIC.read_bytes())
+    path = keep_guitar(conn, cfg, song, data)
     app = WebApp(cfg, JobQueue(lambda args, emit: 0), allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}/"
-    yield base, base + "guitar?" + urlencode({"file": path})
+    return server, base, base + "guitar?" + urlencode({"file": path})
+
+
+@pytest.fixture
+def served(cfg, conn):
+    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is the synthetic score; the address
+    of its Guitar Pro page."""
+    server, base, url = serving(cfg, conn, SYNTHETIC.read_bytes())
+    yield base, url
     server.shutdown()
     server.server_close()
 
@@ -221,7 +228,8 @@ FRAMES = "new Promise((done) => requestAnimationFrame(() => requestAnimationFram
 
 def test_a_long_press_shows_a_track_beside_those_shown_on_a_touch_screen(served, tmp_path):
     _, url = served
-    page = opened(tmp_path, url, width=390, height=844, mobile=True)
+    # A wide touch screen: a phone has the sheet instead of the chips.
+    page = opened(tmp_path, url, width=800, height=1000, mobile=True)
     try:
         assert page.wait(RENDERED, 30)
         # Held, the bass is shown beside the guitar, at once, the finger still down; let go, nothing more.
@@ -414,22 +422,16 @@ def test_a_phone_gets_the_tab_alone_with_no_sideways_scroll(served, tmp_path):
         assert page.js("window.caracoleGuitar.settings.display.staveProfile") == page.js("alphaTab.StaveProfile.Tab")
         assert page.js("window.caracoleGuitar.settings.display.scale") == 0.8
         assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
-        # Every control a thumb's target.
+        # Every control a thumb's target (the chips are hidden: the tracks' button stands for them).
         small = page.js("[...document.querySelectorAll('#gp-bar button, #gp-bar .view label,"
-                        " #gp-bar input[type=range], .links a')].map((e) => e.getBoundingClientRect())"
+                        " #gp-bar input[type=range], .links a')].filter((e) => !e.closest('#tracks'))"
+                        ".map((e) => e.getBoundingClientRect())"
                         ".filter((r) => r.height < 44 || r.width < 44).length")
         assert small == 0
-        # The bar is compact: Play, Stop, the tempo and the switch on one row, the tracks on one more, which
-        # scrolls sideways itself when they don't fit.
+        # The bar is compact: Play, Stop, the tempo and the switch on one row, the tracks' button on one more.
         bar = page.js("document.getElementById('gp-bar').getBoundingClientRect().height")
         assert bar <= 0.15 * 844, bar
-        assert page.js("getComputedStyle(document.getElementById('tracks')).overflowX") == "auto"
-        # The track it opens on, the second, is in that row's view, whole, off its edge.
         assert page.js("document.documentElement.dataset.track") == "1"
-        chip = page.js("(() => { const r = document.querySelector('#tracks .track:nth-child(2)')"
-                       ".getBoundingClientRect(); return [r.left, r.right]; })()")
-        assert chip[0] >= 16 and chip[1] <= 390 - 15, chip
-        assert page.js("document.getElementById('tracks').scrollLeft") > 0
         assert page.js("scrollY") == 0
         middles = page.js("[...document.querySelectorAll('#gp-bar .gp-play > *')]"
                           ".map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; })")
@@ -441,6 +443,138 @@ def test_a_phone_gets_the_tab_alone_with_no_sideways_scroll(served, tmp_path):
         assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
     finally:
         page.close()
+
+
+PHONE = {"width": 390, "height": 844, "mobile": True}
+SHEET = "document.getElementById('tracks-sheet')"
+ROWS = "[...document.querySelectorAll('#tracks-sheet .row')]"
+TICK = "#tracks-sheet .row:nth-child({n}) input"
+
+
+def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        # The chips give way to one button under Play: the track shown, and how many there are.
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
+        opener = "document.getElementById('tracks-open')"
+        assert page.js(f"getComputedStyle({opener}).display") != "none"
+        assert page.js(f"{opener}.getBoundingClientRect().height") >= 44
+        assert page.js(f"{opener}.querySelector('.now').textContent") == "Lead guitar"
+        assert page.js(f"{opener}.querySelector('.count').textContent").startswith("5 tracks")
+        assert page.js(f"{opener}.getAttribute('aria-haspopup')") == "dialog"
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "false"
+        assert page.js(f"{SHEET}.open") is False
+        page.click("#tracks-open")
+        assert page.wait(f"{SHEET}.open", 5)
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "true"
+        assert page.js(f"{SHEET}.contains(document.activeElement)") is True
+        # One row a track, its name and kind as the chips say them, a tick on those shown.
+        assert page.js(f"{ROWS}.map((r) => [r.querySelector('.name').textContent,"
+                       " (r.querySelector('.kind') || {}).textContent])") == [
+            [VOCALS, "6 strings"], ["Lead guitar", "6 strings"], ["Bass", "4 strings"], ["Keys", "no tab"],
+            ["Drums", None]]
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').checked)") == [False, True, False, False, False]
+        # The last one shown can't be unticked.
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').disabled)") == [False, True, False, False, False]
+        assert page.js(f"{SHEET}.getBoundingClientRect().height") <= 0.7 * 844
+        assert page.js("getComputedStyle(document.querySelector('.tracks-list')).overflowY") == "auto"
+        # A name too long for its row is cut, whole in the label's title; the sheet stays within the screen.
+        assert page.js(f"{ROWS}[0].querySelector('label').title") == VOCALS
+        assert page.js(f"{ROWS}[0].querySelector('.name').scrollWidth > {ROWS}[0].querySelector('.name').clientWidth")
+        assert page.js(f"{SHEET}.getBoundingClientRect().right") <= 390
+        assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
+        # A tick draws nothing yet: the tracks are drawn once, when the sheet closes.
+        before = page.js("document.documentElement.dataset.rendered")
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        assert page.js(f"{ROWS}[1].querySelector('input').disabled") is False
+        assert page.js(f"{ROWS}[2].querySelector('input').disabled") is False
+        assert page.js(FRAMES)
+        assert page.js("document.documentElement.dataset.track") == "1"
+        assert page.js("document.documentElement.dataset.rendered") == before
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "false"
+        assert page.js("document.activeElement.id") == "tracks-open"
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+        assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar", "Bass"]
+        assert page.js(f"{opener}.querySelector('.now').textContent") == "Lead guitar + 1"
+        # Unticked again: only that one.
+        page.click("#tracks-open")
+        assert page.wait(f"{SHEET}.open", 5)
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').checked)") == [False, True, True, False, False]
+        page.click(TICK.format(n=3))
+        page.click("#tracks-done")
+        assert page.wait("document.documentElement.dataset.track === '1'", 5)
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 3", 30)
+        # Done with nothing changed draws nothing.
+        drawn = page.js("document.documentElement.dataset.rendered")
+        page.click("#tracks-open")
+        assert page.wait(f"{SHEET}.open", 5)
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js(FRAMES)
+        assert page.js("document.documentElement.dataset.rendered") == drawn
+        # Escape closes it as Done does.
+        page.click("#tracks-open")
+        assert page.wait(f"{SHEET}.open", 5)
+        page.click(TICK.format(n=4))
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.wait("document.documentElement.dataset.track === '1,3'", 5)
+        assert page.js("document.activeElement.id") == "tracks-open"
+        assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def test_a_wide_screen_keeps_its_chips_and_no_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, width=1280, height=800)
+    try:
+        assert page.wait(RENDERED, 30)
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") != "none"
+        assert page.js("getComputedStyle(document.getElementById('tracks-open')).display") == "none"
+        assert page.js(f"{SHEET}.open") is False
+    finally:
+        page.close()
+
+
+ONE_TRACK = """\\title "One track"
+\\tempo 96
+.
+\\track "Lead guitar"
+\\staff {score tabs}
+\\tuning e4 b3 g3 d3 a2 e2
+\\instrument 27
+:4 0.1 2.1 3.1 0.1 | 3.2 1.2 0.2 1.2 |
+"""
+
+
+def test_a_score_of_one_track_has_no_button_on_a_phone(cfg, conn, tmp_path):
+    try:
+        maker = Browser(tmp_path / "maker")
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    try:
+        data = export_alphatex(maker, ONE_TRACK)
+    finally:
+        maker.close()
+    server, _, url = serving(cfg, conn, data)
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        assert page.js("window.caracoleGuitar.score.tracks.length") == 1
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
+        assert page.js("document.getElementById('tracks-open')") is None
+        assert page.js("document.querySelector('dialog')") is None
+    finally:
+        page.close()
+        server.shutdown()
+        server.server_close()
 
 
 def test_a_wide_screen_starts_with_the_score_and_the_tab(served, tmp_path):

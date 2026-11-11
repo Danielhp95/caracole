@@ -1,5 +1,5 @@
 /* caracole serve's Guitar Pro page (guitar_page.py), after base.css: the song's name (top.py's line) and its links, the bar of
-   controls, which stays at the top (playback on one row, the tracks on the next), and the score alphaTab draws. */
+   controls, which stays at the top (playback on one row, the tracks on the next; on a phone, the button that opens the sheet of them), and the score alphaTab draws. */
 .gp-bar { position: sticky; top: 0; z-index: 5; display: grid; gap: 8px; margin: 8px -16px 0; padding: 8px 16px;
   border-bottom: 1px solid var(--border); background: var(--bg); }
 .gp-play { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
@@ -22,8 +22,8 @@
 .view:disabled label { cursor: default; }
 .view label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
 .view .short { display: none; }
-/* The tracks: wrapped on a wide screen, a row of their own that scrolls sideways on a phone. Each is a chip of two
-   buttons, the speaker that mutes it and its name, which shows it (pressed: shown), and which a long press selects
+/* The tracks: wrapped on a wide screen; on a phone, one button that opens a sheet of them (below). Each is a chip of
+   two buttons, the speaker that mutes it and its name, which shows it (pressed: shown), and which a long press selects
    no text of. */
 .gp-tracks { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .track { display: inline-flex; flex: none; align-items: stretch; border: 1px solid var(--control-edge);
@@ -35,10 +35,10 @@
 .track .mute { justify-content: center; width: 44px; padding: 0; border-right: 1px solid var(--border-strong);
   border-radius: 10px 0 0 10px; color: var(--muted); }
 .track .mute:hover { color: var(--text); }
-.track .mute svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+.track .mute svg, .tracks-list .mute svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
   stroke-linejoin: round; }
-.track .mute .cone { fill: currentColor; }
-.track .mute .cross { display: none; }
+.track .mute .cone, .tracks-list .mute .cone { fill: currentColor; }
+.track .mute .cross, .tracks-list .mute .cross { display: none; }
 .track .show { flex-direction: column; align-items: flex-start; justify-content: center; max-width: 13rem;
   padding: 2px 12px; border-radius: 0 10px 10px 0; font-size: .88rem; font-weight: 600; line-height: 1.2;
   text-align: left; }
@@ -47,11 +47,43 @@
 .track:has(.show[aria-pressed="true"]) { border-color: var(--accent); }
 .track .show[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 .track .show[aria-pressed="true"] .kind { color: inherit; opacity: .85; }
-.track.muted .mute { color: var(--failed); }
-.track.muted .mute .waves { display: none; }
-.track.muted .mute .cross { display: inline; }
+.track.muted .mute, .tracks-list .muted .mute { color: var(--failed); }
+.track.muted .mute .waves, .tracks-list .muted .mute .waves { display: none; }
+.track.muted .mute .cross, .tracks-list .muted .mute .cross { display: inline; }
 .track.muted .show .name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .track.muted .show:not([aria-pressed="true"]) { color: var(--muted); }
+/* The phone's button and sheet, which a wide screen has none of (the phone block below shows the button). The sheet is
+   a modal dialog fixed to the bottom, at most 70 % of the screen, its list scrolling inside it. */
+.gp-bar .tracks-open { display: none; justify-content: space-between; gap: 12px; width: 100%; padding: 0 14px;
+  text-align: left; font-weight: 600; }
+.tracks-open .now { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracks-open .count { flex: none; color: var(--muted); font-size: .88rem; font-weight: 500; white-space: nowrap; }
+.tracks-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; height: auto;
+  max-height: 70vh; margin: 0; padding: 0; overflow: hidden; border: 0; border-top: 1px solid var(--border-strong);
+  border-radius: 16px 16px 0 0; background: var(--surface); color: var(--text); }
+.tracks-sheet[open] { display: flex; flex-direction: column; }
+.tracks-sheet::backdrop { background: rgb(0 0 0 / 45%); }
+.tracks-sheet .grip { flex: none; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px;
+  background: var(--border-strong); }
+.tracks-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 4px 16px 4px 20px; }
+.tracks-head h2 { margin: 0; font-size: 1.05rem; }
+.tracks-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 0 0 8px; overflow-y: auto; list-style: none;
+  overscroll-behavior: contain; border-top: 1px solid var(--border); }
+.tracks-list .row { display: flex; align-items: stretch; min-height: 44px; border-bottom: 1px solid var(--border); }
+.tracks-list .row:last-child { border-bottom: 0; }
+.tracks-list label { flex: 1 1 auto; display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 44px;
+  padding: 4px 8px 4px 20px; cursor: pointer; }
+.tracks-list input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.tracks-list input:focus-visible, .tracks-list .mute:focus-visible { outline: 3px solid var(--focus);
+  outline-offset: 2px; }
+.tracks-list .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .95rem; font-weight: 600; }
+.tracks-list .kind { flex: none; color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.tracks-list .mute { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px;
+  height: 44px; margin: 0; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+.tracks-list .mute:hover { color: var(--text); }
+.tracks-list .muted .name { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--muted); }
 .gp-status { min-height: 1.45em; margin: 10px 0 0; color: var(--muted); font-size: .9rem; }
 .gp-status.failed { color: var(--failed); font-weight: 600; }
 .score { isolation: isolate; margin-top: 10px; overflow: hidden; border: 1px solid var(--border); border-radius: 14px;
@@ -60,7 +92,7 @@
 .at-cursor-beat { width: 3px; background: var(--accent); }
 .at-selection div { background: color-mix(in srgb, var(--focus) 18%, transparent); }
 .at-highlight * { fill: var(--accent); stroke: var(--accent); }
-/* A phone: playback on one row (Play, Stop, the tempo without its word, Tab or Score), the tracks under it. */
+/* A phone: playback on one row (Play, Stop, the tempo without its word, Tab or Score), the tracks' button under it. */
 @media (max-width: 599px) {
   .gp-bar { gap: 6px; padding-top: 6px; padding-bottom: 6px; }
   .gp-play { flex-wrap: nowrap; gap: 6px; }
@@ -74,10 +106,8 @@
   .view label { padding: 0 9px; }
   .view .long { display: none; }
   .view .short { display: inline; }
-  .gp-tracks { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
-    margin: 0 -16px; padding: 0 16px; scroll-padding-inline: 16px; }
-  .gp-tracks::-webkit-scrollbar { display: none; }
-  .track .show { max-width: 11rem; }
+  .gp-tracks { display: none; }
+  .gp-bar .tracks-open { display: flex; }
 }
 @media (min-width: 720px) {
   .gp-bar { margin: 8px -24px 0; padding: 8px 24px; }
