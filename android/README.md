@@ -537,4 +537,41 @@ reads a file only from the app that shares it, never a `file:` address another a
 
 ## Alerts and backups
 
-Not built yet.
+**Alerts** are notifications on their own channel, Alerts (Android's settings for the app list it beside "Work in the
+background"; the app asks for the right to notify once, as the library screen opens):
+
+- **a site that blocked a lookup**: "caracole: LRCLIB blocked", with when its cooldown ends. One a cooldown: a lookup
+  that meets the same cooldown again says nothing more, and the lookups after it ask that site nothing until the
+  cooldown is over. On the computer a lookup sends no alert (the nightly run does); the phone has no nightly run to
+  tell, so its lookups do.
+- **a request that failed while the app was in the background** (no screen of the app's open): its name and the line
+  the Requests tab shows for it. One that fails while you are in the app says so there alone.
+
+Tapping one opens the library.
+
+**Backups** are in Settings, Open the backups: each backup is a copy of the phone's library, its songs, their versions, the
+songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each file
+once however many backups hold it. The indexes aren't backed up: they come again from the computer.
+
+- **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
+  one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
+  made; none is made without twice the room it needs (the Requests tab then says "Not backed up: there isn't room for
+  it on the phone").
+- **Export…** saves one as a single `.zip` (`caracole-by-hand-2026-11-10T081400Z.zip`: the copy, a SQLite database,
+  and `blobs/<sha256>`, each file it keeps) wherever you pick, on the phone or in a cloud app's folder. It is a copy
+  kept outside the phone: the phone can't restore from an exported file yet, only from the backups it lists.
+- **Restore…** (asked first) puts the library back as that backup has it: the songs, versions, songbooks and files
+  changed or added since are gone from the phone. What the phone has learnt of the sites since stays as it is now: each
+  site's cooldown, the pace, which searches it asked and which songs it checked, the computer's settings, and what it
+  agreed with the computer at the last sync. So the next sync gives the restored library to the computer as the
+  phone's own change: whatever the restore changed of what the two agreed on at the last sync is given to the
+  computer, and a song that sync agreed on that the backup doesn't hold is given as removed, so the computer removes
+  it too (one the computer changed since is a conflict, yours to choose). The phone's pages are made again after it;
+  until then its pages of what the restore changed aren't served.
+- A backup that doesn't hold every file it names (one made before a sync by an older app, which kept the tables
+  alone, or one made while a file was no longer its bytes) says how many in the list ("2 of its files not kept"). It
+  restores only while the phone's files still hold those bytes, and can't be exported; otherwise its Restore says why
+  and changes nothing.
+
+A backup, its daily one and a restore are requests like a lookup, one at a time on the Requests tab ("Backed up
+(by-hand)", "Restored the library of 2026-11-10 09:14"), never run beside a lookup.

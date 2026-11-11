@@ -245,7 +245,7 @@ class TakeTest {
         val phone = phone("sync/fixtures/rich.jsonl")
         val before = phone.write { db -> libraryTables(db) }
         assertTrue(before.getValue("songs").size >= 3 && before.getValue("phone_overrides").isNotEmpty())
-        val backup = assertNotNull(phone.write { db -> Take.backupBeforeSync(db, phone.state, NOW) })
+        val backup = assertNotNull(phone.write { db -> Take.backupBeforeSync(db, phone.state, NOW, phone.store) })
         assertEquals(File(phone.state, "backups/before-sync-2026-10-31T000000Z.sqlite"), backup)
         phone.write { db ->
             db.execute("DELETE FROM songs WHERE id = (SELECT MIN(id) FROM songs)")
@@ -272,7 +272,7 @@ class TakeTest {
         val record = Corpus.records("sync/take.jsonl").first { text(it.extra["case"]) == "respelling" }
         val phone = phone("sync/fixtures/take_respelling.jsonl")
         val before = phone.write { db -> libraryTables(db) }
-        val backup = phone.write { db -> Take.backupBeforeSync(db, phone.state, NOW) }!!
+        val backup = phone.write { db -> Take.backupBeforeSync(db, phone.state, NOW, phone.store) }!!
         val done = phone.write { db ->
             Take.applyUnits(db, phone.store, InlineSource.of(record.extra.getValue("source").jsonObject),
                             record.args[0].jsonArray.map { w -> w.jsonArray.let { text(it[0])!! to text(it[1]) } },
@@ -286,16 +286,16 @@ class TakeTest {
 
     @Test fun threeBackupsAreKeptAndNoneIsMadeWithoutRoom() {
         val phone = phone("sync/fixtures/plain.jsonl")
-        val made = (1..5).map { day -> phone.write { db -> Take.backupBeforeSync(db, phone.state, "2026-11-0${day}T08:00:00Z")!! } }
-        assertEquals(made.takeLast(3).map { it.name }, File(phone.state, "backups").list()!!.sorted())
+        val made = (1..5).map { day -> phone.write { db -> Take.backupBeforeSync(db, phone.state, "2026-11-0${day}T08:00:00Z", phone.store)!! } }
+        assertEquals(made.takeLast(3).map { it.name }, File(phone.state, "backups").list()!!.filter { it.endsWith(".sqlite") }.sorted())
         val room = Backups.freeSpace
         try {
             Backups.freeSpace = { 1024L }
-            assertNull(phone.write { db -> Take.backupBeforeSync(db, phone.state, "2026-11-09T00:00:00Z") })
+            assertNull(phone.write { db -> Take.backupBeforeSync(db, phone.state, "2026-11-09T00:00:00Z", phone.store) })
         } finally {
             Backups.freeSpace = room
         }
-        assertEquals(made.takeLast(3).map { it.name }, File(phone.state, "backups").list()!!.sorted(), "nothing deleted")
+        assertEquals(made.takeLast(3).map { it.name }, File(phone.state, "backups").list()!!.filter { it.endsWith(".sqlite") }.sorted(), "nothing deleted")
     }
 
     @Test fun aBackupOfAnotherKindIsNeverRestored() {
