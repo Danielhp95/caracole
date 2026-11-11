@@ -151,7 +151,7 @@ class VersionsPageTest {
                      job.steps.single().args)
         // the page reloads while the request waits or runs, then says what it came to (every site refused: nothing
         // kept), from the song's state
-        val said = if (job.state == Job.DONE) "Done, but it wasn't kept" else "Failed"
+        val said = if (job.state == Job.DONE) "Done, not kept" else "Failed"
         waitUntil("the page to say \"$said\"", 60_000) {
             main.onActivity { it.findViewById<WebView>(R.id.web).reload() }
             Thread.sleep(500)

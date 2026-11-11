@@ -53,7 +53,7 @@ import kotlin.concurrent.thread
  *
  * In this order, each in the WebView the app shows:
  * - the app's server is at http://127.0.0.1:8738/, the launch's cookie is the WebView's for that origin, and a request
- *   without it is refused ("Not this app's caracole.");
+ *   without it is refused ("Not this app's scribe.");
  * - another loopback port is never loaded: a link there goes to the browser, a fetch and an image of it are answered
  *   in the app, and that port's server hears nothing;
  * - a sync from the bar's sync button and its sheet (its comparison, Sync, each conflict keeping the computer's),
@@ -121,7 +121,7 @@ class PhoneEndToEndTest {
             assertEquals(200, page.first)
             val refused = get(library, null)
             assertEquals(403, refused.first)
-            assertEquals("Not this app's scribe.\\n", refused.second)
+            assertEquals("Not this app's scribe.\n", refused.second)
             record("cookie", JSONObject().put("webview", cookie.isNotEmpty()).put("without", refused.first))
 
             // Another loopback port: never loaded in the WebView.
