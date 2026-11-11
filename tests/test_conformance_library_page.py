@@ -10,9 +10,10 @@
   library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
   characters a JSON block must escape, one with no songs; each object's keys sorted, as the vector keeps them, so
   that its JSON block is the one a reader of the vector writes) and the server's controls (``controls``: the form
-  token, the badge, the Sync tab or not, and ``active``, how many requests wait or run, the data's
-  ``server.active``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself (``page``) for the
-  smallest case. The page is ``library_page.assemble_page``'s served page as it is, its Requests tab counting
+  token, the badge, the sync, ``sync``: ``"sheet"``, the phone's, the sheet alone, ``"tab"``, caracole serve's, the
+  Sync tab, its panel and the sheet, which the phone never serves, or null, and ``active``, how many requests wait or
+  run, the data's ``server.active``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself
+  (``page``) for the smallest case, the phone's (its sync the sheet). The page is ``library_page.assemble_page``'s served page as it is, its Requests tab counting
   ``active`` (data/caracole/page/requests.json, tests/test_conformance_requests.py, holds the tab and its panel).
   The vector also holds ``server``, the server's member of the page's data (``build_library_page``'s, for the phone's
   controls ``SERVER_CONTROLS``: no Guitar Pro page, no sheet from YouTube and YouTube off) that the phone's
@@ -177,13 +178,16 @@ def data_objects() -> dict[str, dict[str, Any]]:
 
 
 # The cases: a data object, and the controls the page is served with (its requests counted as its data's server
-# member counts them: none in the empty one's, two in the other's).
+# member counts them: none in the empty one's, two in the other's; its sync, ``WebControls.sync``: "sheet", the
+# phone's, the sheet alone; "tab", caracole serve's, the Sync tab, its panel and the sheet, which the phone never
+# serves; None, neither).
 CASES = (
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 0}),  # the smallest: its page is whole
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 0}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": False, "active": 2}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": True, "active": 2}),
-    ("chinese", {"csrf": CSRF, "badge": None, "sync": True, "active": 2}),
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 0}),  # the phone's, smallest: its page whole
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 0}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": "sheet", "active": 2}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": "tab", "active": 2}),
 )
 
 
@@ -285,7 +289,7 @@ def library_page_json(conn, cfg) -> str:
     cases = []
     for n, (name, controls) in enumerate(CASES):
         page = phone_page(objects[name], controls)
-        cases.append({"name": f"{name}, sync {'on' if controls['sync'] else 'off'}, badge {controls['badge']}",
+        cases.append({"name": f"{name}, sync {controls['sync']}, badge {controls['badge']}",
                       "data": objects[name], "controls": controls,
                       "sha256": hashlib.sha256(page.encode("utf-8")).hexdigest(),
                       **({"page": page} if n == 0 else {})})
@@ -455,7 +459,8 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
     assert all(escaped in page for escaped in ("\\b", "\\f", "\\r", "\\t", "\\n"))
     assert "&amp;&quot;&lt;&#x27;&gt;" in page  # the form token, escaped in the request form
     assert "No sheets from YouTube here: YouTube isn&#x27;t on the phone." in page
-    assert {controls["sync"] for _, controls in CASES} == {False, True}
+    assert {controls["sync"] for _, controls in CASES} == {None, "sheet", "tab"}
+    assert CASES[0][1]["sync"] == "sheet"  # the page kept whole is the phone's
     assert {controls["badge"] for _, controls in CASES} == {"Phone", None}
 
 
@@ -534,7 +539,7 @@ def _sha(text: str) -> str:
 
 
 @in_chromium
-@pytest.mark.parametrize("sync", [False, True])
+@pytest.mark.parametrize("sync", [None, "sheet"])
 def test_the_phones_own_data_shapes_draw_with_no_script_error(conn, cfg, tmp_path, sync):
     # library.js, card.js and songbooks.js read every field through listOf() and defaults; this shows it, on the
     # shapes no computer's page has.

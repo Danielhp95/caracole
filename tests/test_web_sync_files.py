@@ -395,6 +395,16 @@ def desk_file(desk, tmp_path, *args) -> bytes:
     return path.read_bytes()
 
 
+def document(lib, unit_id):
+    """A unit's document as ``lib`` holds it now (``peer_sync.unit_document``'s ``"unit"``), None for none."""
+    from caracole import peer_sync as sync
+    from caracole.overrides import load_overrides
+
+    found = sync.unit_document(lib.conn, lib.cfg, load_overrides(lib.cfg.overrides_file),
+                               load_songbooks(songbooks_file(lib.cfg.library_dir)), unit_id)
+    return found["unit"] if found else None
+
+
 def two_differences(desk, studio):
     """Creep on both, chorded differently (a conflict: the two never synced), Wonderwall at Desk alone."""
     desk.song("Radiohead", "Creep", version="key=Am&capo=0")
@@ -427,11 +437,21 @@ def test_a_file_sent_in_parts_is_compared_as_a_sync_with_it(pair, tmp_path):
     assert by[CREEP_UNIT]["here"] == studio.units()[CREEP_UNIT].digest
     assert by[CREEP_UNIT]["there"] == desk.units()[CREEP_UNIT].digest
     assert [f.name for f in staged_imports(studio)] == [f"import-{import_id}"]  # kept for its Sync
-    # The comparison is of a file: its units are the file's, never asked of a caracole serve.
+    # The comparison is of a file: a conflict's two documents, this library's and the file's, read from it (the
+    # page's card), never asked of a caracole serve; a unit the file hasn't got, none.
     from test_web_app import get_json
 
-    refused = get_json(studio.app, f"/api/sync/unit?comparison={found['comparison']}&id={CREEP_UNIT}")
-    assert refused.status == 409
+    for unit in (CREEP_UNIT, WONDERWALL_UNIT):
+        read = get_json(studio.app, f"/api/sync/unit?comparison={found['comparison']}&id={unit}")
+        assert read.status == 200, read.body
+        docs = json.loads(read.body)
+        assert docs["id"] == unit and docs["there"] == document(desk, unit)
+        assert docs["here"] == document(studio, unit) and (docs["here"] is None) == (unit == WONDERWALL_UNIT)
+    assert [f.name for f in staged_imports(studio)] == [f"import-{import_id}"]
+    # Once the file is gone, its comparison's units with it: compare again.
+    peer_import.drop(studio.cfg.state_dir, import_id)
+    gone = get_json(studio.app, f"/api/sync/unit?comparison={found['comparison']}&id={CREEP_UNIT}")
+    assert gone.status == 409 and json.loads(gone.body)["error"] == sync_file_routes.FILE_GONE
 
 
 def test_a_songbooks_only_file_compares_no_song_it_doesnt_hold(pair, tmp_path):
