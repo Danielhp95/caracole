@@ -1064,7 +1064,7 @@ def test_cli_search_by_key_alone_lists_your_songs_in_that_key(tmp_path):
     assert "Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)" in result.output
     assert "Creep" not in result.output and "Queen" not in result.output
     # The offline index knows no keys: it isn't searched.
-    assert "On UG" not in result.output and "without --key" in result.output
+    assert "On Ultimate Guitar" not in result.output and "without --key" in result.output
 
 
 def test_cli_search_by_key_and_words(tmp_path):
@@ -1904,7 +1904,7 @@ def test_cli_lists_a_removed_song_after_the_library_with_the_line_that_brings_it
     for q in ("斑马", "斑马斑马", "banma"):
         out = run(tmp_path, "search", q).output
         assert "Removed from your library" in out, out
-        assert out.index("In your library") < out.index("Removed from your library") < out.index("On UG")
+        assert out.index("In your library") < out.index("Removed from your library") < out.index("On Ultimate Guitar")
         assert "宋冬野 - 斑马斑马" in out and "removed 2026-10-20" in out
         assert 'caracole add "宋冬野" "斑马斑马"' in out
     assert "Removed from your library" not in run(tmp_path, "search", "creep").output
@@ -1916,7 +1916,7 @@ def test_after_caracole_add_the_song_is_in_the_library_group_and_not_the_removed
     assert run(tmp_path, "add", "宋冬野", "斑马斑马").exit_code == 0
     out = run(tmp_path, "search", "banma").output
     assert "Removed from your library" not in out
-    assert "宋冬野 - 斑马斑马" in out.split("On UG")[0]
+    assert "宋冬野 - 斑马斑马" in out.split("On Ultimate Guitar")[0]
 
 
 # --- an artist by a word of their name, and by a close spelling --------------------------------------------------
