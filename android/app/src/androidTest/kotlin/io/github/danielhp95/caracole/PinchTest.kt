@@ -14,6 +14,8 @@ import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.mirror.Manifest
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.mirror.ServerAddress
+import io.github.danielhp95.caracole.mirror.SyncEngine
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -186,11 +188,12 @@ class PinchTest {
         Log.i(TAG, "RESULT $found")
     }
 
-    /** The copy on the phone, synced from [server]: what changed there since, downloaded. */
+    /** The copy on the phone of [server]'s pages: what changed there since, downloaded (a sync's mirror stage by
+     * itself, mirror.SyncEngine). */
     private fun synced(): Manifest {
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
-        assertTrue(outcome.text, outcome.ok)
+        SyncEngine(Caracole.mirror(context), Caracole.http()).sync(ServerAddress.parse(server))
+        Caracole.started()?.search?.invalidate()
         return Caracole.mirror(context).reload()!!
     }
 

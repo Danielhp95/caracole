@@ -11,6 +11,8 @@ import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.core.http.RoutedTransport
 import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.mirror.ServerAddress
+import io.github.danielhp95.caracole.mirror.SyncEngine
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
@@ -48,8 +50,8 @@ import java.security.MessageDigest
  *   note on the harp it starts on.
  *
  * [theComputersPagesPlayOnThePhone] does it on the pages the copy took from the scenario's computer (`-e server`:
- * tests/helpers/e2e_library.py's 茉莉花, whose made-up words are Chinese, and Oh! Susanna's harmonica tab); without a
- * server it is skipped. [aSongLookedUpOnThePhonePlaysAsOnTheComputer] does it on the pages the phone made itself of
+ * tests/helpers/e2e_library.py's 茉莉花, whose made-up words are Chinese, and Oh! Susanna's harmonica tab, copied as a
+ * sync's mirror stage copies them); without a server it is skipped. [aSongLookedUpOnThePhonePlaysAsOnTheComputer] does it on the pages the phone made itself of
  * the songs it looked up against the fake sites (`-e sites`: tests/helpers/fake_sites.py's `chinese` and
  * `harmonica`, Get it on each one's search row, the scenario's index imported first), each served as the phone wrote
  * it while its record says so (its bytes' SHA-256, at its song unit's digest now): the Chinese sheet's, and its kept
@@ -76,10 +78,12 @@ class PagesOnDeviceTest {
     @Test
     fun theComputersPagesPlayOnThePhone() {
         assumeTrue("needs -e server http://10.0.2.2:<port> (device-test.sh PagesOnDeviceTest=DIR)", server != null)
+        // The computer's pages copied (a sync's mirror stage by itself, mirror.SyncEngine, as PinchTest copies them):
+        // the copy's pages are the computer's own.
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
-        assertTrue(outcome.text, outcome.ok)
         val mirror = Caracole.mirror(context)
+        SyncEngine(mirror, Caracole.http()).sync(ServerAddress.parse(server))
+        Caracole.started()?.search?.invalidate()
         val manifest = mirror.reload()!!
         val chinese = SheetLayout.chineseSheet(mirror, manifest)
         val harmonica = manifest.entries.map { it.path }.firstOrNull { it.endsWith("/harmonica-1.html") }

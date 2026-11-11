@@ -13,6 +13,8 @@ import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.mirror.ServerAddress
+import io.github.danielhp95.caracole.mirror.SyncEngine
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.testing.replays.ChoicesReplay
@@ -196,8 +198,10 @@ class VersionsPageTest {
     @Test fun aSandboxedViewerReachesThePageByAPlainGet() {
         assumeTrue("needs -e server http://10.0.2.2:<port>", server != null)
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
-        assertTrue(outcome.text, outcome.ok)
+        // The computer's copy alone (a sync's mirror stage by itself, mirror.SyncEngine): the phone's library stays
+        // the choices vectors' base, given nothing and taking nothing.
+        SyncEngine(Caracole.mirror(context), Caracole.http()).sync(ServerAddress.parse(server))
+        Caracole.started()?.search?.invalidate()
         val manifest = Caracole.mirror(context).reload()!!
         val sheet = manifest.entries.first { it.name == "sheet.html" }.path
         started { main ->
