@@ -118,8 +118,8 @@ def test_a_version_page_is_served_only_while_it_holds_what_caracole_wrote(app, c
     (folder / f"version-{KEPT}.html").write_bytes(page + b"<script>fetch('/caracole.sqlite')</script>")
     edited = get(app, "/" + quote(f"{FOLDER}/version-{KEPT}.html"))
     assert edited.status == 404 and b"<script" not in edited.body
-    assert "This version's viewer isn't the page caracole last wrote here" in shown(edited)
-    assert "the next caracole render writes it again" in shown(edited)
+    assert "This version's viewer isn't the page we last wrote here" in shown(edited)
+    assert "The next caracole render writes it again" in shown(edited)
     assert get(app, "/" + quote(SHEET)).status == 200
 
 
@@ -197,28 +197,28 @@ def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(
     add_pin(cfg.overrides_file, DISPLAY, [SLUGGED.format(OTHER)])  # what get --tab writes before it fetches
     waits = shown(get(app, where))
     assert "it is the one now" not in waits and "The one now: Ver 1 · 4.5★ (10)" in waits
-    assert "recorded under [pin] in overrides.toml" in waits and "the nightly run" in waits
+    assert "noted under [pin]" in waits and "tonight's run" in waits
     assert 'href="/#tab=requests&amp;job=1"' in text(get(app, where))
     other = chords(conn, song, OTHER, rating=4.86, votes=408, number=3)
     keep_file(conn, cfg.library_dir, song=song, version_id=other, name="sheet.txt", data=b"[G]Otra\n", rank=1)
     done = get(app, where)
     assert "Done · the one now." in shown(done) and "The one now: Ver 3 · 4.86★ (408)" in shown(done)
-    assert f'href="/{quote(SHEET)}"' in text(done) and "Open the sheet" in shown(done)
+    assert f'href="/{quote(SHEET)}"' in text(done) and "Open sheet" in shown(done)
     assert "<form" not in text(done)
 
 
 def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, recorder, conn, cfg):
     song = versioned_song(conn, cfg)
     page = get(app, versions_url(OTHER, "keep"))
-    assert page.status == 200 and 'action="/versions/keep"' in text(page) and ">Keep it<" in text(page)
+    assert page.status == 200 and 'action="/versions/keep"' in text(page) and ">Keep<" in text(page)
     where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
     queue.run_pending()
     assert recorder.calls == [["versions", f"--keep={OTHER}", "--progress", "--", *NAMES]]
     done = get(app, where)
-    assert "Done, but it wasn't kept" in shown(done)  # the fake command kept nothing
+    assert "Done, not kept" in shown(done)  # the fake command kept nothing
     keep_version(conn, cfg, song, chords(conn, song, OTHER, rating=4.86, votes=408, number=3), OTHER, rank=3)
     done = get(app, where)
-    assert f'href="/{quote(f"{FOLDER}/version-{OTHER}.html")}"' in text(done) and "Open it" in shown(done)
+    assert f'href="/{quote(f"{FOLDER}/version-{OTHER}.html")}"' in text(done) and "Open" in shown(done)
 
 
 @pytest.mark.parametrize("do,form", [("keep", {"tab": OTHER}), ("choose", {"tab": KEPT}), ("clear", {})])
@@ -244,18 +244,18 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
     versioned_song(conn, cfg)
     page = get(app, versions_url("", "clear"))
     assert page.status == 200 and "<form" not in text(page)  # no pin: caracole picks the sheet already
-    assert "caracole picks" in shown(page)
+    assert "We pick" in shown(page)
     assert post(app, "/versions/clear", {"sheet": SHEET}).status == 409
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
     page = get(app, versions_url("", "clear"))
-    assert 'action="/versions/clear"' in text(page) and ">Back to caracole's pick<" in text(page)
+    assert 'action="/versions/clear"' in text(page) and ">Back to our pick<" in text(page)
     where = header(post(app, "/versions/clear", {"sheet": SHEET}), "location")
     queue.run_pending()
     assert recorder.calls == [["versions", "--clear", "--progress", "--", *NAMES]]
     # the fake command took nothing out: the pin is still there, and the page says so
     assert "caracole picks the sheet again" not in shown(get(app, where))
-    assert "Done, but the [pin] is still there" in shown(get(app, where))
+    assert "Done, but the [pin] remains" in shown(get(app, where))
     cfg.overrides_file.write_text("", encoding="utf-8")
     assert "Done · we pick the sheet again." in shown(get(app, where))
 
@@ -270,7 +270,7 @@ def test_only_a_chords_pin_is_one_to_go_back_from(app, conn, cfg):
     cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(301).replace("chords", "tabs")}"]\n',
                                   encoding="utf-8")
     page = get(app, versions_url("", "clear"))
-    assert "<form" not in text(page) and "caracole picks" in shown(page)
+    assert "<form" not in text(page) and "We pick" in shown(page)
     assert post(app, "/versions/clear", {"sheet": SHEET}).status == 409
 
 
@@ -341,10 +341,10 @@ def test_what_cant_be_done_is_refused_before_anything_is_queued(app, queue, reco
 def test_the_page_of_a_version_that_cant_be_done_says_why_and_offers_no_form(app, conn, cfg):
     versioned_song(conn, cfg)
     kept = get(app, versions_url(KEPT, "keep"))
-    assert "<form" not in text(kept) and "kept already" in shown(kept)
+    assert "<form" not in text(kept) and "Kept already" in shown(kept)
     assert f'href="/{quote(f"{FOLDER}/version-{KEPT}.html")}"' in text(kept)
     gone = get(app, versions_url(GONE, "choose"))
-    assert "<form" not in text(gone) and "no longer has" in shown(gone)
+    assert "<form" not in text(gone) and "Gone from UG" in shown(gone)
 
 
 def test_an_ignored_song_has_nothing_to_choose(app, queue, conn, cfg):
@@ -445,7 +445,7 @@ def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
     kept = queue.job(1)
     assert next(s for s in kept.stages if s.name == "version").detail == "budget spent; nothing kept"
     assert kept.steps[0].output == ["Took tab 1 out of [pin]"]  # progress lines are data, not output
-    assert "Done, but it wasn't kept: budget spent; nothing kept. See the request's output" in shown(get(app, where))
+    assert "Done, not kept: budget spent; nothing kept. See the output" in shown(get(app, where))
 
 
 # --- posts by song, from the library page's card -----------------------------------------------
@@ -482,7 +482,7 @@ def test_keep_more_is_refused_with_nothing_left_to_keep(app, queue, conn, cfg):
     song = versioned_song(conn, cfg)
     note_unkeepable(conn, song.id, OTHER)  # the one left: a keep found it can't keep it
     refused = post(app, "/versions/keep-more", {"song": str(song.id)})
-    assert refused.status == 409 and "Nothing is left to keep" in shown(refused)
+    assert refused.status == 409 and "Nothing left to keep" in shown(refused)
     assert queue.active_count() == 0
 
 
@@ -582,7 +582,7 @@ def test_an_export_from_a_kept_versions_page_is_refused_and_says_what_to_do(app,
     versioned_song(conn, cfg)
     page = f"{FOLDER}/version-{KEPT}.html"
     refused = get(app, f"/export.pdf?sheet={quote(page)}&t=2")
-    assert refused.status == 409 and "make this version the one first" in shown(refused)
+    assert refused.status == 409 and "make this one the one first" in shown(refused)
     assert get(app, f"/export.pdf?sheet={quote(page)}&t=2&mine=1").status == 409
     assert get(app, f"/export.pdf?sheet={quote(SHEET)}&t=2").status == 200
     assert queue.active_count() == 0

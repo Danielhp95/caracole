@@ -226,7 +226,7 @@ def test_keep_fetches_one_tab_page_and_keeps_it_beside_the_sheet(config, sites, 
     assert result.exit_code == 0, result.output
     assert locks == [(f"versions {CREEP} --keep", True)]  # caracole's lock, as a lookup takes it
     assert sites.ug() == [url(104)]  # its page alone
-    assert f"Kept tab 104 beside the sheet of {CREEP}" in result.output
+    assert f"Kept tab 104 beside {CREEP}'s sheet" in result.output
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
     assert "sheet 104" in (folder(tmp_path) / "version-104.txt").read_text()
     song = find_song(conn, "radiohead/creep")
@@ -251,7 +251,7 @@ def test_keep_with_the_lookup_budget_spent_keeps_nothing_and_exits_0(config, sit
     result = versions(config, CREEP, "--keep", "104")
 
     assert result.exit_code == 0, result.output
-    assert "nothing kept" in result.output
+    assert "Nothing kept" in result.output
     assert sites.ug() == []
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
     assert kept_by_you(conn, find_song(conn, "radiohead/creep").id) == ()
@@ -262,7 +262,7 @@ def test_keep_of_a_version_kept_already_sends_nothing(config, sites, conn, tmp_p
     looked_up(config, sites, conn, tmp_path)
     result = versions(config, CREEP, "--keep", url(103))
     assert result.exit_code == 0, result.output
-    assert "kept beside the sheet" in result.output and sites.requests == []
+    assert "is kept beside" in result.output and sites.requests == []
     assert kept_by_you(conn, find_song(conn, "radiohead/creep").id) == ("103",)
 
 
@@ -299,7 +299,7 @@ def test_keep_blocked_counts_the_request_it_sent_in_its_progress(config, sites, 
     assert result.exit_code == 0, result.output
     assert sites.ug() == [url(104)]
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
-    assert any(e.get("stage") == "version" and e["state"] == "skipped" and "nothing kept" in e["detail"]
+    assert any(e.get("stage") == "version" and e["state"] == "skipped" and "turned us back" in e["detail"]
                for e in events)
     assert events[-1]["done"]["requests"] == {"ug": 1}
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
@@ -320,7 +320,7 @@ def test_keep_notes_a_version_it_cant_keep(config, sites, conn, tmp_path):
     result = versions(config, CREEP, "--keep", "104")
 
     assert result.exit_code == 0, result.output
-    assert "has no sheet caracole can keep" in result.output
+    assert "has no sheet we can keep" in result.output
     assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ("104",)
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
 
@@ -406,12 +406,12 @@ def test_keep_more_stops_at_a_block_and_keeps_what_it_kept(config, sites, conn, 
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
     assert (folder(tmp_path) / "version-104.html").is_file()  # what it kept is rendered
     assert get_state(conn, "ug").cooldown_until is not None  # recorded as a block, cooling UG down
-    assert "Ultimate Guitar blocked caracole" in result.output
+    assert "UG turned us back" in result.output
     assert f"Kept 1 version of {CREEP}; 3 more not kept." in result.output  # not "ask again": UG cools down
 
     sites.requests.clear()
     cooling = versions(config, CREEP, "--keep-more")
-    assert cooling.exit_code == 0 and "cooling down" in cooling.output and sites.requests == []
+    assert cooling.exit_code == 0 and "Waiting out UG" in cooling.output and sites.requests == []
 
 
 @pytest.mark.slow
@@ -426,7 +426,7 @@ def test_keep_more_stops_at_a_page_that_wont_parse_and_counts_it_still(config, s
     assert sites.ug() == [url(104), url(105)]
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
     assert (folder(tmp_path) / "version-104.html").is_file()
-    assert "Ultimate Guitar failed" in result.output
+    assert "UG failed" in result.output
     assert f"Kept 1 version of {CREEP}; 2 more not kept: ask again." in result.output  # 105 waits, as any page
     assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ()
 
@@ -453,7 +453,7 @@ def test_keep_more_notes_the_versions_it_cant_keep(config, sites, conn, tmp_path
 
     assert result.exit_code == 0, result.output
     assert sites.ug() == [url(104), url(105)]  # past the one it can't keep, to the next
-    assert "Tab 104 of Radiohead - Creep: its page has no sheet caracole can keep." in result.output
+    assert "Tab 104 of Radiohead - Creep: its page has no sheet we can keep." in result.output
     assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ("104",)
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-105.txt"]
 
