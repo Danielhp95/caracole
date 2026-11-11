@@ -858,7 +858,7 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         assert page.js(TITLES) == ["Hysteria", "Creep"]
         books = page.js(BOOKS)
         assert [b[0] for b in books] == ["Campfire", "Road trip", "Brand new"], books
-        assert books[2][1] == "2 songs · couldn't be made", books
+        assert books[2][1] == "2 songs · not made", books
         # Nothing on it to change but by making it again, from the Select bar (+ New songbook), which has the picks
         # and says why.
         assert page.js("document.querySelector('#songbooks .book .book-files .hint').textContent") == (
@@ -1006,7 +1006,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
       (li.querySelector('.plays, .badge.missing') || {}).textContent || ''])"""
     with opened(tmp_path, *size) as page:
         page.open(url + CAMPFIRE)
-        assert page.js(f"document.querySelector({json.dumps(get)}).textContent") == "Get the 2 missing songs now"
+        assert page.js(f"document.querySelector({json.dumps(get)}).textContent") == "Fetch the 2 missing songs"
         assert page.js(SHIFTS)
         page.click(get)
         assert page.wait(f"{STATUS}.startsWith('Made')", timeout=30), (page.js(STATUS), page.js(lines))
@@ -1014,7 +1014,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         shown = page.js(lines)
         assert [s[0] for s in shown] == ["Creep", "Hysteria", "De Música Ligera", "Debaser", "Uprising"]
         assert shown[1][1].startswith("Ready") and shown[4][1].startswith("Ready"), shown
-        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the book", shown
+        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the logbook", shown
         # Nothing left to get: its button goes (its room kept until your next click, so nothing moves).
         assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
                        f"{json.dumps(get)}))")

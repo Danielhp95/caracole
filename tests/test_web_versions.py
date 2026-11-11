@@ -440,8 +440,8 @@ def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
     queue.run_pending()
     stages, line = seen["keep"]
     assert [(s.name, s.state) for s in stages][:2] == [("song", "done"), ("version", "running")]
-    assert line.text == "Fetching the version from Ultimate Guitar…"
-    assert seen["clear"].text == "Fetching from Ultimate Guitar…"
+    assert line.text == "Fetching the version from UG…"
+    assert seen["clear"].text == "Fetching from UG…"
     kept = queue.job(1)
     assert next(s for s in kept.stages if s.name == "version").detail == "budget spent; nothing kept"
     assert kept.steps[0].output == ["Took tab 1 out of [pin]"]  # progress lines are data, not output

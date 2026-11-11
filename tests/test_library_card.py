@@ -167,7 +167,7 @@ def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, t
     note("chip", { href: chip.getAttribute("href"), said: chip.getAttribute("aria-label") });
     """
     chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
-    assert chip == {"href": url, "said": "Lyrics: AZLyrics, its page there"}
+    assert chip == {"href": url, "said": "Lyrics: its page on AZLyrics"}
 
 
 def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
@@ -240,7 +240,7 @@ def test_a_chip_opens_its_drawer_and_another_chip_closes_it(conn, cfg, tmp_path)
     chips = attribute_of(run(conn, cfg, tmp_path, CHIPS), "data-chips")
     first, second = chips["first"], chips["second"]
     assert first["ug"] == "true" and first["controls"] == first["drawer"]["id"] and not first["drawer"]["hidden"]
-    assert first["drawer"]["what"] == "Ultimate Guitar · chord sheets"
+    assert first["drawer"]["what"] == "UG · chord sheets"
     assert second["ug"] == "false" and second["lc"] == "true" and second["drawer"]["what"] == "LaCuerda · chord sheets"
     assert chips["closed"] is True and chips["lc"] == "false" and chips["drawers"] == 1
 
@@ -251,7 +251,7 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
     hotel(conn, cfg)
     drawer = attribute_of(run(conn, cfg, tmp_path, 'chipOf("Hotel California", "ug").click();\n'
                                                    'note("drawer", noteDrawer("Hotel California"));'), "data-drawer")
-    assert drawer["said"] == "13 versions on the site · 3 kept in your library"
+    assert drawer["said"] == "13 on UG · 3 in your logbook"
     rows = drawer["rows"]
     assert [(r["ver"], r["stars"]) for r in rows] == [
         ("Ver 3", "4.86★ · 408 votes"), ("Ver 4", "4.75★ · 850 votes"), ("Ver 5", "4.70★ · 800 votes")], rows
@@ -262,7 +262,7 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
                                          HOTEL + "version-46192.txt"]
     assert "cur" in rows[0]["cls"].split()
     # The rest are counted, not listed; from the file, the command that fetches them.
-    assert drawer["rest"] == "10 more on Ultimate Guitar, not kept" and drawer["restButtons"] == []
+    assert drawer["rest"] == "10 more on UG, not kept" and drawer["restButtons"] == []
     assert drawer["command"] == "caracole versions --keep-more 'Eagles - Hotel California'"
     words, params = parsed(drawer["command"])
     assert words == ("versions",) and params["keep_more"] is True and list(params["song"]) == ["Eagles - Hotel California"]
@@ -273,7 +273,7 @@ def test_the_lacuerda_and_auto_drawers_list_theirs(conn, cfg, tmp_path):
     script = ('chipOf("Hotel California", "lacuerda").click();\nconst lc = noteDrawer("Hotel California");\n'
               'chipOf("Hotel California", "auto").click();\nnote("drawers", [lc, noteDrawer("Hotel California")]);')
     lc, auto = attribute_of(run(conn, cfg, tmp_path, script), "data-drawers")
-    assert lc["said"] == "2 versions caracole met"
+    assert lc["said"] == "2 versions seen"
     assert [(r["ver"], r["note"], r["acts"], r["open"]) for r in lc["rows"]] == [
         ("Version 1", "90% of the lyrics", ["Its page ↗"], LACUERDA[0]),
         ("Version 2", "60% of the lyrics", ["Its page ↗"], LACUERDA[1])]  # the sheet is UG's: In use on none
@@ -432,9 +432,9 @@ def test_remove_says_remove_and_is_red_and_last(conn, cfg, tmp_path):
     remove = attribute_of(run(conn, cfg, tmp_path, REMOVE, controls=SERVED), "data-remove")
     assert remove["foot"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "info.json", "Remove"]
     assert remove["last"].split()[0] == "foot-more" and remove["menu"].split()[0] == "remove"  # last, behind ⋯
-    assert remove["closed"] == {"open": False, "shown": False, "said": "More for Hotel California"}
+    assert remove["closed"] == {"open": False, "shown": False, "said": "More: Hotel California"}
     assert remove["opened"] is True  # ⋯ opens info.json and Remove
-    assert remove["said"] == "Remove Hotel California by Eagles from caracole"
+    assert remove["said"] == "Remove Hotel California by Eagles from your logbook"
     # Red from the start, its words and edge, yet outlined: never filled, never the main thing to do.
     assert remove["color"] == remove["failed"] and remove["background"] == "rgba(0, 0, 0, 0)"
     assert remove["border"] != remove["color"]
@@ -788,7 +788,7 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
     browser.open(base)
     item = drawer_of(browser, song, "ug")
     rest = f"document.querySelector('{item} .drawer-rest')"
-    assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on Ultimate Guitar, not kept"
+    assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on UG, not kept"
     assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
         "Fetch 6 more versions of Hotel California from Ultimate Guitar")
     other = drawer_of(browser, few, "ug")
@@ -812,9 +812,9 @@ def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, v
     browser.click(item + ' .tile-sheet button.vchip[data-source="ug"]')
     assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
     assert browser.js(f"document.querySelector('{item} .drawer-said').textContent") == (
-        "13 versions on the site · 5 kept in your library")
+        "13 on UG · 5 in your logbook")
     assert browser.js(f"document.querySelector('{item} .drawer-rest .rest-said').textContent") == (
-        "8 more on Ultimate Guitar, not kept")
+        "8 more on UG, not kept")
     assert browser.js(f"document.querySelectorAll('{item} .vrow').length") == 5
 
 

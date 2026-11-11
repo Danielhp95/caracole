@@ -371,7 +371,7 @@ def test_a_chord_legends_lines_are_marked_so_the_script_leaves_their_chords_as_w
 
 
 def test_without_a_capo_the_key_line_names_the_key():
-    assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> <span class="from">from the sheet</span>'
+    assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> · <span class="from">from the sheet</span>'
     assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"
     assert facts_of(build_viewer("{title: T}\n{artist: A}\nOnly words\n")) == ""
 
@@ -593,7 +593,7 @@ def test_a_capo_may_come_off(tmp_path):
     """, "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
     chips, chord, facts = out
     assert chips == ["No capoG shapes", "Capo 3E shapes"]
-    assert chord == "G" and facts == "Key G (−2) from the sheet · no capo"
+    assert chord == "G" and facts == "Key G (−2) · from the sheet · no capo"
 
 
 @in_chromium

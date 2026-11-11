@@ -332,7 +332,7 @@ def test_the_indexes_newer_on_either_side_are_listed_in_the_sites_order(computer
     found = compared(here)
     assert found["differences"] == []
     assert found["indexes"] == [
-        {"site": "ug", "title": "Ultimate Guitar", "here": "2026-11-01T03:30:00Z", "there": "2026-11-02T03:30:00Z",
+        {"site": "ug", "title": "UG", "here": "2026-11-01T03:30:00Z", "there": "2026-11-02T03:30:00Z",
          "newer": "there"},
         {"site": "lacuerda", "title": "LaCuerda", "here": None, "there": "2026-10-20T03:30:00Z", "newer": "there"},
         {"site": "gtptabs", "title": "gtptabs.com", "here": "2026-10-21T03:30:00Z", "there": None, "newer": "here"}]
@@ -556,7 +556,7 @@ def test_a_comparison_kept_without_its_differences_still_needs_a_side_for_every_
     made = list(sync_routes._kept[here.app])[-1]
     status, said = script(here.app, "/sync/apply", {"comparison": made, "prefer": "", "choices": "",
                                                      "parts": "indexes"})
-    assert status == 409 and said["error"] == "Choose a side for every conflict first: 2 have none.", said
+    assert status == 409 and said["error"] == "Choose a book for every conflict: 2 have none.", said
 
 
 def test_a_units_two_documents_are_refused_for_a_comparison_of_a_file(computers):
@@ -604,7 +604,7 @@ def test_a_sync_that_leaves_a_unit_says_how_many_and_why_and_its_next_step_is_a_
     (job,) = here.app.queue.snapshot()
     _, polled = script(here.app, f"/jobs.json?jobs={job.id}")
     (seen,) = polled["jobs"]
-    assert seen["line"] == {"tone": "waiting", "text": "Synced: 1 change left as it was", "link": None,
+    assert seen["line"] == {"tone": "waiting", "text": "Shared · 1 change left as it was", "link": None,
                             "details": f"#tab=requests&job={job.id}"}
     assert seen["outcome"]["left"] == [[ids["Radiohead - Creep"], "skipped, as you chose"]]
     said = outcome(job, job_line(job, None))
@@ -827,7 +827,7 @@ def test_another_caracoles_index_pages_are_a_job_of_no_song_with_one_stage():
     assert made.steps[0].args == ("index", "merge", "--delete", "--progress", "--", str(path))
     running = peer_job("index-merge", "running", {"merge": ("running", "")})
     seen = view(running, [running], None, None)
-    assert seen["kind"] == "index-merge" and seen["line"]["text"] == "Merging the other caracole's index pages…"
+    assert seen["kind"] == "index-merge" and seen["line"]["text"] == "Merging the other scribe's index pages…"
     assert seen["steps"] == [{"name": "merge", "label": "Merge", "state": "running", "detail": ""}]
     done = peer_job("index-merge", "done", {"merge": ("done", "merged 12 pages: ug, lacuerda")})
     assert view(done, [done], None, None)["line"]["text"] == "Merged"

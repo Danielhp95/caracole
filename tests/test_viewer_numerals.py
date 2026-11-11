@@ -325,7 +325,7 @@ def test_a_finger_on_a_numeral_shows_its_line_and_on_the_name_the_card(tmp_path)
         tap_at(b, *name)
         assert b.wait("!document.getElementById('card').hidden")
         card = b.js("[document.getElementById('card-name').textContent, document.getElementById('tip').hidden]")
-    assert tipped["line"] == "♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed from C minor"
+    assert tipped["line"] == "♭VII: on the lowered 7th degree of C major, major (upper case); borrowed from C minor"
     assert not tipped["card"] and escaped is None and elsewhere is None
     assert card == ["Bb · ♭VII", True]
 

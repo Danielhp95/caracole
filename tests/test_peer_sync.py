@@ -112,9 +112,9 @@ def test_once_synced_a_unit_one_side_changed_is_that_sides_and_one_both_changed_
     assert by_id(found) == {"song/here": sync.MINE, "song/there": sync.THEIRS, "song/both": sync.CONFLICT,
                             "song/new-here": sync.MINE, "song/new-there": sync.THEIRS, "song/gone-here": sync.MINE}
     why = {d.id: d.why for d in found}
-    assert why["song/gone-here"] == "gone here since the last sync"
-    assert why["song/new-there"] == "new there since the last sync"
-    assert why["song/there"] == "changed there since the last sync"
+    assert why["song/gone-here"] == "gone here since the last share"
+    assert why["song/new-there"] == "new there since the last share"
+    assert why["song/there"] == "changed there since the last share"
 
 
 def test_the_differences_come_songs_first_by_their_label():

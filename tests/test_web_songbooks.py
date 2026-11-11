@@ -143,7 +143,7 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
                                             "songs": f"{songs['hysteria'].id},{songs['soda'].id}"})
     assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
-    assert job.title == 'Make the songbook "Beach nights" (2 songs)'
+    assert job.title == 'Make songbook "Beach nights" (2 songs)'
     assert steps(queue) == [[("songbook", "make", "--", "Beach nights", "Muse - Hysteria",
                               "Soda Stereo - De Música Ligera")]]
     assert books(setup) == []  # the server writes no songbook: the command does, under caracole's lock

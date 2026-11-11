@@ -317,7 +317,7 @@ CHIPS = """[...document.querySelectorAll('#filter-panel [data-inst]')].map((c) =
 def test_instrument_chips_count_and_filter_any_of(shelf, laptop):
     laptop.open(shelf.as_uri())
     assert laptop.js("document.querySelector('#f-inst').textContent.replace(/\\s+/g, ' ').trim()") == (
-        "Has something for any of these")
+        "Matches")
     chips = laptop.js(CHIPS)
     assert [(c["inst"], c["text"], c["glyph"]) for c in chips] == [
         ("sheet", "Chord sheet 7", "glyph glyph-sheet"), ("guitar", "Guitar tab 2", "glyph glyph-guitar"),

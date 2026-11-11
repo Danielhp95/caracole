@@ -122,7 +122,7 @@ def test_a_reading_with_a_symbol_changed_is_posted_whole(app, conn, cfg):
     render_all(conn, cfg, load(cfg), runner=fake_chordpro)
     found = forms(get(app, page_url()))
     assert json.loads(found[0][1]["as"]) == {"as": "signs", "*": "bend"}
-    assert found[0][2] == "Read it so: - draw · * bend"
+    assert found[0][2] == "Read as: - draw · * bend"
 
 
 def test_a_pin_is_a_command_queued_and_the_page_says_how_it_goes(app, runner, spokey):
@@ -212,7 +212,7 @@ def test_a_pins_request_is_the_songs_change_never_one_of_its_requests(app, spoke
     assert (queued["kind"], queued["songId"], queued["line"]["text"]) == ("export", None, "Queued…")
     app.queue.run_pending()
     [done] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
-    assert done["line"] == {"tone": "ready", "text": "Its harmonica tab read as you set it",
+    assert done["line"] == {"tone": "ready", "text": "Tab read as you set it",
                             "link": {"label": "Open tab", "href": quote(PAGE)}, "details": None}
     requests = json.dumps(answer(get_json(app, "/requests.json")))  # the Requests tab says what it did
-    assert "Its harmonica tab read as you set it" in requests and "Added" not in requests
+    assert "Tab read as you set it" in requests and "Added" not in requests

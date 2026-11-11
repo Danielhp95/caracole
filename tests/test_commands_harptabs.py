@@ -221,7 +221,7 @@ def test_artist_reads_one_page_now_at_the_lookup_pace_and_once_in_30_days(tmp_pa
 
     assert result.exit_code == 0, result.output
     assert result.stdout == "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now.\n"
-    assert served(result) == "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now."
+    assert served(result) == "Read: harptabs' page of billy joel lists 7 of their 98 tabs."
     assert sites.harptabs.requests == [BILLY]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     try:
@@ -239,7 +239,7 @@ def test_artist_the_sitemap_lists_no_page_of_is_not_found_and_asks_nothing(tmp_p
     result = run(tmp_path, "--artist", "Nobody Known")
     assert result.exit_code == 0, result.output
     assert result.stdout == "Not found: harptabs.com's sitemap lists no artist named Nobody Known.\n"
-    assert served(result) == "Not found: harptabs.com's sitemap lists no artist named Nobody Known."
+    assert served(result) == "Not found: harptabs lists no artist named Nobody Known."
     assert sites.harptabs.requests == []
 
 

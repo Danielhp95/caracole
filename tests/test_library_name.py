@@ -118,7 +118,7 @@ def test_a_pages_title_names_caracole_and_the_library_and_a_badge_first():
     assert LibraryName("Tabs").title() == "caracole · Tabs"
     assert LibraryName("Tabs").title("Look up") == "Look up · caracole · Tabs"
     assert LibraryName("test-lib", SCRATCH).title() == "Scratch library · caracole · test-lib"
-    assert LibraryName("Tabs", "Demo").title("Pick") == "Demo · Pick the match · caracole · Tabs"
+    assert LibraryName("Tabs", "Demo").title("Pick") == "Demo · Pick · caracole · Tabs"
 
 
 def test_the_name_and_the_badge_are_escaped_markup():

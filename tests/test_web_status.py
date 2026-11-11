@@ -192,7 +192,7 @@ def test_a_song_in_review_with_candidates_links_to_its_picker_not_the_to_do_page
 
 def test_a_failure_without_an_error_line_names_its_step():
     crashed = job("failed", states=["done", "failed", "skipped", "skipped"], outputs=[[], ["Traceback …"]])
-    assert job_line(crashed, None).text == "Looking it up failed."
+    assert job_line(crashed, None).text == "Matching failed."
     stopped = job("failed", states=["done", "skipped", "skipped", "skipped"])
     assert job_line(stopped, None).text == "Stopped before the end."
 
@@ -348,7 +348,7 @@ def test_an_import_of_a_file_is_a_sync_and_says_its_stages_and_once_over_synced(
     assert peer_kind(made) == "sync"
     assert [(s.name, s.label) for s in made.stages] == list(PEER_IMPORT_STAGES)
     made.state, made.stages[0].state = "running", "running"
-    assert job_line(made, None).text == "Checking what changed since the comparison…"
+    assert job_line(made, None).text == "Checking for changes since the compare…"
     made.state = "done"
     for s in made.stages:
         s.state = "done"

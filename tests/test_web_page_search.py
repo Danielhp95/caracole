@@ -626,7 +626,7 @@ def test_a_removed_song_shows_among_the_results_and_add_again_brings_it_back(cfg
     assert browser.wait(f"{answer_to('radiohead')} && !!document.querySelector('#results .removed-hit')")
     assert browser.js(LINES) == [["Radiohead", [["Creep", ""], ["Karma Police", "ug"]]]]  # its artist's group
     line = "#results .removed-hit"
-    assert browser.js(f"document.querySelector('{line} .line-status').textContent") == "Removed 2026-10-20"
+    assert browser.js(f"document.querySelector('{line} .line-status').textContent") == "Removed 20/10/26"
     assert browser.js(f"document.querySelector('{line} .line-action button.line-fetch').getAttribute('aria-label')"
                       ) == "Add Radiohead - Creep again"  # the download glyph, named for what it does
     browser.press("Enter")  # never what Enter acts on: it moves to the first result, and asks for nothing
@@ -681,8 +681,8 @@ def test_a_results_name_posts_what_its_get_it_posts(cfg, live, browser):
     assert queue.snapshot() == []  # noted, never sent
     # Named for what it does, and looking like the name it is.
     assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").getAttribute('aria-label')"
-                      ) == "Get Ryan Adams - Wonderwall"
-    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").title").startswith("Get Ryan Adams - Wonderwall")
+                      ) == "Fetch Ryan Adams - Wonderwall"
+    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").title").startswith("Fetch Ryan Adams - Wonderwall")
     assert browser.js(f"document.querySelector(\"{RYAN} h3\").textContent") == "Wonderwall"
 
 
@@ -913,7 +913,7 @@ def test_the_instruments_filter_your_songs_in_the_results_never_the_sites(cfg, l
     assert artist == "Eagles" and ["Hotel California", "yours"] in lines and ["Take It Easy", "ug"] in lines, lines
     assert "Desperado" not in [title for title, _ in lines], lines  # yours, with no harmonica tab
     assert browser.js("document.querySelector('#results p.filtered > span').textContent") == (
-        "Your songs here: with a harmonica tab")  # the results' head says it, as the toolbar steps aside
+        "Yours here: with harmonica tab")  # the results' head says it, as the toolbar steps aside
 
 
 def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
@@ -998,7 +998,7 @@ def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_artist_
     assert browser.wait(f"!{BUSY} && document.getElementById('found').dataset.query === 'creep'")
     # Wanted pressed: of your songs, the wanted Creep alone; Radiohead's, found, nowhere, though UG has it.
     assert browser.wait(same(LINES, [["Stone Temple Pilots", [["Creep", "yours"]]]])), browser.js(LINES)
-    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: wanted"
+    assert browser.js(f"{note}.firstChild.textContent") == "Yours here: wanted"
     browser.click("#results .filtered button")  # Show all of yours
     every = [["Radiohead", [["Creep", "yours"]]], ["Stone Temple Pilots", [["Creep", "yours"]]]]
     assert browser.wait(same(LINES, every)), browser.js(LINES)
@@ -1009,7 +1009,7 @@ def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_artist_
     browser.click("#list section.artist button.artist-only")  # Radiohead
     search(browser, "creep")
     assert browser.wait(same(LINES, [["Radiohead", [["Creep", "yours"]]]])), browser.js(LINES)
-    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: by Radiohead"
+    assert browser.js(f"{note}.firstChild.textContent") == "Yours here: by Radiohead"
 
 
 def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, live, browser):
@@ -1285,7 +1285,7 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
     assert [w[0] for w in words] == [
         "1 of your songs", "0 on Ultimate Guitar", "0 on gtptabs.com: index empty",
         "0 on LaCuerda: index in part, up to C", "MuseScore: blocked",
-        "0 on harptabs.com: index in part, 2 of 3 artists", "5 on gametabs.net: index in part, 2 of 7 games"]
+        "0 on harptabs.com: index in part, 2 of 3 artists", "5 on gametabs.net · index in part, 2 of 7 games"]
     assert words[0] == ["1 of your songs", "1 of your songs", None]
     assert words[5][1:] == [
         "0 on harptabs.com: index in part, 2 of 3 artists\nharptabs.com's artist pages are still being read: 2 of 3 "
@@ -1394,7 +1394,7 @@ def test_a_typo_is_an_artist_band_first_whose_row_lists_their_songs_then_the_mis
     their = "#results section.meant .their-songs"
     assert browser.js(f"document.querySelector('{their}').textContent") == "Their 5 songs on UG›"
     assert browser.js(f"document.querySelector('{their} [aria-hidden=true]').textContent") == "›"
-    assert browser.js(STATUS) == "Nothing on the sites · did you mean Lynyrd Skynyrd?"
+    assert browser.js(STATUS) == "Not on the sites · did you mean Lynyrd Skynyrd?"
     assert browser.js(DID_YOU_MEAN) is None and browser.js(HITS) == 0 and browser.js(BACK) is False
     searched = len(asked)
     browser.click(their)  # their songs, in their band, as an artist's are
@@ -1465,7 +1465,7 @@ def test_the_lookup_page_says_what_each_site_found_as_the_library_page_does(cfg,
     assert browser.js(COUNTS) == [["library", "done", 1], ["ug", "done", 0], ["gtptabs", "empty", 0],
                                   ["lacuerda", "partial", 0], ["musescore", "blocked", None],
                                   ["harptabs", "partial", 0], ["gametabs", "partial", 5]]
-    assert [w[0] for w in browser.js(COUNT_WORDS)][-1] == "5 on gametabs.net: index in part, 2 of 7 games"
+    assert [w[0] for w in browser.js(COUNT_WORDS)][-1] == "5 on gametabs.net · index in part, 2 of 7 games"
     place = browser.js("(() => { const c = document.getElementById('bar-counts').getBoundingClientRect(); return "
                        "[document.querySelector('.search').contains(document.getElementById('bar-counts')), "
                        "c.top >= document.getElementById('q').getBoundingClientRect().bottom, "
@@ -1520,10 +1520,10 @@ def test_a_title_spelled_close_is_a_line_in_its_artists_band_whose_get_it_looks_
     assert browser.js(LINES) == [["Eagles", [["Hotel California", "ug"]]]]
     assert browser.js("[...document.querySelectorAll('#results .groups > section')].map((s) => s.className)") == [
         "artist meant", "nothing"]
-    assert browser.js(STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    assert browser.js(STATUS) == "Not on the sites · did you mean Hotel California by Eagles?"
     assert browser.js(f"document.querySelector('{MEANT_LINE} .line-facts').textContent") == "chords ×6"
     assert browser.js(f"document.querySelector('{MEANT_LINE} .line-action button.line-fetch').getAttribute("
-                      "'aria-label')") == "Get Eagles - Hotel California from Ultimate Guitar"
+                      "'aria-label')") == "Fetch Eagles - Hotel California from UG"
     assert browser.js(f"document.querySelector('{MEANT_LINE} h3 .title-get').getAttribute('aria-label')") == (
         "Get Eagles - Hotel California")  # its name gets it, as its Get it does
     assert browser.js("document.querySelector('#results section.meant .their-songs').textContent") == (
@@ -1575,7 +1575,7 @@ def test_the_lookup_page_suggests_a_title_as_a_row_whose_get_it_looks_it_up(cfg,
                       f".row-artist').textContent, document.querySelector('{row} .source').dataset.source, "
                       f"document.querySelector('{row} .row-action button').textContent]") == [
         "Hotel California", "Eagles", "ug", "Get it"]
-    assert browser.js(LOOKUP_STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    assert browser.js(LOOKUP_STATUS) == "Not on the sites · did you mean Hotel California by Eagles?"
     assert browser.js(LOOKUP_WORDS_SHOWN) is False and browser.js(COUNTS_SHOWN)
     browser.click(f"{row} .row-action button")
     args = posted(queue)
@@ -1916,7 +1916,7 @@ def test_a_sheets_artist_searches_for_them_on_the_library_page_and_back_returns_
     assert phone.wait("location.pathname === '/index.html' && document.readyState === 'complete'")
     assert phone.wait("document.getElementById('found').dataset.query === 'C Tangana'")
     assert phone.js("document.getElementById('q').value") == "C Tangana"
-    assert phone.js(GROUPS)[0] == "C Tangana · you have 1 · UG 3 · LaCuerda 1 · Guitar Pro 1", phone.js(GROUPS)
+    assert phone.js(GROUPS)[0] == "C Tangana · yours 1 · UG 3 · LaCuerda 1 · Guitar Pro 1", phone.js(GROUPS)
     assert phone.js(LINES)[0] == ["C Tangana", [
         ["Demasiadas Mujeres", "yours"], ["Tu Me Dejaste De Querer", "ug"], ["Los Tontos", "ug+gtptabs"],
         ["Nunca Estoy", "lacuerda"]]], phone.js(LINES)

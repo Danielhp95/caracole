@@ -287,7 +287,7 @@ def test_lyrics_count_songs_and_the_synced_ones(conn, cfg):
     cards = [card(files=[("lyrics.txt", "lrclib"), ("lyrics.lrc", "lrclib")]), card(files=[("lyrics.txt", "lrclib")]),
              card()]
     assert line(sites_data(conn, cfg, cards, NOW), "lrclib")["kept"] == {
-        "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them synced"}
+        "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them timed"}
 
 
 def test_megalobizs_lyrics_count_as_lrclibs_do(conn, cfg):
@@ -295,7 +295,7 @@ def test_megalobizs_lyrics_count_as_lrclibs_do(conn, cfg):
              card(files=[("lyrics.txt", "lrclib")])]
     data = sites_data(conn, cfg, cards, NOW)
     assert line(data, "megalobiz")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1,
-                                               "detail": "1 of them synced"}
+                                               "detail": "1 of them timed"}
     assert line(data, "lrclib")["kept"]["count"] == 1
 
 
@@ -367,7 +367,7 @@ def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     assert line(data, "ug")["robots"]["paths"][0] == ["/search.php", "its search"]
     assert line(data, "ug")["robots"]["more"] == more_paths(site("ug"))
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
-    assert line(data, "ug")["name"] == "Ultimate Guitar"
+    assert line(data, "ug")["name"] == "UG"
     assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
     assert data["totals"] == {"sites": 10, "indexed": 0, "kept": 0}
 
@@ -478,6 +478,6 @@ def test_its_lyrics_count_as_lrclibs_do_and_a_site_with_no_budget_shows_what_it_
     kv_set_json(conn, "run:last", {**RUN, "requests": {**RUN["requests"], "azlyrics": 4}})
     cards = [card(files=[("lyrics.txt", "azlyrics")])]
     data = sites_data(conn, cfg, cards, NOW)
-    assert line(data, "azlyrics")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1, "detail": "0 of them synced"}
+    assert line(data, "azlyrics")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1, "detail": "0 of them timed"}
     assert line(data, "azlyrics")["night"] == {"used": 4, "budget": None, "unit": "requests"}
     assert line(data, "azlyrics")["pace"] == "0 s between requests"

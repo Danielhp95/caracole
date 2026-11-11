@@ -837,7 +837,7 @@ def test_the_rails_first_neck_is_the_keys_scale_with_its_tonic_marked(tmp_path):
         chords = b.js(RAIL)["chords"]
     assert scale["first"] and scale["name"] == "C scale"
     assert scale["switch"] == [["Scale", "true"], ["Major pentatonic", "false"]]
-    assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale: the tonic, C, marked"
+    assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale, tonic C marked"
     assert box["name"] == "C major pentatonic" and box["dots"] == scale_dots(0, MAJOR_BOX)
     assert box["switch"] == [["Scale", "false"], ["Major pentatonic", "true"]] and focus == "Major pentatonic"
     assert [c["name"] for c in chords] == ["C", "G", "Am", "F"]  # the chords' necks after it

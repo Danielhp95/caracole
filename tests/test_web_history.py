@@ -173,7 +173,7 @@ def test_the_requests_tab_shows_the_history_after_a_restart_with_try_again(stopp
     assert fed["active"] == 0 and set(shown) == {1, 2}
     assert shown[1]["says"] == {"tone": "failed", "text": "Failed"}
     assert shown[2]["says"] == {"tone": "waiting", "text": "Interrupted"}
-    assert shown[2]["reason"] == "caracole serve stopped while it ran: run it again to finish it."
+    assert shown[2]["reason"] == "The server stopped mid-way. Try again to finish."
     assert shown[2]["actions"] == [{"label": "Try again", "primary": False, "post": "/jobs/again",
                                    "fields": {"job": "2"}}]
     assert shown[2]["output"]["steps"] == [{"label": "Fetching", "badge": {"tone": "interrupted",
@@ -331,7 +331,7 @@ def test_the_requests_tab_after_a_restart_in_a_browser(stopped, tmp_path):
             assert page.wait("(document.querySelector('#req-2 .req-output pre') || {}).textContent === "
                              "'get: looking up Oasis - Wonderwall'")
             assert page.js("document.querySelector('#req-2 .req-reason').textContent") == (
-                "caracole serve stopped while it ran: run it again to finish it.")
+                "The server stopped mid-way. Try again to finish.")
             page.click("#req-2 .req-next form button")  # Try again
             assert page.wait("document.querySelector('#req-3') !== null"), page.js("document.body.innerText")
             assert page.js("document.documentElement.scrollWidth <= innerWidth")

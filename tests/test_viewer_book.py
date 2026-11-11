@@ -99,7 +99,7 @@ def test_each_song_says_what_its_capo_means_as_its_sheet_html_does():
     first = re.search(r'<p class="facts" id="facts-1">(.*?)</p>', html).group(1)
     minor = re.search(r'<p class="facts" id="facts-3">(.*?)</p>', html).group(1)
     assert first == '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
-    assert minor == 'Key <b>Am</b> <span class="from">from the tab</span>'
+    assert minor == 'Key <b>Am</b> · <span class="from">from the tab</span>'
 
 
 def test_the_pager_is_above_each_sheet_and_after_it_too():

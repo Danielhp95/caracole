@@ -143,8 +143,8 @@ def test_the_piano_draws_each_chord_as_a_keyboard_its_notes_lit_and_its_bass_mar
         assert board["bass"] == [position[0]] and board["on"] == position[1:]
     c_e = chord_shapes(PIANO, parse_chord("C/E"))
     assert card[0]["bass"] == [52] and card[0]["on"] == c_e[0][1:] and card[1] == "1 of 3"
-    assert card[2] == "Root position; E in the bass, left hand."
-    assert second[0]["on"] == c_e[1][1:] and second[1] == "1st inversion; E in the bass, left hand."
+    assert card[2] == "Root position · E in the bass, left hand"
+    assert second[0]["on"] == c_e[1][1:] and second[1] == "1st inversion · E in the bass, left hand"
     assert card[0]["keys"] == second[0]["keys"]  # one keyboard for all three: the card keeps its width
     assert wide[0] >= 170 and wide[1] == 390
 
@@ -302,7 +302,7 @@ def test_the_instrument_is_kept_for_every_sheet_and_in_the_address(tmp_path):
     assert reloaded["chips"][1][1] == "true" and reloaded["hash"] == "#inst=ukulele"
     assert elsewhere[0]["chips"][1][1] == "true" and elsewhere[0]["hash"] == "#inst=ukulele"
     assert guitar["chips"][0][1] == "true" and guitar["hash"] == ""
-    assert asked["chips"][4][1] == "true" and asked["facts"] == "Key C from the sheet"
+    assert asked["chips"][4][1] == "true" and asked["facts"] == "Key C · from the sheet"
     assert unknown["chips"][0][1] == "true" and unknown["hash"] == ""  # one the viewer doesn't draw: the guitar
 
 
@@ -468,6 +468,6 @@ def test_an_instrument_a_script_registers_is_offered_then_drawn_by_it(tmp_path, 
         heard = b.wait("document.documentElement.dataset.heard === '369.99'")  # F#4: its notes, as it says
     assert [c[0] for c in before["chips"]] == NAMES and before["chips"][0][1] == "true"  # not drawn yet: the guitar
     assert [c[0] for c in after["chips"]] == [*NAMES, "Kazoo"]
-    assert on[0]["facts"] == "Key F#m from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
+    assert on[0]["facts"] == "Key F#m · from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
     assert on[0]["hint"] == "Hum along." and not on[0]["capo"] and on[2] == "Kazoo at 2"
     assert bare == ["hum F#", "hum D", "hum A", "hum E"] and card == "hum F#" and heard

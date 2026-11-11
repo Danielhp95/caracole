@@ -202,7 +202,7 @@ def test_fetch_now_is_the_download_glyph_on_the_same_row(conn, cfg, tmp_path):
     """
     shown = attribute_of(run(conn, cfg, tmp_path, script, controls=WebControls(csrf="tok")), "data-fetch")
     assert shown == {"text": "", "said": "Fetch Creep by Radiohead now", "type": "submit",
-                     "title": "Fetch now: ask Ultimate Guitar for this song now, politely",
+                     "title": "Fetch: ask UG for this song",
                      "glyph": "glyph glyph-download", "action": "/fetch", "have": 0}
 
 

@@ -690,7 +690,7 @@ def test_lacuerda_artist_lacuerda_has_no_page_for_says_so(tmp_path, sites, quick
     result = run(tmp_path, "lacuerda", "--artist", "Nadie Conocido")
     assert result.exit_code == 0, result.output
     assert result.stdout == "Not found: LaCuerda has no artist page for Nadie Conocido.\n"
-    assert served(result) == "Not found: LaCuerda has no artist page for Nadie Conocido."
+    assert served(result) == "Not found: LaCuerda has no page for Nadie Conocido."
 
 
 def test_lacuerda_artist_block_cooldown_error_and_spent_lookup_budget_exit_0(tmp_path, sites, quick):
@@ -933,7 +933,7 @@ def test_lacuerda_search_after_three_failures_in_an_hour_the_page_sends_none_by_
     sites.lacuerda.status = None
     sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--auto")
-    assert searched(result) == "Not searched: 3 searches of LaCuerda failed in the last hour."
+    assert searched(result) == "Not searched: 3 LaCuerda searches failed this hour."
     assert "so the page sends none by itself before " in result.stdout and len(sites.lacuerda.requests) == 3
     # An hour after the first of them, two failed in the last hour: the page's own searches go again.
     conn = open_db(tmp_path)

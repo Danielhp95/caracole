@@ -785,7 +785,7 @@ def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_e
         targets = b.js(small_targets(".foot *"))
     assert seen["open"] and not seen["panel"] and seen["focus"] == "harmony-title"
     assert seen["box"]["bottom"] == bar["top"] and seen["box"]["left"] == 0 and seen["box"]["right"] == 390
-    assert seen["key"] == "Read in the key of C (from the sheet)."
+    assert seen["key"] == "In the key of C (from the sheet)."
     assert seen["neck"]  # the key's neck, on a phone, is here
     verse, chorus, bridge = seen["rows"]  # the riff has no chord to read
     assert verse == {"section": "Verse", "numerals": ["I", "V", "vi", "IV"], "repeats": "×4",
@@ -887,7 +887,7 @@ def test_the_panel_names_a_progression_a_section_plays_within_it_and_a_cycle_tha
     assert verse["numerals"] == ["iv", "♭III", "♭VII", "i", "♭VI", "♭II", "♭III", "♭VII", "i", "♭VI"]
     assert verse["about"] == "contains the pop progression ×2"
     assert verse["named"] == [["Songs with the pop progression", "../../index.html#prog=I%20V%20vi%20IV"]]
-    assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, one variation"
+    assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, 1 variation"
     assert chorus["about"] == "the Andalusian cadence · ends on a half cadence (on V)" and chorus["named"] == []
     assert heads == ["Verse · contains the pop progression ×2", "Chorus · the Andalusian cadence"]
 
@@ -1157,7 +1157,7 @@ def test_a_changed_version_asks_before_downloading(tmp_path):
         other = b.js(ASKED)
     link = EXPORTS + "&capo=2"
     assert asked == {"title": "Make this your version of In E?", "version": "D Major, capo 2",  # D shapes, sounding E
-                     "what": "Its PDF, its viewer and your songbooks will start there.",
+                     "what": "Its PDF, sheet and songbooks start there.",
                      "answers": [["Download and make it mine", link + "&mine=1", True], ["Just download", link, False],
                                  ["Cancel", None, False]],
                      "modal": True, "focus": True}

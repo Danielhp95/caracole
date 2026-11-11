@@ -255,12 +255,12 @@ def test_explain_says_the_degree_the_quality_and_the_key_it_is_read_in():
     assert explain(ch("Am"), C) == "vi: the 6th chord of C major, minor (lower case)"
     assert explain(ch("Am"), A_MINOR) == "i: the 1st chord of A minor, minor (lower case)"
     assert explain(ch("Bb"), C) == (
-        "♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed from C minor")
+        "♭VII: on the lowered 7th degree of C major, major (upper case); borrowed from C minor")
     assert explain(ch("D"), C, ch("G")) == "V/V: the V of V in C major, major (upper case); leads to G"
     assert explain(ch("E"), C, ch("F")) == (
         "V/vi: the V of vi in C major, major (upper case); points to Am")
     assert explain(ch("G7"), C) == "V7: the 5th chord of C major, major (upper case) with a 7th (7)"
-    assert explain(ch("F#"), C) == "♯IV: built on the raised 4th degree of C major, major (upper case); outside C major"
+    assert explain(ch("F#"), C) == "♯IV: on the raised 4th degree of C major, major (upper case); outside C major"
 
 
 def test_explain_says_what_the_bass_is():

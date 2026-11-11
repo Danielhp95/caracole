@@ -173,7 +173,7 @@ def test_a_harp_tapped_on_the_circle_is_the_one_the_key_and_the_chords_are_on(tm
     assert ["G", "bent-in"] in d["bends"] and ["B", "bent-tonic"] in d["bends"] and ["G#", "bent-out"] in d["bends"]
     assert d["legend"] == "B, the tonicin the scalebent"
     chords = {c["name"]: c for c in d["chords"]}
-    assert chords["E"]["run"] == "draw 4–6 · as Em, the minor stand-in" and chords["E"]["shape"] == "D shape"
+    assert chords["E"]["run"] == "draw 4–6 · as Em, minor substitute" and chords["E"]["shape"] == "D shape"
     assert [n for n, role in chords["E"]["draw"] if role == "run"] == ["E", "G", "B"]  # Em's holes, draw 4 to 6
     assert chords["Bm"]["run"] == "no chord here: play its notes one hole at a time"
     assert {n for n, role in chords["Bm"]["blow"] + chords["Bm"]["draw"] if role == "tone"} == {"D", "F#", "B"}

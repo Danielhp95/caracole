@@ -114,7 +114,7 @@ def test_a_song_with_a_tab_and_no_sheet_gets_its_page_and_goes_back_to_the_libra
     song = song_with_a_tab(conn, cfg, sheet=False)
     render(conn, cfg)
     page = song_dir(cfg.library_dir, song) / "harmonica-1.html"
-    assert facts(page) == "Harmonica tab · C harp, as harptabs.com's key says"
+    assert facts(page) == "Harmonica tab · C harp, as harptabs' key says"
     assert '<a class="back" href="../../index.html">‹ Library</a>' in page.read_text("utf-8")
     assert not (song_dir(cfg.library_dir, song) / "sheet.html").exists()
 

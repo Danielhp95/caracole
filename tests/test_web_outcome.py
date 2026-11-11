@@ -162,7 +162,7 @@ def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_othe
     missing = ended({"match": ("done", MATCH_NOT_FOUND), "sheet": ("skipped", NOT_IN_INDEX),
                      "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "in no songbook")})
     facts = SongFacts(not_found=True, checked_now=True)
-    assert job_line(missing, facts).text == "Not found"
+    assert job_line(missing, facts).text == "Not on the sites"
     assert progress(missing, job_line(missing, facts), facts) == {"steps": [
         {"name": "Song", "source": "", "state": "done"}, {"name": "Match · not on UG", "source": "", "state": "plain"},
         {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"}]}
@@ -298,16 +298,16 @@ def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
     job = ended({"sheet": ("skipped", NOT_IN_INDEX)}, display="Horse The Band - Crippled By Pizza")
     unmatched = SongFacts(not_found=True, checked_now=True)
     assert said(job, unmatched, song_id=3) == Outcome(
-        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name.", SEARCH)
+        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name.", SEARCH)
     # Its artist's UG page was read for it, with no chords there: UG was asked, and the index still lacks it.
     read = SongFacts(not_found=True, checked_now=True, asked_ug=True)
-    assert said(job, read, song_id=3) == Outcome("missing", "Not found", "Ultimate Guitar has no chords for it.",
+    assert said(job, read, song_id=3) == Outcome("missing", "Not on the sites", "Ultimate Guitar has no chords for it.",
                                                  SEARCH)
     # A song the index matched, whose UG page had no sheet to keep: requested by name.
     matched = ended({"sheet": ("skipped", "UG has no sheet to keep")},
                     display="Horse The Band - Crippled By Pizza")
     assert said(matched, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it.",
+        "missing", "Not on the sites", "Ultimate Guitar has no chords for it.",
         Action("Ask by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
     # A fetch of commands that refused the song as not in the index (it failed): not asked either.
     fetch = Job(9, "Fetch Horse The Band - Crippled By Pizza", "horse-the-band/crippled-by-pizza",
@@ -321,24 +321,24 @@ def test_not_found_with_something_elsewhere_gets_it_from_there():
     job = ended({"sheet": ("skipped", "UG has no sheet to keep")})
     gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
     assert said(job, gtp, song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
+        "missing", "Not on the sites", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
         Action("Fetch from there", post="/lookup", fields=(("song", "3"),)))
     # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
     unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
     lc = SongFacts(not_found=True, checked_now=True,
                    elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
     assert said(unmatched, lc, song_id=3) == Outcome(
-        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
+        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
         Action("Fetch from there", post="/lookup", fields=(
             ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
         also=SEARCH)
     # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
     got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
     assert said(got, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
+        "missing", "Not on the sites", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
                                 "gtptabs.com.", Action("Open in the library", href="/#song=3"))
     assert said(got, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
-        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; caracole got a Guitar "
+        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name; caracole got a Guitar "
                                 "Pro file from gtptabs.com.", Action("Open in the library", href="/#song=3"),
         also=SEARCH)
 

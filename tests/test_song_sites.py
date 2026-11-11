@@ -35,7 +35,7 @@ def test_a_song_never_asked_has_every_site_grey_and_unasked_in_their_order(conn,
     # The sites on by default; YouTube only where its route runs, which needs auto-chords.
     assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"]
     assert {state for state, _ in sites.values()} == {"unasked"}
-    assert sites["harptabs"][1] == "harptabs.com: not asked yet"
+    assert sites["harptabs"][1] == "harptabs: not asked yet"
 
 
 def test_the_digging_my_potato_case_ug_has_none_and_harptabs_has_it(conn, cfg):
