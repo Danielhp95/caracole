@@ -3907,7 +3907,7 @@ the library, sent as they are: they carry no badge.
   progression", "blues"; words of fewer than five letters, "pop" or "the road",
   are words, as "minor" alone is, and "creep" the song) finds your songs
   that play it too, the first among the results, and the results' head says how
-  many play it ("Your songs with I–V–vi–IV, the pop progression: 12"), with
+  many play it ("Songs with I–V–vi–IV, the pop progression: 12"), with
   Show them, the list of those alone (`#prog=`, above). The results come under the
   same artist headers as the list's, each header counting the songs
   of theirs you have and, for an artist the query names, the songs Ultimate
@@ -4123,7 +4123,7 @@ the library, sent as they are: they carry no badge.
   beside Ultimate Guitar's song, Fetch with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
+  line of its own ("Sending…", "Fetching from UG… · 2 of 7
   done"), with the lookup's steps as chips under it, as on a song's line
   (below), and once the sheet is kept the line is the song's own line, yours,
   its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Fetch does**: a click on
@@ -4236,7 +4236,7 @@ the library, sent as they are: they carry no badge.
   why the lyrics wait ("No lyrics yet (LRCLIB unavailable); tonight's run tries
   again."): the nightly run asks LRCLIB again, and auto-chords makes the sheet
   again with them. A block, a cooldown, a spent budget or a network error ends
-  it **Not made yet**, the step that stopped it red, the reason in the Journal ("YouTube is paused after a block, until …"), with Try again; a video
+  it **Not made yet**, the step that stopped it red, the reason in the Journal ("YouTube turned us back; waiting until …"), with Try again; a video
   YouTube won't give ("can't download this video; try another") or audio
   auto-chords can't read, **Failed**. A song with a human sheet ("… already has
   a sheet."), ignored or with bought audio is refused before anything is written
@@ -4455,7 +4455,7 @@ the library, sent as they are: they carry no badge.
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet, but never the Sheet a cooldown, a block or a spent
     budget stopped, drawn failed); for a request of other commands, its commands.
-    Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
+    Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
     one that is over stays). A cancelled request is over, never run: it stays
@@ -4632,11 +4632,11 @@ the library, sent as they are: they carry no badge.
     **Its own version** runs `--clear`;
   - **×** takes it out; **Fetch**, on a song with no sheet yet, looks it up
     now (one `caracole get`), then makes the songbook again with its sheet;
-  - **Get the 2 missing songs now** looks up each song of yours there without
+  - **Fetch the 2 missing songs** looks up each song of yours there without
     a sheet, one `caracole get` after the other in the songbook's order, then
-    runs `caracole songbook render NAME`: its line says "Queued behind 2
-    requests…" while they run, then "Making the songbook…" and "Made · Open
-    songbook". A song "not in the library", or one overrides.toml ignores,
+    runs `caracole songbook render NAME`: its line says "Queued · 2 requests
+    ahead…" while they run, then "Making the songbook…" and "Made · Open
+    songbook". A song "not in the logbook", or one overrides.toml ignores,
     isn't looked up. With less room in the queue than songs, it gets the first
     ones, and the button offers the rest once they are done;
   - **Add a song** searches your songs and the offline indexes as you type
@@ -5839,9 +5839,9 @@ it would come from:
     The two never synced: a unit on one side alone is that side's, and one both hold, differently, a conflict.
     3 differences, 1 conflict:
       Songs:
-        take there's  Estopa - Tu Calorro  (only there)
-        CONFLICT      Oasis - Wonderwall  (on both sides, different, and never synced)
-        keep here's   Radiohead - Creep  (only here)
+        theirs comes here  Estopa - Tu Calorro  (only in theirs)
+        CONFLICT           Oasis - Wonderwall  (in both books, different, never shared)
+        ours goes there    Radiohead - Creep  (only in our book)
 
 It changes nothing on either side, takes no lock and asks no site. `--json` prints the comparison as data.
 
@@ -5857,7 +5857,7 @@ What caracole makes from a song (PDFs, viewers, the pages) isn't compared: the s
 again. Nor are cooldowns, the HTTP cache or the site indexes (`caracole index export` and `merge` move those).
 
 Once two caracoles have synced, each remembers what the two agreed on, so a difference says where it changed: a unit
-changed on one side alone comes from that side ("changed there since the last sync"), and a unit changed on both, to
+changed on one side alone comes from that side ("changed there since the last share"), and a unit changed on both, to
 different things, is a conflict for you to settle. Before then, a unit on one side alone is that side's, and one on
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
@@ -6028,7 +6028,7 @@ are `peer sync`'s; with `--progress` it ends with a report of what it did, for c
 take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
 
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+chose when a file of the other's was imported"), and so does caracole serve's Share tab: a unit kept here at an import
 is given there, with no question asked.
 
 ### Syncing parts, and the indexes
@@ -6049,7 +6049,7 @@ synced and agreed on (its stage **index**): each site goes the way of the later 
   most). The other side must be a caracole serve of this version or later.
 - Neither newer, or the indexes not among the parts: nothing is asked ("no index is newer on either side").
 
-With `--progress` the sync ends with a report of what it did, for caracole serve's Sync tab: the other caracole, when,
+With `--progress` the sync ends with a report of what it did, for caracole serve's Share tab: the other caracole, when,
 the parts, and each index taken or given with the tabs it tracked before and after (the rows of its first table:
 UG's sitemap index, LaCuerda's listings, …) and when it was read. An index stage that fails says why; the sync exits
 1, the units taken and given all the same.

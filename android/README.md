@@ -337,12 +337,12 @@ socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest N
 ## Picking an uncertain match
 
 A song caracole isn't sure of (several Ultimate Guitar songs could be it) is settled on the phone as in caracole
-serve: **Pick the match** on its card, on its line in the Requests tab, or a not-found song's **Look in the index**
+serve: **Pick the match** on its card, on its line in the Journal, or a not-found song's **Look in index**
 (what the offline index finds for its artist and title) lists the candidates, each with why the matcher thought of it,
 its score, its tabs and its Ultimate Guitar page. A pick goes into the phone's overrides under `[match]` (and
 `[alias]` when the artist is spelled otherwise there), **None of these** under `[reject]`, and the song's match is
-decided again at once, with its artist's other songs after an alias. **Fetch it now** (ticked) then looks the song up,
-as Fetch now does. While a request of the song's waits or runs, a pick is refused until it ends. A sync takes the
+decided again at once, with its artist's other songs after an alias. **Fetch** (ticked) then looks the song up,
+as Fetch does. While a request of the song's waits or runs, a pick is refused until it ends. A sync takes the
 answer to the computer, as it takes any of the phone's overrides.
 
 ## Performance notes
@@ -415,9 +415,9 @@ the computer's render does. No page links a PDF: the phone makes none.
 For every song, those the computer's pages serve too, the phone records what the library page finds it by: the
 progressions its sheet plays and whether its words are Chinese.
 
-A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync that changed
+A lookup makes its song's pages as it ends ("pages made; no PDFs on this scribe"). After a sync that changed
 songs, and when the app starts as a new build (any APK whose code or tables differ, whatever its version says), the
-phone makes the pages it owes in the background, a request of the Requests tab ("Make the pages again"), which lets a
+phone makes the pages it owes in the background, a request of the Journal ("Remake the pages"), which lets a
 lookup asked for meanwhile go first, between two songs. A song whose pages can't be made says why on that request, and
 costs the other songs nothing; it is tried again once the song changes or a new build is installed.
 
@@ -428,24 +428,24 @@ On the emulator: `android/scripts/device-test.sh --area render`.
 The Songbooks tab's forms and the Select bar's songbook are the phone's own, as `caracole songbook` is on the
 computer: **Make** a songbook of the songs picked, **Add** to it (a song you have at once; one new to the library, from
 the tab's search, looked up first, the two queued together or not at all), **Move** a song, **Take it out**,
-**Rename** and **Delete** a songbook. Each is a request of the Requests tab, one at a time behind any other, its line
+**Rename** and **Delete** a songbook. Each is a request of the Journal, one at a time behind any other, its line
 saying how it goes ("Making the songbook…", then "Made"); a form that can't be done (a name taken, a songbook or a
 song that isn't there, a song of the computer the phone hasn't got) is refused at once, in caracole serve's words, and
 queues nothing. The songbooks are the phone's (`phone_songbooks`), which a sync gives the computer.
 
 - **A song's chip** sets where the songbook plays it, as on the computer: its key, mode, capo and instrument, or **Its
   own version**; a key or a mode alone keeps the capo it plays at now, and another instrument the pitch it plays at.
-- **Get the missing songs** looks up each song of the songbook the phone has no sheet of (one a sync brought plays from
+- **Fetch the missing songs** looks up each song of the songbook the phone has no sheet of (one a sync brought plays from
   the computer's sheet, and is never asked for), as many as the queue has room for, then makes the songbook again; a
-  set list's **Get it**, that song alone.
+  set list's **Fetch**, that song alone.
 - **Phone page**: the phone makes each songbook's page itself (`_songbooks/<name>/songbook.html`), from the sheets it
   plays, after every change; the PDF and the ChordPro file are the computer's (chordpro), so the phone links neither.
   A page that can't be made fails its request ("Making the songbook failed."), the change itself made.
 
 **A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
-computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
+computer. **Make this the one**, **Keep** and **Back to our pick** open a page of the phone's own that says
 what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
-that page until it is over (the page reloads every ten seconds), and in the Requests tab: Make this the one looks the
+that page until it is over (the page reloads every ten seconds), and in the Journal: Make this the one looks the
 song up with that tab and keeps your choice in overrides; Keep it reads the version's page from Ultimate Guitar, at a
 lookup's pace, and keeps it beside the sheet; Back to caracole's pick takes your choice out and looks the song up
 again. A page the computer made and the phone copied names no version of the phone's: choose there on the computer.
@@ -466,10 +466,10 @@ viewer's print style (a light page, the margins).
 - **Download and make it mine** (the viewer asks when the version's music isn't the song's own) prints it and makes
   it your version too, as on the computer: the song's `[version]`, kept by the key it plays in, so its viewer and its
   songbooks start there (a song whose pages were the computer's copy gets pages the phone makes, at once). The
-  Requests tab shows it ("Your version now"). Like caracole serve's, it is a plain link with no form token, the one
+  Journal shows it ("Your version"). Like caracole serve's, it is a plain link with no form token, the one
   write the phone takes so.
 - The phone names the version of a sheet of its own library: one it made the pages of, or one of the computer's
-  pages whose song a sync brought (the Sync tab). A copy of the computer's pages with no song of its own (Sync now's
+  pages whose song a sync brought (the Share tab). A copy of the computer's pages with no song of its own (Sync now's
   pages alone) has no sheet to name, and says so. The auto-chords sheet kept beside a song's own sheet, and a kept
   version's page, offer no export of their own, as on the computer.
 
@@ -566,8 +566,8 @@ caracole files each one as the computer files what you drop into `_inbox/`:
 - A score is placed by its name alone on the phone: a MusicXML file named "score.musicxml" waits, where the computer
   would read the title and composer inside it.
 
-A toast says how each went, as its line on the Requests tab does: "Filed as guitar-1.gp5 of Oasis - Wonderwall",
-"Waiting for a song that fits: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
+A toast says how each went, as its line in the Journal does: "Filed · guitar-1.gp5 of Oasis - Wonderwall",
+"Waiting for its song: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
 Guitar Pro files and scores alone). A file shared with no extension takes the one its bytes or its type tell.
 
 caracole is offered for files: never to open a PDF (Android's Open with), and never for a text (a music app's song,
@@ -585,7 +585,7 @@ background"; the app asks for the right to notify once, as the library screen op
   cooldown is over. On the computer a lookup sends no alert (the nightly run does); the phone has no nightly run to
   tell, so its lookups do.
 - **a request that failed while the app was in the background** (no screen of the app's open): its name and the line
-  the Requests tab shows for it. One that fails while you are in the app says so there alone.
+  the Journal shows for it. One that fails while you are in the app says so there alone.
 
 Tapping one opens the library.
 
@@ -595,7 +595,7 @@ file once however many backups hold it. The indexes aren't backed up: they come 
 
 - **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
   one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
-  made; none is made without twice the room it needs (the Requests tab then says "Not backed up: there isn't room for
+  made; none is made without twice the room it needs (the Journal then says "Not backed up: there isn't room for
   it on the phone").
 - **Export…** saves one as a single `.zip` (`caracole-by-hand-2026-11-10T081400Z.zip`: the copy, a SQLite database,
   and `blobs/<sha256>`, each file it keeps) wherever you pick, on the phone or in a cloud app's folder. It is a copy
@@ -613,5 +613,5 @@ file once however many backups hold it. The indexes aren't backed up: they come 
   restores only while the phone's files still hold those bytes, and can't be exported; otherwise its Restore says why
   and changes nothing.
 
-A backup, its daily one and a restore are requests like a lookup, one at a time on the Requests tab ("Backed up
-(by-hand)", "Restored the library of 2026-11-10 09:14"), never run beside a lookup.
+A backup, its daily one and a restore are requests like a lookup, one at a time in the Journal ("Backed up
+(by-hand)", "Restored the book of 2026-11-10 09:14"), never run beside a lookup.

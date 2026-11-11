@@ -29,7 +29,7 @@ or on paper.
   you haven't got is one tap from your library.
 - **Your choice of version:** the Ultimate Guitar versions of a sheet kept side by side, a
   switcher to change, and Make this my version to keep your key, capo and chord swaps.
-- **The library page:** one line a song, a button for each thing to play from it; Requests,
+- **The library page:** one line a song, a button for each thing to play from it; the Journal,
   what was asked and how it went; Sites, what each site holds and allows.
 - **Two caracoles in step:** sync a computer's library with another's or with the phone's,
   both ways, choosing where both changed a song, or copy it whole into a `.caracole` file.
@@ -64,7 +64,7 @@ computer off.
 - **Your library, offline:** the library page, every sheet with all its tools, kept versions,
   harmonica tabs and songbooks, with no network.
 - **Search and fetch from the phone:** the computer's site indexes come with a sync, so the
-  phone's search finds songs on the sites offline; Get it looks a song up from the phone,
+  phone's search finds songs on the sites offline; Fetch looks a song up from the phone,
   at the same gentle pace, and the phone builds its pages itself. Where caracole isn't sure
   which song it found, you pick the match on the phone.
 - **Sync with your computer:** the bar's sync button compares the two libraries and each takes
