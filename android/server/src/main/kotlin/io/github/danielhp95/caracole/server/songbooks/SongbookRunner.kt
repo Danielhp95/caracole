@@ -17,11 +17,13 @@ import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookError
 import io.github.danielhp95.caracole.core.songbooks.SongbookSong
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
+import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.lookups.LookupJobs
+import io.github.danielhp95.caracole.server.routes.ExportRoutes
 import io.github.danielhp95.caracole.viewer.version.Versions
 import java.io.File
 import java.math.BigInteger
@@ -41,13 +43,33 @@ import java.nio.file.LinkOption
  *   names missing and the files it wrote, as `_render` says them. While the songbooks' pages are none
  *   ([SongbookPages.NONE]), nothing is made and nothing more is said, as the lookup's songbooks stage does.
  *
- * The phone forgets the search's answers after each job (Phone.afterJob), this one's too. The library's pages are
- * the phone's own, made per request, so nothing writes them here (caracole serve's `write_pages`). [readOverrides]
- * stands in for the phone's overrides, a test's.
+ * Its lines are the command's (vectors/songbook/routes_runner.jsonl holds them, and the songbooks after, to
+ * commands/songbook.py's for the same library): an error its `error:` line, then the lines after it of a message of
+ * several (a song the library hasn't got, with what it may have meant), as the log writes one; a songbook whose page
+ * couldn't be made a `warning:` line, as render_songbooks logs it, and its exit 1 none (typer.Exit's, so the Requests
+ * tab says "Making the songbook failed." as caracole serve's does).
+ *
+ * A song's sheet is the one the songbooks' pages play it from (SongbookEntries.sheetOf): where its pages are the
+ * computer's, the [mirror]'s .cho of it. The phone forgets the search's answers after each job (Phone.afterJob), this
+ * one's too. The library's pages are the phone's own, made per request, so nothing writes them here (caracole serve's
+ * `write_pages`). [readOverrides] stands in for the phone's overrides, a test's.
  */
-class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Overrides = { Overrides.read(it) }) :
-    CommandRunner {
+class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Overrides = { Overrides.read(it) },
+                     private val mirror: () -> Mirror? = { ExportRoutes.mirrorOf(parts.cards) }) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
+        try {
+            command(args, context)
+        } catch (e: CommandExit) {
+            // a message of several lines: its error line, then the others, as the log writes it, and no line more
+            val lines = e.message.orEmpty().lines()
+            if (lines.size < 2) throw e
+            context.say("error: ${lines[0]}")
+            lines.drop(1).forEach(context::say)
+            throw CommandExit(e.code, "")
+        }
+    }
+
+    private suspend fun command(args: List<String>, context: JobContext) {
         val action = args.getOrNull(1) ?: throw CommandExit(2, "Missing command.")
         val line = LookupJobs.line(args.drop(1), VALUED)
         val o = line.options
@@ -183,30 +205,37 @@ class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
         render(book.name, context)
     }
 
-    /** `songbook render [NAME]`: its files (every songbook's), when they need it; exits 1 when one couldn't be made.
-     * `--force` is the computer's (every file made again): the phone's songbooks' pages make what they need. */
+    /** `songbook render [NAME]`: its files (every songbook's), when they need it; exits 1 when one couldn't be made
+     * (its warning says which), with no error line, as typer.Exit(1). `--force` is the computer's (every file made
+     * again): the phone's songbooks' pages make what they need. */
     private suspend fun renderCommand(name: String?, context: JobContext) {
         val only = name?.let { parts.database.read { db -> book(db, it).name } }
         val stats = render(only, context, quiet = true)
         context.say("${stats.rendered} rendered, ${stats.skipped} up to date, ${stats.failed.size} failed")
-        if (stats.failed.isNotEmpty()) throw CommandExit(1, "${plural(stats.failed.size, "songbook")} couldn't be made")
+        if (stats.failed.isNotEmpty()) throw CommandExit(1, "")
     }
 
     // --- what they share ---------------------------------------------------------------------------------------------
 
     /** commands/songbook._render: the songbook's files made again ([only]: that one, else every one; the files of
-     * songbooks gone go too). While the phone makes no songbook pages, none. Not [quiet]: the songs it names missing,
-     * and the files it wrote. A songbook that couldn't be made exits 1 (unless [quiet]), its change made. */
+     * songbooks gone go too). While the phone makes no songbook pages, none. A songbook that couldn't be made is
+     * said as render_songbooks logs it (a `warning:` line), quiet or not. Not [quiet]: the songs it names missing,
+     * and the files it wrote; then a songbook that couldn't be made exits 1, its change made, with no error line
+     * (typer.Exit(1)). */
     private suspend fun render(only: String?, context: JobContext, quiet: Boolean = false): SongbookStats {
         val songbooks = parts.songbooks
         if (songbooks === SongbookPages.NONE) return SongbookStats()
         val stats = parts.database.write { db -> songbooks.render(db, only?.let(::setOf)) }
         stats.error?.let { throw CommandExit(2, it) }
+        stats.fontError?.let { context.say("warning: $it") }
+        for (name in stats.failed) context.say("warning: songbook $name: its page couldn't be made")
         if (!quiet && only != null) {
             val said = parts.database.read { db ->
                 val book = Songbooks.find(Songbooks.all(db), only) ?: return@read emptyList()
-                val missing = SongbookEntries.entries(db, parts.store.libraryDir, readOverrides(db), book)
-                    .filter { it.missing == MISSING_SHEET }
+                // a read: the keys as the change's write left them
+                val missing = SongbookEntries.entries(db, parts.store.libraryDir, readOverrides(db), book,
+                                                      rekey = false, mirror = mirror())
+                    .filter { it.missing == SongbookEntries.MISSING_SHEET }
                     .map { "${it.song?.display ?: it.text} has no sheet yet: it is named missing until it has one" }
                 val where = File(File(parts.store.libraryDir, Songbooks.FOLDER), SafeName.safeName(book.name))
                 val files = FILES.filter { Files.isRegularFile(File(where, it).toPath(), LinkOption.NOFOLLOW_LINKS) }
@@ -216,9 +245,7 @@ class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
             said.forEach(context::say)
             if (stats.failed.isNotEmpty()) context.say("Some of its files couldn't be made: the warning above says why.")
         }
-        if (stats.failed.isNotEmpty() && !quiet) {
-            throw CommandExit(1, "The songbook ${stats.failed.joinToString(", ") { "\"$it\"" }} couldn't be made")
-        }
+        if (stats.failed.isNotEmpty() && !quiet) throw CommandExit(1, "")
         return stats
     }
 
@@ -290,10 +317,12 @@ class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
         for ((text, f) in texts.zip(found)) if (!f.exact) context.say("Took ${f.song.display} for \"$text\"")
     }
 
-    /** commands/songbook._played: the songbook's song [entry] as its files play it with [setting]. */
+    /** commands/songbook._played: the songbook's song [entry] as its files play it with [setting]; inside [change]'s
+     * write, which re-keyed the library first. */
     private fun played(db: Db, overrides: Overrides, book: Songbook, entry: String, setting: Setting?): Entry =
         SongbookEntries.entries(db, parts.store.libraryDir, overrides,
-                                Songbook(book.name, listOf(SongbookSong(entry, setting)))).single()
+                                Songbook(book.name, listOf(SongbookSong(entry, setting))), rekey = false,
+                                mirror = mirror()).single()
 
     /** songbook.check_setting's problem: version.setting_problem of a setting's parts. */
     private fun problem(setting: Setting): String? =
@@ -317,9 +346,6 @@ class SongbookRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
 
         /** songbook.SEARCH_MARGIN: a search finds a song when no other one scores within this of it. */
         private const val SEARCH_MARGIN = 5
-
-        /** songbook.MISSING_SHEET. */
-        private const val MISSING_SHEET = "no sheet yet"
 
         /** commands/songbook._files' order: the songbook's files a folder may hold. */
         private val FILES = listOf("songbook.pdf", "songbook (Traditional).pdf", "songbook.html", "songbook.cho")

@@ -1931,21 +1931,32 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes):
   - core.songbooks' `Songbooks`: songbook.py's names, entries and writers over phone_songbooks
     (vectors/songbook/writers*.jsonl);
+  - server/songbooks/`SongbookEntries` (songbook.py's entries, where each plays, `songs_to_get`, `with_capo`,
+    `on_instrument`), `SongbookPagesImpl` (render_songbooks: each songbook's songbook.html alone, kv
+    `songbook:<folder>`, no PDF nor .cho) and server/page/`SongbookSection` (the Songbooks tab's data, the page's and
+    `/jobs.json`'s: PageRoutes puts it in place of the mirror's); a song whose pages are the computer's plays from the
+    mirror's .cho of it (`SongbookEntries.sheetOf`); vectors/songbook/entries.jsonl and tab.jsonl;
   - the Songbooks tab's forms, server/routes/SongbookRoutes.kt: each `/songbook/*` form queued as its `caracole
     songbook` command under web/songbooks.py's key (`songbook\u001f` and the command's words; a setting's, its songbook
     and song first; Get the missing songs' render, the last lookup it follows), refused in songbook_routes.py's words
     before anything is queued (a mirror's card, a negative id: "isn't in the library any more");
-    - Get the missing songs: one lookup a song (`get --no-songbooks`, SongbookEntries.songsToGet) with room left for
-      the songbook's `songbook render` after them;
+    - Get the missing songs: one lookup a song (`get --no-songbooks`, SongbookEntries.songsToGet: none of a song whose
+      sheet the phone or the mirror keeps) with room left for the songbook's `songbook render` after them;
     - Add a song: a song of the library's add alone, else its lookup (LookupForms.lookupRequest, whose `caracole get`
       adds it) and the add, `JobQueue.submitAll`, both or neither;
     - vectors/songbook/routes.jsonl (tests/test_conformance_songbook_routes.py, SongbookRoutesReplay): each form's
-      answer and the queue's jobs, scenario by scenario;
+      answer, its jobs' views, and the queue's jobs, scenario by scenario;
   - the songbook runner, server/songbooks/SongbookRunner.kt: commands/songbook.py's make, add, remove, move, set,
-    rename, delete and render through Songbooks in one write, its words and exit statuses, a song found as the command
-    finds one (its "Artist - Title", else a search one song answers well), then the songbook made again through
-    `PhoneParts.songbooks` (nothing, and nothing said of it, while that is `SongbookPages.NONE`);
-  - a songbook's entries, its settings (`set`'s runner) and its page (songbook-entries): not built yet.
+    rename, delete and render through Songbooks in one write, a song found as the command finds one (its "Artist -
+    Title", else a search one song answers well), then the songbook made again through `PhoneParts.songbooks`
+    (SongbookPagesImpl), and what `_render` says of it (the songs it names missing, the files it wrote);
+    - its lines and exit statuses are the command's: vectors/songbook/routes_runner.jsonl (commands/songbook.py through
+      CliRunner over the tab's library, render_songbooks making nothing) and the songbooks after;
+    - a message of several lines is its `error:` line, then the others; a songbook whose page can't be made is a
+      `warning:` line and exit 1 with no `error:` line (typer.Exit(1): `CommandExit` with no words, which the queue
+      writes none for), so the Requests tab says "Making the songbook failed." as caracole serve's does;
+  - area songbook-tab (SongbookTabReplay, the routes' replays with it); SongbooksOnDeviceTest drives the tab in the
+    WebView (Select's Make songbook, a song's chip, the songbook's Phone page).
 - A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
 - Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
   and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.

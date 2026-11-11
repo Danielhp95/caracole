@@ -402,8 +402,14 @@ saying how it goes ("Making the songbook…", then "Made"); a form that can't be
 song that isn't there, a song of the computer the phone hasn't got) is refused at once, in caracole serve's words, and
 queues nothing. The songbooks are the phone's (`phone_songbooks`), which a sync gives the computer.
 
-Not built yet: a song's chip (where a songbook plays it), **Get the missing songs**, and the songbook's own page on the
-phone (songbook-entries).
+- **A song's chip** sets where the songbook plays it, as on the computer: its key, mode, capo and instrument, or **Its
+  own version**; a key or a mode alone keeps the capo it plays at now, and another instrument the pitch it plays at.
+- **Get the missing songs** looks up each song of the songbook the phone has no sheet of (one a sync brought plays from
+  the computer's sheet, and is never asked for), as many as the queue has room for, then makes the songbook again; a
+  set list's **Get it**, that song alone.
+- **Phone page**: the phone makes each songbook's page itself (`_songbooks/<name>/songbook.html`), from the sheets it
+  plays, after every change; the PDF and the ChordPro file are the computer's (chordpro), so the phone links neither.
+  A page that can't be made fails its request ("Making the songbook failed."), the change itself made.
 
 ### Export PDF
 

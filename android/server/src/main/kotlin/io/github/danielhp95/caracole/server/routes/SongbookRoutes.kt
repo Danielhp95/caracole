@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.songbooks.Setting
 import io.github.danielhp95.caracole.core.songbooks.Songbook
 import io.github.danielhp95.caracole.core.songbooks.SongbookError
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
+import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.http.PostAnswer
 import io.github.danielhp95.caracole.server.http.Refused
@@ -62,14 +63,17 @@ import java.time.Instant
  * songbook's own entry (`song`), so a song gone from the library can be moved or taken out too.
  *
  * Get the missing songs queues one lookup a song the library has without a sheet yet, in the songbook's order
- * (SongbookEntries.songsToGet), as many as leave room for the songbook's render after them, then the render; Add a
- * song adds a song of the library at once, and looks a song new to it up first ([LookupForms.lookupRequest], whose
- * `caracole get` adds it: the phone writes no wanted.txt), its lookup and the add queued together
- * (JobQueue.submitAll). To the page's script each answers the songbook job's view (App.queued), with the lookups'
- * views (`jobs`) and how many songs wait for another tap (`left`); to a form, its line in the Requests tab.
- * vectors/songbook/routes.jsonl holds every form to caracole serve's answers (SongbookRoutesReplay).
+ * (SongbookEntries.songsToGet: a song whose pages are the computer's has the [mirror]'s sheet, as the Songbooks tab
+ * shows it, so none is asked of a site for it), as many as leave room for the songbook's render after them, then the
+ * render; Add a song adds a song of the library at once, and looks a song new to it up first
+ * ([LookupForms.lookupRequest], whose `caracole get` adds it: the phone writes no wanted.txt), its lookup and the add
+ * queued together (JobQueue.submitAll). To the page's script each answers the songbook job's view (App.queued), with
+ * the lookups' views (`jobs`) and how many songs wait for another tap (`left`); to a form, its line in the Requests
+ * tab. vectors/songbook/routes.jsonl holds every form to caracole serve's answers, the views too
+ * (SongbookRoutesReplay).
  */
-class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = Instant::now) : RouteModule {
+class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = Instant::now,
+                     private val mirror: () -> Mirror? = { ExportRoutes.mirrorOf(parts.cards) }) : RouteModule {
     override val routes: List<Route> = CHANGES.map { (action, doc) ->
         Route("POST", "/songbook/$action", doc, post = PostAnswer { _, form -> change(action, form) })
     } + listOf(
@@ -172,12 +176,14 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
 
     /** songbooks.missing_songs: the songbook a Get the missing songs form names, and the songs of it a lookup could
      * get a sheet for now, in its order (SongbookEntries.songsToGet; with `song`, that one alone); Refused when there
-     * is no such songbook, or none of its songs to get. */
+     * is no such songbook, or none of its songs to get. A read: the songs' keys as the writes left them, as the tab's
+     * data reads them (SongbookSection). */
     private fun missingSongs(db: Db, form: Map<String, String>, overrides: Overrides): Pair<String, List<SongRow>> {
         val (asked, books) = named(form, db)
         val book = book(books, asked)
         var songs = SongbookEntries.songsToGet(
-            SongbookEntries.entries(db, parts.store.libraryDir, overrides, book), overrides)
+            SongbookEntries.entries(db, parts.store.libraryDir, overrides, book, rekey = false, mirror = mirror()),
+            overrides)
         val one = Py.strip(form["song"].orEmpty())
         if (one.isNotEmpty()) {  // a set list's Get it: that song alone
             val id = if (asciiDigits(one)) BigInteger(one) else null

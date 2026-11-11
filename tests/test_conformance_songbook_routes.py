@@ -21,7 +21,9 @@ database and library folder.
   ``out``, one answer a form: a refusal, ``{status, title, message, wanted}``, or what was queued, ``{status,
   location, job, jobs, left, wanted}``: the answer's status and ``Location`` (the songbook job's line in the Requests
   tab), the id of the songbook's job, the ids of the lookups it queued first (Get the missing songs' and Add a song's
-  ``jobs``, in order) and how many songs wait for another tap (Get the missing songs' ``left``, else null).
+  ``jobs``, in order) and how many songs wait for another tap (Get the missing songs' ``left``, else null), and
+  ``views``, the songbook job's view and its lookups', as the answer gives them to the page's script (``job``, then
+  ``jobs``: jobs_routes.view, the queue never started, so each waits).
   ``wanted``: the form named a song new to the library, so caracole serve wrote wanted.txt
   (``library_routes.wanted_line``), which its lookup's ``note`` and a full queue's refusal tell of; the phone writes no
   wanted.txt (its lookup's ``caracole get`` adds the song), so its note says nothing then, and its queue-full words
@@ -29,12 +31,29 @@ database and library folder.
   title, key, steps: [[label, [args]]], fetching, note, display, together}``, ``wanted`` on a lookup of a song new to
   the library.
 
+**vectors/songbook/routes_runner.jsonl**: what each ``caracole songbook`` command those forms queue says and does
+(commands/songbook.py through typer's CliRunner, its command line as SongbookRoutes queues it), for the phone's
+``SongbookRunner`` to say and do the same, over test_conformance_songbook_tab.py's library
+(``songbook/fixtures/entries-library.jsonl``: sheets in keys major and minor, with a capo, in Chinese, with no key,
+songs with none, songbooks with settings of every kind) and its overrides (``overrides_json``), with
+``songbook.render_songbooks`` making nothing and the library pages written by none (``write_pages``): the files the
+fixture holds are what the command says it wrote. A header, then:
+
+- ``{"fn": "overrides", "out": ...}``: the overrides every command reads, as entries.jsonl's first record writes them;
+- a record a case, ``{"fn": "songbook_runner", "case", "commands": [{"args", "lines", "code"}, ...], "songbooks"}``:
+  its commands run in turn over the fixture's songbooks.toml as it is, ``args`` each command line after
+  ``caracole``, ``lines`` what it wrote (stdout and stderr as they came, its ``error:`` line and the lines after it of
+  a message of several; the library folder's path written ``{library}``), ``code`` its exit code; ``songbooks`` every
+  songbook once the last is over, ``peer_sync.songbook_value``'s. typer's own usage errors (a missing argument, an
+  option that isn't one, a value out of range) are not held: typer draws them in a box the phone words its own way.
+
 Regenerate with ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_songbook_routes.py``.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -48,6 +67,7 @@ from caracole.web.pages import Refused
 
 MADE_BY = "tests/test_conformance_songbook_routes.py"
 ROUTES = VECTORS / "songbook" / "routes.jsonl"
+RUNNER = VECTORS / "songbook" / "routes_runner.jsonl"
 STAMP = "2026-11-03T10:00:00Z"
 SLUGGED = "https://tabs.ultimate-guitar.com/tab/{}-chords-{}"
 
@@ -214,7 +234,8 @@ def scenario(cfg, case: str, asked: list[tuple[str, list[tuple[str, str]]]], *, 
                 wanted_jobs |= {job.id for job in app.queue.snapshot() if job.id not in ids and job.looks_up}
             location = next((v for k, v in response.headers if k == "Location"), None)
             out.append({"status": response.status, "location": location, "job": data["job"]["id"], "jobs": lookups,
-                        "left": data.get("left"), "wanted": wanted})
+                        "left": data.get("left"), "wanted": wanted,
+                        "views": [data["job"], *data.get("jobs", [])]})
     finally:
         if before:
             cfg.wanted_file.write_text(before, encoding="utf-8")
@@ -426,6 +447,160 @@ def scenarios(cfg, songs) -> list[dict[str, Any]]:
     return out
 
 
+# --- the runner -----------------------------------------------------------------------------------------------------
+
+# Each case's commands, each its words after ``caracole songbook`` as SongbookRoutes queues them (the names after
+# "--"), run in turn over the fixture's songbooks (test_conformance_songbook_tab.SONGBOOKS: Campfire, Settings,
+# Road trip #1, Empty).
+RUNNER_CASES: tuple[tuple[str, tuple[tuple[str, ...], ...]], ...] = (
+    # make
+    ("make: two songs", (("make", "--", "Beach", "Oasis - Wonderwall", "Soda Stereo - De Música Ligera"),)),
+    ("make: a song named twice is in it once", (("make", "--", "Beach", "Oasis - Wonderwall", "oasis - WONDERWALL"),)),
+    ("make: songs found by a search", (("make", "--", "Beach", "wonderwall", "ban ma ban ma"),)),
+    ("make: a song in Traditional characters", (("make", "--", "篝火", "宋冬野 - 斑馬，斑馬"),)),
+    ("make: songs the library hasn't got, with what they may mean",
+     (("make", "--", "Beach", "Nobody - Nothing", "Oasis", "zzzz qqqq"),)),
+    ("make: a song typed with a typo", (("make", "--", "Beach", "Oasis - Wonderwal"),)),
+    ("make: a name another songbook has", (("make", "--", "  CAMPFIRE ", "Oasis - Wonderwall"),)),
+    ("make: a hidden name", (("make", "--", ".Beach", "Oasis - Wonderwall"),)),
+    ("make: then add to it", (("make", "--", "Beach", "Muse - Hysteria"),
+                              ("add", "--", "beach", "Radiohead - Creep", "Muse - Hysteria"))),
+    # add
+    ("add: songs, one in it already", (("add", "--", "campfire", "Earth - Wind - Fire - September",
+                                        "Oasis - Wonderwall"),)),
+    ("add: to a songbook of none", (("add", "--", "Empty", "AC/DC - T.N.T. (Live)"),)),
+    ("add: to a songbook that isn't there", (("add", "--", "  Pic   nic ", "Oasis - Wonderwall"),)),
+    ("add: a song the library hasn't got", (("add", "--", "Campfire", "Fito Páez - Mariposa Tecknicolor"),)),
+    ("add: a song found by a search", (("add", "--", "Road trip #1", "hysteria"),)),
+    # remove
+    ("remove: as the songbook writes it", (("remove", "--", "Campfire", "oasis - WONDERWALL"),)),
+    ("remove: a song gone from the library", (("remove", "--", "Campfire", "Nobody - Nothing"),)),
+    ("remove: one in it, one not", (("remove", "--", "Campfire", "Muse - Hysteria",
+                                     "Earth - Wind - Fire - September"),)),
+    ("remove: none in it", (("remove", "--", "Campfire", "Earth - Wind - Fire - September"),)),
+    ("remove: a song found by a search", (("remove", "--", "Campfire", "wonderwall"),)),
+    ("remove: Traditional for Simplified", (("remove", "--", "Settings", "宋冬野 - 斑馬，斑馬"),)),
+    ("remove: from a songbook that isn't there", (("remove", "--", "Picnic", "Oasis - Wonderwall"),)),
+    # move
+    ("move: to the first place", (("move", "--", "Campfire", "Muse - Hysteria", "1"),)),
+    ("move: past the end", (("move", "--", "Campfire", "Muse - Hysteria", "100000"),)),
+    ("move: a song the songbook hasn't got", (("move", "--", "Campfire", "Earth - Wind - Fire - September", "1"),)),
+    ("move: an artist with a dash in the name", (("move", "--", "Road trip #1", "earth - wind - fire - september",
+                                                  "3"),)),
+    ("move: a song gone from the library", (("move", "--", "Campfire", "Nobody - Nothing", "1"),)),
+    # set: a song with no setting, with a sheet
+    ("set: a key", (("set", "--key", "g", "--", "Campfire", "Soda Stereo - De Música Ligera"),)),
+    ("set: a key with a sharp", (("set", "--key", "f#", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: a mode alone", (("set", "--mode", "Dorian", "--", "Campfire", "Soda Stereo - De Música Ligera"),)),
+    ("set: a key and a mode", (("set", "--key", "D", "--mode", "dorian", "--", "Campfire",
+                                "Eagles - Hotel California (Live)"),)),
+    ("set: a capo alone", (("set", "--capo", "3", "--", "Campfire", "Soda Stereo - De Música Ligera"),)),
+    ("set: no capo", (("set", "--capo", "0", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: a key with a capo", (("set", "--key", "A", "--capo", "2", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: an instrument alone", (("set", "--instrument", "Piano", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: an instrument and a key", (("set", "--instrument", "piano", "--key", "C", "--", "Campfire",
+                                       "Oasis - Wonderwall"),)),
+    ("set: an instrument and a capo", (("set", "--instrument", "ukulele", "--capo", "1", "--", "Campfire",
+                                        "Oasis - Wonderwall"),)),
+    ("set: the harmonica", (("set", "--instrument", "harmonica", "--", "Campfire", "Soda Stereo - De Música Ligera"),)),
+    ("set: a song with no sheet", (("set", "--key", "G", "--", "Campfire", "Muse - Hysteria"),)),
+    ("set: a sheet with no key", (("set", "--key", "G", "--", "Settings", "Nobody - Keyless"),)),
+    ("set: a Chinese song", (("set", "--capo", "1", "--", "Campfire", "宋冬野 - 斑马，斑马"),)),
+    ("set: an auto sheet", (("set", "--key", "D", "--", "Campfire", "Placeholder Band - Synthetic Song"),)),
+    # set: a song with a setting
+    ("set: a key over a key", (("set", "--key", "A", "--", "Settings", "Soda Stereo - De Música Ligera"),)),
+    ("set: a capo over a mode", (("set", "--capo", "2", "--", "Settings", "Oasis - Wonderwall"),)),
+    ("set: another instrument over a key and a mode", (("set", "--instrument", "piano", "--", "Settings",
+                                                       "Eagles - Hotel California"),)),
+    ("set: back to the guitar from the piano", (("set", "--instrument", "guitar", "--", "Settings",
+                                                 "Earth - Wind - Fire - September"),)),
+    ("set: the guitar from the piano, a capo given", (("set", "--instrument", "guitar", "--capo", "3", "--",
+                                                       "Settings", "Earth - Wind - Fire - September"),)),
+    ("set: the guitar from the piano, a key given", (("set", "--instrument", "guitar", "--key", "E", "--",
+                                                      "Settings", "Earth - Wind - Fire - September"),)),
+    ("set: the ukulele from the baritone", (("set", "--instrument", "ukulele", "--", "Road trip #1",
+                                             "AC/DC - T.N.T."),)),
+    ("set: a key on the harmonica", (("set", "--key", "G", "--", "Settings", "Placeholder Band - Synthetic Song"),)),
+    ("set: a mode over a key and no capo", (("set", "--mode", "mixolydian", "--", "Settings", "Muse - Hysteria"),)),
+    ("set: its setting cleared", (("set", "--clear", "--", "Settings", "Eagles - Hotel California"),)),
+    ("set: a song gone from the library", (("set", "--key", "D", "--", "Settings", "Nobody - Nothing"),)),
+    ("set: a key, then an instrument at the pitch it plays at",
+     (("set", "--key", "G", "--capo", "3", "--", "Campfire", "Soda Stereo - De Música Ligera"),
+      ("set", "--instrument", "piano", "--", "Campfire", "Soda Stereo - De Música Ligera"),
+      ("set", "--instrument", "baritone", "--", "Campfire", "Soda Stereo - De Música Ligera"))),
+    # set: refused
+    ("set: nothing to set", (("set", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: both a part and clear", (("set", "--clear", "--key", "G", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: a key that isn't one", (("set", "--key", "H", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: a key whose first letter grows made upper case", (("set", "--key", "ßb", "--", "Campfire",
+                                                              "Oasis - Wonderwall"),)),
+    ("set: a mode that isn't one", (("set", "--mode", "funky", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: an instrument that isn't one", (("set", "--instrument", "banjo", "--", "Campfire", "Oasis - Wonderwall"),)),
+    ("set: a song the songbook hasn't got", (("set", "--key", "G", "--", "Campfire",
+                                              "Earth - Wind - Fire - September"),)),
+    ("set: in a songbook that isn't there", (("set", "--key", "G", "--", "Picnic", "Oasis - Wonderwall"),)),
+    # rename
+    ("rename: to a new name", (("rename", "--", "Campfire", "  Fogata  "),)),
+    ("rename: in another case", (("rename", "--", "campfire", "CAMPFIRE"),)),
+    ("rename: to a name another has", (("rename", "--", "Campfire", "road trip #1"),)),
+    ("rename: to a hidden name", (("rename", "--", "Campfire", ".x"),)),
+    ("rename: a songbook that isn't there", (("rename", "--", "Picnic", "Lunch"),)),
+    # delete
+    ("delete: a songbook", (("delete", "--", " campfire "),)),
+    ("delete: a songbook of none", (("delete", "--", "Empty"),)),
+    ("delete: a songbook that isn't there", (("delete", "--", "Picnic"),)),
+    # render
+    ("render: every songbook", (("render",),)),
+    ("render: one", (("render", "--", "campfire"),)),
+    ("render: one that isn't there", (("render", "--", "Picnic"),)),
+)
+
+
+def runner_records(tmp: Path) -> list[dict[str, Any]]:
+    """RUNNER_CASES' commands through caracole's CLI, as the module's docstring says."""
+    from test_conformance_songbook_tab import _Library, _overrides, overrides_json
+    from typer.testing import CliRunner
+
+    from caracole.cli import build_app
+    from caracole.peer_sync import songbook_value
+    from caracole.songbook import SongbookStats, load_songbooks, songbooks_file
+
+    (tmp / "library").mkdir()
+    lib = _Library(tmp / "library")
+    try:
+        cfg = lib.cfg
+        toml = tmp / "caracole.toml"
+        toml.write_text(f"library_dir = {json.dumps(str(cfg.library_dir))}\n"
+                        f"state_dir = {json.dumps(str(cfg.state_dir))}\n"
+                        f"cache_dir = {json.dumps(str(cfg.cache_dir))}\n", encoding="utf-8")
+        path = songbooks_file(cfg.library_dir)
+        original = path.read_bytes()
+        library = str(cfg.library_dir)
+        env = {name: None for name in ("CARACOLE_CONFIG", "JOURNAL_STREAM", "INVOCATION_ID", "NO_COLOR",
+                                       "FORCE_COLOR", "CARACOLE_CJK_FONT")}
+        out: list[dict[str, Any]] = [{"fn": "overrides", "out": overrides_json()}]
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("caracole.songbook.render_songbooks", lambda *a, **k: SongbookStats())
+            patch.setattr("caracole.commands.songbook.write_pages", lambda *a, **k: None)
+            patch.setattr("caracole.commands.songbook.load_ovr", lambda cfg: _overrides())
+            for case, commands in RUNNER_CASES:
+                path.write_bytes(original)
+                said = []
+                for args in commands:
+                    result = CliRunner().invoke(build_app(), ["--config", str(toml), "songbook", *args], env=env)
+                    assert result.exception is None or isinstance(result.exception, SystemExit), (
+                        case, args, result.output)
+                    lines = result.output.replace(library, "{library}").splitlines()
+                    assert not any(line.startswith(("Usage:", "Try ", "╭")) for line in lines), (case, lines)
+                    said.append({"args": ["songbook", *args], "lines": lines, "code": result.exit_code})
+                out.append({"fn": "songbook_runner", "case": case, "commands": said,
+                            "songbooks": [songbook_value(b) for b in load_songbooks(path)]})
+        path.write_bytes(original)
+        return out
+    finally:
+        lib.conn.close()
+
+
 # --- the vectors ---------------------------------------------------------------------------------------------------
 
 
@@ -476,6 +651,35 @@ def test_the_cases_meet_what_they_name(made):
     sets = {r["case"]: r["out"][0] for r in made[1:] if r["case"].startswith("set: ")}
     assert sets["set: a key whose first letter grows when made upper case"]["status"] == 400
     assert "job" in sets["set: its own version, on"]
+
+
+@pytest.fixture(scope="module")
+def ran(tmp_path_factory) -> list[dict[str, Any]]:
+    return runner_records(tmp_path_factory.mktemp("songbook_runner"))
+
+
+def test_the_runner_vectors_are_caracole_songbooks(ran):
+    check(RUNNER, jsonl(ran, corpus="songbook/routes_runner", made_by=MADE_BY))
+
+
+def test_the_runner_cases_meet_what_they_name(ran):
+    out = {r["case"]: r for r in ran[1:]}
+    assert len(out) == len(RUNNER_CASES)
+    codes = {r["commands"][-1]["code"] for r in ran[1:]}
+    assert codes == {0, 1, 2}, codes
+    unknown = out["make: songs the library hasn't got, with what they may mean"]["commands"][0]
+    assert unknown["code"] == 1 and unknown["lines"][0].startswith('error: No song "Nobody - Nothing"')
+    assert len(unknown["lines"]) == 4 and not unknown["lines"][1].startswith("error:"), unknown
+    assert "did you mean" in unknown["lines"][1], unknown
+    made = out["make: two songs"]["commands"][0]["lines"]
+    assert made[0] == 'Made the songbook "Beach": 2 songs.' and made[-1].startswith("Nothing written in {library}/")
+    assert out["render: one"]["commands"][0]["lines"][-1] == "0 rendered, 0 up to date, 0 failed"
+    wrote = out["add: songs, one in it already"]["commands"][0]["lines"][-1]
+    assert wrote == "Wrote {library}/_songbooks/Campfire: songbook.pdf, songbook.html, songbook.cho", wrote
+    steps = out["set: a key, then an instrument at the pitch it plays at"]
+    assert [c["code"] for c in steps["commands"]] == [0, 0, 0]
+    sets = [r for r in ran[1:] if r["case"].startswith("set: ") and r["commands"][-1]["code"] == 0]
+    assert any("In the songbook: " in line for r in sets for c in r["commands"] for line in c["lines"])
 
 
 def test_the_vectors_are_the_same_on_another_run(made, tmp_path_factory):

@@ -4,10 +4,13 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
+import io.github.danielhp95.caracole.core.lookup.SongbookStats
+import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -16,15 +19,19 @@ import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
+import io.github.danielhp95.caracole.server.jobs.CommandExit
+import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.routes.SongbookRoutes
+import io.github.danielhp95.caracole.server.songbooks.SongbookRunner
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.WebJson
 import io.github.danielhp95.caracole.server.testing.header
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -43,13 +50,16 @@ import java.nio.file.Files
  * vectors/songbook/routes.jsonl's scenarios, each form posted in turn to the phone's SongbookRoutes as caracole serve's
  * were, over its library (the vector's fixture, in a database and a library folder of their own), to one fresh queue
  * of the record's limit that runs nothing ([NOWHERE]): each answer, a refusal `{status, title, message}` or the jobs it
- * answers with (the songbook job's id, the lookups' it queued first, and what is left), and the queue's jobs after
- * (title, key, commands, fetching, note, display, together). Where caracole serve wrote wanted.txt (`wanted`), the
- * phone writes none: its lookup's note says nothing then, and a full queue says nothing was added
- * ([LibraryRoutes.FULL]). [skip]: the scenarios to leave aside, by a path one of their forms posts.
+ * answers with (the songbook job's id, the lookups' it queued first, what is left, and each of those jobs' view as the
+ * page's script reads it), and the queue's jobs after (title, key, commands, fetching, note, display, together).
+ * Where caracole serve wrote wanted.txt (`wanted`), the phone writes none: its lookup's note says nothing then, and a
+ * full queue says nothing was added ([LibraryRoutes.FULL]). [skip]: the scenarios to leave aside, by a path one of
+ * their forms posts. [runner]: the commands those forms queue, run (routes_runner.jsonl). Both are of area
+ * songbook-tab (SongbookTabReplay), and SongbookRoutesTest's on the JVM.
  */
 object SongbookRoutesReplay {
     const val ROUTES = "songbook/routes.jsonl"
+    const val RUNNER = "songbook/routes_runner.jsonl"
 
     /** A scope that runs nothing: a job queued in it waits for ever, as the generator's queue was never started. */
     private val NOWHERE = CoroutineScope(Job().apply { cancel() })
@@ -135,6 +145,7 @@ object SongbookRoutesReplay {
             "job" to (data["job"] as? JsonObject)?.get("id").orNull(),
             "jobs" to JsonArray((data["jobs"] as? JsonArray).orEmpty().map { (it as JsonObject).getValue("id") }),
             "left" to data["left"].orNull(),
+            "views" to JsonArray(listOfNotNull(data["job"]) + (data["jobs"] as? JsonArray).orEmpty()),
         ))
         val expected = JsonObject(out - "wanted")
         WebJson.difference(expected, phone)?.let { misses.check(false) { "$said: its answer at $it: $phone" } }
@@ -143,12 +154,86 @@ object SongbookRoutesReplay {
 
     private fun JsonElement?.orNull(): JsonElement = this ?: JsonNull
 
+    // --- the runner --------------------------------------------------------------------------------------------------
+
+    /** The songbooks' pages of the generator's: render_songbooks making nothing, yet no [SongbookPages.NONE], so the
+     * runner says what `_render` says once the songbooks are made. */
+    private val NOTHING_MADE = SongbookPages { _, _ -> SongbookStats() }
+
+    /**
+     * vectors/songbook/routes_runner.jsonl: each case's `caracole songbook` commands run in turn by the phone's
+     * SongbookRunner, over the songbook tab's library (SongbookTabReplay.LIBRARY, loaded afresh for each case) and the
+     * record's overrides, the songbooks' pages making nothing ([NOTHING_MADE]): each command's lines as the queue
+     * writes them (what it said, then its `error:` line, the library folder's path written `{library}`) and its exit
+     * code, and every songbook after the last (Songbooks.value), as commands/songbook.py's.
+     */
+    fun runner(misses: Misses) {
+        val records = Corpus.lines(RUNNER).filter { it["header"] != JsonPrimitive(true) }
+        val o = records.first { it["fn"]?.jsonPrimitive?.content == "overrides" }.getValue("out").jsonObject
+        val overrides = Overrides(
+            version = o.getValue("version").jsonObject.mapValues { it.value.jsonPrimitive.content },
+            transpose = o.getValue("transpose").jsonObject.mapValues { it.value.jsonPrimitive.int },
+            ignore = o.getValue("ignore").jsonArray.mapTo(HashSet()) { it.jsonPrimitive.content },
+        )
+        for (r in records) {
+            if (r["fn"]?.jsonPrimitive?.content != "songbook_runner") continue
+            val dir = Files.createTempDirectory("songbook-runner").toFile()
+            try {
+                TestDb.fresh(dir).use { database ->
+                    val library = File(dir, "library").apply { mkdirs() }
+                    database.writeBlocking { db -> Fixtures.load(db, SongbookTabReplay.LIBRARY, library) }
+                    val parts = parts(database, dir, JobQueue(NOWHERE), NOTHING_MADE)
+                    runCase(misses, parts, SongbookRunner(parts, readOverrides = { overrides }), library, r)
+                }
+            } finally {
+                dir.deleteRecursively()
+            }
+        }
+    }
+
+    private fun runCase(misses: Misses, parts: PhoneParts, runner: SongbookRunner, library: File, r: JsonObject) {
+        val case = r.getValue("case").jsonPrimitive.content
+        for ((n, command) in r.getValue("commands").jsonArray.map { it.jsonObject }.withIndex()) {
+            val args = command.getValue("args").jsonArray.map { it.jsonPrimitive.content }
+            val heard = Heard()
+            val code = try {
+                runBlocking { runner.run(args, heard) }
+                0
+            } catch (e: CommandExit) {
+                if (!e.message.isNullOrEmpty()) heard.say("error: ${e.message!!.lines().first()}")
+                e.code
+            }
+            val phone = JsonObject(linkedMapOf(
+                "lines" to JsonArray(heard.lines.map { JsonPrimitive(it.replace(library.path, "{library}")) }),
+                "code" to JsonPrimitive(code),
+            ))
+            val expected = JsonObject(linkedMapOf("lines" to command.getValue("lines"), "code" to command.getValue("code")))
+            WebJson.difference(expected, phone)?.let {
+                misses.check(false) { "$case, command ${n + 1} (${args.joinToString(" ")}) at $it: $phone" }
+            } ?: misses.check(true) { "" }
+        }
+        val books = JsonArray(parts.database.read { db -> Songbooks.all(db) }.map(Songbooks::value))
+        WebJson.difference(r.getValue("songbooks"), books)?.let { misses.check(false) { "$case: the songbooks at $it: $books" } }
+            ?: misses.check(true) { "" }
+    }
+
+    /** What a command says, line by line, as the queue hears it. */
+    private class Heard : JobContext {
+        val lines = ArrayList<String>()
+        override fun stage(name: String, state: String, detail: String) = Unit
+        override fun say(line: String) {
+            lines += line
+        }
+        override fun outcome(value: JsonObject) = Unit
+        override val isCancelled: Boolean get() = false
+    }
+
     /** The parts of a phone over [database], as caracole serve's generator had it. */
-    private fun parts(database: Database, dir: File, queue: JobQueue): PhoneParts {
+    private fun parts(database: Database, dir: File, queue: JobQueue, songbooks: SongbookPages = SongbookPages.NONE): PhoneParts {
         val state = File(dir, "state").apply { mkdirs() }
         return PhoneParts(database, LibraryStore(File(dir, "library")), state, { PhoneConfig.DEFAULTS }, queue,
                           MirrorPageData(null),
                           { Clients(PhoneConfig.DEFAULTS, File(state, "cache"), { RefusingTransport }, Pacing.REAL) },
-                          SongPages.NONE, SongbookPages.NONE, Alerts.NONE, Pacing.REAL, searchesLacuerda = false)
+                          SongPages.NONE, songbooks, Alerts.NONE, Pacing.REAL, searchesLacuerda = false)
     }
 }
