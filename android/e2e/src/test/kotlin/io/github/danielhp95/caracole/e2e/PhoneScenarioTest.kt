@@ -16,6 +16,8 @@ import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.viewer.progressions.Progressions
+import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -34,6 +36,7 @@ import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URI
+import java.security.MessageDigest
 import java.time.Instant
 import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
 import kotlin.test.assertEquals
@@ -73,9 +76,14 @@ import kotlin.test.fail
  *    a search row of a song new to both sides keeps its sheet, LRCLIB's timed lyrics and its card's sheet.txt,
  *    served; a song asked for with no fetch (no site asked), then Fetch now on its card, keeps its sheet, every lyrics
  *    site answering a miss; Fetch them keeps more of the first one's versions; a song at a bare tab its artist's page
- *    alone lists, asked for with Fetch now, keeps its sheet from that page, an index page noted for the computer; Get
- *    it on a song whose page redirects to one robots.txt closes keeps no sheet, the redirect never followed; Get it on
- *    one whose page answers 403 keeps none either and is never a miss, Ultimate Guitar cooling down on the phone. Each lookup asks the sites (counted from
+ *    alone lists, asked for with Fetch now, keeps its sheet from that page, an index page noted for the computer; the
+ *    pages phase's (milestone 5's check): Get it on a song whose charts sing Chinese words keeps its sheet and its other
+ *    version beside it, and on one with a harmonica tab on harptabs.com its sheet and the tab, and the phone makes
+ *    their pages itself (the lookup's pdf and pages stages: the sheets' viewers and .cho, the kept version's page, the
+ *    tab's page, info.json), each recorded at its song unit's digest and served as it wrote it, the Chinese sheet's
+ *    with each character's reading, which /api/search's progression finds by what it plays; Get it on a song whose
+ *    page redirects to one robots.txt closes keeps no sheet, the redirect never followed; Get it on one whose page
+ *    answers 403 keeps none either and is never a miss, Ultimate Guitar cooling down on the phone. Each lookup asks the sites (counted from
  *    just before it is posted), each at most its lookup_requests, every lookup together at most its lookup_per_hour,
  *    never a URL robots.txt closes, every URL one the scenario answers (`known`: no URL the computer's caracole
  *    wouldn't ask read as a miss), and no request leaves for any host but the fake server's (Requests, against the
@@ -86,8 +94,9 @@ import kotlin.test.fail
  *    conflicts, and which fields of the unit differ, are reported: §11 Q2); applied with that one taken from the
  *    computer: every stage done, the rest given, nothing left; the computer's settings taken (kv `phone:settings`,
  *    `PhoneConfig.read`); Ultimate Guitar still cooling on the phone, as nothing of either side's politeness crosses;
- *    the index pages the phone read pushed (none noted left); every mirrored page served; then the phone's units
- *    written to DIR/phone/phone-state.json again.
+ *    the index pages the phone read pushed (none noted left); every mirrored page served, and the pages the phone made
+ *    of the songs it gave still its own, served as it wrote them (tests/test_android_e2e.py's step 11 holds them to
+ *    Python's for the same inputs); then the phone's units written to DIR/phone/phone-state.json again.
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -328,6 +337,46 @@ class PhoneScenarioTest {
         assertTrue(reads.any { it.startsWith("ug:") && URI(it.removePrefix("ug:")).path == URI(rose.artistPage).path },
                    "the artist's page noted for the computer: $reads")
 
+        // The pages phase's lookups (milestone 5's check): Get it on the row of a song whose charts sing Chinese words
+        // keeps its sheet and its other version beside it, and on one with a harmonica tab on harptabs.com its sheet
+        // and the tab; the phone makes their pages itself (the lookup's pdf and pages stages, PhoneRender), each
+        // recorded at its song unit's digest now and served as it wrote it, the Chinese sheet's with its readings,
+        // and /api/search's progression finds that song by what it plays. Step 11 holds them to Python's.
+        val chinese = lookups.song("chinese")
+        val chineseRow = searchRow(phone, chinese.search!!)
+        val sung = lookUp("chinese") {
+            phone.post("/lookup", "artist" to chineseRow.text("artist"), "title" to chineseRow.text("title"),
+                       "ug" to chineseRow.text("ug"))
+        }
+        for (stage in listOf("sheet", "pdf", "ug", "pages")) assertStage(sung, stage, DONE)
+        val beside = chinese.tabs.drop(1).map { "version-${it.substringAfterLast('-')}.txt" }
+        assertEquals(beside, keptVersions(phone, chinese.found.key), "its other version kept beside its sheet")
+        val harmonica = lookups.song("harmonica")
+        val harpRow = searchRow(phone, harmonica.search!!)
+        val harped = lookUp("harmonica") {
+            phone.post("/lookup", "artist" to harpRow.text("artist"), "title" to harpRow.text("title"),
+                       "ug" to harpRow.text("ug"))
+        }
+        for (stage in listOf("sheet", "pdf", "harptabs", "pages")) assertStage(harped, stage, DONE)
+        assertTrue(harmonica.harp!! in asked.getValue("harmonica").map { it.text("url") },
+                   "its tab's page read on harptabs.com: ${asked["harmonica"]}")
+        assertTrue("harmonica-1.txt" in keptFiles(phone, harmonica.found.key), "${keptFiles(phone, harmonica.found.key)}")
+        val pages = linkedMapOf("chinese" to chinese.found, "harmonica" to harmonica.found).mapValues { (_, song) ->
+            ownPages(phone, song.key)
+        }
+        assertTrue(pages.getValue("chinese").keys.containsAll(
+            listOf("sheet.html", "sheet.cho") + beside.map { it.removeSuffix(".txt") + ".html" }), "${pages["chinese"]}")
+        assertTrue(pages.getValue("harmonica").keys.containsAll(listOf("sheet.html", "sheet.cho", "harmonica-1.html")),
+                   "${pages["harmonica"]}")
+        val sheetData = pageData(ownFile(phone, chinese.found.key, "sheet.html").readText(), "song")
+        assertTrue(sheetData["pinyin"]!!.jsonArray.any { line ->
+            line is JsonArray && line.any { it is JsonPrimitive && it.isString && it.content.isNotEmpty() }
+        }, "each character's reading in the Chinese sheet's data: ${sheetData["pinyin"]}")
+        val tabs = pageData(ownFile(phone, harmonica.found.key, "sheet.html").readText(), "song")["harmonicaTabs"]
+        assertEquals(listOf("harmonica-1.html"), tabs!!.jsonArray.map { it.jsonObject.text("page") },
+                     "the sheet's viewer links its harmonica tab's page")
+        val playing = progressionFinds(phone, chinese.found.key)
+
         // Get it on a song whose page redirects to its print view, which robots.txt closes: never followed, the song
         // matched and its page checked as the computer's caracole checks it (tests/test_fake_sites.py: a page
         // robots.txt closes is Ultimate Guitar's answer, RobotsClosed, so the song isn't left dirty).
@@ -381,7 +430,7 @@ class PhoneScenarioTest {
         assertTrue(Requests.paths.all { it == "/fetch" }, "${Requests.paths}")
         assertEquals(every.size, Requests.count, "every request the phone sent is one the fake sites counted")
 
-        val looked = listOf(getIt.found, fetchNow, rose.song, wild.found, blocked.found)
+        val looked = listOf(getIt.found, fetchNow, rose.song, chinese.found, harmonica.found, wild.found, blocked.found)
         buildJsonObject {
             put("sites", every.size)
             put("asked", JsonObject(asked.mapValues { (_, requests) ->
@@ -395,6 +444,13 @@ class PhoneScenarioTest {
                 buildJsonObject { put("artist", song.artist); put("title", song.title); put("key", song.key) }
             }))
             put("reads", JsonArray(reads.map(::JsonPrimitive)))
+            put("pages", JsonObject(mapOf("chinese" to chinese.found, "harmonica" to harmonica.found).mapValues { (role, song) ->
+                buildJsonObject {
+                    put("key", song.key)
+                    put("files", JsonObject(pages.getValue(role).mapValues { JsonPrimitive(it.value) }))
+                }
+            }))
+            put("progression", playing)
         }
     }
 
@@ -438,6 +494,13 @@ class PhoneScenarioTest {
         val gate = PhoneGate(phone.database)
         for (page in phone.mirror.manifest()!!.entries.filter { it.unit != null }) {
             assertEquals(Gate.SERVE, gate.check(page.unit!!, page.digest), page.path)
+        }
+        // The pages the phone made of the songs it gave, still its own, as it wrote them: the songs given as they
+        // were, so the computer's pages of them (the mirror's now) supersede none.
+        for ((role, made) in five["pages"]!!.jsonObject) {
+            val key = made.jsonObject.text("key")
+            assertEquals(made.jsonObject["files"]!!.jsonObject.mapValues { it.value.jsonPrimitive.content },
+                         ownPages(phone, key), "$role: the phone's own pages after the sync")
         }
         write(File(phone.home, "phone-state.json"), buildJsonObject {
             put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
@@ -652,10 +715,67 @@ class PhoneScenarioTest {
     private fun pageData(phone: ScenarioPhone): JsonObject {
         val page = phone.get("/")
         assertEquals(200, page.status, page.text.take(1000))
-        val block = Regex("""<script type="application/json" id="songs">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
-            .find(page.text) ?: fail("no data on the library page")
+        return pageData(page.text, "songs")
+    }
+
+    /** A page's JSON data block [name] (`<script type="application/json" id="NAME">`). */
+    private fun pageData(page: String, name: String): JsonObject {
+        val block = Regex("""<script type="application/json" id="$name">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
+            .find(page) ?: fail("no $name data in the page: ${page.take(500)}")
         return Json.parseToJsonElement(block.groupValues[1]).jsonObject
     }
+
+    /**
+     * The pages the phone made itself of the song of [key] (kv `render:files:<id>`, WrittenPages), by name, each
+     * one's SHA-256: each written beside the song's kept files with the bytes its record says, made at the song
+     * unit's digest now, and served as it wrote it (LibraryFiles: a link's GET of its path); its info.json written.
+     */
+    private fun ownPages(phone: ScenarioPhone, key: String): Map<String, String> {
+        val id = idOf(phone, key)
+        val folder = songFolder(phone, key)
+        val (record, digest) = phone.database.read { db ->
+            WrittenPages.record(db, id).keys.associateWith { WrittenPages.written(db, id, it)!! } to
+                Units.digestOf(db, "song/$key")
+        }
+        assertTrue(record.isNotEmpty(), "the phone made no page of $key")
+        assertTrue(File(folder, "info.json").isFile, "its info.json")
+        for ((name, written) in record) {
+            val file = File(folder, name)
+            assertTrue(file.isFile, "$key's $name, recorded, is written")
+            val bytes = file.readBytes()
+            assertEquals(sha256(bytes) to bytes.size.toLong(), written.sha256 to written.size, "$key's $name record")
+            assertEquals(digest, written.unitDigest, "$key's $name made at its unit's digest now")
+            val path = file.relativeTo(phone.libraryDir).invariantSeparatorsPath
+            val served = phone.get("/" + quotePath(path))
+            assertEquals(200, served.status, "$path: ${served.text.take(500)}")
+            assertTrue(served.bytes.contentEquals(bytes), "$path served as the phone wrote it")
+        }
+        return record.mapValues { it.value.sha256 }
+    }
+
+    /** The file [name] in the folder of the song of [key] on the phone. */
+    private fun ownFile(phone: ScenarioPhone, key: String, name: String): File = File(songFolder(phone, key), name)
+
+    /**
+     * What the song of [key] plays, as the phone recorded it rendering its sheet (kv `render:progressions:<id>`), and
+     * /api/search's answer to its first section's progression typed: the progression read (`progression`), the song
+     * one of those that play it, among the answer's songs of yours. The record, for the Python side.
+     */
+    private fun progressionFinds(phone: ScenarioPhone, key: String): JsonObject {
+        val id = idOf(phone, key)
+        val record = phone.database.read { db -> db.kvGet("${Progressions.KV}$id") }
+            ?.let { Json.parseToJsonElement(it).jsonObject } ?: fail("no progressions recorded of $key")
+        val typed = record["sections"]!!.jsonArray.first().jsonObject.text("key")
+        val found = phone.answer(phone.script("/api/search?q=" + quote(typed)))
+        val said = found["progression"] as? JsonObject ?: fail("/api/search reads no progression in \"$typed\": $found")
+        assertTrue(said.text("songs").toInt() >= 1, "$said")
+        assertTrue(found["library"]!!.jsonArray.any { it.jsonObject.text("id") == "$id" },
+                   "/api/search's progression \"$typed\" finds $key: $found")
+        return buildJsonObject { put("typed", typed); put("record", record); put("said", said) }
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private fun stateOf(unit: SyncUnit): JsonObject =
         buildJsonObject { put("label", unit.label); put("digest", unit.digest) }
