@@ -114,13 +114,18 @@ class LocalServerTest {
 
                 // The app itself told to load it: answered in the app, a 404, and no socket is opened.
                 main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(elsewhere + "page") }
+                // The library page's document gone, read in the document itself: WebView.getUrl() names the new
+                // page before its document (the app's answer, or the WebView's error page, chrome-error://) replaces
+                // the library page's, whose readyState is "complete" already, so probes put there went with it.
+                val there = "!location.href.startsWith(${JSONObject.quote("$origin/")}) && document.readyState === 'complete'"
                 waitUntil("the WebView to give up on it") {
-                    url(main).startsWith(elsewhere) && evaluate(main, "document.readyState") == "complete"
+                    url(main).startsWith(elsewhere) && evaluate(main, there) == true
                 }
                 // From that page, the app's own 404 with no policy of its own (the library page's would refuse these
                 // before the WebView ever asked the app), a fetch and an image of that origin: each answered in the
                 // app (a 404, or refused), and neither opens a socket.
-                evaluate(main, """(() => {
+                val probe = """(() => {
+                    if (!($there)) return 0;
                     window.probes = {};
                     const done = (name, how) => { window.probes[name] = how; };
                     fetch(${JSONObject.quote(elsewhere + "fetched")}).then((r) => done("fetch", "status " + r.status),
@@ -130,8 +135,11 @@ class LocalServerTest {
                     image.onerror = () => done("image", "refused");
                     image.src = ${JSONObject.quote(elsewhere + "image.png")};
                     return 1;
-                })()""")
+                })()"""
+                evaluate(main, probe)
+                // Probed again in a document that replaced the one probed (its probes gone with it).
                 waitUntil("the fetch and the image to settle") {
+                    if (evaluate(main, "window.probes === undefined") == true) evaluate(main, probe)
                     evaluate(main, "Object.keys(window.probes || {}).length") == 2
                 }
                 val probes = JSONObject(evaluate(main, "JSON.stringify(window.probes)") as String)
