@@ -80,6 +80,11 @@ and what the next step needs of it). The steps, as the plan numbers them:
    phone's but for the PDF (a viewer's footer link to it, info.json's ``render``); the computer's readers read the
    songbook, the version and the file back; and the phone's backup holds both songs, their files' bytes, the
    songbook and the version.
+15. The round's last changes, phase 11, the computer off: the first song's key set in the songbook and its own
+   version made again, then the library exported in a `.caracole` file as the phone's Settings' Export makes it. The
+   computer back: caracole serve's Import a file takes it (``imported_on_the_computer``: open, the parts, compare,
+   apply), its summary's outcome a song and a songbook taken and nothing given, and both libraries equal unit for
+   unit after (``the_file_read_back``).
 
 Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
 sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
@@ -474,6 +479,15 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     assert computer.politeness() == politeness  # nothing of the phone's politeness crossed, nor changed the computer's
     the_round_read_back(nine, made, computer, dir, tmp_path / "round")
 
+    # 15. The round's last changes, made with the computer off and exported in a file on the phone, imported on the
+    # computer through caracole serve's Import a file.
+    eleven = phone(11, url, dir)
+    with computer.serving(port) as served:
+        job = imported_on_the_computer(served, Path(eleven["file"]))
+    state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+    assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    the_file_read_back(eleven, job, computer)
+
 
 def phone_made(dir: Path, keys: list[str]) -> Pages:
     """The pages the phone made of the songs of identity keys ``keys`` and what it recorded of them, read from
@@ -700,6 +714,71 @@ def the_round_read_back(nine: dict, made: Pages, computer: Computer, dir: Path, 
         copy.close()
     print("the round:", json.dumps({k: nine[k] for k in ("play", "book", "songbook", "guitar", "backup", "asked")},
                                    ensure_ascii=False))
+
+
+def imported_on_the_computer(url: str, file: Path, timeout: float = 300) -> dict:
+    """``file`` imported by the computer's caracole serve at ``url`` as its Sync tab's Import a file sends one: the
+    form token its peer state gives (``token``), ``POST /sync/import/open``, the file in parts (``/sync/import/part``),
+    ``/sync/import/compare``, then ``/sync/apply`` of that comparison with no choice; the sync's job once it is over, as
+    /jobs.json gives it to the sheet, whose summary it makes (its ``outcome``: what was taken, given and left, and the
+    ``report``)."""
+    import time
+    from urllib.parse import urlencode
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    token = read(f"{url}/api/peer/state")["token"]
+
+    def post(path: str, body: bytes, kind: str) -> dict:
+        asked = urllib.request.Request(f"{url}{path}", data=body, method="POST", headers={
+            "content-type": kind, "accept": "application/json", "x-caracole-form-token": token})
+        with opener.open(asked, timeout=120) as answer:
+            return json.load(answer)
+
+    def form(path: str, **fields: str) -> dict:
+        return post(path, urlencode({"csrf": token, **fields}).encode(), "application/x-www-form-urlencoded")
+
+    data = file.read_bytes()
+    opened = post("/sync/import/open", json.dumps({"size": len(data), "name": file.name}).encode(), "application/json")
+    for at in range(0, len(data), opened["part"]):
+        post(f"/sync/import/part?import={opened['import']}&at={at}", data[at:at + opened["part"]],
+             "application/octet-stream")
+    compared = form("/sync/import/compare", **{"import": opened["import"]})
+    assert compared["peer"]["kind"] == "file", compared["peer"]
+    queued = form("/sync/apply", comparison=compared["comparison"], prefer="", choices="")["job"]
+    end = time.monotonic() + timeout
+    while True:  # /jobs.json, as the page's script reads it: the form token in its header
+        asked = urllib.request.Request(f"{url}/jobs.json?jobs={queued['id']}", headers={
+            "accept": "application/json", "x-caracole-form-token": token})
+        with opener.open(asked, timeout=60) as answer:
+            (job,) = json.load(answer)["jobs"]
+        if job["state"] not in ("queued", "running"):
+            return job
+        assert time.monotonic() < end, f"the import, still: {job}"
+        time.sleep(0.5)
+
+
+def the_file_read_back(eleven: dict, job: dict, computer: Computer) -> None:
+    """Step 15: the file the phone exported, as the computer's import of it went (the Sync tab's summary is made of
+    its job's outcome: sync.js's sections, a songs-taken one and a songbooks one here, and no given arrow from a file)
+    and as the computer's readers read the round's last changes once it took them."""
+    from caracole.overrides import load_overrides, song_entries
+    from caracole.songbook import load_songbooks, songbooks_file
+
+    assert job["state"] == "done", job
+    outcome = job["outcome"]
+    assert sorted(outcome["taken"]) == sorted(eleven["units"]), outcome  # the song taken, and the songbook
+    assert outcome["given"] == [] and outcome["left"] == [], outcome  # a file takes nothing back
+    assert outcome["report"]["with"]["kind"] == "file", outcome["report"]
+    assert {u.split("/")[0] for u in outcome["taken"]} == {"song", "songbook"}  # the summary's two sections
+    cfg = computer.cfg()
+    play = eleven["play"]
+    assert song_entries(load_overrides(cfg.overrides_file), play["key"]).get("version") == play["version"]
+    said = eleven["songbook"]
+    book = {b.name: b for b in load_songbooks(songbooks_file(cfg.library_dir))}[said["name"]]
+    setting = {song.text: song.setting for song in book.songs}[said["set"]]
+    assert setting is not None and setting.key == said["key"], book
+    print("the round's file:", json.dumps({"name": eleven["name"], "display": job.get("display"),
+                                           "outcome": outcome}, ensure_ascii=False))
 
 
 def merged(computer: Computer, timeout: float = 300) -> dict[int, str]:

@@ -130,6 +130,8 @@ import kotlin.test.fail
  * 10. The computer back, one sync: the round's units (its two songs and the songbook) the phone's and nothing else,
  *    given, nothing taken or left, a comparison after finding nothing, the round's pages still the phone's own; the
  *    phone's units written for the Python side, which holds them to the computer's and the pages to Python's.
+ * 11. The computer off: the first song's key set in the songbook and its own version made again, then the library
+ *    exported in a file as Settings' Export makes it, for the Python side to import on the computer (Import a file).
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -945,6 +947,53 @@ class PhoneScenarioTest {
             put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
         })
         buildJsonObject { put("given", outcome["given"] ?: JsonNull) }
+    }
+
+    /**
+     * The round's last changes go to the computer in a file, the computer off: the first song's key set in the
+     * songbook and its own version made again, then this library exported as Settings' Export makes it (`POST
+     * /sync/export` of the library and the songbooks, `GET /api/sync/export` its file once). The file, the units it
+     * changed and each change are written for tests/test_android_e2e.py's step 15, which imports it on the computer
+     * through caracole serve's Import a file and reads the summary's sync back; the phone's units, for it to hold them
+     * to the computer's after.
+     */
+    @Test fun phase11_theRoundsLastChangesGoToTheComputerInAFile() = phase(11) { phone, _ ->
+        val computer = URI(phone.server)
+        assertFailsWith<ConnectException>("the computer is off") {
+            Socket().use { it.connect(InetSocketAddress(computer.host, computer.port), 5_000) }
+        }
+        val nine = read(File(phone.home, "phase-9.json"))
+        val play = nine["play"]!!.jsonObject
+        val key = play.text("key")
+        val display = phone.database.read { db -> Songs.byKey(db, key)!!.display }
+        val book = nine["songbook"]!!.jsonObject.text("name")
+        done(phone.await(phone.jobOf(phone.post("/songbook/set", "name" to book, "song" to display, "key" to "C"))))
+        val sheetPath = ownFile(phone, key, "sheet.html").relativeTo(phone.libraryDir).invariantSeparatorsPath
+        val export = phone.get("/export.pdf?sheet=" + quote(sheetPath) + "&t=5&mine=1")
+        assertEquals(200, export.status, export.text.take(1000))
+        done(phone.await(phone.phone.queue.snapshot().last { it.key.startsWith("export:$key:") }.id))
+        val version = phone.database.read { db ->
+            db.one("SELECT value FROM phone_overrides WHERE tbl = 'version' AND key = ?", key) { it.text(0)!! }
+        } ?: fail("no [version] of $key")
+        assertTrue(Json.parseToJsonElement(version) != play["version"], "its own version made again: $version")
+
+        val made = phone.answer(phone.json("/sync/export", """{"parts": ["library", "songbooks"]}"""))
+        val sent = phone.get("/api/sync/export?export=" + made.text("export"))
+        val bytes = sent.bytes  // the file once: the server deletes it as it opens it to send it
+        assertEquals(200, sent.status, bytes.decodeToString().take(1000))
+        assertEquals(made.text("size").toLong(), bytes.size.toLong(), "the file sent whole")
+        val file = File(phone.home, made.text("name"))
+        file.writeBytes(bytes)
+        write(File(phone.home, "phone-state.json"), buildJsonObject {
+            put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
+        })
+        buildJsonObject {
+            put("file", file.path)
+            put("name", made.text("name"))
+            put("units", JsonArray(listOf("song/$key", "songbook/" + Songbooks.nameKey(book)).map(::JsonPrimitive)))
+            put("play", buildJsonObject { put("key", key); put("display", display); put("version", Json.parseToJsonElement(version)) })
+            put("songbook", buildJsonObject { put("name", book); put("set", display); put("key", "C") })
+        }
     }
 
     // --- the phases' plumbing ---------------------------------------------------------------------------------------
