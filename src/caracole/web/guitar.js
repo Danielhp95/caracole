@@ -181,14 +181,16 @@
   // Shift, Ctrl or ⌘ held it is shown beside those shown, or taken away from them (the last one stays), and so on a
   // touch screen with a long press (HOLD ms, the finger still), whose tap at the end does nothing more. A track
   // stays muted, whichever is shown, while the page is open: the synthesizer mutes its channels at once, playing or
-  // not, and keeps them muted (alphaTab never resets them; and the track's playbackInfo says so too).
+  // not, and keeps them muted (alphaTab never resets them; and the track's playbackInfo says so too). The page
+  // keeps which are muted itself, none at first: a track the file saves muted (its playbackInfo says so) is
+  // heard, alphaTab never applying that to the synthesizer, so it is shown as heard.
   //
   // On a phone (guitar.css, under 600 px) the chips give way to one button, #tracks-open, which opens a sheet of
   // the tracks, a modal <dialog>: a row each with a tick (shown), its name and kind, and a speaker (muted). The
   // ticks only choose: the tracks ticked are drawn once, when the sheet closes, since alphaTab draws the whole
   // score again for a change of tracks, which takes a moment on a phone. The page's one track shown can't be
   // unticked. Done, a tap outside the sheet, Escape and Android's Back close it, and so does a screen widened past
-  // 599 px. Both are built whatever the screen, for a score of two tracks or more, and each shows by its width.
+  // 599 px (a button pressed while the screen is wide opens nothing). Both are built whatever the screen, for a score of two tracks or more, and each shows by its width.
   const HOLD = 450;
   const bar = $("tracks");
   const trackName = (track, index) => String(track.name || "").trim() || "Track " + (index + 1);
@@ -218,9 +220,9 @@
   const buttons = [];  // each track's chip
   const rows = [];  // each track's row in the sheet, index for index with buttons
   let opener = null;  // the button that opens the sheet, once built
-  const isMuted = (index) => Boolean(score.tracks[index].playbackInfo && score.tracks[index].playbackInfo.isMute);
+  const silenced = score.tracks.map(() => false);  // each track's mute, as this page set it
   const markMuted = () => buttons.forEach(({ item, button }, index) => {
-    const muted = isMuted(index);
+    const muted = silenced[index];
     item.classList.toggle("muted", muted);
     button.setAttribute("aria-pressed", String(muted));
     if (rows[index]) {
@@ -248,6 +250,7 @@
   };
   const mute = (index, muted) => {
     const track = score.tracks[index];
+    silenced[index] = muted;
     track.playbackInfo.isMute = muted;
     api.changeTrackMute([track], muted);
     markMuted();
@@ -349,10 +352,12 @@
       history.back();
     }
     opener.setAttribute("aria-expanded", "false");
-    opener.focus();
     if (ticked.join() !== shown.join()) showTracks(ticked);
+    // The button is hidden once the screen is wide: the focus goes to the chip of the first track shown instead.
+    (narrow.matches ? opener : buttons[shown[0]].show).focus();
   };
   const openSheet = () => {
+    if (!narrow.matches) return;  // a button left from a phone's screen: a wide one has the chips
     if (pending && !sheet.open) closeSheet();  // Escape shut it, and its close event hasn't come yet
     if (pending) return;
     if (skip) {
@@ -382,11 +387,14 @@
     opener.className = "btn tracks-open";
     opener.setAttribute("aria-haspopup", "dialog");
     opener.setAttribute("aria-expanded", "false");
-    for (const [cls, text] of [["now", ""], ["count", score.tracks.length + " tracks \u25b4"]]) {
+    for (const [cls, text] of [["now", ""], ["count", score.tracks.length + " tracks "]]) {
       const span = opener.appendChild(document.createElement("span"));
       span.className = cls;
       span.textContent = text;
     }
+    const arrow = opener.querySelector(".count").appendChild(document.createElement("span"));
+    arrow.setAttribute("aria-hidden", "true");  // a picture of the sheet's way, never read out
+    arrow.textContent = "\u25b4";
     bar.after(opener);
 
     sheet = document.body.appendChild(document.createElement("dialog"));
@@ -499,9 +507,11 @@
   stop.addEventListener("click", () => api.stop());
   // Space plays and pauses, as Play does, wherever the focus is: a button it is on (Play itself, a track's) is not
   // pressed too, nor a switch moved, and the page doesn't scroll. The page has no field to type in. Before the sound
-  // has loaded, or with a modifier held, Space is the browser's.
+  // has loaded, or with a modifier held, Space is the browser's, and so it is in the open sheet, where it ticks a box,
+  // mutes a speaker and presses Done as in any dialog.
   document.addEventListener("keydown", (e) => {
     if (e.key !== " " || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || play.disabled) return;
+    if (sheet && sheet.open) return;
     e.preventDefault();
     if (!e.repeat) play.click();
   });
