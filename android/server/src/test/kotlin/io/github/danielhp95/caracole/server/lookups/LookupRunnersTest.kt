@@ -349,13 +349,46 @@ class LookupRunnersTest {
         scope.cancel()
     }
 
-    @Test fun aKeepFindsTheSongAndSaysTheCommandsLastLine() {
+    @Test fun aKeepOfATabTheSongHasntIsRefusedInVersionsCmdsWords() {
         job(JobCommands.versionSteps("Radiohead", "Creep", keep = "4169"), { p ->
             p.database.writeBlocking { p.store.add(it, "Radiohead", "Creep", now = "2026-11-03T12:00:00Z") }
             mapOf("versions" to VersionsRunner(p, none, stages()))
         }) { job, _ ->
-            assertEquals(Job.DONE, job.state)
-            assertEquals(listOf("Not on the phone yet."), job.steps.single().output)  // ug-fetch-artist's until
+            assertEquals(Job.FAILED, job.state)
+            assertEquals(1, job.steps.single().code)  // versions_cmd.py's fail
+            assertEquals(listOf("error: Tab 4169 isn't one of the Ultimate Guitar chords versions of Radiohead - Creep: " +
+                                    "caracole versions \"Radiohead - Creep\" lists them."), job.steps.single().output)
+            assertTrue(site.said.isEmpty())
+        }
+    }
+
+    @Test fun aKeepAsksThroughTheLookupsEnvelopeAndSaysItsLinesAsTheJobKeepsThem() {
+        // VersionsCommands says versions_cmd.py's lines from {"song": …} on (vectors/lookup/commands_versions.jsonl);
+        // the runner owns the rest of Python's output: the song stage begun before it, and the last line once it
+        // returns. Here the version's page answers 403: the envelope (InteractiveAsk) cools Ultimate Guitar down.
+        job(JobCommands.versionSteps("Radiohead", "Creep", keep = "4169"), { p ->
+            p.database.writeBlocking { db ->
+                val song = p.store.add(db, "Radiohead", "Creep", now = "2026-11-03T12:00:00Z")
+                io.github.danielhp95.caracole.core.library.Versions.upsert(
+                    db, "ug", "4169", song.id, "sheet", "chords", 4.5, 10, 1, null, ug,
+                    kotlinx.serialization.json.JsonObject(emptyMap()), "2026-11-03T12:00:00Z")
+            }
+            mapOf("versions" to VersionsRunner(p, none, stages()))
+        }) { job, database ->
+            assertEquals(Job.DONE, job.state)  // a block exits 0, as versions_cmd.py's
+            assertEquals(listOf("GET $ug"), site.said)
+            val until = database.read { Health.state(it, "ug").cooldownUntil }
+            assertNotNull(until)
+            val words = "Ultimate Guitar blocked caracole (ug: 403: $ug: HTTP 403): no more requests to it until " +
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(java.time.ZoneOffset.UTC)
+                    .format(until) + "; nothing kept."
+            // No page made after a block, as versions_cmd.py makes none: the queue's end skips the stages left.
+            assertEquals(listOf("song" to "done", "version" to "skipped", "pdf" to "skipped", "pages" to "skipped"),
+                         job.stages.map { it.name to it.state })
+            assertEquals("in the library", job.stages.first { it.name == "song" }.detail)
+            assertEquals(words, job.stages.first { it.name == "version" }.detail)
+            assertEquals(listOf(words), job.steps.single().output)  // its last line, said once it returned
+            assertEquals(database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!.id, job.songId)
         }
     }
 

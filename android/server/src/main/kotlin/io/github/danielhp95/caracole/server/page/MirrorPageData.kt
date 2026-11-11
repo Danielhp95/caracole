@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -30,25 +29,42 @@ import java.nio.charset.CodingErrorAction
  * - a card of a song the phone hasn't got keeps the computer's, under a negative id of its own (-1, -2, … in the
  *   cards' order), which the served page makes no request of (`fetchable` false: [LibraryPage.withServer]);
  * - a card of a song the phone removed (a tombstone and no song, Songs.isRemoved) is left out, until a sync settles it;
- * - a song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
+ * - a song the computer's data has no card of, taken from a file, gets the card of the newest of the mirror's layers
+ *   ([Mirror.layers]) that keeps a page of the song and whose library page (the file's start page) holds its
+ *   identity, re-identified as the computer's are: its sheet's link is the file's page, which the mirror serves from
+ *   that layer ([io.github.danielhp95.caracole.mirror.pageFor]). A file is anyone's to write, so its card is read as
+ *   untrusted ([fromFile]): the fields library_page.py writes alone, each of the JSON type it writes it as, every
+ *   address in it the library's (relative) or a site's over https, a kept file's the library's, and where its lyrics
+ *   link back to the phone's own ([lyricsFrom]); a card that fails any of it is the minimal card below;
+ * - any other song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
  *   and no site (vectors/web/library_page.json's `minimal_cards`): its names, status, the folds the page sorts and
  *   filters it by ([CardText]), where its lyrics link back to (`lyricsFrom`: Megalobiz's or AZLyrics' page, which
  *   their fair use asks for, [lyricsFrom]), and its kept files (the phone's `files`), each with the one its line
  *   opens (`primary`) and the name a Guitar Pro file or a score downloads under;
  * - each songbook's set names its songs by the same ids (by each entry's `key`), none for a song left out.
  *
- * The parsed block is kept until the mirror's page changes (its entry's SHA-256). Reads only: every query is the
- * caller's [Db], inside Database.read.
+ * Each parsed block (the mirror's, and each layer's) is kept until its page changes (its entry's SHA-256). Reads only:
+ * every query is the caller's [Db], inside Database.read.
+ *
+ * The phone's page is PhonePageData's, which makes every card of the phone's songs itself and takes of this only what
+ * it doesn't make ([mirrored]: the data with the cards of the songs the phone hasn't got, and the computer's cards
+ * by identity, [computerCards]); the cards above are M2–M3's, for a page with no library of its own to make them of.
  */
 class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
     @Volatile private var parsed: Pair<String, JsonObject>? = null
+
+    /** Each layer's library page's cards by identity, by that page's SHA-256. */
+    @Volatile private var layersParsed: Map<String, Map<String, JsonObject>> = emptyMap()
 
     override fun data(db: Db, now: String): JsonObject {
         val base = mirrorData() ?: emptyLibrary(now)
         val cards = (base["songs"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         val phone = Phone.read(db)
         val made = Remade(phone, cards)
-        val songs = made.cards + phone.songs.filter { it.key !in made.identities }.map { minimalCard(db, phone, it) }
+        val layers by lazy { layerCards() }
+        val songs = made.cards + phone.songs.filter { it.key !in made.identities }.map { song ->
+            layerCard(layers, song)?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song)
+        }
         return JsonObject(base.mapValues { (name, value) ->
             when (name) {
                 "songs" -> JsonArray(songs)
@@ -62,10 +78,51 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         val cards = (mirrorData()?.get("songs") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         val byIdentity = cards.associateBy { identityOf(it) }
         val phone = Phone(songs, emptySet(), ignoredKeys(db))
+        val layers by lazy { layerCards() }
         return songs.associate { song ->
-            song.id to (byIdentity[song.key]?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song))
+            val card = byIdentity[song.key] ?: layerCard(layers, song)
+            song.id to (card?.let { phoneCard(phone, it, song) } ?: minimalCard(db, phone, song))
         }
     }
+
+    /**
+     * The mirror's data as PhonePageData takes it: its icons, catalogue, fold table, sites and generated time as they
+     * are; its songs the computer's cards of the songs the phone hasn't got alone (by their negative ids, in the
+     * cards' order: none of a song the phone removed), which PhonePageData puts after the phone's own; and each
+     * songbook's set naming its songs by the page's ids (the phone's song of the entry's key, else that card's). No
+     * card of the phone's songs is made here.
+     */
+    fun mirrored(db: Db, now: String): JsonObject {
+        val base = mirrorData() ?: emptyLibrary(now)
+        val cards = (base["songs"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+        val phone = Phone.read(db)
+        val made = Remade(phone, cards)
+        val theirs = made.cards.filter { card -> ((card["id"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L) < 0 }
+        for (song in phone.songs) made.ids[song.key] = song.id
+        return JsonObject(base.mapValues { (name, value) ->
+            when (name) {
+                "songs" -> JsonArray(theirs)
+                "songbooks" -> songbooks(value, made)
+                else -> value
+            }
+        })
+    }
+
+    /** The computer's cards in the mirror's library page, by identity (the first of each), as the computer made them;
+     * none with no mirror, or no page it can read. */
+    fun computerCards(): Map<String, JsonObject> {
+        val data = mirrorData() ?: return emptyMap()
+        byIdentity?.let { (of, cards) -> if (of === data) return cards }
+        val cards = LinkedHashMap<String, JsonObject>()
+        for (card in (data["songs"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()) {
+            identityOf(card)?.let { cards.putIfAbsent(it, card) }
+        }
+        byIdentity = data to cards
+        return cards
+    }
+
+    /** [computerCards] of the data block they were read from. */
+    @Volatile private var byIdentity: Pair<JsonObject, Map<String, JsonObject>>? = null
 
     /** What the phone's database says of its songs, read once for a page: its songs (newest first), the keys it holds
      * a tombstone of and no song (Songs.isRemoved's), and those its overrides ignore. */
@@ -164,20 +221,8 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         })
     }
 
-    /**
-     * library.lyrics_from: where a song's lyrics link back to, `{source, href}`, for a site of [LYRICS_PAGES] and a page
-     * on it alone (its card's Lyrics tile links it); null for any other, or lyrics that can't be read. Read from the
-     * stored JSON alone, as json.loads reads it.
-     */
-    private fun lyricsFrom(song: SongRow): JsonElement {
-        val stored = song.lyricsJson?.let { runCatching { PyJson.loads(it) }.getOrNull() } as? JsonObject ?: return JsonNull
-        if (song.lyricsStatus != "found") return JsonNull
-        val provider = (stored["provider"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val url = (stored["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val site = provider?.let { LYRICS_PAGES[it] }
-        if (site == null || url == null || !url.startsWith(site)) return JsonNull
-        return JsonObject(linkedMapOf("source" to JsonPrimitive(provider), "href" to JsonPrimitive(url)))
-    }
+    /** library.lyrics_from of [song] (CardText.lyricsFrom). */
+    private fun lyricsFrom(song: SongRow): JsonElement = CardText.lyricsFrom(song.lyricsStatus, song.lyricsJson)
 
     /** The Songbooks tab's data with each set's songs named by the page's ids (none for a song left out). */
     private fun songbooks(value: JsonElement, made: Remade): JsonElement {
@@ -216,6 +261,69 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         return data
     }
 
+    /** A layer's cards by identity, and the units it keeps a page of. */
+    private class LayerCards(val cards: Map<String, JsonObject>, val units: Set<String>)
+
+    /** The card of [song] from the newest layer that keeps a page of it and whose library page holds its identity,
+     * as [fromFile] reads it; null for none, or one that isn't a card the phone shows. */
+    private fun layerCard(layers: List<LayerCards>, song: SongRow): JsonObject? =
+        layers.firstOrNull { SONG_UNIT + song.key in it.units && song.key in it.cards }
+            ?.let { fromFile(it.cards.getValue(song.key), song) }
+
+    /** The cards of each of the mirror's layers' library pages by identity, the newest layer first, with the units
+     * each keeps a page of; no card for a layer whose page can't be read. */
+    private fun layerCards(): List<LayerCards> {
+        val mirror = mirror ?: return emptyList()
+        val known = layersParsed
+        val read = LinkedHashMap<String, Map<String, JsonObject>>()
+        val layers = ArrayList<LayerCards>()
+        for (layer in mirror.layers()) {
+            val manifest = layer.manifest() ?: continue
+            val served = layer.lookup(manifest.start) ?: continue
+            val sha = served.entry.sha256
+            val cards = read[sha] ?: known[sha] ?: run {
+                val data = try {
+                    dataBlock(served.file.readBytes())
+                } catch (e: java.io.IOException) {
+                    null
+                }
+                val cards = (data?.get("songs") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+                LinkedHashMap<String, JsonObject>().apply { for (card in cards) identityOf(card)?.let { putIfAbsent(it, card) } }
+            }
+            read[sha] = cards
+            layers.add(LayerCards(cards, manifest.entries.mapNotNullTo(HashSet()) { it.unit }))
+        }
+        layersParsed = read
+        return layers
+    }
+
+    /**
+     * A file's [card] of [song], read as untrusted (anyone can write a file's library page): the fields
+     * library_page._song and the page's build write ([CARD]), each of the JSON type they write it as, any other left
+     * out; its identity the song's; every `href` in it an address of the library (relative: no scheme, no host, no
+     * backslash) or of a site over https, a kept file's ([FILES]: its name and label text) of the library alone; where
+     * its lyrics link back to, where it says, the phone's own ([lyricsFrom] of the song, which the file gave it). Null
+     * for a card
+     * that fails any of it, which the minimal card replaces, so that no file's card can break the library page.
+     */
+    private fun fromFile(card: JsonObject, song: SongRow): JsonObject? {
+        if (identityOf(card) != song.key) return null
+        val kept = LinkedHashMap<String, JsonElement>()
+        for ((name, value) in card) {
+            val fits = CARD[name] ?: continue
+            if (!fits(value)) return null
+            kept[name] = value
+        }
+        if (REQUIRED.any { it !in kept } || !addressesFit(JsonObject(kept))) return null
+        for (file in (kept["files"] as JsonArray)) {
+            val f = file as JsonObject
+            if (FILES.any { (name, fits) -> name in f && !fits(f.getValue(name)) } ||
+                f["name"] !is JsonPrimitive || !library((f["href"] as? JsonPrimitive)?.content)) return null
+        }
+        if ("lyricsFrom" in kept) kept["lyricsFrom"] = lyricsFrom(song)
+        return JsonObject(kept)
+    }
+
     /** A library with no song, for a phone with no mirror: the page's data as library_page.py's build makes it of a
      * library with no song ([EMPTY]: its fold table, its sources' names and badges with no icon kept, the named
      * progressions, the Songbooks tab's menus with no songbook), in its order, and no site's (the Sites tab's data
@@ -231,9 +339,8 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
     ))
 
     companion object {
-        /** library.LYRICS_PAGES: the lyrics sites whose fair use asks a link back, by provider, and where their pages
-         * are. */
-        val LYRICS_PAGES = mapOf("megalobiz" to "https://megalobiz.com/", "azlyrics" to "https://www.azlyrics.com/")
+        /** library.LYRICS_PAGES (CardText's). */
+        val LYRICS_PAGES = CardText.LYRICS_PAGES
 
         /** library_page._TRANSLITERATED: the letters fold transliterates, which the page folds typed queries with. */
         const val TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
@@ -253,6 +360,63 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
          * the row of a song no longer ignored). One query for the page, not one a song. */
         private fun ignoredKeys(db: Db): Set<String> =
             db.query("SELECT key FROM phone_overrides WHERE tbl = 'ignore'") { it.text(0)!! }.toSet()
+
+        private const val SONG_UNIT = "song/"
+
+        private fun isText(e: JsonElement) = e is JsonPrimitive && e.isString
+        private fun isTextOrNull(e: JsonElement) = e is JsonNull || isText(e)
+        private fun isBool(e: JsonElement) = e is JsonPrimitive && !e.isString && (e.content == "true" || e.content == "false")
+        private fun isInt(e: JsonElement) = e is JsonPrimitive && !e.isString && INT.matches(e.content)
+        private fun isTexts(e: JsonElement) = e is JsonArray && e.all(::isText)
+        private fun isObjects(e: JsonElement) = e is JsonArray && e.all { it is JsonObject }
+        private fun isObjectOrNull(e: JsonElement) = e is JsonNull || e is JsonObject
+        private val INT = Regex("-?[0-9]{1,15}")
+
+        /** The fields a card of library_page.py's holds (`_song`'s, and what its build adds: `progressions`, `hanzi`,
+         * `candidates`, `notFound`, `sites`), each with the JSON type it writes it as. */
+        private val CARD: Map<String, (JsonElement) -> Boolean> = mapOf(
+            "id" to ::isInt, "artist" to ::isText, "artists" to ::isTexts, "title" to ::isText,
+            "display" to ::isTextOrNull, "status" to ::isText, "review" to ::isBool, "added" to ::isTextOrNull,
+            "key" to ::isTextOrNull, "key_source" to ::isTextOrNull, "transpose" to ::isInt, "lyrics" to ::isTextOrNull,
+            "lyricsFrom" to ::isObjectOrNull, "auto" to ::isBool, "files" to ::isObjects, "instruments" to ::isTexts,
+            "versions" to ::isObjectOrNull, "autoSheet" to ::isObjectOrNull, "source" to ::isTextOrNull,
+            "museScore" to ::isObjects, "links" to ::isObjects, "buy" to ::isObjects, "youtube" to ::isObjectOrNull,
+            "youtubeSheet" to ::isBool, "lacuerda" to ::isObjectOrNull, "lacuerdaVersions" to ::isObjects,
+            "lacuerdaSheet" to ::isObjectOrNull, "identity" to ::isText, "sortArtist" to ::isText,
+            "sortTitle" to ::isText, "artistLetter" to ::isText, "titleLetter" to ::isText, "search" to ::isText,
+            "initials" to ::isText, "progressions" to ::isObjects, "hanzi" to { it is JsonObject },
+            "candidates" to ::isObjects, "notFound" to ::isBool, "sites" to ::isObjects,
+        )
+
+        /** What a card is of, at least: its song's names, its identity and its files. */
+        private val REQUIRED = listOf("artist", "title", "files", "identity")
+
+        /** A kept file's fields, of library_page._files, each with its type. */
+        private val FILES: Map<String, (JsonElement) -> Boolean> = mapOf(
+            "name" to ::isText, "label" to ::isText, "href" to ::isText, "primary" to ::isBool,
+            "source" to ::isTextOrNull, "download" to ::isText,
+        )
+
+        private val SCHEME = Regex("[A-Za-z][A-Za-z0-9+.-]*:.*", RegexOption.DOT_MATCHES_ALL)
+
+        /** An address of the library: relative, with no scheme, no host and no backslash. */
+        private fun library(href: String?): Boolean =
+            href != null && href.isNotEmpty() && !SCHEME.matches(href) && !href.startsWith("/") && '\\' !in href &&
+                href.none { it < ' ' || it == '\u007f' }
+
+        /** Whether every `href` in [e], however deep, is none (empty), the library's ([library]) or a site's over
+         * https. */
+        private fun addressesFit(e: JsonElement): Boolean = when (e) {
+            is JsonObject -> e.all { (name, value) ->
+                if (name == "href" && value !is JsonNull) {
+                    val href = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+                    href != null && (href.isEmpty() || library(href) ||
+                        (href.startsWith("https://") && href.none { it <= ' ' || it == '\\' || it == '\u007f' }))
+                } else addressesFit(value)
+            }
+            is JsonArray -> e.all(::addressesFit)
+            else -> true
+        }
 
         private const val OPEN = "<script type=\"application/json\" id=\"songs\">"
         private const val CLOSE = "</script>"

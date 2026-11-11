@@ -110,8 +110,9 @@ again, and the next sync brings them to the phone.
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
 `http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
-caracole's own page, built from the same files caracole serve builds it from, with your songs' cards taken from the
-copy. Sheets, PDFs and songbooks are the copy's files.
+caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
+the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
+holds the song as the computer did, else the pages the phone makes itself.
 
 **Only the app can use that server.** At each launch the app makes a random secret and sets it as a cookie
 (`caracole-launch`) in its WebView. The server refuses any request without it ("Not this app's caracole."), so
@@ -273,9 +274,10 @@ DIR PORT --address 127.0.0.1`):
 Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
 app send no request to a site: every test's sites refuse, unless the test names the fake sites server.
 
-`android/scripts/device-test.sh` does all of it, one caller at a time (it builds first, then holds the emulator's
-lock, `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`), starting the emulator if none is
-up and leaving it up:
+`android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the
+first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-5554, -5556 and -5558, holding its lock,
+`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
+port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
@@ -372,15 +374,73 @@ never in a page) times each step.
 
 ## Pages built on the phone
 
-Not built yet.
+The phone makes a song's pages itself, as the computer's render does them but with no PDF, whenever the computer's
+pages in the copy aren't of the song as the phone holds it: a song added or looked up on the phone, or changed there
+since the last sync. The song's sheet page (`sheet.html`, and an auto sheet's beside it), the page of each version kept
+beside the sheet (`version-<tab>.html`) and of each harmonica tab (`harmonica-N.html`), with the sheet's `.cho` and its
+`info.json`, go into the song's folder in the app's library, each written only when its bytes change; a version's or a
+tab's page goes once the song keeps it no longer. An auto sheet made before its song had lyrics takes them first, as
+the computer's render does. No page links a PDF: the phone makes none.
+
+For every song, those the computer's pages serve too, the phone records what the library page finds it by: the
+progressions its sheet plays and whether its words are Chinese.
+
+A lookup makes its song's pages as it ends ("its pages made; this caracole makes no PDF"). After a sync that changed
+songs, and when the app starts as a new build (any APK whose code or tables differ, whatever its version says), the
+phone makes the pages it owes in the background, a request of the Requests tab ("Make the pages again"), which lets a
+lookup asked for meanwhile go first, between two songs. A song whose pages can't be made says why on that request, and
+costs the other songs nothing; it is tried again once the song changes or a new build is installed.
+
+On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
-Not built yet.
+**A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
+computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
+what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
+that page until it is over (the page reloads every ten seconds), and in the Requests tab: Make this the one looks the
+song up with that tab and keeps your choice in overrides; Keep it reads the version's page from Ultimate Guitar, at a
+lookup's pace, and keeps it beside the sheet; Back to caracole's pick takes your choice out and looks the song up
+again. A page the computer made and the phone copied names no version of the phone's: choose there on the computer.
+
+**A harmonica tab's readings.** A harmonica tab's page links its Read as line (or, at its foot, **Change how it's
+read**) to the readings caracole weighs, best first, each with its Q and a button that pins it (harptabs.com's own
+notation among them), and Back to caracole's guess for a tab you pinned. The tab's page is made again with your
+reading.
+
+Songbooks and printing: not built yet.
+
+### Export PDF
+
+**Export PDF** in a sheet's settings prints the sheet as the viewer shows it, in its version (key, capo, mode, the
+shapes and swaps you chose, the instrument): Android's print dialog opens on an A4 page, for a printer or **Save as
+PDF**, the file named as caracole serve names its download ("Soda Stereo - De Música Ligera (A Major, capo 0).pdf").
+Nothing is written into the library. The phone makes no PDF of its own: the page you see is what prints, in the
+viewer's print style (a light page, the margins).
+
+- **Download and make it mine** (the viewer asks when the version's music isn't the song's own) prints it and makes
+  it your version too, as on the computer: the song's `[version]`, kept by the key it plays in, so its viewer and its
+  songbooks start there (a song whose pages were the computer's copy gets pages the phone makes, at once). The
+  Requests tab shows it ("Your version now"). Like caracole serve's, it is a plain link with no form token, the one
+  write the phone takes so.
+- The phone names the version of a sheet of its own library: one it made the pages of, or one of the computer's
+  pages whose song a sync brought (the Sync tab). A copy of the computer's pages with no song of its own (Sync now's
+  pages alone) has no sheet to name, and says so. The auto-chords sheet kept beside a song's own sheet, and a kept
+  version's page, offer no export of their own, as on the computer.
 
 ## Guitar Pro
 
-Not built yet.
+A song's Guitar Pro file (filed from the inbox or downloaded from gtptabs.com) opens on a page of its own in the app,
+as it does in caracole serve: the score drawn by alphaTab and played by its synthesizer (Play, Stop, Tempo), Tab only
+or Score and tab, each track shown or muted. **Download** gives the file to another app. A Power Tab file is a
+download alone.
+
+alphaTab (MPL-2.0), its Bravura music font (SIL OFL 1.1) and the Sonivox SoundFont (Apache-2.0) are in the app, their
+licences beside them in its assets (`alphatab/licenses/`): nothing is downloaded. A Guitar Pro file of a song only the
+copy of the computer's pages has (not in the phone's own library yet) opens in another app instead, as before.
+
+Building the app needs `CARACOLE_ALPHATAB_DIR` (alphaTab's files, nix/alphatab.nix), which `nix develop ./android`
+sets; without it the build stops and says so.
 
 ## Sharing a song from a music app
 
@@ -388,8 +448,9 @@ In a music app, **Share** a song and pick **caracole** in Android's share sheet:
 for that song.
 
 1. **What it read**: "caracole read Queen – Bohemian Rhapsody." It reads the artist and the title from the text the
-   app shared, the way caracole reads what you type in a search box. It sends no request to the music app or to any
-   site. "What Spotify sent" shows the text as it came.
+   app shared, the way caracole reads what you type in a search box, with no request. "What Spotify sent" shows the
+   text as it came. When the app shared a link alone, caracole asks its service once what the link names (below):
+   "Read from Spotify's page: Queen – Bohemian Rhapsody."
 2. **The best match**: the song the phone's search finds for those names, in your library or in the indexes, with
    what each site has of it ("Ultimate Guitar: chords ×12 · tabs ×3 · LaCuerda ×2"), and "In your library" when the
    song is yours. Up to three other songs the search found come under it, each with its own Get it.
@@ -399,7 +460,7 @@ for that song.
    - **Edit** takes the artist and the title as you type them, then searches again.
    - **Cancel** takes you back to the app you shared from.
 
-Nothing is sent to any site until you tap Get it. With no index imported, the page says so, and Get it still looks
+Nothing is sent to a tab site until you tap Get it. With no index imported, the page says so, and Get it still looks
 the song up by its names.
 
 What each app shares (tests/fixtures/share/shares.jsonl lists them, each with where it was found):
@@ -415,7 +476,24 @@ What each app shares (tests/fixtures/share/shares.jsonl lists them, each with wh
 - Any other app's text is read as you'd type it in the search box, less its links and the app's name at its end
   ("… | Spotify").
 
-For a link alone, caracole says so and offers Edit. It never asks the music service what a link is.
+**A link alone** of Apple Music, Spotify, TIDAL, YouTube or YouTube Music is read by asking its service once, at a
+lookup's pace, with caracole's own user agent:
+
+| Link | Asked | Requests |
+|---|---|---|
+| Apple Music, a song (`music.apple.com/us/album/…?i=…`, `/song/…`) | Apple's catalogue, `itunes.apple.com/lookup` | 1 |
+| Spotify, a track (`open.spotify.com/track/…`) | the track's page | 1 |
+| Spotify's short link (`spotify.link/…`) | the link, then the track's page | 2 |
+| TIDAL, a track (`tidal.com/track/…`, `/browse/track/…`) | the track's page, `tidal.com/track/…` | 1 |
+| TIDAL's short link (`tidal.link/…`) | the link, then the track's page | 2 |
+| YouTube, YouTube Music (`watch?v=`, `youtu.be`, `shorts`) | YouTube's oEmbed: the video's title and channel | 1 |
+
+The page then says "Read from Spotify's page: Queen – Bohemian Rhapsody", and goes on as for a text that named the
+song. A link to an album (Apple Music's with no `?i=`), a playlist, an artist or a channel names no song: the page says
+which, with no request. When the service fails, blocks caracole or is turned off, the page says so in one line and
+opens Edit. A link shared again is read from the cache, with no request. Each service is turned off on the computer,
+`[providers.spotify] enabled = false` (or `itunes`, `tidal`, `youtube-oembed`) in caracole.toml, which the phone takes
+at its next sync. Deezer's shares carry the song's names; a Navidrome or Subsonic link is never asked.
 
 **To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
 Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
@@ -423,8 +501,72 @@ as they came.
 
 ## Sharing files to caracole
 
-Not built yet.
+A Guitar Pro file (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`, or a Power Tab `.ptb`) or a score (`.mscz`, `.mxl`,
+`.musicxml`, `.pdf`, `.mid`, `.midi`) you have on the phone, in a file manager, your browser's downloads or a chat:
+**Share** it and pick **caracole**. Share several at once if you like.
+
+caracole files each one as the computer files what you drop into `_inbox/`:
+
+- **For the song its name is of**: "Oasis - Wonderwall.gp5", "Oasis - Wonderwall (ver 2).gp5", or "wonderwall.gp5"
+  when one song of your library has that title. It is kept as the song's `guitar-1.gp5` (or the next number free) or
+  `score-1.pdf`, never over a file the song keeps, and goes to the computer as the song's at the next sync.
+- **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed as guitar-1.gp5 of …".
+  One the library lost (deleted on another device) is put back where it was.
+- **A file no song fits waits**, up to 30 days, and is tried again after each sync and each lookup: share a Guitar
+  Pro file first and look its song up after, and it is filed then. One that couldn't be filed (its song's folder is
+  another song's too, the phone is full) waits too, tried again after the next sync, or a day later.
+- **The bytes of a file caracole keeps whose copy you changed since** are not filed: "Not filed: … whose place holds
+  other bytes now, and nothing is replaced". caracole replaces nothing of yours; the file is put back once that place
+  is free.
+- A score is placed by its name alone on the phone: a MusicXML file named "score.musicxml" waits, where the computer
+  would read the title and composer inside it.
+
+A toast says how each went, as its line on the Requests tab does: "Filed as guitar-1.gp5 of Oasis - Wonderwall",
+"Waiting for a song that fits: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
+Guitar Pro files and scores alone). A file shared with no extension takes the one its bytes or its type tell.
+
+caracole is offered for files: never to open a PDF (Android's Open with), and never for a text (a music app's song,
+above, is another share). A share of several kinds of file at once (a PDF with a photo, say) offers caracole too, as
+Android offers it every app that takes any of them: a file caracole keeps nothing of is answered "Not filed". caracole
+reads a file only from the app that shares it, never a `file:` address another app names.
 
 ## Alerts and backups
 
-Not built yet.
+**Alerts** are notifications on their own channel, Alerts (Android's settings for the app list it beside "Work in the
+background"; the app asks for the right to notify once, as the library screen opens):
+
+- **a site that blocked a lookup**: "caracole: LRCLIB blocked", with when its cooldown ends. One a cooldown: a lookup
+  that meets the same cooldown again says nothing more, and the lookups after it ask that site nothing until the
+  cooldown is over. On the computer a lookup sends no alert (the nightly run does); the phone has no nightly run to
+  tell, so its lookups do.
+- **a request that failed while the app was in the background** (no screen of the app's open): its name and the line
+  the Requests tab shows for it. One that fails while you are in the app says so there alone.
+
+Tapping one opens the library.
+
+**Backups** are in Settings, Backups…: each backup is a copy of the phone's library, its songs, their versions, the
+songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each file
+once however many backups hold it. The indexes aren't backed up: they come again from the computer.
+
+- **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
+  one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
+  made; none is made without twice the room it needs (the Requests tab then says "Not backed up: there isn't room for
+  it on the phone").
+- **Export…** saves one as a single `.zip` (`caracole-by-hand-2026-11-10T081400Z.zip`: the copy, a SQLite database,
+  and `blobs/<sha256>`, each file it keeps) wherever you pick, on the phone or in a cloud app's folder. It is a copy
+  kept outside the phone: the phone can't restore from an exported file yet, only from the backups it lists.
+- **Restore…** (asked first) puts the library back as that backup has it: the songs, versions, songbooks and files
+  changed or added since are gone from the phone. What the phone has learnt of the sites since stays as it is now: each
+  site's cooldown, the pace, which searches it asked and which songs it checked, the computer's settings, and what it
+  agreed with the computer at the last sync. So the next sync gives the restored library to the computer as the
+  phone's own change: whatever the restore changed of what the two agreed on at the last sync is given to the
+  computer, and a song that sync agreed on that the backup doesn't hold is given as removed, so the computer removes
+  it too (one the computer changed since is a conflict, yours to choose). The phone's pages are made again after it;
+  until then its pages of what the restore changed aren't served.
+- A backup that doesn't hold every file it names (one made before a sync by an older app, which kept the tables
+  alone, or one made while a file was no longer its bytes) says how many in the list ("2 of its files not kept"). It
+  restores only while the phone's files still hold those bytes, and can't be exported; otherwise its Restore says why
+  and changes nothing.
+
+A backup, its daily one and a restore are requests like a lookup, one at a time on the Requests tab ("Backed up
+(by-hand)", "Restored the library of 2026-11-10 09:14"), never run beside a lookup.

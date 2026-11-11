@@ -122,13 +122,13 @@ STAGE_LINES = {
     "give": "Giving what changed here",
     "mirror": "Copying the computer's pages",  # the phone's alone
     "agree": "Recording what the two agree on",
-    "index": "Bringing the indexes up to date",  # the phone's alone
-    "check": "Checking what changed since the comparison",  # caracole peer take --progress's (jobs.PEER_TAKE_STAGES)
+    "index": "Bringing the indexes up to date",  # caracole peer sync's and import's, and the phone's
+    "check": "Checking what changed since the comparison",  # caracole peer take's and import's (jobs.PEER_TAKE_STAGES)
     "render": "Rendering what was taken",
     "merge": "Merging the other caracole's index pages",  # caracole index merge --progress's (jobs.INDEX_MERGE_STAGES)
 }
 # What a sync's or a take's command is (its first step's ``caracole peer`` subcommand), as the page names its kind.
-PEER_KINDS = {"sync": "sync", "take": "peer-push", "pull": "peer-pull"}
+PEER_KINDS = {"sync": "sync", "take": "peer-push", "pull": "peer-pull", "import": "sync"}  # import: a file's sync
 INDEX_MERGE_KIND = "index-merge"  # ``caracole index merge --progress``: another caracole's index pages merged
 # How each says it is done.
 _PEER_DONE = {"sync": "Synced", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
@@ -211,10 +211,10 @@ class Line:
 
 
 def peer_kind(job: Job) -> str | None:
-    """What a job of ``caracole peer`` is, as the page names it: "sync" (``peer sync``, the Sync tab's), "peer-push"
-    (``peer take``, a push another caracole sent) or "peer-pull" (``peer pull``, units another caracole asked this one
-    to take); "index-merge" for ``caracole index merge --progress`` (another caracole's index pages, ``POST
-    /peer/index``); None for any other job."""
+    """What a job of ``caracole peer`` is, as the page names it: "sync" (``peer sync``, the Sync tab's, and ``peer
+    import``, its sync with a file), "peer-push" (``peer take``, a push another caracole sent) or "peer-pull" (``peer
+    pull``, units another caracole asked this one to take); "index-merge" for ``caracole index merge --progress``
+    (another caracole's index pages, ``POST /peer/index``); None for any other job."""
     args = job.steps[0].args if job.steps else ()
     if tuple(args[:2]) == INDEX_MERGE_COMMAND and "--progress" in args:
         return INDEX_MERGE_KIND

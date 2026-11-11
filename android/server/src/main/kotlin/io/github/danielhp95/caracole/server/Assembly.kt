@@ -52,10 +52,15 @@ import io.github.danielhp95.caracole.server.routes.RequestsRoutes
 import io.github.danielhp95.caracole.server.routes.ReviewRoutes
 import io.github.danielhp95.caracole.server.routes.SearchRoutes
 import io.github.danielhp95.caracole.server.routes.ShareRoutes
+import io.github.danielhp95.caracole.server.routes.share.ShareReader
 import io.github.danielhp95.caracole.server.routes.SongbookRoutes
 import io.github.danielhp95.caracole.server.routes.Stubs
+import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.sync.Exports
+import io.github.danielhp95.caracole.server.routes.sync.Imports
+import io.github.danielhp95.caracole.server.routes.sync.MirrorPages
 import io.github.danielhp95.caracole.server.routes.VersionsRoutes
 import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
 import io.github.danielhp95.caracole.server.songbooks.SongbookRunner
@@ -87,9 +92,11 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
- * RequestsRoutes, SyncRoutes, LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
+ * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
+ * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
- * the app), then Stubs for every route no module answers; the
+ * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
@@ -101,13 +108,14 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
     private val store = LibraryStore(deps.libraryDir)
-    private val cards = PhonePageData(MirrorPageData(deps.mirror), store, ::config)
+    private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */
     val render: PhoneRender = render ?: PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version)
 
-    /** The songbooks' pages the phone makes itself (milestone 6). */
-    val songbookPages = SongbookPagesImpl(deps.database, store)
+    /** The songbooks' pages the phone makes itself (milestone 6), of the mirror's sheets where the songs' pages are
+     * the computer's, at the phone's build. */
+    val songbookPages = SongbookPagesImpl(deps.database, store, deps.mirror, this.render::build)
 
     /** The phone's settings now: config.py's defaults with what the computer gave at the last sync. */
     private fun config(): PhoneConfig = deps.database.read { db -> PhoneConfig.read(db) }
@@ -152,25 +160,43 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                 Unit
             }
         },
+        // An import's pages kept as a layer of the mirror, the layers then cut to what the phone still serves.
+        pagesFromFile = deps.mirror?.let { SyncFileRoutes.pagesFromFile(it, deps.libraryDir, PhoneGate(deps.database)) },
     )
+
+    /** The Sync tab's routes, which the app's unattended sync (`alone`) and Settings' Test (`tested`) ask too. */
+    val sync: SyncRoutes = SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync)
+
+    /** The exports made for their one download (`stateDir/cache/peer/`), every one an earlier start left cleared. */
+    private val exports = Exports(File(deps.stateDir, "cache")).also { it.clear() }
+
+    /** Export and Import a file: a file staged in `stateDir/peer/import-<id>/`, its import the engine's; the export's
+     * pages the mirror's and its layers' (MirrorPages), its start page the phone's own library page's data. */
+    private val files = SyncFileRoutes(
+        engine, queue, deps.database, deps.libraryDir, Imports(deps.stateDir), exports,
+        pages = { MirrorPages(deps.mirror, deps.database.read { db -> MirrorPages.startPage(cards.data(db, now())) }) },
+        afterSync = ::afterSync, version = deps.version,
+    ).also { sync.files = it }
 
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(
         PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls,
                    libraryName = { config().libraryName.orEmpty() }),
         search,
-        JobsRoutes(queue, cards, deps.database, songbooks = { db -> SongbookSection.data(db, store) }),
+        JobsRoutes(queue, cards, deps.database, songbooks = { db -> SongbookSection.data(db, store, deps.mirror, cards) }),
         RequestsRoutes(parts),
-        SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync),
+        sync,
+        files,
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         SongbookRoutes(parts),
-        VersionsRoutes(parts),
-        HarmonicaRoutes(parts),
+        VersionsRoutes(parts, deps.csrf),
+        HarmonicaRoutes(parts, deps.csrf),
         ReviewRoutes(parts),
         ExportRoutes(parts),
         GuitarRoutes(parts),
-        ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() }),
+        ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
+                    links = ShareReader(parts)),
     )
 
     val app: App = App(
@@ -198,11 +224,13 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
 
     /** After a sync's take, inside the sync's job (SyncRoutes' `afterSync`, its stages over): the copy reloaded, the
      * phone's pages of what the take moved forgotten, the search's answers forgotten, and the pages owed then made by
-     * the render job, queued after the sync, never inside it. A full queue leaves them owed, for the next start's or
-     * take's render job. */
+     * the render job, queued after the sync, never inside it, which makes the phone's songbook pages again after them;
+     * with none owed, those songbook pages made again now (SongbookPagesImpl.renderOwn: a song the take moved, its
+     * sheet the mirror's now). A full queue leaves them owed, for the next start's or take's render job. */
     internal fun afterSync() {
         deps.mirror?.reload()
         val owed = render.afterSync()
+        if (!owed) deps.database.writeBlocking { db -> songbookPages.renderOwn(db) }
         search.invalidate()
         if (owed) {
             try {
@@ -226,7 +254,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /**
      * The render job (PhoneKinds' render kind, keyed by the phone's build, its words PhoneKinds'): the pages the phone
      * owes made by this build, the lookups queued meanwhile run first between two songs (JobContext.yieldToQueued), its
-     * stage saying how far; a song whose pages couldn't be made fails the job, with why. One waiting already is joined.
+     * stage saying how far, then the songbook pages the phone made made again where their songs or the build moved
+     * (SongbookPagesImpl.renderOwn); a song whose pages couldn't be made fails the job, with why. One waiting already
+     * is joined.
      */
     fun renderAgain(): Job {
         val kind = PhoneKinds.RENDER
@@ -240,6 +270,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                     val made = render.renderStale(between = { job.yieldToQueued() }) { done, total ->
                         job.stage(stage, "running", PhoneKinds.fill(kind.running, "done" to done, "total" to total))
                     }
+                    deps.database.writeBlocking { db -> songbookPages.renderOwn(db) }
                     search.invalidate()
                     val failed = made.failed.values.firstOrNull()
                     if (failed != null) {
@@ -260,7 +291,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         val busy = active.filter { it.spec.kind != "remove" }.mapNotNull { it.spec.songId }.toSet()
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, removing = removing,
-            jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = false,
+            jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
         )
     }
 
