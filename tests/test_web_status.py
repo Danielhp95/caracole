@@ -23,19 +23,19 @@ READY = SongFacts(sheet="Radiohead/Creep/sheet.pdf")
 
 def test_a_queued_request_says_how_many_wait_before_it():
     assert job_line(job(), None) == Line("queued", "Queued…")
-    assert job_line(job(), None, ahead=1) == Line("queued", "Queued behind 1 request…")
-    assert job_line(job(), None, ahead=3).text == "Queued behind 3 requests…"
+    assert job_line(job(), None, ahead=1) == Line("queued", "Queued · 1 request ahead…")
+    assert job_line(job(), None, ahead=3).text == "Queued · 3 requests ahead…"
 
 
 def test_a_running_request_says_its_running_steps_label_whatever_the_command():
     running = job("running", states=["done", "done", "running", "waiting"])
-    assert job_line(running, None) == Line("running", "Fetching from Ultimate Guitar…")
+    assert job_line(running, None) == Line("running", "Fetching from UG…")
     # A job of any other commands reads the same way: the label is the line.
     other = job("running", [("Searching every site", ("get", "Radiohead - Creep"))], states=["running"])
     assert job_line(other, None).text == "Searching every site…"
     # Between two steps, the one about to run.
     between = job("running", states=["done", "waiting", "waiting", "waiting"])
-    assert job_line(between, None).text == "Looking it up…"
+    assert job_line(between, None).text == "Matching…"
 
 
 def test_a_removal_says_removing_while_it_runs_then_removed():
@@ -46,7 +46,7 @@ def test_a_removal_says_removing_while_it_runs_then_removed():
         made.song_key = REMOVING + "radiohead/creep"
         return made
 
-    assert job_line(removal("running", ["running"]), None) == Line("running", "Removing from caracole…")
+    assert job_line(removal("running", ["running"]), None) == Line("running", "Removing from the book…")
     # Its song is gone once it is done: that is what it did, not a request that added the song.
     assert job_line(removal("done", ["done"]), None) == Line("removed", "Removed")
     failed = removal("failed", ["failed"])
@@ -87,7 +87,7 @@ def test_a_songs_line_says_ready_alone_as_the_song_opens_its_sheet_itself():
     assert song_line(job_line(done, READY)) == Line("ready", "Ready")
     # Any other line keeps its link: the next step is elsewhere.
     for line in (Line("review", "Needs your pick", ("Pick", "review?song=3")),
-                 Line("missing", "Not found", ("To-do page", "_todo.md")),
+                 Line("missing", "Not on the sites", ("To-do page", "_todo.md")),
                  Line("ready", "Your version", ("Open", "a/b.html")),
                  Line("ready", "Made", ("Open songbook", "_songbooks/Campfire/songbook.html"))):
         assert song_line(line) == line
@@ -97,7 +97,7 @@ def test_a_done_fetch_without_a_sheet_says_why_and_never_calls_a_wait_a_miss():
     done = job("done", states=["done"] * 4)
     # Looked up during the request (its fetch finished, or its artist's page was read): UG has no sheet.
     assert job_line(done, SongFacts(checked_now=True)) == Line(
-        "missing", "Not found", ("To-do page", "_todo.md"))
+        "missing", "Not on the sites", ("To-do page", "_todo.md"))
     # A cooldown, a block, a spent budget or an error exits 0 and looks nothing up: it waits, it isn't missing.
     assert job_line(done, SongFacts()) == Line("waiting", "Not fetched yet", details=details_href(3))
     assert job_line(done, SongFacts(not_found=True)).tone == "waiting"  # an earlier match's word, not this fetch's
@@ -166,7 +166,7 @@ def test_a_fetch_that_fails_on_a_song_in_review_or_not_found_says_so_not_the_com
     bare = job("failed", states=["done", "done", "failed", "skipped"],
                outputs=[[], [], ["error: Ultimate Guitar lists Obscure Band only by bare tab ids, which …"], []])
     assert job_line(bare, SongFacts(not_found=True)) == Line(
-        "missing", "Not found", ("To-do page", "_todo.md"), details=details_href(3))
+        "missing", "Not on the sites", ("To-do page", "_todo.md"), details=details_href(3))
     # Reviewed on its title alone (other artists' songs of it), it needs review too.
     assert job_line(bare, SongFacts(review=True)).tone == "review"
     # Any other failure, or a song that has its sheet, says the error.
@@ -235,12 +235,12 @@ def test_a_running_lookup_says_its_running_stage_as_a_steps_label_would():
     assert job_line(lookup_job(), None) == Line("running", "Adding to the book…")  # a song new to the library
     sheet = lookup_job(stages={"song": ("done", "in the book"), "match": ("done", "matched to radiohead/creep"),
                                "sheet": ("running", "")})
-    assert job_line(sheet, None) == Line("running", "Fetching from Ultimate Guitar…")
+    assert job_line(sheet, None) == Line("running", "Fetching from UG…")
     pdf = lookup_job(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
                              "pdf": ("running", "")})
-    assert job_line(pdf, None).text == "Rendering the sheet…"
+    assert job_line(pdf, None).text == "Making the PDF…"
     lyrics = lookup_job(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf")})
-    assert job_line(lyrics, None).text == "Fetching the lyrics from LRCLIB…"  # between two: the one about to run
+    assert job_line(lyrics, None).text == "Fetching lyrics…"  # between two: the one about to run
 
 
 def test_a_lookups_sheet_stage_says_lacuerda_while_it_asks_lacuerda_for_the_sheet():
@@ -252,7 +252,7 @@ def test_a_lookups_sheet_stage_says_lacuerda_while_it_asks_lacuerda_for_the_shee
     lacuerda = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["lacuerda"])})
     assert job_line(lacuerda, None) == Line("running", "Fetching from LaCuerda…")
     back = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["ug"])})
-    assert job_line(back, None) == Line("running", "Fetching from Ultimate Guitar…")
+    assert job_line(back, None) == Line("running", "Fetching from UG…")
 
 
 def test_a_lookup_remaking_a_songbook_names_it():
@@ -263,8 +263,8 @@ def test_a_lookup_remaking_a_songbook_names_it():
 
 
 def test_a_lookup_waiting_for_the_lock_says_so():
-    waiting = lookup_job(stages={"song": ("running", "waiting for another caracole (pid 42: run), which lets "
-                                                     "a lookup go first at its next pause, or between two songs")})
+    waiting = lookup_job(stages={"song": ("running", "waiting for the book (pid 42: run); a fetch goes first "
+                                                     "at its next pause")})
     assert job_line(waiting, None).text == "Waiting for the book…"
 
 
@@ -296,11 +296,11 @@ def youtube_job(state="running", stages=None):
 
 def test_a_sheet_from_youtube_says_its_running_stage():
     lines = {"song": "Adding to the book…", "audio": "Getting the audio…",
-             "lyrics": "Fetching the lyrics from LRCLIB…", "chords": "Working out the chords…",
-             "pdf": "Rendering the sheet…"}
+             "lyrics": "Fetching lyrics…", "chords": "Working out the chords…",
+             "pdf": "Making the PDF…"}
     for name, text in lines.items():
         assert job_line(youtube_job(stages={name: ("running", "")}), None) == Line("running", text)
-    waiting = youtube_job(stages={"song": ("running", "waiting for another caracole (pid 9: run)")})
+    waiting = youtube_job(stages={"song": ("running", "waiting for the book (pid 9: run)")})
     assert job_line(waiting, None).text == "Waiting for the book…"
 
 
@@ -324,9 +324,9 @@ def test_a_caracole_with_no_to_do_page_says_the_same_line_with_no_link_to_it():
     assert job_line(done, SongFacts(review=True), todo=None) == Line("review", "Needs your pick")
     assert job_line(done, SongFacts(review=True, picker="review?song=7"), todo=None).link == (
         "Pick", "review?song=7")
-    assert job_line(done, SongFacts(checked_now=True), todo=None) == Line("missing", "Not found")
+    assert job_line(done, SongFacts(checked_now=True), todo=None) == Line("missing", "Not on the sites")
     bare = job("failed", states=["done", "done", "failed", "skipped"], outputs=[[], [], ["error: no"], []])
-    assert job_line(bare, SongFacts(not_found=True), todo=None) == Line("missing", "Not found",
+    assert job_line(bare, SongFacts(not_found=True), todo=None) == Line("missing", "Not on the sites",
                                                                         details=details_href(3))
     assert job_line(bare, SongFacts(review=True), todo=None) == Line("review", "Needs your pick",
                                                                      details=details_href(3))
@@ -352,4 +352,4 @@ def test_an_import_of_a_file_is_a_sync_and_says_its_stages_and_once_over_synced(
     made.state = "done"
     for s in made.stages:
         s.state = "done"
-    assert job_line(made, None) == Line("ready", "Synced")
+    assert job_line(made, None) == Line("ready", "Shared")

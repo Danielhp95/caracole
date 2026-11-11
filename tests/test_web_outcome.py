@@ -65,10 +65,10 @@ def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_i
                                                                        "gametabs": ("waiting", "")}))
     assert Chip("Extras", "done") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept"),
                                                                     "gametabs": ("done", "")}))
-    spent = ended({"harptabs": ("skipped", "the lookup's 6 requests to harptabs.com are spent; the nightly run does "
+    spent = ended({"harptabs": ("skipped", "this fetch's 6 asks of harptabs.com are spent; tonight's run does "
                                            "the rest")})
     assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
-        "The lookup's 6 requests to harptabs.com are spent: the harmonica tab waits for tonight's run.")
+        "This fetch's 6 asks of harptabs.com are spent. The harmonica tab waits until tonight.")
 
 
 def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its_words():
@@ -76,10 +76,10 @@ def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its
                                               "harptabs")}
     assert Chip("Extras", "running") in steps(lookup(stages=extras | {"gametabs": ("running", "")}))
     assert Chip("Extras", "done") in steps(lookup(stages=extras | {"gametabs": ("done", "game music tab kept")}))
-    spent = ended({"gametabs": ("skipped", "the lookup's 6 requests to gametabs.net are spent; the nightly run does "
+    spent = ended({"gametabs": ("skipped", "this fetch's 6 asks of gametabs.net are spent; tonight's run does "
                                            "the rest")})
     assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
-        "The lookup's 6 requests to gametabs.net are spent: the tab of game music waits for tonight's run.")
+        "This fetch's 6 asks of gametabs.net are spent. The game music tab waits until tonight.")
 
 
 def test_a_step_the_request_doesnt_use_is_not_drawn():
@@ -126,8 +126,8 @@ def test_a_song_ultimate_guitars_index_lacks_is_drawn_plain_never_a_failure():
 def test_a_sheet_that_failed_names_the_site_it_asked_when_it_did():
     job = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria")})
     job.heard({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]})
-    job.heard({"stage": "sheet", "state": "failed", "detail": "Ultimate Guitar failed (ug: 502); the nightly run "
-                                                              "tries again"})
+    job.heard({"stage": "sheet", "state": "failed", "detail": "Ultimate Guitar failed (ug: 502); tried again "
+                                                              "tonight"})
     assert steps(job)[2] == Chip("Sheet", "failed", "UG")
     bug = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("failed", "a bug in caracole: x")})
     assert steps(bug)[2] == Chip("Sheet", "failed")
@@ -172,11 +172,11 @@ def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_othe
         {"name": "Song", "source": "", "state": "failed"}]}
 
 
-COOLING = "Ultimate Guitar is cooling down after a block, until 2026-10-28 14:00 UTC"
+COOLING = "Waiting out Ultimate Guitar until 2026-10-28 14:00 UTC"
 WAITS = (COOLING,
-         "Ultimate Guitar blocked caracole (ug: 403: https://x): no more requests to it until 2026-10-28 14:00 UTC. "
+         "Ultimate Guitar turned us back (ug: 403: https://x). No more asks until 2026-10-28 14:00 UTC. "
          "Nothing marked not on the sites.",
-         "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly run does the rest")
+         "no more asks of Ultimate Guitar this hour (60 spent); tonight's run does the rest")
 
 
 def test_a_sheet_a_block_a_cooldown_or_a_spent_budget_stopped_stays_to_show_which_step_stopped():
@@ -255,25 +255,24 @@ def test_ready_opens_its_sheet():
 
 def test_ready_says_what_waits_for_tonights_run_in_the_stages_words():
     lrclib = ended({"lyrics": ("failed", "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get?x=1: HTTP 503); "
-                                         "the nightly run tries again")})
+                                         "tried again tonight")})
     facts = SongFacts(sheet="Radiohead/Creep/sheet.html")
-    assert said(lrclib, facts).reason == "LRCLIB answered 503: the lyrics wait for tonight's run."
+    assert said(lrclib, facts).reason == "LRCLIB answered 503. The lyrics wait until tonight."
     timeout = ended({"lyrics": ("failed", "LRCLIB failed (lrclib: https://lrclib.net/api/get: timed out); "
-                                          "the nightly run tries again")})
-    assert said(timeout, facts).reason == "LRCLIB failed: the lyrics wait for tonight's run."
-    spent = ended({"gtptabs": ("skipped", "the lookup's 6 requests to gtptabs.com are spent; the nightly run does "
+                                          "tried again tonight")})
+    assert said(timeout, facts).reason == "LRCLIB failed. The lyrics wait until tonight."
+    spent = ended({"gtptabs": ("skipped", "this fetch's 6 asks of gtptabs.com are spent; tonight's run does "
                                           "the rest")})
-    assert said(spent, facts).reason == ("The lookup's 6 requests to gtptabs.com are spent: the Guitar Pro file "
-                                         "waits for tonight's run.")
-    blocked = ended({"ug": ("skipped", "Ultimate Guitar blocked caracole (ug: 429: https://x: HTTP 429): no more "
-                                       "requests to it until 2026-10-22 18:00 UTC. Nothing was marked not found.")})
-    assert said(blocked, facts).reason == ("Ultimate Guitar blocked caracole: its other versions and its tab "
+    assert said(spent, facts).reason == ("This fetch's 6 asks of gtptabs.com are spent. The Guitar Pro file "
+                                         "waits until tonight.")
+    blocked = ended({"ug": ("skipped", "Ultimate Guitar turned us back (ug: 429: https://x: HTTP 429). No more "
+                                       "asks until 2026-10-22 18:00 UTC. Nothing marked not on the sites.")})
+    assert said(blocked, facts).reason == ("Ultimate Guitar turned us back. Its other versions and tab "
                                            "wait until 2026-10-22 18:00 UTC.")
-    cooling = ended({"lyrics": ("skipped", "LRCLIB is cooling down after a block, until 2026-10-22 18:00 UTC")})
-    assert said(cooling, facts).reason == ("LRCLIB is cooling down after a block: the lyrics wait until "
-                                           "2026-10-22 18:00 UTC.")
+    cooling = ended({"lyrics": ("skipped", "Waiting out LRCLIB until 2026-10-22 18:00 UTC")})
+    assert said(cooling, facts).reason == ("Waiting out LRCLIB until 2026-10-22 18:00 UTC. The lyrics wait.")
     # Nothing to say of a site turned off, or of a stage that had nothing to do.
-    quiet = ended({"gtptabs": ("skipped", "gtptabs.com is off in caracole.toml"),
+    quiet = ended({"gtptabs": ("skipped", "gtptabs.com is off (caracole.toml)"),
                    "songbooks": ("skipped", "in no songbook")})
     assert said(quiet, facts).reason == ""
 
@@ -282,7 +281,7 @@ def test_needs_review_picks_the_match():
     facts = SongFacts(review=True, picker="review?song=7")
     job = ended({"sheet": ("skipped", "caracole isn't sure which Ultimate Guitar song this is")})
     assert said(job, facts, song_id=7) == Outcome(
-        "review", "Needs your pick", "caracole isn't sure which Ultimate Guitar song it is.",
+        "review", "Needs your pick", "Not sure which UG song it is.",
         Action("Pick", href="/review?song=7"))
     # Without candidates to pick from, its line on the library page, where caracole review's answers are.
     bare = said(job, SongFacts(review=True), song_id=7)
@@ -298,48 +297,48 @@ def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
     job = ended({"sheet": ("skipped", NOT_IN_INDEX)}, display="Horse The Band - Crippled By Pizza")
     unmatched = SongFacts(not_found=True, checked_now=True)
     assert said(job, unmatched, song_id=3) == Outcome(
-        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name.", SEARCH)
+        "missing", "Not on the sites", "Not in UG's index under this name.", SEARCH)
     # Its artist's UG page was read for it, with no chords there: UG was asked, and the index still lacks it.
     read = SongFacts(not_found=True, checked_now=True, asked_ug=True)
-    assert said(job, read, song_id=3) == Outcome("missing", "Not on the sites", "Ultimate Guitar has no chords for it.",
+    assert said(job, read, song_id=3) == Outcome("missing", "Not on the sites", "UG has no chords for it.",
                                                  SEARCH)
     # A song the index matched, whose UG page had no sheet to keep: requested by name.
     matched = ended({"sheet": ("skipped", "UG has no sheet to keep")},
                     display="Horse The Band - Crippled By Pizza")
     assert said(matched, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
-        "missing", "Not on the sites", "Ultimate Guitar has no chords for it.",
+        "missing", "Not on the sites", "UG has no chords for it.",
         Action("Ask by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
     # A fetch of commands that refused the song as not in the index (it failed): not asked either.
     fetch = Job(9, "Fetch Horse The Band - Crippled By Pizza", "horse-the-band/crippled-by-pizza",
                 [Step("Fetching from UG", ("fetch", "--song=Horse The Band - Crippled By Pizza"),
                       state="failed")], fetching=True, state="failed")
     assert said(fetch, SongFacts(not_found=True), song_id=3).reason == (
-        "Not in the offline Ultimate Guitar index under this name.")
+        "Not in UG's index under this name.")
 
 
 def test_not_found_with_something_elsewhere_gets_it_from_there():
     job = ended({"sheet": ("skipped", "UG has no sheet to keep")})
     gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
     assert said(job, gtp, song_id=3) == Outcome(
-        "missing", "Not on the sites", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
+        "missing", "Not on the sites", "UG has no chords for it. gtptabs lists a page for it.",
         Action("Fetch from there", post="/lookup", fields=(("song", "3"),)))
     # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
     unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
     lc = SongFacts(not_found=True, checked_now=True,
                    elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
     assert said(unmatched, lc, song_id=3) == Outcome(
-        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
+        "missing", "Not on the sites", "Not in UG's index under this name. LaCuerda has a sheet.",
         Action("Fetch from there", post="/lookup", fields=(
             ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
         also=SEARCH)
     # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
     got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
     assert said(got, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
-        "missing", "Not on the sites", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
-                                "gtptabs.com.", Action("Open in the library", href="/#song=3"))
+        "missing", "Not on the sites", "UG has no chords for it. Got a Guitar Pro file from "
+                                "gtptabs.", Action("Open in the library", href="/#song=3"))
     assert said(got, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
-        "missing", "Not on the sites", "Not in the offline Ultimate Guitar index under this name; caracole got a Guitar "
-                                "Pro file from gtptabs.com.", Action("Open in the library", href="/#song=3"),
+        "missing", "Not on the sites", "Not in UG's index under this name. Got a Guitar "
+                                "Pro file from gtptabs.", Action("Open in the library", href="/#song=3"),
         also=SEARCH)
 
 
@@ -348,18 +347,18 @@ def test_failed_and_not_fetched_yet_try_again():
     assert said(failed) == Outcome("failed", "Failed", "overrides.toml can't be read: line 3.",
                                    Action("Try again", post="/jobs/again", fields=(("job", "4"),)))
     # Not fetched yet says why, from its stages: a wait is never a miss.
-    waits = ended({"sheet": ("skipped", "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly "
+    waits = ended({"sheet": ("skipped", "no more asks of Ultimate Guitar this hour (60 spent); tonight's "
                                         "run does the rest"), "pdf": ("skipped", "no sheet yet")})
     assert said(waits, SongFacts()) == Outcome(
-        "waiting", "Not fetched yet", "This hour's 60 lookup requests to Ultimate Guitar are spent: the sheet waits "
-                                      "for tonight's run.",
+        "waiting", "Not fetched yet", "No more asks of Ultimate Guitar this hour (60 spent). The sheet waits "
+                                      "until tonight.",
         Action("Try again", post="/jobs/again", fields=(("job", "4"),)))
     # A fetch of commands, which has no stages: its output says which.
     fetch = Job(9, "Fetch Radiohead - Creep", "radiohead/creep",
                 [Step("Fetching from UG", ("fetch", "--song=Radiohead - Creep"), state="done")],
                 fetching=True, state="done")
-    assert said(fetch, SongFacts()).reason == ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, "
-                                               "a spent budget or an error: the output says which).")
+    assert said(fetch, SongFacts()).reason == ("UG not asked this time: waiting out a block, no asks left, or an "
+                                               "error. The output says which.")
 
 
 def test_a_failed_removal_tries_again_through_its_question_never_straight_to_remove():
@@ -392,10 +391,10 @@ def test_a_songbook_made_opens_it_and_a_deletion_and_a_removal_say_so():
 def test_an_add_and_a_lacuerda_read_say_their_line_as_a_word_and_a_sentence():
     add = Job(8, "Add Radiohead - Creep", "radiohead/creep", [Step("Adding to the book", ("add",), state="done")],
               state="done")
-    assert said(add, SongFacts()) == Outcome("added", "Added", "The nightly run looks for it.")
+    assert said(add, SongFacts()) == Outcome("added", "Added", "Fetched tonight.")
     read = Job(9, "Read the page of Caifanes on LaCuerda", LACUERDA_ARTIST + "caifanes",
                [Step("Reading", ("lacuerda", "--artist=caifanes"), state="done",
-                     output=["Not read: LaCuerda failed (lacuerda: 503: x); the nightly run tries again"])],
+                     output=["Not read: LaCuerda failed (lacuerda: 503: x). Try again later."])],
                state="done")
     assert said(read) == Outcome("waiting", "Not read", "LaCuerda failed.",
                                  Action("Try again", post="/jobs/again", fields=(("job", "9"),)))
@@ -410,8 +409,8 @@ NOW = datetime(2026, 10, 21, 12, tzinfo=UTC)
 def test_elsewhere_is_a_lacuerda_sheet_or_a_gtptabs_page_the_local_indexes_list(conn, cfg):
     song = add_song(conn, "Estopa", "Como Camarón")
     # A lookup that asked neither: LaCuerda didn't look like the song's, gtptabs.com failed.
-    job = ended({"sheet": ("skipped", ""), "lacuerda": ("skipped", "not a song for LaCuerda: not Spanish"),
-                 "gtptabs": ("failed", "gtptabs.com failed (gtptabs: 500: x); the nightly run tries again")},
+    job = ended({"sheet": ("skipped", ""), "lacuerda": ("skipped", "not for LaCuerda: not Spanish"),
+                 "gtptabs": ("failed", "gtptabs.com failed (gtptabs: 500: x); tried again tonight")},
                 display="Estopa - Como Camarón")
     assert elsewhere(conn, cfg, song, job, NOW) is None
     conn.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) VALUES "
@@ -468,8 +467,8 @@ def test_elsewhere_offers_no_site_the_new_lookup_would_skip_again(conn, cfg):
     # A stage skipped for a spent budget or a block: not offered either, whatever the cooldowns say now.
     conn.execute("DELETE FROM kv WHERE key LIKE 'provider:%'")
     spent = ended({"sheet": ("skipped", ""),
-                   "lacuerda": ("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"),
-                   "gtptabs": ("skipped", "gtptabs.com blocked caracole (gtptabs: 429: x): no more requests to it "
+                   "lacuerda": ("skipped", "this fetch's 6 asks of LaCuerda are spent; tonight's run does the rest"),
+                   "gtptabs": ("skipped", "gtptabs.com turned us back (gtptabs: 429: x). No more asks "
                                           "until 2026-10-22 18:00 UTC.")}, display="Estopa - Como Camarón")
     assert elsewhere(conn, cfg, song, spent, NOW) is None
 
@@ -505,7 +504,7 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
     assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "count": "2 of 5 done"}
     ready = youtube_job("done", EVERY)
     assert progress(ready, job_line(ready, SHEET), SHEET) == {}  # Ready: its steps fold away
-    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube blocked caracole; paused until "
+    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube turned us back; waiting until "
                                                                "2026-10-30 20:00 UTC"),
                                           "chords": ("skipped", "no audio")})
     # The audio a block stopped is the step that stopped it, drawn failed; those it left with nothing to do go.
@@ -518,16 +517,16 @@ def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():
     ready = youtube_job("done", EVERY)
     assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
         "ready", "Ready", "Chords over the lyrics.", Action("Open", href="/" + SHEET.sheet))
-    no_words = youtube_job("done", EVERY | {"lyrics": ("failed", "no lyrics yet (LRCLIB unavailable); tonight's run "
-                                                                "tries again"),
+    no_words = youtube_job("done", EVERY | {"lyrics": ("failed", "no lyrics yet (LRCLIB unavailable); tried again "
+                                                                "tonight"),
                                             "chords": ("done", "chords only, no lyrics")})
     assert outcome(no_words, job_line(no_words, SHEET), SHEET).reason == (
-        "No lyrics yet (LRCLIB unavailable); tonight's run tries again.")
-    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube is paused after a block, until "
+        "No lyrics yet (LRCLIB unavailable); tried again tonight.")
+    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube turned us back; waiting until "
                                                                "2026-10-30 20:00 UTC"),
                                           "chords": ("skipped", "no audio"), "pdf": ("skipped", "no sheet")})
     said = outcome(waited, job_line(waited, None), None)
-    assert said == Outcome("waiting", "Not made yet", "YouTube is paused after a block, until 2026-10-30 20:00 UTC.",
+    assert said == Outcome("waiting", "Not made yet", "YouTube turned us back; waiting until 2026-10-30 20:00 UTC.",
                            Action("Try again", post="/jobs/again", fields=(("job", "6"),)))
     failed = youtube_job("failed", EVERY | {"chords": ("failed", "auto-chords can't read the audio")})
     assert outcome(failed, job_line(failed, None), None).word == "Failed"

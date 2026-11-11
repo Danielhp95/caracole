@@ -149,7 +149,7 @@ def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, 
     """
     chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
     assert chip == {"tag": "a", "href": url, "target": "_blank", "rel": "noopener noreferrer",
-                    "said": "Lyrics: Megalobiz, its page there", "name": "Megalobiz"}
+                    "said": "Lyrics: its page on Megalobiz", "name": "Megalobiz"}
 
 
 def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):

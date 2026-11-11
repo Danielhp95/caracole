@@ -454,7 +454,7 @@ def test_the_line_under_the_holes_names_the_harps_notes_outside_the_key():
     said = {name: named(harp.outside("aeolian", (HARP_KEYS.index(name) - 11) % 12), 11, names) for name in "DAG"}
     assert said == {"D": "Every note it plays is in B minor.", "A": "Outside B minor: G#.",
                     "G": "Outside B minor: C."}
-    assert named(harp.outside("ionian", 0), 7, spelling(Key(7, "ionian"))) == "Every note it blows or draws is in G major."
+    assert named(harp.outside("ionian", 0), 7, spelling(Key(7, "ionian"))) == "Every note it plays is in G major."
     assert named(harp.outside("dorian", 5), 2, spelling(Key(2, "dorian"))) == "Outside D dorian: F#."  # a G harp
 
 

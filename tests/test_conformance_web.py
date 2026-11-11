@@ -648,7 +648,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("its song stage, a song of the library", in_state(look, "running", {"song": ("running", "")}),
         facts=_status.SongFacts())
     add("waiting for another caracole", in_state(look, "running", {"song": (
-        "running", "waiting for another caracole (pid 4242), which lets a lookup go first at its next pause")}),
+        "running", "waiting for the book (pid 4242); a fetch goes first at its next pause")}),
         facts=_status.SongFacts())
     add("its match stage", in_state(look, "running", {"song": ("done", ""), "match": ("running", "")}),
         facts=_status.SongFacts())

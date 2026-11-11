@@ -157,7 +157,7 @@ def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg,
 
     def runner(args, emit):
         emit(PROGRESS_PREFIX + json.dumps({"stage": "song", "state": "running",
-                                           "detail": "waiting for another caracole (pid 42: run)"}))
+                                           "detail": "waiting for the book (pid 42: run)"}))
         release.wait(20)
         for event in ({"stage": "song", "state": "done", "detail": "in the book"},
                       {"stage": "sheet", "state": "skipped", "detail": "the lookup requests are spent"},
@@ -174,7 +174,7 @@ def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg,
         queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True)
         url = f"http://127.0.0.1:{server.server_address[1]}/lookup?job=1"
         waiting = dump_dom(url, tmp_path / "1")
-        assert "waiting for another caracole (pid 42: run)" in shown(waiting, 'p class="said"')
+        assert "waiting for the book (pid 42: run)" in shown(waiting, 'p class="said"')
         release.set()
         for _ in range(100):
             if not queue.active_count():
