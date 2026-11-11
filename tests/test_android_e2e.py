@@ -48,12 +48,18 @@ and what the next step needs of it). The steps, as the plan numbers them:
    computer's config); nothing of either side's politeness crosses (the owner's choice: Ultimate Guitar cools on the
    phone alone, and the computer's events and the kv records of its pace, health and lookups are as they were); and
    the index pages the phone read (its artist page of the bare tab) reach the computer's index, merged by the job its
-   ``POST /peer/index`` queued; and the pages the phone made of the songs it gave are still its own.
+   ``POST /peer/index`` queued; the pages the phone made of the songs it gave are still its own, and those of the
+   song it took (looked up and rendered again on the computer) forgotten, the mirror's serving at its unit's digest.
 11. The pages phase's end: the computer, which took those songs, copied, and Python's build of the phone's pages of
    them run on the copy (tests/helpers/phone_render.py, ``Computer.phone_pages``): the phone wrote the same pages,
    each byte for byte, info.json too, and recorded them as Python does (each page's SHA-256, size and unit, the
    song's unit and script, and what its sheet plays: kv ``render:files:``, ``render:<id>:phone`` and
    ``render:progressions:``).
+12. Phone, phase 7, the computer off: a new build of the app (PhoneRender's build stamp another) makes the pages
+   owed again over the scenario's library, a lookup queued as the render job starts runs between two songs, before
+   the job ends, and the phone's own pages of step 11's songs, which the mirror holds the computer's of now, are
+   forgotten for the mirror's; its time over the library, printed (the plan's §9, the M5 check), with a pass's that
+   makes every song's pages itself, as a phone holding none of the computer's (no mirror).
 
 Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
 sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
@@ -419,6 +425,12 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
 
     # 11. The pages the phone made of its lookups, held to Python's for the same inputs.
     pages_as_python_makes_them(five, computer, dir, tmp_path / "reference")
+
+    # 12. A new build: the render job makes the pages again, a lookup queued meanwhile running between two songs.
+    seven = phone(7, url, dir)
+    assert seven["songs"] >= 20 and seven["requests"] == 0, seven
+    print("the re-render at a new build:", json.dumps({k: seven[k] for k in ("seconds", "songs", "detail", "alone")},
+                                                      ensure_ascii=False))
 
 
 def phone_made(dir: Path, keys: list[str]) -> Pages:

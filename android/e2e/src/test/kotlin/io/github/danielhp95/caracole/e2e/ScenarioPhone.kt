@@ -17,6 +17,7 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +40,8 @@ import kotlin.time.Duration.Companion.minutes
  * header) or its form ([post]: the token in the body, from the page's own origin). Its sites are the fake sites server
  * at [sites] (RoutedTransport: tests/helpers/fake_sites.py), or, with none, a transport that refuses every one.
  */
-class ScenarioPhone(val home: File, val server: String, val sites: String? = null) : AutoCloseable {
+class ScenarioPhone(val home: File, val server: String, val sites: String? = null,
+                    render: ((PhoneDeps) -> PhoneRender)? = null) : AutoCloseable {
     val database: Database = Database(File(home.apply { mkdirs() }, "caracole.sqlite"))
     val libraryDir: File = File(home, "library").apply { mkdirs() }
     val stateDir: File = File(home, "state").apply { mkdirs() }
@@ -58,8 +60,9 @@ class ScenarioPhone(val home: File, val server: String, val sites: String? = nul
     /** The fake sites, every request to one of them sent there; else every site refuses, and nothing is sent. */
     private val transport: Transport = sites?.let(::RoutedTransport) ?: RefusingTransport
 
-    val phone: Phone = Phone(PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET,
-                                       TestApp.CSRF, transport = { transport }))
+    /** The phone, its pages made by [render]'s PhoneRender where one is given (phase 7's), else the app's. */
+    val phone: Phone = PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET, TestApp.CSRF,
+                                 transport = { transport }).let { deps -> Phone(deps, render?.invoke(deps)) }
 
     /** A GET as the WebView makes it: a page's link, or its address typed. */
     fun get(target: String): Response = handle("GET", target, mapOf("sec-fetch-site" to "same-origin"))
