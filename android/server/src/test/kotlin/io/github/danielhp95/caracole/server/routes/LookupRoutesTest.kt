@@ -188,6 +188,28 @@ class LookupRoutesTest {
         assertEquals("turned off in caracole.toml", gtptabs.getValue("why").jsonPrimitive.content)
     }
 
+    /** The M4 check's "the phone matches with the computer's [match]": a title 90.9 like UG's ("Creeps" and creep) is
+     * accepted at the default accept (90), and once the phone takes a computer's `[match] accept = 92` (its settings at
+     * a sync, PhoneConfig.take) the next lookup of such a song asks a review: each lookup reads the settings taken. */
+    @Test fun `a lookup matches with the match settings the phone took from the computer`() {
+        phone.parts.database.writeBlocking { db ->
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (1, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-1')")
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (2, 'portishead', 'roads', 'chords', '1', 'x', 'portishead/roads-chords-2')")
+            db.kvSet("ug:index:built_at", "2026-10-18T03:30:00Z")
+        }
+        fun decision(artist: String, title: String): String? {
+            done(jobOf(post("/lookup", "artist" to artist, "title" to title)))
+            return phone.parts.database.read { Songs.byKey(it, Normalize.identityKey(artist, title)) }?.matchDecision
+        }
+        assertEquals("accept", decision("Radiohead", "Creeps"), "the default [match] accept, 90")
+        phone.parts.database.writeBlocking { db ->
+            PhoneConfig.take(db, JsonObject(mapOf("match" to JsonObject(mapOf("accept" to JsonPrimitive(92))))))
+        }
+        assertEquals("review", decision("Portishead", "Roadss"), "the computer's [match] accept, 92")
+    }
+
     @Test fun `Fetch now on a card, an artist's Songs and Fetch them each queue their command`() {
         val added = done(jobOf(post("/request", "artist" to "Estopa", "title" to "Tu Calorro")))
         // a plain add asks no site: status.py's line for an add, the song's facts read
