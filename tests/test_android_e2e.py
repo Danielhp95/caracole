@@ -60,6 +60,16 @@ and what the next step needs of it). The steps, as the plan numbers them:
    the job ends, and the phone's own pages of step 11's songs, which the mirror holds the computer's of now, are
    forgotten for the mirror's; its time over the library, printed (the plan's §9, the M5 check), with a pass's that
    makes every song's pages itself, as a phone holding none of the computer's (no mirror).
+13. Computer: serve again, the fake sites up. Phone, phase 8: milestone 6's changes, each made on the phone through its
+   own route (the plan's §9, the M6 check): a songbook made, a song's key set in it, a song moved and the songbook
+   renamed, its songbook.html the phone's own and served; a song matched only uncertainly, its review answered with
+   a candidate; a version kept beside a sheet (one tab page from the fake sites); a version made a song's own (Export
+   PDF's ``mine=1``); a Guitar Pro file shared to the app, filed for its song. The next sync lists each change's unit
+   as the phone's and nothing else, and gives them all; the units equal on both sides; and the computer's readers read
+   each back (``made_on_the_phone_read_back``): songbooks.toml's songbook under its new name, in the order the phone
+   moved its songs to, with the key it set, and its page rendered; overrides.toml's ``[match]`` of the pick and the
+   song matched by it; the kept version's file; overrides.toml's ``[version]`` as the phone wrote it; the Guitar Pro
+   file filed, its bytes the phone's.
 
 Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
 sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
@@ -432,6 +442,13 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     print("the re-render at a new build:", json.dumps({k: seven[k] for k in ("seconds", "songs", "detail", "alone")},
                                                       ensure_ascii=False))
 
+    # 13. Milestone 6's changes, made on the phone, given at the next sync and read back on the computer.
+    with FakeSites(LOOKUPS) as fake, computer.serving(port):
+        eight = phone(8, url, dir, sites=fake.url)
+        state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+        assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    made_on_the_phone_read_back(eight, computer)
+
 
 def phone_made(dir: Path, keys: list[str]) -> Pages:
     """The pages the phone made of the songs of identity keys ``keys`` and what it recorded of them, read from
@@ -504,6 +521,60 @@ def pages_as_python_makes_them(five: dict, computer: Computer, dir: Path, into: 
     assert five["progression"]["record"] == mine.records[chinese["key"]]["progressions"]
     print("the pages phase:", json.dumps({path: hashlib.sha256(page).hexdigest() for path, page in mine.pages.items()},
                                          ensure_ascii=False, indent=1))
+
+
+def made_on_the_phone_read_back(eight: dict, computer: Computer) -> None:
+    """Step 13: what phase 8 made on the phone, as the computer's readers read it once ``caracole peer take`` took
+    its units (peer_sync.apply_units: songbook.put_songbook, overrides.put_song_entries, each kept file checked by
+    its SHA-256): the songbook under its new name, its songs in the order the phone moved them to and the key it set;
+    the review's pick as the song's ``[match]``, and the song matched by it; the version kept beside its sheet; the
+    version made the song's own, its ``[version]`` as the phone wrote it; and the Guitar Pro file shared to the phone,
+    filed for its song, its bytes the phone's."""
+    from caracole import db
+    from caracole.inbox import guitar_files
+    from caracole.overrides import load_overrides, song_entries
+    from caracole.songbook import load_songbooks, songbooks_file
+    from caracole.songs import find_song
+
+    cfg = computer.cfg()
+    overrides = load_overrides(cfg.overrides_file)
+    said = eight["songbook"]
+    books = {book.name: book for book in load_songbooks(songbooks_file(cfg.library_dir))}
+    assert said["name"] in books and "From the phone" not in books, list(books)
+    book = books[said["name"]]
+    assert list(book.texts) == said["songs"], book
+    setting = {song.text: song.setting for song in book.songs}[said["set"]]
+    assert setting is not None and setting.key == said["key"], book
+    assert (cfg.library_dir / "_songbooks" / said["name"] / "songbook.html").is_file()  # rendered there too
+
+    conn = db.connect(cfg.db_path)
+    try:
+        review = eight["review"]
+        assert song_entries(overrides, review["key"]).get("match") == review["pick"], song_entries(overrides,
+                                                                                                    review["key"])
+        song = find_song(conn, review["key"])
+        assert song is not None and f"{song.match_artist_key}/{song.match_song_key}" == review["pick"], song
+        assert not song.review, song
+
+        kept = eight["kept"]
+        song = find_song(conn, kept["key"])
+        (path,) = conn.execute("SELECT path FROM files WHERE song_id = ? AND name = ?",
+                               (song.id, f"version-{kept['tab']}.txt")).fetchone()
+        assert (cfg.library_dir / path).is_file(), path
+
+        mine = eight["mine"]
+        assert song_entries(overrides, mine["key"]).get("version") == mine["version"], song_entries(overrides,
+                                                                                                    mine["key"])
+
+        shared = eight["guitar"]
+        song = find_song(conn, shared["key"])
+        files = guitar_files(conn, song.id)
+        assert [f.name for f in files] == [shared["name"]], files
+        assert hashlib.sha256((cfg.library_dir / files[0].path).read_bytes()).hexdigest() == shared["sha256"]
+    finally:
+        conn.close()
+    print("milestone 6's changes:", json.dumps({k: eight[k] for k in ("songbook", "review", "kept", "mine", "guitar")},
+                                               ensure_ascii=False))
 
 
 def merged(computer: Computer, timeout: float = 300) -> dict[int, str]:

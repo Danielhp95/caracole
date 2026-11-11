@@ -3,11 +3,14 @@ package io.github.danielhp95.caracole.e2e
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Reads
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.RenderStats
+import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.ug.SheetVersions
 import io.github.danielhp95.caracole.mirror.Gate
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.PhoneGate
@@ -17,6 +20,8 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.lookups.InboxShare
+import io.github.danielhp95.caracole.server.lookups.Review
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
@@ -108,6 +113,13 @@ import kotlin.test.fail
  *    lookup queued as it starts runs between two songs, before the job ends, phase 5's pages, which the mirror holds
  *    the computer's of now, forgotten for the mirror's, and its time over the library is written for the report,
  *    with a pass's that makes every song's pages itself, as a phone with none of the computer's (no mirror).
+ * 8. Milestone 6's changes, the computer back and the fake sites up, each through its own route: a songbook made, a
+ *    song's key set in it, a song moved and the songbook renamed, its songbook.html the phone's and served; a song
+ *    matched only uncertainly, its review answered with a candidate; a version kept beside a sheet (Keep it, one tab
+ *    page from the fake sites, Ultimate Guitar's phase-5 cooldown over); a version made a song's own (Export PDF's
+ *    `mine=1`); a Guitar Pro file shared to the app (InboxShare), filed for its song. The comparison lists each
+ *    change's unit as the phone's and nothing else, the apply gives them all and leaves nothing, and a comparison
+ *    after finds nothing; each change and the phone's units are written for the Python side to read back.
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -619,6 +631,146 @@ class PhoneScenarioTest {
                 })
                 put("progress", JsonArray(said.map(::JsonPrimitive)))
             }
+        }
+    }
+
+    /**
+     * Milestone 6's changes, each made on the phone through its own route as the page or the share sheet makes it,
+     * then given to the computer at the next sync (the Sync tab's compare and apply): a songbook made, a song's key
+     * set in it, a song moved and the songbook renamed (SongbookRoutes), its songbook.html the phone's own and served;
+     * a song asked for that the index matches only uncertainly, its review answered with a candidate (ReviewRoutes);
+     * a version kept beside a sheet (VersionsRoutes' Keep it, one tab page from the fake sites); a version made a
+     * song's own (Export PDF's `mine=1`, ExportRoutes); and a Guitar Pro file shared to the app, filed for its song
+     * (InboxShare, the inbox runner). The comparison lists each change's unit as the phone's and nothing else; the
+     * apply gives them all and leaves nothing; what each change is, for tests/test_android_e2e.py's step 13 to read
+     * back on the computer, and the phone's units, are written.
+     */
+    @Test fun phase8_theSongbooksVersionsReviewAndFilesMadeOnThePhoneReachTheComputer() = phase(8) { phone, scenario ->
+        assertNotNull(sites, "phase 8 keeps a version from the fake sites (-Pcaracole.e2e.sites)")
+        val changed = scenario.changed.values.flatten().toSet()
+        val taken = setOf(scenario.r.key, scenario.c1.key, scenario.c2.key)
+        val guitars = phone.database.read { db ->
+            db.query("SELECT DISTINCT songs.key FROM files JOIN songs ON songs.id = files.song_id " +
+                         "WHERE files.name LIKE 'guitar-%'") { it.text(0)!! }
+        }.toSet()
+        // The computer's songs no change of the goal's touched, each with the computer's sheet viewer mirrored.
+        val sheets = phone.mirror.manifest()!!.entries.filter { it.path.endsWith("/sheet.html") && it.unit != null }
+            .associateBy { it.unit!! }
+        val plain = scenario.songs.filter { it.key !in changed && it.key !in taken && it.key !in guitars &&
+                                                it.unit in sheets }
+        assertTrue(plain.size >= 4, "four songs of the computer's to change: $plain")
+        val (first, second, mine, shared) = plain.take(4).map { songOf(phone, it) }
+        fun display(song: Song) = phone.database.read { db -> Songs.byKey(db, song.key)!!.display }
+
+        // A song asked for by a name the index matches only uncertainly (its title a part of the index's), looked up:
+        // a review, its candidates the index's; answered with the first of them, and matched again by it.
+        val loose = Song(scenario.lookups.song("fetch_now").song.artist, "Stilly Night", "")
+        val asked = done(phone.await(phone.jobOf(phone.post("/request", "artist" to loose.artist,
+                                                            "title" to loose.title, "fetch" to "1"))))
+        val reviewed = phone.database.read { db ->
+            db.query("SELECT key FROM songs WHERE artist = ? AND title = ?", loose.artist, loose.title) { it.text(0)!! }
+        }.singleOrNull() ?: fail("no song ${loose.artist} - ${loose.title}: ${asked.asJson()}")
+        val inReview = phone.database.read { db -> Songs.byKey(db, reviewed)!! }
+        assertTrue(inReview.review, "an uncertain match is a review: ${inReview.matchDecision} ${asked.asJson()}")
+        val refs = phone.database.read { db -> Review.choices(db, inReview) }.map { it.text("ref") }
+        assertTrue(refs.isNotEmpty(), "the review's candidates")
+        val pick = refs.first()
+        done(phone.await(phone.jobOf(phone.post("/review", "song" to "${inReview.id}", "pick" to pick,
+                                                "shown" to refs.joinToString(" ")))))
+        val answered = phone.database.read { db -> Songs.byKey(db, reviewed)!! }
+        assertFalse(answered.review, "the review answered: ${answered.matchDecision}")
+        assertEquals(pick, "${answered.matchArtistKey}/${answered.matchSongKey}", "matched by the pick")
+
+        // A songbook made of two songs, one's key set in it, the other moved first, and renamed.
+        val made = "From the phone"
+        val named = "Phone set"
+        val ids = listOf(first, second).map { idOf(phone, it.key) }
+        done(phone.await(phone.jobOf(phone.post("/songbook/make", "name" to made, "songs" to ids.joinToString(",")))))
+        done(phone.await(phone.jobOf(phone.post("/songbook/set", "name" to made, "song" to display(first),
+                                                "key" to "D"))))
+        done(phone.await(phone.jobOf(phone.post("/songbook/move", "name" to made, "song" to display(second),
+                                                "position" to "1"))))
+        done(phone.await(phone.jobOf(phone.post("/songbook/rename", "name" to made, "new" to named))))
+        val books = phone.database.read { db ->
+            db.query("SELECT name FROM phone_songbooks ORDER BY position") { it.text(0)!! }
+        }
+        assertTrue(named in books && made !in books, "the songbook renamed: $books")
+        val page = File(phone.libraryDir, "_songbooks/$named/songbook.html")
+        assertTrue(page.isFile, "the phone made the songbook's page: $page")
+        val served = phone.get("/" + quotePath("_songbooks/$named/songbook.html"))
+        assertEquals(200, served.status, served.text.take(1000))
+        assertTrue(served.header("content-type").orEmpty().startsWith("text/html"), "${served.header("content-type")}")
+        assertTrue(served.bytes.contentEquals(page.readBytes()), "the songbook's page served as the phone wrote it")
+
+        // Keep it: a version of a sheet not kept beside it yet, one tab page from the fake sites (a page of theirs).
+        // Ultimate Guitar cools on the phone since phase 5's 403: that cooldown over, as a day on would leave it.
+        phone.database.writeBlocking { db -> db.kvDelete("provider:ug") }
+        val theirs = listOf("get_it", "fetch_now", "chinese", "harmonica")
+            .flatMap { scenario.lookups.song(it).tabs }.toSet()
+        val (kept, tab) = phone.database.read { db ->
+            val rank = PhoneConfig.read(db).rank
+            db.query("SELECT DISTINCT song_id FROM versions WHERE provider = 'ug' ORDER BY song_id") { it.long(0)!! }
+                .firstNotNullOfOrNull { id ->
+                    SheetVersions.mayKeep(db, id, SheetVersions.inLibrary(db, id, rank), emptyList())
+                        .firstOrNull { it.url in theirs }
+                        ?.let { Songs.byId(db, id)!!.key to it.tabId }
+                }
+        } ?: fail("no song with a version left to keep")
+        val keep = done(phone.await(phone.jobOf(phone.post("/versions/keep", "song" to "${idOf(phone, kept)}",
+                                                           "tab" to tab))))
+        assertTrue("version-$tab.txt" in keptFiles(phone, kept), "version $tab kept: ${keep.asJson()}")
+
+        // Make this my version: Export PDF's link with mine=1, on the computer's viewer the mirror serves.
+        val viewer = sheets.getValue(mine.unit).path
+        val export = phone.get("/export.pdf?sheet=" + quote(viewer) + "&t=2&mine=1")
+        assertEquals(200, export.status, export.text.take(1000))
+        val making = phone.phone.queue.snapshot().single { it.key.startsWith("export:${mine.key}:") }
+        done(phone.await(making.id))
+        val version = phone.database.read { db ->
+            db.one("SELECT value FROM phone_overrides WHERE tbl = 'version' AND key = ?", mine.key) { it.text(0)!! }
+        } ?: fail("no [version] of ${mine.key} written")
+
+        // A Guitar Pro file shared to the app, named for its song: filed as the song's guitar-N.
+        val gp = phone.database.read { db ->
+            db.one("SELECT path FROM files WHERE name LIKE 'guitar-%.gp' ORDER BY path LIMIT 1") { it.text(0)!! }
+        } ?: fail("no Guitar Pro file on the phone to share")
+        val bytes = File(phone.libraryDir, gp).readBytes()
+        val share = InboxShare.share(phone.phone.parts, "${display(shared)}.gp", "application/octet-stream", bytes)
+        val filing = done(phone.await((share.job ?: fail("not queued: ${share.said}")).id))
+        val filed = keptFiles(phone, shared.key).filter { it.startsWith("guitar-") }
+        assertEquals(listOf("guitar-1.gp"), filed, "filed for ${shared.key}: ${filing.asJson()}")
+
+        // The next sync: every change the phone's, given; nothing else differs.
+        val units = setOf("songbook/" + Songbooks.nameKey(named), "song/$reviewed", "song/$kept", mine.unit, shared.unit)
+        val compared = compare(phone)
+        assertEquals(units.associateWith { "mine" }, compared.proposals)
+        val job = apply(phone, compared, "")
+        assertStages(phone, job, SyncEngine.COMPARE to DONE, SyncEngine.TAKE to SKIPPED, SyncEngine.GIVE to DONE,
+                     SyncEngine.MIRROR to DONE, SyncEngine.AGREE to DONE)
+        val outcome = outcome(phone, job)
+        assertEquals(units, units(outcome, "given"), "$outcome")
+        assertEquals(JsonArray(emptyList()), outcome["left"], "nothing left: $outcome")
+        assertEquals(emptyMap(), compare(phone).proposals, "a comparison after finds nothing")
+
+        write(File(phone.home, "phone-state.json"), buildJsonObject {
+            put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
+        })
+        buildJsonObject {
+            put("songbook", buildJsonObject {
+                put("name", named)
+                put("songs", JsonArray(listOf(second, first).map { JsonPrimitive(display(it)) }))
+                put("set", display(first))
+                put("key", "D")
+            })
+            put("review", buildJsonObject { put("key", reviewed); put("pick", pick) })
+            put("kept", buildJsonObject { put("key", kept); put("tab", tab) })
+            put("mine", buildJsonObject { put("key", mine.key); put("version", Json.parseToJsonElement(version)) })
+            put("guitar", buildJsonObject {
+                put("key", shared.key)
+                put("name", filed.single())
+                put("sha256", sha256(bytes))
+            })
+            put("given", outcome["given"] ?: JsonNull)
         }
     }
 
