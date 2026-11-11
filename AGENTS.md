@@ -2030,15 +2030,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `POST /review`, its answer and the card's picker's: `caracole review --song=… --pick=…` (or `--none --seen=…`)
     queued under the song's key, never joined (`join` false), refused while the song's own request waits or runs;
   - a pick with Fetch it now is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
-    caracole serve's `caracole fetch --song` and `render --song`, which the phone hasn't.
+    caracole serve's `caracole fetch --song` and `render --song`, which the phone hasn't: its line, while the review
+    runs, the lookup's first stage's, as status.py says it of a job with a lookup ("Finding the song…");
+  - the page's form token is Assembly's (`ReviewRoutes(parts, csrf)`, no default), so its Pick posts as the card's.
 - server/lookups' `ReviewRunner` is commands/library.py's `_answer`, in one savepoint: `Review.accept` (`[match]`, and
   `[alias]` when `writesAlias`) or `Review.reject` (the candidates seen, else every one listed, under `[reject]`),
   `review` false, then `Matcher.matchAll` over the song and, after an `[alias]`, every song with that artist among its
   artists; its lines caracole review's but `Wrote …` (the phone writes no _todo.md or index.html).
-- `Review` is review.py's rules: `candidatesOf`, `searchCandidates` (core.search's `searchIndex`, less the song's
-  `[reject]`), `writesAlias`, `stepWords` and the picker's choices (library_page.review_choices).
+- `Review` is review.py's rules: `searchCandidates` (core.search's `searchIndex`, less the song's `[reject]`),
+  `writesAlias`, `accept` and `reject`, and, as the cards' `Choices` ports them (library-cards), `candidatesOf`,
+  `ref`, `stepWords` and the picker's choices (library_page.review_choices).
 - vectors/web/review.jsonl (tests/test_conformance_review.py, `ReviewReplay`, area `review`) holds both routes, the
-  rules, the command over a copy of a library and the job's line after it; ReviewRoutesTest the phone whole.
+  rules, the command over a copy of a library, the job's line after it and a pick with Fetch it now's lines as it
+  runs; ReviewRoutesTest the phone whole (its page's form posted, a pick refused while the song's request runs).
 
 ##### Guitar Pro on the phone
 

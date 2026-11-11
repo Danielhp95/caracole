@@ -192,7 +192,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         SongbookRoutes(parts),
         VersionsRoutes(parts, deps.csrf),
         HarmonicaRoutes(parts, deps.csrf),
-        ReviewRoutes(parts),
+        ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },

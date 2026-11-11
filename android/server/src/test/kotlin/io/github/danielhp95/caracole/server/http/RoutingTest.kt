@@ -192,7 +192,7 @@ class RoutingTest {
             TestApp(tmp.root, modules = { db ->
                 val parts = TestParts.of(db, tmp.root, scope)
                 listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts),
-                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts),
+                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts, TestApp.CSRF),
                        ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()

@@ -43,7 +43,12 @@ which the replay loads into a fresh database for each case that writes.
   artist's songs matched again; every other song is as the fixture has it);
 - ``{"fn": "POST /review, run", "case", "form", "out": {line, overrides, songs}}``: the job ``POST /review`` queues,
   run to its end on a fresh copy of the library, ``caracole review`` in-process, then the job's line as the phone's
-  says it (``status.job_line`` with ``todo=None``, its song's facts ``jobs_routes.song_of``'s), and the rows as above.
+  says it (``status.job_line`` with ``todo=None``, its song's facts ``jobs_routes.song_of``'s), and the rows as above;
+- ``{"fn": "POST /review, fetching", "case", "form", "out": {running: [{command, line}], line}}``: a pick with Fetch
+  it now as the phone queues it (its ``phone_steps``), on a fresh copy of the library: the job's line as each of its
+  two commands starts (while ``caracole review`` runs, the lookup's first stage's: ``status.py`` reads a job with a
+  lookup by its stages), ``caracole review`` run in-process and the lookup ended at once with nothing said, then the
+  job's line once it is over.
 
 Stamps: the library's writers take ``STAMP``; what the command writes takes the clock's time (``matched_at``,
 ``updated_at``), which no record holds.
@@ -593,6 +598,64 @@ def jobs(where: Path) -> list[dict[str, Any]]:
     return out
 
 
+FETCHING = (  # case, song's title, pick
+    ("a pick, fetched now", "Creep", "radiohead/creep"),
+    ("a pick of another artist's, fetched now", "Persiana Americana", "soda-stereo/persiana-americana"),
+    ("a search hit, fetched now", "Crep", "radiohead/creep"),
+)
+
+
+def fetching(where: Path) -> list[dict[str, Any]]:
+    """A pick with Fetch it now, as the phone queues it: its ``phone_steps`` (``caracole review``, then the lookup Fetch
+    now queues) under the title and key ``POST /review`` gives it, run by a queue whose runner says the job's line as
+    each command starts (``status.job_line``, ``todo=None``: while ``caracole review`` runs, the lookup's stages wait,
+    so its first one's), runs ``caracole review`` in-process and ends the lookup at once, having said nothing (no site
+    is asked); then the job's line once it is over."""
+    from caracole.overrides import load_overrides
+    from caracole.review import search_candidates
+    from caracole.web import jobs_routes
+    from caracole.web.jobs import lookup_steps, review_steps
+    from caracole.web.status import job_line
+
+    out = []
+    for n, (case, title, pick) in enumerate(FETCHING):
+        with _library(where / f"fetching-{n}") as (path, cfg, conn, songs):
+            song = songs[title]
+            cands = (_choices(conn, songs, title) if song.review else
+                     [{"ref": f"{c['artist_key']}/{c['song_key']}"} for c in
+                      search_candidates(conn, song, rejected=load_overrides(cfg.overrides_file).reject.get(
+                          song.key, frozenset()))])
+            form = [("song", str(song.id)), ("pick", pick), ("shown", " ".join(c["ref"] for c in cands)),
+                    ("fetch", "1")]
+            running: list[dict[str, Any]] = []
+            app = None
+
+            def line_now() -> dict[str, Any]:
+                [job] = app.queue.snapshot()
+                _, facts = jobs_routes.song_of(app, conn, load_overrides(cfg.overrides_file), job)
+                return job_line(job, facts, todo=None).as_json()
+
+            def runner(args, emit):
+                running.append({"command": args[0], "line": line_now()})
+                if args[0] == "get":
+                    return 0
+                said = _cli(path, list(args))
+                for line in said["lines"]:
+                    emit(line)
+                return said["code"]
+
+            app = _app(cfg, runner=runner)
+            steps = [*review_steps(song.display, pick=pick), *lookup_steps(song.artist, song.title)]
+            app.submit(f"Pick {pick} for {song.display}, and fetch it", song.key, steps, fetching=True, join=False,
+                       display=song.display)
+            app.queue.run_pending()
+            [job] = app.queue.snapshot()
+            assert job.state == "done", (case, [(s.state, s.output) for s in job.steps])
+            said = {"running": running, "line": line_now()}
+        out.append({"fn": "POST /review, fetching", "case": case, "form": [list(f) for f in form], "out": said})
+    return out
+
+
 # --- the vectors ---------------------------------------------------------------------------------------------------
 
 
@@ -606,7 +669,7 @@ def _made(tmp: Path) -> list[dict[str, Any]]:
     with _library(tmp / "library") as (_path, cfg, conn, songs):
         records = [{"fn": "fixture", "records": dump_fixture(conn)}, *rules(cfg, conn, songs), *picks(cfg, songs),
                    *answers(cfg, conn, songs)]
-    return [*records, *runs(tmp), *jobs(tmp)]
+    return [*records, *runs(tmp), *jobs(tmp), *fetching(tmp)]
 
 
 def test_the_vectors_are_caracole_serves_answers(made):
@@ -657,8 +720,12 @@ def test_the_cases_meet_what_they_name(made):
     lines = _by(made, "POST /review, run")
     assert lines["a pick"]["line"]["text"] == "Added: the nightly run looks for it"
     assert lines["none of these, another left"]["line"]["tone"] == "review"
+    for case, said in _by(made, "POST /review, fetching").items():
+        assert [r["command"] for r in said["running"]] == ["review", "get"], case
+        assert all(r["line"]["tone"] == "running" for r in said["running"]), case
     assert all(r["out"]["lines"] for r in made if r["fn"] == "caracole review" and r["out"]["code"] == 0)
 
 
+@pytest.mark.slow
 def test_the_vectors_are_the_same_on_another_run(made, tmp_path):
     assert _made(tmp_path) == made

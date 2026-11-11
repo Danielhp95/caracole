@@ -22,8 +22,8 @@ import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
+import io.github.danielhp95.caracole.server.page.internal.cards.Choices
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * `caracole review --song=… --pick=…` (or `--none`, `--seen=…`) on the phone (commands/library.py's `_answer`): one
@@ -157,7 +157,8 @@ class ReviewRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Ove
 
     /**
      * `caracole review`'s command line, as typer reads it: `--song`, `--pick` and each `--seen` (`--name=value` or
-     * `--name value`), `--none`; checked as review_cmd checks it, in its order (exit 2).
+     * `--name value`), `--none`, a `--` ending the options (click's); an option it hasn't refused as it is read, then
+     * any argument (it takes none), then checked as review_cmd checks it, in its order (exit 2).
      */
     internal class Asked(val song: String, val pick: String?, val seen: List<MatchCandidate>) {
         companion object {
@@ -168,9 +169,19 @@ class ReviewRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Ove
                 var pick: String? = null
                 var none = false
                 val seen = ArrayList<String>()
+                val extra = ArrayList<String>()
                 var i = 1  // after `review`
                 while (i < args.size) {
                     val arg = args[i]
+                    if (arg == "--") {  // click: the rest are arguments, whatever they look like
+                        extra += args.subList(i + 1, args.size)
+                        break
+                    }
+                    if (!arg.startsWith("-") || arg == "-") {
+                        extra += arg
+                        i++
+                        continue
+                    }
                     val (name, given) = if (arg.startsWith("--") && '=' in arg) arg.substringBefore('=') to arg.substringAfter('=')
                                         else arg to null
                     val value = when {
@@ -183,10 +194,13 @@ class ReviewRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Ove
                         "--pick" -> pick = value
                         "--seen" -> seen += value!!
                         "--none" -> if (given == null) none = true else throw CommandExit(2, "Option '--none' does not take a value.")
-                        else -> throw CommandExit(2, if (arg.startsWith("-")) "No such option: $name"
-                                                     else "Got unexpected extra argument ($arg)")
+                        else -> throw CommandExit(2, "No such option: $name")
                     }
                     i++
+                }
+                if (extra.isNotEmpty()) {
+                    val s = if (extra.size == 1) "" else "s"
+                    throw CommandExit(2, "Got unexpected extra argument$s (${extra.joinToString(" ")})")
                 }
                 if ((pick != null || none) && song == null) {
                     throw CommandExit(2, "--pick and --none answer for one song: name it with --song")
@@ -221,23 +235,32 @@ class ReviewRunner(val parts: PhoneParts, private val readOverrides: (Db) -> Ove
  * review.py's rules on the phone, for the review runner and the picker (ReviewRoutes): the candidates a review lists
  * ([candidatesOf]), a song not found's search hits ([searchCandidates]), the UG song a candidate is ([ref]), whether a
  * pick writes an `[alias]` ([writesAlias]), the two answers ([accept], [reject]), and the picker's choices
- * ([choices]: library_page.review_choices). vectors/web/review.jsonl holds each to Python's (ReviewReplay).
+ * ([choices]: library_page.review_choices). What the library page's cards show of a review too (candidates_of, ref,
+ * step_words, review_choices) is their port, Choices, read here; vectors/web/review.jsonl holds each to Python's
+ * (ReviewReplay).
  */
 object Review {
     /** review.SHOWN: the candidates a review lists, numbered 1 to 9. */
-    const val SHOWN = 9
+    const val SHOWN = Choices.SHOWN
 
     /** review.SEARCH: the step of a candidate caracole search found, for a song not found. */
-    const val SEARCH = "search"
+    const val SEARCH = Choices.SEARCH
 
     /** review.SEARCHED: the search hits offered as a song not found's candidates. */
     const val SEARCHED = 5
 
     /** review.candidates_of: the song's stored candidates that name a UG song, best first, nine at most. */
-    fun candidatesOf(song: SongRow): List<MatchCandidate> = Matcher.candidatesOf(song).take(SHOWN)
+    fun candidatesOf(song: SongRow): List<MatchCandidate> = Choices.candidatesOf(song)
 
     /** review.ref: a candidate as overrides.toml names a UG song, "artist-key/song-key". */
-    fun ref(cand: MatchCandidate): String = "${cand.artistKey}/${cand.songKey}"
+    fun ref(cand: MatchCandidate): String = Choices.ref(cand)
+
+    /** review.step_words: why the matcher thought of a candidate, in plain words; an unknown step as it is. */
+    fun stepWords(cand: MatchCandidate): String = Choices.stepWords(cand)
+
+    /** library_page.review_choices: each candidate ([cands], else the song's own) as the picker shows it, numbered. */
+    fun choices(db: Db, song: SongRow, cands: List<MatchCandidate>? = null): List<JsonObject> =
+        Choices.reviewChoices(db, song, cands)
 
     /**
      * review.search_candidates: for a song not found (and not ignored), what `caracole search` finds for its artist and
@@ -269,57 +292,4 @@ object Review {
         OverrideWriters.addReject(db, song.display, cands.map(::ref))
         Versions.updateSong(db, song.id, mapOf("review" to false))
     }
-
-    // --- waiting on library-cards: its Choices (server/page/internal/cards/Choices.kt) is the one port of
-    // review_choices and step_words; until it merges, these stand in for it, and go once it has ---------------------
-
-    /** review._STEP_WORDS: why the matcher thought of a candidate, by the step that found it. */
-    private val STEP_WORDS = mapOf(
-        SEARCH to "a caracole search hit for its artist and title",
-        "exact" to "same artist and title",
-        "alias" to "under the artist's [alias]",
-        "fuzzy_title" to "title spelled differently",
-        "fuzzy_artist" to "artist spelled differently",
-        "word_title" to "a title of the artist's with words more or fewer",
-        "typo_artist" to "artist a letter or two off",
-        "title_only" to "title only: another artist's song, probably a cover",
-        "override" to "your [match] in overrides.toml",
-        "pin" to "pinned in overrides.toml",
-        "artist_page" to "on the artist's UG page",
-    )
-
-    /** library_page._TAB_KINDS. */
-    private val TAB_KINDS = mapOf("chords" to "Chords", "tabs" to "Tabs", "ukulele" to "Ukulele Chords")
-
-    /** review.step_words: why the matcher thought of a candidate, in plain words; an unknown step as it is. */
-    fun stepWords(cand: MatchCandidate): String {
-        val step = cand.step ?: ""
-        if (step == "catch_all") {
-            val performer = if (cand.artistKey in Match.PERFORMER_CATCH_ALLS) ", the performer's name first" else ""
-            return "under UG's catch-all ${cand.artistKey}$performer"
-        }
-        return STEP_WORDS[step] ?: step
-    }
-
-    /** library_page.review_choices: each candidate ([cands], else the song's own) as the picker shows it, numbered:
-     * its ref, its artist and title as UG writes them (named from its keys when the index no longer has it, with no
-     * tabs and no page), its score rounded, why, its tabs per type and its UG page. */
-    fun choices(db: Db, song: SongRow, cands: List<MatchCandidate>? = null): List<JsonObject> =
-        (cands ?: candidatesOf(song)).mapIndexed { i, cand ->
-            val hit = Search.indexSong(db, cand.artistKey, cand.songKey)
-            val (artist, title) = if (hit != null) hit.artist to hit.title
-                                  else Search.displayFromKeys(cand.artistKey, cand.songKey)
-            JsonObject(linkedMapOf(
-                "n" to JsonPrimitive(i + 1),
-                "ref" to JsonPrimitive(ref(cand)),
-                "artist" to JsonPrimitive(artist),
-                "title" to JsonPrimitive(title),
-                "score" to JsonPrimitive(Math.rint(cand.score ?: 0.0).toLong()),
-                "why" to JsonPrimitive(stepWords(cand)),
-                "tabs" to JsonPrimitive(hit?.counts?.entries?.joinToString(" · ") { (kind, n) ->
-                    "${TAB_KINDS[kind] ?: kind} ×$n"
-                } ?: ""),
-                "href" to JsonPrimitive(hit?.url ?: ""),
-            ))
-        }
 }

@@ -315,6 +315,17 @@ On the emulator, LookupOfflineTest looks a song up with every site refusing, as 
 stages failed, the notification while it runs), and NoNetworkTest checks that with no sites set a lookup opens no
 socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest NoNetworkTest`.
 
+## Picking an uncertain match
+
+A song caracole isn't sure of (several Ultimate Guitar songs could be it) is settled on the phone as in caracole
+serve: **Pick the match** on its card, on its line in the Requests tab, or a not-found song's **Look in the index**
+(what the offline index finds for its artist and title) lists the candidates, each with why the matcher thought of it,
+its score, its tabs and its Ultimate Guitar page. A pick goes into the phone's overrides under `[match]` (and
+`[alias]` when the artist is spelled otherwise there), **None of these** under `[reject]`, and the song's match is
+decided again at once, with its artist's other songs after an alias. **Fetch it now** (ticked) then looks the song up,
+as Fetch now does. While a request of the song's waits or runs, a pick is refused until it ends. A sync takes the
+answer to the computer, as it takes any of the phone's overrides.
+
 ## Performance notes
 
 **The WAL after an import.** An import (Settings' Import indexes, or a sync's newer indexes) merges the computer's

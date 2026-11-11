@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
@@ -8,13 +9,19 @@ import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.http.Response
+import io.github.danielhp95.caracole.server.jobs.CommandExit
+import io.github.danielhp95.caracole.server.jobs.Commands
 import io.github.danielhp95.caracole.server.jobs.Job
-import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.JobCommands
+import io.github.danielhp95.caracole.server.jobs.JobQueue
+import io.github.danielhp95.caracole.server.jobs.JobSpec
+import io.github.danielhp95.caracole.server.lookups.ReviewRunner
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import io.github.danielhp95.caracole.server.testing.replays.ReviewReplay
 import io.github.danielhp95.caracole.server.testing.text
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,7 +42,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** An uncertain match reviewed on the phone: the routes and the runner as caracole serve's (the vectors), and the
@@ -147,23 +153,56 @@ class ReviewRoutesTest {
         assertFalse(creep.review)
     }
 
-    @Test fun `the picker's page carries the form token, the candidates and no script`() {
-        val routes = ReviewRoutes(phone.parts, csrf = { TestApp.CSRF }, libraryName = { "Tabs" })
-        val page = routes.routes.first { it.method == "GET" }.get!!
-            .answer(TestApp.request("GET", "/review?song=${creep.id}", emptyMap(), ByteArray(0), TestApp.SECRET))
-        assertEquals(200, page.status)
+    @Test fun `the picker's page, as the app assembles it, carries the form token, and its form's Pick is taken`() {
+        val page = handle("GET", "/review?song=${creep.id}", mapOf("sec-fetch-site" to "same-origin"))
+        assertEquals(200, page.status, page.text)
         val html = page.text
         assertFalse("<script" in html)
-        assertTrue("<input type=\"hidden\" name=\"csrf\" value=\"${TestApp.CSRF}\">" in html)
+        assertTrue("<input type=\"hidden\" name=\"csrf\" value=\"${TestApp.CSRF}\">" in html, html)
         assertTrue("<input type=\"hidden\" name=\"shown\" value=\"$SHOWN\">" in html)
         assertTrue("value=\"radiohead/creep\" required autofocus>" in html)
         assertTrue("form-action 'self'" in page.header("content-security-policy")!!)
-        assertTrue("<title>Phone · Pick the match · caracole · Tabs</title>" in html, html.take(800))
+        assertTrue(Regex("<title>[^<]*Pick the match · caracole[^<]*</title>").containsMatchIn(html), html.take(800))
+        // The form as a browser sends it: its hidden fields, the first candidate, Fetch it now as ticked.
+        val hidden = Regex("<input type=\"hidden\" name=\"([a-z]+)\" value=\"([^\"]*)\">").findAll(html)
+            .map { it.groupValues[1] to it.groupValues[2] }.toList()
+        assertEquals(listOf("csrf", "song", "shown"), hidden.map { it.first })
+        val pick = Regex("name=\"pick\" value=\"([^\"]*)\"").find(html)!!.groupValues[1]
+        val answer = handle(
+            "POST", "/review",
+            mapOf("sec-fetch-site" to "same-origin", "origin" to "http://${TestApp.HOST}",
+                  "content-type" to "application/x-www-form-urlencoded"),
+            TestApp.form(hidden + listOf("pick" to pick, "fetch" to "1")),
+        )
+        assertEquals(303, answer.status, answer.text)
+        val location = answer.header("location")!!
+        assertTrue(Regex("/#tab=requests&job=\\d+").matches(location), location)
+        val job = done(location.substringAfter("job=").toInt())
+        assertEquals(listOf("review", "get"), job.steps.map { it.args.first() })
+        assertEquals("done", job.steps[0].state, "${job.steps[0].output}")
+        assertEquals("radiohead" to "creep", phone.parts.database.read { Overrides.read(it) }.match["radiohead/creep"])
     }
 
-    @Test fun `a pick waits for the song's own request, and a page from elsewhere is refused`() {
-        val first = post("/review", "song" to "${creep.id}", "pick" to "radiohead/creep", "shown" to SHOWN)
-        assertEquals(200, first.status)
+    @Test fun `a pick waits for the song's own request`() {
+        val holding = CompletableDeferred<Unit>()
+        val (own, _) = phone.queue.submit(JobSpec("Look up ${creep.display}", creep.key, "song", emptyList(),
+                                                  display = creep.display, run = { holding.await() }))
+        try {
+            val refused = post("/review", "song" to "${creep.id}", "pick" to "radiohead/creep", "shown" to SHOWN)
+            assertEquals(409, refused.status, refused.text)
+            assertEquals("A request for Radiohead - Creep is waiting or running: pick once it ends.",
+                         refused.json.jsonObject.getValue("error").jsonPrimitive.content)
+            assertEquals(listOf(own.id), phone.queue.snapshot().map { it.id }, "nothing more was queued")
+        } finally {
+            holding.complete(Unit)
+        }
+        done(own.id)
+        val after = post("/review", "song" to "${creep.id}", "pick" to "radiohead/creep", "shown" to SHOWN)
+        assertEquals(200, after.status, "once it ended, the pick is taken: ${after.text}")
+        done(after.json.jsonObject.getValue("job").jsonObject.getValue("id").jsonPrimitive.int)
+    }
+
+    @Test fun `a page from elsewhere is refused`() {
         val refused = handle(
             "POST", "/review",
             mapOf("sec-fetch-site" to "cross-site", "origin" to "http://evil.example",
@@ -171,11 +210,34 @@ class ReviewRoutesTest {
             TestApp.form(listOf("csrf" to TestApp.CSRF, "song" to "${creep.id}", "pick" to "none", "shown" to SHOWN)),
         )
         assertEquals(403, refused.status)
-        val id = first.json.jsonObject.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
-        done(id)
-        assertNotNull(phone.queue.job(id))
-        assertEquals(1, phone.queue.snapshot().size, "nothing more was queued")
-        assertEquals(JobViews.detailsHref(id), "#tab=requests&job=$id")
+        assertTrue(phone.queue.snapshot().isEmpty(), "nothing was queued")
+        assertTrue(creep.review, "nothing was written")
+    }
+
+    @Test fun `overrides the phone can't read stop the answer, exit 2, in _common's words`() {
+        val runner = ReviewRunner(phone.parts, readOverrides = { throw OverridesError("[match]: not a table") })
+        val queue = JobQueue(scope, commands = Commands(mapOf("review" to runner)))
+        val (job, _) = queue.submit(JobSpec("Pick radiohead/creep for Radiohead - Creep", creep.key, "review",
+                                            emptyList(), display = creep.display, join = false,
+                                            commands = JobCommands.reviewSteps(creep.display, pick = "radiohead/creep")))
+        val ended = runBlocking { withTimeout(60_000) { queue.await(job.id) } }
+        assertEquals("failed", ended.state)
+        assertEquals("error: overrides: [match]: not a table", ended.steps.single().output.last())
+        assertTrue(creep.review, "nothing was written")
+    }
+
+    @Test fun `the command line ends its options at --, as click does`() {
+        val asked = ReviewRunner.Asked.of(listOf("review", "--song=Radiohead - Creep", "--pick=1", "--"))
+        assertEquals("Radiohead - Creep", asked.song)
+        for ((args, said) in listOf(
+            listOf("--song=Radiohead - Creep", "--", "--none") to "Got unexpected extra argument (--none)",
+            listOf("--song=Radiohead - Creep", "--pick=1", "x", "--", "y") to "Got unexpected extra arguments (x y)",
+            listOf("--song=Radiohead - Creep", "--pick=1", "--fetch") to "No such option: --fetch",
+        )) {
+            val refused = runCatching { ReviewRunner.Asked.of(listOf("review") + args) }.exceptionOrNull()
+            assertTrue(refused is CommandExit && refused.code == 2, "$args: $refused")
+            assertEquals(said, refused.message)
+        }
     }
 
     private companion object {

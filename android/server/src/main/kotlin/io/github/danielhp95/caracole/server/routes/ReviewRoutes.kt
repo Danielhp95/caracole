@@ -48,7 +48,7 @@ import java.time.Instant
  * phone's form token ([csrf]) and the library named as every page of the phone's names it ([libraryName]).
  * vectors/web/review.jsonl holds both routes to caracole serve's answers (ReviewReplay).
  */
-class ReviewRoutes(val parts: PhoneParts, private val csrf: () -> String = { "" },
+class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
                    private val libraryName: () -> String = { parts.config().libraryName.orEmpty() },
                    private val clock: () -> Instant = Instant::now) : RouteModule {
     override val routes: List<Route> = listOf(
@@ -84,7 +84,7 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: () -> String = { "" 
             throw Refused(409, NOTHING, "caracole search finds nothing close to ${song.display} in the offline Ultimate " +
                                         "Guitar index.")
         }
-        val html = page(pick, csrf(), LibraryName.phone(libraryName()))
+        val html = page(pick, csrf, LibraryName.phone(libraryName()))
         return Response(200, Body.Bytes(html.toByteArray(Charsets.UTF_8)),
                         mutableListOf("Content-Type" to MessagePage.HTML, "Content-Security-Policy" to MessagePage.csp))
     }

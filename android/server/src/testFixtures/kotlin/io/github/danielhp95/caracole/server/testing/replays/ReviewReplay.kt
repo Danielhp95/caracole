@@ -24,6 +24,7 @@ import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.jobs.CommandExit
+import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.Commands
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobQueue
@@ -75,7 +76,8 @@ import java.time.Instant
  * - `caracole review`: the review runner over a fresh copy of the library, its exit status, its last word, its lines,
  *   then the phone's overrides and every song's match;
  * - `POST /review, run`: the job POST /review queues, run by the phone's queue and its review runner, then its line as
- *   the phone's says it (JobViews.line, its song's facts SongFacts.songOf) and the rows as above.
+ *   the phone's says it (JobViews.line, its song's facts SongFacts.songOf) and the rows as above;
+ * - `POST /review, fetching`: a pick with Fetch it now, its line as each of its commands starts and once it is over.
  */
 object ReviewReplay : AreaReplay {
     override val area = "review"
@@ -111,12 +113,15 @@ object ReviewReplay : AreaReplay {
             var n = 0
             for (r in lines) {
                 val fn = fn(r)
-                if (fn != "caracole review" && fn != "POST /review, run") continue
+                if (fn != "caracole review" && fn != "POST /review, run" && fn != "POST /review, fetching") continue
                 val where = File(dir, "case-${n++}").apply { mkdirs() }
                 TestDb.fresh(where).use { database ->
                     database.writeBlocking { db -> Fixtures.loadRecords(db, fixture) }
-                    if (fn == "caracole review") command(misses, database, where, r, library)
-                    else run(misses, database, where, r, library)
+                    when (fn) {
+                        "caracole review" -> command(misses, database, where, r, library)
+                        "POST /review, run" -> run(misses, database, where, r, library)
+                        else -> fetching(misses, database, where, r)
+                    }
                 }
             }
         }
@@ -183,7 +188,7 @@ object ReviewReplay : AreaReplay {
     // --- the routes -------------------------------------------------------------------------------------------------
 
     private fun routes(database: Database, dir: File, queue: JobQueue): ReviewRoutes =
-        ReviewRoutes(parts(database, dir, queue), csrf = { CSRF }, libraryName = { NAME })
+        ReviewRoutes(parts(database, dir, queue), CSRF, libraryName = { NAME })
 
     private fun picker(misses: Misses, database: Database, dir: File, r: JsonObject) {
         val case = "GET /review (${r.getValue("case").jsonPrimitive.content})"
@@ -294,11 +299,11 @@ object ReviewReplay : AreaReplay {
         val out = r.getValue("out").jsonObject
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
-            val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
+            val commands = HashMap<String, CommandRunner>()
             val queue = JobQueue(scope, commands = Commands(commands))
             val parts = parts(database, dir, queue)
             commands["review"] = ReviewRunner(parts)
-            val route = ReviewRoutes(parts, csrf = { CSRF }, libraryName = { NAME }).routes.first { it.method == "POST" }
+            val route = ReviewRoutes(parts, CSRF, libraryName = { NAME }).routes.first { it.method == "POST" }
             val answer = route.post!!.answer(TestApp.request("POST", "/review", emptyMap(), ByteArray(0), TestApp.SECRET),
                                              form(r))
             val id = answer.data!!.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
@@ -309,6 +314,47 @@ object ReviewReplay : AreaReplay {
             WebJson.difference(out.getValue("line"), line)?.let { misses.check(false) { "$case: its line at $it: $line" } }
                 ?: misses.check(true) { "" }
             rows(misses, case, database, out, library)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /**
+     * A pick with Fetch it now, as POST /review queues it on the phone: `caracole review` by the review runner, then
+     * the lookup, which a runner here ends at once, having said nothing (no site is asked); the job's line as each
+     * command starts, and once it is over, as the generator's queue said them.
+     */
+    private fun fetching(misses: Misses, database: Database, dir: File, r: JsonObject) {
+        val case = "POST /review, fetching (${r.getValue("case").jsonPrimitive.content})"
+        val out = r.getValue("out").jsonObject
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val commands = HashMap<String, CommandRunner>()
+            val queue = JobQueue(scope, commands = Commands(commands))
+            val parts = parts(database, dir, queue)
+            val running = ArrayList<JsonElement>()
+            fun lineNow(): JsonElement {
+                val job = queue.snapshot().single()
+                val facts = database.read { db -> SongFacts.ended(queue).songOf(db, job, parts.cards, Instant.now()) }.second
+                return JobViews.line(job, facts = facts).asJson()
+            }
+            val review = ReviewRunner(parts)
+            commands["review"] = CommandRunner { args, context ->
+                running += JsonObject(linkedMapOf("command" to JsonPrimitive("review"), "line" to lineNow()))
+                review.run(args, context)
+            }
+            commands["get"] = CommandRunner { _, _ ->
+                running += JsonObject(linkedMapOf("command" to JsonPrimitive("get"), "line" to lineNow()))
+            }
+            val route = ReviewRoutes(parts, CSRF, libraryName = { NAME }).routes.first { it.method == "POST" }
+            val answer = route.post!!.answer(TestApp.request("POST", "/review", emptyMap(), ByteArray(0), TestApp.SECRET),
+                                             form(r))
+            val id = answer.data!!.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
+            val job = runBlocking { withTimeout(60_000) { queue.await(id) } }
+            misses.check(job.state == "done") { "$case: the job is ${job.state}: ${job.steps.map { it.output }}" }
+            val got = JsonObject(linkedMapOf("line" to lineNow(), "running" to JsonArray(running)))
+            WebJson.difference(out, got)?.let { misses.check(false) { "$case: its lines at $it: $got" } }
+                ?: misses.check(true) { "" }
         } finally {
             scope.cancel()
         }
