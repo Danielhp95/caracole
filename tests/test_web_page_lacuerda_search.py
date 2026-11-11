@@ -412,7 +412,7 @@ def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_re
     # LaCuerda", and the page shows it, with that button.
     spend_the_share(cfg)
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=6)
-    assert "press Ask LaCuerda" in browser.js(LINE) and jobs(queue) == []
+    assert "Ask LaCuerda asks anyway" in browser.js(LINE) and jobs(queue) == []
     assert browser.js(BUTTONS) == ["Ask LaCuerda: “corazon de tiza” · 1 request"]
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
@@ -432,7 +432,7 @@ def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_it
     browser.open(base)
     type_into(browser, "q", "corazon de tiza")
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
-    assert browser.js(LINE).startswith("LaCuerda's search for “corazon de tiza” failed less than an hour ago")
+    assert browser.js(LINE).startswith("LaCuerda's search for “corazon de tiza” failed within the hour")
     time.sleep(2)
     assert len(jobs(queue)) == 1 and searches(heard) == SENT_BY_ITSELF
 
@@ -510,7 +510,7 @@ def test_with_its_search_failed_lately_the_one_button_reads_the_names_page(cfg, 
     browser.open(base + page)
     put(browser, "bunbury")
     assert browser.wait(f"!!document.querySelector('{ASK}')", timeout=5)
-    assert browser.wait(f"{LINE}.startsWith('LaCuerda\\'s search for “bunbury” failed less than an hour ago')")
+    assert browser.wait(f"{LINE}.startsWith('LaCuerda\\'s search for “bunbury” failed within the hour')")
     if page == "lookup":  # under the chevron of a search that found nothing
         browser.click(FOLD[page])
     assert browser.js(BUTTONS) == [label]  # why the search waits, and one button: the name's page
