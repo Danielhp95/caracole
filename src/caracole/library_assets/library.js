@@ -3229,7 +3229,7 @@
     showLine(item.querySelector(".progress"), { line: Object.assign({}, line, { details: null }) });
     const shown = Array.from(trayItems.keys()).map((n) => views.get(n)).filter(Boolean);
     const going = shown.filter(isActive).length;
-    traySum.textContent = going ? shown.length + "/" + going + " requests to go"
+    traySum.textContent = going ? going + " of " + plural(shown.length, "request") + " to go"
       : plural(shown.length, "request") + " · done";
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
