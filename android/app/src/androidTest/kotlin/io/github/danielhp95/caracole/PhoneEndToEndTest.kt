@@ -11,9 +11,12 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.Pages.evaluate
@@ -53,8 +56,8 @@ import kotlin.concurrent.thread
  *   without it is refused ("Not this app's caracole.");
  * - another loopback port is never loaded: a link there goes to the browser, a fetch and an image of it are answered
  *   in the app, and that port's server hears nothing;
- * - a sync from the Sync tab (Compare, every conflict taking there's, Sync), which brings the computer's library and
- *   its indexes;
+ * - a sync from the bar's sync button and its sheet (its comparison, Sync, each conflict keeping the computer's),
+ *   which brings the computer's library and its indexes;
  * - Sec-Fetch-Site reaches the server from the WebView: the library page's own read of /api/sync is answered, and the
  *   same read from a sandboxed viewer (an opaque origin, so `cross-site`) is refused as another site's;
  * - a query typed into the library page's box shows /api/search's rows: a song of the computer's index the library
@@ -148,32 +151,29 @@ class PhoneEndToEndTest {
             }
             assertEquals("connections the other port heard", 0, heard.get())
 
-            // A sync from the Sync tab: the computer's library and indexes come to the phone.
-            js("document.getElementById('tab-sync').click()")
-            waitUntil("the Sync tab") {
-                js("(() => { const p = document.getElementById('sync'); return !!p && !p.hidden; })()") == true
+            // A sync from the bar's sync button and its sheet (SyncSheet, sync-app's): the computer's library and
+            // indexes come to the phone, each song changed on both sides keeping the computer's.
+            SyncDevice.mayNotify()
+            val syncSheet = SyncSheet { script -> js(script) }
+            syncSheet.libraryLoaded()
+            onView(withId(R.id.sync)).perform(click())
+            val compared = syncSheet.compared()
+            record("compared", compared)
+            assertTrue("the first sync takes the computer's songs: $compared", compared.getInt("take") > 0)
+            syncSheet.click("sync-go")
+            waitUntil("a conflict's card or the sync's summary", timeoutMs = 5 * 60_000) {
+                when (syncSheet.state().getString("view")) {
+                    "conflict" -> { syncSheet.click("sync-keep-there"); false }
+                    "done" -> true
+                    else -> false
+                }
             }
-            waitUntil("the address offered") { js("document.getElementById('sync-address').value") == server }
-            compare(main)
-            val differences = JSONObject(js("""JSON.stringify({rows: document.querySelectorAll('#sync-groups li').length,
-                conflicts: !document.getElementById('sync-bulk').hidden})""") as String)
-            record("compared", differences)
-            assertTrue("the first sync lists the computer's songs: $differences", differences.getInt("rows") > 0)
-            if (differences.getBoolean("conflicts")) js("document.getElementById('sync-all-there').click()")
-            waitUntil("Sync to be offered") { js("document.getElementById('sync-go').disabled") == false }
-            js("document.getElementById('sync-go').click()")
-            waitUntil("the sync to end", timeoutMs = 5 * 60_000) { js("!document.getElementById('sync-reload').hidden") == true }
-            val synced = JSONObject(js("""JSON.stringify({tone: document.getElementById('sync-job-line').dataset.tone,
-                line: document.getElementById('sync-job-line').textContent,
-                steps: Array.from(document.querySelectorAll('#sync-steps .step-chip')).map(c => c.className + ' ' + c.textContent),
-                outcome: document.getElementById('sync-outcome').textContent})""") as String)
+            val synced = syncSheet.done()
             record("synced", synced)
             assertFalse("the sync failed: $synced", synced.getString("tone") == "failed")
-            val steps = synced.getJSONArray("steps")
-            for (i in 0 until steps.length()) {
-                val chip = steps.getString(i)
-                assertTrue("every stage done or skipped: $chip", " done " in "$chip " || " plain " in "$chip ")
-            }
+            assertTrue("the summary: $synced", synced.getString("title").startsWith("Synced with: "))
+            syncSheet.click("sync-go")
+            waitUntil("the sheet closed") { !syncSheet.state().getBoolean("open") }
 
             // The library page as the sync left it.
             reload(main, library)
@@ -356,15 +356,6 @@ class PhoneEndToEndTest {
         return job!!
     }
 
-    private fun compare(main: ActivityScenario<MainActivity>) {
-        evaluate(main, "document.getElementById('sync-compare').click()")
-        waitUntil("the comparison", timeoutMs = 2 * 60_000) {
-            evaluate(main, "(() => { const s = document.getElementById('sync-status'); " +
-                "return s.dataset.tone === 'failed' || !document.getElementById('sync-found').hidden; })()") == true
-        }
-        assertFalse("the comparison failed: " + evaluate(main, "document.getElementById('sync-status').textContent"),
-                    evaluate(main, "document.getElementById('sync-status').dataset.tone") == "failed")
-    }
 
     private fun loaded(main: ActivityScenario<MainActivity>, address: String) = waitUntil("$address loaded") {
         url(main).substringBefore('#') == address && evaluate(main, "document.readyState") == "complete"
