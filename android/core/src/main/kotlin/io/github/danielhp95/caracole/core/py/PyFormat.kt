@@ -1,11 +1,12 @@
 package io.github.danielhp95.caracole.core.py
 
 import java.math.BigDecimal
+import java.math.MathContext
 import java.math.RoundingMode
 
 /**
  * Python's format specs and rounding, the ones caracole writes text with: f-strings' `f` and `%` (Megalobiz's LRC
- * stamps, `{s:05.2f}`; a share, `{x:.0%}`) and round(x). A double is rounded half-even on its exact binary value, as
+ * stamps, `{s:05.2f}`; a share, `{x:.0%}`), `g` (a version's rating, `format(x, "g")`) and round(x). A double is rounded half-even on its exact binary value, as
  * CPython's dtoa does (0.125 to 0.12, 2.675 to 2.67), never on a decimal string half-up nor in the default locale, as
  * String.format would (vectors/py/format_numbers.jsonl).
  */
@@ -32,6 +33,22 @@ object PyFormat {
 
     /** f'{x:.N%}': x * 100, in double as Python multiplies it, written as [fixed] writes it, then "%". */
     fun percent(x: Double, digits: Int): String = fixed(x * 100.0, digits) + "%"
+
+    /** format(x, "g"): six significant digits, rounded half-even on the exact binary value, trailing zeros dropped;
+     * written with an exponent (`1e+06`, `2.5e-07`) when it is below -4 or from 6 on, else plainly; "inf", "-inf",
+     * "nan", and a zero's sign kept ("-0"). */
+    fun general(x: Double): String {
+        if (x.isNaN()) return "nan"
+        if (x.isInfinite()) return if (x > 0) "inf" else "-inf"
+        if (x == 0.0) return if (1.0 / x < 0) "-0" else "0"
+        val rounded = BigDecimal(x).round(MathContext(6, RoundingMode.HALF_EVEN))
+        val exponent = rounded.precision() - rounded.scale() - 1
+        if (exponent >= -4 && exponent < 6) return rounded.stripTrailingZeros().toPlainString()
+        val digits = rounded.unscaledValue().abs().toString().trimEnd('0').ifEmpty { "0" }
+        val mantissa = if (digits.length > 1) "${digits[0]}.${digits.substring(1)}" else digits
+        val sign = if (rounded.signum() < 0) "-" else ""
+        return "$sign${mantissa}e${if (exponent < 0) "-" else "+"}${Math.abs(exponent).toString().padStart(2, '0')}"
+    }
 
     /** round(x): to the nearest whole number, a half to the even one (float.__round__ with no digits). Python's
      * ValueError for NaN is an [IllegalArgumentException], its OverflowError for an infinity an

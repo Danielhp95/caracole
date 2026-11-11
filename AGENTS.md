@@ -1979,7 +1979,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 ##### Songbooks, versions and printing on the phone
 
 - Songbooks, their entries and the Songbooks tab (songbook-writers, songbook-entries, songbook-routes): not built yet.
-- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): server/routes'
+  `VersionsRoutes` and `HarmonicaRoutes`, their pages server/pages' (`VersionsPage`, `HarmonicaPage`, `Choices`).
+  - `GET /versions`, `POST /versions/choose`, `/keep`, `/clear` (versions_routes.py; Fetch them, `/versions/keep-more`,
+    is LookupRoutes'), and `GET /harmonica`, `POST /harmonica/pin`, `/clear` (harmonica_routes.py).
+  - Each page the server's own with no script (the message pages' style and policy), reached from the sandboxed
+    viewer by a plain GET (a top-level navigation: the launch's cookie is Lax), its forms posting with the form token
+    (Assembly gives both modules `deps.csrf`), one that follows a request reloading every 10 s; its words, refusals
+    and jobs Python's.
+  - A viewer is the phone's when the phone recorded writing it (kv `render:files:<id>`, WrittenPages): a computer's
+    page the mirror serves names no sheet (404), as LookupRoutes' keep-more by sheet.
+  - Each post a job: under the song's key, the `versions` runner (VersionsRunner, joined as jobs.py's `_pick`); or
+    under jobs.READING, the `harmonica` runner (HarmonicaRunner: harmonica_cmd.py's pin, clear and list, the pin
+    checked by `HarpTabs.checkSpec` and written by `OverrideWriters.addHarmonica`, then the song rendered again
+    through `PhoneParts.pages`).
+  - vectors/web/versions_routes.jsonl and harmonica_routes.jsonl (tests/test_conformance_choices.py: a library a
+    scene; every page whole but its stylesheet, every post's job, `caracole harmonica`'s runs), `ChoicesReplay`
+    (area `choices`).
 - Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
   and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.
   - A viewer is the library's where the phone recorded writing it (`WrittenPages.written`, render.written_file's kv
