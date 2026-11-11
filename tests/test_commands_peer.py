@@ -359,7 +359,7 @@ def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
     assert [(e["stage"], e["state"]) for e in events if "stage" in e] == [
         ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
-        ("give", "done"), ("agree", "running"), ("agree", "done")]
+        ("give", "done"), ("agree", "running"), ("agree", "done"), ("index", "skipped")]
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
         (unit["Radiohead - Creep"], "left", "skipped, as chosen"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])

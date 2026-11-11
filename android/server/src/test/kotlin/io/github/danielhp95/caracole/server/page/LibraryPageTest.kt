@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.server.page
 import io.github.danielhp95.caracole.core.testing.Corpus
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -15,17 +16,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The phone's library page is caracole serve's for the same data and controls, its Requests tab counted, byte for
- * byte (tests/conformance/vectors/web/library_page.json, vectors/web/requests.jsonl's tabs). */
+/** The phone's library page is caracole serve's for the same data and controls, its Requests tab counted and its
+ * sync the sheet alone (the vector's "sheet" cases; its "tab" cases are caracole serve's alone), byte for byte
+ * (tests/conformance/vectors/web/library_page.json, vectors/web/requests.jsonl's tabs). */
 class LibraryPageTest {
     private val vector = Corpus.json("web/library_page.json")
     private val page = LibraryPage(LibraryAssets.load())
     private val name = vector.getValue("library_name").jsonPrimitive.content
 
+    /** A case's sync as the phone serves it: "sheet" the sheet, null none; null for "tab", which it never serves. */
+    private fun sheet(of: JsonObject): Boolean? = when (val sync = of.getValue("sync")) {
+        is JsonNull -> false
+        else -> if (sync.jsonPrimitive.content == "sheet") true else null
+    }
+
     private fun controls(of: JsonObject) = ServerControls(
         csrf = of.getValue("csrf").jsonPrimitive.content,
         badge = of.getValue("badge").let { if (it is JsonNull) null else it.jsonPrimitive.content },
-        sync = of.getValue("sync").jsonPrimitive.boolean,
+        sync = sheet(of) ?: throw AssertionError("the phone never serves the Sync tab"),
         active = of.getValue("active").jsonPrimitive.int,
     )
 
@@ -33,6 +41,9 @@ class LibraryPageTest {
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
     private val cases get() = vector.getValue("cases").jsonArray.map { it.jsonObject }
+
+    /** The cases the phone serves: every one but caracole serve's Sync tab. */
+    private val phones get() = cases.filter { sheet(it.getValue("controls").jsonObject) != null }
 
     @Test
     fun `the request form's reason for no sheet from YouTube is the vector's`() {
@@ -96,8 +107,9 @@ class LibraryPageTest {
     }
 
     @Test
-    fun `the smallest case's page is Python's, byte for byte`() {
+    fun `the phone's page is the sheet case byte for byte`() {
         val case = cases.first()
+        assertEquals(JsonPrimitive("sheet"), case.getValue("controls").jsonObject.getValue("sync"))
         val made = page.served(case.getValue("data").jsonObject, controls(case.getValue("controls").jsonObject), name)
         val expected = case.getValue("page").jsonPrimitive.content
         if (made != expected) {
@@ -108,24 +120,26 @@ class LibraryPageTest {
     }
 
     @Test
-    fun `every case's page has Python's SHA-256`() {
-        assertTrue(cases.size >= 4)
-        for (case in cases) {
+    fun `every case the phone serves has Python's SHA-256`() {
+        assertTrue(phones.size >= 4 && phones.size < cases.size, "caracole serve's Sync tab is a case of its own")
+        for (case in phones) {
             val made = page.served(case.getValue("data").jsonObject, controls(case.getValue("controls").jsonObject), name)
             assertEquals(case.getValue("sha256").jsonPrimitive.content, sha256(made), case.getValue("name").jsonPrimitive.content)
         }
     }
 
     @Test
-    fun `the Sync tab is the templates as they are, where the controls have it, and the Requests tab always`() {
+    fun `the sync is its sheet as it is, where the controls have it, never the Sync tab, and the Requests tab always`() {
         val assets = page.assets
         val data = cases.first().getValue("data").jsonObject
         val on = page.served(data, ServerControls("tok", sync = true), name)
         val off = page.served(data, ServerControls("tok", sync = false), name)
-        assertTrue(assets.template("sync-tab.html") in on && assets.template("sync-panel.html") in on)
-        assertFalse(assets.template("sync-tab.html") in off || assets.template("sync-panel.html") in off)
         val markup = { text: String -> text.substringBefore("<script type=\"application/json\"") }
+        assertEquals(1, markup(on).split(assets.template("sync-sheet.html")).size - 1)
+        assertFalse(assets.template("sync-sheet.html") in off)
         for (made in listOf(on, off)) {
+            assertFalse(assets.template("sync-tab.html") in made || assets.template("sync-panel.html") in made)
+            assertFalse("id=\"tab-sync\"" in markup(made))
             assertEquals(1, markup(made).split("id=\"tab-requests\"").size - 1)
             assertEquals(1, markup(made).split(page.requests.panel).size - 1)
         }

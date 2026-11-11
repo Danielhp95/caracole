@@ -64,5 +64,6 @@
     <string name="backups_hint">Copies of the phone\'s library, to restore it from: not on the phone yet.</string>
     <string name="backups_not_built">Backups aren\'t on the phone yet.</string>
     <string name="alerts_channel">Alerts</string>
-    <string name="print_not_built">Exporting a PDF isn\'t on the phone yet.</string>
+    <string name="print_refused">The phone\'s caracole didn\'t name that version (HTTP %1$d).</string>
+    <string name="print_failed">The sheet couldn\'t be printed: %1$s</string>
 </resources>

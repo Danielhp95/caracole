@@ -7,9 +7,11 @@ import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.web.DownloadNames
@@ -28,11 +30,15 @@ import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.JobQueue
+import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
+import io.github.danielhp95.caracole.server.routes.sync.Exports
+import io.github.danielhp95.caracole.server.routes.sync.Imports
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.server.testing.SearchApp
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.WebJson
+import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import io.github.danielhp95.caracole.server.testing.text
@@ -57,6 +63,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLEncoder
 import java.nio.file.Files
+import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
@@ -76,6 +83,8 @@ import kotlin.concurrent.thread
  *   [jsonAnswers], what every JSON answer and data block is written as;
  * - [syncRoutes]: sync_routes.jsonl, the Sync tab's routes over a fixture of the sync corpus and a computer answering
  *   its state as the record gives it (a server on 127.0.0.1 of the replay's own, so that the device runs it too);
+ * - [syncFileRoutes]: sync_file_routes.jsonl, Export and Import a file over a fixture of the sync corpus and the sync
+ *   file corpus's files (SyncFileRoutes, and SyncRoutes' Sync on a file's comparison);
  * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names;
  * - [security]: security.jsonl, security.py's host, origin, own-page and token checks, and Python's `str.isdigit` and
  *   `str.isspace` over every code point (SecurityTest's).
@@ -92,6 +101,7 @@ object WebReplay : AreaReplay {
         routing(misses)
         jsonAnswers(misses)
         syncRoutes(misses)
+        syncFileRoutes(misses)
         downloads(misses)
         security(misses)
     }
@@ -360,8 +370,9 @@ object WebReplay : AreaReplay {
 
     private const val MASKED = "<comparison>"
 
-    /** The phone's sync's stages the computer's hasn't (§5.3). */
-    private val PHONE_ALONE = setOf("mirror", "index")
+    /** The phone's sync's stages the computer's hasn't (§5.3): its mirror; the index stage both have
+     * (jobs.PEER_SYNC_STAGES' index, `caracole peer sync`'s indexes both ways). */
+    private val PHONE_ALONE = setOf("mirror")
 
     /** The six routes of the Sync tab sync_routes.jsonl asks (the sync redesign's §3.4.1). */
     val SYNC_ROUTES = setOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
@@ -498,6 +509,321 @@ object WebReplay : AreaReplay {
         }
         return JsonObject(mapOf("job" to JsonObject(job + ("steps" to JsonArray(steps)))))
     }
+
+    // --- sync_file_routes.jsonl -------------------------------------------------------------------------------------
+
+    /** Every request of Export and Import a file sync_file_routes.jsonl asks (the sync redesign's §3.4.2), and the
+     * routes' declared bodies (`limits`). */
+    val SYNC_FILE_ROUTES = setOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",
+                                 "HEAD /api/sync/export", "POST /sync/import/open", "POST /sync/import/part",
+                                 "POST /sync/import/compare", "POST /sync/import/drop", "POST /sync/apply", "limits")
+
+    /** The routes' clock as the vectors' (test_conformance_sync_file_routes.NOW), and the name a file is sent by. */
+    private val FILE_ROUTES_NOW: Instant = Instant.parse("2026-11-03T22:00:00Z")
+    private const val SENT_AS = "lib-03-11-26.caracole"
+    private const val EXPORT = "<export>"
+    private const val IMPORT = "<import>"
+
+    /** An import's stages the computer's import has and the phone's hasn't (its render, which the phone's pages make
+     * after the job), and the phone's it hasn't (the file's pages kept as a layer of the mirror). */
+    private val COMPUTER_IMPORT_ALONE = setOf("render")
+
+    /**
+     * sync_file_routes.jsonl: each record's request asked of the phone's SyncFileRoutes (and SyncRoutes, whose Sync
+     * hands a file's comparison to it) over a phone of its own, the record's `here` (a fixture of the sync corpus
+     * loaded, its id and kv, its library's name), under UTC with the routes' clock at the vectors' time; its status
+     * and its answer Python's, the ids masked as the record masks them. A record's request follows what it says
+     * came before it: an export made of the parts it names (`export`); the file it names sent whole, or its first
+     * `sent` bytes, in parts of 4096 (`file`), and for a Sync, compared, with a song added between (`moved`); and
+     * where the record's answer says an earlier request of the same phone is its cause, that one: an open refused for
+     * one open already (409) opens one first, a part is sent to an import opened of the size its accepted parts end
+     * at, a drop refused for its request (409) follows that file's Sync, and a drop of a file gone (404) follows its
+     * drop. A Sync queued is the computer's view of the same job but for the import's stages each side has alone
+     * ([COMPUTER_IMPORT_ALONE], the phone's mirror), its comparison the one the computer's queued command names.
+     */
+    fun syncFileRoutes(misses: Misses) {
+        val records = Corpus.records("web/sync_file_routes.jsonl")
+        misses.check(records.map { it.fn }.toSet() == SYNC_FILE_ROUTES) {
+            "sync_file_routes.jsonl's routes: ${records.map { it.fn }.toSet()}"
+        }
+        misses.check(records.size >= 40) { "sync_file_routes.jsonl holds ${records.size} records" }
+        misses.check(records.any { (it.out as? JsonObject)?.get("job") is JsonObject }) {
+            "sync_file_routes.jsonl holds no Sync queued"
+        }
+        for (record in records) {
+            if (record.fn == "limits") limits(record, misses) else syncFileRoute(record, misses)
+        }
+    }
+
+    /** `limits`: each POST route's body and limit, the phone's routes' (SyncFileRoutes', SyncRoutes') as Python's. */
+    private fun limits(record: Record, misses: Misses) = inFolder("caracole-sync-file-limits") { dir ->
+        val routes = TestDb.fresh(dir).use { database ->
+            val engine = SyncEngine(database, LibraryStore(File(dir, "library")), File(dir, "state"),
+                                    client = { throw IllegalStateException("no computer") }, mirrorRefresh = null)
+            val queue = JobQueue(CoroutineScope(Job().apply { cancel() }))
+            val settings = object : SyncSettings {
+                override val address: String? = null
+                override fun remember(address: String) {}
+            }
+            SyncRoutes(engine, queue, settings, database, afterSync = {}).routes +
+                SyncFileRoutes(engine, queue, database, File(dir, "library"), Imports(File(dir, "state")),
+                               Exports(File(dir, "cache")), pages = { null }, afterSync = {}).routes
+        }
+        val declared = JsonObject(routes.filter { it.method == "POST" }.associate { route ->
+            "${route.method} ${route.path}" to JsonArray(listOf(JsonPrimitive(route.body), JsonPrimitive(route.limit)))
+        })
+        misses.check(declared == record.out) { "the routes declare $declared, Python's ${record.out}" }
+    }
+
+    private fun syncFileRoute(record: Record, misses: Misses) = inFolder("caracole-sync-file-routes") { dir ->
+        val here = record.extra.getValue("here").jsonObject
+        val note = "${record.fn}: ${record.extra["note"]?.jsonPrimitive?.content}"
+        val name = here.getValue("name").jsonPrimitive.content
+        val scope = CoroutineScope(Job().apply { cancel() })  // a Sync queued stays so: the record is its answer
+        val queue = JobQueue(scope)
+        val settings = object : SyncSettings {
+            override var address: String? = null
+            override fun remember(address: String) {}
+        }
+        val imports = Imports(File(dir, "state"))
+        val exports = Exports(File(dir, "state/cache"))
+        lateinit var engine: SyncEngine
+        val app = TestApp(dir, modules = { database ->
+            engine = SyncEngine(database, LibraryStore(File(dir, "library")), File(dir, "state"),
+                                client = { throw IllegalStateException("$note: no computer to ask") }, mirrorRefresh = null)
+            val sync = SyncRoutes(engine, queue, settings, database, afterSync = {}, name = name, zone = { ZoneOffset.UTC })
+            val files = SyncFileRoutes(engine, queue, database, File(dir, "library"), imports, exports, pages = { null },
+                                       afterSync = {}, name = { name }, now = { FILE_ROUTES_NOW }, zone = { ZoneOffset.UTC })
+            sync.files = files
+            listOf(sync, files)
+        })
+        try {
+            app.database.writeBlocking { db ->
+                Fixtures.load(db, here.getValue("fixture").jsonPrimitive.content + ".jsonl", app.libraryDir)
+                db.kvSet("sync:id", here.getValue("id").jsonPrimitive.content)
+                for ((key, value) in here.getValue("kv").jsonObject) db.kvSet(key, value.jsonPrimitive.content)
+            }
+            val asking = FileAsking(app)
+            val status = record.extra["status"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.int
+            fun answered(answer: Response, out: JsonElement) {
+                misses.check(status == answer.status) { "$note: status ${answer.status}, not $status: ${out.toString().take(300)}" }
+                misses.check(record.out == out) { "$note: ${out.toString().take(600)}\n   Python: ${record.out.toString().take(600)}" }
+            }
+            fun staged() = File(dir, "state/peer").listFiles().orEmpty().any { it.name.startsWith("import-") }
+            fun sent(): String? {
+                val given = record.extra["file"] ?: return null
+                val data = fileOf(given)
+                val upto = record.extra["sent"]?.jsonPrimitive?.int ?: data.size
+                return asking.send(data, upto)
+            }
+            when (record.fn) {
+                "GET /api/sync/sizes" -> {
+                    val answer = asking.get("/api/sync/sizes")
+                    val out = answer.json.jsonObject
+                    // The indexes' bytes are SQLite's pages (masked); null where its build has no dbstat, as the
+                    // phone's bundled SQLite's may (peer_file.indexes_size's None): Python's then, whatever it says.
+                    val dbstat = app.database.read { db -> db.query("PRAGMA compile_options") { it.text(0) } }
+                        .any { it == "ENABLE_DBSTAT_VTAB" }
+                    val indexes = out["indexes"]
+                    misses.check(dbstat == (indexes != null && indexes !is JsonNull)) {
+                        "$note: the indexes' bytes $indexes, with dbstat $dbstat"
+                    }
+                    answered(answer, JsonObject(out + ("indexes" to (record.out!!.jsonObject["indexes"].takeIf { !dbstat } ?: JsonPrimitive("<bytes>")))))
+                }
+                "POST /sync/export" -> {
+                    val doc = record.extra.getValue("json")
+                    val answer = if (record.extra["making"] == JsonPrimitive(true)) {
+                        var asked: Response? = null
+                        exports.make("busy.caracole") { file -> asked = asking.json("/sync/export", doc); file.writeBytes(ByteArray(1)) }
+                        asked!!
+                    } else asking.json("/sync/export", doc)
+                    val out = answer.json.jsonObject
+                    if (answer.status == 200) {
+                        misses.check(Imports.ID.matches(out.getValue("export").jsonPrimitive.content)) { "$note: an export's id $out" }
+                        misses.check(out.getValue("size").jsonPrimitive.content.toLongOrNull() != null) { "$note: its size $out" }
+                        answered(answer, JsonObject(out + ("export" to JsonPrimitive(EXPORT)) + ("size" to JsonPrimitive("<size>"))))
+                    } else answered(answer, out)
+                }
+                "GET /api/sync/export" -> {
+                    val made = record.extra["export"]?.let { parts ->
+                        asking.json("/sync/export", parts).json.jsonObject.getValue("export").jsonPrimitive.content
+                    }
+                    val asked = record.extra.getValue("query").jsonObject.getValue("export").jsonPrimitive.content
+                    val target = "/api/sync/export?export=" + URLEncoder.encode(if (asked == EXPORT) made!! else asked, "UTF-8")
+                    val answer = asking.get(target)
+                    val out = if (answer.status == 200) {
+                        val file = File(dir, "downloaded.caracole").apply { writeBytes(answer.bytes) }
+                        JsonObject(linkedMapOf(
+                            "headers" to JsonObject(listOf("Content-Type", "Content-Disposition").associateWith {
+                                answer.header(it)?.let(::JsonPrimitive) ?: JsonNull
+                            }),
+                            "manifest" to Json.parseToJsonElement(SyncFiles.read(file).manifest.toString()),
+                        ))
+                    } else answer.json
+                    answered(answer, out)
+                    record.extra["again"]?.let { again ->
+                        val second = asking.get(target)
+                        misses.check(JsonArray(listOf(JsonPrimitive(second.status), second.json)) == again) {
+                            "$note: asked again, ${second.status} ${second.text}"
+                        }
+                    }
+                    misses.check(File(dir, "state/cache/peer").listFiles().orEmpty().none { it.name.endsWith(".caracole") }) {
+                        "$note: the export left in the cache once sent: ${File(dir, "state/cache/peer").list()?.toList()}"
+                    }
+                }
+                "HEAD /api/sync/export" -> {
+                    val query = record.extra.getValue("query").jsonObject.getValue("export").jsonPrimitive.content
+                    val answer = asking.get("/api/sync/export?export=$query", "HEAD")
+                    answered(answer, JsonObject(mapOf("Allow" to (answer.header("Allow")?.let(::JsonPrimitive) ?: JsonNull))))
+                }
+                "POST /sync/import/open" -> {
+                    if (status == 409) asking.json("/sync/import/open", obj("size" to 10, "name" to "first.caracole"))
+                    val answer = asking.json("/sync/import/open", record.extra.getValue("json"))
+                    val out = answer.json.jsonObject
+                    answered(answer, if ("import" in out) JsonObject(out + ("import" to JsonPrimitive(IMPORT))) else out)
+                }
+                "POST /sync/import/part" -> {
+                    val parts = record.extra.getValue("parts").jsonArray.map { it.jsonObject }
+                    val answers = (record.out as JsonArray).map { it.jsonArray[0].jsonPrimitive.int }
+                    val size = parts.zip(answers).filter { it.second == 200 }
+                        .maxOfOrNull { (p, _) -> p.getValue("at").jsonPrimitive.int + p.getValue("bytes").jsonPrimitive.int } ?: 1000
+                    val opened = asking.json("/sync/import/open", obj("size" to size, "name" to SENT_AS)).json.jsonObject
+                        .getValue("import").jsonPrimitive.content
+                    val got = parts.map { part ->
+                        val id = part["import"]?.jsonPrimitive?.content?.let { if (it == IMPORT) opened else it } ?: opened
+                        val at = part.getValue("at").jsonPrimitive.content
+                        val answer = asking.bytes("/sync/import/part?import=$id&at=$at", ByteArray(part.getValue("bytes").jsonPrimitive.int) { 'x'.code.toByte() })
+                        JsonArray(listOf(JsonPrimitive(answer.status), answer.json))
+                    }
+                    misses.check(JsonArray(got) == record.out) { "$note: $got\n   Python: ${record.out}" }
+                }
+                "POST /sync/import/compare" -> {
+                    val id = sent()
+                    val form = record.extra.getValue("form").jsonObject.mapValues { (_, v) ->
+                        v.jsonPrimitive.content.let { if (it == IMPORT) id!! else it }
+                    }
+                    val answer = asking.form("/sync/import/compare", form)
+                    val out = answer.json.jsonObject
+                    answered(answer, if ("comparison" in out) JsonObject(out + ("comparison" to JsonPrimitive(MASKED))) else out)
+                    record.extra["staged"]?.let { want ->
+                        misses.check(JsonPrimitive(staged()) == want) { "$note: staged after it ${staged()}, Python's $want" }
+                    }
+                }
+                "POST /sync/apply" -> {
+                    val id = sent()!!
+                    val compared = asking.form("/sync/import/compare", mapOf("import" to id))
+                    if (compared.status != 200) {
+                        misses.check(false) { "$note: its comparison ${compared.text}" }
+                        return@inFolder
+                    }
+                    val made = compared.json.jsonObject.getValue("comparison").jsonPrimitive.content
+                    val hash = engine.comparison(made)?.hash
+                    record.extra["moved"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.let { moved ->
+                        val (artist, title) = moved.split(" - ", limit = 2)
+                        app.database.writeBlocking { db -> LibraryStore(app.libraryDir).add(db, artist, title, now = "2026-11-03T22:00:00Z") }
+                    }
+                    val queued = record.extra.getValue("queued").jsonArray
+                    if (queued.isNotEmpty()) {
+                        misses.check("--compared=$hash" in queued.single().jsonArray.map { it.jsonPrimitive.content }) {
+                            "$note: the comparison the computer's command names isn't the phone's ($hash)"
+                        }
+                    }
+                    val form = record.extra.getValue("form").jsonObject.mapValues { (k, v) ->
+                        v.jsonPrimitive.content.let { if (k == "comparison" && it == MASKED) made else it }
+                    }
+                    val answer = asking.form("/sync/apply", form)
+                    misses.check(status == answer.status) { "$note: status ${answer.status}, not $status: ${answer.text.take(300)}" }
+                    val want = importJob(record.out!!, COMPUTER_IMPORT_ALONE)
+                    val got = importJob(answer.json, setOf(SyncEngine.MIRROR))
+                    misses.check(want == got) { "$note: ${got.toString().take(600)}\n   Python: ${want.toString().take(600)}" }
+                    (answer.json.jsonObject["job"] as? JsonObject)?.let { job ->
+                        val names = job.getValue("steps").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content }
+                        misses.check(names == SyncEngine.FILE_STAGES.map { it.first }) { "$note: the phone's import's stages $names" }
+                    }
+                    misses.check(queue.snapshot().isEmpty() == queued.isEmpty()) {
+                        "$note: the phone queued ${queue.snapshot().map { it.spec.key }}, Python ${queued.size}"
+                    }
+                    queue.snapshot().singleOrNull()?.let { job ->
+                        misses.check(job.spec.key == SyncFileRoutes.IMPORTING + id) { "$note: its job's key ${job.spec.key}" }
+                    }
+                }
+                "POST /sync/import/drop" -> {
+                    val id = sent()
+                    if (status == 409 && id != null) {
+                        val made = asking.form("/sync/import/compare", mapOf("import" to id)).json.jsonObject
+                            .getValue("comparison").jsonPrimitive.content
+                        asking.form("/sync/apply", mapOf("comparison" to made, "prefer" to "", "choices" to ""))
+                    }
+                    val doc = record.extra.getValue("json").jsonObject.mapValues { (_, v) ->
+                        v.jsonPrimitive.content.let { JsonPrimitive(if (it == IMPORT) id!! else it) }
+                    }
+                    if (status == 404 && id != null) asking.json("/sync/import/drop", JsonObject(doc))
+                    val answer = asking.json("/sync/import/drop", JsonObject(doc))
+                    val out = answer.json.jsonObject
+                    answered(answer, if (id != null && out["dropped"] == JsonPrimitive(id)) JsonObject(mapOf("dropped" to JsonPrimitive(IMPORT))) else out)
+                }
+                else -> misses.check(false) { "$note: no such route" }
+            }
+        } finally {
+            app.close()
+            scope.cancel()
+        }
+    }
+
+    /** A Sync's answer with the import's stages of one side alone ([alone]) left out. */
+    private fun importJob(answer: JsonElement, alone: Set<String>): JsonElement {
+        val job = answer.jsonObject["job"] as? JsonObject ?: return answer
+        return JsonObject(mapOf("job" to JsonObject(job + ("steps" to JsonArray(job.getValue("steps").jsonArray.filter {
+            it.jsonObject.getValue("name").jsonPrimitive.content !in alone
+        })))))
+    }
+
+    /** The sync file corpus's file a record names (`sync/files/<name>.caracole`), its bytes (`{"bytes": base64}`), or
+     * one cut short (`{"file", "cut"}`: less its last `cut` bytes). */
+    private fun fileOf(given: JsonElement): ByteArray = when {
+        given is JsonPrimitive -> Corpus.open(given.content)!!.use { it.readBytes() }
+        "bytes" in given.jsonObject -> Base64.getDecoder().decode(given.jsonObject.getValue("bytes").jsonPrimitive.content)
+        else -> fileOf(given.jsonObject.getValue("file")).let { it.copyOf(it.size - given.jsonObject.getValue("cut").jsonPrimitive.int) }
+    }
+
+    /** The page's script asking the phone's App, as test_conformance_sync_file_routes.Here asks caracole serve. */
+    private class FileAsking(private val app: TestApp) {
+        private val own = mapOf("sec-fetch-site" to "same-origin", "accept" to "application/json",
+                                TestApp.TOKEN_HEADER to app.csrf)
+
+        fun get(target: String, method: String = "GET"): Response = app.handle(app.request(method, target, own))
+
+        fun json(target: String, doc: JsonElement): Response = app.handle(app.request(
+            "POST", target, own + ("content-type" to "application/json"), PyJson.dumps(doc).toByteArray(Charsets.UTF_8)))
+
+        fun bytes(target: String, data: ByteArray): Response =
+            app.handle(app.request("POST", target, own + ("content-type" to "application/octet-stream"), data))
+
+        fun form(target: String, form: Map<String, String>): Response = app.postScript(target, form.toList())
+
+        /** [data] sent to Import a file as the page sends one, its first [upto] bytes, in parts of 4096: its id. */
+        fun send(data: ByteArray, upto: Int): String {
+            val opened = json("/sync/import/open", JsonObject(linkedMapOf("size" to JsonPrimitive(data.size),
+                                                                          "name" to JsonPrimitive(SENT_AS))))
+            check(opened.status == 200) { "open: ${opened.text}" }
+            val id = opened.json.jsonObject.getValue("import").jsonPrimitive.content
+            var at = 0
+            while (at < upto) {
+                val end = minOf(at + 4096, upto)
+                val part = bytes("/sync/import/part?import=$id&at=$at", data.copyOfRange(at, end))
+                check(part.status == 200) { "part at $at: ${part.text}" }
+                at = end
+            }
+            return id
+        }
+    }
+
+    private fun obj(vararg pairs: Pair<String, Any>): JsonObject = JsonObject(pairs.associate { (k, v) ->
+        k to when (v) {
+            is Int -> JsonPrimitive(v)
+            else -> JsonPrimitive(v.toString())
+        }
+    })
 
     /**
      * Another caracole's `GET /api/peer/state` and `GET /api/peer/unit` as a record gives them, on 127.0.0.1 at a free

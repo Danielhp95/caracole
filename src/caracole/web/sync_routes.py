@@ -14,15 +14,16 @@
                           songbook difference's two documents; the indexes newer on either side; kept 10 minutes
                           under an id of its own (``comparison``)
     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents: this side's and the other's,
-                          asked of it now (``here``, ``there``: null where a side hasn't got it); the page's script
-                          alone asks it
+                          asked of it now, or an import's read from its file (``here``, ``there``: null where a side
+                          hasn't got it); the page's script alone asks it
     GET  /api/sync/indexes   each site's index here: its newest read and the tabs it tracks
                           (``index_transfer.newest``, ``tab_counts``), which the phone asks after it gives one
     POST /sync/apply      a comparison kept (``comparison``), synced with the owner's choices (``choices``: a line a
                           unit, ``<here|there|skip>\\t<unit id>``; ``prefer``: here, there, or "" for none) and its
                           parts (``parts``: library, songbooks, indexes by commas; none sent, all three):
                           ``caracole peer sync --push --parts=… --compared HASH --choose=…`` queued, its view the
-                          answer
+                          answer; on a file's comparison (``POST /sync/import/compare``, web/sync_file_routes.py),
+                          ``caracole peer import`` of the folder it is staged in, under ``import:<id>``
 
 Test and the comparison ask the other caracole for its state, one request (``GET /api/peer/state``), and a comparison
 asks for each songbook the two hold differently that the other has (``GET /api/peer/unit``), so that the songs either
@@ -60,6 +61,7 @@ from caracole.web.app import Response, Route, WebApp, json_response, query
 from caracole.web.pages import Refused
 
 SYNCING = "sync:"  # a sync's job key: the address it syncs with after it
+IMPORTING = "import:"  # an import's comparison's source, and its job's key: the staged file's id after it
 KEPT_FOR = 600.0  # seconds a comparison is kept for its Sync
 KEPT = 20  # comparisons kept at most, the newest
 SIDES = ("here", "there", "skip")
@@ -391,32 +393,48 @@ def compare(app: WebApp, form: dict[str, str]) -> Response:
     kept = Compared(address, state.name, sync.compared_hash(found), {d.id: d.proposal for d in found},
                     time.monotonic(), listed=made.listed, found=tuple(found))
     comparison = _keep(app, kept)
+    peer = {"address": address, "server": state.server, "caracole": state.version, "name": state.name,
+            "kind": kept.kind, "made": None}
+    return json_response(200, comparison_answer(comparison, peer, made.synced, kept.holds, found, made.base,
+                                                made.kept, made.listed, made.songbooks,
+                                                _waiting(made.newest, state.indexes)))
+
+
+def comparison_answer(comparison: str, peer: Mapping[str, Any], synced_before: str | None, holds, found: list,
+                      base, kept, listed: Mapping[str, list[str]], songbooks: Mapping[str, tuple[Any, Any]],
+                      indexes: list[dict[str, Any]]) -> dict[str, Any]:
+    """A comparison as the page reads it (``POST /sync/compare``'s answer, and ``POST /sync/import/compare``'s of a
+    file: web/sync_file_routes.py): its id, the other side (``peer``), when the two last agreed, the parts the other
+    holds, each difference with its names, each side's change against ``base`` and ``kept``, its part and the
+    songbooks that list it (``listed``), each songbook difference's two documents, and the indexes newer there."""
+    from caracole import peer_sync as sync
 
     def names(d) -> dict[str, str] | None:
         cut = sync.names_of(d.id, d.label)
         return None if cut is None else {"artist": cut[0], "title": cut[1]}
 
-    return json_response(200, {
+    return {
         "comparison": comparison,
-        "peer": {"address": address, "server": state.server, "caracole": state.version, "name": state.name,
-                 "kind": kept.kind, "made": None},
-        "synced_before": made.synced,
-        "holds": list(kept.holds),
+        "peer": dict(peer),
+        "synced_before": synced_before,
+        "holds": list(holds),
         "differences": [{"id": d.id, "label": d.label, "kind": d.id.partition("/")[0], "proposal": d.proposal,
                          "why": d.why, "here": d.mine.digest if d.mine else None,
                          "there": d.theirs.digest if d.theirs else None, "names": names(d),
-                         "change": list(sync.change_of(d, made.base, made.kept)), "part": sync.part_of(d.id),
-                         "with": made.listed.get(d.id, [])} for d in found],
-        "songbooks": {unit_id: {"here": here, "there": there} for unit_id, (here, there) in made.songbooks.items()},
-        "indexes": _waiting(made.newest, state.indexes),
-    })
+                         "change": list(sync.change_of(d, base, kept)), "part": sync.part_of(d.id),
+                         "with": listed.get(d.id, [])} for d in found],
+        "songbooks": {unit_id: {"here": here, "there": there} for unit_id, (here, there) in songbooks.items()},
+        "indexes": indexes,
+    }
 
 
 def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     """``GET /api/sync/unit``: a unit of a comparison kept (``comparison``, ``id``), its two documents, ``{id, here,
-    there}``: this side's now (``peer_sync.unit_document``'s ``"unit"``) and the other caracole's, asked of it now
-    (``GET /api/peer/unit``), None for a side that hasn't got it. Refused 409 for a comparison past or of a file,
-    404 for a unit it didn't find, 502 for the other caracole not answering."""
+    there}``: this side's now (``peer_sync.unit_document``'s ``"unit"``) and the other side's, asked of the other
+    caracole now (``GET /api/peer/unit``), or, for an import's comparison, read from its staged file
+    (``sync_file_routes.file_unit``, sending no request), None for a side that hasn't got it. Refused 409 for a
+    comparison past, of another source, or of a file gone, 404 for a unit it didn't find, 502 for the other caracole
+    not answering."""
     from caracole import peer_sync as sync
     from caracole.web.peer_routes import _library
 
@@ -428,17 +446,23 @@ def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     if unit_id not in kept.proposals:
         raise Refused(404, "Not compared", f"{unit_id[:200]!r} isn't one that comparison found: it is no unit the "
                                            "two hold differently.")
-    if kept.source != "peer":  # an import's comparison: its other side is the file, which no caracole serve answers
+    importing = kept.source.startswith(IMPORTING)
+    if kept.source != "peer" and not importing:  # its units are its source's own to read
         raise Refused(409, "Not a network sync", "That comparison is of a file, not of another caracole: its units "
                                                  "are read from the file.")
     overrides, books = _library(app)
     with app.db() as conn:
         here = sync.unit_document(conn, app.cfg, overrides, books, unit_id)
-    try:
-        with sync.Peer(kept.address, transport=transport()) as peer:
-            there = peer.unit(unit_id)
-    except sync.PeerError as e:
-        raise Refused(502, "Not reached", str(e)) from None
+    if importing:
+        from caracole.web.sync_file_routes import file_unit
+
+        there = file_unit(app, kept.source[len(IMPORTING):], unit_id)
+    else:
+        try:
+            with sync.Peer(kept.address, transport=transport()) as peer:
+                there = peer.unit(unit_id)
+        except sync.PeerError as e:
+            raise Refused(502, "Not reached", str(e)) from None
     return json_response(200, {"id": unit_id, "here": here["unit"] if here else None, "there": there})
 
 
@@ -509,6 +533,8 @@ def apply(app: WebApp, form: dict[str, str]) -> Response:
     if open_ and not prefer:
         raise Refused(409, "Choose first", f"Choose a side for every conflict first: {len(open_)} "
                                            f"{'has' if len(open_) == 1 else 'have'} none.")
+    if kept.source.startswith(IMPORTING):
+        return _apply_import(app, made, kept, parts, choices, prefer)
     fresh = _compared(app, kept.address, documents=False)  # afresh: refused now, before anything is queued
     if sync.compared_hash(fresh.found) != kept.hash:
         _forget(app, made)
@@ -522,5 +548,30 @@ def apply(app: WebApp, form: dict[str, str]) -> Response:
     if not new:
         raise Refused(409, "Syncing already", f"A sync with {kept.address} is on its way already (request "
                                               f"{job.id}): compare again once it is over.")
+    _forget(app, made)
+    return app.queued(job, "/#tab=sync")
+
+
+def _apply_import(app: WebApp, made: str, kept: Compared, parts: tuple[str, ...] | None, choices: dict[str, str],
+                  prefer: str) -> Response:
+    """Sync on an import's comparison (``kept.source`` ``import:<id>``, web/sync_file_routes.py): the staged file
+    compared again, sending no request (409 ``STALE`` once this library moved since, 409 ``GONE`` once the file is
+    gone), then ``caracole peer import --yes --progress [--parts=…] --compared HASH --choose=… -- FOLDER`` queued under
+    ``import:<id>``, its view the answer; one of that file waiting or running already is refused (409)."""
+    from caracole.web.sync_file_routes import compared_again
+
+    import_id = kept.source[len(IMPORTING):]
+    if compared_again(app, import_id) != kept.hash:
+        _forget(app, made)
+        raise Refused(409, "Compare again", STALE)
+    shown = f"Sync with a file from {(kept.name.strip() or 'a library')[:120]}"
+    args = ("peer", "import", "--yes", "--progress",
+            *((f"--parts={','.join(parts)}",) if parts is not None else ()), f"--compared={kept.hash}",
+            *(f"--choose={side}:{unit_id}" for unit_id, side in choices.items()),
+            *((f"--prefer={prefer}",) if prefer else ()), "--", kept.address)
+    job, new = app.submit(shown, IMPORTING + import_id, [(shown, args)], display=shown, join=False)
+    if not new:
+        raise Refused(409, "Importing already", f"That file is being imported already (request {job.id}): choose it "
+                                                "again once that is over.")
     _forget(app, made)
     return app.queued(job, "/#tab=sync")

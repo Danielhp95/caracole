@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The phone's device tests on the one emulator, one caller at a time (AGENTS.md, "How work is done here"):
+# The phone's device tests on a pool of emulators, one caller an emulator at a time (AGENTS.md, "How work is done
+# here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
 #
@@ -10,11 +11,15 @@
 #   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest..., or in full:
 #                   io.github.danielhp95.caracole.NoSitesTest), with DIR its computer's folder
 #   --computer DIR  one computer for every class that names none
-#   --sites S       the fake sites server for the classes (lane lookups-e2e fills this branch)
+#   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
+#                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
 #
-# It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then holds
-# ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock} while it installs and runs. It uses an
-# emulator alone (a serial emulator-NNNN), never a phone adb also lists, starts one if none is up (without a display it
+# It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then takes the first free emulator of
+# the pool (CARACOLE_EMULATORS, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556, -5558), holding its
+# lock while it installs and runs: emulator-5554's is
+# ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}, as before, and each other's the same name
+# with its port (caracole-emulator-5556.lock). It uses an emulator alone (a serial emulator-NNNN), never a phone adb also
+# lists, starts the one it took if it isn't up (each read-only, so several run on the one AVD; without a display it
 # stops and says so) and leaves it up, never holding the lock (nothing the script starts inherits it). Between classes the app's data is cleared, and the print spooler and any
 # chooser closed. It prints each class's result and exits non-zero on any failure.
 set -euo pipefail
@@ -34,7 +39,7 @@ computer=""
 sites=""
 classes=()
 
-usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 2; }  # the header, whole
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -50,29 +55,37 @@ while [ $# -gt 0 ]; do
 done
 [ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
 [ "$areas" = all ] && areas=""
-if [ -n "$sites" ]; then
-    echo "device-test.sh: --sites is lane lookups-e2e's (the fake sites server): not built yet" >&2
-    exit 2
-fi
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
 (cd "$repo" && nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-# 2. The emulator's lock, held until the script ends.
+# 2. A free emulator of the pool and its lock, held until the script ends.
 mkdir -p "$(dirname "$lock")" "$logs"
-exec 9>"$lock"
-if ! flock -n 9; then
-    echo "device-test.sh: the emulator is busy (another caller holds $lock): waiting" >&2
-    flock 9
-fi
+pool="${CARACOLE_EMULATORS:-3}"
+lock_of() { if [ "$1" = 5554 ]; then echo "$lock"; else echo "${lock%.lock}-$1.lock"; fi; }
+port=""
+said=0
+while [ -z "$port" ]; do
+    for i in $(seq 0 $((pool - 1))); do
+        p=$((5554 + 2 * i))
+        exec 9>"$(lock_of "$p")"
+        if flock -n 9; then port="$p"; break; fi
+        exec 9>&-
+    done
+    if [ -z "$port" ]; then
+        [ "$said" = 1 ] || echo "device-test.sh: every emulator of the pool ($pool) is busy: waiting" >&2
+        said=1
+        sleep 3
+    fi
+done
 
 # adb: the host's, else the emulator shell's (one adb server for every caller: a phone it also lists is never used).
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(cd "$repo" && nix develop ./android#emulator -c sh -c 'command -v adb')"
 adb_cmd() { "$adb_bin" "$@"; }
-emulator_serial() { adb_cmd devices 2>/dev/null | awk '$1 ~ /^emulator-[0-9]+$/ && $2 == "device" { print $1; exit }'; }
+emulator_serial() { adb_cmd devices 2>/dev/null | awk -v s="emulator-$port" '$1 == s && $2 == "device" { print $1; exit }'; }
 
 serial="$(emulator_serial || true)"
 if [ -z "$serial" ]; then
@@ -80,11 +93,12 @@ if [ -z "$serial" ]; then
         echo "device-test.sh: no emulator is up and there is no display to start one on" >&2
         exit 3
     fi
-    echo "device-test.sh: starting the emulator (its log: $logs/emulator.log)" >&2
+    echo "device-test.sh: starting emulator-$port (its log: $logs/emulator-$port.log)" >&2
     (cd "$repo" && setsid nohup nix develop ./android#emulator -c env \
         ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-/home/dani/.config/.android/avd}" QT_QPA_PLATFORM=xcb \
         LD_LIBRARY_PATH=/run/opengl-driver/lib \
-        emulator -avd caracole -gpu host -no-snapshot-save >"$logs/emulator.log" 2>&1 </dev/null &) 9>&-
+        emulator -avd caracole -port "$port" -read-only -gpu host -no-snapshot-save >"$logs/emulator-$port.log" \
+        2>&1 </dev/null &) 9>&-
     for _ in $(seq 1 180); do
         serial="$(emulator_serial || true)"
         [ -n "$serial" ] && break
@@ -132,6 +146,31 @@ start_computer() {
     return 1
 }
 
+# The fake sites server of scenario $sites, on a free port (never 8737), for every class: its address as the
+# emulator reaches it, in each class's arguments.
+site_args=()
+if [ -n "$sites" ]; then
+    sites_port="$(free_port)"
+    while [ "$sites_port" = 8737 ]; do sites_port="$(free_port)"; done
+    (exec 9>&-; cd "$repo" && exec nix develop -c python -m tests.helpers.fake_sites serve "$sites" "$sites_port" \
+        --address 127.0.0.1) \
+        >"$logs/sites-$sites_port.log" 2>&1 &
+    servers+=($!)
+    for _ in $(seq 1 600); do
+        if python3 -c 'import sys, urllib.request; urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+                "http://127.0.0.1:%s/" % sys.argv[1], timeout=2).close()' "$sites_port" 2>/dev/null; then
+            site_args=(-e sites "http://10.0.2.2:$sites_port")
+            break
+        fi
+        sleep 1
+    done
+    if [ ${#site_args[@]} -eq 0 ]; then
+        echo "device-test.sh: the fake sites of $sites didn't answer (their log: $logs/sites-$sites_port.log)" >&2
+        exit 3
+    fi
+    echo "device-test.sh: the fake sites of $sites at http://10.0.2.2:$sites_port (their log: $logs/sites-$sites_port.log)" >&2
+fi
+
 failed=0
 results=()
 
@@ -139,7 +178,8 @@ results=()
 run_class() {
     local name="$1"; shift
     local out
-    out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" "$runner" 2>&1 | tr -d '\r')" || true
+    out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
+        | tr -d '\r')" || true
     echo "$out"
     if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
         results+=("PASS $name")

@@ -4791,11 +4791,44 @@ why it can't show one.
 
 **Another caracole's sync.** `GET /api/peer/state` answers what this library
 holds, unit by unit, for another caracole's `caracole peer` (see
-[Two caracoles](#two-caracoles-the-phones-and-the-computers)); `GET
+[Two caracoles](#two-caracoles-the-phones-and-the-computers)), with what the two
+last agreed on and each "keep mine" this library's imports of that caracole's
+files remembered, so that its sync gives this one its version no more; `GET
 /api/peer/unit` a unit whole and `GET /api/peer/file` a song's kept file, while
 it is as kept: reads, with no lock and no request to a site, that another
 site's page can't make. `POST /peer/pull` queues `caracole peer pull` of the
 units another caracole's sync asks this one to take from it.
+
+**Export and Import a file.** `GET /api/sync/sizes` says what an export of this
+library would hold: its name, songs and songbooks, its library's size in bytes
+(its kept files, and the library page with what it links), its site indexes'
+size (null where the server's SQLite can't count it) and the tabs they track.
+`POST /sync/export` (JSON `{"parts": ["library", "songbooks"]}`, `indexes`
+beside them or not) makes the file `caracole peer export` writes (see [Export
+and import](#export-and-import-peer-export-peer-import)) in `cache_dir/peer/`,
+one at a time (503 while another is made), and answers its id, the name it
+downloads under (`horde_logbook-03-11-26.caracole`) and its size; `GET
+/api/sync/export?export=ID` sends it once, as that attachment: it is deleted as
+it is sent, as the next export is made if it never is (one waits to be sent at
+most), and an hour after at the latest. A file to import comes in parts:
+`POST /sync/import/open` (JSON `{"size", "name"}`, 8 GiB at most, one at a time)
+answers its id and how big a part may be (8 MiB), then `POST
+/sync/import/part?import=ID&at=N` sends each, in order, into
+`state_dir/peer/import-<id>/`. `POST /sync/import/compare` (a form, `import`)
+reads it whole and compares it with this library, as `POST /sync/compare` does
+with another caracole (its other side the file: `kind` `file`, when it was made,
+the parts it holds), or refuses it in the words `caracole peer import` says
+(400 for no file caracole exported, one of another version or one cut short; 409
+for this library's own export or one no newer than your last sync with its
+caracole) and deletes it. `POST /sync/apply` on that comparison queues
+`caracole peer import` of the folder, a sync shown as "Sync with a file from
+<its library>", which deletes it once it is over. `POST /sync/import/drop`
+(JSON `{"import"}`) deletes one at once, as the page's Cancel does (409 while its
+import waits or runs). One never taken is deleted an hour after its last part,
+or as the next file is opened, when no request names it and it is whole (a file
+compared and left) or its upload stopped two minutes before. The two reads take
+no lock, ask no site and can't be made by another site's page; the writes carry
+the form token, in their header or their form.
 
 **The Android app's copy.** caracole's Android app copies the library from the
 server to read it offline: `GET /api/offline` lists what to copy, as JSON
@@ -5936,9 +5969,10 @@ it now: compare again, and choose again.
 
 Each unit taken here is checked against both sides' digests as compared, so one that changed on either side since is
 left as it is. Then the sync keeps what the two agree on, stamped by the other side's clock, and the other side's
-address and name, which caracole serve's Sync tab lists. A unit left doesn't fail the sync (exit 0): it says why.
-**`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
-for caracole serve.
+address and name, which caracole serve's Sync tab lists, and brings the indexes up to date (see [Syncing parts, and
+the indexes](#syncing-parts-and-the-indexes)). A unit left doesn't fail the sync (exit 0): it says why.
+**`--progress`** prints its stages, compare, take, give, agree and index, each unit taken, given or left, and at the
+end a report of what it did, as JSON lines for caracole serve.
 
 ### Export and import: peer export, peer import
 
@@ -5999,40 +6033,90 @@ or an hour after its last part if it is never taken. `--choose`, `--prefer`, `--
 are `peer sync`'s; with `--progress` it ends with a report of what it did, for caracole serve, even when it could
 take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
 
-**`--parts`**, of `peer sync` and `peer import`: the parts of the sync, `library`, `songbooks` and `indexes` by
-commas, all three by default. A difference outside them is neither taken nor given nor listed, but a song a songbook
-lists comes along with the songbooks. `peer sync --parts indexes` does nothing yet.
-
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
 chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
 is given there, with no question asked.
 
+### Syncing parts, and the indexes
+
+**`--parts`**, of `peer sync` and `peer import`: the parts of the sync, `library`, `songbooks` and `indexes` by
+commas, all three by default. A difference outside them is neither taken nor given nor listed, but a song a songbook
+lists comes along with the songbooks.
+
+With `indexes` among them, `caracole peer sync` brings each site's index up to date on both sides, once the units are
+synced and agreed on (its stage **index**): each site goes the way of the later read, whichever side read it.
+
+- A site the other side read more recently is **taken**: its index streamed here (`GET /api/peer/index?sites=`, into
+  `cache_dir/peer/`) and merged as `caracole index merge` merges a file, the database backed up first
+  (`…-before-merge.sqlite`), under caracole's lock; the copy is deleted.
+- A site this side read more recently is **given**: exported (`caracole index export` of those sites, no lock), sent
+  to the other's Import a file in parts as its page sends one, compared there and synced there, of the indexes alone;
+  the other caracole serve merges it as a queued `caracole peer import`, which the sync waits for (ten minutes at
+  most). The other side must be a caracole serve of this version or later.
+- Neither newer, or the indexes not among the parts: nothing is asked ("no index is newer on either side").
+
+With `--progress` the sync ends with a report of what it did, for caracole serve's Sync tab: the other caracole, when,
+the parts, and each index taken or given with the tabs it tracked before and after (the rows of its first table:
+UG's sitemap index, LaCuerda's listings, …) and when it was read. An index stage that fails says why; the sync exits
+1, the units taken and given all the same.
+
 ### The Sync tab
 
-The library page caracole serve serves has a **Sync** tab, before Requests, which syncs this library with another
-caracole's (the phone's has the same tab), as `caracole peer sync` does from a terminal:
+The library page caracole serve serves has a **Sync** tab, the last, after Requests (on a wide screen Library and
+Songbooks sit on the left, Sites, Requests and Sync on the right). It holds three panels:
 
-1. **Compare**: type the other caracole serve's address (`http://192.168.1.20:8737`), or press a caracole synced
-   with before, listed under the field with when (the newest's address is in the field already). caracole serve asks
-   the other for its library's units, one request, and lists every unit the two hold differently (`POST
-   /sync/compare`), grouped as Songs, Removals, Songbooks, Artists' aliases, Artists' UG pages and Blocked tabs, each
-   with why it differs and what the sync proposes: **keep here's**, **take there's**, or **CONFLICT** where both
-   changed it. Nothing changes on either side.
-2. **Choose**: each difference has Here, There or Skip, its proposal's side chosen at first; a conflict has none
-   until you choose, and two buttons settle every conflict at once (Keep here's, Take there's).
-3. **Sync**, once every conflict has a side (`POST /sync/apply`): only the comparison and your choices are sent,
-   never a song. It queues `caracole peer sync ADDRESS --push --compared HASH --choose=SIDE:ID …` (see above), which
-   takes here what comes from there and pushes there what goes there, so the other side needn't reach this one.
-   A comparison is kept 10 minutes, and Sync compares again first: when either side changed since, it is refused
-   ("compare them again, and choose again") before anything is queued. With nothing to take or give, Sync still
-   records that the two agree (and the phone's brings the computer's newer pages and indexes).
+- **Sync with a server**: the other caracole serve's address (`http://192.168.1.20:8737`; the one it synced with last
+  is there already, and the others it synced with are offered as you type), **Test**, which asks it what it holds and
+  changes nothing ("✓ Studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26"), when this library last
+  synced with it, and **Sync**.
+- **Export**: this library in one file, for another server or a phone, to share or to keep.
+- **Import a file**: a file a phone or a server exported, synced as if its caracole were here.
 
-The tab then follows the sync, a step at a time (Compare, Take, Give, Agree), and says what it took here, gave there
-and left as it was, with why (a unit you skipped, or one that changed on a side since the comparison: "Synced: 1
-change left as it was"), then offers **Reload**. The sync is a request like any, in the Requests tab too, where a
-sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
-comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
-two agree on, and the other side's address and name, which `GET /api/sync` lists.
+Each opens the same sheet the phone's sync button opens, so a sync goes the same way on both:
+
+1. **What to sync.** The sheet compares the two as it opens (one request to the other caracole; nothing changes on
+   either side), then shows three parts, all ticked: **Library** (your songs, their sheets and pages), **Songbooks**
+   (your songbooks and their set lists; a song a songbook lists comes along with it even when Library isn't ticked)
+   and **Site indexes** (for searching offline: whichever side read a site more recently gives it to the other). Each
+   says what waits in it ("2 changed on Studio", "newer on Studio: Ultimate Guitar (read today)"), and above them what
+   the sync does, counted in the parts ticked: ↓ to take, ↑ to give, ⚠ changed on both. **Cancel** on the left,
+   **Sync** on the right.
+2. **A conflict stops it to ask.** Everything changed on one side alone is taken or given by itself. A song (or a
+   songbook) changed differently on both sides since the last sync gets a card: its name, "1 of N", and each side's
+   version, this computer on the left, showing how the two differ (its own key, its sheet, its versions, its lyrics,
+   an override; a songbook's set list). Under **Which version to keep**, a button for each side: **This computer** and
+   the server's name. Tick **Same for the other N**, then a side, to keep it for every conflict left. There is no
+   Skip: **Cancel** (or Escape) ends the sync with nothing taken, given or sent, and forgets the sides you chose.
+3. **What it did.** The sheet follows the sync (a request like any, in the Requests tab too), then says "Synced with:
+   Studio" and when, the two sides as icons, and a line for each kind of change, an arrow the way it went: songs taken,
+   songs given (and why: "added on this computer"), the conflicts (whose version was kept, and how it differs), the
+   songbooks (each with what changed in it) and the indexes (the tabs each site's index tracks, before and after; a
+   site whose listings no longer name some tabs goes down, in red). Each opens on its chevron. **Done** closes it.
+
+A sync already on its way when the page loads, or in another tab, is followed, never started again; once the last
+card is answered the sync is sent, and Escape then only hides the sheet, as **Hide** does. When the two changed
+since the comparison, Sync is refused in the server's words and the sheet compares again, keeping your choices for
+every conflict as it was. Behind it, Sync queues `caracole peer sync ADDRESS --push --parts=… --compared HASH
+--choose=SIDE:ID …` (see above): only the comparison, the parts and your choices are sent, never a song.
+
+**Export** asks what to put in the file, with each part's size: Library and Songbooks ticked, **Site indexes**
+unticked (they are big). **Export** makes the file and the browser saves it as `<library name>-dd-mm-yy.caracole`
+(see [Export and import](#export-and-import-peer-export-peer-import)); caracole serve sends it once, so its link,
+clicked again, says to export again for another copy. **Import a file** sends the file you choose to caracole serve
+in parts of 8 MiB, then opens the sheet as a sync with it: "Sync with a file from Phone", when it was exported, and
+its parts (one the file doesn't hold greyed, "Not in this file"); a conflict's other side is the **File**, its
+version read from the file. A file takes nothing back: the summary has no "given" arrow; to give your changes,
+export a file of your own. A file older than your last sync with its caracole, or this library's own export, is
+refused in its own words. caracole serve holds one file to import at a time: one you cancel, or close the sheet on
+without Sync, is dropped at once, so that the next can be sent right after.
+
+The same sheet opens at an address: `#sheet=sync`, `#sheet=export` or `#sheet=import` after the library page's
+(the phone's Settings use these).
+
+The sync is a request like any, in the Requests tab too, where a sync that left something or failed offers
+**Compare again**, never Try again, as its choices were made on a comparison that is past. caracole serve writes
+nothing for it but the request: `caracole peer sync` keeps what the two agree on, and the other side's address and
+name, which `GET /api/sync` lists.
 
 What the tab's routes answer (the phone's server answers the same six with the same shapes, but that its `device`
 is `phone` and a comparison's other side, the computer, is of `kind` `computer`):
@@ -6049,8 +6133,9 @@ is `phone` and a comparison's other side, the computer, is of `kind` `computer`)
   it, each songbook that differs as both sides hold it (the other's asked for, one request each), and each site
   whose index one side read more recently. It compares with the answers an import remembered, as `peer sync` does.
 - `GET /api/sync/unit?comparison=&id=`: a unit of a comparison kept, as both sides hold it now, the other's asked
-  for (null for a side that hasn't got it); 409 for a comparison past, 404 for a unit it didn't find. Only the
-  page's own script may ask it (the form token in its header).
+  for, or read from the file for a file's comparison (null for a side that hasn't got it); 409 for a comparison
+  past, or a file gone since, 404 for a unit it didn't find. Only the page's own script may ask it (the form token
+  in its header).
 - `GET /api/sync/indexes`: each site's index here, its newest read and the tabs it tracks; the phone asks it after
   it gives the computer its index pages.
 - `POST /sync/apply` also takes `parts` (library, songbooks, indexes by commas; all three when none is sent) and

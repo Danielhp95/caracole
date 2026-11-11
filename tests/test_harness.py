@@ -158,12 +158,23 @@ def test_what_collection_made_is_out_of_the_garbage_collectors_way():
 
 def test_auto_means_the_cores_up_to_a_dozen(monkeypatch):
     monkeypatch.delenv("PYTEST_XDIST_AUTO_NUM_WORKERS", raising=False)
+    monkeypatch.setattr(os, "getloadavg", lambda: (0.0, 0.0, 0.0))
     monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(24)))
     assert conftest.pytest_xdist_auto_num_workers(None) == conftest.MAX_WORKERS == 12
     monkeypatch.setattr(os, "sched_getaffinity", lambda pid: {0, 1, 2})
     assert conftest.pytest_xdist_auto_num_workers(None) == 3
     monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "5")
     assert conftest.pytest_xdist_auto_num_workers(None) is None  # pytest-xdist's own hook reads it
+
+
+def test_auto_leaves_a_busy_machines_cores_to_the_suites_already_on_it(monkeypatch):
+    # Several suites at once (a build's lanes) each take the cores the load leaves, two at least.
+    monkeypatch.delenv("PYTEST_XDIST_AUTO_NUM_WORKERS", raising=False)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(24)))
+    monkeypatch.setattr(os, "getloadavg", lambda: (18.0, 9.0, 4.0))
+    assert conftest.pytest_xdist_auto_num_workers(None) == 6
+    monkeypatch.setattr(os, "getloadavg", lambda: (118.0, 80.0, 50.0))
+    assert conftest.pytest_xdist_auto_num_workers(None) == conftest.FEWEST_WORKERS == 2
 
 
 # --- tmp_path in memory ------------------------------------------------------------------------
