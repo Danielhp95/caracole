@@ -414,6 +414,23 @@ On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
+The Songbooks tab's forms and the Select bar's songbook are the phone's own, as `caracole songbook` is on the
+computer: **Make** a songbook of the songs picked, **Add** to it (a song you have at once; one new to the library, from
+the tab's search, looked up first, the two queued together or not at all), **Move** a song, **Take it out**,
+**Rename** and **Delete** a songbook. Each is a request of the Requests tab, one at a time behind any other, its line
+saying how it goes ("Making the songbook…", then "Made"); a form that can't be done (a name taken, a songbook or a
+song that isn't there, a song of the computer the phone hasn't got) is refused at once, in caracole serve's words, and
+queues nothing. The songbooks are the phone's (`phone_songbooks`), which a sync gives the computer.
+
+- **A song's chip** sets where the songbook plays it, as on the computer: its key, mode, capo and instrument, or **Its
+  own version**; a key or a mode alone keeps the capo it plays at now, and another instrument the pitch it plays at.
+- **Get the missing songs** looks up each song of the songbook the phone has no sheet of (one a sync brought plays from
+  the computer's sheet, and is never asked for), as many as the queue has room for, then makes the songbook again; a
+  set list's **Get it**, that song alone.
+- **Phone page**: the phone makes each songbook's page itself (`_songbooks/<name>/songbook.html`), from the sheets it
+  plays, after every change; the PDF and the ChordPro file are the computer's (chordpro), so the phone links neither.
+  A page that can't be made fails its request ("Making the songbook failed."), the change itself made.
+
 **A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
 computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
 what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
@@ -426,8 +443,6 @@ again. A page the computer made and the phone copied names no version of the pho
 read**) to the readings caracole weighs, best first, each with its Q and a button that pins it (harptabs.com's own
 notation among them), and Back to caracole's guess for a tab you pinned. The tab's page is made again with your
 reading.
-
-Songbooks and printing: not built yet.
 
 ### Export PDF
 
