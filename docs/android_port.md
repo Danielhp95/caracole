@@ -376,7 +376,8 @@ through `CorpusOnDeviceTest`, under Android's runtime (AGENTS.md, "android/", ha
   Guitar Pro file to one and backs up; one sync then leaves every unit equal on both sides, nothing of either side's
   politeness crossed; the phone's pages of those songs are phone_render.py's on the computer's copy, byte for byte,
   and the computer's own pages of them, rendered with ChordPro, differ from them only in each viewer's link to its
-  PDF and info.json's PDF record.
+  PDF and info.json's PDF record; and the round's last changes, exported in a `.caracole` file on the phone, are
+  taken by the computer's Import a file, a song and a songbook, nothing given back.
 - **On the device**: every corpus area and every androidTest class pass on an Android 16 (API 36) emulator (x86_64),
   through android/scripts/device-test.sh, in one run on one emulator. On the owner's phone (Sony XQ-DQ72, Android 15,
   arm64), in a copy of the app with another application id, never the owner's: the corpus's 52 areas under ART and ICU,
