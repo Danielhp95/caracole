@@ -140,7 +140,7 @@ def test_a_songbook_inlines_it_too():
 def test_the_settings_have_a_sound_row():
     html = build_viewer(SONG)
     row = re.search(r'<span id="sound-row" hidden>.*?</span></span>', html, re.S)
-    assert row and 'id="volumes"' in row.group(0) and 'role="group" aria-label="Strum"' in row.group(0)
+    assert row and 'id="volumes"' in row.group(0) and 'role="group" aria-label="Strum volume"' in row.group(0)
     assert re.search(r'<div class="diagram" id="diagram"', html)
 
 

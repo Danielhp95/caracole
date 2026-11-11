@@ -110,7 +110,7 @@ def test_a_lookup_shows_its_stages_and_the_sheet_in_a_real_browser(cfg, served, 
     assert "Radiohead - Creep" in reader and "Done." in reader
     assert "walking down the river road tonight" in shown(dom, 'pre class="sheet"')
     assert "&lt;b&gt;not markup&lt;/b&gt;" in reader and "<b>not markup</b>" not in reader  # text, never markup
-    assert re.search(r'class="stage done"[^>]*>The sheet<', reader)
+    assert re.search(r'class="stage done"[^>]*>Sheet<', reader)
     assert 'href="/Radiohead/Creep/sheet.txt"' in reader
 
 
@@ -142,9 +142,9 @@ def test_the_search_lists_the_offline_index_as_you_type_in_a_real_browser(cfg, s
     results = shown(dom, 'div id="results"', until='<details class="by-name"')
     assert "On UG" in results
     assert results.index("Radiohead") < results.index("Stone Temple Pilots")
-    assert results.count(">Get it<") == 2 and "1 chords" in results
+    assert results.count(">Fetch<") == 2 and "1 chords" in results
     # A screen reader moving through the buttons hears which song each one gets.
-    assert 'aria-label="Get Radiohead - Creep from Ultimate Guitar"' in results
+    assert 'aria-label="Fetch Radiohead - Creep from UG"' in results
     assert 'aria-label="Versions of Stone Temple Pilots - Creep"' in results
     # Each version numbered in its kind, with a link to preview it on UG before picking it.
     assert ">Chords 1 of 1<" in results
@@ -485,7 +485,7 @@ def test_a_songs_name_looks_it_up_as_its_get_it_does(cfg, live, browser):
         pressed[what] = browser.js("window.posts")
     assert pressed["name"] == pressed["get it"] and pressed["name"][0][0] == "/lookup"
     name = "document.querySelector(\"#results .hit[data-ug='radiohead/creep'] .row-title button\")"
-    assert browser.js(f"{name}.getAttribute('aria-label')") == "Get Radiohead - Creep"
+    assert browser.js(f"{name}.getAttribute('aria-label')") == "Fetch Radiohead - Creep"
     assert browser.js(f"{name}.closest('h2').textContent") == "Creep"
     assert queue.snapshot() == []  # noted, never sent
 

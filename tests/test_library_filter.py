@@ -320,7 +320,7 @@ def test_instrument_chips_count_and_filter_any_of(shelf, laptop):
         "Matches")
     chips = laptop.js(CHIPS)
     assert [(c["inst"], c["text"], c["glyph"]) for c in chips] == [
-        ("sheet", "Chord sheet 7", "glyph glyph-sheet"), ("guitar", "Guitar tab 2", "glyph glyph-guitar"),
+        ("sheet", "Chords 7", "glyph glyph-sheet"), ("guitar", "Guitar 2", "glyph glyph-guitar"),
         ("ukulele", "Ukulele 1", "glyph glyph-ukulele"), ("harmonica", "Harmonica 4", "glyph glyph-harmonica"),
         ("score", "Score 1", "glyph glyph-score")], chips
     assert not any(c["off"] or c["faded"] for c in chips) and {c["on"] for c in chips} == {"false"}
@@ -343,7 +343,7 @@ def test_instrument_chips_count_and_filter_any_of(shelf, laptop):
 def test_an_instrument_with_no_song_is_disabled(conn, cfg, shelf, laptop):
     laptop.open(shelf.as_uri() + "#q=dylan")
     chips = {c["inst"]: c for c in laptop.js(CHIPS)}
-    assert chips["guitar"]["text"] == "Guitar tab 0" and chips["guitar"]["off"] and chips["guitar"]["faded"]
+    assert chips["guitar"]["text"] == "Guitar 0" and chips["guitar"]["off"] and chips["guitar"]["faded"]
     assert chips["harmonica"]["text"] == "Harmonica 2" and not chips["harmonica"]["off"]
     # One on that no song has now stays a chip you can press, to let it go.
     laptop.open(shelf.as_uri() + "#q=dylan&inst=score")
@@ -553,7 +553,7 @@ def test_each_active_filter_is_a_removable_tag(shelf, laptop):
     laptop.open(shelf.as_uri() + "#mode=minor")
     assert [t["text"] for t in laptop.js(TAGS)] == ["Minor", "Clear"]
     laptop.open(shelf.as_uri() + "#tonic=E&show=review")
-    assert [t["text"] for t in laptop.js(TAGS)] == ["Needs your pick", "E", "Clear"]
+    assert [t["text"] for t in laptop.js(TAGS)] == ["Needs review", "E", "Clear"]
     laptop.open(shelf.as_uri())
     assert laptop.js(TAGS) == [] and laptop.js("document.getElementById('tags').hidden")
 
@@ -605,14 +605,14 @@ def test_the_panel_shows_only_what_applies(conn, cfg, laptop):
 def test_no_match_names_every_filter_and_show_all_clears_them(shelf, laptop):
     empty = "[...document.querySelectorAll('#list > p.empty, #list > button')].map((n) => n.textContent)"
     laptop.open(shelf.as_uri() + "#q=hotel&show=wanted&inst=harmonica,score&key=Bm&artist=eagles")
-    assert laptop.js(empty) == ["No wanted songs of Eagles with a harmonica tab or a score in B minor match “hotel”.",
+    assert laptop.js(empty) == ["No wanted songs of Eagles with harmonica tab or score in B minor match “hotel”.",
                                 "Show all 1 match"]
     laptop.click("#list > button")
     assert laptop.wait(f"JSON.stringify({TITLES}) === '[\"Hotel California\"]'"), laptop.js(TITLES)
     assert laptop.js("location.hash") == "#q=hotel" and laptop.js(TAGS) == []
-    for address, said in (("#show=review&mode=major", "No songs in a major key needing review."),
+    for address, said in (("#show=review&mode=major", "No songs in a major key needs review."),
                           ("#inst=ukulele&tonic=E", "No songs with ukulele chords in E major or minor."),
-                          ("#show=wanted&inst=sheet", "No wanted songs with a chord sheet.")):
+                          ("#show=wanted&inst=sheet", "No wanted songs with chord sheet.")):
         laptop.open(shelf.as_uri() + address)
         assert laptop.js(empty) == [said, "Show all"], address
     laptop.click("#list > button")

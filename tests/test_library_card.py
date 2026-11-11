@@ -206,13 +206,13 @@ def test_chips_count_versions_per_source(conn, cfg, tmp_path):
     tiles = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'), "data-card")["tiles"]
     chips = {t["name"]: (t["lead"], [(c["tag"], c["source"], c["n"], c["said"]) for c in t["chips"]]) for t in tiles}
     assert chips["Chord sheet"] == ("Versions", [
-        ("button", "ug", "13", "Ultimate Guitar: 13 versions"), ("button", "lacuerda", "2", "LaCuerda: 2 versions"),
+        ("button", "ug", "13", "UG: 13 versions"), ("button", "lacuerda", "2", "LaCuerda: 2 versions"),
         ("button", "auto", "1", "the audio (auto-chords): 1 version")])  # an auto sheet beside the human one
-    assert chips["Guitar Pro"] == ("Files", [("button", "gtptabs", "1", "gtptabs.com: 1 file"),
+    assert chips["Guitar Pro"] == ("Files", [("button", "gtptabs", "1", "gtptabs: 1 file"),
                                              ("button", "inbox", "1", "your inbox: 1 file")])
     # One source with one version, nothing to choose: From it, no chevron, no drawer.
     assert chips["Lyrics"] == ("From", [("span", "lrclib", None, "LRCLIB")])
-    assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs.com")])
+    assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs")])
     assert chips["Score"] == ("From", [("span", "inbox", None, "your inbox")])
     # More than one version: a small stack.
     assert [("stack" in t["cls"].split()) for t in tiles] == [True, True, False, False, False, False]
@@ -255,7 +255,7 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
     rows = drawer["rows"]
     assert [(r["ver"], r["stars"]) for r in rows] == [
         ("Ver 3", "4.86★ · 408 votes"), ("Ver 4", "4.75★ · 850 votes"), ("Ver 5", "4.70★ · 800 votes")], rows
-    assert [r["note"] for r in rows] == ["Every line of the lyrics · caracole's pick", "80% of the lyrics",
+    assert [r["note"] for r in rows] == ["All the lyrics · our pick", "80% of the lyrics",
                                          "50% of the lyrics"]
     assert [r["acts"] for r in rows] == [["In use", "Open"], ["Open"], ["Open"]]  # the file chooses nothing
     assert [r["open"] for r in rows] == [HOTEL + "sheet.html", HOTEL + "version-46191.html",
@@ -349,7 +349,7 @@ def test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links(conn, cfg, tm
     assert card["tiles"] == [] and "tiles" not in card["parts"]
     # Look in the index; which sites had it; links
     assert card["parts"] == ["facts", "actions", "card-sites", "find-elsewhere", "foot"], card["parts"]
-    assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles now"
+    assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles"
 
 
 def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
@@ -363,7 +363,7 @@ def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
     dom = run(conn, cfg, tmp_path, script)
     assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "card-sites", "find-elsewhere", "foot"]
     elsewhere = attribute_of(dom, "data-elsewhere")
-    assert elsewhere.startswith("Find it elsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
+    assert elsewhere.startswith("ElsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
 
 
 def test_a_text_tab_alone_is_a_guitar_tab_tile(conn, cfg, tmp_path):
@@ -473,7 +473,7 @@ def test_progressions_are_search_chips_that_filter(conn, cfg, tmp_path):
     assert (progs["before"]["label"], progs["before"]["em"]) == ("Progressions", None)  # no line of words about it
     assert progs["before"]["hint"] == "Find songs that play one"  # the label says it as a tooltip
     assert progs["before"]["chips"][0][0] == "vi–IV–I–V" and progs["before"]["chips"][0][2] is True
-    assert progs["before"]["chips"][0][1].startswith("Your songs with I–V–vi–IV")
+    assert progs["before"]["chips"][0][1].startswith("Songs with I–V–vi–IV")
     assert "prog=I+V+vi+IV" in progs["hash"] and progs["titles"] == ["In A Minor", "Synthetic Song"]
 
 
@@ -790,7 +790,7 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
     rest = f"document.querySelector('{item} .drawer-rest')"
     assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on UG, not kept"
     assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
-        "Fetch 6 more versions of Hotel California from Ultimate Guitar")
+        "Fetch 6 more versions of Hotel California from UG")
     other = drawer_of(browser, few, "ug")
     assert browser.js(f"[...document.querySelectorAll('{other} .drawer-rest button')].map((b) => b.textContent)") == [
         "Fetch them"]

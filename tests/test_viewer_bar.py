@@ -233,7 +233,7 @@ def test_play_starts_the_scroll_and_the_pill_takes_the_bars_place(tmp_path):
         b.click("#pill-end")
         ended = bar(b)
     assert counting["pill"] and counting["where"] == "hidden" and counting["focus"] == "go"
-    assert status == "Scrolling in 3 seconds"
+    assert status == "Scrolling in 3 s"
     assert not ended["pill"] and ended["where"] == "shown" and ended["focus"] == "scroll"
 
 

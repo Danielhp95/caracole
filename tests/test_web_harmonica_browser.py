@@ -90,10 +90,10 @@ def test_served_the_read_as_lines_source_opens_the_readings_and_one_is_pinned(cf
                         ".trim())")
     assert listed[0].startswith("b blow · d draw · * bend · - joins · (h) hold · (w) wah Q 0.96 · now")
     browser.js("window.before = true")
-    browser.js("[...document.querySelectorAll('button')].find((b) => b.textContent === 'Read it as letters').click()")
-    assert browser.wait("!window.before && document.body.textContent.includes('Done: read as')", 15)
+    browser.js("[...document.querySelectorAll('button')].find((b) => b.textContent === 'Read as letters').click()")
+    assert browser.wait("!window.before && document.body.textContent.includes('Done · read as')", 15)
     said = browser.js("document.body.textContent.replace(/\\s+/g, ' ')")
-    assert "Done: read as b blow · d draw · * bend · - joins, as you set it." in said
+    assert "Done · read as b blow · d draw · * bend · - joins, as you set it." in said
     assert runner.calls == [["harmonica", "--tab=harmonica-1.txt", "--as=letters", "--", "Cowboy Bebop",
                              "Spokey Dokey"]]
     browser.js("window.before = true")
