@@ -2100,7 +2100,41 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### Files shared to the app
 
-Not built yet. (inbox-share.)
+- `ShareActivity`: SEND and SEND_MULTIPLE of the manifest's stream types (never VIEW or text/plain); a share of mixed
+  types, `*/*`, `application/*` or `audio/*`, offers caracole too, as Android matches a wildcard type against any type
+  a filter names, and each file of a kind it keeps nothing of is answered Not filed (ShareTest pins both). Each file of
+  EXTRA_STREAM (else the share's ClipData), one at a time, read whole while the share's grant holds, at most
+  `InboxShare.MAX_BYTES` (64 MiB), with its display name and type, and staged and queued before the next is read, each
+  its own line; only a `content:` address (`ShareActivity.refused`: a `file:` one could name caracole's own files, which
+  its process may open; its own FileProvider shares the cache's `handoff/` alone). Then finished, and a toast of each
+  file's line, the Requests tab's (`ShareActivity.told`, ShareTest's).
+- server's `InboxShare.share`: the file's name (core.inbox's `InboxFolder.nameFor`: its display name's last part, an
+  extension from its bytes, `GtpTabsFetch.sniff`, or its type when it has none inbox.py files), staged in
+  `stateDir/inbox/` (`InboxFolder`: one file a name, " (2)" before a second's extension, which parse_download_name
+  drops; regular files alone, no link followed), and its filing queued, a job of PhoneKinds' inbox kind keyed
+  `inbox:<name>`, run by the inbox runner (`InboxRunner`, `caracole inbox -- NAME`, as the job's own run, so its
+  stage `file` says PhoneKinds' words: a command's stage events would be its output lines). A name with no
+  extension inbox.py files is never staged.
+- core.inbox's `Inbox.file`: inbox.py's filing of one `_inbox/` entry, in one Database.write: `parseDownloadName`;
+  `match`, by identity key, then `MusicNames` (music.Names: Fuzz.ratio and tokenSetRatio) at 90 among the songs not
+  ignored, a title alone only when one song fits; `_place`'s numbering (core.library's `Numbering`) and the song's
+  `inbox` version; `Kept.keepFile`; `_copies` and `_again`, a lost copy put back by its bytes, a duplicate where the
+  library holds one (`Inbox.held` names it), left waiting where its place holds other bytes now (`Inbox.changed` names
+  it: the job fails "Not filed: … whose place holds other bytes now, and nothing is replaced", the file staged still,
+  as inbox.py leaves it in `_inbox/`). MusicXML's header is never read on the phone: a score is placed by its name
+  alone (the plan's §11, Q12).
+- A file no song fits waits: `InboxRetry`, the phone's afterJob, queues each waiting file that fits now
+  (`Inbox.fits`, read only, every song's names made once a pass, `Inbox.Candidates`) after a job that ran of kind sync,
+  song or add, and after the process's first job whatever its kind (a share whose job the process's end cut short:
+  Try again can't repeat a run of the phone's own), and drops after any job the files that waited 30 days
+  (`InboxFolder.sweep`). A filing that failed (a `SharedFolder`, an IOException) is remembered (`InboxFolder.failed`,
+  `stateDir/inbox/.failed/<name>`) and tried again after a sync, else a day on (`InboxRetry.AFTER_FAILURE`), never
+  after every lookup. A file kept or put back has its song's pages made again (`PhoneParts.pages`).
+- vectors/inbox/ (tests/test_conformance_inbox.py, `InboxReplay`, area `inbox`): names.jsonl (parse_download_name
+  over every download name tests/test_inbox.py writes and more, music.Names' forms and scores), match.jsonl
+  (`_match`), file.jsonl (one file filed over file_fixture_library.jsonl: what it came to, the rows and files it
+  wrote); none filed by a MusicXML header.
+- InboxTest and InboxRunnerTest on the JVM, ShareTest on the device.
 
 ##### Alerts and backups on the phone
 
