@@ -40,7 +40,7 @@ server at SITES (``routed``, RoutedTransport's twin in httpx), so that the compu
 pages the phone does. In a test, ``FakeSites(name)`` is the server on a free port of 127.0.0.1, in a thread
 (``with FakeSites("lookups") as sites: sites.url``).
 
-The scenario ``lookups`` (``LOOKUPS``): seven songs, each with a part (``role``) in the lookups the phases make:
+The scenario ``lookups`` (``LOOKUPS``): nine songs, each with a part (``role``) in the lookups the phases make:
 
 - ``get_it``, Thomas Moore's The Minstrel Boy: four chords versions in UG's index and on each of its pages, the best
   rated first, and LRCLIB's timed lyrics. Get it on its search row keeps its sheet; Fetch them keeps more of its
@@ -61,6 +61,11 @@ The scenario ``lookups`` (``LOOKUPS``): seven songs, each with a part (``role``)
   (its sitemap's rows of the tab and of its artist's page, ``harptabs_rows``, in the scenario's index; the tab's page,
   harptabs_site.py's markup of e2e_library.py's made-up ``harmonica_tab``): Get it keeps both, and the phone makes the
   tab's page.
+- ``round_play`` and ``round_book`` (``ROUND``), Septimus Winner's Listen to the Mockingbird (two chords versions)
+  and Henry Russell's A Life on the Ocean Wave (one, and LRCLIB's timed lyrics): the integration's round
+  (tests/test_android_e2e.py's step 14), looked up on the phone with the computer off, after every phase before it,
+  which looks up none of them. The first plays and is made the song's own version; both make a songbook, the second's
+  key set in it and a Guitar Pro file shared to it.
 
 The standard library alone at import, so that e2e_library.py can import its songs; caracole, httpx and the suite's
 helpers are imported where they are used.
@@ -170,6 +175,8 @@ THOMAS_MOORE = Artist("Thomas Moore", 70001)
 TRADITIONAL = Artist("Traditional", 70002)
 MISC_TRADITIONAL = Artist("Misc Traditional", 70003)
 HENRY_CLAY_WORK = Artist("Henry Clay Work", 70004)
+SEPTIMUS_WINNER = Artist("Septimus Winner", 70005)
+HENRY_RUSSELL = Artist("Henry Russell", 70006)
 LOOKUPS = (
     SiteSong("get_it", THOMAS_MOORE, "The Minstrel Boy", "Am", ("Am", "G", "C", "E"),
              tabs=(7000001, 7000002, 7000003, 7000004), lyrics=True, query="minstrel boy"),
@@ -183,7 +190,12 @@ LOOKUPS = (
              tabs=(7000051, 7000052), chinese=True, query="kangding love song"),
     SiteSong("harmonica", HENRY_CLAY_WORK, "Marching Through Georgia", "C", ("C", "F", "G", "Am"), tabs=(7000061,),
              harp=(6101, 701), query="marching through georgia"),
+    SiteSong("round_play", SEPTIMUS_WINNER, "Listen to the Mockingbird", "G", ("G", "C", "D", "Em"),
+             tabs=(7000071, 7000072), query="listen to the mockingbird"),
+    SiteSong("round_book", HENRY_RUSSELL, "A Life on the Ocean Wave", "D", ("D", "G", "A", "Bm"), tabs=(7000081,),
+             lyrics=True, query="life on the ocean wave"),
 )
+ROUND = ("round_play", "round_book")  # the integration's round (tests/test_android_e2e.py's step 14), none before it
 SCENARIOS = {"lookups": LOOKUPS}
 
 

@@ -70,6 +70,16 @@ and what the next step needs of it). The steps, as the plan numbers them:
    moved its songs to, with the key it set, and its page rendered; overrides.toml's ``[match]`` of the pick and the
    song matched by it; the kept version's file; overrides.toml's ``[version]`` as the phone wrote it; the Guitar Pro
    file filed, its bytes the phone's.
+14. The round (the plan's §9, the integration): the computer off, the fake sites up, phase 9: two songs new to both
+   sides looked up by their rows' Get it, the first played from its card (its page the phone's own), a songbook made
+   of both and the second's key set in it, the first made the song's own version, a Guitar Pro file shared to the
+   second and a backup made by hand. The computer back, phase 10: one sync gives the round's units and nothing else,
+   and the units are equal on both sides; nothing of either side's politeness crosses. Then
+   (``the_round_read_back``): the phone's pages of the round are tests/helpers/phone_render.py's on the computer's
+   copy, byte for byte; the computer's own pages of them, rendered by ``caracole peer take`` with chordpro, are the
+   phone's but for the PDF (a viewer's footer link to it, info.json's ``render``); the computer's readers read the
+   songbook, the version and the file back; and the phone's backup holds both songs, their files' bytes, the
+   songbook and the version.
 
 Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
 sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
@@ -117,7 +127,7 @@ from helpers.e2e_library import (
     stop,
     wait_until_answering,
 )
-from helpers.fake_sites import FakeSites
+from helpers.fake_sites import ROUND, FakeSites
 
 pytestmark = [
     pytest.mark.slow,
@@ -449,6 +459,21 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
         assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
     made_on_the_phone_read_back(eight, computer)
 
+    # 14. The round: the computer off, the phone looks two songs up, plays one, makes a songbook of both, sets one's
+    # key, makes a version its own, shares a Guitar Pro file to one and backs up; the computer back, one sync.
+    assert refused(port)
+    with FakeSites(LOOKUPS) as fake:
+        nine = phone(9, url, dir, sites=fake.url)
+    keys = [nine[role]["key"] for role in ("play", "book")]
+    made = phone_made(dir, keys)  # the round's pages as the phone made them, every change made
+    politeness = computer.politeness()
+    with computer.serving(port):
+        phone(10, url, dir)
+        state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+        assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    assert computer.politeness() == politeness  # nothing of the phone's politeness crossed, nor changed the computer's
+    the_round_read_back(nine, made, computer, dir, tmp_path / "round")
+
 
 def phone_made(dir: Path, keys: list[str]) -> Pages:
     """The pages the phone made of the songs of identity keys ``keys`` and what it recorded of them, read from
@@ -489,15 +514,10 @@ def first_difference(mine: bytes, theirs: bytes) -> str:
             f"Python's {theirs[max(0, at - 80):at + 160]!r}")
 
 
-def pages_as_python_makes_them(five: dict, computer: Computer, dir: Path, into: Path) -> None:
-    """Step 11: the pages the phone made of the pages phase's songs (phase 5's ``pages``), and the records it kept of
-    them, as tests/helpers/phone_render.py makes them on a copy of the computer once it took those songs: the same
-    pages, each byte for byte (info.json too), recorded alike, the song's unit and script alike (never the build, the
-    app's own), and what its sheet plays alike."""
-    made = five["pages"]
-    keys = [song["key"] for song in made.values()]
-    theirs = computer.phone_pages(keys, into)
-    mine = phone_made(dir, keys)
+def same_as_python(mine: Pages, theirs: Pages, keys: list[str]) -> None:
+    """The phone's pages of the songs of ``keys`` and its records of them (``mine``) are Python's for the same inputs
+    (``theirs``, ``Computer.phone_pages``): the same pages, each byte for byte (info.json too), recorded alike, the
+    song's unit and script alike (never the build, the app's own), and what its sheet plays alike."""
     assert sorted(mine.pages) == sorted(theirs.pages)  # every page the phone made, and none Python wouldn't make
     for path, page in mine.pages.items():
         assert page == theirs.pages[path], f"{path}: {first_difference(page, theirs.pages[path])}"
@@ -507,12 +527,24 @@ def pages_as_python_makes_them(five: dict, computer: Computer, dir: Path, into: 
         assert {k: phone["phone"].get(k) for k in ("unit", "script")} == \
             {k: python["phone"].get(k) for k in ("unit", "script")}, key
         assert phone["progressions"] == python["progressions"], key
+    assert mine.folders == theirs.folders
+
+
+def pages_as_python_makes_them(five: dict, computer: Computer, dir: Path, into: Path) -> None:
+    """Step 11: the pages the phone made of the pages phase's songs (phase 5's ``pages``), and the records it kept of
+    them, as tests/helpers/phone_render.py makes them on a copy of the computer once it took those songs: the same
+    pages, each byte for byte (info.json too), recorded alike, the song's unit and script alike (never the build, the
+    app's own), and what its sheet plays alike."""
+    made = five["pages"]
+    keys = [song["key"] for song in made.values()]
+    theirs = computer.phone_pages(keys, into)
+    mine = phone_made(dir, keys)
+    same_as_python(mine, theirs, keys)
     # The pages the phase was for: the Chinese sheet's with its readings and its kept version's, the tab's page.
     chinese, tabbed = (made[role] for role in ("chinese", "harmonica"))
     assert {"sheet.html", "sheet.cho"} | {n for n in chinese["files"] if n.startswith("version-")} <= \
         set(mine.records[chinese["key"]]["files"]) and any(n.startswith("version-") for n in chinese["files"])
     assert {"sheet.html", "sheet.cho", "harmonica-1.html"} <= set(mine.records[tabbed["key"]]["files"])
-    assert mine.folders == theirs.folders
     sheet = mine.pages[f"{mine.folders[chinese['key']]}/sheet.html"]
     readings = json.loads(re.search(rb'<script type="application/json" id="song">(.*?)</script>', sheet,
                                     re.DOTALL).group(1))["pinyin"]
@@ -577,6 +609,99 @@ def made_on_the_phone_read_back(eight: dict, computer: Computer) -> None:
                                                ensure_ascii=False))
 
 
+PDF_LINK = re.compile(rb'<a class="pdf" href="[^"]*"(?: data-trad="[^"]*")?>[^<]*</a>\n')  # page.pdf_line's
+
+
+def without_the_pdf(path: str, page: bytes) -> bytes:
+    """A page with what the computer's own has by design and the phone's hasn't masked: a viewer's footer links to
+    its PDFs (page.pdf_line's), info.json's ``render``, its PDF's record (library.write_info)."""
+    if path.endswith(".html"):
+        return PDF_LINK.sub(b"", page)
+    if path.endswith("/info.json"):
+        info = json.loads(page)
+        info["render"] = None
+        return json.dumps(info, ensure_ascii=False, indent=2).encode("utf-8")
+    return page
+
+
+def the_round_read_back(nine: dict, made: Pages, computer: Computer, dir: Path, into: Path) -> None:
+    """Step 14: the round, as the computer has it once phase 10's sync gave it (``caracole peer take``, then its own
+    render with chordpro): its two songs and their pages, the songbook, the version made the first's own, the Guitar
+    Pro file shared to the second; the phone's pages of them Python's for the same inputs, byte for byte
+    (``same_as_python``); the computer's own pages of them the phone's but for the PDF (``without_the_pdf``: each
+    viewer's footer link, and info.json's ``render``); and the backup the phone made, holding all of it."""
+    from caracole import db
+    from caracole.inbox import guitar_files
+    from caracole.overrides import load_overrides, song_entries
+    from caracole.songbook import load_songbooks, songbooks_file
+    from caracole.songs import find_song
+
+    play, book = nine["play"], nine["book"]
+    keys = [play["key"], book["key"]]
+    # The phone's own pages, as Python's page path with no PDF writes them on the computer's copy.
+    assert {key: {n: e["sha256"] for n, e in made.records[key]["files"].items()} for key in keys} == nine["pages"]
+    same_as_python(made, computer.phone_pages(keys, into), keys)
+    assert any(name.startswith("version-") and name.endswith(".html") for name in nine["pages"][play["key"]])
+
+    # The computer's own pages of them: the phone's, but for the PDF.
+    cfg = computer.cfg()
+    linked = []
+    for path, page in made.pages.items():
+        theirs = (cfg.library_dir / path).read_bytes()
+        if path.endswith(".html"):
+            assert not PDF_LINK.search(page), f"{path}: the phone links no PDF"
+        if PDF_LINK.search(theirs):
+            linked.append(path)
+        mine, own = without_the_pdf(path, page), without_the_pdf(path, theirs)
+        assert mine == own, f"{path}: {first_difference(mine, own)}"
+    folders = {made.folders[key] for key in keys}
+    assert {f"{folder}/sheet.html" for folder in folders} <= set(linked), linked  # the computer's link their PDFs
+    for folder in folders:
+        assert (cfg.library_dir / folder / "sheet.pdf").is_file(), folder
+        info = json.loads((cfg.library_dir / folder / "info.json").read_bytes())
+        assert info["render"] and info["render"]["pdf"], info
+
+    # The rest of the round, as the computer's readers read it.
+    overrides = load_overrides(cfg.overrides_file)
+    assert song_entries(overrides, play["key"]).get("version") == play["version"], song_entries(overrides,
+                                                                                                play["key"])
+    said = nine["songbook"]
+    books = {b.name: b for b in load_songbooks(songbooks_file(cfg.library_dir))}
+    assert said["name"] in books, list(books)
+    assert list(books[said["name"]].texts) == said["songs"], books[said["name"]]
+    setting = {song.text: song.setting for song in books[said["name"]].songs}[said["set"]]
+    assert setting is not None and setting.key == said["key"], books[said["name"]]
+    assert (cfg.library_dir / "_songbooks" / said["name"] / "songbook.html").is_file()
+    shared = nine["guitar"]
+    conn = db.connect(cfg.db_path)
+    try:
+        song = find_song(conn, shared["key"])
+        files = guitar_files(conn, song.id)
+        assert [f.name for f in files] == [shared["name"]], files
+        assert hashlib.sha256((cfg.library_dir / files[0].path).read_bytes()).hexdigest() == shared["sha256"]
+    finally:
+        conn.close()
+
+    # The backup the phone made with the computer off: both songs, their kept files' bytes, the songbook, the version.
+    backups = dir / "phone" / "state" / "backups"
+    copy = sqlite3.connect(backups / nine["backup"]["name"])
+    try:
+        held = dict(copy.execute("SELECT key, id FROM songs WHERE key IN (?, ?)", keys))
+        assert set(held) == set(keys), held
+        rows = copy.execute("SELECT path, sha256 FROM files WHERE song_id IN (?, ?)", list(held.values())).fetchall()
+        assert any(Path(path).name == shared["name"] for path, _ in rows), rows
+        for path, sha in rows:
+            assert hashlib.sha256((backups / "blobs" / sha).read_bytes()).hexdigest() == sha, path
+        (version,) = copy.execute("SELECT value FROM phone_overrides WHERE tbl = 'version' AND key = ?",
+                                  (play["key"],)).fetchone()
+        assert json.loads(version) == play["version"]
+        assert said["name"] in {name for (name,) in copy.execute("SELECT name FROM phone_songbooks")}
+    finally:
+        copy.close()
+    print("the round:", json.dumps({k: nine[k] for k in ("play", "book", "songbook", "guitar", "backup", "asked")},
+                                   ensure_ascii=False))
+
+
 def merged(computer: Computer, timeout: float = 300) -> dict[int, str]:
     """The index merges the computer's caracole serve queued for the phone's pushes (``POST /peer/index``), once each
     is over: their states by id. The phone's sync waits for its push's merge already when the computer counts its
@@ -611,7 +736,7 @@ def looked_up(five: dict, asked: list[dict], lookups: dict, computer: Computer) 
     closed = lookups["songs"]["closed"]
     assert {r["status"] for r in mine if r["url"] in closed["tabs"]} == {301}
     assert not [r for r in asked if r["url"] in closed["closed"]]  # the redirect robots.txt closes, never followed
-    assert len(five["added"]) == len(lookups["songs"]) == 7  # each of the scenario's songs looked up once
+    assert len(five["added"]) == len(lookups["songs"]) - len(ROUND) == 7  # each song but the round's, looked up once
     harmonica = lookups["songs"]["harmonica"]["harp"]
     assert [r["status"] for r in mine if r["url"] == harmonica] == [200]  # the tab's page, read once on harptabs.com
     # The computer, its cache as empty of these pages as the phone's was, asks the very URLs the phone's Get it did.
