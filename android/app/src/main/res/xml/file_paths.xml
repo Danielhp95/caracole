@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A file handed to another app is a copy under the cache's handoff/ folder, named for its song. -->
+<!-- A file handed to another app is a copy under the cache's handoff/ folder, named for its song; an export of the sync
+     sheet's, a copy under exports/, named as its attachment (Exports), for the share sheet. -->
 <paths>
     <cache-path name="handoff" path="handoff/" />
+    <cache-path name="exports" path="exports/" />
 </paths>

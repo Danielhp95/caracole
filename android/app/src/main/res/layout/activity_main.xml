@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- A small top bar: the page's title, and a menu with Sync now, Library and Settings. -->
+    <!-- A small top bar: the page's title, the sync button (the page's sync sheet), and a menu with Library and
+         Settings. -->
     <LinearLayout
         android:id="@+id/bar"
         android:layout_width="match_parent"
@@ -27,6 +28,15 @@
             android:textSize="15sp" />
 
         <ImageButton
+            android:id="@+id/sync"
+            android:layout_width="40dp"
+            android:layout_height="36dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/sync"
+            android:src="@drawable/ic_sync"
+            android:tooltipText="@string/sync" />
+
+        <ImageButton
             android:id="@+id/more"
             android:layout_width="40dp"
             android:layout_height="36dp"
@@ -35,7 +45,7 @@
             android:src="@drawable/ic_more" />
     </LinearLayout>
 
-    <!-- The sync's line: "Syncing: 34 of 120 files", then "Up to date" or the error, briefly. -->
+    <!-- The unattended sync's line: "Syncing with the computer…", then what it came to or the error, briefly. -->
     <TextView
         android:id="@+id/status"
         android:layout_width="match_parent"

@@ -6,14 +6,17 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -49,7 +52,9 @@ import kotlin.coroutines.resume
 /**
  * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
  * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
- * bar (the page's title; Sync now, Library, Settings) and the sync's line under it. The WebView carries the launch's
+ * bar (the page's title; the sync button, which opens the library page's sync sheet; ⋮ with Library and Settings)
+ * and the unattended sync's line under it. An intent's [SHEET] (Settings' Export and Import a file, the notification
+ * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
  * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
  * at over the page while it lasts ([sizeLabel]).
  */
@@ -59,12 +64,16 @@ class MainActivity : Activity() {
     private lateinit var title: TextView
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
-    private var files: LocalFiles? = null
-    /** The server's origin, once it has started. */
-    private var origin: String? = null
+    /** The server's files read in this process, once it has started (the WebView's client reads it on its own
+     * threads, for an export). */
+    @Volatile private var files: LocalFiles? = null
+    /** The server's origin, once it has started (read on the WebView's threads too). */
+    @Volatile private var origin: String? = null
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
     private lateinit var label: SizeLabel
+    /** The page's file input to Android's picker (the sync sheet's Import a file). */
+    private lateinit var chooser: FileChooser
     /** alphaTab's bundle from the APK's assets, which the sandboxed Guitar Pro page asks for with no cookie. */
     private lateinit var alphaTab: AlphaTabAssets
     /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
@@ -77,6 +86,8 @@ class MainActivity : Activity() {
     /** The page an intent asked the screen to show (a song shared to the app: ShareLinkActivity's), until the server
      * has started. */
     private var asked: String? = null
+    /** The sync sheet's flow an intent asked for ([SHEET]), until the server has started. */
+    private var askedSheet: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,6 +100,7 @@ class MainActivity : Activity() {
         title = findViewById(R.id.title)
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
+        chooser = FileChooser(this)
         fitInsets()
 
         ownTextZoom = web.settings.textZoom
@@ -120,11 +132,19 @@ class MainActivity : Activity() {
             override fun onReceivedTitle(view: WebView, text: String?) {
                 title.text = text?.takeIf { it.isNotBlank() } ?: getString(R.string.app_name)
             }
-        }
-        // A link with `download` (a Guitar Pro file on the library page, the viewer's Export PDF), or a file the
-        // WebView can't show, comes here, not as a navigation.
-        web.setDownloadListener { url, _, _, _, _ -> follow(url, download = true) }
 
+            // The page's file input (the sync sheet's Choose a file): Android's picker, its answer back to the page.
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>,
+                                           params: FileChooserParams?): Boolean = chooser.open(callback, params)
+        }
+        // A link with `download` (a Guitar Pro file on the library page, the viewer's Export PDF, the sync sheet's
+        // export), or a file the WebView can't show, comes here, not as a navigation: an export to the share sheet
+        // ([Exports]), anything else where [follow] sends it.
+        web.setDownloadListener { url, _, disposition, _, _ ->
+            if (Exports.isExport(url, origin)) shareExport(url, disposition) else follow(url, download = true)
+        }
+
+        findViewById<ImageButton>(R.id.sync).setOnClickListener { showSheet(SYNC) }
         findViewById<ImageButton>(R.id.more).setOnClickListener { menu(it) }
         backCallback()
         screen.launch { start(savedInstanceState) }
@@ -155,27 +175,36 @@ class MainActivity : Activity() {
             return
         }
         val page = asked ?: if (saved == null) SharedLink.shown(intent?.getStringExtra(SharedLink.PAGE)) else null
+        val sheet = askedSheet ?: if (saved == null) intent?.getStringExtra(SHEET) else null
         asked = null
+        askedSheet = null
         if (page != null) {
             showPage(page)
+        } else if (sheet != null) {
+            showSheet(sheet)
         } else if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) &&
             web.restoreState(saved) != null) {
             shown = true
         } else {
             showLibrary()
         }
-        if (saved == null && page == null && settings.server.isBlank() && Caracole.mirror(this).manifest() == null) {
+        if (saved == null && page == null && sheet == null && settings.server.isBlank() &&
+            Caracole.mirror(this).manifest() == null) {
             openSettings()
         }
     }
 
-    /** A song shared to the app while the screen was open (MainActivity is single-task): its page, once the server
-     * has started. */
+    /** A song shared to the app while the screen was open (MainActivity is single-task): its page; or the sync sheet
+     * an intent asked for ([SHEET]); either once the server has started. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val page = SharedLink.shown(intent.getStringExtra(SharedLink.PAGE)) ?: return
-        if (origin != null) showPage(page) else asked = page
+        val page = SharedLink.shown(intent.getStringExtra(SharedLink.PAGE))
+        val sheet = intent.getStringExtra(SHEET)
+        when {
+            page != null -> if (origin != null) showPage(page) else asked = page
+            sheet != null -> if (origin != null) showSheet(sheet) else askedSheet = sheet
+        }
     }
 
     /** The launch's cookie, set for [origin] before the WebView asks it for anything; false when it can't be. */
@@ -246,19 +275,20 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The library page's Sync tab (`#tab=sync`): where the phone and the computer compare their libraries, and each
-     * takes what the other changed, the computer's address the one Settings keeps. From the library page itself a
-     * change of its address alone (tabs.js hears it); from any other page, the library page at that tab.
+     * The library page's sync sheet at [name]'s flow ([SheetAddress]: sync, export or import; the page alone for any
+     * other word): where the phone and the computer, or a file, compare their libraries and each takes what the other
+     * changed. From the library page itself a change of its address alone (sync.js hears it and opens the sheet);
+     * from any other page, the library page with the sheet open.
      */
-    private fun showSyncTab() {
+    private fun showSheet(name: String) {
         val links = links ?: return
         askToNotify()
-        web.loadUrl(links.address("") + SYNC_TAB)
+        web.loadUrl(SheetAddress.of(links.address(""), name))
         shown = true
     }
 
-    /** Android 13 and later show the notification of a sync that runs (SyncService) only once asked; it runs either
-     * way. */
+    /** Android 13 and later show the notification of a sync that runs (SyncService), and of one that left conflicts,
+     * only once asked; it runs either way. */
     private fun askToNotify() {
         if (Build.VERSION.SDK_INT < 33) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
@@ -272,8 +302,6 @@ class MainActivity : Activity() {
         popup.menuInflater.inflate(R.menu.main, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.sync_now -> Syncs.now(this)
-                R.id.sync_tab -> showSyncTab()
                 R.id.library -> showLibrary()
                 R.id.settings -> openSettings()
             }
@@ -282,14 +310,17 @@ class MainActivity : Activity() {
         popup.show()
     }
 
-    /** The sync's line: while it runs, how far; at its end, "Up to date" or the error, for a few seconds. */
+    /**
+     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs; at its end, for a few
+     * seconds, what it came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose",
+     * or why it failed). A sync from the sheet says how it goes in the sheet.
+     */
     private fun show(state: SyncState) {
         hiding?.cancel()
         when (state) {
             SyncState.Idle -> status.visibility = View.GONE
             is SyncState.Running -> {
-                val p = state.progress
-                status.text = if (p == null) getString(R.string.syncing_asking) else getString(R.string.syncing, p.done, p.total)
+                status.text = getString(R.string.syncing)
                 status.visibility = View.VISIBLE
             }
             is SyncState.Ended -> {
@@ -299,11 +330,7 @@ class MainActivity : Activity() {
                     status.visibility = View.GONE
                     return
                 }
-                status.text = when {
-                    !outcome.ok -> outcome.text
-                    outcome.text == "nothing changed" -> getString(R.string.up_to_date)
-                    else -> getString(R.string.up_to_date_changes, outcome.text)
-                }
+                status.text = outcome.text
                 status.visibility = View.VISIBLE
                 if (outcome.ok && !shown) showLibrary()
                 hiding = scope.launch {
@@ -312,6 +339,19 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    /** The picker's answer, for the page's file input ([chooser]). */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!chooser.result(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    /** The sync sheet's export at [url], read from the phone's server in this process and handed to Android's share
+     * sheet ([Exports]). */
+    private fun shareExport(url: String, disposition: String?) {
+        val files = files ?: return
+        Log.i(TAG, "an export heard by the download listener: to the share sheet")
+        screen.launch { Exports.share(this@MainActivity, files, url, disposition) }
     }
 
     /** A line in the status bar, kept until the next sync's. */
@@ -369,10 +409,41 @@ class MainActivity : Activity() {
 
     private inner class Client : WebViewClient() {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-            // alphaTab's bundle first, from the APK ([AlphaTabAssets]). Then the phone's server, at its exact origin,
-            // is all the WebView loads: anything else (another port of 127.0.0.1 among them, which the launch's
-            // cookie would reach, cookies ignoring the port) is a 404 here and reaches no socket.
-            alphaTab.answer(request) ?: if (links?.loads(request.url.toString()) == true) null else notFound()
+            // alphaTab's bundle first, from the APK ([AlphaTabAssets]); an export, read here once ([exportAnswer]).
+            // Then the phone's server, at its exact origin, is all the WebView loads: anything else (another port of
+            // 127.0.0.1 among them, which the launch's cookie would reach, cookies ignoring the port) is a 404 here
+            // and reaches no socket.
+            alphaTab.answer(request) ?: exportAnswer(request)
+                ?: if (links?.loads(request.url.toString()) == true) null else notFound()
+
+        /**
+         * An export's address, should the WebView ask it itself before its download listener hears it: the phone's
+         * server sends an export once, so the file is read here, in this process, and copied for the share sheet
+         * ([Exports.copy]), and the WebView gets an empty attachment of the same name, which its download listener
+         * then shares from that copy. Null for any other request.
+         */
+        private fun exportAnswer(request: WebResourceRequest): WebResourceResponse? {
+            val url = request.url.toString()
+            if (request.method != "GET" || !Exports.isExport(url, origin)) return null
+            val files = files ?: return notFound()
+            Log.i(TAG, "an export asked by the WebView itself: read here, once")
+            return try {
+                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER))) {
+                    is Exports.Copied.File -> WebResourceResponse(Exports.TYPE, null, 200, "OK",
+                        mapOf("Content-Disposition" to got.disposition), ByteArrayInputStream(ByteArray(0)))
+                    // The listener hears no download, and says nothing: the refusal is said here.
+                    is Exports.Copied.Refused -> {
+                        runOnUiThread { Handoff.toast(this@MainActivity, got.message ?: getString(R.string.export_gone)) }
+                        notFound()
+                    }
+                }
+            } catch (e: IOException) {
+                runOnUiThread {
+                    Handoff.toast(this@MainActivity, getString(R.string.export_failed, e.message ?: e.javaClass.simpleName))
+                }
+                notFound()
+            }
+        }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             if (request.isForMainFrame) follow(request.url.toString()) else false
@@ -514,11 +585,18 @@ class MainActivity : Activity() {
     private fun notFound() =
         WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
-    private companion object {
-        const val SHOW_ENDED_MS = 5_000L
-        const val SYNC_TAB = "#tab=sync"
-        const val NOTIFY = 1
-        const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
-        const val FADE_MS = 250L
+    companion object {
+        /** The intent's extra that opens the sync sheet at a flow: "sync", "export" or "import" ([SheetAddress]). */
+        const val SHEET = "sheet"
+
+        /** The sheet's network sync, the bar's button's and the notification's. */
+        const val SYNC = "sync"
+
+        private const val SHOW_ENDED_MS = 5_000L
+        /** The log's tag for the sync sheet's export, which reaches the app by one way or the other. */
+        private const val TAG = "caracole-export"
+        private const val NOTIFY = 1
+        private const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
+        private const val FADE_MS = 250L
     }
 }
