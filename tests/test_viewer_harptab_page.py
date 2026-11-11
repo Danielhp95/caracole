@@ -153,8 +153,8 @@ def test_a_tab_shown_as_written_can_still_be_read_another_way():
 
 def test_spokey_dokey_says_it_was_read_by_its_own_legend():
     html = page(SPOKEY, facts={"difficulty": "Expert", "views": 23000})
-    assert text_of(html, "legend") == ("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the "
-                                       "tab's own legend · Expert · 23k views")
+    assert text_of(html, "legend") == ("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from its "
+                                       "legend · Expert · 23k views")
     guessed = page("\n".join(line for line in SPOKEY.split("\n") if " = " not in line and "= " not in line))
     assert re.fullmatch(r"Read as: b blow · d draw · \* bend · - joins, guessed \(0\.8\d\)", text_of(guessed, "legend"))
     data = data_of(html)
@@ -213,7 +213,7 @@ def test_a_row_read_with_low_confidence_keeps_its_words_above_it_where_the_tab_w
 
 
 def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
-    assert "caracole placed each hole over its syllable" in page()
+    assert "We placed each hole over its syllable" in page()
     assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
 
 
@@ -227,7 +227,7 @@ def test_back_to_the_songs_sheet_or_the_library():
 
 def test_its_foot_links_the_tabs_text_and_its_page_on_harptabs_com_alone():
     html = page(url="https://www.harptabs.com/tab/588/hotel-california")
-    assert '<a class="pdf" href="harmonica-1.txt">The tab as text</a>' in html
+    assert '<a class="pdf" href="harmonica-1.txt">Tab as text</a>' in html
     assert '<a href="https://www.harptabs.com/tab/588/hotel-california">harptabs.com</a>' in html
     assert '<a href="https://www.harptabs.com/">harptabs.com</a>' in page(url="javascript:alert(1)")
 

@@ -231,7 +231,7 @@ def test_the_list_shows_every_version_and_opens_the_kept_ones(tmp_path):
         b.click("#ver-items > li:first-child .ver-main")
         assert b.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
     rows = shown["rows"]
-    assert shown["title"] == "13 versions on Ultimate Guitar" and len(rows) == 13 and focus == "version-list-title"
+    assert shown["title"] == "13 versions on UG" and len(rows) == 13 and focus == "version-list-title"
     assert rows[0]["link"] == "sheet.html" and "Ver 3" in rows[0]["text"] and "4.86★ (408)" in rows[0]["text"]
     assert "the one" in rows[0]["text"] and "the version that oasis play on Wembley 2008" in rows[0]["text"]
     assert rows[1]["link"] is None and rows[1]["current"] == "page" and "this page" in rows[1]["text"]
@@ -251,7 +251,7 @@ def test_from_a_file_a_version_not_kept_links_to_ug_and_shows_the_command_that_k
         cmd = b.js("document.querySelector('#ver-items > li:nth-child(4) .cmd').textContent")
         copy = b.js("(() => { const r = document.querySelector('#ver-items > li:nth-child(4) .vcmd button')"
                     ".getBoundingClientRect(); return [r.width, r.height]; })()")
-    assert actions == [["On UG", WONDERWALL["list"][3]["url"]], ["Keep it", None]]
+    assert actions == [["On UG", WONDERWALL["list"][3]["url"]], ["Keep", None]]
     assert cmd == f"caracole versions {DISPLAY} --keep 504"
     assert min(copy) >= 44
 
@@ -355,7 +355,7 @@ def test_served_the_list_links_to_caracole_serves_versions_page(tmp_path):
     assert back[0] == "Back to our pick" and query(back[1]) == (
         "/versions", {"sheet": "Artist/Title/version-39144.html", "do": "clear"})
     keep = shown["rows"][3]["actions"]
-    assert len(keep) == 1 and keep[0][0] == "Keep it" and query(keep[0][1]) == (
+    assert len(keep) == 1 and keep[0][0] == "Keep" and query(keep[0][1]) == (
         "/versions", {"sheet": "Artist/Title/version-39144.html", "tab": "504", "do": "keep"})
     assert shown["rows"][8]["actions"] == []  # gone
 

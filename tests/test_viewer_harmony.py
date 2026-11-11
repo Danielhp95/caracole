@@ -268,7 +268,7 @@ def test_explain_says_what_the_bass_is():
     assert explain(ch("C/D"), C) == (
         "I/2: the 1st chord of C major, major (upper case); D in the bass, the 2nd above its root, "
         "outside the chord")
-    assert explain(ch("G/F"), C).endswith("; F in the bass, the lowered 7th above its root, not a note of the chord")
+    assert explain(ch("G/F"), C).endswith("; F in the bass, the lowered 7th above its root, outside the chord")
     assert explain(ch("G7/F"), C).endswith("; F in the bass, its 7th")
     assert explain(ch("Am/C"), C).endswith("; C in the bass, its 3rd")
     assert explain(ch("Cadd9/D"), C).endswith("; D in the bass, its 9th")

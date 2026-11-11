@@ -299,7 +299,7 @@ def test_a_song_with_no_sheet_has_no_guitar_tab_and_shows_the_pages_harp(tmp_pat
         assert b.wait("document.querySelector('#necks .hk-name').textContent === 'Eb harp'")
         up = seen(b)
     assert first["tabs"] == [] and title == "Harmonica" and first["pane"] == "harmonica"
-    assert first["none"].startswith("With no chord sheet") and first["centre"] is None and first["chords"] == []
+    assert first["none"].startswith("No chord sheet, so no key") and first["centre"] is None and first["chords"] == []
     assert first["card"] == "D harp" and [n for n, _ in first["blow"]] == "D F# A D F# A D F# A D".split()
     assert {role for _, role in first["blow"] + first["draw"]} == {"plain"}
     assert [n for n, _ in up["blow"]][:3] == ["Eb", "G", "Bb"]
@@ -413,7 +413,7 @@ def test_spokey_dokey_says_how_it_was_read_and_keeps_what_it_couldnt_read_in_pla
         named = b.js("document.querySelector('#sheet .h[data-i=\"0\"]').textContent")
         wahs_with_notes, unread_with_notes = b.js(WAHS), b.js(UNREAD)
         wide = b.js(WIDE)
-    assert said.startswith("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend")
+    assert said.startswith("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from its legend")
     assert Counter(unread) == Counter({"3": 4, "$": 2, "(DV)": 1})
     assert around == ["−4", "‿", "‿", "−5", True]
     assert wahs == ["wah"] * 11

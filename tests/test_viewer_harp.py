@@ -478,7 +478,7 @@ def test_the_page_names_the_key_card_on_every_transposition_as_harp_py_plays_it(
                     head = f"Outside {names[tonic]} {words}: "
                     assert text.startswith(head) and set(text[len(head):-1].split(", ")) == out, text
                 else:
-                    assert text == f"Every note it blows or draws is in {names[tonic]} {words}."
+                    assert text == f"Every note it plays is in {names[tonic]} {words}."
 
 
 def test_the_tables_hold_the_overlays_for_every_mode():

@@ -589,7 +589,7 @@ def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(
     swap = f"alt=ionian.4.{alt[0]}.{quote(alt[1], safe='')}.{'' if alt[2] is None else alt[2]}"
     with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both&" + swap, **DESKTOP) as b:
         chosen = tip_on(b, 6)
-    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: your swap for D7."
     assert chosen["picture"] and [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
     unnamed = tmp_path / "Unnamed" / "Title" / "sheet.html"
     unnamed.parent.mkdir(parents=True)
@@ -783,7 +783,7 @@ def test_it_follows_the_chord_played_now(tmp_path):
         b.click("#card-tip")
         assert b.wait("!document.getElementById('tip').hidden")
         chosen = b.js(SEEN)
-    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: your swap for D7."
     assert [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
 
 

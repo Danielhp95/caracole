@@ -81,7 +81,7 @@ def assert_drawn(seen: dict, mark: list) -> None:
     assert seen["links"] == [["Somos vikingos veganos - Hyperfanes", URL, None]]  # in this tab: the sandbox's rule
     assert seen["channel"] == ["kintanedu"]
     assert "Audio from YouTube" not in seen["text"] and "youtube.com" not in seen["text"]
-    assert "Auto-generated, unverified" in seen["text"]  # the notice, as it was
+    assert "We heard these chords in the recording. Unchecked." in seen["text"]  # the notice, as it was
     assert not seen["sideways"]
 
 

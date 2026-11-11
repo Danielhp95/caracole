@@ -196,7 +196,7 @@ def test_the_page_credits_the_fingerings():
 
 def test_an_auto_sheet_says_it_is_unverified():
     html = build_viewer(to_chordpro("[ch]Am[/ch]\nla", title="T", artist="A", auto=True))
-    assert "auto-generated, unverified" in html.lower() or "Auto-generated, unverified" in html
+    assert "We heard these chords in the recording. Unchecked." in html
 
 
 # --- the artist's name: their songs in the library ---------------------------------------------
@@ -303,7 +303,7 @@ def test_then_a_key_estimated_from_the_chords():
 def test_with_a_capo_the_key_line_says_the_shapes_the_capo_and_the_key_it_sounds_in():
     # "Key Em · Capo 2" read as the song's key; Em is the shapes', and the song sounds in F#m.
     assert facts_of(build_viewer(WALL)) == (
-        '<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b> · <span class="from">key estimated from the chords</span>'
+        '<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b> · <span class="from">key guessed from the chords</span>'
     )
     assert facts_of(build_viewer(UG_CHO)) == (
         '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
@@ -616,7 +616,7 @@ def test_every_song_has_a_capo_to_move(tmp_path):
       out = [shown, offered, off, four, look()];
     """)
     assert shown and offered == 0
-    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m estimated from the chords · no capo"]
+    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m · guessed from the chords · no capo"]
     assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "natural minor"]
     assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
 

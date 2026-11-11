@@ -121,8 +121,8 @@ def test_a_chord_the_ukulele_has_no_shape_for_says_what_it_shows(tmp_path):
             b.click(f'#sheet .c[data-c="{i}"]')
             assert b.wait(f"document.getElementById('card-name').textContent === {json.dumps(['C5', 'C/E', 'G9'][i])}")
             notes.append(b.js("document.getElementById('shape-note').textContent"))
-    assert notes == ["No shape for this chord here: C is the closest.", "Shown without its bass, E.",
-                     "No shape for this chord here: G7 is the closest."]
+    assert notes == ["No shape for this chord. Closest: C.", "Without its bass, E.",
+                     "No shape for this chord. Closest: G7."]
 
 
 def test_the_piano_draws_each_chord_as_a_keyboard_its_notes_lit_and_its_bass_marked(tmp_path):
@@ -168,9 +168,9 @@ def test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back(tmp_path
     assert guitar[0] == "Em shapes · capo 2 · sounds F#m · key from the sheet" and guitar[1] == ["Em", "C", "G", "D"]
     assert moved[0].startswith("D#m shapes · capo 3 · sounds F#m") and moved[1] == ["D#m", "B", "F#", "C#"]
     # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row.
-    assert piano[0]["facts"] == "Key F#m from the sheet" and not piano[0]["capo"]
+    assert piano[0]["facts"] == "Key F#m · from the sheet" and not piano[0]["capo"]
     assert piano[1] == ["F#m", "D", "A", "E"] and piano[2].startswith("F#m") and "capo" not in piano[2]
-    assert card == ["F#m", "Root position; F# in the bass, left hand."]
+    assert card == ["F#m", "Root position · F# in the bass, left hand"]
     assert back[0].startswith("D#m shapes · capo 3 · sounds F#m") and back[1] == ["D#m", "B", "F#", "C#"]
 
 

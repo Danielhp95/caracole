@@ -27,7 +27,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 UG_CHO = (FIXTURES / "ug_sheet.cho").read_text(encoding="utf-8")  # G, D, Em, C, G/B, Am, F; no legend
 LEGEND = (FIXTURES / "legend_sheet.cho").read_text(encoding="utf-8")  # a Wonderwall-like legend, made-up words
 CADD9 = 3  # its index among the legend sheet's chords: Em7, G, A7sus4, Cadd9, Dsus4, Dsus4/F#
-CAPO = "With the capo on fret 2."  # the legend sheet's capo, which every shape of it is played with
+CAPO = "Capo on fret 2."  # the legend sheet's capo, which every shape of it is played with
 TABS = "As the tab plays it. " + CAPO
 NONE = "000000"  # a tab says nothing of the fingers
 DB = load_voicings()
