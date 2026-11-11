@@ -192,25 +192,18 @@ class RoutingTest {
             TestApp(tmp.root, modules = { db ->
                 val parts = TestParts.of(db, tmp.root, scope)
                 listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts),
-                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts),
+                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts, TestApp.CSRF),
                        ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
                 // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), a sheet's versions and a
                 // harmonica tab's readings VersionsRoutes' and HarmonicaRoutes' (VersionsRoutesTest,
                 // HarmonicaRoutesTest), Export PDF ExportRoutes' (ExportRoutesTest), the Songbooks tab's forms
-                // SongbookRoutes' (SongbookRoutesTest), the rest neutral still.
+                // SongbookRoutes' (SongbookRoutesTest) and the picker ReviewRoutes' (ReviewRoutesTest).
                 for (path in listOf("/songbook/make", "/songbook/add", "/songbook/add-song", "/songbook/get",
                                     "/songbook/remove", "/songbook/move", "/songbook/set", "/songbook/rename",
-                                    "/songbook/delete")) {
+                                    "/songbook/delete", "/review")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
-                    assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
-                }
-                for (path in listOf("/review")) {
-                    assertTrue(path !in stubbed, "$path is its module's now")
-                    val refused = test.postScript(path, listOf("song" to "1"))
-                    assertEquals(409, refused.status, path)
-                    assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
                     assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
                 }
                 // The Guitar Pro page and alphaTab's bundle are GuitarRoutes' own now (server.guitar's GuitarPageTest),
@@ -219,16 +212,6 @@ class RoutingTest {
                     assertTrue(path !in stubbed, "$path is its module's now")
                 }
                 assertTrue(stubbed.none { it.startsWith("/assets/alphatab") || it == "/guitar" }, stubbed.toString())
-                for (path in listOf("/review")) {
-                    assertTrue(path !in stubbed, "$path is its module's now")
-                    val page = test.get("$path?song=1")
-                    assertEquals(409, page.status, path)
-                    assertEquals("text/html; charset=utf-8", page.header("Content-Type"))
-                    assertTrue("isn&#x27;t on the phone yet." in page.text,
-                               page.text.substringAfter("<p class=\"message\">").substringBefore("</p>"))
-                    val said = test.script("$path?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
-                    assertTrue(said.endsWith(" on the phone yet."), said)
-                }
             }
         } finally {
             scope.cancel()

@@ -67,6 +67,11 @@ object Search {
         return IndexFound(rows, hits, "song", best)
     }
 
+    /** search_index: the songs of the offline UG index that match [q], best first, by any reading, [limit] at most
+     * (a song not found's search hits, review.search_candidates, read them). */
+    fun searchIndex(db: Db, q: String, limit: Int = 10): List<IndexHit> =
+        ScoredRows.hits(db, PyKeys.head(ScoredRows.of(db, q).rows, limit))
+
     /** found: your songs with the index's answer: a song of yours read by its title (or both) at STRONG or more
      * comes first and is best; never one read only by its artist, nor one under a placeholder artist. */
     fun found(library: List<LibraryHit>, index: IndexFound): Found {
