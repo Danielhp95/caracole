@@ -6,6 +6,13 @@ computer to the byte: every rule the Kotlin side ports, Python states as data he
 The helpers are `tests/helpers/corpus.py` (Python) and `android/core/src/testFixtures/…/core/testing/` (Kotlin:
 `Corpus.kt`, `Fixtures.kt`, `TestDb.kt`); their tests are `tests/test_corpus_helpers.py` and `:core`'s.
 
+Built through milestone 6 (2026-11-10): 23 areas of vectors (55.3 MB of the 71 MB budget; the largest viewer, 9.1 of
+its 12 MB, and web, 8.4 of 9), the runtime data the APK ships under `data/caracole/` (3.4 MB), every area replayed on
+the JVM and, by `CorpusOnDeviceTest`'s 52 replays, on an Android 16 emulator and on the owner's arm64 phone. Beside
+the vectors, the milestones' references the end to end holds the phone to: tests/helpers/phone_render.py (the
+phone's pages, byte for byte), tests/helpers/scenario.py (a lookup's requests and rows), tests/helpers/fake_sites.py
+and tests/helpers/e2e_library.py.
+
 ## Who writes it
 
 The Python suite writes every file under `tests/conformance/`.

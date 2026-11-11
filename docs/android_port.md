@@ -4,13 +4,17 @@ A plan for a phone app that keeps a library of its own and works with the comput
 keeps songbooks and plays sheets. It syncs with the computer's caracole both ways, and the owner chooses a side
 wherever the two differ. Nothing in it needs Termux or Python on the phone.
 
-Status: milestones 1–3 are built (2026-11-03): the Kotlin core with the conformance corpus, search with the computer
-off, and sync from the phone, both ways. The goal's 20-songs scenario passes end to end on the JVM
+Status: milestones 1–6 are built. Milestones 1–3 (2026-11-03): the Kotlin core with the conformance corpus, search with
+the computer off, and sync from the phone, both ways ([below](#built-milestones-1-to-3)). Milestones 4–6 (2026-11-10):
+lookups on the sites from the phone, the page builder, songbooks, a sheet's versions, printing, alphaTab, files shared
+to the app, alerts and backups, with the sync redesign (the sync sheet and the `.caracole` file)
+([below](#built-milestones-4-to-6)). The goal's scenario and the round's pass end to end on the JVM
 (`CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`), and the app's tests pass on an
-Android 16 emulator (x86_64), the device step of the plan
-([superpowers/plans/2026-11-03-android-port-m1-m3.md](superpowers/plans/2026-11-03-android-port-m1-m3.md) §9). What
-only a real phone can show, and what waits for milestone 4, are [below](#built-milestones-1-to-3). Milestones 4–6 are
-still a plan. The research behind it, with sources, is
+Android 16 (API 36) emulator (x86_64) and, read-only in a copy of the app, on the owner's phone (arm64, Android 15). The
+plans: [superpowers/plans/2026-11-03-android-port-m1-m3.md](superpowers/plans/2026-11-03-android-port-m1-m3.md),
+[superpowers/plans/2026-11-03-android-port-m4-m6.md](superpowers/plans/2026-11-03-android-port-m4-m6.md) and
+[superpowers/plans/2026-11-03-sync-redesign.md](superpowers/plans/2026-11-03-sync-redesign.md). The research behind it,
+with sources, is
 [superpowers/specs/2026-11-02-android-native-port-feasibility.md](superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 The sync protocol it builds on is designed in
 [superpowers/specs/2026-10-31-phone-server-sync-design.md](superpowers/specs/2026-10-31-phone-server-sync-design.md).
@@ -44,9 +48,9 @@ The sync protocol it builds on is designed in
   runs every change as a queued `caracole` command.
 - **The Android app** ([android/](../android/README.md)) copies the computer's library (what `GET /api/offline`
   lists) and shows it through a caracole of its own, a server on 127.0.0.1 that only the app can use. With the
-  computer's indexes imported it searches the sites with the computer off, adds and removes songs, and syncs with
-  the computer both ways from the library page's Sync tab (milestones 1–3, [below](#built-milestones-1-to-3)). It
-  doesn't look songs up on the sites yet.
+  computer's indexes imported it searches the sites with the computer off, adds and removes songs, looks them up on
+  the sites itself, makes their pages, keeps songbooks, versions, shared files and backups, and syncs with the
+  computer both ways from the bar's sync sheet or a `.caracole` file (milestones 1–6, [below](#built-milestones-4-to-6)).
 - **Sync between two caracoles** works on the computer's side today (`caracole peer diff`, `sync`, `pull`). It cuts
   a library into units: each song, each removed song, each songbook, and a few per-artist and per-tab settings. Each
   unit has a digest, and two libraries are compared three ways against the last state they agreed on. A unit
@@ -152,7 +156,9 @@ What the port takes:
   - errors never misses: a block or a parse error never marks a song not found;
   - every 200 and 404 cached.
 
-  Each caracole counts its own budgets, and a cooldown one side met moves to the other at a sync.
+  Each caracole keeps its own budgets, counts, pace and cooldowns, and none of them crosses at a sync: the owner's
+  choice of 2026-11-03 (superpowers/specs/2026-11-03-politeness-crossing.md). Two caracoles at one address may then
+  together send a site more than either one's limits; the phone looks songs up at the lookup pace alone.
 - The cost is breadth, not difficulty. Do UG and lyrics first, then the other sites one at a time.
 
 ### 3. Indexing
@@ -193,8 +199,8 @@ What the port takes:
 - **The phone starts every sync.** Today each side pulls, so the computer would have to reach the phone's server.
   Instead the phone pulls what it takes, then pushes what the computer takes to a new `POST /peer/push`, with the
   form token as every write. The phone then serves nothing to the network.
-- **The Sync page**, still to build on the computer too: the peer's address, the differences, a side for each, and
-  Sync. Built as a tab of the library page in JavaScript, it serves both sides.
+- **The Sync page**: the peer's address, the differences, a side for each, and Sync. Built as the library page's
+  sync sheet in JavaScript (library_assets/sync.js), the computer's Sync tab and the phone's sync button open it.
 - **Rendered pages.** A sync of units carries no rendered page: each side renders what it takes. Until the phone
   has its page builder (feature 6), the app's existing mirror (`GET /api/offline`) brings the computer's rendered
   pages for the computer's songs. The mirror has to change for that: today it swaps in the computer's whole library,
@@ -290,7 +296,9 @@ Each one ends with something usable.
 6. **Songbooks, sheet versions, PDFs by printing, alphaTab**, then the rest of the table above as wanted.
 
 Milestones 2 and 3 already cover most of the goal: songs changed on the computer reach the phone and come back.
-Milestones 4 and 5 are the bulk of the work.
+Milestones 4 and 5 are the bulk of the work. All six are built ([below](#built-milestones-4-to-6)): of the table
+above, everything but PDFs by ChordPro, a nightly run, auto-chords, YouTube, Music/ and the to-do page, which stay
+the computer's.
 
 ### Built: milestones 1 to 3
 
@@ -325,13 +333,79 @@ Built on 2026-11-03, in android/ (`:core`, `:server`, `:mirror`, `:app`, `:e2e`)
 - Wi-Fi or tailnet reachability of the computer;
 - the APK's size on arm64.
 
-**Deferred to milestone 4:**
+**Deferred to milestone 4**, and since settled ([below](#built-milestones-4-to-6)):
 
-- the index from the phone to the computer: a sync merges the computer's newer indexes into the phone, never the
-  other way (the phone builds none until it looks songs up);
-- cooldowns moved across at a sync (the state document has room for them);
-- the Requests tab on the phone: its page has none; a job shows on its song's line and a sync on the Sync tab, and
-  the history lives in memory until the app stops.
+- the index from the phone to the computer: the pages the phone's lookups read go to the computer at each sync
+  (`POST /peer/index`);
+- cooldowns moved across at a sync: not built, by the owner's choice (each caracole's politeness is its own);
+- the Requests tab on the phone: built, its history kept across the app's restarts.
+
+### Built: milestones 4 to 6
+
+Built from 2026-11-03 to 2026-11-10, in android/ (`:core`, `:server`, `:viewer`, `:mirror`, `:app`, `:e2e`; some
+73,000 lines of Kotlin, 133,000 with the tests) and on the computer's side ([Changes on the computer's
+side](#changes-on-the-computers-side)). Each part is held to the Python by the conformance corpus, on the JVM and,
+through `CorpusOnDeviceTest`, under Android's runtime (AGENTS.md, "android/", has each port's section).
+
+**What works:**
+
+- **Lookups on the phone** (milestone 4): Get it, Fetch now, Fetch them, an artist's Songs, LaCuerda's own search and
+  Keep it look songs up from the phone itself, as `caracole get` does: Ultimate Guitar (its pages, and an artist's page
+  for a bare tab), LRCLIB, Megalobiz, AZLyrics, LaCuerda, gtptabs.com, harptabs.com and gametabs.net, with MuseScore's
+  links from the index. http.py's client (robots.txt, the cache, the lookup pace and budgets, blocks and cooldowns,
+  LRCLIB's 503), the HTML parser (lexbor's, ported), the matcher, ranking and coverage, and the job queue with its
+  Requests tab, all in Kotlin. The computer's settings come with each sync; the phone's index reads go back.
+- **The page builder** (milestone 5): theory, harmony and its tables, progressions, chord shapes on every instrument,
+  the harmonica and the winds, harmonica tabs read and laid out, pinyin and Simplified or Traditional characters
+  (OpenCC's algorithm and dictionaries), each sheet's page, a kept version's and a harmonica tab's: byte for byte what
+  tests/helpers/phone_render.py (render.py's page path with no PDF) writes for the same inputs, served only while
+  they are the bytes and the unit the phone made them of, and forgotten for the computer's once the mirror holds the
+  computer's of the same song.
+- **Milestone 6**: songbooks made and changed on the phone (the Songbooks tab, songbook.html); a sheet's versions and
+  a harmonica tab's readings chosen; Export PDF by Android's printing, and Make this my version; an uncertain match
+  reviewed; the Guitar Pro page with alphaTab in the app; files shared to the app filed as `_inbox/` files them;
+  alerts on Android's notifications; backups, daily and by hand, exported and restored. And, by the owner's later
+  choice (2026-11-10), a song shared from a music app, read from its text or by asking its service once.
+- **The sync redesign**: the library page's sync sheet on both sides (the computer's Sync tab, the phone's bar), its
+  three parts (library, songbooks, indexes), a card for each conflict, a summary of what it did; a `.caracole` file
+  exported and imported on either side; Sync on Wi-Fi by itself, which leaves each conflict for a notification; sync
+  format 3, whose digests leave out Ultimate Guitar's ratings and votes.
+- **End to end** (tests/test_android_e2e.py, a real caracole serve and the fake sites server): the goal's phases, then
+  lookups, pages, a new build and milestone 6's changes, and the round: with the computer off the phone looks two
+  songs up, plays one (its own page), makes a songbook of both and sets one's key, makes a version its own, shares a
+  Guitar Pro file to one and backs up; one sync then leaves every unit equal on both sides, nothing of either side's
+  politeness crossed; the phone's pages of those songs are phone_render.py's on the computer's copy, byte for byte,
+  and the computer's own pages of them, rendered with ChordPro, differ from them only in each viewer's link to its
+  PDF and info.json's PDF record; and the round's last changes, exported in a `.caracole` file on the phone, are
+  taken by the computer's Import a file, a song and a songbook, nothing given back.
+- **On the device**: every corpus area and every androidTest class pass on an Android 16 (API 36) emulator (x86_64),
+  through android/scripts/device-test.sh, in one run on one emulator. On the owner's phone (Sony XQ-DQ72, Android 15,
+  arm64), in a copy of the app with another application id, never the owner's: the corpus's 52 areas under ART and ICU,
+  BundledSqliteTest, the WAL fixes' ColdSearchTest (300,000 rows merged in 7.6 s, the first search after a start 118 ms,
+  a warm one 24 ms), LookupOfflineTest, NoNetworkTest, RealTransportOnDeviceTest, LookupOnDeviceTest against the fake
+  sites, the pages served, songbooks, versions, Guitar Pro, print, share, backups and alerts.
+
+**What only a real phone can show:**
+
+- a sync with the owner's computer over the LAN or the tailnet, with the real library and the full index (about
+  1.5 million rows), and the matcher's heap on it;
+- the real sites from a phone: OkHttp's retry on another route, its encoding of `|`, `^` and `\` in a path, its own
+  gzip (AGENTS.md, core.http);
+- Doze, battery saver and the maker's background limits during a lookup, a sync or the daily backup, and
+  notifications over days;
+- printing through the phone's own spooler to a real printer, sharing from real music and file apps, sound through a
+  real speaker, real fingers on the pages;
+- a re-render's time on the phone (on the JVM, about a second for the e2e library).
+
+**What is left:**
+
+- YouTube on the phone (a sheet from a video, a search's first video, a pasted video): no yt-dlp in Kotlin, and
+  auto-chords needs the models; the routes say so ("… isn't on the phone yet.");
+- caracole serve's lookup page (`GET /lookup`): the library page's search does its work on the phone;
+- ChordPro's PDFs, the nightly run, building the indexes, Music/ and the to-do page: the computer's;
+- a score's MusicXML header read on the phone (a score is placed by its name alone);
+- a backup restored from an exported file (only from those the phone lists);
+- the library's lines with a button for each instrument (designed, not built).
 
 ## Changes on the computer's side
 
@@ -341,29 +415,43 @@ The port needs these in the Python caracole:
   `caracole peer take`).
 - Version records and lyrics hashed canonicalized, with a sync format bump. Built (canonical.py, format 2; format 3
   hashes UG's raw records without their ratings and votes, which a kept version's JSON leaves out too).
-- `GET /api/peer/index`, and the index merged both ways at a sync. Built from the computer to the phone; the other
-  way waits for milestone 4.
-- Cooldowns moved across at a sync (already planned). Milestone 4.
+- `GET /api/peer/index`, and the index merged both ways at a sync. Built: the computer's newer indexes to the phone,
+  and the pages the phone's lookups read to the computer (`POST /peer/index`, `caracole index merge --delete
+  --progress`).
+- Cooldowns moved across at a sync: not built, by the owner's choice of 2026-11-03 (each caracole's politeness is its
+  own, superpowers/specs/2026-11-03-politeness-crossing.md).
+- The computer's settings for the phone (its name, user agent, provider switches, lookup settings, `[match]` and
+  `[rank]`) in `GET /api/peer/state`. Built (politeness.py).
+- Every wait between requests divided by four, the owner's choice of 2026-11-03 (config.py, commands/icons.py,
+  yt-dlp's own pauses); budgets and limits as they were. Built.
+- A library in a `.caracole` file, exported and imported (`caracole peer export`, `peer import`, the Sync tab's
+  Export and Import a file, peer_file.py, peer_import.py, web/sync_file_routes.py), and the sync sheet the computer's
+  Sync tab opens. Built.
 - The Sync page, as a tab of the library page. Built (web/sync_routes.py, library_assets/sync.js).
-- The conformance corpus writer, in the test suite. Built (tests/test_conformance_*.py, tests/conformance/).
+- The conformance corpus writer, in the test suite. Built (tests/test_conformance_*.py, tests/conformance/), with
+  the references milestones 4–6 are held to: tests/helpers/phone_render.py (the phone's pages), tests/helpers/
+  scenario.py (a lookup's requests and rows), tests/helpers/fake_sites.py (the fake sites server) and
+  tests/helpers/e2e_library.py (the end to end's computer).
 
 ## Risks and open questions
 
 - **Two implementations to maintain.** Every later change to search, lookups, theory or sync has to be made twice.
   This is the largest cost over time. The corpus catches drift but doesn't prevent the extra work.
 - **FTS5 in the bundled SQLite** is in: `BundledSqliteTest` reads `ENABLE_FTS5` in `PRAGMA compile_options` and
-  runs the three FTS5 indexes search reads, on the JVM and on the x86_64 emulator. arm64 is a real phone's to show.
+  runs the three FTS5 indexes search reads, on the JVM, on the x86_64 emulator and on the owner's arm64 phone.
 - **Page builds on a phone.** The harmony tables are computed for every transposition and mode, so measure how long
   that takes. A page is built once and kept until its sheet or the builder changes, as on the computer.
 - **The index's size.** About 400 MB, so the first transfer should be over Wi-Fi.
 - **The index merge's speed**, measured on the JVM (MergeSpeedTest, on the development machine): 200,000 `ug_index`
   rows merged through the triggers in about 1.0 s into a new phone (946 ms) and into a phone of 400 songs, 200 of
   them marked (1,053 ms), the export generated in 140–180 ms. The full index is seven times that, so some seconds on
-  a laptop and, by a phone's slower storage and cores, likely a minute or more: a real phone's to measure.
+  a laptop; on the owner's phone 300,000 rows merged in 7.6 s (ColdSearchTest), so the full index in about half a
+  minute.
 - **Android's background limits.** The local server lives while the app does. Lookups are short (a few requests),
   but an index import or a long sync belongs in a foreground service or WorkManager.
 - **The localhost secret** is a departure from caracole's no-secret rule, and the owner's decision.
-- **opencc4j against OpenCC 1.4.1** on real sheets. The corpus will show any difference.
+- **OpenCC on the phone**: settled by porting OpenCC's own algorithm and shipping the Python package's dictionaries
+  (1.4.0), held to it by the corpus; an OpenCC upgrade regenerates them.
 - **Ktor's footprint and start-up time** in an app.
 
 ## Alternatives considered

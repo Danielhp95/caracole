@@ -4845,9 +4845,10 @@ no page links. caracole records `index.html` each time it writes the pages; one
 changed since, or written by a caracole older than that record, isn't sent, and
 `/api/offline` answers 503 until `caracole todo` (or any command that writes the
 pages) writes it again. It is a read and needs nothing on the server: no
-option, no lock, no request to a site. Another site's page can't read it. In
-the app the pages behave as they do opened from the folder: a viewer shows the
-command to run for Export PDF or a version, and the Guitar Pro files themselves.
+option, no lock, no request to a site. Another site's page can't read it. The
+app shows those pages through a caracole of its own on the phone, which answers
+a viewer's Export PDF (it prints), its versions, a harmonica tab's readings and
+the Guitar Pro page as caracole serve does ([android/README.md](../android/README.md)).
 
 Who can reach it: there is no sign-in, no access token and no cookie, so
 whoever can reach the server can read the library, request songs and change
@@ -5904,8 +5905,8 @@ Two caracoles whose databases are copies of each other are the same caracole, an
 new-id` gives one of them an id of its own (and forgets what it agreed on with every other).
 
 The other caracole's `GET /api/peer/state` gives its form token with its units, for the request a sync posts there:
-anyone who can reach caracole serve can read it from a page already, and another site's page can read neither. A
-Sync page in caracole serve comes next ([the design](superpowers/specs/2026-10-31-phone-server-sync-design.md)).
+anyone who can reach caracole serve can read it from a page already, and another site's page can read neither. The
+library page's Sync tab does all of this from a browser ([The Sync tab](#the-sync-tab)).
 
 ### The phone pushes its changes (POST /peer/push)
 
@@ -6176,7 +6177,8 @@ your ntfy topic. The phone sends no settings back, and another computer syncing 
 The phone takes them at each sync, as it records what the two agree on, replacing the last ones it took: a computer
 that gives none leaves the phone's as they were, and a sync that fails before then takes none. It lays them over its
 own defaults, value by value as caracole.toml's would be read, and passes over a provider it doesn't know. Its own
-lookups, which read them as each one begins, aren't on the phone yet, and its pages still call the library "Phone".
+lookups read them as each one begins, and its pages name the library by its `name`, after caracole's, with the
+phone's badge.
 
 ### The phone's reads go to the computer (POST /peer/index)
 
@@ -6228,8 +6230,9 @@ of, as `caracole peer diff` names units: `unit`, `song/<key>` for a file in a
 song's folder or `songbook/<name key>` (its name in lowercase, its spaces
 collapsed) for one in a songbook's, and `digest`, that unit's digest when the
 list was made. The app's own caracole shows a page it copied unless the phone
-changed or removed that song since: a song changed on the phone says so and
-links to the phone's sheet text, and a song removed on the phone says it was
+changed or removed that song since: the phone then shows the pages it made of
+the song itself, and until it has, says the song changed on the phone and
+links to the phone's sheet text; a song removed on the phone says it was
 removed. When two songs' names make one folder, each file there is of the song
 caracole wrote it for (its kept files, and the pages and PDFs made of them); a
 file either could be, such as its `info.json`, carries no unit. `index.html`,
