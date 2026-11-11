@@ -15,7 +15,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 /** library_page.WebControls on the phone: what its server adds to the page; its badge the one every page the phone
- * writes itself shows (MessagePage.PHONE_BADGE). */
+ * writes itself shows (MessagePage.PHONE_BADGE). [sync] true is WebControls.sync's "sheet": the sync's sheet alone
+ * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab"). */
 data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
@@ -25,8 +26,9 @@ data class ServerControls(
 
 /**
  * The library page the phone serves: library_page.assemble_page's served branch, the templates of library_assets/
- * filled in, its one stylesheet and one script inlined ([LibraryAssets]), its data as its JSON block, and its
- * Requests tab and panel ([RequestsTab]), the tab counting the requests that wait or run ([ServerControls.active]). A
+ * filled in, its one stylesheet and one script inlined ([LibraryAssets]), its data as its JSON block, its Requests
+ * tab and panel ([RequestsTab]), the tab counting the requests that wait or run ([ServerControls.active]), and, with
+ * [ServerControls.sync], the sync's sheet (sync-sheet.html; no Sync tab, which only caracole serve's page has). A
  * pure function of its arguments and the assets, so the phone's page for some data is caracole serve's for the same
  * data, byte for byte (tests/conformance/vectors/web/library_page.json).
  *
@@ -50,9 +52,9 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         return assets.template("head.html").replace("__CSP__", csp).replace("__ICON__", shown.icon())
             .replace("__STYLE__", assets.styles).replace("__TITLE__", PyText.escape(shown.title())) +
             assets.template("body.html").replace("__MARK__", PageIcon.mark).replace("__LIBRARY__", shown.markup("p"))
-                .replace("__TABSYNC__", if (sync) assets.template("sync-tab.html") else "")
+                .replace("__TABSYNC__", "")
                 .replace("__TABREQUESTS__", requests.tab(controls.active))
-                .replace("__SYNC__", if (sync) assets.template("sync-panel.html") else "")
+                .replace("__SYNC__", if (sync) assets.template("sync-sheet.html") else "")
                 .replace("__REQUESTS__", requests.panel)
                 .replace("__REQUEST__", requestForm(controls)).replace("__REQUESTED__", assets.template("requested.html")) +
             Inline.jsonBlock("songs", data) +

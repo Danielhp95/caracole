@@ -14,8 +14,8 @@
                           songbook difference's two documents; the indexes newer on either side; kept 10 minutes
                           under an id of its own (``comparison``)
     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents: this side's and the other's,
-                          asked of it now (``here``, ``there``: null where a side hasn't got it); the page's script
-                          alone asks it
+                          asked of it now, or an import's read from its file (``here``, ``there``: null where a side
+                          hasn't got it); the page's script alone asks it
     GET  /api/sync/indexes   each site's index here: its newest read and the tabs it tracks
                           (``index_transfer.newest``, ``tab_counts``), which the phone asks after it gives one
     POST /sync/apply      a comparison kept (``comparison``), synced with the owner's choices (``choices``: a line a
@@ -430,9 +430,11 @@ def comparison_answer(comparison: str, peer: Mapping[str, Any], synced_before: s
 
 def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     """``GET /api/sync/unit``: a unit of a comparison kept (``comparison``, ``id``), its two documents, ``{id, here,
-    there}``: this side's now (``peer_sync.unit_document``'s ``"unit"``) and the other caracole's, asked of it now
-    (``GET /api/peer/unit``), None for a side that hasn't got it. Refused 409 for a comparison past or of a file,
-    404 for a unit it didn't find, 502 for the other caracole not answering."""
+    there}``: this side's now (``peer_sync.unit_document``'s ``"unit"``) and the other side's, asked of the other
+    caracole now (``GET /api/peer/unit``), or, for an import's comparison, read from its staged file
+    (``sync_file_routes.file_unit``, sending no request), None for a side that hasn't got it. Refused 409 for a
+    comparison past, of another source, or of a file gone, 404 for a unit it didn't find, 502 for the other caracole
+    not answering."""
     from caracole import peer_sync as sync
     from caracole.web.peer_routes import _library
 
@@ -444,17 +446,23 @@ def unit_documents(app: WebApp, params: dict[str, str]) -> Response:
     if unit_id not in kept.proposals:
         raise Refused(404, "Not compared", f"{unit_id[:200]!r} isn't one that comparison found: it is no unit the "
                                            "two hold differently.")
-    if kept.source != "peer":  # an import's comparison: its other side is the file, which no caracole serve answers
+    importing = kept.source.startswith(IMPORTING)
+    if kept.source != "peer" and not importing:  # its units are its source's own to read
         raise Refused(409, "Not a network sync", "That comparison is of a file, not of another caracole: its units "
                                                  "are read from the file.")
     overrides, books = _library(app)
     with app.db() as conn:
         here = sync.unit_document(conn, app.cfg, overrides, books, unit_id)
-    try:
-        with sync.Peer(kept.address, transport=transport()) as peer:
-            there = peer.unit(unit_id)
-    except sync.PeerError as e:
-        raise Refused(502, "Not reached", str(e)) from None
+    if importing:
+        from caracole.web.sync_file_routes import file_unit
+
+        there = file_unit(app, kept.source[len(IMPORTING):], unit_id)
+    else:
+        try:
+            with sync.Peer(kept.address, transport=transport()) as peer:
+                there = peer.unit(unit_id)
+        except sync.PeerError as e:
+            raise Refused(502, "Not reached", str(e)) from None
     return json_response(200, {"id": unit_id, "here": here["unit"] if here else None, "there": there})
 
 

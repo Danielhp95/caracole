@@ -36,8 +36,8 @@ def test_index_html_is_its_templates_filled_in(conn, cfg):
     from caracole.library_page import TEMPLATES, WebControls, build_library_page
 
     add_song(conn, "Radiohead", "Creep")
-    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", sync=True))  # every one
-    whole = ("requested.html", "sync-tab.html", "sync-panel.html")  # put in as they are
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", sync="tab"))  # every one
+    whole = ("requested.html", "sync-tab.html", "sync-panel.html", "sync-sheet.html")  # put in as they are
     for name in TEMPLATES:
         text = text_of(name)
         pieces = re.split(r"__[A-Z]+__", text)
@@ -46,17 +46,20 @@ def test_index_html_is_its_templates_filled_in(conn, cfg):
         assert not re.search(r"__[A-Z]+__", html)  # and none is left
 
 
-def test_the_sync_tab_is_its_templates_before_requests_and_only_where_the_server_syncs(conn, cfg):
+def test_the_sync_tab_is_its_templates_after_requests_and_only_where_the_server_syncs(conn, cfg):
     from caracole.library_page import WebControls, build_library_page
 
-    tab, panel = text_of("sync-tab.html"), text_of("sync-panel.html")
-    synced = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", sync=True))
-    assert tab in synced and panel in synced
-    assert synced.index('id="tab-sync"') < synced.index('id="tab-requests"')
-    assert synced.index('id="sync"') < synced.index('id="requests"')
+    tab, panel, sheet = text_of("sync-tab.html"), text_of("sync-panel.html"), text_of("sync-sheet.html")
+    synced = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", sync="tab"))
+    assert tab in synced and panel in synced and synced.count(sheet) == 1
+    assert synced.index('id="tab-requests"') < synced.index('id="tab-sync"')  # Sync last
+    assert synced.index('id="requests"') < synced.index('id="sync"') < synced.index('id="sync-sheet"')
+    # The phone's page: the sheet alone, which its app's sync button opens.
+    phone = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", sync="sheet"))
+    assert tab not in phone and panel not in phone and phone.count(sheet) == 1
     for page in (build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok")),
                  build_library_page(conn, cfg, Overrides(), NOW)):
-        assert 'id="tab-sync"' not in page and 'id="sync"' not in page
+        assert 'id="tab-sync"' not in page and 'id="sync"' not in page and 'id="sync-sheet"' not in page
 
 
 def test_the_page_is_assembled_from_its_data_alone(conn, cfg):
@@ -65,7 +68,7 @@ def test_the_page_is_assembled_from_its_data_alone(conn, cfg):
     from caracole.library_page import WebControls, assemble_page, build_library_page
 
     add_song(conn, "Radiohead", "Creep")
-    for controls in (None, WebControls(csrf="tok", sync=True)):
+    for controls in (None, WebControls(csrf="tok", sync="tab"), WebControls(csrf="tok", sync="sheet")):
         notes = []
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls, note=notes.append)
         (data,) = notes
