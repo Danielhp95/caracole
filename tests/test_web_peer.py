@@ -287,7 +287,7 @@ def test_an_export_this_side_would_refuse_is_refused_before_the_phone_forgets_it
     status, _, body = phone_side.ask("POST", "/peer/index", path.read_bytes(), kind="application/octet-stream")
     said = json.loads(body)["error"]
     assert status == 409 and said.startswith("The index export was exported at schema version")
-    assert "Bring both caracoles to one version first." in said and str(cfg.state_dir) not in said
+    assert "Bring both scribes to one version first." in said and str(cfg.state_dir) not in said
 
     home = tt.database(tmp_path, "home")
     try:

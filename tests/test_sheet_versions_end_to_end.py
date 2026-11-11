@@ -331,7 +331,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     browser.js("window.before = true")
     browser.js("location.reload()")
     assert browser.wait("!window.before && document.readyState === 'complete'")
-    assert "Done: it is kept beside the sheet." in browser.js("document.body.textContent")
+    assert "Done · kept beside the sheet." in browser.js("document.body.textContent")
     browser.js("window.before = true")
     browser.click("a.btn.primary")  # Open it
     assert browser.wait("!window.before && location.pathname.endsWith('/version-104.html')"

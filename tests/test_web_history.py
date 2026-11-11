@@ -102,7 +102,7 @@ def test_a_request_that_ran_or_waited_when_the_server_stopped_is_interrupted(pat
                   fetching=True, display="Radiohead - Creep", state="running", queued_at=started,
                   started_at=started + timedelta(seconds=1),
                   stages=[Stage("song", "Find the song", "done", "in the book"),
-                          Stage("sheet", "The sheet", "running", "asking Ultimate Guitar"),
+                          Stage("sheet", "Sheet", "running", "asking Ultimate Guitar"),
                           Stage("pdf", "The PDF")])
     waiting = Job(2, "Add Oasis - Wonderwall", "oasis|wonderwall",
                   [Step("Adding to the book", add_steps("Oasis", "Wonderwall")[0][1])], queued_at=started)
@@ -177,7 +177,7 @@ def test_the_requests_tab_shows_the_history_after_a_restart_with_try_again(stopp
     assert shown[2]["actions"] == [{"label": "Try again", "primary": False, "post": "/jobs/again",
                                    "fields": {"job": "2"}}]
     assert shown[2]["output"]["steps"] == [{"label": "Fetching", "badge": {"tone": "interrupted",
-                                                                                "text": "Interrupted"},
+                                                                                "text": "Cut short"},
                                             "lines": ["get: looking up Oasis - Wonderwall"]}]
     assert answer(get_json(app, "/api/jobs/2"))["state"] == "interrupted"
 

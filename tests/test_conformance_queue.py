@@ -653,7 +653,7 @@ def scenarios() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
          "seconds_to_sheet": 2.5},
         _line(5, "Get Muse - Hysteria", "muse/hysteria", lookup_steps("Muse", "Hysteria"), "running", fetching=True,
               step_state="running", stages=[["song", "Find the song", "done", "", ""],
-                                            ["sheet", "The sheet", "running", "asking", "asking"],
+                                            ["sheet", "Sheet", "running", "asking", "asking"],
                                             ["pdf", "The PDF", "waiting", "", ""]]),
         _line(6, "Get Blur - Song 2", "blur/song 2", lookup_steps("Blur", "Song 2"), "queued", fetching=True),
         _line(7, "LaCuerda's search", "lacuerda-search:q", lacuerda_search_steps("q", auto=True), "done"),
@@ -826,7 +826,7 @@ def history_cases() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
             _job_line(1, "queued"),
             {**_job_line(2, "running"), "stages": [
                 {"name": "song", "label": "Find the song", "state": "done", "detail": "", "running_detail": ""},
-                {"name": "sheet", "label": "The sheet", "state": "running", "detail": "asking", "running_detail": "a"},
+                {"name": "sheet", "label": "Sheet", "state": "running", "detail": "asking", "running_detail": "a"},
                 {"name": "pdf", "label": "The PDF", "state": "waiting", "detail": "", "running_detail": ""}],
              "steps": [{**_job_line(2, "running")["steps"][0]}, {**_job_line(2, "queued")["steps"][0]}]},
             {**_job_line(3, "running"), "finished_at": "2026-11-02T09:00:00+00:00"},

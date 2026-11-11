@@ -149,7 +149,7 @@ def test_a_database_it_cant_open_fails_its_stage_and_keeps_the_file_for_try_agai
     assert result.exit_code == 2
     [running, failed] = events(result.stdout)
     assert running["state"] == "running"
-    assert failed["state"] == "failed" and failed["detail"].startswith("Not merged: caracole's lock or its database")
+    assert failed["state"] == "failed" and failed["detail"].startswith("Not merged: couldn't get the lock or the database")
     assert path.exists()
 
 

@@ -427,7 +427,7 @@ def test_a_job_is_data_its_steps_each_with_a_state():
     data = queue.job(job.id).as_json()
     json.dumps(data)  # plain data
     assert (data["id"], data["title"], data["state"]) == (job.id, "Get Radiohead - Creep", "done")
-    assert data["steps"][2] == {"name": "sheet", "label": "The sheet", "state": "done",
+    assert data["steps"][2] == {"name": "sheet", "label": "Sheet", "state": "done",
                                 "detail": "tab 101 from Ultimate Guitar"}
     assert data["song"] == {"id": 7, "display": "Radiohead - Creep"}
     assert data["files"] == {"sheet": "Radiohead/Creep/sheet.txt"} and data["seconds_to_sheet"] == 2.25

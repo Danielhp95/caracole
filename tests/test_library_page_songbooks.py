@@ -134,7 +134,7 @@ def test_a_broken_songbooks_file_is_said_and_the_page_is_made_all_the_same(conn,
     songbooks_file(cfg.library_dir).write_text("[Campfire\n", encoding="utf-8")
     html = page(conn, cfg)
     said = data_of(html)["songbooks"]
-    assert said["books"] == [] and "Can't read songbooks.toml" in said["error"] and "line 1" in said["error"]
+    assert said["books"] == [] and "songbooks.toml can't be read" in said["error"] and "line 1" in said["error"]
     assert len(data_of(html)["songs"]) == 1
 
 
@@ -395,7 +395,7 @@ def test_select_mode_needs_a_name_and_a_song(library, tmp_path):
       q(".pickbar-form button[type=submit]").click();
       out = {disabled, shown: !q(".pick-command").hidden, said: q(".pick-error").textContent};
     """)
-    assert out["disabled"] and not out["shown"] and "name" in out["said"]
+    assert out["disabled"] and not out["shown"] and "Name" in out["said"]
 
 
 @in_chromium

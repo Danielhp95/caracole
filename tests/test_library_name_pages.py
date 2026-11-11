@@ -65,7 +65,7 @@ def test_the_served_library_page_carries_the_name_and_its_servers_badge(conn, cf
     assert title_of(badged) == "Scratch library · caracole · Tabs"
     masthead = MASTHEAD.search(badged).group(1)
     assert ('<p class="libname"><span class="name">Tabs</span> '
-            '<span class="scratch" title="Not your usual library">Scratch library</span></p>') in masthead
+            '<span class="scratch" title="Scratch">Scratch library</span></p>') in masthead
     assert SCRATCH_LINK in badged and LINK not in badged  # its icon in the badge's colour
 
 
@@ -97,7 +97,7 @@ def test_every_page_caracole_serve_writes_names_the_library_and_says_its_badge(b
         page = text(get(badged, path))
         header = (MASTHEAD.search(page) or TOP.search(page)).group(1)
         assert '<span class="name">Tabs</span>' in header, path
-        assert '<span class="scratch" title="Not your usual library">Demo</span>' in header, path
+        assert '<span class="scratch" title="Scratch">Demo</span>' in header, path
         assert title_of(page).startswith("Demo · ") and title_of(page).endswith(" · caracole · Tabs"), path
         assert SCRATCH_LINK in page and LINK not in page, path
         page = text(get(usual, path))

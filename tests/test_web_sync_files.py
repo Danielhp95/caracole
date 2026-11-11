@@ -526,7 +526,7 @@ def test_sync_on_an_import_queues_peer_import_of_its_folder_and_its_view_is_a_sy
     import_id = sent(studio.app, desk_file(desk, tmp_path))
     _, found = file_compared(studio.app, import_id)
     status, said = applied(studio.app, found["comparison"])
-    assert status == 409 and "Choose a side for every conflict first" in said["error"]
+    assert status == 409 and "Choose a book for every conflict" in said["error"]
     status, answer = applied(studio.app, found["comparison"], choices=f"here\t{CREEP_UNIT}")
     assert status == 200, answer
     queued = answer["job"]
@@ -552,7 +552,7 @@ def test_sync_on_an_import_queues_peer_import_of_its_folder_and_its_view_is_a_sy
     assert load_overrides(studio.cfg.overrides_file).version[override_key(CREEP)] == "key=Gm&capo=0"  # kept
     assert CREEP_UNIT in sync.kept_of(studio.conn, desk.id())
     polled = json.loads(get_json(studio.app, f"/jobs.json?jobs={job.id}").body)["jobs"][0]
-    assert polled["line"]["text"] == "Synced"
+    assert polled["line"]["text"] == "Shared"
     assert polled["outcome"]["taken"] == [WONDERWALL_UNIT]
     report = polled["outcome"]["report"]
     assert report["with"] == {"name": "Desk", "kind": "file", "address": None}

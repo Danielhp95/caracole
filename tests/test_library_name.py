@@ -126,7 +126,7 @@ def test_the_name_and_the_badge_are_escaped_markup():
     assert plain == '<span class="libname"><span class="name">Tabs &amp; &lt;b&gt;chords&lt;/b&gt;</span></span>'
     badged = LibraryName("lib", '"Demo"').markup("p")
     assert badged == ('<p class="libname"><span class="name">lib</span> '
-                      '<span class="scratch" title="Not your usual library">&quot;Demo&quot;</span></p>')
+                      '<span class="scratch" title="Scratch">&quot;Demo&quot;</span></p>')
 
 
 def test_a_badged_library_has_its_own_icon():
