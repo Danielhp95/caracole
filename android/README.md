@@ -9,7 +9,7 @@ songs on the sites with the computer off ([below](#search-with-the-computer-off)
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
 changed. It checks each file's size and hash, and it swaps the new list in whole, so a sync cut short leaves the
-copy you had. The copy writes nothing to the computer's library; the Sync tab's two-way sync does, as the computer's
+copy you had. The copy writes nothing to the computer's library; the sync's two-way take and give does, as the computer's
 own request ([Sync from the phone](#sync-from-the-phone)). The app shows the copy through a caracole of its own on
 the phone, a small server on 127.0.0.1 that only the app can use.
 
@@ -38,14 +38,13 @@ settings, a file read from the phone's server for another app, an index fetched 
    - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
      once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
-   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
+   **Test**, then the bar's sync button ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
    pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
    library's name when its caracole.toml gives one (`name`), which the pages then show after caracole's.
-3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
-   indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
-   with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
-   say). It runs in the background and Settings says how it ended ([Search with the computer
-   off](#search-with-the-computer-off)).
+3. **The indexes**, so that its search finds the sites' songs with the computer off, come with a sync (its Site
+   indexes), or from a file: Settings › **Import a file**, one made on the computer with `caracole index export
+   indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`, say) ([Search with the
+   computer off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`). An update must be signed
 with the same key.
@@ -58,15 +57,17 @@ with the same key.
 2. On the phone, open Settings (the first start opens it). Type the address, for example
    `http://192.168.1.20:8737`. Without a scheme, `http://` is assumed. An IPv6 address goes in brackets when it
    has a port (`[fd7a:115c::1]:8737`); typed without them, the app adds them.
-3. Tap **Test**. It answers "caracole answered: 312 files, 41 MB", or says what went wrong. Then tap **Sync now**.
+3. Tap **Test**. It answers "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26", or says what went
+   wrong. Then tap the bar's sync button ([below](#sync-from-the-phone)).
 
-**Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers
-at the address. When nothing answers there, or something else does (another network's device, a Wi-Fi login
-page), it does nothing and keeps the last sync's outcome; **Sync now** says what answered. The library screen's
-menu (⋮) has Sync now, Sync with the computer ([below](#sync-from-the-phone)), Library and Settings.
+**Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network, leaving what changed on both sides for you
+to choose ([below](#sync-from-the-phone)). First it checks that caracole answers at the address. When nothing
+answers there, or something else does (another network's device, a Wi-Fi login page), it does nothing and says
+nothing. The library screen's bar has the sync
+button, and its menu (⋮) Library and Settings.
 
-Sync now copies the computer's pages, one way. Sync with the computer, the library page's Sync tab, is the two-way
-sync: what you add, remove or change on the phone goes to the computer too.
+The sync is two-way: what you add, remove or change on the phone goes to the computer too, and the computer's pages
+come to the phone with what it changed.
 
 ## Offline
 
@@ -110,8 +111,9 @@ again, and the next sync brings them to the phone.
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
 `http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
-caracole's own page, built from the same files caracole serve builds it from, with your songs' cards taken from the
-copy. Sheets, PDFs and songbooks are the copy's files.
+caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
+the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
+holds the song as the computer did, else the pages the phone makes itself.
 
 **Only the app can use that server.** At each launch the app makes a random secret and sets it as a cookie
 (`caracole-launch`) in its WebView. The server refuses any request without it ("Not this app's caracole."), so
@@ -120,20 +122,13 @@ nothing else: a link to another one, another port of 127.0.0.1 included (a Termu
 in the browser, and nothing a page asks for elsewhere leaves the phone. A file another app opens (a PDF, a Guitar
 Pro file) is read from the server inside the app, never downloaded by Android.
 
-**Import the computer's indexes** to search the sites. The computer builds them (the nightly run, `caracole index
-build`); the phone never asks the sites for them. In Settings, under Import indexes:
-
-- **From the computer** fetches them from caracole serve at the address above (`GET /api/peer/index`, which a
-  recent caracole gives).
-- **From a file** takes a file made on the computer with `caracole index export indexes.sqlite` and copied to the
-  phone.
-
-The import runs in the background, with a notification while it lasts, one import at a time: asked for while one
-runs, Settings says so. The phone merges the file as `caracole index merge` does: each site's newer reads win, and
-nothing it holds goes back. It waits for a sync that runs, and a sync waits for it. Settings shows how the last
-import ended, or why it failed, in the computer's words or the merge's ("the file was exported at schema version
-14…": export it again with the computer's caracole). Import again now and then to bring the sites' new songs; a
-sync from the phone brings the newer ones too ([below](#sync-from-the-phone)).
+**Bring the computer's indexes** to search the sites. The computer builds them (the nightly run, `caracole index
+build`); the phone never asks the sites for them. A sync brings each site whose index is newer on the computer (its
+Site indexes, [below](#sync-from-the-phone)), and Settings' **Import a file** takes a file made on the computer with
+`caracole index export indexes.sqlite` and copied to the phone, synced as a file of the indexes alone. The phone
+merges them as `caracole index merge` does: each site's newer reads win, and nothing it holds goes back. A merge
+waits for a sync that runs, and a sync waits for it; a file made by another caracole's schema is refused in the
+merge's words ("the file was exported at schema version 14…": export it again with the computer's caracole).
 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
@@ -141,40 +136,63 @@ artist's songs. LaCuerda's own search and YouTube's suggestions need the compute
 
 ## Sync from the phone
 
-The library page's **Sync** tab syncs the phone and the computer both ways, as `caracole peer sync` syncs two
-computers. Open it from the menu (⋮ › Sync with the computer) or from the library page's tabs. The field offers the
-address in Settings; the address you compare with becomes the one Settings keeps, for Sync now too.
+The bar's **sync** button (two circular arrows, left of ⋮) opens the library page's sync sheet, from any page: the
+phone and the computer at the address in Settings compared, and each takes what the other changed, as `caracole peer
+sync` syncs two computers. It is the sheet caracole serve's Sync tab opens, written once in library_assets; the
+phone's library page has no Sync tab.
 
-**Compare** asks the computer for its state and lists what differs, a line per unit: a song (its names, versions,
-choices and kept files), a removal, a songbook, an artist's alias or UG page, a blocked tab. Each line says what the
-sync proposes:
+1. **What to sync**: Library (your songs, their sheets and pages, both ways), Songbooks and Site indexes (for
+   searching offline), all three ticked, each with what is waiting ("3 changed on the computer"). A song a songbook
+   lists comes along with the songbooks, even with Library unticked. **Cancel** on the left, **Sync** on the right.
+2. **A card for each conflict**, a song (or a songbook, a removal…) changed on both sides since the two last agreed:
+   its name, "1 of N", the phone on the left and the computer on the right, a line for each way the two differ (its
+   own key, its sheet, its versions, its kept files…). Under "Which version to keep", **Phone** or **Computer**, and
+   **Same for the other N**. Above the card, what is to take (↓), to give (↑) and changed on both (⚠). There is no
+   Skip: Cancel ends the sync with nothing taken or given.
+3. **The sync** runs in the background, with a notification ("Syncing with <the computer's name>…") that keeps the
+   app working while you leave it, gone once it ends:
+   1. compared again, refused if either side changed since you compared (compare again then);
+   2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
+      each file checked by its SHA-256;
+   3. what the phone changed given to the computer (`POST /peer/push`), which takes it as its own request and
+      renders its pages;
+   4. the computer's pages copied (skipped with Library unticked);
+   5. what the two agree on recorded, so the next comparison lists only what changes after;
+   6. the computer's newer indexes merged (skipped with Site indexes unticked, or when none is newer).
+4. **The summary**: "Synced with: <name>" and when, then a section for each kind of change, each closed at first:
+   the songs taken, the songs given (and why), the conflicts (which side was kept), the songbooks, the indexes (each
+   site's tabs before → after). **Done** closes it.
 
-- **keep here's**: changed on the phone since the two last agreed;
-- **take there's**: changed on the computer;
-- **CONFLICT**: changed on both, differently.
+A sync already on its way when the page loads (a reload, a notification's tap) is followed to its summary, never
+started again.
 
-Each has Here, There and Skip, the proposal chosen at first. A conflict has none until you choose, one at a time or
-all at once (Keep here's for every conflict, Take there's for every conflict), and **Sync** waits until each has
-one. Skip leaves a unit as it is on both sides, until the next comparison.
+**Export and Import a file**, in Settings, open the sheet at the export or the import.
 
-**Sync** runs it in the background, with a notification ("Syncing with <the computer's name>…") that keeps the app
-working while you leave it, gone once it ends. Its stages show on the tab:
+- **Export**: "Export this library", its name, songs and date; Library and Songbooks ticked, Site indexes not, each
+  with its size. The file, `<library name>-dd-mm-yy.caracole`, goes to Android's share sheet: send it, or save it
+  to Files. The app reads it from its own server in its own process (the launch's cookie and all, never Android's
+  DownloadManager) and shares a copy from its cache.
+- **Import a file**: the sheet's Choose a file opens Android's file picker (a page can't open it without a tap of its
+  own). A file another caracole exported, a phone's or a computer's, or an index from `caracole index export`, is
+  synced as if its caracole were here: the same cards, **File** in the computer's place, a part the file doesn't
+  hold greyed ("Not in this file"), and nothing goes back (a file takes nothing). Refused: this library's own
+  export, and a file no newer than the last sync with its caracole ("Nothing in this file is newer than your sync
+  with studio on 03/11/26").
 
-1. compared again, refused if either side changed since you compared (compare again then);
-2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
-   each file checked by its SHA-256;
-3. what the phone changed given to the computer (`POST /peer/push`), which takes it as its own request and renders
-   its pages;
-4. the computer's pages copied, as Sync now copies them;
-5. what the two agree on recorded, so the next comparison lists only what changes after;
-6. the computer's newer indexes merged, skipped when none is newer.
-
-At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
-comparison"), and Reload shows the library page with the songs as they are now.
+**Sync on Wi-Fi by itself** (Settings) is this sync, unattended: every 6 hours on an unmetered network, the three
+parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
+sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
+something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
+the bar's line says so ("Syncing with the computer…"), and at its end what it did for a few seconds ("Up to date: 1
+taken, 2 given"; "2 changed on both sides: tap Sync to choose"; or why it failed, a stage that failed among it, such
+as the copy of the computer's pages). When it left conflicts, a notification on its own channel, Syncs, says so ("2
+songs changed on both sides: tap to choose"), and its tap opens the sheet, whose cards ask; the next one that leaves
+none takes it back. A sync with the computer already on its way (one from the sheet) is left to finish, and this one
+does nothing.
 
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
-`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
-reason; upgrade caracole there.
+`"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused as the two are compared,
+with the reason; upgrade caracole there.
 
 **Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your
 library at once, and the computer's next run fetches it after a sync gives it there: the phone asks no site. Its
@@ -249,8 +267,8 @@ To try the app by hand there, install it as on a phone
 at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`
 builds a library of 20 songs in DIR with no request and serves it on the host's loopback alone (caracole serve has
 no sign-in: never on the LAN for a test), which the emulator reaches at `http://10.0.2.2:PORT`. Its
-Settings then imports that computer's indexes (From the computer), or a file pushed to the emulator's Download
-folder (`adb push indexes.sqlite /sdcard/Download/`, then From a file). `adb shell pm clear
+bar's sync button then brings that computer's indexes with the rest, and Settings' Import a file a file pushed to the
+emulator's Download folder (`adb push indexes.sqlite /sdcard/Download/`). `adb shell pm clear
 io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
@@ -259,10 +277,12 @@ the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
 page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables.
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
-never loads another loopback port, and a first start's database is made whole. SyncTabTest opens the Sync tab from
-the menu, compares with the computer and syncs, then compares again and finds nothing that differs (it changes the
-phone's library, so give it a computer of its own, such as `nix develop -c python -m tests.helpers.e2e_library serve
-DIR PORT --address 127.0.0.1`):
+never loads another loopback port, and a first start's database is made whole. SyncSheetTest opens the sheet with
+the bar's sync button and syncs a song changed on both sides, the computer's version kept, then finds nothing that
+differs; and opens it from the notification of a Sync on Wi-Fi that left such a conflict. ExportImportTest exports
+from Settings to the share sheet, and imports a file through the picker. They change the computer's library (one
+song's own version), so give them a computer of their own, such as `nix develop -c python -m tests.helpers.e2e_library
+serve DIR PORT --address 127.0.0.1`:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
@@ -279,9 +299,9 @@ first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-55
 port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
-    android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
-                                                          # each against a computer of its own
-    android/scripts/device-test.sh LocalServerTest NoSitesTest SyncTabTest=/tmp/lib   # classes, one a computer
+    android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
+                                                          # PhoneEndToEndTest, each against a computer of its own
+    android/scripts/device-test.sh LocalServerTest NoSitesTest SyncSheetTest=/tmp/lib   # classes, one a computer
 
 ## Lookups on the phone
 
@@ -316,7 +336,7 @@ socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest N
 
 ## Performance notes
 
-**The WAL after an import.** An import (Settings' Import indexes, or a sync's newer indexes) merges the computer's
+**The WAL after an import.** An import (a sync's newer indexes, or Settings' Import a file of them) merges the computer's
 indexes in a few big transactions, and SQLite's WAL grows with them: on the owner's phone it was left at 387 MB, and
 the first search after the import, or after a start, took more than 30 s while every search waited behind it. A WAL
 SQLite has copied back stays on disk at its largest unless told otherwise, every read before the next checkpoint
@@ -394,7 +414,20 @@ On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
-Not built yet.
+**A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
+computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
+what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
+that page until it is over (the page reloads every ten seconds), and in the Requests tab: Make this the one looks the
+song up with that tab and keeps your choice in overrides; Keep it reads the version's page from Ultimate Guitar, at a
+lookup's pace, and keeps it beside the sheet; Back to caracole's pick takes your choice out and looks the song up
+again. A page the computer made and the phone copied names no version of the phone's: choose there on the computer.
+
+**A harmonica tab's readings.** A harmonica tab's page links its Read as line (or, at its foot, **Change how it's
+read**) to the readings caracole weighs, best first, each with its Q and a button that pins it (harptabs.com's own
+notation among them), and Back to caracole's guess for a tab you pinned. The tab's page is made again with your
+reading.
+
+Songbooks and printing: not built yet.
 
 ### Export PDF
 
@@ -518,4 +551,41 @@ reads a file only from the app that shares it, never a `file:` address another a
 
 ## Alerts and backups
 
-Not built yet.
+**Alerts** are notifications on their own channel, Alerts (Android's settings for the app list it beside "Work in the
+background"; the app asks for the right to notify once, as the library screen opens):
+
+- **a site that blocked a lookup**: "caracole: LRCLIB blocked", with when its cooldown ends. One a cooldown: a lookup
+  that meets the same cooldown again says nothing more, and the lookups after it ask that site nothing until the
+  cooldown is over. On the computer a lookup sends no alert (the nightly run does); the phone has no nightly run to
+  tell, so its lookups do.
+- **a request that failed while the app was in the background** (no screen of the app's open): its name and the line
+  the Requests tab shows for it. One that fails while you are in the app says so there alone.
+
+Tapping one opens the library.
+
+**Backups** are in Settings, Open the backups: each backup is a copy of the phone's library, its songs, their versions,
+the songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each
+file once however many backups hold it. The indexes aren't backed up: they come again from the computer.
+
+- **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
+  one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
+  made; none is made without twice the room it needs (the Requests tab then says "Not backed up: there isn't room for
+  it on the phone").
+- **Export…** saves one as a single `.zip` (`caracole-by-hand-2026-11-10T081400Z.zip`: the copy, a SQLite database,
+  and `blobs/<sha256>`, each file it keeps) wherever you pick, on the phone or in a cloud app's folder. It is a copy
+  kept outside the phone: the phone can't restore from an exported file yet, only from the backups it lists.
+- **Restore…** (asked first) puts the library back as that backup has it: the songs, versions, songbooks and files
+  changed or added since are gone from the phone. What the phone has learnt of the sites since stays as it is now: each
+  site's cooldown, the pace, which searches it asked and which songs it checked, the computer's settings, and what it
+  agreed with the computer at the last sync. So the next sync gives the restored library to the computer as the
+  phone's own change: whatever the restore changed of what the two agreed on at the last sync is given to the
+  computer, and a song that sync agreed on that the backup doesn't hold is given as removed, so the computer removes
+  it too (one the computer changed since is a conflict, yours to choose). The phone's pages are made again after it;
+  until then its pages of what the restore changed aren't served.
+- A backup that doesn't hold every file it names (one made before a sync by an older app, which kept the tables
+  alone, or one made while a file was no longer its bytes) says how many in the list ("2 of its files not kept"). It
+  restores only while the phone's files still hold those bytes, and can't be exported; otherwise its Restore says why
+  and changes nothing.
+
+A backup, its daily one and a restore are requests like a lookup, one at a time on the Requests tab ("Backed up
+(by-hand)", "Restored the library of 2026-11-10 09:14"), never run beside a lookup.

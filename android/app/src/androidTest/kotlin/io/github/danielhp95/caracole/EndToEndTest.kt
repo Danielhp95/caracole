@@ -28,6 +28,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import io.github.danielhp95.caracole.mirror.ServerAddress
+import io.github.danielhp95.caracole.mirror.SyncEngine
 import java.io.File
 import java.security.MessageDigest
 
@@ -38,7 +40,7 @@ import java.security.MessageDigest
  *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
- * host.) It syncs a fresh copy, runs Settings' Test, opens the library page (the phone's own server's, at its
+ * host.) It syncs a fresh copy, runs Settings' Test (what the computer holds, in its words), opens the library page (the phone's own server's, at its
  * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
  * Export PDF is the phone's own route (here, a copy of pages with no song, its 404) and each other link it shows to
  * caracole serve's own pages is answered by the phone's stub ("… isn't on the phone yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
@@ -59,15 +61,17 @@ class EndToEndTest {
 
     @Test
     fun syncsThenShowsTheLibraryAndAViewerOfflineAndHandsFilesOff() {
-        // A fresh copy, synced as Sync now does.
+        // A fresh copy of the computer's pages alone: a sync's mirror stage by itself (mirror.SyncEngine), no song
+        // of the library taken, so that the viewer's links below are a copy's (the phone's whole sync, the bar's
+        // button's and Sync on Wi-Fi's, is SyncSheetTest's).
         val mirror = Caracole.mirror(context)
         File(context.filesDir, "blobs").deleteRecursively()
         File(context.filesDir, "manifest.json").delete()
         mirror.reload()
         Settings(context).server = server!!
-        val outcome = Syncs.run(context, probe = false)!!
-        record("sync", outcome.text)
-        assertTrue(outcome.text, outcome.ok)
+        val copied = SyncEngine(mirror, Caracole.http()).sync(ServerAddress.parse(server))
+        Caracole.started()?.search?.invalidate()
+        record("sync", copied.summary())
         val manifest = mirror.reload()!!
         record("files", manifest.entries.size)
         assertTrue(manifest.entries.all { mirror.blob(it.sha256).isFile })
@@ -77,7 +81,8 @@ class EndToEndTest {
             var said = ""
             waitUntil("Test's answer") {
                 settings.onActivity { said = it.findViewById<TextView>(R.id.test_result).text.toString() }
-                said.startsWith("caracole answered")
+                // SyncRoutes.tested's words: "<the computer's name> answered: N songs, M songbooks, …".
+                " answered: " in said && " song" in said
             }
             record("test", said)
             shot("settings")
@@ -127,15 +132,17 @@ class EndToEndTest {
             // the computer's pages alone, no song, so it says the library has no such sheet (404). The Guitar Pro page
             // is the phone's own too (GuitarRoutes): a file only the copy of the computer's pages holds, as this test's
             // sync of the copy alone leaves it, is the file itself (303 to the file's own address), which the app hands
-            // to another app; the page itself (200) is GuitarPageTest's. The phone answers each other with its stub:
-            // the message page, 409, "… isn't on the phone yet." (Stubs).
+            // to another app; the page itself (200) is GuitarPageTest's. A version's page is the phone's own as well
+            // (VersionsRoutes), of a viewer the phone made: a copy's names no sheet of its (404; VersionsPageTest's
+            // viewer is the phone's). The phone answers each other with its stub: the message page, 409, "… isn't on
+            // the phone yet." (Stubs).
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
                 val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
-                if (href.startsWith("/export.pdf?")) {
+                if (href.startsWith("/export.pdf?") || href.startsWith("/versions?")) {
                     assertEquals("$href on the phone: $text", 404, status)
                     assertTrue("$href: $text", "no such sheet in the library" in text)
                     continue

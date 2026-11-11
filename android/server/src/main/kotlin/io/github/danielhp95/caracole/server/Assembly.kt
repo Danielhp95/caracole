@@ -108,7 +108,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
     private val store = LibraryStore(deps.libraryDir)
-    private val cards = PhonePageData(MirrorPageData(deps.mirror), store, ::config)
+    private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */
     val render: PhoneRender = render ?: PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version)
@@ -190,8 +190,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         SongbookRoutes(parts),
-        VersionsRoutes(parts),
-        HarmonicaRoutes(parts),
+        VersionsRoutes(parts, deps.csrf),
+        HarmonicaRoutes(parts, deps.csrf),
         ReviewRoutes(parts),
         ExportRoutes(parts),
         GuitarRoutes(parts),
