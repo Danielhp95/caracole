@@ -579,7 +579,7 @@ def test_a_word_of_an_artists_name_leads_with_them_and_enter_lists_their_songs(c
     # The artist first, Sam Grow's song after; LaCuerda's listings not read to L, Ask LaCuerda under them.
     assert groups == ["Artists on UG", "On UG"]
     assert browser.js("document.querySelector('#results .notes-line .ask-lacuerda').textContent") == \
-        "Ask LaCuerda for “Lynyrd Skynyrd” (1 request)"
+        "Ask LaCuerda: “Lynyrd Skynyrd” · 1 request"
     browser.press("Enter")
     assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
     time.sleep(0.5)

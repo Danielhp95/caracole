@@ -395,7 +395,7 @@ def test_with_the_hours_share_spent_the_page_offers_the_button(cfg, live, browse
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
     time.sleep(2)
     assert jobs(queue) == [] and searches(heard) == []
-    assert browser.js(BUTTONS) == ["Ask LaCuerda for “corazon de tiza” (1 request)"]  # the one button, its search
+    assert browser.js(BUTTONS) == ["Ask LaCuerda: “corazon de tiza” · 1 request"]  # the one button, its search
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
@@ -413,7 +413,7 @@ def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_re
     spend_the_share(cfg)
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=6)
     assert "press Ask LaCuerda" in browser.js(LINE) and jobs(queue) == []
-    assert browser.js(BUTTONS) == ["Ask LaCuerda for “corazon de tiza” (1 request)"]
+    assert browser.js(BUTTONS) == ["Ask LaCuerda: “corazon de tiza” · 1 request"]
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND]
@@ -442,7 +442,7 @@ FOLD = {"": "#results .nothing .line-more", "lookup": "#results .nothing .row-mo
 
 
 @pytest.mark.parametrize("page, query, label, folded", [
-    ("", "bunbury", "Ask LaCuerda for “bunbury” (1 request)", False),  # under the results: gtptabs.com has a song
+    ("", "bunbury", "Ask LaCuerda: “bunbury” · 1 request", False),  # under the results: gtptabs.com has a song
     ("", "caifanes", "Ask LaCuerda · 1 request", True),  # under the chevron of a search that found nothing
     ("lookup", "bunbury", "Ask LaCuerda · 1 request", True),
 ], ids=["library", "library-miss", "lookup"])
@@ -488,7 +488,7 @@ def test_the_one_button_pressed_before_the_query_settles_sends_the_search_by_han
         f"const ask = document.querySelector('{ASK}'); "
         "if (!ask) { if (performance.now() > until) done(null); else setTimeout(go, 5); return; } "
         f"const shown = {BUTTONS}; ask.click(); done(shown); }}; go(); }})")
-    assert pressed == ["Ask LaCuerda for “bunbury” (1 request)"]
+    assert pressed == ["Ask LaCuerda: “bunbury” · 1 request"]
     assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
     time.sleep(2)  # long past the 1.5 s a settled query waits
     assert jobs(queue) == [("lacuerda", "--search=bunbury", "--progress")]
@@ -496,7 +496,7 @@ def test_the_one_button_pressed_before_the_query_settles_sends_the_search_by_han
 
 
 @pytest.mark.parametrize("page, titles, label", [
-    ("", TITLES, "Ask LaCuerda for “bunbury” (1 request)"), ("lookup", LOOKUP_TITLES, "Ask LaCuerda · 1 request")],
+    ("", TITLES, "Ask LaCuerda: “bunbury” · 1 request"), ("lookup", LOOKUP_TITLES, "Ask LaCuerda · 1 request")],
     ids=["library", "lookup"])
 def test_with_its_search_failed_lately_the_one_button_reads_the_names_page(cfg, live, browser, heard, page, titles,
                                                                             label):

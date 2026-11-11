@@ -167,7 +167,7 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
     mark = browser.js("(() => { const c = document.querySelector('#bar-counts li[data-state=partial]'); "
                       "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
-    assert mark[:2] == ["lacuerda", "1 on LaCuerda: index in part, E, J only"] and "still being read" in mark[2]
+    assert mark[:2] == ["lacuerda", "1 on LaCuerda · index in part, E, J only"] and "being read" in mark[2]
     assert "E, J read whole" in mark[2]
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
@@ -206,7 +206,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     assert browser.wait(f"{answer_to('bunbury')} && !!document.querySelector('{ask}')")
     offer = browser.js(f"document.querySelector('{ask}').title")
     assert offer.startswith("LaCuerda's list doesn't reach B yet") and "“bunbury”" in offer
-    assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda for “bunbury” (1 request)"
+    assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda: “bunbury” · 1 request"
     assert queue.snapshot() == []  # the search asked nothing: reading the page is the button's
     browser.click(ask)
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
