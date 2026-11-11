@@ -5,8 +5,8 @@
 {"args":["","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole"}
 {"args":["","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole"}
 {"args":["","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole"}
-{"args":["","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["","Phone"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Music","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · Music"}
 {"args":["Music","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · Music"}
@@ -14,8 +14,8 @@
 {"args":["Music","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · Music"}
 {"args":["Music","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · Music"}
 {"args":["Music","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · Music"}
-{"args":["Music","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["Music","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["Music","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["Music","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["Music","Phone"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Phone","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · Phone"}
 {"args":["Phone","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · Phone"}
@@ -23,56 +23,56 @@
 {"args":["Phone","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · Phone"}
 {"args":["Phone","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · Phone"}
 {"args":["Phone","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · Phone"}
-{"args":["Phone","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["Phone","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["Phone","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["Phone","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["Dani's songs","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · Dani's songs"}
 {"args":["Dani's songs","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · Dani's songs"}
 {"args":["Dani's songs","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole · Dani's songs"}
 {"args":["Dani's songs","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · Dani's songs"}
 {"args":["Dani's songs","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · Dani's songs"}
 {"args":["Dani's songs","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · Dani's songs"}
-{"args":["Dani's songs","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["Dani's songs","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["Dani's songs","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["Dani's songs","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · <b>\"Tabs\" & chords</b>"}
-{"args":["<b>\"Tabs\" & chords</b>","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["<b>\"Tabs\" & chords</b>","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["<b>\"Tabs\" & chords</b>","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["<b>\"Tabs\" & chords</b>","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["Ana & Luis's <3","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · Ana & Luis's <3"}
-{"args":["Ana & Luis's <3","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["Ana & Luis's <3","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["Ana & Luis's <3","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["Ana & Luis's <3","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["宋冬野的歌","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · 宋冬野的歌"}
-{"args":["宋冬野的歌","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["宋冬野的歌","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["宋冬野的歌","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["宋冬野的歌","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["  spaced  ","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole ·   spaced  "}
 {"args":["  spaced  ","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole ·   spaced  "}
 {"args":["  spaced  ","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole ·   spaced  "}
 {"args":["  spaced  ","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole ·   spaced  "}
 {"args":["  spaced  ","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole ·   spaced  "}
 {"args":["  spaced  ","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole ·   spaced  "}
-{"args":["  spaced  ","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["  spaced  ","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["  spaced  ","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["  spaced  ","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["é́ ‍🎸","Phone",""],"fn":"caracole.library_name.LibraryName.title","out":"Phone · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Phone","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Look up · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Phone","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Sync · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Phone","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Not found · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Phone","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · Hotel California · Eagles · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Phone","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Phone · <script> & 'quotes' · caracole · é́ ‍🎸"}
-{"args":["é́ ‍🎸","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></span>"}
-{"args":["é́ ‍🎸","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>"}
+{"args":["é́ ‍🎸","Phone","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></span>"}
+{"args":["é́ ‍🎸","Phone","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">Phone</span></p>"}
 {"args":["",null,""],"fn":"caracole.library_name.LibraryName.title","out":"caracole"}
 {"args":["",null,"Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Look up · caracole"}
 {"args":["",null,"Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Sync · caracole"}
@@ -153,8 +153,8 @@
 {"args":["","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole"}
 {"args":["","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole"}
 {"args":["","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole"}
-{"args":["","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["","Scratch library"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Music","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · Music"}
 {"args":["Music","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · Music"}
@@ -162,8 +162,8 @@
 {"args":["Music","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · Music"}
 {"args":["Music","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · Music"}
 {"args":["Music","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · Music"}
-{"args":["Music","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["Music","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["Music","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["Music","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["Music","Scratch library"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Phone","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · Phone"}
 {"args":["Phone","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · Phone"}
@@ -171,64 +171,64 @@
 {"args":["Phone","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · Phone"}
 {"args":["Phone","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · Phone"}
 {"args":["Phone","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · Phone"}
-{"args":["Phone","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["Phone","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["Phone","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["Phone","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["Dani's songs","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · Dani's songs"}
 {"args":["Dani's songs","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · Dani's songs"}
 {"args":["Dani's songs","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole · Dani's songs"}
 {"args":["Dani's songs","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · Dani's songs"}
 {"args":["Dani's songs","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · Dani's songs"}
 {"args":["Dani's songs","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · Dani's songs"}
-{"args":["Dani's songs","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["Dani's songs","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["Dani's songs","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["Dani's songs","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · <b>\"Tabs\" & chords</b>"}
-{"args":["<b>\"Tabs\" & chords</b>","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["<b>\"Tabs\" & chords</b>","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["<b>\"Tabs\" & chords</b>","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["<b>\"Tabs\" & chords</b>","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["Ana & Luis's <3","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · Ana & Luis's <3"}
-{"args":["Ana & Luis's <3","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["Ana & Luis's <3","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["Ana & Luis's <3","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["Ana & Luis's <3","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["宋冬野的歌","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · 宋冬野的歌"}
-{"args":["宋冬野的歌","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["宋冬野的歌","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["宋冬野的歌","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["宋冬野的歌","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["  spaced  ","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole ·   spaced  "}
 {"args":["  spaced  ","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole ·   spaced  "}
 {"args":["  spaced  ","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole ·   spaced  "}
 {"args":["  spaced  ","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole ·   spaced  "}
 {"args":["  spaced  ","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole ·   spaced  "}
 {"args":["  spaced  ","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole ·   spaced  "}
-{"args":["  spaced  ","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["  spaced  ","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["  spaced  ","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["  spaced  ","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["é́ ‍🎸","Scratch library",""],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Scratch library","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Look up · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Scratch library","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Sync · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Scratch library","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Not found · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Scratch library","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · Hotel California · Eagles · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","Scratch library","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"Scratch library · <script> & 'quotes' · caracole · é́ ‍🎸"}
-{"args":["é́ ‍🎸","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></span>"}
-{"args":["é́ ‍🎸","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">Scratch library</span></p>"}
+{"args":["é́ ‍🎸","Scratch library","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></span>"}
+{"args":["é́ ‍🎸","Scratch library","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">Scratch library</span></p>"}
 {"args":["","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole"}
 {"args":["","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole"}
 {"args":["","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole"}
 {"args":["","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole"}
 {"args":["","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole"}
 {"args":["","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole"}
-{"args":["","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\"></span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["","<i>&</i>"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Music","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · Music"}
 {"args":["Music","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · Music"}
@@ -236,8 +236,8 @@
 {"args":["Music","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · Music"}
 {"args":["Music","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · Music"}
 {"args":["Music","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · Music"}
-{"args":["Music","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["Music","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["Music","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["Music","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Music</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["Music","<i>&</i>"],"fn":"caracole.library_name.LibraryName.icon","out":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzdhNGMwMCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iNi42IiByPSIyLjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTYgMTIuOFYxNWMwIDIuNC02IDIuOS02IDYuOSAwIDMgMi41IDQuNiA2IDQuNiAyLjkgMCA1LjEtMS40IDUuOC0zLjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==\">\n"}
 {"args":["Phone","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · Phone"}
 {"args":["Phone","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · Phone"}
@@ -245,53 +245,53 @@
 {"args":["Phone","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · Phone"}
 {"args":["Phone","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · Phone"}
 {"args":["Phone","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · Phone"}
-{"args":["Phone","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["Phone","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["Phone","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["Phone","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Phone</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["Dani's songs","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · Dani's songs"}
 {"args":["Dani's songs","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · Dani's songs"}
 {"args":["Dani's songs","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole · Dani's songs"}
 {"args":["Dani's songs","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · Dani's songs"}
 {"args":["Dani's songs","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · Dani's songs"}
 {"args":["Dani's songs","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · Dani's songs"}
-{"args":["Dani's songs","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["Dani's songs","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["Dani's songs","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["Dani's songs","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Dani&#x27;s songs</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · <b>\"Tabs\" & chords</b>"}
 {"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · <b>\"Tabs\" & chords</b>"}
-{"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["<b>\"Tabs\" & chords</b>","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">&lt;b&gt;&quot;Tabs&quot; &amp; chords&lt;/b&gt;</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["Ana & Luis's <3","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · Ana & Luis's <3"}
 {"args":["Ana & Luis's <3","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · Ana & Luis's <3"}
-{"args":["Ana & Luis's <3","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["Ana & Luis's <3","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["Ana & Luis's <3","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["Ana & Luis's <3","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">Ana &amp; Luis&#x27;s &lt;3</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["宋冬野的歌","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · 宋冬野的歌"}
 {"args":["宋冬野的歌","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · 宋冬野的歌"}
-{"args":["宋冬野的歌","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["宋冬野的歌","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["宋冬野的歌","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["宋冬野的歌","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">宋冬野的歌</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["  spaced  ","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole ·   spaced  "}
 {"args":["  spaced  ","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole ·   spaced  "}
 {"args":["  spaced  ","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole ·   spaced  "}
 {"args":["  spaced  ","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole ·   spaced  "}
 {"args":["  spaced  ","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole ·   spaced  "}
 {"args":["  spaced  ","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole ·   spaced  "}
-{"args":["  spaced  ","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["  spaced  ","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["  spaced  ","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["  spaced  ","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">  spaced  </span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
 {"args":["é́ ‍🎸","<i>&</i>",""],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","<i>&</i>","Look up"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Look up · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","<i>&</i>","Sync"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Sync · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","<i>&</i>","Not found"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Not found · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","<i>&</i>","Hotel California · Eagles"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · Hotel California · Eagles · caracole · é́ ‍🎸"}
 {"args":["é́ ‍🎸","<i>&</i>","<script> & 'quotes'"],"fn":"caracole.library_name.LibraryName.title","out":"<i>&</i> · <script> & 'quotes' · caracole · é́ ‍🎸"}
-{"args":["é́ ‍🎸","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
-{"args":["é́ ‍🎸","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Not your usual library\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}
+{"args":["é́ ‍🎸","<i>&</i>","span"],"fn":"caracole.library_name.LibraryName.markup","out":"<span class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></span>"}
+{"args":["é́ ‍🎸","<i>&</i>","p"],"fn":"caracole.library_name.LibraryName.markup","out":"<p class=\"libname\"><span class=\"name\">é́ ‍🎸</span> <span class=\"scratch\" title=\"Scratch\">&lt;i&gt;&amp;&lt;/i&gt;</span></p>"}

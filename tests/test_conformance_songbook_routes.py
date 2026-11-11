@@ -630,7 +630,7 @@ def test_the_cases_meet_what_they_name(made):
     assert [o["job"] for o in twice["out"]] == [1, 1] and len(twice["queue"]) == 1
     assert out["make: a full queue"]["out"][0]["status"] == 503
     assert out["make: a song the phone hasn't got (a negative id, a mirror's card)"]["out"][0]["message"] == (
-        "A song you picked isn't in the library any more: reload the library and pick again.")
+        "A song you picked left the logbook. Reload the page and pick again.")
     assert out["make: a name whose folder another songbook's is"]["out"][0]["status"] == 409
     get = out["get: its songs without a sheet, then the songbook"]
     assert [j["display"] for j in get["queue"][:-1]] == ["Oasis - Wonderwall", "Muse - Hysteria",

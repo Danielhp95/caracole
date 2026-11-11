@@ -72,11 +72,10 @@ class HarmonicaRoutes(val parts: PhoneParts, private val csrf: String,
         }
         val spec = if (doing == "pin") HarmonicaPage.reading(form["as"].orEmpty()) else null
         if (doing == "pin" && spec == asked.pin) {
-            throw Refused(409, "Nothing to do", "It is read so already, as you set it.")
+            throw Refused(409, "Nothing to do", "Read that way already, as you set it.")
         }
         if (doing == "clear" && asked.pin == null) {
-            throw Refused(409, "Nothing to do", "caracole guesses how it is read already: no [harmonica] entry in " +
-                                                "overrides.toml pins it.")
+            throw Refused(409, "Nothing to do", "We guess its reading already: no [harmonica] entry pins it.")
         }
         LookupForms.notIgnored(asked.song, parts.database.read { db -> LookupForms.overrides(db) })
         val song = asked.song

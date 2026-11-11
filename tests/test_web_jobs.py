@@ -43,30 +43,30 @@ class FakeRunner:
 
 def test_a_lookup_can_leave_its_songbooks_to_a_later_job():
     assert lookup_steps("Radiohead", "Creep", songbooks=False) == [
-        ("Look it up now", ("get", "--progress", "--no-songbooks", "--", "Radiohead", "Creep"))]
+        ("Fetching", ("get", "--progress", "--no-songbooks", "--", "Radiohead", "Creep"))]
 
 
 def test_a_request_is_caracole_add_and_a_fetch_is_match_fetch_render():
     # Each label is what the song's card says while the step runs: "Fetching from Ultimate Guitar…".
-    assert add_steps("Radiohead", "Creep") == [("Adding to the library", ("add", "--", "Radiohead", "Creep"))]
+    assert add_steps("Radiohead", "Creep") == [("Adding to the book", ("add", "--", "Radiohead", "Creep"))]
     assert add_steps("-rf", "--help", album="OK Computer", duration_ms=239000) == [
-        ("Adding to the library", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
+        ("Adding to the book", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
     assert fetch_steps("Radiohead - Creep") == [
-        ("Looking it up", ("match",)),
-        ("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
-        ("Rendering the sheet", ("render", "--song=Radiohead - Creep")),
+        ("Matching", ("match",)),
+        ("Fetching from UG", ("fetch", "--song=Radiohead - Creep")),
+        ("Making the PDF", ("render", "--song=Radiohead - Creep")),
     ]
 
 
 def test_a_request_is_caracole_add_and_a_lookup_is_one_caracole_get():
-    assert add_steps("Radiohead", "Creep") == [("Adding to the library", ("add", "--", "Radiohead", "Creep"))]
+    assert add_steps("Radiohead", "Creep") == [("Adding to the book", ("add", "--", "Radiohead", "Creep"))]
     assert add_steps("-rf", "--help", album="OK Computer", duration_ms=239000) == [
-        ("Adding to the library", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
+        ("Adding to the book", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
     # One process for the whole lookup, which reports its stages as JSON lines.
-    assert lookup_steps("Radiohead", "Creep") == [("Look it up now", ("get", "--progress", "--", "Radiohead", "Creep"))]
+    assert lookup_steps("Radiohead", "Creep") == [("Fetching", ("get", "--progress", "--", "Radiohead", "Creep"))]
     assert lookup_steps("-rf", "--help", album="OK Computer", duration_ms=239000, ug="radiohead/creep",
                         tab="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169") == [
-        ("Look it up now", ("get", "--progress", "--album=OK Computer", "--duration=3:59", "--ug=radiohead/creep",
+        ("Fetching", ("get", "--progress", "--album=OK Computer", "--duration=3:59", "--ug=radiohead/creep",
                             "--tab=https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169", "--", "-rf",
                             "--help"))]
 
@@ -242,7 +242,7 @@ def test_a_job_that_mustnt_join_another_gets_the_songs_job_unchanged(state):
             asked.append(queue.submit("Pick", "radiohead|creep", review, fetching=True, join=False))
         return 0
 
-    review = [("Writing the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
+    review = [("Noting your answer in overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
     queue = JobQueue(runner)
     add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
     if state == "queued":
@@ -325,7 +325,7 @@ def test_a_lookup_that_joined_a_keep_it_starts_its_stages_afresh():
     seen = []
 
     def runner(args, emit):
-        said = [("song", "running", ""), ("song", "done", "in the library")]
+        said = [("song", "running", ""), ("song", "done", "in the book")]
         said += ([("version", "running", ""), ("version", "done", "tab 3 kept"), ("pdf", "running", ""),
                   ("pdf", "done", "made"), ("pages", "running", ""), ("pages", "done", "")]
                  if args[0] == "versions" else
@@ -431,7 +431,7 @@ def test_a_job_is_data_its_steps_each_with_a_state():
                                 "detail": "tab 101 from Ultimate Guitar"}
     assert data["song"] == {"id": 7, "display": "Radiohead - Creep"}
     assert data["files"] == {"sheet": "Radiohead/Creep/sheet.txt"} and data["seconds_to_sheet"] == 2.25
-    assert data["commands"] == [{"label": "Look it up now", "args": ["get", "--progress", "--", "Radiohead", "Creep"],
+    assert data["commands"] == [{"label": "Fetching", "args": ["get", "--progress", "--", "Radiohead", "Creep"],
                                  "state": "done", "code": 0}]
     assert queue.job(999) is None
 
@@ -450,7 +450,7 @@ def test_a_job_of_commands_is_data_too():
     queue = JobQueue(FakeRunner())
     job, _ = queue.submit("Add Oasis - Wonderwall", "oasis|wonderwall", add_steps("Oasis", "Wonderwall"))
     data = queue.job(job.id).as_json()
-    assert data["steps"] == [{"name": "add", "label": "Adding to the library", "state": "waiting", "detail": ""}]
+    assert data["steps"] == [{"name": "add", "label": "Adding to the book", "state": "waiting", "detail": ""}]
     assert data["song"] is None and data["files"] == {}
 
 

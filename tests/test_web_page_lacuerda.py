@@ -224,7 +224,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     browser.click(ask)
     assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
-    assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See what it answered" in said
+    assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See it in the Journal" in said
     assert browser.js(f"document.querySelector('{ask}').disabled")
 
 
@@ -265,7 +265,7 @@ def test_the_lookup_page_lists_lacuerda_after_ultimate_guitar(cfg, live, browser
     browser.open(base + "lookup?q=estopa")
     assert browser.wait("[...document.querySelectorAll('#results .group')].length >= 2")
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups.index("On LaCuerda") > groups.index("Artists on Ultimate Guitar"), groups
+    assert groups.index("On LaCuerda") > groups.index("Artists on UG"), groups
     browser.click("#results .hit[data-slug='estopa'] .row-action button")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 2")
     browser.js(f"{LC_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Tu Calorro')"
@@ -299,7 +299,7 @@ def test_enter_on_the_lookup_page_opens_the_artist_lacuerda_alone_has_by_that_na
     browser.open(base + "lookup?q=andres%20calamaro")
     assert browser.wait(f"{LC_ROWS}.length === 1")  # the lookup page's artist row
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups == ["On LaCuerda", "On Ultimate Guitar"], groups
+    assert groups == ["On LaCuerda", "On UG"], groups
     browser.js("document.getElementById('q').focus()")
     browser.press("Enter")
     assert browser.wait("!!document.querySelector('#results .artist-head h2')")

@@ -29,7 +29,7 @@ songbooks are ``SongbookPages.NONE``, ``SONGBOOKS``, in place of Python's:
 - ``pdf``: a pass that made the PDF or found it up to date is ``["skipped", get.NO_PDFS]`` (no sheet yet is no sheet
   yet on both);
 - ``pages``: "_todo.md and index.html rewritten" is ``get.LIBRARY_PAGE``;
-- ``songbooks``: "no songbook lists it" (no songbooks.toml) is ``["skipped", SONGBOOKS]``, the words of
+- ``songbooks``: "in no songbook" (no songbooks.toml) is ``["skipped", SONGBOOKS]``, the words of
   ``core.lookup.sites.NotYet.WORDS``, which Python has no constant of: they go, and these records are made again, when
   the phone's ``SongbookPages.NONE`` does (milestone 6).
 
@@ -296,7 +296,7 @@ def phone_end(name: str, state: str, detail: str) -> tuple[str, str] | None:
         return "skipped", get.NO_PDFS
     if name == "pages" and (state, detail) == ("done", "_todo.md and index.html rewritten"):
         return "done", get.LIBRARY_PAGE
-    if name == "songbooks" and (state, detail) == ("skipped", "no songbook lists it"):
+    if name == "songbooks" and (state, detail) == ("skipped", "in no songbook"):
         return "skipped", SONGBOOKS
     assert name not in ("pdf", "pages", "songbooks") or state == "running" or (name, detail) in (
         ("pdf", "no sheet yet"), ("pdf", ""), ("pages", ""), ("songbooks", "")), (name, state, detail)
@@ -878,7 +878,7 @@ def test_the_stage_stream_is_the_phones_words(made):
     """No record says what only a caracole with wanted.txt, ChordPro, index.html and songbooks says."""
     for record in _records(made[GET]) + _records(made[COMMANDS]):
         said = json.dumps(record["out"]["result"]["progress"]) + json.dumps(record["out"]["result"]["result"])
-        for words in ("wanted.txt", "_todo.md", "no songbook lists it", '"up to date"'):
+        for words in ("wanted.txt", "_todo.md", "in no songbook", '"up to date"'):
             assert words not in said, (record["case"], words)
 
 
@@ -887,7 +887,7 @@ def test_the_cases_come_to_what_they_say(made):
 
     cases = {r["case"].split(":")[0]: r for r in _records(made[GET]) + _records(made[COMMANDS])}
     new = cases["a new song found and its sheet kept"]
-    assert _ends(new)["song"] == ("done", get.ADDED) and _ends(new)["sheet"] == ("done", "tab 101 from Ultimate Guitar")
+    assert _ends(new)["song"] == ("done", get.ADDED) and _ends(new)["sheet"] == ("done", "tab 101 from UG")
     assert {"provider:ug", "provider:lrclib", "lookup:songs"} <= set(new["out"]["kv"])
     picked = cases["a tab picked"]
     assert [r["tbl"] for r in picked["out"]["rows"]["phone_overrides"]] == ["pin"]
@@ -900,7 +900,7 @@ def test_the_cases_come_to_what_they_say(made):
     assert _ends(cases["an error on Ultimate Guitar"])["sheet"][0] == "failed"
     spent = cases["this hour's lookups spent on Ultimate Guitar"]
     assert not any("ultimate-guitar" in r for r in spent["out"]["requests"])
-    assert "lookup requests to Ultimate Guitar are spent" in _ends(spent)["sheet"][1]
+    assert "no more asks of Ultimate Guitar this hour" in _ends(spent)["sheet"][1]
     kept = cases["what follows the sheet held to the half of the hour's lookups not kept for sheets"]
     assert "kept for sheets" in _ends(kept)["ug"][1]
     for refused in ("an ignored song refused", "a tab of a kind caracole doesn't use refused before anything is written"):
@@ -920,7 +920,7 @@ def test_the_cases_come_to_what_they_say(made):
     assert {"Billy Joel/Piano Man/guitar-1.gp5", "Billy Joel/Piano Man/harmonica-1.txt"} <= set(files["out"]["library"])
     harp = cases["a harmonica tab picked"]
     assert [r["tbl"] for r in harp["out"]["rows"]["phone_overrides"]] == ["harptabs"]
-    assert _ends(harp)["harptabs"] == ("done", get.HARPTABS_KEPT) and "blocked" in _ends(harp)["gtptabs"][1]
+    assert _ends(harp)["harptabs"] == ("done", get.HARPTABS_KEPT) and "turned us back" in _ends(harp)["gtptabs"][1]
     assert json.loads(harp["out"]["kv"]["provider:gtptabs"])["cooldown_until"] is not None
     game = cases["gametabs.net keeps a game's tab"]
     assert _ends(game)["gametabs"] == ("done", get.GAMETABS_KEPT)

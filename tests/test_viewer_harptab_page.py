@@ -99,13 +99,13 @@ def test_the_harp_with_the_record_in_the_header_and_the_bar():
     assert text_of(html, "why") == "100% of the sung notes fall on the sheet's chords on a D harp, 33% on an F harp"
     data = data_of(html)
     assert data["start"] == 2
-    assert data["why"] == {"2": "with the record", "0": "harptabs.com's key"}
+    assert data["why"] == {"2": "with the record", "0": "harptabs' key"}
     assert data["positions"][2] == "4th position, aeolian" and data["positions"][11] == "1st position"
 
 
 def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
     assert text_of(page(JUKE, page_key="E"), "facts") == "Harmonica tab · A harp, as the tab says"
-    assert data_of(page(JUKE, page_key="E"))["why"] == {"9": "as the tab says", "4": "harptabs.com's key"}
+    assert data_of(page(JUKE, page_key="E"))["why"] == {"9": "the tab's", "4": "harptabs' key"}
     assert text_of(page(HOTEL, page_key="Bb"), "facts") == "Harmonica tab · Bb harp, as harptabs.com's key says"
     other = a_sheet("G", key="G", lines=("other words", "than the tab"))
     assert text_of(page(HOTEL, cho=other), "facts") == "Harmonica tab · G harp for the song's key (1st position)"
@@ -334,7 +334,7 @@ def test_a_sheet_with_no_key_has_its_guitar_tab_and_says_so_of_the_harps():
     keyless = "{title: Synthetic Song}\n{artist: Placeholder Band}\n[N.C.]la la [Hm]lo lo\n"
     overlay = data_of(page(TAB_D, cho=keyless))["overlay"]
     assert overlay["guitar"] is not None and overlay["harp"]["key"] is None
-    assert overlay["harp"]["none"] == "With no key in its chord sheet, caracole can't tell which harp plays the song."
+    assert overlay["harp"]["none"] == "The chord sheet has no key: no harp to suggest."
 
 
 def test_a_harp_its_page_guesses_is_no_tabs():

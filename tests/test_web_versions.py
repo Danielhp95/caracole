@@ -183,7 +183,7 @@ def test_make_this_the_one_looks_the_song_up_with_that_tab(app, queue, recorder,
     done = get(app, where)
     assert 'http-equiv="refresh"' not in text(done)
     assert "it is the one now" not in shown(done)  # the fake command changed nothing: the page says so
-    assert "Done, but it isn't the one" in shown(done) and 'href="/#tab=requests&amp;job=1"' in text(done)
+    assert "Done, but not the one" in shown(done) and 'href="/#tab=requests&amp;job=1"' in text(done)
 
 
 def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(app, queue, recorder, conn, cfg):
@@ -202,7 +202,7 @@ def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(
     other = chords(conn, song, OTHER, rating=4.86, votes=408, number=3)
     keep_file(conn, cfg.library_dir, song=song, version_id=other, name="sheet.txt", data=b"[G]Otra\n", rank=1)
     done = get(app, where)
-    assert "Done: it is the one now." in shown(done) and "The one now: Ver 3 · 4.86★ (408)" in shown(done)
+    assert "Done · the one now." in shown(done) and "The one now: Ver 3 · 4.86★ (408)" in shown(done)
     assert f'href="/{quote(SHEET)}"' in text(done) and "Open the sheet" in shown(done)
     assert "<form" not in text(done)
 
@@ -257,7 +257,7 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
     assert "caracole picks the sheet again" not in shown(get(app, where))
     assert "Done, but the [pin] is still there" in shown(get(app, where))
     cfg.overrides_file.write_text("", encoding="utf-8")
-    assert "Done: caracole picks the sheet again." in shown(get(app, where))
+    assert "Done · we pick the sheet again." in shown(get(app, where))
 
 
 def test_only_a_chords_pin_is_one_to_go_back_from(app, conn, cfg):
@@ -416,7 +416,7 @@ def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
 
     def runner(args, emit):
         if args[0] == "versions" and args[1].startswith("--keep="):
-            emit(progress_line({"stage": "song", "state": "done", "detail": "in the library"}))
+            emit(progress_line({"stage": "song", "state": "done", "detail": "in the book"}))
             emit(progress_line({"stage": "version", "state": "running", "detail": ""}))
             seen["keep"] = (queue.job(1).stages, job_line(queue.job(1), None))
             emit(progress_line({"stage": "version", "state": "skipped", "detail": "budget spent; nothing kept"}))
@@ -460,7 +460,7 @@ def test_keep_more_queues_one_job_under_the_songs_key(app, queue, recorder, conn
     assert queue.active_count() == 1 and song.key in queue.fetching_keys()  # it asks Ultimate Guitar for pages
     job = queue.job(1)
     assert job.song_key == song.key and job.title == f"Fetch the other versions of {DISPLAY}"
-    assert [step.label for step in job.steps] == ["Fetching versions from Ultimate Guitar"]
+    assert [step.label for step in job.steps] == ["Fetching versions from UG"]
     assert [stage.name for stage in job.stages] == ["song", "version", "pdf", "pages"]
     queue.run_pending()
     assert recorder.calls == [["versions", "--keep-more", "--progress", "--", *NAMES]]

@@ -290,7 +290,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     browser.js("window.before = true")
     browser.js("location.reload()")
     assert browser.wait("!window.before && document.readyState === 'complete'")
-    assert "Done: it is the one now." in browser.js("document.body.textContent")
+    assert "Done · the one now." in browser.js("document.body.textContent")
     # The page it was asked from went (the version is sheet.html now): back to the sheet is the song's sheet
     assert browser.js("[...document.querySelectorAll('a.btn')].map((a) => [a.textContent, a.getAttribute('href')])") == [
         ["Open the sheet", f"/{FOLDER}/sheet.html"], ["Back to the sheet", f"/{FOLDER}/sheet.html"]]
@@ -316,7 +316,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
     browser.click("#ver-now")
     assert browser.wait("!document.querySelector('#version-list').hidden")
-    assert browser.js(SWITCHER)["acts"] == [["Back to caracole's pick", f"/versions?sheet={quote(FOLDER + '/sheet.html', safe='')}"
+    assert browser.js(SWITCHER)["acts"] == [["Back to our pick", f"/versions?sheet={quote(FOLDER + '/sheet.html', safe='')}"
                                                                         "&do=clear"]]
     browser.js("window.before = true")
     browser.click("#ver-items > li:nth-child(4) .ver-acts a")

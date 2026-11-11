@@ -25,7 +25,7 @@ from conftest import add_song
 def lookup(state="running", stages=None, *, args=None, job_id=4, display="Muse - Hysteria"):
     """A lookup, its stages in ``stages`` (name -> (state, detail)), the others waiting."""
     made = [Step(label, tuple(a)) for label, a in lookup_steps(*display.split(" - "))] if args is None else [
-        Step("Look it up now", tuple(args))]
+        Step("Fetching", tuple(args))]
     said = stages or {}
     job = Job(job_id, f"Fetch {display}", display.lower().replace(" - ", "/"), made, fetching=True,
               display=display, state=state,
@@ -45,7 +45,7 @@ def ended(stages, state="done", **kw):
 
 
 def test_a_lookup_in_progress_shows_its_stages_as_steps_in_plain_words():
-    job = lookup(stages={"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria"),
+    job = lookup(stages={"song": ("done", "in the book"), "match": ("done", "matched to muse/hysteria"),
                          "sheet": ("done", "tab 1 from Ultimate Guitar"), "pdf": ("running", "")})
     assert steps(job, SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")) == [
         Chip("Song", "done"), Chip("Match", "done", "UG"), Chip("Sheet", "done", "UG"), Chip("PDF", "running"),
@@ -87,13 +87,13 @@ def test_a_step_the_request_doesnt_use_is_not_drawn():
     job = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])
     assert [c.name for c in steps(job)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Extras"]
     # A stage that ended with nothing to do for this song: no sheet, so no PDF; no songbook lists it.
-    skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in the offline Ultimate Guitar index"),
+    skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in UG's index"),
                              "sheet": ("skipped", "the offline index doesn't have it"), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
-    assert [c.name for c in steps(skipped)] == ["Song", "Match: not on UG", "Lyrics", "Extras", "Songbooks"]
+    assert [c.name for c in steps(skipped)] == ["Song", "Match · not on UG", "Lyrics", "Extras", "Songbooks"]
     # A failed stage stays, as failed.
     failed = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
-                            "pdf": ("failed", "chordpro couldn't make the PDF; the log says why"),
+                            "pdf": ("failed", "chordpro couldn't make the PDF (see the log)"),
                             "lyrics": ("running", "")})
     assert Chip("PDF", "failed") in steps(failed)
 
@@ -101,7 +101,7 @@ def test_a_step_the_request_doesnt_use_is_not_drawn():
 def test_match_says_the_index_it_matched_in_and_sheet_the_site_it_asked_then_got_it_from():
     # Match is the offline index's, Ultimate Guitar's. The sheet names no site until it asks one, then the one it
     # asks (get.SHEET_FROM), switching when it falls back to the other; once done, where the song's sheet came from.
-    asked = {"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria")}
+    asked = {"song": ("done", "in the book"), "match": ("done", "matched to muse/hysteria")}
     assert steps(lookup(stages={**asked, "sheet": ("running", "")}))[1:3] == [
         Chip("Match", "done", "UG"), Chip("Sheet", "running")]
     assert steps(lookup(stages={**asked, "sheet": ("running", SHEET_FROM["ug"])}))[2] == Chip("Sheet", "running", "UG")
@@ -115,11 +115,11 @@ def test_match_says_the_index_it_matched_in_and_sheet_the_site_it_asked_then_got
 
 
 def test_a_song_ultimate_guitars_index_lacks_is_drawn_plain_never_a_failure():
-    # The sheet may come from LaCuerda: "Match: not on UG", which is over, as a done step is.
-    job = lookup(stages={"song": ("done", "in the library"),
-                         "match": ("done", MATCH_NOT_FOUND + " (the offline index is incomplete)"),
+    # The sheet may come from LaCuerda: "Match · not on UG", which is over, as a done step is.
+    job = lookup(stages={"song": ("done", "in the book"),
+                         "match": ("done", MATCH_NOT_FOUND + " (UG's index is incomplete)"),
                          "sheet": ("running", SHEET_FROM["lacuerda"])})
-    assert steps(job)[:3] == [Chip("Song", "done"), Chip("Match: not on UG", "plain"),
+    assert steps(job)[:3] == [Chip("Song", "done"), Chip("Match · not on UG", "plain"),
                               Chip("Sheet", "running", "LaCuerda")]
 
 
@@ -156,15 +156,15 @@ def test_the_library_page_draws_a_running_lookups_steps_with_the_count_of_those_
 
 def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_otherwise():
     ready = SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")
-    over = ended({"songbooks": ("skipped", "no songbook lists it")})
+    over = ended({"songbooks": ("skipped", "in no songbook")})
     assert progress(over, job_line(over, ready), ready) == {}  # the song's line opens the sheet itself
     # Ended otherwise, the steps stay, with no count: they show which step stopped.
     missing = ended({"match": ("done", MATCH_NOT_FOUND), "sheet": ("skipped", NOT_IN_INDEX),
-                     "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "no songbook lists it")})
+                     "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "in no songbook")})
     facts = SongFacts(not_found=True, checked_now=True)
     assert job_line(missing, facts).text == "Not found"
     assert progress(missing, job_line(missing, facts), facts) == {"steps": [
-        {"name": "Song", "source": "", "state": "done"}, {"name": "Match: not on UG", "source": "", "state": "plain"},
+        {"name": "Song", "source": "", "state": "done"}, {"name": "Match · not on UG", "source": "", "state": "plain"},
         {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"}]}
     failed = ended({"song": ("failed", "overrides.toml can't be read: line 3")} | {
         name: ("skipped", "") for name, _ in STAGES[1:]}, state="failed")
@@ -175,7 +175,7 @@ def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_othe
 COOLING = "Ultimate Guitar is cooling down after a block, until 2026-10-28 14:00 UTC"
 WAITS = (COOLING,
          "Ultimate Guitar blocked caracole (ug: 403: https://x): no more requests to it until 2026-10-28 14:00 UTC. "
-         "Nothing was marked not found.",
+         "Nothing marked not on the sites.",
          "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly run does the rest")
 
 
@@ -185,7 +185,7 @@ def test_a_sheet_a_block_a_cooldown_or_a_spent_budget_stopped_stays_to_show_whic
     # fetched yet shows which step stopped.
     for detail in WAITS:
         waited = ended({"sheet": ("skipped", detail), "pdf": ("skipped", "no sheet yet"),
-                        "songbooks": ("skipped", "no songbook lists it")})
+                        "songbooks": ("skipped", "in no songbook")})
         facts = SongFacts()
         line = job_line(waited, facts)
         assert line.text == "Not fetched yet"
@@ -212,14 +212,14 @@ def test_a_request_that_runs_no_lookup_or_hasnt_run_has_no_steps_on_the_library_
     cancelled = ended({name: ("skipped", "") for name, _ in STAGES}, state="cancelled")
     cancelled.state = "cancelled"
     assert progress(cancelled, job_line(cancelled, None), None) == {}
-    add = Job(2, "Add Muse - Hysteria", "muse/hysteria", [Step("Adding to the library", ("add", "--", "Muse",
+    add = Job(2, "Add Muse - Hysteria", "muse/hysteria", [Step("Adding to the book", ("add", "--", "Muse",
                                                                                        "Hysteria"),
                                                                  state="running")], state="running")
     assert progress(add, job_line(add, None), None) == {}
     read = Job(3, "x", LACUERDA_ARTIST + "caifanes", [Step("Reading LaCuerda's page for Caifanes", (
         "lacuerda", "--artist=caifanes"), state="running")], state="running")
     assert progress(read, job_line(read, None), None) == {}
-    keep = Job(5, "Keep", "muse/hysteria", [Step("Fetching the version from Ultimate Guitar", tuple(
+    keep = Job(5, "Keep", "muse/hysteria", [Step("Fetching the version from UG", tuple(
         version_steps("Muse", "Hysteria", keep="3")[0][1]), state="running")], state="running",
                stages=[Stage(name, label) for name, label in KEEP_STAGES])
     assert progress(keep, job_line(keep, None), None) == {}
@@ -227,10 +227,10 @@ def test_a_request_that_runs_no_lookup_or_hasnt_run_has_no_steps_on_the_library_
 
 def test_a_request_of_other_commands_shows_its_job_steps_the_same_way():
     job = Job(2, "Pick muse/hysteria for Muse - Hysteria, and fetch it", "muse/hysteria", [
-        Step("Writing the answer to overrides.toml", ("review", "--song=Muse - Hysteria", "--pick=muse/hysteria"),
+        Step("Noting your answer in overrides.toml", ("review", "--song=Muse - Hysteria", "--pick=muse/hysteria"),
              state="done"),
-        Step("Fetching from Ultimate Guitar", ("fetch", "--song=Muse - Hysteria"), state="running"),
-        Step("Rendering the sheet", ("render", "--song=Muse - Hysteria"))], state="running")
+        Step("Fetching from UG", ("fetch", "--song=Muse - Hysteria"), state="running"),
+        Step("Making the PDF", ("render", "--song=Muse - Hysteria"))], state="running")
     assert steps(job) == [Chip("Your pick", "done"), Chip("Sheet", "running"), Chip("PDF", "waiting")]
     # A command it doesn't name is shown by its label.
     other = Job(3, "x", "x", [Step("Reading LaCuerda's page for Caifanes", ("lacuerda", "--artist=caifanes"),
@@ -274,7 +274,7 @@ def test_ready_says_what_waits_for_tonights_run_in_the_stages_words():
                                            "2026-10-22 18:00 UTC.")
     # Nothing to say of a site turned off, or of a stage that had nothing to do.
     quiet = ended({"gtptabs": ("skipped", "gtptabs.com is off in caracole.toml"),
-                   "songbooks": ("skipped", "no songbook lists it")})
+                   "songbooks": ("skipped", "in no songbook")})
     assert said(quiet, facts).reason == ""
 
 
@@ -282,14 +282,14 @@ def test_needs_review_picks_the_match():
     facts = SongFacts(review=True, picker="review?song=7")
     job = ended({"sheet": ("skipped", "caracole isn't sure which Ultimate Guitar song this is")})
     assert said(job, facts, song_id=7) == Outcome(
-        "review", "Needs review", "caracole isn't sure which Ultimate Guitar song it is.",
-        Action("Pick the match", href="/review?song=7"))
+        "review", "Needs your pick", "caracole isn't sure which Ultimate Guitar song it is.",
+        Action("Pick", href="/review?song=7"))
     # Without candidates to pick from, its line on the library page, where caracole review's answers are.
     bare = said(job, SongFacts(review=True), song_id=7)
     assert bare.action == Action("Open in the library", href="/#song=7")
 
 
-SEARCH = Action("See what caracole search finds", href="/review?song=3")
+SEARCH = Action("Search the index", href="/review?song=3")
 
 
 def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
@@ -304,32 +304,32 @@ def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
     assert said(job, read, song_id=3) == Outcome("missing", "Not found", "Ultimate Guitar has no chords for it.",
                                                  SEARCH)
     # A song the index matched, whose UG page had no sheet to keep: requested by name.
-    matched = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")},
+    matched = ended({"sheet": ("skipped", "UG has no sheet to keep")},
                     display="Horse The Band - Crippled By Pizza")
     assert said(matched, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
         "missing", "Not found", "Ultimate Guitar has no chords for it.",
-        Action("Request by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
+        Action("Ask by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
     # A fetch of commands that refused the song as not in the index (it failed): not asked either.
     fetch = Job(9, "Fetch Horse The Band - Crippled By Pizza", "horse-the-band/crippled-by-pizza",
-                [Step("Fetching from Ultimate Guitar", ("fetch", "--song=Horse The Band - Crippled By Pizza"),
+                [Step("Fetching from UG", ("fetch", "--song=Horse The Band - Crippled By Pizza"),
                       state="failed")], fetching=True, state="failed")
     assert said(fetch, SongFacts(not_found=True), song_id=3).reason == (
         "Not in the offline Ultimate Guitar index under this name.")
 
 
 def test_not_found_with_something_elsewhere_gets_it_from_there():
-    job = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")})
+    job = ended({"sheet": ("skipped", "UG has no sheet to keep")})
     gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
     assert said(job, gtp, song_id=3) == Outcome(
         "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
-        Action("Get it from there", post="/lookup", fields=(("song", "3"),)))
+        Action("Fetch from there", post="/lookup", fields=(("song", "3"),)))
     # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
     unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
     lc = SongFacts(not_found=True, checked_now=True,
                    elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
     assert said(unmatched, lc, song_id=3) == Outcome(
         "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
-        Action("Get it from there", post="/lookup", fields=(
+        Action("Fetch from there", post="/lookup", fields=(
             ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
         also=SEARCH)
     # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
@@ -356,7 +356,7 @@ def test_failed_and_not_fetched_yet_try_again():
         Action("Try again", post="/jobs/again", fields=(("job", "4"),)))
     # A fetch of commands, which has no stages: its output says which.
     fetch = Job(9, "Fetch Radiohead - Creep", "radiohead/creep",
-                [Step("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep"), state="done")],
+                [Step("Fetching from UG", ("fetch", "--song=Radiohead - Creep"), state="done")],
                 fetching=True, state="done")
     assert said(fetch, SongFacts()).reason == ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, "
                                                "a spent budget or an error: the output says which).")
@@ -390,7 +390,7 @@ def test_a_songbook_made_opens_it_and_a_deletion_and_a_removal_say_so():
 
 
 def test_an_add_and_a_lacuerda_read_say_their_line_as_a_word_and_a_sentence():
-    add = Job(8, "Add Radiohead - Creep", "radiohead/creep", [Step("Adding to the library", ("add",), state="done")],
+    add = Job(8, "Add Radiohead - Creep", "radiohead/creep", [Step("Adding to the book", ("add",), state="done")],
               state="done")
     assert said(add, SongFacts()) == Outcome("added", "Added", "The nightly run looks for it.")
     read = Job(9, "Read the page of Caifanes on LaCuerda", LACUERDA_ARTIST + "caifanes",

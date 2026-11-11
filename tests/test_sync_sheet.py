@@ -66,7 +66,7 @@ def difference(unit: str, label: str, proposal: str, why: str, change: tuple, *,
 
 def song(unit: str, artist: str, title: str, proposal: str, change: tuple, **more) -> dict:
     why = {"mine": "changed here since the last sync", "theirs": "changed there since the last sync",
-           "conflict": "changed on both sides since the last sync"}[proposal]
+           "conflict": "both books changed it since the last share"}[proposal]
     return difference(unit, f"{artist} - {title}", proposal, why, change, names={"artist": artist, "title": title},
                       **more)
 
@@ -79,7 +79,7 @@ DIFFERENCES = [
          listed=["songbook/campfire"]),
     song("song/oasis/wonderwall", "Oasis", "Wonderwall", "conflict", ("changed", "changed")),
     song("song/radiohead/creep", "Radiohead", "Creep", "theirs", (None, "changed"), listed=["songbook/campfire"]),
-    difference("songbook/campfire", "the songbook Campfire", "theirs", "changed there since the last sync",
+    difference("songbook/campfire", "songbook Campfire", "theirs", "changed there since the last sync",
                (None, "changed")),
     difference("songbook/wedding set", "the songbook Wedding set", "theirs", "new there since the last sync",
                (None, "new")),
@@ -919,7 +919,7 @@ def test_a_sync_on_its_way_as_the_page_loads_is_followed_to_its_summary(served, 
     url = served(fake, sync="sheet", jobs=(VIEWS[1],)) + "#sheet=sync"
     with opened(tmp_path, url, width=390, height=844, mobile=True) as page:
         at_view(page, "going")
-        assert page.js("document.getElementById('sync-going-line').textContent") == "Taking what changed there…"
+        assert page.js("document.getElementById('sync-going-line').textContent") == "Taking their entries…"
         assert page.js("document.getElementById('sync-title').textContent") == "Syncing with Studio"
         assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", "done"], ["Library", "now"],
                                   ["Songbooks", "now"], ["Indexes", ""]]

@@ -40,7 +40,7 @@ def progress(stage, state, detail=""):
 
 
 LOOKUP_LINES = [progress("song", "running"), "get: Radiohead - Creep is in the library",
-                progress("song", "done", "in the library"), progress("sheet", "running", "asking Ultimate Guitar"),
+                progress("song", "done", "in the book"), progress("sheet", "running", "asking Ultimate Guitar"),
                 "get: tab 4169 from Ultimate Guitar", progress("sheet", "done", "tab 4169"),
                 PROGRESS_PREFIX + json.dumps({"song": {"id": 7, "display": "Radiohead - Creep"},
                                               "files": {"pdf": "Radiohead/Creep/sheet.pdf"}, "seconds": 3.5})]
@@ -97,15 +97,15 @@ def test_a_request_that_ran_or_waited_when_the_server_stopped_is_interrupted(pat
     # The server killed (a crash, a power cut): the file says what it last knew of each request.
     started = datetime(2026, 10, 29, 9, 0, tzinfo=UTC)
     running = Job(1, "Fetch Radiohead - Creep", "radiohead|creep",
-                  [Step("Look it up now", lookup_steps("Radiohead", "Creep")[0][1], state="running",
+                  [Step("Fetching", lookup_steps("Radiohead", "Creep")[0][1], state="running",
                         output=["get: asking Ultimate Guitar"])],
                   fetching=True, display="Radiohead - Creep", state="running", queued_at=started,
                   started_at=started + timedelta(seconds=1),
-                  stages=[Stage("song", "Find the song", "done", "in the library"),
+                  stages=[Stage("song", "Find the song", "done", "in the book"),
                           Stage("sheet", "The sheet", "running", "asking Ultimate Guitar"),
                           Stage("pdf", "The PDF")])
     waiting = Job(2, "Add Oasis - Wonderwall", "oasis|wonderwall",
-                  [Step("Adding to the library", add_steps("Oasis", "Wonderwall")[0][1])], queued_at=started)
+                  [Step("Adding to the book", add_steps("Oasis", "Wonderwall")[0][1])], queued_at=started)
     history = History(path)
     history.save(running, [running, waiting], 3)
     history.save(waiting, [running, waiting], 3)
@@ -158,7 +158,7 @@ def stopped(cfg, path):
                  display="Radiohead - Creep")
     queue.run_pending()
     running = Job(2, "Fetch Oasis - Wonderwall", "oasis|wonderwall",
-                  [Step("Look it up now", lookup_steps("Oasis", "Wonderwall")[0][1], state="running",
+                  [Step("Fetching", lookup_steps("Oasis", "Wonderwall")[0][1], state="running",
                         output=["get: looking up Oasis - Wonderwall"])],
                   fetching=True, display="Oasis - Wonderwall", state="running", started_at=datetime.now(UTC))
     History(path).save(running, [*queue.snapshot(), running], 3)
@@ -176,7 +176,7 @@ def test_the_requests_tab_shows_the_history_after_a_restart_with_try_again(stopp
     assert shown[2]["reason"] == "caracole serve stopped while it ran: run it again to finish it."
     assert shown[2]["actions"] == [{"label": "Try again", "primary": False, "post": "/jobs/again",
                                    "fields": {"job": "2"}}]
-    assert shown[2]["output"]["steps"] == [{"label": "Look it up now", "badge": {"tone": "interrupted",
+    assert shown[2]["output"]["steps"] == [{"label": "Fetching", "badge": {"tone": "interrupted",
                                                                                 "text": "Interrupted"},
                                             "lines": ["get: looking up Oasis - Wonderwall"]}]
     assert answer(get_json(app, "/api/jobs/2"))["state"] == "interrupted"
@@ -234,7 +234,7 @@ def test_the_newest_requests_of_the_last_days_are_kept(path):
         queue.submit(f"Add A - {n}", f"a|{n}", add_steps("A", str(n)))
     queue.run_pending()
     assert [j.title for j in restart(path, keep=3).snapshot()] == ["Add A - 4", "Add A - 3", "Add A - 2"]
-    old = Job(9, "Add Old - One", "old|one", [Step("Adding to the library", ("add", "--", "Old", "One"),
+    old = Job(9, "Add Old - One", "old|one", [Step("Adding to the book", ("add", "--", "Old", "One"),
                                                    state="done", code=0)], state="done",
               queued_at=datetime.now(UTC) - timedelta(days=31), finished_at=datetime.now(UTC) - timedelta(days=31))
     History(path).save(old, [old], 10)
@@ -349,7 +349,7 @@ def test_the_pages_that_follow_a_request_say_it_was_interrupted():
     job = Job(4, "Keep a version", "a|b", [Step("Fetching the version", ("versions", "--keep=3"), state=INTERRUPTED)],
               state=INTERRUPTED, started_at=datetime.now(UTC))
     said, link = versions_routes._how_it_goes(None, "keep", None, job)
-    assert said.startswith('<p class="says waiting">Interrupted: caracole serve stopped before it was over.')
+    assert said.startswith('<p class="says waiting">Interrupted: the server stopped mid-way.')
     assert "#tab=requests&amp;job=4" in said and link == ""
     said = harmonica_routes._how_it_goes(None, job)
-    assert said.startswith('<p class="says waiting">Interrupted: caracole serve stopped before it was over.')
+    assert said.startswith('<p class="says waiting">Interrupted: the server stopped mid-way.')

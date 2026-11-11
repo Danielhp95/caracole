@@ -361,7 +361,7 @@ def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
         ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
         ("give", "done"), ("agree", "running"), ("agree", "done"), ("index", "skipped")]
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
-        (unit["Radiohead - Creep"], "left", "skipped, as chosen"), (unit["Oasis - Wonderwall"], "taken", ""),
+        (unit["Radiohead - Creep"], "left", "skipped, as you chose"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])
     found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
     assert [(d["id"], d["proposal"]) for d in found] == [(unit["Radiohead - Creep"], "conflict")]

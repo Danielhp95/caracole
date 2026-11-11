@@ -265,7 +265,7 @@ def test_lrclib_failing_leaves_the_chords_alone_and_says_what_comes_of_the_lyric
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["lyrics"] == ("failed", "no lyrics yet (LRCLIB unavailable); tonight's run tries again")
+    assert heard.ends()["lyrics"] == ("failed", "no lyrics yet (LRCLIB unavailable); tried again tonight")
     assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     assert get_song(conn, find_song(conn, result_key(conn)).id).lyrics_status == "pending"  # never a miss
 
@@ -290,7 +290,7 @@ def test_lyrics_the_song_had_are_kept(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok and heard.ends()["lyrics"] == ("done", "already there") and lrclib.requests == []
-    assert heard.ends()["song"][1].startswith("in the library")
+    assert heard.ends()["song"][1].startswith("in the book")
 
 
 # --- refused: asked nothing -----------------------------------------------------------------------------

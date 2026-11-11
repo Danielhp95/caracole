@@ -97,11 +97,11 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     controls = html[start:html.index('<div class="pill"')]
     # In the order a keyboard reaches them, each named for a screen reader.
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', controls) == [
-        ("necks-toggle", "Chord necks"), ("t-down", "Transpose down a semitone"), ("t-up", "Transpose up a semitone"),
+        ("necks-toggle", "Chord necks"), ("t-down", "Down a semitone"), ("t-up", "Up a semitone"),
         ("necks-open", "Necks and harps"), ("shapes", "Chord shapes"),
         ("size", "Text size"),
-        ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Scroll by itself"),
-        ("more", "More settings")]
+        ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Auto-scroll"),
+        ("more", "Settings")]
     # The key between − and +, in short for the eye and in full for a screen reader.
     assert re.search(r'<output class="now" id="key-now" for="t-down t-up">.*id="key-full"', controls)
     # Aa opens the size, there with the size it shows; ⋯ the settings.

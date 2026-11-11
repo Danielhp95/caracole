@@ -72,7 +72,7 @@ def mockup() -> tuple[list[Job], dict, dict, dict]:
                                             "pdf": ("running", "")}, state="running")
     running.started_at = NOW - timedelta(seconds=12)
     queued = lookup(7, "Estopa - Como Camarón", {}, state="queued")
-    nyc = lookup(5, "Horse The Band - New York City", {"sheet": ("skipped", "Ultimate Guitar has no sheet to keep"),
+    nyc = lookup(5, "Horse The Band - New York City", {"sheet": ("skipped", "UG has no sheet to keep"),
                                                        "pdf": ("skipped", "no sheet yet")}, finished=today_at(14, 2))
     pizza = lookup(4, "Horse The Band - Crippled By Pizza", {"sheet": ("skipped", "Ultimate Guitar has no sheet to "
                                                                                   "keep"), "pdf": ("skipped", "")},
@@ -119,18 +119,18 @@ def test_the_running_lookup_comes_first_with_its_stages_as_steps():
 
 
 def test_the_running_steps_say_a_song_ultimate_guitars_index_lacks_plainly_and_where_the_sheet_comes_from():
-    estopa = lookup(8, "Estopa - Tu Calorro", {"song": ("done", "in the library"),
+    estopa = lookup(8, "Estopa - Tu Calorro", {"song": ("done", "in the book"),
                                               "match": ("done", MATCH_NOT_FOUND),
                                               "sheet": ("running", SHEET_FROM["lacuerda"])}, state="running")
     [card] = requests(feed([estopa], {8: job_line(estopa, None)}, now=NOW), "Now")
     assert card["says"]["text"] == "Fetching from LaCuerda…"
     assert card["steps"][:3] == [{"name": "Song", "source": "", "state": "done"},
-                                 {"name": "Match: not on UG", "source": "", "state": "plain"},
+                                 {"name": "Match · not on UG", "source": "", "state": "plain"},
                                  {"name": "Sheet", "source": "LaCuerda", "state": "running"}]
 
 
 def test_queued_requests_say_their_place_and_each_can_be_cancelled():
-    jobs = [Job(n, f"Add A - {n}", f"a/{n}", [Step("Adding to the library", ("add",))], display=f"A - {n}")
+    jobs = [Job(n, f"Add A - {n}", f"a/{n}", [Step("Adding to the book", ("add",))], display=f"A - {n}")
             for n in (4, 3, 2, 1)]
     jobs[-1].state = "running"
     shown = by_id(feed(jobs, {}, now=NOW))
@@ -151,10 +151,10 @@ def test_each_outcome_says_its_word_its_reason_and_its_next_step():
     nyc, pizza, creep, book = today
     assert nyc["says"] == {"tone": "missing", "text": "Not found"}
     assert nyc["reason"] == "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it."
-    assert nyc["actions"] == [{"label": "Get it from there", "primary": True, "post": "/lookup",
+    assert nyc["actions"] == [{"label": "Fetch from there", "primary": True, "post": "/lookup",
                                "fields": {"song": "15"}}]
     assert nyc["when"]["text"] == "14:02" and nyc["when"]["stamp"].endswith("Z")
-    assert pizza["actions"] == [{"label": "Request by name", "primary": False,
+    assert pizza["actions"] == [{"label": "Ask by name", "primary": False,
                                  "href": "/#q=Horse+The+Band+-+Crippled+By+Pizza"}]
     assert pizza["reason"] == "Ultimate Guitar has no chords for it."
     assert creep["says"] == {"tone": "ready", "text": "Ready"}
@@ -187,7 +187,7 @@ def test_the_outputs_time_is_in_the_servers_time_zone_named(monkeypatch):
     monkeypatch.setenv("TZ", "EST+05")  # five hours behind UTC, a POSIX rule: no zone files
     time.tzset()
     try:
-        job = Job(1, "Add A - B", "a/b", [Step("Adding to the library", ("add",), state="done")], state="done",
+        job = Job(1, "Add A - B", "a/b", [Step("Adding to the book", ("add",), state="done")], state="done",
                   display="A - B", queued_at=datetime(2026, 10, 21, 3, 30, tzinfo=UTC),
                   finished_at=datetime(2026, 10, 21, 3, 31, tzinfo=UTC))
         fed = feed([job], {1: job_line(job, SongFacts())}, now=datetime(2026, 10, 21, 12, tzinfo=UTC))
@@ -199,7 +199,7 @@ def test_the_outputs_time_is_in_the_servers_time_zone_named(monkeypatch):
 
 def test_finished_requests_are_grouped_by_the_day_they_ended_in_the_servers_time_zone():
     def done(job_id: int, when: datetime) -> Job:
-        return Job(job_id, f"Add A - {job_id}", f"a/{job_id}", [Step("Adding to the library", ("add",), state="done")],
+        return Job(job_id, f"Add A - {job_id}", f"a/{job_id}", [Step("Adding to the book", ("add",), state="done")],
                    state="done", display=f"A - {job_id}", queued_at=when, finished_at=when)
 
     midnight = NOW.replace(hour=0, minute=0)
@@ -221,18 +221,18 @@ def test_a_lookup_that_stopped_for_a_pick_says_its_sheet_waits_for_one_never_tha
                                                         song_id=9)},
                picks={creep.song_key: pick}, now=NOW)
     shown = by_id(fed)[1]
-    assert shown["says"] == {"tone": "review", "text": "Needs review"}
-    assert shown["actions"] == [{"label": "Pick the match", "primary": True, "href": "/review?song=9"}]
+    assert shown["says"] == {"tone": "review", "text": "Needs your pick"}
+    assert shown["actions"] == [{"label": "Pick", "primary": True, "href": "/review?song=9"}]
     sheet = next(s for s in shown["output"]["stages"] if s["label"] == "The sheet")
-    assert sheet["badge"] == {"tone": "review", "text": "Waits for a pick"} and "Pick the match" in sheet["note"]
+    assert sheet["badge"] == {"tone": "review", "text": "Waits for a pick"} and "Pick" in sheet["note"]
 
 
 def test_a_song_the_index_didnt_match_gets_what_caracole_search_finds_as_a_next_step_once():
-    job = Job(1, "Add A - B", "a/b", [Step("Adding to the library", ("add",), state="done")], state="done",
+    job = Job(1, "Add A - B", "a/b", [Step("Adding to the book", ("add",), state="done")], state="done",
               display="A - B", queued_at=NOW, finished_at=NOW)
     pick = Pick(4, "A - B", "B", "A", search=True)
     shown = by_id(feed([job], {1: job_line(job, SongFacts())}, picks={"a/b": pick}, now=NOW))[1]
-    assert shown["actions"] == [{"label": "See what caracole search finds", "href": "/review?song=4",
+    assert shown["actions"] == [{"label": "Search the index", "href": "/review?song=4",
                                  "primary": False}]
 
 
@@ -404,23 +404,23 @@ def test_a_song_the_offline_index_lacks_says_so_and_its_one_next_step_is_what_ca
     item = by_id(answer(get_json(app, "/requests.json")))[1]
     # Nobody asked Ultimate Guitar: the index doesn't have it under this name, and its artist's page isn't known.
     assert item["reason"] == "Not in the offline Ultimate Guitar index under this name."
-    assert item["actions"] == [{"label": "See what caracole search finds", "primary": True,
+    assert item["actions"] == [{"label": "Search the index", "primary": True,
                                 "href": f"/review?song={pizza.id}"}]
     # The library page's line for it is as it was.
     [view] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
     assert view["line"] == {"tone": "missing", "text": "Not found",
-                            "link": {"label": "see the to-do page", "href": "_todo.md"}, "details": None}
+                            "link": {"label": "To-do page", "href": "_todo.md"}, "details": None}
 
 
 def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_it(cfg, conn, queue, app):
     pizza = lookup_ran(cfg, conn, queue, app, "Horse The Band", "Crippled By Pizza", asked=True)
     item = by_id(answer(get_json(app, "/requests.json")))[1]
     assert item["reason"] == "Ultimate Guitar has no chords for it."
-    assert item["actions"] == [{"label": "Request by name", "primary": False,
+    assert item["actions"] == [{"label": "Ask by name", "primary": False,
                                 "href": "/#q=Horse+The+Band+-+Crippled+By+Pizza"}]
     [view] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
     assert view["line"] == {"tone": "missing", "text": "Not found",
-                            "link": {"label": "see the to-do page", "href": "_todo.md"}, "details": None}
+                            "link": {"label": "To-do page", "href": "_todo.md"}, "details": None}
     assert view["songId"] == pizza.id
     conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, versions, "
                  "acordes, page) VALUES ('estopa/como_camaron', 'estopa', 'Estopa', 'estopa', 'Como Camarón', "
@@ -430,8 +430,8 @@ def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_
     assert item["reason"] == "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet."
     # What caracole search finds, beside it: never a second way on.
     get_it, search = item["actions"]
-    assert search == {"label": "See what caracole search finds", "primary": False, "href": f"/review?song={camaron.id}"}
-    assert get_it == {"label": "Get it from there", "primary": True, "post": "/lookup",
+    assert search == {"label": "Search the index", "primary": False, "href": f"/review?song={camaron.id}"}
+    assert get_it == {"label": "Fetch from there", "primary": True, "post": "/lookup",
                       "fields": {"song": str(camaron.id),
                                  "lacuerda": "https://acordes.lacuerda.net/estopa/como_camaron.shtml"}}
     # The form is the lookup a search's Get it runs; the tab posts it as the page's script, and follows its job.
@@ -471,7 +471,7 @@ def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn):
     seen, views = [], []
 
     def runner(args, emit):
-        emit(progress_line({"stage": "song", "state": "done", "detail": "in the library"}))
+        emit(progress_line({"stage": "song", "state": "done", "detail": "in the book"}))
         emit(progress_line({"stage": "match", "state": "done", "detail": "matched to radiohead/creep"}))
         emit(progress_line({"stage": "sheet", "state": "running"}))
         emit(progress_line({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]}))
@@ -579,10 +579,10 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
         assert shown["chips"] == ["✓ Song: done", "✓ Match UG: done", "✓ Sheet UG: done", "PDF: running",
                                   "Lyrics: waiting", "Extras: waiting", "Songbooks: waiting"]
-        assert shown["says"][:3] == [["Rendering the sheet…", "running"], ["Queued, next", "queued"],
+        assert shown["says"][:3] == [["Rendering the sheet…", "running"], ["Queued · next", "queued"],
                                      ["Not found", "missing"]]
-        assert shown["actions"] == [["Get it from there", "BUTTON", "/lookup"],
-                                    ["Request by name", "A", "/#q=Horse+The+Band+-+Crippled+By+Pizza"]]
+        assert shown["actions"] == [["Fetch from there", "BUTTON", "/lookup"],
+                                    ["Ask by name", "A", "/#q=Horse+The+Band+-+Crippled+By+Pizza"]]
         assert shown["when"] == "14:02"
         if width < 500:  # on a touch screen every control is a thumb's size, its Output open; a mouse keeps compact tabs
             assert noted(dom, "data-short") == [], scheme
@@ -625,7 +625,7 @@ def adds(*songs: tuple[str, str]):
     def before(app):
         for artist, title in songs:
             app.submit(f"Add {artist} - {title}", f"{artist.lower()}/{title.lower()}",
-                       [("Adding to the library", ("add", "--", artist, title))], display=f"{artist} - {title}")
+                       [("Adding to the book", ("add", "--", artist, title))], display=f"{artist} - {title}")
 
     return before
 
@@ -650,7 +650,7 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             assert page.wait(SAYS.format(n=2) + " === 'Queued, next'"), page.js("document.body.innerText")
             assert page.js("location.hash") == "#tab=requests" and page.js("document.getElementById('library-view')"
                                                                            ".hidden") is True
-            assert page.js(SAYS.format(n=1)) == "Adding to the library…"
+            assert page.js(SAYS.format(n=1)) == "Adding to the book…"
             assert page.js("document.querySelector('#req-1 form')") is None  # the running one: never stopped
             # Cancel, posted with the form token, the page staying where it is.
             page.click("#req-2 form button")

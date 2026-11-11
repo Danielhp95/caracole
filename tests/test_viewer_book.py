@@ -30,7 +30,7 @@ SONGS = [
     BookSong("Synthetic Test Song", "The Placeholders", cho=UG_CHO, id="aaaa"),
     BookSong("Hysteria", "Muse", missing="no sheet yet", id="bbbb"),
     BookSong("Minor Song", "Others", cho=MINOR, key="Am", key_source="tab", transpose=2, id="cccc"),
-    BookSong("Removed Song", "Gone Band", missing="not in the library", id="dddd"),
+    BookSong("Removed Song", "Gone Band", missing="not in the logbook", id="dddd"),
     BookSong("斑马斑马", "宋冬野", cho=ZH, id="eeee"),
 ]
 

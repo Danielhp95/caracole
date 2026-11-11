@@ -3,7 +3,7 @@
 While a song is looked up (Fetch now, a search result's Get it), its request line says what runs and how many steps
 are over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"), and under it each step is a chip (outcome.py's, as
 /jobs.json gives them): those done ticked, the one that runs lit, those to come grey, Match naming the index it
-matched in ("Match UG", or "Match: not on UG", plain) and Sheet the site it asks, then the one its sheet came from.
+matched in ("Match UG", or "Match · not on UG", plain) and Sheet the site it asks, then the one its sheet came from.
 Ended Ready, they fold away and the line is the song's own, which opens its sheet; ended otherwise, they stay, to
 show which step stopped. A real ``caracole serve`` answers on a socket with the page's timers quick
 (``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get --progress``'s lines, said a stage at a
@@ -70,17 +70,17 @@ AFTER_THE_SHEET = [stage("lyrics", "done", "found"), stage("ug", "running"), sta
                    stage("gtptabs", "running"), stage("gtptabs", "skipped", "no file wanted, or gtptabs.com's index "
                                                                             "doesn't know the artist"),
                    stage("pages", "running"), stage("pages", "done", "_todo.md and index.html rewritten"),
-                   stage("songbooks", "running"), stage("songbooks", "skipped", "no songbook lists it")]
+                   stage("songbooks", "running"), stage("songbooks", "skipped", "in no songbook")]
 # A song Ultimate Guitar has: its sheet from there; the test holds it while the sheet is asked for, then while the
 # lyrics are.
-FROM_UG = [stage("song", "running"), stage("song", "done", "in the library"), stage("match", "running"),
+FROM_UG = [stage("song", "running"), stage("song", "done", "in the book"), stage("match", "running"),
            stage("match", "done", "matched to it"), stage("sheet", "running"),
            stage("sheet", "running", SHEET_FROM["ug"]), HOLD, kept_from("ug"),
            stage("sheet", "done", "tab 1 from Ultimate Guitar"), stage("pdf", "running"), stage("pdf", "done", "made"),
            stage("lyrics", "running"), HOLD, *AFTER_THE_SHEET]
 # A song Ultimate Guitar's index lacks, whose sheet LaCuerda fails to give: held while LaCuerda is asked.
 LACUERDA_FAILS = "LaCuerda failed (lacuerda: 503: https://acordes.lacuerda.net/x: HTTP 503); the nightly run tries again"
-NOT_ON_UG = [stage("song", "running"), stage("song", "done", "in the library"), stage("match", "running"),
+NOT_ON_UG = [stage("song", "running"), stage("song", "done", "in the book"), stage("match", "running"),
              not_matched, stage("match", "done", MATCH_NOT_FOUND), stage("sheet", "running"),
              stage("sheet", "running", SHEET_FROM["lacuerda"]), HOLD, stage("sheet", "failed", LACUERDA_FAILS),
              stage("pdf", "running"), stage("pdf", "skipped", "no sheet yet"), stage("lyrics", "running"),
@@ -240,7 +240,7 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
         page.open(base)
         page.click(f"{line} form.fetch button")
         # The offline index lacks it, plainly: no failure, as the sheet is asked of LaCuerda.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match: not on UG"],
+        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
                                         ["running", "Sheet LaCuerda"], *WAITING])
         wait_for(page, said(line), ["Fetching from LaCuerda…", "2 of 7 done"])
         assert page.js(f"getComputedStyle(document.querySelector('{line} .step-chips .plain')).borderTopStyle") == (
@@ -249,7 +249,7 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
         # Not found: the line says so with its next step, as before, and the steps stay; those that turned out not to
         # apply (no sheet, so no PDF; no songbook lists it) are gone.
         wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not found·see the to-do page")
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match: not on UG"],
+        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
                                         ["failed", "✕ Sheet LaCuerda"], ["done", "✓ Lyrics"], ["failed", "✕ Extras"]])
         assert page.js(f"!!document.querySelector('{line} .progress .steps-over')") is False  # over: no count
 

@@ -391,9 +391,9 @@
 {"args":["If 斑马斑马 is a title, caracole needs its artist too: `caracole add ARTIST \"斑马斑马\"`","tuesdays-gone"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"If 斑马斑马 is a title, caracole needs its artist too - `caracole add ARTIST 斑马斑马`","song_folder":["If 斑马斑马 is a title, caracole needs its artist too - `caracole add ARTIST 斑马斑马`","tuesdays-gone"]}}
 {"args":["If 斑马斑马 is the artist's name","  Fourth Band - Within · wanted, no sheet yet · Bridge · in C major · "],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"If 斑马斑马 is the artist's name","song_folder":["If 斑马斑马 is the artist's name","Fourth Band - Within · wanted, no sheet yet · Bridge · in C major ·"]}}
 {"args":["In April","Lamento"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In April","song_folder":["In April","Lamento"]}}
-{"args":["In your library","signos"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your library","song_folder":["In your library","signos"]}}
-{"args":["In your library, in ","Кино (Kino) - Live at Wembley"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your library, in","song_folder":["In your library, in","Кино (Kino)"]}}
-{"args":["In your library, in A minor","Antonio José"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your library, in A minor","song_folder":["In your library, in A minor","Antonio José"]}}
+{"args":["In your library, in ","signos"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your library, in","song_folder":["In your library, in","signos"]}}
+{"args":["In your library, in A minor","Кино (Kino) - Live at Wembley"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your library, in A minor","song_folder":["In your library, in A minor","Кино (Kino)"]}}
+{"args":["In your logbook","Antonio José"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"In your logbook","song_folder":["In your logbook","Antonio José"]}}
 {"args":["Into The Night","beyonse"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Into The Night","song_folder":["Into The Night","beyonse"]}}
 {"args":["Intro","ありがとう Arigatou"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Intro","song_folder":["Intro","ありがとう Arigatou"]}}
 {"args":["Intro (Hong Dou)","/artist/634073"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Intro (Hong Dou)","song_folder":["Intro (Hong Dou)","-artist-634073"]}}
@@ -466,7 +466,7 @@
 {"args":["Main Theme","`caracole sync`"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Main Theme","song_folder":["Main Theme","`caracole sync`"]}}
 {"args":["Manu Chao","fade-to-black"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao","song_folder":["Manu Chao","fade-to-black"]}}
 {"args":["Manu Chao Official","%ban%ma%ban%ma%"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao Official","song_folder":["Manu Chao Official","%ban%ma%ban%ma%"]}}
-{"args":["Manu Chao | Clandestino","On Ultimate Guitar"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao Clandestino","song_folder":["Manu Chao Clandestino","On Ultimate Guitar"]}}
+{"args":["Manu Chao | Clandestino","On UG"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao Clandestino","song_folder":["Manu Chao Clandestino","On UG"]}}
 {"args":["Manu Chao | Clandestino (Letra)","tabs/l/index0.html"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao Clandestino (Letra)","song_folder":["Manu Chao Clandestino (Letra)","tabs-l-index0.html"]}}
 {"args":["Manu Chao | Clandestino | Official Video","Yuzo Koshiro"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Manu Chao Clandestino Official Video","song_folder":["Manu Chao Clandestino Official Video","Yuzo Koshiro"]}}
 {"args":["Mar","Not sure which Ultimate Guitar song"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Mar","song_folder":["Mar","Not sure which Ultimate Guitar song"]}}
@@ -515,7 +515,7 @@
 {"args":["Oasis, an artist: 7 songs (9 tabs). The most tabbed:","dos_Café (with Y)"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Oasis, an artist - 7 songs (9 tabs). The most tabbed -","song_folder":["Oasis, an artist - 7 songs (9 tabs). The most tabbed -","dos_Café"]}}
 {"args":["Old Capital","  MTV"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Old Capital","song_folder":["Old Capital","MTV"]}}
 {"args":["On LaCuerda (offline index)","赞贊赞 - ２０１１ (MTV Unplugged)"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On LaCuerda (offline index)","song_folder":["On LaCuerda (offline index)","赞贊赞 - ２０１１"]}}
-{"args":["On Ultimate Guitar","夜に駆ける / Yoru Ni Kakeru Zebra Zebra - Acústico"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On Ultimate Guitar","song_folder":["On Ultimate Guitar","夜に駆ける - Yoru Ni Kakeru Zebra Zebra"]}}
+{"args":["On UG","夜に駆ける / Yoru Ni Kakeru Zebra Zebra - Acústico"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On UG","song_folder":["On UG","夜に駆ける - Yoru Ni Kakeru Zebra Zebra"]}}
 {"args":["On Ultimate Guitar (offline index)","RHRTTTDTB"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On Ultimate Guitar (offline index)","song_folder":["On Ultimate Guitar (offline index)","RHRTTTDTB"]}}
 {"args":["On gametabs.net (offline index)","[Am]la"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On gametabs.net (offline index)","song_folder":["On gametabs.net (offline index)","[Am]la"]}}
 {"args":["On harptabs.com (offline index)","nobody known"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"On harptabs.com (offline index)","song_folder":["On harptabs.com (offline index)","nobody known"]}}
@@ -2084,7 +2084,7 @@
 {"args":[" - 夜に駆ける","gametabs.net's game pages are still being read: 2 of 7 game pages so far; caracole gametabs --index reads the rest."],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"- 夜に駆ける","song_folder":["- 夜に駆ける","gametabs.net's game pages are still being read - 2 of 7 game pages so far; caracole gametabs --index reads the rest"]}}
 {"args":["7Ħǝ`ŗȶˇË (Live)","绿色 (LV SE) - ACÚSTICO"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"7Ħǝ`ŗȶˇË (Live)","song_folder":["7Ħǝ`ŗȶˇË (Live)","绿色 (LV SE)"]}}
 {"args":["MTV","Persiana Americana (Gira Me Verás Volver)"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"MTV","song_folder":["MTV","Persiana Americana (Gira Me Verás Volver)"]}}
-{"args":["斑马 斑马 / BAN MA BAN MA","In your library"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"斑马 斑马 - BAN MA BAN MA","song_folder":["斑马 斑马 - BAN MA BAN MA","In your library"]}}
+{"args":["斑马 斑马 / BAN MA BAN MA","In your library, in "],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"斑马 斑马 - BAN MA BAN MA","song_folder":["斑马 斑马 - BAN MA BAN MA","In your library, in"]}}
 {"args":["ありがとう","ub"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"ありがとう","song_folder":["ありがとう","ub"]}}
 {"args":["绿色 ファ - ﬁ — Don’t - 2011 Remaster","wanted.txt"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"绿色 ファ - ﬁ — Don’t - 2011 Remaster","song_folder":["绿色 ファ - ﬁ — Don’t - 2011 Remaster","wanted.txt"]}}
 {"args":["Кино / Kino (MTV Unplugged)","hotel"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Кино - Kino (MTV Unplugged)","song_folder":["Кино - Kino (MTV Unplugged)","hotel"]}}
@@ -2251,7 +2251,7 @@
 {"args":["夜に駆ける[嘤嚶嚶「lasel　ȀĊ","fitoor-pashmina"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"夜に駆ける[嘤嚶嚶「las el ȀĊ","song_folder":["夜に駆ける[嘤嚶嚶「las el ȀĊ","fitoor-pashmina"]}}
 {"args":["Niño","skynyrd lynyrd"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"Niño","song_folder":["Niño","skynyrd lynyrd"]}}
 {"args":["doce\tVersión","a-great-big-world"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"doce Versión","song_folder":["doce Versión","a-great-big-world"]}}
-{"args":["赞贊赞 - ２０１１ (MTV Unplugged)","In your library, in A minor"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"赞贊赞 - ２０１１ (MTV Unplugged)","song_folder":["赞贊赞 - ２０１１ (MTV Unplugged)","In your library, in A minor"]}}
+{"args":["赞贊赞 - ２０１１ (MTV Unplugged)","In your logbook"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"赞贊赞 - ２０１１ (MTV Unplugged)","song_folder":["赞贊赞 - ２０１１ (MTV Unplugged)","In your logbook"]}}
 {"args":["舰艦 / Σίσυφος","adam-and-the-ants/stand-and-deliver-chords-767025"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"舰艦 - Σίσυφος","song_folder":["舰艦 - Σίσυφος","adam-and-the-ants-stand-and-deliver-chords-767025"]}}
 {"args":["ウィ 𪚥 - ACÚSTICO","[pin]\n\"宋冬野 - 斑马斑马\" = [\"https://es.ultimate-guitar.com/tab/4180894\"]\n"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"ウィ 𪚥 - ACÚSTICO","song_folder":["ウィ 𪚥 - ACÚSTICO","[pin] 宋冬野 - 斑马斑马 = [https - --es.ultimate-guitar.com-tab-4180894]"]}}
 {"args":["王菲 / wangfei Zebra Zebra","【斑馬】Love - From \"Film\" Soundtrack"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"王菲 - wangfei Zebra Zebra","song_folder":["王菲 - wangfei Zebra Zebra","【斑馬】Love"]}}
@@ -2277,7 +2277,7 @@
 {"args":["夜に駆ける / YoruniKakeru Zebra Zebra - 2011 Remaster","https://gtptabs.com/tabs/1/silvana-estrada/tregua.html"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"夜に駆ける - YoruniKakeru Zebra Zebra - 2011 Remaster","song_folder":["夜に駆ける - YoruniKakeru Zebra Zebra - 2011 Remaster","https - --gtptabs.com-tabs-1-silvana-estrada-tregua.html"]}}
 {"args":["version Banma - 1999 Stereo Mix","宋冬野 - 斑马，斑马"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"version Banma - 1999 Stereo Mix","song_folder":["version Banma - 1999 Stereo Mix","宋冬野 - 斑马，斑马"]}}
 {"args":["version - 鮦鮦鲖","ラーメン Raamen Noodles"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"version - 鮦鮦鲖","song_folder":["version - 鮦鮦鲖","ラーメン Raamen Noodles"]}}
-{"args":["２０１１【きゃ — I'll(绿色 uno","In your library, in "],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"２０１１【きゃ — I'll(绿色 uno","song_folder":["２０１１【きゃ — I'll(绿色 uno","In your library, in"]}}
+{"args":["２０１１【きゃ — I'll(绿色 uno","In your library, in A minor"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"２０１１【きゃ — I'll(绿色 uno","song_folder":["２０１１【きゃ — I'll(绿色 uno","In your library, in A minor"]}}
 {"args":["宋冬野 / songdongye Racing into the Night","Shakira"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"宋冬野 - songdongye Racing into the Night","song_folder":["宋冬野 - songdongye Racing into the Night","Shakira"]}}
 {"args":["颤顫, ĲSSEL - 宋冬野`① Ærøskøbing","ď"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"颤顫, ĲSSEL - 宋冬野`① Ærøskøbing","song_folder":["颤顫, ĲSSEL - 宋冬野`① Ærøskøbing","ď"]}}
 {"args":["봄날 / BOMNAL Spring Day","grupo_"],"fn":"test_conformance_keys.safe_of","out":{"safe_name":"봄날 - BOMNAL Spring Day","song_folder":["봄날 - BOMNAL Spring Day","grupo_"]}}

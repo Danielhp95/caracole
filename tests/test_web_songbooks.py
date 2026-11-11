@@ -161,7 +161,7 @@ def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, que
     queue.run_pending()
     job = queue.snapshot()[0]
     assert job.state == "failed"  # the requests page says so, not "Done"
-    assert "couldn't be made" in "\n".join(job.steps[0].output)
+    assert "not made" in "\n".join(job.steps[0].output)
     assert books(setup) == [Songbook("Trip", ("Radiohead - Creep",))]
 
 
@@ -225,7 +225,7 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
                   ["Radiohead - Karma Police", "Muse - Hysteria", "Radiohead - Karma Police Live"])
     conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
     gone = page_books(app)[0]["set"][2]
-    assert (gone["entry"], gone["missing"], gone["id"]) == ("Radiohead - Karma Police Live", "not in the library", None)
+    assert (gone["entry"], gone["missing"], gone["id"]) == ("Radiohead - Karma Police Live", "not in the logbook", None)
 
     assert post(app, "/songbook/move", {"name": "Gig", "song": "Radiohead - Karma Police Live",
                                         "position": "2"}).status == 303
@@ -250,7 +250,7 @@ def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missi
     assert conn.execute("SELECT count(*) FROM songs WHERE id = ?", (creep.id,)).fetchone()[0] == 0
     first = page_books(app)[0]["set"][0]
     assert (first["n"], first["title"], first["entry"], first["missing"]) == (1, "Creep", "Radiohead - Creep",
-                                                                            "not in the library")
+                                                                            "not in the logbook")
     assert get(app, PAGE).status == 200  # the page caracole wrote, until the next render writes it again
 
     assert post(app, "/songbook/remove", {"name": "Campfire", "song": "Radiohead - Creep"}).status == 303
@@ -429,7 +429,7 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert made["says"] == {"tone": "ready", "text": "Made"}  # the Requests tab
     assert made["actions"] == [{"label": "Open songbook", "primary": True,
                                 "href": "/_songbooks/Beach%20nights/songbook.html"}]
-    assert "nightly run" not in json.dumps(made)  # a song's line, "Added: the nightly run looks for it", misleads here
+    assert "nightly run" not in json.dumps(made)  # a song's line, "Added · fetched tonight", misleads here
     # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
     # the older lines.
     for n, path, fields, done, page in [
@@ -739,7 +739,7 @@ def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songboo
 def test_the_pages_script_gets_the_songbooks_job_and_each_lookup(app, setup, queue, gig):
     queue._limit = 10
     data = json.loads(post(app, "/songbook/get", {"name": "Gig"}, accept=JSON).body)
-    assert data["job"]["kind"] == "songbook" and data["job"]["line"]["text"] == "Queued behind 2 requests…"
+    assert data["job"]["kind"] == "songbook" and data["job"]["line"]["text"] == "Queued · 2 requests ahead…"
     assert data["job"]["songbook"] == {"action": "render", "name": "Gig", "after": "Gig"}
     assert [(v["kind"], v["songId"], v["display"], v["line"]["text"]) for v in data["jobs"]] == [
         ("song", gig["hysteria"].id, "Muse - Hysteria", "Queued…"),

@@ -107,7 +107,7 @@ def test_the_bars_neck_opens_the_overlay_as_a_sheet_over_half_the_screen(tmp_pat
     assert 0.45 * half["screen"] <= half["height"] <= 0.6 * half["screen"]  # about half the screen
     assert (half["left"], half["right"]) == (0, half["client"]) and not half["sideways"] and half["inside"]
     assert half["close"] == "Close" and not half["hide"]  # ✕, not the rail's Hide
-    assert half["handle"] == "false" and half["handleNamed"] == "Whole screen"
+    assert half["handle"] == "false" and half["handleNamed"] == "Full screen"
     assert shown["tabs"] == [["Guitar", "true"], ["Harmonica", "false"]] and shown["necks"] == SHAPES
     assert half["focus"] == "Guitar"  # into it, on the tab shown
     assert scrolled[0] > 100 and scrolled[1]["at"] == "half"
@@ -134,7 +134,7 @@ def test_its_handle_takes_it_to_the_whole_screen_and_back(tmp_path):
     assert full["open"] and full["handle"] == "true" and full["top"] <= 40 and full["bottom"] == full["barTop"]
     assert full["focus"] != "necks-open"  # the focus stays in the sheet
     assert gap and half["handle"] == "false" and half["top"] > 0.35 * half["screen"]
-    assert keyed["handle"] == "true" and keyed["focus"] == "Whole screen"
+    assert keyed["handle"] == "true" and keyed["focus"] == "Full screen"
 
 
 def test_close_and_escape_close_it_and_the_focus_goes_back_to_the_button(tmp_path):

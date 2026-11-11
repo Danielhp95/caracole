@@ -149,7 +149,7 @@ def test_a_block_cools_ug_down_and_exits_0(tmp_path, ug):
     assert result.exit_code == 0, result.output
     assert "Ultimate Guitar blocked caracole" in result.output
     assert re.search(r"No more UG requests until \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC", result.output)
-    assert "Nothing was marked not found." in result.output
+    assert "Nothing marked not on the sites." in result.output
     state = get_state(conn, "ug")
     assert state.strikes == 1 and state.cooldown_until is not None
     assert ug.requests == [PERSIANA]
@@ -351,7 +351,7 @@ def cut_short(how, tmp_path, ug, conn):
 @pytest.mark.parametrize("how,said", [
     ("error", "; it waits for the next run."),
     ("budget", "so it waits for the next run."),
-    ("block", "Nothing was marked not found."),
+    ("block", "Nothing marked not on the sites."),
     ("cooldown", "Soda Stereo - Signos waits for the first run after that."),
 ])
 def test_song_option_cut_short_on_a_clean_song_sends_it_to_the_next_run(tmp_path, ug, how, said):

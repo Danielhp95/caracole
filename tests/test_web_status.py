@@ -3,10 +3,10 @@
 from caracole.web.jobs import Job, Step
 from caracole.web.status import Line, SongFacts, details_href, job_line, song_line
 
-FETCH = [("Adding to the library", ("add", "--", "Radiohead", "Creep")),
-         ("Looking it up", ("match",)),
-         ("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
-         ("Rendering the sheet", ("render",))]
+FETCH = [("Adding to the book", ("add", "--", "Radiohead", "Creep")),
+         ("Matching", ("match",)),
+         ("Fetching from UG", ("fetch", "--song=Radiohead - Creep")),
+         ("Making the PDF", ("render",))]
 
 
 def job(state="queued", steps=FETCH, *, fetching=True, states=None, outputs=None, job_id=3):
@@ -74,7 +74,7 @@ def test_a_songbook_change_links_its_page_once_made_or_added_to_only():
 
 def test_a_done_request_whose_song_has_a_sheet_is_ready_with_a_link_to_it():
     done = job("done", states=["done"] * 4)
-    assert job_line(done, READY) == Line("ready", "Ready", ("Open sheet", "Radiohead/Creep/sheet.pdf"))
+    assert job_line(done, READY) == Line("ready", "Ready", ("Open", "Radiohead/Creep/sheet.pdf"))
     # Asked only to add it, a song with a sheet already is ready too.
     added = job("done", FETCH[:1], fetching=False, states=["done"])
     assert job_line(added, READY).tone == "ready"
@@ -86,9 +86,9 @@ def test_a_songs_line_says_ready_alone_as_the_song_opens_its_sheet_itself():
     done = job("done", states=["done"] * 4)
     assert song_line(job_line(done, READY)) == Line("ready", "Ready")
     # Any other line keeps its link: the next step is elsewhere.
-    for line in (Line("review", "Needs review", ("Pick the match", "review?song=3")),
-                 Line("missing", "Not found", ("see the to-do page", "_todo.md")),
-                 Line("ready", "Your version now", ("Open sheet", "a/b.html")),
+    for line in (Line("review", "Needs your pick", ("Pick", "review?song=3")),
+                 Line("missing", "Not found", ("To-do page", "_todo.md")),
+                 Line("ready", "Your version", ("Open", "a/b.html")),
                  Line("ready", "Made", ("Open songbook", "_songbooks/Campfire/songbook.html"))):
         assert song_line(line) == line
 
@@ -97,28 +97,28 @@ def test_a_done_fetch_without_a_sheet_says_why_and_never_calls_a_wait_a_miss():
     done = job("done", states=["done"] * 4)
     # Looked up during the request (its fetch finished, or its artist's page was read): UG has no sheet.
     assert job_line(done, SongFacts(checked_now=True)) == Line(
-        "missing", "Not found", ("see the to-do page", "_todo.md"))
+        "missing", "Not found", ("To-do page", "_todo.md"))
     # A cooldown, a block, a spent budget or an error exits 0 and looks nothing up: it waits, it isn't missing.
     assert job_line(done, SongFacts()) == Line("waiting", "Not fetched yet", details=details_href(3))
     assert job_line(done, SongFacts(not_found=True)).tone == "waiting"  # an earlier match's word, not this fetch's
     assert job_line(done, SongFacts(review=True)) == Line(
-        "review", "Needs review", ("see the to-do page", "_todo.md"))
-    assert job_line(done, SongFacts(ignored=True)).text == "Ignored in overrides.toml"
+        "review", "Needs your pick", ("To-do page", "_todo.md"))
+    assert job_line(done, SongFacts(ignored=True)).text == "Ignored · overrides.toml"
 
 
 def test_a_done_add_says_the_nightly_run_looks_for_it():
     added = job("done", FETCH[:1], fetching=False, states=["done"])
-    assert job_line(added, SongFacts()) == Line("added", "Added: the nightly run looks for it")
-    assert job_line(added, None) == Line("added", "Added: the nightly run looks for it")
+    assert job_line(added, SongFacts()) == Line("added", "Added · fetched tonight")
+    assert job_line(added, None) == Line("added", "Added · fetched tonight")
 
 
 def test_a_done_add_of_a_song_picked_on_lacuerda_says_tonights_run_gets_that_sheet():
     added = job("done", FETCH[:1], fetching=False, states=["done"])
     picked = SongFacts(not_found=True, lacuerda=True)
-    assert job_line(added, picked) == Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
+    assert job_line(added, picked) == Line("added", "Added · your LaCuerda pick comes tonight")
     # A review of the artist's own songs is still one; a pick LaCuerda had no sheet for is the usual add.
-    assert job_line(added, SongFacts(review=True, lacuerda=True)).text == "Needs review"
-    assert job_line(added, SongFacts(not_found=True)) == Line("added", "Added: the nightly run looks for it")
+    assert job_line(added, SongFacts(review=True, lacuerda=True)).text == "Needs your pick"
+    assert job_line(added, SongFacts(not_found=True)) == Line("added", "Added · fetched tonight")
 
 
 def test_reading_a_lacuerda_artists_page_says_what_lacuerda_answered():
@@ -162,11 +162,11 @@ def test_a_fetch_that_fails_on_a_song_in_review_or_not_found_says_so_not_the_com
     review = job("failed", states=["done", "done", "failed", "skipped"],
                  outputs=[[], [], ['error: "Radiohead - Creep" needs review first: run `caracole review`.'], []])
     assert job_line(review, SongFacts(review=True)) == Line(
-        "review", "Needs review", ("see the to-do page", "_todo.md"), details=details_href(3))
+        "review", "Needs your pick", ("To-do page", "_todo.md"), details=details_href(3))
     bare = job("failed", states=["done", "done", "failed", "skipped"],
                outputs=[[], [], ["error: Ultimate Guitar lists Obscure Band only by bare tab ids, which …"], []])
     assert job_line(bare, SongFacts(not_found=True)) == Line(
-        "missing", "Not found", ("see the to-do page", "_todo.md"), details=details_href(3))
+        "missing", "Not found", ("To-do page", "_todo.md"), details=details_href(3))
     # Reviewed on its title alone (other artists' songs of it), it needs review too.
     assert job_line(bare, SongFacts(review=True)).tone == "review"
     # Any other failure, or a song that has its sheet, says the error.
@@ -182,19 +182,19 @@ def test_a_song_in_review_with_candidates_links_to_its_picker_not_the_to_do_page
     review = job("failed", states=["done", "done", "failed", "skipped"],
                  outputs=[[], [], ['error: "Radiohead - Creep" needs review first: run `caracole review`.'], []])
     assert job_line(review, SongFacts(review=True, picker=picker)) == Line(
-        "review", "Needs review", ("Pick the match", picker), details=details_href(3))
+        "review", "Needs your pick", ("Pick", picker), details=details_href(3))
     done = job("done", states=["done"] * 4)
     assert job_line(done, SongFacts(review=True, picker=picker)) == Line(
-        "review", "Needs review", ("Pick the match", picker))
+        "review", "Needs your pick", ("Pick", picker))
     # A review without candidates has nothing to pick: caracole review offers a pin or an ignore.
-    assert job_line(done, SongFacts(review=True)).link == ("see the to-do page", "_todo.md")
+    assert job_line(done, SongFacts(review=True)).link == ("To-do page", "_todo.md")
 
 
 def test_a_failure_without_an_error_line_names_its_step():
     crashed = job("failed", states=["done", "failed", "skipped", "skipped"], outputs=[[], ["Traceback …"]])
     assert job_line(crashed, None).text == "Looking it up failed."
     stopped = job("failed", states=["done", "skipped", "skipped", "skipped"])
-    assert job_line(stopped, None).text == "It stopped before it was done."
+    assert job_line(stopped, None).text == "Stopped before the end."
 
 
 def test_a_long_error_is_cut_to_a_short_sentence():
@@ -205,8 +205,8 @@ def test_a_long_error_is_cut_to_a_short_sentence():
 
 
 def test_a_line_as_json():
-    assert Line("ready", "Ready", ("Open sheet", "a/b.pdf")).as_json() == {
-        "tone": "ready", "text": "Ready", "link": {"label": "Open sheet", "href": "a/b.pdf"}, "details": None}
+    assert Line("ready", "Ready", ("Open", "a/b.pdf")).as_json() == {
+        "tone": "ready", "text": "Ready", "link": {"label": "Open", "href": "a/b.pdf"}, "details": None}
     assert Line("queued", "Queued…").as_json() == {"tone": "queued", "text": "Queued…", "link": None,
                                                     "details": None}
     # Details: the request's output in the library page's Requests tab, after the line's own link.
@@ -232,8 +232,8 @@ def lookup_job(state="running", stages=None):
 def test_a_running_lookup_says_its_running_stage_as_a_steps_label_would():
     # One `caracole get` does what match, fetch and render did: the card still says which part runs.
     assert job_line(lookup_job(), SongFacts()) == Line("running", "Finding the song…")
-    assert job_line(lookup_job(), None) == Line("running", "Adding to the library…")  # a song new to the library
-    sheet = lookup_job(stages={"song": ("done", "in the library"), "match": ("done", "matched to radiohead/creep"),
+    assert job_line(lookup_job(), None) == Line("running", "Adding to the book…")  # a song new to the library
+    sheet = lookup_job(stages={"song": ("done", "in the book"), "match": ("done", "matched to radiohead/creep"),
                                "sheet": ("running", "")})
     assert job_line(sheet, None) == Line("running", "Fetching from Ultimate Guitar…")
     pdf = lookup_job(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
@@ -248,7 +248,7 @@ def test_a_lookups_sheet_stage_says_lacuerda_while_it_asks_lacuerda_for_the_shee
     # says so (get.py's SHEET_FROM), and Ultimate Guitar's again once the stage turns to it.
     from caracole.get import SHEET_FROM
 
-    before = {"song": ("done", "in the library"), "match": ("done", "matched to radiohead/creep")}
+    before = {"song": ("done", "in the book"), "match": ("done", "matched to radiohead/creep")}
     lacuerda = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["lacuerda"])})
     assert job_line(lacuerda, None) == Line("running", "Fetching from LaCuerda…")
     back = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["ug"])})
@@ -265,7 +265,7 @@ def test_a_lookup_remaking_a_songbook_names_it():
 def test_a_lookup_waiting_for_the_lock_says_so():
     waiting = lookup_job(stages={"song": ("running", "waiting for another caracole (pid 42: run), which lets "
                                                      "a lookup go first at its next pause, or between two songs")})
-    assert job_line(waiting, None).text == "Waiting for another caracole…"
+    assert job_line(waiting, None).text == "Waiting for the book…"
 
 
 def test_a_refused_lookup_says_why_in_its_stages_words():
@@ -295,20 +295,20 @@ def youtube_job(state="running", stages=None):
 
 
 def test_a_sheet_from_youtube_says_its_running_stage():
-    lines = {"song": "Adding to the library…", "audio": "Getting the audio…",
+    lines = {"song": "Adding to the book…", "audio": "Getting the audio…",
              "lyrics": "Fetching the lyrics from LRCLIB…", "chords": "Working out the chords…",
              "pdf": "Rendering the sheet…"}
     for name, text in lines.items():
         assert job_line(youtube_job(stages={name: ("running", "")}), None) == Line("running", text)
     waiting = youtube_job(stages={"song": ("running", "waiting for another caracole (pid 9: run)")})
-    assert job_line(waiting, None).text == "Waiting for another caracole…"
+    assert job_line(waiting, None).text == "Waiting for the book…"
 
 
 def test_a_sheet_from_youtube_is_ready_once_its_chords_are_made():
     every = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "found, timed"),
              "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
     sheet = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.html")
-    assert job_line(youtube_job("done", every), sheet) == Line("ready", "Ready", ("Open sheet", sheet.sheet))
+    assert job_line(youtube_job("done", every), sheet) == Line("ready", "Ready", ("Open", sheet.sheet))
     # An auto sheet of an earlier video, kept while YouTube cooled down: no new sheet, so not Ready.
     waited = every | {"audio": ("skipped", "YouTube is paused after a block, until 2026-10-30 20:00 UTC"),
                       "chords": ("skipped", "no audio")}
@@ -321,17 +321,17 @@ def test_a_caracole_with_no_to_do_page_says_the_same_line_with_no_link_to_it():
     # The phone has no to-do page (todo=None): a Not found or a Needs review with no candidates says the same words,
     # with nothing to open; its picker's link stays, and the to-do page is the computer's default.
     done = job("done", states=["done"] * 4)
-    assert job_line(done, SongFacts(review=True), todo=None) == Line("review", "Needs review")
+    assert job_line(done, SongFacts(review=True), todo=None) == Line("review", "Needs your pick")
     assert job_line(done, SongFacts(review=True, picker="review?song=7"), todo=None).link == (
-        "Pick the match", "review?song=7")
+        "Pick", "review?song=7")
     assert job_line(done, SongFacts(checked_now=True), todo=None) == Line("missing", "Not found")
     bare = job("failed", states=["done", "done", "failed", "skipped"], outputs=[[], [], ["error: no"], []])
     assert job_line(bare, SongFacts(not_found=True), todo=None) == Line("missing", "Not found",
                                                                         details=details_href(3))
-    assert job_line(bare, SongFacts(review=True), todo=None) == Line("review", "Needs review",
+    assert job_line(bare, SongFacts(review=True), todo=None) == Line("review", "Needs your pick",
                                                                      details=details_href(3))
     assert job_line(done, SongFacts(checked_now=True), todo="_todo.md") == job_line(done, SongFacts(checked_now=True))
-    assert job_line(done, SongFacts(checked_now=True), todo="elsewhere.md").link == ("see the to-do page",
+    assert job_line(done, SongFacts(checked_now=True), todo="elsewhere.md").link == ("To-do page",
                                                                                      "elsewhere.md")
 
 

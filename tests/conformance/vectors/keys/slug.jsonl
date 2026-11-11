@@ -391,9 +391,9 @@
 {"args":["If 斑马斑马 is a title, caracole needs its artist too: `caracole add ARTIST \"斑马斑马\"`"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"if斑马斑马isatitlecaracoleneedsitsartisttoocaracoleaddartist斑马斑马","slug_key":"if-斑马斑马-is-a-title-caracole-needs-its-artist-too-caracole-add-artist-斑马斑马","split_variant":["if-斑马斑马-is-a-title-caracole-needs-its-artist-too-caracole-add-artist-斑马斑马",null],"ug_slug_key":"if 斑马斑马 is a title, caracole needs its artist too: `caracole add artist \"斑马斑马\"`"}}
 {"args":["If 斑马斑马 is the artist's name"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"if斑马斑马istheartistsname","slug_key":"if-斑马斑马-is-the-artists-name","split_variant":["if-斑马斑马-is-the-artists-name",null],"ug_slug_key":"if 斑马斑马 is the artist's name"}}
 {"args":["In April"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"inapril","slug_key":"in-april","split_variant":["in-april",null],"ug_slug_key":"in april"}}
-{"args":["In your library"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"inyourlibrary","slug_key":"in-your-library","split_variant":["in-your-library",null],"ug_slug_key":"in your library"}}
 {"args":["In your library, in "],"fn":"test_conformance_keys.slugs_of","out":{"compact":"inyourlibraryin","slug_key":"in-your-library-in","split_variant":["in-your-library-in",null],"ug_slug_key":"in your library, in "}}
 {"args":["In your library, in A minor"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"inyourlibraryinaminor","slug_key":"in-your-library-in-a-minor","split_variant":["in-your-library-in-a-minor",null],"ug_slug_key":"in your library, in a minor"}}
+{"args":["In your logbook"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"inyourlogbook","slug_key":"in-your-logbook","split_variant":["in-your-logbook",null],"ug_slug_key":"in your logbook"}}
 {"args":["Into The Night"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"intothenight","slug_key":"into-the-night","split_variant":["into-the-night",null],"ug_slug_key":"into the night"}}
 {"args":["Intro"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"intro","slug_key":"intro","split_variant":["intro",null],"ug_slug_key":"intro"}}
 {"args":["Intro (Hong Dou)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"introhongdou","slug_key":"intro-hong-dou","split_variant":["intro-hong-dou",null],"ug_slug_key":"intro (hong dou)"}}
@@ -515,7 +515,7 @@
 {"args":["Oasis, an artist: 7 songs (9 tabs). The most tabbed:"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"oasisanartist7songs9tabsthemosttabbed","slug_key":"oasis-an-artist-7-songs-9-tabs-the-most-tabbed","split_variant":["oasis-an-artist-7-songs-9-tabs-the-most-tabbed",null],"ug_slug_key":"oasis, an artist: 7 songs (9 tabs). the most tabbed:"}}
 {"args":["Old Capital"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"oldcapital","slug_key":"old-capital","split_variant":["old-capital",null],"ug_slug_key":"old capital"}}
 {"args":["On LaCuerda (offline index)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"onlacuerdaofflineindex","slug_key":"on-lacuerda-offline-index","split_variant":["on-lacuerda-offline-index",null],"ug_slug_key":"on lacuerda (offline index)"}}
-{"args":["On Ultimate Guitar"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"onultimateguitar","slug_key":"on-ultimate-guitar","split_variant":["on-ultimate-guitar",null],"ug_slug_key":"on ultimate guitar"}}
+{"args":["On UG"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"onug","slug_key":"on-ug","split_variant":["on-ug",null],"ug_slug_key":"on ug"}}
 {"args":["On Ultimate Guitar (offline index)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"onultimateguitarofflineindex","slug_key":"on-ultimate-guitar-offline-index","split_variant":["on-ultimate-guitar-offline-index",null],"ug_slug_key":"on ultimate guitar (offline index)"}}
 {"args":["On gametabs.net (offline index)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ongametabsnetofflineindex","slug_key":"on-gametabs-net-offline-index","split_variant":["on-gametabs-net-offline-index",null],"ug_slug_key":"on gametabs.net (offline index)"}}
 {"args":["On harptabs.com (offline index)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"onharptabscomofflineindex","slug_key":"on-harptabs-com-offline-index","split_variant":["on-harptabs-com-offline-index",null],"ug_slug_key":"on harptabs.com (offline index)"}}
@@ -2496,7 +2496,7 @@
 {"args":["-INSERT-INTO-UG-INDEX-TAB-ID-ARTIST-KEY-SONG-KEY-TYPE-SITEMAP-FIRST-SEEN-PATH-VALUES-CHORDS-1-X-"],"fn":"caracole.normalize.ug_slug_key","out":"insert-into-ug-index-tab-id-artist-key-song-key-type-sitemap-first-seen-path-values-chords-1-x"}
 {"args":["-IU--아이유"],"fn":"caracole.normalize.ug_slug_key","out":"iu-아이유"}
 {"args":["-IF-斑马斑马-IS-A-TITLE-CARACOLE-NEEDS-ITS-ARTIST-TOO-CARACOLE-ADD-ARTIST-斑马斑马-"],"fn":"caracole.normalize.ug_slug_key","out":"if-斑马斑马-is-a-title-caracole-needs-its-artist-too-caracole-add-artist-斑马斑马"}
-{"args":["-IN--YOUR--LIBRARY-the"],"fn":"caracole.normalize.ug_slug_key","out":"in-your-library-the"}
+{"args":["-IN--YOUR--LIBRARY--IN-the"],"fn":"caracole.normalize.ug_slug_key","out":"in-your-library-in-the"}
 {"args":["-INTRO-"],"fn":"caracole.normalize.ug_slug_key","out":"intro"}
 {"args":["-JOAQUIN--SABINA-the"],"fn":"caracole.normalize.ug_slug_key","out":"joaquin-sabina-the"}
 {"args":["-LA"],"fn":"caracole.normalize.ug_slug_key","out":"la"}
@@ -2963,7 +2963,7 @@
 {"args":["insert-into-ug-index-tab-id-artist-key-song-key-type-sitemap-first-seen-path-values-chords-1-x-unplugged"],"fn":"caracole.normalize.split_variant","out":["insert-into-ug-index-tab-id-artist-key-song-key-type-sitemap-first-seen-path-values-chords-1-x","unplugged"]}
 {"args":["iu-아이유-outro"],"fn":"caracole.normalize.split_variant","out":["iu-아이유","outro"]}
 {"args":["if-斑马斑马-is-a-title-caracole-needs-its-artist-too-caracole-add-artist-斑马斑马-riff"],"fn":"caracole.normalize.split_variant","out":["if-斑马斑马-is-a-title-caracole-needs-its-artist-too-caracole-add-artist-斑马斑马","riff"]}
-{"args":["in-your-library-intro"],"fn":"caracole.normalize.split_variant","out":["in-your-library","intro"]}
+{"args":["in-your-library-in-intro"],"fn":"caracole.normalize.split_variant","out":["in-your-library-in","intro"]}
 {"args":["intro-outro"],"fn":"caracole.normalize.split_variant","out":["intro","outro"]}
 {"args":["joaquin-sabina-unplugged"],"fn":"caracole.normalize.split_variant","out":["joaquin-sabina","unplugged"]}
 {"args":["la-remix"],"fn":"caracole.normalize.split_variant","out":["la-remix",null]}

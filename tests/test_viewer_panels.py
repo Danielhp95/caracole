@@ -322,8 +322,8 @@ def test_the_mode_line_says_what_it_sounds_like(tmp_path):
         major = b.js(MODES)
         mode(b, "Dorian")
         dorian = b.js(MODES)
-    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright and settled", True]
-    assert [dorian["what"], dorian["level"]] == ["minor, with a brighter sixth", True]
+    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright, settled", True]
+    assert [dorian["what"], dorian["level"]] == ["minor, brighter 6th", True]
 
 
 # The chord names' segments: the words shown, the words a screen reader hears, pressed, offered (not disabled).
@@ -394,7 +394,7 @@ def test_the_names_hint_shows_only_without_a_key(tmp_path):
         b.click("#more")
         unknown = [b.js(hint), b.js(NAMES)]
     assert keyed is None
-    assert unknown[0] == "caracole can't tell this song's key, so it can't number its chords."
+    assert unknown[0] == "No key found, so no numerals."
     assert [offered for *_, offered in unknown[1]] == [True, False, False]  # the chords alone, the others greyed
 
 
@@ -428,7 +428,7 @@ def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
     assert guitar["tag"] == "SELECT" and [n for n, _ in guitar["options"]] == names and guitar["named"] == "Instrument"
     assert guitar["value"] == "guitar" and guitar["title"] == "Standard tuning, E A D G B E." and guitar["hash"] == ""
     assert set(guitar["strings"]) == {6}
-    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, the G string high."
+    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, high G."
     assert uke["hash"] == "#inst=ukulele" and uke["kept"] == "ukulele" and set(uke["strings"]) == {4}  # as the chips did
 
 

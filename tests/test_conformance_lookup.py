@@ -337,11 +337,11 @@ def test_asking_jsonl(cfg, conn, monkeypatch):
     records = [asking_record(cfg, conn, *case) for case in ASKING]
     by_case = {r["case"]: r["out"] for r in records}
     assert by_case["a first block"]["end"] == [
-        "skipped", "Ultimate Guitar blocked caracole (ug: 403: " + UG_URL + ": HTTP 403): no more requests to it until "
-        "2026-11-04 14:00 UTC. Nothing was marked not found."]
+        "skipped", "Ultimate Guitar turned us back (ug: 403: " + UG_URL + ": HTTP 403). No more asks until "
+        "2026-11-04 14:00 UTC. Nothing marked not on the sites."]
     assert by_case["this hour's lookups spent"]["end"] == [
-        "skipped", "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly run does the rest"]
-    assert by_case["kept for sheets"]["end"][1].startswith("this hour's lookups have spent half of their 60")
+        "skipped", "no more asks of Ultimate Guitar this hour (60 spent); tonight's run does the rest"]
+    assert by_case["kept for sheets"]["end"][1].startswith("half this hour's 60 asks of Ultimate Guitar are spent")
     assert by_case["a block owes a matched song its fetch"]["ug_dirty"] is True
     assert by_case["a song in review is owed nothing"]["ug_dirty"] is False
     assert by_case["a file where another song keeps one"]["end"][0] == "failed"
@@ -409,7 +409,7 @@ def test_after_the_sheet_jsonl(cfg, conn, monkeypatch):
     assert by_case["27 sent this hour: three left for what follows"] == {
         "end": "asked", "left": 3, "budget": 3, "kept_for_sheets": True}
     assert by_case["30 sent: none left, nothing asked"]["budget"] is None
-    assert by_case["none left, and cooling: the cooldown says why"]["end"][1].startswith("Ultimate Guitar is cooling")
+    assert by_case["none left, and cooling: the cooldown says why"]["end"][1].startswith("Waiting out Ultimate Guitar")
     assert by_case["the sheet sent two, 28 this hour"]["budget"] == 4
     check(VECTORS / "lookup" / "after_the_sheet.jsonl",
           jsonl(records, corpus="lookup/after_the_sheet", made_by=MADE_BY))
@@ -428,14 +428,14 @@ def constants() -> dict[str, Any]:
 
 LRCLIB_ENDS: list[Any] = [
     "found", "LRCLIB has none", "an instrumental", "already there",
-    ("skipped", "LRCLIB is cooling down after a block, until 2026-11-04 14:00 UTC"),
-    ("failed", "LRCLIB failed (lrclib: 502: " + LRCLIB_URL + ": HTTP 502); the nightly run tries again"),
-    ("skipped", "this hour's 200 lookup requests to LRCLIB are spent; the nightly run does the rest"),
+    ("skipped", "Waiting out LRCLIB until 2026-11-04 14:00 UTC"),
+    ("failed", "LRCLIB failed (lrclib: 502: " + LRCLIB_URL + ": HTTP 502); tried again tonight"),
+    ("skipped", "no more asks of LRCLIB this hour (200 spent); tonight's run does the rest"),
 ]
 THEN_ENDS: list[Any] = [
     None, "timed lyrics from Megalobiz", "Megalobiz has no timed ones",
-    ("failed", "Megalobiz failed (megalobiz: 500); the nightly run tries again"),
-    ("skipped", "Megalobiz is off in caracole.toml"),
+    ("failed", "Megalobiz failed (megalobiz: 500); tried again tonight"),
+    ("skipped", "Megalobiz is off (caracole.toml)"),
 ]
 
 
@@ -468,21 +468,21 @@ def site(end: Any, *, asked: bool = True, keeps: str | None = None) -> dict[str,
 UG_KEPT = site("tab 4169 from Ultimate Guitar", keeps="ug")
 UG_NONE = site("Ultimate Guitar has no sheet to keep")
 UG_READY = site(("skipped", get.NOT_IN_INDEX), asked=False)
-UG_REVIEW = site(("skipped", "caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, "
-                             "or run caracole review"), asked=False)
-UG_BLOCKED = site(("skipped", "Ultimate Guitar blocked caracole (ug: 403): no more requests to it until 2026-11-04 "
-                              "14:00 UTC. Nothing was marked not found."))
-UG_FAILED = site(("failed", "Ultimate Guitar failed (ug: 502); the nightly run tries again"))
-UG_COOLING = site(("skipped", "Ultimate Guitar is cooling down after a block, until 2026-11-04 14:00 UTC"),
+UG_REVIEW = site(("skipped", "not sure which UG song this is: pick it on the lookup page, or run caracole review"),
+                 asked=False)
+UG_BLOCKED = site(("skipped", "Ultimate Guitar turned us back (ug: 403). No more asks until 2026-11-04 14:00 UTC. "
+                              "Nothing marked not on the sites."))
+UG_FAILED = site(("failed", "Ultimate Guitar failed (ug: 502); tried again tonight"))
+UG_COOLING = site(("skipped", "Waiting out Ultimate Guitar until 2026-11-04 14:00 UTC"),
                   asked=False)
 LC_KEPT = site("sheet kept from LaCuerda", keeps="lacuerda")
 LC_MISSING = site("not on LaCuerda")
-LC_NOT_FOR = site(("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"))
-LC_PINNED = site(("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"))
-LC_HOLDS = site(("done", "the LaCuerda sheet you picked is the sheet already"))
-LC_FAILED = site(("failed", "LaCuerda failed (lacuerda: 500); the nightly run tries again"))
-LC_SPENT = site(("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"))
-LC_COOLING = site(("skipped", "LaCuerda is cooling down after a block, until 2026-11-04 14:00 UTC"), asked=False)
+LC_NOT_FOR = site(("skipped", "not for LaCuerda: not Spanish, a full sheet already, or asked this month"))
+LC_PINNED = site(("skipped", "your pinned UG tab is kept over your LaCuerda pick"))
+LC_HOLDS = site(("done", "your LaCuerda pick is the sheet already"))
+LC_FAILED = site(("failed", "LaCuerda failed (lacuerda: 500); tried again tonight"))
+LC_SPENT = site(("skipped", "this fetch's 6 asks of LaCuerda are spent; tonight's run does the rest"))
+LC_COOLING = site(("skipped", "Waiting out LaCuerda until 2026-11-04 14:00 UTC"), asked=False)
 LC_AGAIN = site("kept what it had")
 
 SHEETS: list[tuple[str, bool, str | None, dict, dict]] = [
@@ -571,7 +571,7 @@ def frame_records(conn: sqlite3.Connection, monkeypatch) -> list[dict[str, Any]]
     lk._kept_sheet = lambda: None
     records.append({"fn": "caracole.get._Lookup.pdf", "case": "no sheet yet", "out": ended(lk.pdf())})
     for said in (("done", "sheet kept from LaCuerda"), ("done", ""), ("skipped", "not on LaCuerda: x"),
-                 ("failed", "LaCuerda failed (lacuerda: 500); the nightly run tries again")):
+                 ("failed", "LaCuerda failed (lacuerda: 500); tried again tonight")):
         lk.lacuerda_asked, lk.lacuerda_said = True, said
         records.append({"fn": "caracole.get._Lookup.lacuerda", "case": "asked already, for the sheet",
                         "kw": {"said": list(said)}, "out": ended(lk.lacuerda())})
@@ -622,15 +622,15 @@ def frame_records(conn: sqlite3.Connection, monkeypatch) -> list[dict[str, Any]]
 
 LINES: list[tuple[str, list[list[Any]]]] = [
     ("a lookup, its sheet readable", [
-        ["stage", "song", "running", ""], ["stage", "song", "done", "in the library"],
+        ["stage", "song", "running", ""], ["stage", "song", "done", "in the book"],
         ["stage", "match", "running", ""], ["stage", "match", "done", "matched to radiohead/creep"],
-        ["stage", "sheet", "running", ""], ["stage", "sheet", "running", "from Ultimate Guitar"],
-        ["stage", "sheet", "done", "tab 4169 from Ultimate Guitar"],
+        ["stage", "sheet", "running", ""], ["stage", "sheet", "running", "from UG"],
+        ["stage", "sheet", "done", "tab 4169 from UG"],
         ["readable", {"sheet": "Radiohead/Creep/sheet.txt"}, 2.04],
         ["stage", "pdf", "running", ""], ["stage", "pdf", "skipped", get.NO_PDFS],
         ["stage", "lyrics", "running", ""], ["stage", "lyrics", "done", "found"],
-        ["stage", "ug", "running", ""], ["stage", "ug", "failed", "Ultimate Guitar failed (ug: 502); the nightly run "
-                                                                  "tries again"],
+        ["stage", "ug", "running", ""], ["stage", "ug", "failed", "Ultimate Guitar failed (ug: 502); tried again "
+                                                                  "tonight"],
         ["stage", "pages", "running", ""], ["stage", "pages", "done", get.LIBRARY_PAGE],
         ["stage", "songbooks", "running", ""], ["stage", "songbooks", "skipped", ""]]),
     ("a sheet with no page yet, then its page", [

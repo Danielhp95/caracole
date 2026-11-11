@@ -667,11 +667,11 @@ def test_with_the_youtube_route_on_a_card_says_where_its_audio_comes_from_and_of
     kv_set_json(conn, f"youtube:{missing.id}", {"missing_at": "2026-10-18T03:30:00Z"})
     songs = songs_of(page(conn, on, Overrides(youtube={declined.key: None})))
     assert songs[queued.display]["youtube"] == {
-        "text": "No human sheet yet: caracole takes the audio from YouTube next", "video": None}
+        "text": "No human sheet yet · we take its audio from YouTube next", "video": None}
     assert songs[downloaded.display]["youtube"] == {
-        "text": "Audio from YouTube: auto-chords works out the chords next",
+        "text": "Audio from YouTube · auto-chords works out the chords next",
         "video": {"label": "Creep (Radiohead - Topic)", "href": "https://www.youtube.com/watch?v=XFkzRNyygfk"}}
-    assert songs[missing.display]["youtube"]["text"] == "Nothing on YouTube fits: see the to-do page"
+    assert songs[missing.display]["youtube"]["text"] == "Nothing on YouTube fits · see the to-do page"
     for s in (queued, downloaded, missing):
         assert songs[s.display]["buy"] == [], s.display
         assert [link["label"] for link in songs[s.display]["links"]] == ["Chordify", "YouTube"]
@@ -702,7 +702,7 @@ def test_with_the_youtube_route_on_one_page_write_asks_where_each_song_stands_on
     todo_md, index_html = todo.write_pages(conn, on, Overrides(), NOW)
     assert len(calls) == 1
     assert songs_of(index_html.read_text(encoding="utf-8"))[song.display]["youtube"]["text"] == (
-        "No human sheet yet: caracole takes the audio from YouTube next")
+        "No human sheet yet · we take its audio from YouTube next")
     listed = todo_md.read_text(encoding="utf-8").split(f"## {todo.NO_SHEET_TITLE}", 1)[1]
     assert song.display in listed
 
@@ -728,7 +728,7 @@ def test_with_the_youtube_route_on_a_one_song_card_asks_about_its_own_song_alone
     monkeypatch.setattr(yf, "song_state", counted)
     [card] = song_cards(conn, on, Overrides(), NOW, [get_song(conn, songs[1].id)])
     assert asked == [songs[1].id]
-    assert card["youtube"]["text"] == "No human sheet yet: caracole takes the audio from YouTube next"
+    assert card["youtube"]["text"] == "No human sheet yet · we take its audio from YouTube next"
 
 
 def test_without_the_youtube_route_no_card_mentions_youtube_audio(conn, cfg):
@@ -2064,7 +2064,7 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), UNFOLD + MARKS))
     marks = marks_of(dump_dom(path, tmp_path))
     ug = [m for m in marks if m["source"] == "ug"]
-    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
+    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from UG" for m in ug), ug
     # Under a song's chevron, the chips of each tile say where what it holds came from ("From [UG] Ultimate Guitar",
     # "From [LR] LRCLIB"), and a link elsewhere names its site.
     assert all(m["where"] in ("chip", "link") for m in marks), marks
@@ -3074,7 +3074,7 @@ def test_a_wanted_songs_line_keeps_its_badge(conn, cfg, tmp_path):
     skipped = add_song(conn, "Some Artist", "Some Interlude")
     parts = line_parts(conn, cfg, tmp_path, Overrides(ignore=frozenset({skipped.key})))
     assert {title: p["badges"] for title, p in parts.items()} == {
-        "Desperado": ["Wanted"], "Yesterday": [], "Crep": ["Needs review"], "Creep": ["Needs review"],
+        "Desperado": ["Wanted"], "Yesterday": [], "Crep": ["Needs your pick"], "Creep": ["Needs your pick"],
         "Some Interlude": ["Ignored"]}, parts
 
 
@@ -3216,7 +3216,7 @@ def test_the_fold_button_is_a_chevron_named_more_for_the_song(conn, cfg, tmp_pat
 BADGES_AND_KEYS = """
 (() => {
   const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy", sources: ["ug", "lacuerda", "gtptabs"],
-    badges: [{ kind: "found", text: "In your library" }, { kind: "instrument harmonica", text: "Harmonica" }],
+    badges: [{ kind: "found", text: "In your logbook" }, { kind: "instrument harmonica", text: "Harmonica" }],
     facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
   hit.classList.add("hit");
   document.querySelector("#list section.artist .lines").appendChild(hit);
@@ -3242,7 +3242,7 @@ def test_a_badge_never_covers_the_key_column(conn, cfg, tmp_path, width):
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), BADGES_AND_KEYS))
     boxes = attribute_of(dump_dom(path, tmp_path, size=f"{width},900"), "data-boxes")
     badges = boxes["badges"]
-    assert sorted(b["text"] for b in badges) == ["Harmonica", "In your library", "Needs review"], boxes
+    assert sorted(b["text"] for b in badges) == ["Harmonica", "In your logbook", "Needs your pick"], boxes
     [key] = boxes["keys"]
     for b in badges:
         left, right, _, _ = b["box"]
@@ -3258,7 +3258,7 @@ MARKS_DRAWN = """
 (() => {
   const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy",
     sources: ["ug", "lacuerda", "gtptabs", "harptabs", "gametabs"],
-    badges: [{ kind: "found", text: "In your library" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
+    badges: [{ kind: "found", text: "In your logbook" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
   hit.classList.add("hit");
   (document.querySelector("#list section.artist .lines") || document.querySelector("#list .lines")).appendChild(hit);
   const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };

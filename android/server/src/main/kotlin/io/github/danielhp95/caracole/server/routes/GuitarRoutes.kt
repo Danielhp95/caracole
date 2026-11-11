@@ -77,7 +77,7 @@ class GuitarRoutes(
         val fields = try {
             fields(PyUrl.urlsplit(target).query)
         } catch (e: PyUrl.Invalid) {
-            throw Refused(400, "Not an address", "That address can't be read.")
+            throw Refused(400, "Not an address", "Can't read that address.")
         }
         val asked = fields["file"].orEmpty()
         if (asked.size != 1) throw notKept()
@@ -95,7 +95,7 @@ class GuitarRoutes(
             throw notKept()
         }
         val (file, song) = kept
-        val data = readLibraryFile(path) ?: throw Refused(404, "Not in the library", GONE)
+        val data = readLibraryFile(path) ?: throw Refused(404, "Not in the book", GONE)
         if (data.size > MAX_FILE) throw tooLarge()
         val html = GuitarPage.build(
             title = song.title, artist = song.artists.ifEmpty { listOf(song.artist) }.joinToString(", "),
@@ -110,9 +110,9 @@ class GuitarRoutes(
 
     /** guitar_routes.asset: `GET /assets/alphatab/<name>`, the bundle by the name the page loads it by. */
     fun asset(name: String): Response {
-        val at = alphaTab() ?: throw Refused(404, "Not found", "This caracole serve has no alphaTab " +
+        val at = alphaTab() ?: throw Refused(404, "Not found", "No alphaTab on this server " +
                                                               "(CARACOLE_ALPHATAB_DIR isn't set).")
-        if (name != at.name || at.body.isEmpty()) throw Refused(404, "Not found", "There's no such file of alphaTab's here.")
+        if (name != at.name || at.body.isEmpty()) throw Refused(404, "Not found", "No such alphaTab file here.")
         return Response(200, Body.Bytes(at.body), mutableListOf(
             "Content-Type" to "text/javascript; charset=utf-8",
             "Access-Control-Allow-Origin" to "*",
@@ -230,15 +230,14 @@ class GuitarRoutes(
         /** library_page._primary's viewers and PDFs, in a line's order (_SHEET_PAGES'). */
         private val SHEETS = listOf("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf")
 
-        private const val NOT_KEPT = "That isn't a Guitar Pro file caracole keeps in the library."
-        private const val POWER_TAB = "alphaTab can't read Power Tab files, so this one is a download alone: " +
-            "find it under its song's ⋯ in the library."
-        private const val NO_ALPHATAB = "This caracole serve has no alphaTab (CARACOLE_ALPHATAB_DIR isn't set), " +
-            "so it can't show Guitar Pro files in the browser: download the file from its song's ⋯ in the library instead."
-        private const val NO_SUCH_SONG = "That song isn't in the library."
-        private const val GONE = "That Guitar Pro file isn't in the library any more: the next caracole run fetches " +
-            "it again, or files it from the inbox."
-        private const val TOO_LARGE = "That Guitar Pro file is too large to show here: download it instead."
+        private const val NOT_KEPT = "Not a Guitar Pro file in the book."
+        private const val POWER_TAB = "alphaTab can't read Power Tab files. Download it from its song's ⋯ in the book."
+        private const val NO_ALPHATAB = "No alphaTab on this server (CARACOLE_ALPHATAB_DIR isn't set), so no Guitar " +
+            "Pro in the browser. Download the file from its song's ⋯ in the book."
+        private const val NO_SUCH_SONG = "That song isn't in the logbook."
+        private const val GONE = "That Guitar Pro file is gone from the book. Tonight's run fetches it again, or " +
+            "files it from the inbox."
+        private const val TOO_LARGE = "Too large to show here. Download it."
 
         private fun notKept() = Refused(404, "Not a Guitar Pro file", NOT_KEPT)
         private fun tooLarge() = Refused(413, "Too large", TOO_LARGE)

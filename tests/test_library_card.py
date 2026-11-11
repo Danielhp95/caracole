@@ -120,7 +120,7 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     assert tiles[1]["download"] == "Eagles - Hotel California.gp5" and tiles[0]["download"] is None
     assert tiles[5]["download"] == "Eagles - Hotel California.mxl"
     assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "a text tab", "Tab 1",
-                                          "synced to the recording", "Score 1 (MusicXML)"]
+                                          "timed", "Score 1 (MusicXML)"]
     assert [d["text"] for d in tiles[1]["downloads"]] == [".gp5"] and [d["text"] for d in tiles[2]["downloads"]] == [
         "Text"]
     assert not any("primary" in t["cls"].split() for t in tiles)  # none first
@@ -471,7 +471,7 @@ def test_progressions_are_search_chips_that_filter(conn, cfg, tmp_path):
     progression_library(conn, cfg)
     progs = attribute_of(run(conn, cfg, tmp_path, PROGS), "data-progs")
     assert (progs["before"]["label"], progs["before"]["em"]) == ("Progressions", None)  # no line of words about it
-    assert progs["before"]["hint"] == "Find your songs that play one"  # the label says it as a tooltip
+    assert progs["before"]["hint"] == "Find songs that play one"  # the label says it as a tooltip
     assert progs["before"]["chips"][0][0] == "vi–IV–I–V" and progs["before"]["chips"][0][2] is True
     assert progs["before"]["chips"][0][1].startswith("Your songs with I–V–vi–IV")
     assert "prog=I+V+vi+IV" in progs["hash"] and progs["titles"] == ["In A Minor", "Synthetic Song"]
@@ -829,7 +829,7 @@ def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, bro
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
     item = drawer_of(browser, song, "ug")
-    press(browser, item, "Back to caracole's pick", ".drawer-head")
+    press(browser, item, "Back to our pick", ".drawer-head")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
 
 
@@ -854,6 +854,6 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     buttons = f"[...document.querySelectorAll('{item} .drawer button')].map((b) => b.textContent)"
     assert "Use this one" not in browser.js(buttons)
     assert browser.js(f"document.querySelector('{item} .drawer .pin-note').textContent") == (
-        "Your choice on Ultimate Guitar is in use: Back to caracole's pick first.")
-    press(browser, item, "Back to caracole's pick")
+        "Your UG choice is in use. Back to our pick first.")
+    press(browser, item, "Back to our pick")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})

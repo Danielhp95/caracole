@@ -571,7 +571,7 @@ def test_the_cases_meet_what_they_name(made):
     for case in ("no song and no sheet", "a song of spaces, no sheet", "a sheet no viewer was written for",
                  "a sheet that is no viewer's path"):
         assert out[("POST /versions/keep-more", case, True)] == {
-            "status": 404, "title": "Not found", "message": "There's no such sheet in the library."}, case
+            "status": 404, "title": "Not found", "message": "No such sheet in the book."}, case
     states = {r["case"]: r["out"] for r in made["routes"][1:] if r["fn"] == "POST /lacuerda/search"}
     assert states["auto: sent by the page"]["job"]["steps"][0][1][-1] == "--auto"
     assert states["by hand"]["job"]["steps"][0][1][-1] == "--progress"

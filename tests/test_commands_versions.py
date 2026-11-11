@@ -475,7 +475,7 @@ def test_keep_more_progress_counts_in_the_version_stage(config, sites, conn, tmp
     assert result.exit_code == 0, result.output
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
     ended = [(e["stage"], e["state"], e["detail"]) for e in events if "stage" in e and e["state"] != "running"]
-    assert ended[0] == ("song", "done", "in the library")
+    assert ended[0] == ("song", "done", "in the book")
     assert ended[1] == ("version", "done", "kept 3 of 10")
     assert [name for name, _, _ in ended[2:]] == ["pdf", "pages"]
     assert events[-1]["done"]["ok"] is True and events[-1]["done"]["requests"] == {"ug": 3}

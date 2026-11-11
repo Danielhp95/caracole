@@ -990,7 +990,7 @@ def test_an_unreadable_overrides_file_leads_the_page(conn, cfg):
     first = text.split("\n## ", 1)[1]
     assert first.startswith("Setup problems")
     setup = first.split("\n## ", 1)[0]
-    assert "overrides.toml can't be read" in setup and error in setup and "merge" in setup
+    assert "Can't read overrides.toml" in setup and error in setup and "merge" in setup
 
 
 def test_find_artist_skips_artists_in_index(conn, cfg):

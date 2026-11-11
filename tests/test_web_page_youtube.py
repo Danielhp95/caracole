@@ -358,7 +358,7 @@ def test_a_pasted_youtube_link_is_a_song_to_add_its_name_guessed_and_one_press_a
     assert browser.js(f"{panel}.querySelector('.yt-meta').textContent") == "kintanedu · 3:42"
     # A link is no words to search: no site search, no LaCuerda, no YouTube suggestion for it.
     assert not any(t.startswith("/api/search") for t in posted.read)
-    assert browser.js("document.getElementById('bar-status').textContent") == "A YouTube video: add it as a song"
+    assert browser.js("document.getElementById('bar-status').textContent") == "Extract from YouTube video"
     # In words, which show: no site was searched, so no mark says what one found.
     assert browser.js("document.getElementById('bar-status').getBoundingClientRect().width") > 1
     assert browser.js("document.getElementById('bar-counts').checkVisibility()") is False

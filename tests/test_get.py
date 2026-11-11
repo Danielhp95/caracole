@@ -837,7 +837,7 @@ def test_the_sheet_stage_says_which_site_it_asks(cfg, conn, sites):
 
 
 def test_the_match_stage_says_a_song_the_index_lacks_in_the_words_caracole_serve_reads(cfg, conn, sites):
-    # caracole serve's Match step reads it as "Match: not on UG" (outcome.py).
+    # caracole serve's Match step reads it as "Match · not on UG" (outcome.py).
     from caracole.get import MATCH_NOT_FOUND
 
     result, _ = look_up(cfg, sites=sites, artist="Nobody", title="Nothing At All")
@@ -854,7 +854,7 @@ def test_a_tab_you_pinned_on_ultimate_guitar_is_said_to_be_kept_over_a_lacuerda_
 
     assert CAMARON_2 not in sites.requests  # the pin wins: LaCuerda is asked nothing
     assert "sheet 202" in (folder(cfg, "Estopa", "Como Camarón") / "sheet.txt").read_text(encoding="utf-8")
-    said = "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
+    said = "your pinned UG tab is kept over your LaCuerda pick"
     assert result.details["sheet"].startswith(said) and said in result.details["lacuerda"]
     assert "this month" not in result.details["lacuerda"]
 
@@ -1082,7 +1082,7 @@ def test_a_song_in_no_songbook_remakes_none(cfg, conn, sites):
 
     _, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
-    assert ("songbooks", "skipped", "no songbook lists it") in progress.said
+    assert ("songbooks", "skipped", "in no songbook") in progress.said
     assert not (cfg.library_dir / "_songbooks").exists()
 
 
@@ -1097,7 +1097,7 @@ def test_a_broken_songbooks_file_is_said_and_stops_nothing(cfg, conn, sites):
     assert result.ok and result.refused is None
     assert (folder(cfg, "Radiohead", "Creep") / "sheet.pdf").is_file()
     state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
-    assert state == "skipped" and "songbooks.toml can't be read" in detail
+    assert state == "skipped" and "Can't read songbooks.toml" in detail
 
 
 def test_a_songbook_that_cant_be_made_is_said_and_the_lookups_sheet_stands(cfg, conn, sites):

@@ -81,7 +81,7 @@ def test_served_the_read_as_lines_source_opens_the_readings_and_one_is_pinned(cf
     browser.open(f"{base}/{quote(page)}")
     assert browser.wait("document.documentElement.dataset.ready === '1'")
     source, foot = browser.js(LINKS)
-    assert source == ["A", "/harmonica?page=" + quote(page, safe=""), "from the tab's own legend"]
+    assert source == ["A", "/harmonica?page=" + quote(page, safe=""), "from its legend"]
     assert foot is None
     browser.js("window.before = true")
     browser.click("#reading-src")
@@ -129,4 +129,4 @@ def test_from_a_file_no_link_but_the_text(cfg, tmp_path):
         assert b.wait("document.documentElement.dataset.ready === '1'")
         legend = b.js(LINKS)
     assert standard[0] is None and standard[1][0] is True  # hidden
-    assert legend[0] == ["SPAN", None, "from the tab's own legend"] and legend[1] is None
+    assert legend[0] == ["SPAN", None, "from its legend"] and legend[1] is None

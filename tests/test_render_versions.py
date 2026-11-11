@@ -126,7 +126,7 @@ def test_a_version_page_takes_its_own_key_and_links_no_pdf(conn, cfg):
     c = page_data(folder / version_names(str(C))[2])
     assert b["key"] == {"tonic": 9, "mode": "ionian", "from": "from the tab"}  # its tonality_name
     assert c["key"]["tonic"] == 0  # no tonality_name: from its chords, as the sheet's would be
-    assert c["key"]["from"] == "estimated from the chords"
+    assert c["key"]["from"] == "guessed from the chords"
     assert page_data(folder / "sheet.html")["key"]["tonic"] == 7
     assert "sheet.pdf" not in (folder / version_names(str(B))[2]).read_text("utf-8")
 

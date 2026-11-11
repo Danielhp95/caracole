@@ -472,7 +472,7 @@ def test_songs_without_a_sheet_are_named_missing(conn, cfg, two):
     cho = (folder(cfg) / "songbook.cho").read_text(encoding="utf-8")
     assert "Hysteria" not in cho and "Removed Song" not in cho  # an app gets the songs it can play
     page = (folder(cfg) / "songbook.html").read_text(encoding="utf-8")
-    assert "Hysteria" in page and "no sheet yet" in page and "not in the library" in page
+    assert "Hysteria" in page and "no sheet yet" in page and "not in the logbook" in page
 
 
 @pytest.fixture
@@ -496,7 +496,7 @@ def test_a_song_gone_from_the_library_is_missing_never_a_song_whose_title_its_ow
     (book,) = load_songbooks(songbooks_file(cfg.library_dir))
     entries = songbook_entries(conn, cfg.library_dir, overrides(cfg, ""), book)
     assert [(e.song.id if e.song else None, e.missing) for e in entries] == [
-        (gig.id, None), (entries[1].song.id, "no sheet yet"), (None, "not in the library")]
+        (gig.id, None), (entries[1].song.id, "no sheet yet"), (None, "not in the logbook")]
     fake = FakeChordPro()
     render(conn, cfg, runner=fake)
     police, wonderwall, live = inputs(fake, pdf_call(fake))
@@ -866,7 +866,7 @@ def test_a_songbooks_file_nested_too_deep_stops_neither_the_render_nor_the_page(
     assert stats.error and "songbooks.toml" in stats.error
     assert fake.calls == [] and stats.removed == 0
     page = build_library_page(conn, cfg, Overrides(), datetime(2026, 10, 18, 3, 41, tzinfo=UTC))
-    assert "songbooks.toml can't be read" in page
+    assert "Can't read songbooks.toml" in page
 
 
 def test_a_link_in_place_of_the_songbooks_folder_is_never_written_through(conn, cfg, two, tmp_path):

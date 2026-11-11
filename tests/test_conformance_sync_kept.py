@@ -349,14 +349,14 @@ def in_scope_records() -> list[dict]:
         ("parts in any order, one twice, one unknown", every, ["songbooks", "library", "library", "lyrics"], None,
          None),
         ("a song only here and one only there, listed, in a sync of the songbooks: both come along",
-         [_d(SONG, theirs=None, proposal="mine", why="only here"),
+         [_d(SONG, theirs=None, proposal="mine", why="only in our book"),
           _d(OTHER, mine=None, proposal="theirs", why="new there since the last sync")],
          ["songbooks"], {SONG: [BOOK], OTHER: [BOOK]}, None),
         ("a listed song gone on a side, in a sync of the songbooks: never removed, given, taken or asked",
          [_d("song/x/a", theirs=None, proposal="theirs", why="gone there since the last sync"),
           _d("song/x/b", mine=None, proposal="mine", why="gone here since the last sync"),
-          _d("song/x/c", mine=None, proposal="conflict", why="changed on both sides since the last sync"),
-          _d("song/x/d", theirs=None, proposal="conflict", why="changed on both sides since the last sync"),
+          _d("song/x/c", mine=None, proposal="conflict", why="both books changed it since the last share"),
+          _d("song/x/d", theirs=None, proposal="conflict", why="both books changed it since the last share"),
           _d("song/x/e", proposal="conflict"), _d(BOOK, theirs=None, proposal="theirs")],
          ["songbooks"], {f"song/x/{n}": [BOOK] for n in "abcde"}, None),
         ("a listed song gone on a side, the library asked too: as the library's",
@@ -552,9 +552,9 @@ def test_the_vectors_show_what_the_design_says(conn):
     assert kept["merged_kept", "the other side's agreement at the same time as this side's kept answer: the "
                                "agreement"] == {}
     assert kept["compare", "kept with no base, beside units compared as a first sync: only here, only there, never "
-                           "synced"] == [["song/a", sync.MINE, sync.KEPT_HERE], ["song/c", sync.MINE, "only here"],
-                                         ["song/d", sync.THEIRS, "only there"],
-                                         ["song/e", sync.CONFLICT, "on both sides, different, and never synced"]]
+                           "synced"] == [["song/a", sync.MINE, sync.KEPT_HERE], ["song/c", sync.MINE, "only in our book"],
+                                         ["song/d", sync.THEIRS, "only in theirs"],
+                                         ["song/e", sync.CONFLICT, "in both books, different, never shared"]]
     scope = {(r["fn"], r["case"]): r["out"] for r in scope_records() if r["fn"] != "names_of"}
     assert scope["in_scope", "a file of the songbooks alone never reads a song it lacks as removed"] == [OTHER, BOOK]
     assert scope["in_scope", "a file of the indexes alone removes nothing"] == [OTHER, BOOK2]

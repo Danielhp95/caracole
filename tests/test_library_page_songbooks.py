@@ -111,7 +111,7 @@ def test_a_song_gone_from_the_library_is_missing_with_no_id(conn, cfg):
     make_songbook(songbooks_file(cfg.library_dir), "Gig", ["Radiohead - Creep", "Pixies - Debaser"])
     debaser = books_of(page(conn, cfg))[0]["set"][1]
     assert (debaser["title"], debaser["artist"], debaser["id"], debaser["missing"], debaser["get"]) == (
-        "Debaser", "Pixies", None, "not in the library", False)
+        "Debaser", "Pixies", None, "not in the logbook", False)
     assert debaser["key"] == "pixies/debaser"  # its entry's
 
 
@@ -134,7 +134,7 @@ def test_a_broken_songbooks_file_is_said_and_the_page_is_made_all_the_same(conn,
     songbooks_file(cfg.library_dir).write_text("[Campfire\n", encoding="utf-8")
     html = page(conn, cfg)
     said = data_of(html)["songbooks"]
-    assert said["books"] == [] and "songbooks.toml can't be read" in said["error"] and "line 1" in said["error"]
+    assert said["books"] == [] and "Can't read songbooks.toml" in said["error"] and "line 1" in said["error"]
     assert len(data_of(html)["songs"]) == 1
 
 

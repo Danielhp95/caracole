@@ -50,7 +50,7 @@ def test_a_library_is_its_songs_removals_songbooks_and_the_entries_about_artists
     found = units(conn, load_overrides(path), books)
     assert sorted(found) == sorted([f"song/{song.key}", f"removed/{gone.key}", "songbook/campfire", "block/4242"])
     assert found[f"song/{song.key}"].label == "Radiohead - Creep"
-    assert found["songbook/campfire"].label == "the songbook Campfire"
+    assert found["songbook/campfire"].label == "songbook Campfire"
     assert found[f"removed/{gone.key}"].label == "Oasis - Wonderwall (removed)"
 
 
@@ -230,7 +230,7 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
     with pytest.raises(sync.PeerError, match="not as a caracole that syncs"):
         read("http://phone:8737", answer(404, {"text": "nope"}))
     with pytest.raises(sync.PeerError, match="answered 503: overrides.toml can't be read"):
-        read("http://phone:8737", answer(503, {"json": {"error": "overrides.toml can't be read"}}))
+        read("http://phone:8737", answer(503, {"json": {"error": "Can't read overrides.toml"}}))
     with pytest.raises(sync.PeerError, match="not a caracole sync state"):
         read("http://phone:8737", answer(200, {"json": {"format": 99}}))
 

@@ -90,7 +90,7 @@ def test_the_settings_offer_each_instrument_the_viewer_draws_the_guitar_first(tm
     assert seen["row"] and seen["chips"] == [[n, "true" if n == "Guitar" else "false"] for n in NAMES]
     assert seen["hint"] == "Standard tuning, E A D G B E." and seen["hash"] == ""
     assert [c[1] for c in uke["chips"]] == ["false", "true"] + ["false"] * 6
-    assert uke["hint"] == "G C E A, the G string high." and uke["hash"] == "#inst=ukulele"
+    assert uke["hint"] == "G C E A, high G." and uke["hash"] == "#inst=ukulele"
 
 
 @pytest.mark.parametrize("inst", [UKULELE, UKULELE_LOW_G, BARITONE], ids=lambda i: i.id)

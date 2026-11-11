@@ -1694,11 +1694,11 @@ def test_the_stage_says_each_of_its_ends(tmp_path):
     said = {tuple(r["out"]["result"]) for r in records if "out" in r}
     assert said == {
         ("done", "sheet kept from LaCuerda"), ("done", "not on LaCuerda"), ("done", "kept what it had"),
-        ("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"),
-        ("done", "the LaCuerda sheet you picked is the sheet already"),
-        ("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"),
-        ("skipped", "your pick on LaCuerda waits: it was asked for this month"),
-        ("skipped", "your pick on LaCuerda waits for the nightly run"),
+        ("skipped", "not for LaCuerda: not Spanish, a full sheet already, or asked this month"),
+        ("done", "your LaCuerda pick is the sheet already"),
+        ("skipped", "your pinned UG tab is kept over your LaCuerda pick"),
+        ("skipped", "your LaCuerda pick waits: asked this month already"),
+        ("skipped", "your LaCuerda pick comes tonight"),
     }, said
     assert {r["raises"]["type"] for r in records if "raises" in r} == {"BudgetExhausted", "ProviderError",
                                                                         "ProviderBlocked"}
@@ -1957,9 +1957,8 @@ def test_the_commands_end_with_each_of_their_lines(tmp_path):
     for start in ("Read: ", "Not found: ", "Not read: ", "Searched: ", "Found already: ", "Nothing found: ",
                   "Not searched: "):
         assert any(e.startswith(start) for e in ends), start
-    spent = [e for e in ends if "are spent" in e]
-    assert any("the lookup's 6 requests" in e for e in spent) and any("this hour's 60 lookup requests" in e
-                                                                      for e in spent)
+    spent = [e for e in ends if "spent" in e]
+    assert any("this fetch's 6 asks" in e for e in spent) and any("this hour (60 spent)" in e for e in spent)
     searches = [r for r in records if r["kw"]["command"] == "search"]
     for r in searches[1:]:  # every one past the first, which reads no word, says it is asking first
         assert r["out"]["result"]["lines"][0].startswith('caracole-progress: {"stage":"search","state":"running"'), r

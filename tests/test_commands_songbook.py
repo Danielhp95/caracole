@@ -246,7 +246,7 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
     index = (cfg.library_dir / "index.html").read_text(encoding="utf-8")  # caracole remove rewrote it
     data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', index, re.S).group(1))
     first = data["songbooks"]["books"][0]["set"][0]  # what its Songbooks tab shows
-    assert (first["title"], first["missing"], first["id"]) == ("De Música Ligera", "not in the library", None)
+    assert (first["title"], first["missing"], first["id"]) == ("De Música Ligera", "not in the logbook", None)
 
     rendered = run(setup, "render", "Campfire")
     assert rendered.exit_code == 0, rendered.output

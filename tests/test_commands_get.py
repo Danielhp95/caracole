@@ -77,7 +77,7 @@ def test_get_says_where_the_sheet_is_as_soon_as_it_is_kept(config, sites, conn, 
     sheet = tmp_path / "library" / "Radiohead" / "Creep" / "sheet.txt"
     lines = result.output.splitlines()
     at = next(i for i, line in enumerate(lines) if line.startswith("Sheet: "))
-    assert str(sheet) in lines[at] and "from Ultimate Guitar" in lines[at] and "readable after" in lines[at]
+    assert str(sheet) in lines[at] and "from UG" in lines[at] and "readable after" in lines[at]
     assert any(line.startswith("Lyrics: found") for line in lines[at:])  # after the sheet
     # Megalobiz's search too, for timed lyrics LRCLIB's plain ones lack: it has none here.
     assert lines[-1].startswith("Done in ") and "5 requests" in lines[-1] and "Megalobiz 1" in lines[-1]

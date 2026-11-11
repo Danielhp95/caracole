@@ -372,7 +372,7 @@ def test_a_reject_settles_a_review_only_when_it_names_every_candidate(app, conn,
     update_song(conn, creep.id, match_decision="review", match_candidates=REVIEW, review=True)
     add_reject(cfg.overrides_file, creep.display, ["radiohead/creep-live", "radiohead/creep"])
     response = post(app, "/fetch", {"song": str(creep.id)})
-    assert response.status == 409 and "Review it first" in shown(response) and queue.snapshot() == []
+    assert response.status == 409 and "Pick its match first" in shown(response) and queue.snapshot() == []
     card = card_data(get(app, "/"), creep.id)
     # Held (WebControls.held): the card shows its picker, and no Fetch now that could only fail.
     assert card["fetchable"] is False and [c["ref"] for c in card["candidates"]] == SHOWN.split()
@@ -518,7 +518,7 @@ def test_a_removal_says_how_it_goes_in_the_requests_tab_and_on_the_songs_own_car
     [view] = server["jobs"]
     assert view["kind"] == "remove" and view["songId"] == creep.id and view["line"]["text"] == "Queued…"
     [item] = tab_requests(app)
-    assert (item["display"], item["says"]["text"]) == ("Radiohead - Creep", "Queued, next")
+    assert (item["display"], item["says"]["text"]) == ("Radiohead - Creep", "Queued · next")
     queue.run_pending()
     conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # as caracole remove does
     [item] = tab_requests(app)
@@ -691,7 +691,7 @@ def test_a_done_fetch_without_a_sheet_is_not_found_only_when_it_looked_the_song_
     for how, line in [
         ("nothing", {"tone": "waiting", "text": "Not fetched yet", "link": None, "details": "#tab=requests&job=1"}),
         ("finished", {"tone": "missing", "text": "Not found",
-                      "link": {"label": "see the to-do page", "href": "_todo.md"}, "details": None}),
+                      "link": {"label": "To-do page", "href": "_todo.md"}, "details": None}),
     ]:
         queue = JobQueue(LooksUp(cfg, how))
         app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
@@ -817,10 +817,10 @@ def test_a_clean_song_fetched_now_is_missing_only_when_ug_answered(cfg, conn, tm
 @pytest.mark.parametrize("decision,review,error,line", [
     ("not_found", False, "Ultimate Guitar lists Obscure Band only by bare tab ids, which caracole can't see. "
                          "Find the artist's page on UG.",
-     {"tone": "missing", "text": "Not found", "link": {"label": "see the to-do page", "href": "_todo.md"},
+     {"tone": "missing", "text": "Not found", "link": {"label": "To-do page", "href": "_todo.md"},
       "details": None}),
     ("review", True, '"Obscure Band - Song" needs review first: run `caracole review`.',
-     {"tone": "review", "text": "Needs review", "link": {"label": "see the to-do page", "href": "_todo.md"},
+     {"tone": "review", "text": "Needs your pick", "link": {"label": "To-do page", "href": "_todo.md"},
       "details": None}),
 ])
 def test_a_requested_fetch_that_fetch_refuses_says_why_as_the_card_would(cfg, conn, decision, review, error,
@@ -981,8 +981,8 @@ def test_a_pick_says_on_the_cards_line_that_it_writes_the_answer(app, conn, queu
     from caracole.web.jobs import review_steps
 
     assert review_steps("Radiohead - Creep", pick="radiohead/creep") == [
-        ("Writing the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
-    assert review_steps("Radiohead - Creep", seen=["a/b"])[0][0] == "Writing the answer to overrides.toml"
+        ("Noting your answer in overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
+    assert review_steps("Radiohead - Creep", seen=["a/b"])[0][0] == "Noting your answer in overrides.toml"
 
 
 def test_a_pick_without_fetch_only_answers(app, conn, queue):
@@ -1162,9 +1162,9 @@ def test_a_request_that_ends_in_a_review_leads_to_its_picker(app, conn, queue):
     assert "/review" not in json.dumps(tab_requests(app))  # not while it runs
     queue.run_pending()
     job = tab_request(app, 1)
-    assert job["says"] == {"tone": "review", "text": "Needs review"}
+    assert job["says"] == {"tone": "review", "text": "Needs your pick"}
     assert job["reason"] == "caracole isn't sure which Ultimate Guitar song it is."
-    assert job["actions"] == [{"label": "Pick the match", "primary": True, "href": f"/review?song={creep.id}"}]
+    assert job["actions"] == [{"label": "Pick", "primary": True, "href": f"/review?song={creep.id}"}]
 
 
 def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue):
@@ -1236,7 +1236,7 @@ def test_a_request_that_ends_not_found_links_to_its_search_hits(app, conn, queue
     crep = not_found(conn)
     queue.run_pending()
     job = tab_request(app, 1)
-    assert {"label": "See what caracole search finds", "primary": False, "href": f"/review?song={crep.id}"} in (
+    assert {"label": "Search the index", "primary": False, "href": f"/review?song={crep.id}"} in (
         job["actions"])
 
 
@@ -1328,15 +1328,15 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     from caracole.songs import list_songs
 
     [song] = list_songs(conn)
-    assert item["says"] == {"tone": "review", "text": "Needs review"} and "error" not in item.get("reason", "")
-    assert item["actions"] == [{"label": "Pick the match", "primary": True, "href": f"/review?song={song.id}"}]
+    assert item["says"] == {"tone": "review", "text": "Needs your pick"} and "error" not in item.get("reason", "")
+    assert item["actions"] == [{"label": "Pick", "primary": True, "href": f"/review?song={song.id}"}]
     assert "to-do" not in json.dumps(item)
     view = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"][0]
-    assert view["line"]["link"] == {"label": "Pick the match", "href": f"review?song={song.id}"}
+    assert view["line"]["link"] == {"label": "Pick", "href": f"review?song={song.id}"}
     assert view["card"]["candidates"]  # the card it is drawn again as has the picker the line names
     # The lookup's own words are there, in the request's output: its sheet waits for a pick, never failed.
     [sheet] = [stage for stage in item["output"]["stages"] if stage["label"] == "The sheet"]
-    assert sheet["badge"] == {"tone": "review", "text": "Waits for a pick"} and "Pick the match" in sheet["note"]
+    assert sheet["badge"] == {"tone": "review", "text": "Waits for a pick"} and "Pick" in sheet["note"]
     assert "isn't sure which Ultimate Guitar song" in sheet["detail"]
 
 
@@ -1355,7 +1355,7 @@ def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
     item = tab_request(app, 1)
     badges = [s["badge"] for s in item["output"]["stages"] + item["output"]["steps"]]
     assert {"tone": "failed", "text": "Failed"} in badges and "Waits for a pick" not in json.dumps(item)
-    assert item["actions"][0] == {"label": "Pick the match", "primary": True, "href": f"/review?song={creep.id}"}
+    assert item["actions"][0] == {"label": "Pick", "primary": True, "href": f"/review?song={creep.id}"}
 
 
 # --- what every write must carry --------------------------------------------------------------
@@ -1399,7 +1399,7 @@ def test_the_requests_tab_has_each_request_newest_first_its_output_folded(app, c
     post(app, "/request", {"artist": "Evil", "title": "<script>alert(1)</script>", "fetch": "1"})
     [item] = tab_requests(app)
     assert item["display"] == "Evil - <script>alert(1)</script>"  # data: the tab writes it with textContent
-    assert item["says"]["text"] == "Queued, next"
+    assert item["says"]["text"] == "Queued · next"
     queue.run_pending()
     creep = add_song(conn, "Radiohead", "Creep")
     post(app, "/fetch", {"song": str(creep.id)})
@@ -1416,7 +1416,7 @@ def test_the_requests_tab_has_each_request_newest_first_its_output_folded(app, c
     # tab opens its output.
     output = newest["output"]
     assert "The sheet" in [s["label"] for s in output["stages"]]
-    assert [(s["label"], s["badge"]["text"]) for s in output["steps"]] == [("Look it up now", "Done")]
+    assert [(s["label"], s["badge"]["text"]) for s in output["steps"]] == [("Fetching", "Done")]
     assert "lines" not in output["steps"][0]
     assert tab_request(app, 2, opened=True)["output"]["steps"][0]["lines"] == ["ok"]
 
@@ -1748,7 +1748,7 @@ def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
     assert data["skipped"] == [{"source": "lacuerda", "name": "LaCuerda",
                                 "why": "its index is empty: the nightly run reads its listings of every artist"},
                                {"source": "harptabs", "name": "harptabs.com",
-                                "why": "its index is empty: the nightly run reads its sitemap"}]
+                                "why": "its index is empty: tonight's run reads its sitemap"}]
 
 
 def test_the_search_lists_harptabs_tabs_by_title_and_none_while_it_is_turned_off(app, cfg, conn):
@@ -2025,7 +2025,7 @@ def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
     assert data["gtptabs"] == [] and data["musescore"] == []
     reasons = {s["source"]: s["why"] for s in data["skipped"]}
-    assert reasons["gtptabs"] == reasons["musescore"] == "turned off in caracole.toml"
+    assert reasons["gtptabs"] == reasons["musescore"] == "off in caracole.toml"
     looked = {s["source"]: (s["state"], s["label"]) for s in data["looked"]}
     assert looked["gtptabs"] == ("off", "gtptabs.com: off") and looked["musescore"] == ("off", "MuseScore: off")
 
@@ -3077,7 +3077,7 @@ def test_a_json_or_bytes_route_reads_its_kind_with_the_form_token_in_a_header(ap
     assert refused(sent(app, "/t/bytes", b"123456789", "application/octet-stream"), 413)
     # JSON that can't be read
     for body in (b"{", b'{"a": 1} x', b"\xff", b"", b"'a'"):
-        assert refused(sent(app, "/t/json", body, JSON), 400) == {"error": "That can't be read as JSON."}, body
+        assert refused(sent(app, "/t/json", body, JSON), 400) == {"error": "Can't read that as JSON."}, body
     with_test_routes(monkeypatch, Route("POST", "/t/json", lambda app, asked, data: json_response(200, {}),
                                         body="json", limit=10 ** 6))
     assert refused(sent(app, "/t/json", b"[" * 100_000 + b"]" * 100_000, JSON), 400)

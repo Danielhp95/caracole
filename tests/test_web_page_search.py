@@ -51,7 +51,7 @@ class FakeGet:
         try:
             stage("song", "running")
             sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
-            stage("song", "done", "in the library")
+            stage("song", "done", "in the book")
             stage("sheet", "running")
             time.sleep(0.3)  # long enough for the page to show it
             song = find_song(conn, override_key(f"{args[-2]} - {args[-1]}"))
@@ -339,12 +339,12 @@ def test_one_song_from_two_sites_is_one_line_with_two_icons(cfg, live, browser):
     line = "#results .hit[data-ug='oasis/wonderwall']"
     assert browser.js(f"document.querySelectorAll(\"{line}\").length") == 1
     assert browser.js(f"[...document.querySelectorAll(\"{line} .line-sources .source\")].map((m) => m.getAttribute('alt')"
-                      " || m.getAttribute('aria-label'))") == ["from Ultimate Guitar", "from gtptabs.com"]
+                      " || m.getAttribute('aria-label'))") == ["from UG", "from gtptabs.com"]
     assert browser.js(f"document.querySelector(\"{line} .line-facts\").textContent") == "chords ×9 · Guitar Pro file"
     # Under its "⋯", each site's: UG's versions, gtptabs.com's page.
     browser.click(f"{line} .line-more")
     panel = browser.js(f"document.querySelector(\"{line} .line-panel\").textContent")
-    assert "Chords 1 of 9" in panel and "On gtptabs.com" in panel
+    assert "Chords 1 of 9" in panel and "On gtptabs" in panel
     assert browser.js(f"document.querySelector(\"{line} .line-panel a[href*='gtptabs.com']\").href") == \
         "https://gtptabs.com/tabs/15/oasis/wonderwall.html"
     # Its Get it is Ultimate Guitar's song, whose lookup gets the Guitar Pro file from gtptabs.com too.
@@ -736,7 +736,7 @@ def test_a_song_of_yours_keeps_its_buttons_and_a_removed_songs_name_adds_it_agai
 
 # What each line of the results looks like, read from the page: whether it is a song you have, its name's colour and
 # weight against the page's own (--text, --muted), the wash behind it and the edge (--accent at --have-tint), and the
-# width of its "In your library" pill, which a song you have shows to a screen reader alone.
+# width of its "In your logbook" pill, which a song you have shows to a screen reader alone.
 HAVE = """
 (() => {
   const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
@@ -1193,14 +1193,14 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
     assert browser.js(REQUESTS) == ["Request"]
     assert browser.js("document.getElementById('request-box').checkVisibility()") is False
     assert browser.js(BACK) is False
-    assert browser.js(STATUS) == "Nothing on the sites" and browser.js(WORDS_SHOWN) is False
+    assert browser.js(STATUS) == "Not on the sites" and browser.js(WORDS_SHOWN) is False
     assert browser.js(NO_SEARCHED_LINE)
     assert browser.js(OLD_NOTES) == 0 and browser.js("document.querySelector('#results .did-you-mean')") is None
     # Its chevron opens the rest: Ask LaCuerda (L is unread), and why caracole may not see an artist, folded.
     assert browser.js(DRAWER)["open"] is False
     browser.click(f"{NOTHING} .line-more")
     assert browser.js(DRAWER) == {
-        "open": True, "buttons": ["Ask LaCuerda · 1 request"], "why": "Why can't caracole find it?", "folded": True,
+        "open": True, "buttons": ["Ask LaCuerda · 1 request"], "why": "Why isn't it found?", "folded": True,
         "code": ['[artist_url]\n"lynrd" = "https://www.ultimate-guitar.com/artist/…"', 'caracole add ARTIST "lynrd"']}
     assert browser.js(f"document.querySelector('{NOTHING} .ask-lacuerda').title").startswith(
         "LaCuerda's list doesn't reach L yet")
@@ -1325,7 +1325,7 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
 
 
 def test_the_row_under_the_box_says_in_words_what_no_mark_can(cfg, live, browser):
-    # Before anything is typed nothing; a hint in words before three letters; "Searching the sites…" in words until the
+    # Before anything is typed nothing; a hint in words before three letters; "Searching sites" in words until the
     # first answer; then the marks, which stay (dimmed) while the next query's answer comes; Escape leaves them.
     base, _, asked = live
     sites(cfg, ug=[("radiohead", "creep", 4), ("radiohead", "karma-police", 2)])
@@ -1356,7 +1356,7 @@ def test_the_row_under_the_box_says_in_words_what_no_mark_can(cfg, live, browser
         "getComputedStyle(document.getElementById('bar-counts')).opacity")) == 1
     browser.press("Escape")  # your songs again: the line says what typing and Enter do
     assert browser.wait(f"!{COUNTS_SHOWN}")
-    assert browser.js(WORDS_SHOWN) and browser.js(STATUS) == "None of yours match: Enter searches the sites"
+    assert browser.js(WORDS_SHOWN) and browser.js(STATUS) == "None of yours match · Enter searches the sites"
 
 
 def test_what_follows_an_answer_is_said_in_words_beside_its_marks(cfg, live, browser):
@@ -1438,7 +1438,7 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     assert browser.js(COUNTS) == [["library", "done", 0], ["ug", "done", 0], ["gtptabs", "empty", 0],
                                   ["lacuerda", "empty", 0], ["musescore", "empty", 0], ["harptabs", "empty", 0],
                                   ["gametabs", "empty", 0]]
-    assert browser.js(LOOKUP_STATUS) == "Nothing on the sites" and browser.js(LOOKUP_WORDS_SHOWN) is False
+    assert browser.js(LOOKUP_STATUS) == "Not on the sites" and browser.js(LOOKUP_WORDS_SHOWN) is False
     assert browser.js(NO_SEARCHED_LINE)
     assert browser.js("document.getElementById('by-name-box').checkVisibility()") is False  # one Look up
     browser.click(f"{NOTHING} .row-more")

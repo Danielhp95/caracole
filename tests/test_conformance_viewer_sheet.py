@@ -693,7 +693,7 @@ def test_the_sheets_reach_every_kind_of_line_and_every_way_to_a_key():
         for k, src in [(s.key, s.key_source), *SONG_KEYS]:
             origins.add(song_key(parsed, k, src)[3])
     assert kinds == {"Lyrics", "ChordRow", "Text", "Tab", "Blank"}
-    assert {"from the tab", "estimated from the chords", "from the audio", "from info.json", "from the sheet",
+    assert {"from the tab", "guessed from the chords", "from the audio", "from the song's entry", "from the sheet",
             "from MusicBrainz Lookup"} <= origins
     assert any(sheet.split_preamble(s.cho.splitlines()).legend for s in viewer_corpus.sheets())
     assert any(sheet.preamble_section(parse_sheet(s.cho)) for s in viewer_corpus.sheets())

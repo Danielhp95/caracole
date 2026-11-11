@@ -236,10 +236,10 @@ def test_a_comparison_lists_each_difference_with_its_kind_proposal_and_both_dige
                              "name": there.cfg.library_name, "kind": "server", "made": None}
     mine, theirs = here.units(), there.units()
     assert [(d["label"], d["kind"], d["proposal"], d["why"]) for d in found["differences"]] == [
-        ("Estopa - Tu Calorro", "song", "theirs", "only there"),
+        ("Estopa - Tu Calorro", "song", "theirs", "only in theirs"),
         ("Muse - Hysteria", "song", "mine", "only here"),
-        ("Oasis - Wonderwall", "song", "conflict", "on both sides, different, and never synced"),
-        ("Radiohead - Creep", "song", "conflict", "on both sides, different, and never synced")]
+        ("Oasis - Wonderwall", "song", "conflict", "in both books, different, never shared"),
+        ("Radiohead - Creep", "song", "conflict", "in both books, different, never shared")]
     creep = by_label(found)["Radiohead - Creep"]
     assert creep["id"] == unit["Radiohead - Creep"]
     assert (creep["here"], creep["there"]) == (mine[creep["id"]].digest, theirs[creep["id"]].digest)
@@ -606,7 +606,7 @@ def test_a_sync_that_leaves_a_unit_says_how_many_and_why_and_its_next_step_is_a_
     (seen,) = polled["jobs"]
     assert seen["line"] == {"tone": "waiting", "text": "Synced: 1 change left as it was", "link": None,
                             "details": f"#tab=requests&job={job.id}"}
-    assert seen["outcome"]["left"] == [[ids["Radiohead - Creep"], "skipped, as chosen"]]
+    assert seen["outcome"]["left"] == [[ids["Radiohead - Creep"], "skipped, as you chose"]]
     said = outcome(job, job_line(job, None))
     assert (said.tone, said.word, said.reason) == ("waiting", "Synced", "Took 2 changes here and gave 1 change "
                                                                         "there. 1 change left as it was.")
@@ -790,7 +790,7 @@ def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = 
 def test_a_syncs_view_while_it_runs_is_its_running_stage_and_once_over_what_it_did():
     running = peer_job("sync", "running", {"compare": ("done", "4 differences"), "take": ("running", "2 changes")})
     seen = view(running, [running], None, None)
-    assert seen["line"]["text"] == "Taking what changed there…" and seen["outcome"] is None
+    assert seen["line"]["text"] == "Taking their entries…" and seen["outcome"] is None
     assert seen["steps"][1] == {"name": "take", "label": "Take", "state": "running", "detail": "2 changes"}
     # A crash in its take: the line is the error, never what the stage said while it ran.
     crashed = peer_job("sync", "failed", {"compare": ("done", "4 differences"), "take": ("running", "2 changes")},

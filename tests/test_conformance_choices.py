@@ -907,10 +907,10 @@ def test_the_versions_cases_meet_what_they_name(made):
     assert "Fetching the version…" in out[("GET /versions", "base", "keep, running")]["page"]
     assert 'http-equiv="refresh"' in out[("GET /versions", "base", "keep, queued")]["page"]
     assert 'http-equiv="refresh"' not in out[("GET /versions", "base", "keep, failed")]["page"]
-    assert "Done: it is the one now." in out[("GET /versions", "chosen", "choose, done: the one now")]["page"]
-    assert "Done: it is kept beside the sheet." in out[("GET /versions", "kept", "keep, done: kept")]["page"]
-    assert "recorded under [pin]" in out[("GET /versions", "pinned", "choose, done: pinned, not the one yet")]["page"]
-    assert "caracole picks the sheet again" in out[("GET /versions", "unpinned", "clear, done: caracole picks again")][
+    assert "Done · the one now." in out[("GET /versions", "chosen", "choose, done: the one now")]["page"]
+    assert "Done · kept beside the sheet." in out[("GET /versions", "kept", "keep, done: kept")]["page"]
+    assert "noted under [pin]" in out[("GET /versions", "pinned", "choose, done: pinned, not the one yet")]["page"]
+    assert "we pick the sheet again" in out[("GET /versions", "unpinned", "clear, done: caracole picks again")][
         "page"]
     posted = out[("POST /versions/choose", "base", "choose a version")]
     assert posted["status"] == 303 and posted["location"].startswith("/versions?") and posted["job"]["steps"]
@@ -929,7 +929,7 @@ def test_the_harmonica_cases_meet_what_they_name(made):
     assert page["page"].count('action="/harmonica/pin"') == 6
     assert out[("GET /harmonica", "spokey", "the page 'Cowboy Bebop/Spokey Dokey/harmonica-4.html'")]["status"] == 404
     assert out[("GET /harmonica", "spokey", "the page 'Cowboy Bebop/Spokey Dokey/harmonica-5.html'")]["status"] == 404
-    assert "Back to caracole&#x27;s guess" in out[("GET /harmonica", "letters", "harmonica-1")]["page"]
+    assert "Back to our guess" in out[("GET /harmonica", "letters", "harmonica-1")]["page"]
     for case, status in (("pin no notation", 400), ("pin no JSON", 400), ("pin no meaning", 400),
                          ("clear with no pin", 409), ("pin an ignored song's tab", 409)):
         do = "clear" if case.startswith("clear") else "pin"

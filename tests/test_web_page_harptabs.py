@@ -118,7 +118,7 @@ def test_billy_joel_is_harptabs_coms_artist_with_his_songs_whose_get_it_keeps_th
     assert browser.js(f"{HT_ROWS}[0].querySelector('.line-sources .source').dataset.source") == "harptabs"
     assert browser.js(f"{HT_ROWS}.map((h) => h.querySelector('.badge.instrument').textContent)") == ["Harmonica"] * 3
     assert "harmonica tab ×4" in browser.js(f"{HT_ROWS}[0].textContent")
-    assert "on harptabs.com" in browser.js("document.getElementById('bar-status').textContent")
+    assert "on harptabs" in browser.js("document.getElementById('bar-status').textContent")
     assert queue.snapshot() == []
     # "+ 1 more": the song of his the index holds that the row left out, from /api/artist, asking no site.
     assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by billy joel on harptabs.com"
@@ -219,7 +219,7 @@ def test_the_lookup_page_lists_harptabs_com_last_and_its_artists_songs(cfg, live
     assert browser.wait("[...document.querySelectorAll('#results .group')].some((g) => g.textContent === "
                         "'On harptabs.com')")
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups[-1] == "On harptabs.com", groups
+    assert groups[-1] == "On harptabs", groups
     browser.click("#results .hit[data-slug='artist/1178/billy-joel'] .row-action button")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 4")
     browser.js(f"{HT_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Vienna!')"

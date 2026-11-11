@@ -307,7 +307,7 @@ def test_a_version_you_chose_offers_caracoles_pick_back(tmp_path):
         cmd = b.js("document.querySelector('#ver-acts .cmd').textContent")
     assert shown["line"] == "Ver 6 of 13 · 4.58★ (180) · the one"
     assert shown["prev"] == "version-2161290.html" and shown["next"] is None  # by rank, the 6th after the 3rd
-    assert shown["acts"] == [["Back to caracole's pick", None]]
+    assert shown["acts"] == [["Back to our pick", None]]
     assert cmd == f"caracole versions {DISPLAY} --clear"
 
 
@@ -327,7 +327,7 @@ def test_the_way_back_to_caracoles_pick_is_offered_while_a_pin_chooses_the_sheet
         with viewer(tmp_path / name, pages["sheet.html"].as_uri()) as b:
             open_list(b)
             seen_acts[name] = seen(b)["acts"]
-    assert seen_acts == {"pinned": [["Back to caracole's pick", None]], "loose": []}
+    assert seen_acts == {"pinned": [["Back to our pick", None]], "loose": []}
 
 
 @in_chromium
@@ -352,7 +352,7 @@ def test_served_the_list_links_to_caracole_serves_versions_page(tmp_path):
     make, back = shown["acts"]
     assert make[0] == "Make this the one" and query(make[1]) == (
         "/versions", {"sheet": "Artist/Title/version-39144.html", "tab": "39144", "do": "choose"})
-    assert back[0] == "Back to caracole's pick" and query(back[1]) == (
+    assert back[0] == "Back to our pick" and query(back[1]) == (
         "/versions", {"sheet": "Artist/Title/version-39144.html", "do": "clear"})
     keep = shown["rows"][3]["actions"]
     assert len(keep) == 1 and keep[0][0] == "Keep it" and query(keep[0][1]) == (

@@ -51,7 +51,7 @@ class FakeLookup:
             emit(PROGRESS_PREFIX + json.dumps({"stage": name, "state": state, "detail": detail}))
 
         stage("song", "running")
-        stage("song", "done", "in the library")
+        stage("song", "done", "in the book")
         stage("sheet", "running")
         time.sleep(0.5)  # long enough for the page to show it
         self.hold.wait(30)

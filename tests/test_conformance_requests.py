@@ -217,7 +217,7 @@ def queue_at_work() -> tuple[str, list[tuple[Job, SongFacts | None, int | None]]
     now = "2026-11-03T23:30:00.250000+00:00"
     running = lookup(20, "Radiohead", "Creep", state="running", queued="2026-11-03T23:27:00+00:00",
                      started="2026-11-03T23:27:59.750000+00:00",
-                     stages={"song": ("done", "in the library"), "match": ("done", "matched in UG"),
+                     stages={"song": ("done", "in the book"), "match": ("done", "matched in UG"),
                              "sheet": ("running", "from LaCuerda")},
                      steps_said=[("running", ["Looking Radiohead - Creep up", "Asking LaCuerda"], 0)])
     over = [
@@ -236,7 +236,7 @@ def queue_at_work() -> tuple[str, list[tuple[Job, SongFacts | None, int | None]]
         (lookup(18, "Soda Stereo", "De Música Ligera", state="failed", queued="2026-11-03T23:05:00+00:00",
                 started="2026-11-03T23:05:01+00:00", finished="2026-11-03T23:10:00+00:00",
                 stages={"song": ("done", ""), "match": ("done", ""),
-                        "sheet": ("failed", "Ultimate Guitar failed (ReadTimeout); the nightly run tries again")},
+                        "sheet": ("failed", "Ultimate Guitar failed (ReadTimeout); tried again tonight")},
                 steps_said=[("failed", [f"line {n}" for n in range(5)], 195)]),
          SongFacts(), 2),
         (lookup(17, "Gustavo Cerati", "Crimen", state="done", queued="2026-10-24T11:59:00+00:00",
@@ -554,8 +554,8 @@ def test_the_feed_records_cover_what_the_tab_draws():
     assert any(s.get("note") == feed_module.PICK_STEP for req in requests for s in req["output"]["steps"])
     assert any(s.get("lines", [""])[0].endswith("earlier lines") for req in requests for s in req["output"]["steps"])
     actions = [a for req in requests for a in req.get("actions", [])]
-    assert {a["label"] for a in actions} >= {"Cancel", "Try again", "Open", feed_module.SEARCH, "Pick the match",
-                                             "Get it from there"}
+    assert {a["label"] for a in actions} >= {"Cancel", "Try again", "Open", feed_module.SEARCH, "Pick",
+                                             "Fetch from there"}
     assert any(a["primary"] for a in actions) and any(not a["primary"] for a in actions)
     assert any("post" in a for a in actions) and any("href" in a for a in actions)
     metas = [req["output"]["meta"] for req in requests]

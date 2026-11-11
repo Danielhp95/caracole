@@ -89,7 +89,7 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
             val label = try {
                 export.label(found.version, traditional = Exports.traditional(asked))
             } catch (e: ExportError) {
-                throw Refused(500, "No PDF", "The PDF couldn't be made: ${e.message}")
+                throw Refused(500, "No PDF", "Couldn't make the PDF: ${e.message}")
             }
             found to label
         }
@@ -162,15 +162,14 @@ class ExportRoutes(val parts: PhoneParts, private val mirror: () -> Mirror? = { 
         /** The file name an export's download name is made from (download_names.download_name's). */
         private const val PDF_NAME = "sheet.pdf"
 
-        private val NOT_AN_ADDRESS get() = Refused(400, "Not an address", "That address can't be read.")
-        private val NOT_A_VERSION get() = Refused(400, "Not a version", "That version can't be read.")
-        private val NOT_FOUND get() = Refused(404, "Not found", "There's no such sheet in the library.")
-        private const val BESIDE = "This is the auto-chords sheet kept beside the song's own sheet, with chords of " +
-            "its own: a PDF in another version is made from the song's own sheet, so open that one from the library " +
-            "and export it."
-        private const val VERSION = "This is a version kept beside the song's own sheet, with chords of its own: a " +
-            "PDF in another version is made from the song's own sheet, so make this version the one first (Make " +
-            "this the one, under its Versions), then export it from the song's sheet."
+        private val NOT_AN_ADDRESS get() = Refused(400, "Not an address", "Can't read that address.")
+        private val NOT_A_VERSION get() = Refused(400, "Not a version", "Can't read that version.")
+        private val NOT_FOUND get() = Refused(404, "Not found", "No such sheet in the book.")
+        private const val BESIDE = "This is the auto-chords sheet kept beside the song's own. A PDF in another " +
+            "version comes from the song's own sheet: open that from the book and export it."
+        private const val VERSION = "This is a version kept beside the song's own. A PDF in another version comes " +
+            "from the song's own sheet: make this one the one first (Make this the one, under Versions), then export " +
+            "from the song's sheet."
 
         /** app.written_pages' names: the sheets' viewers, a songbook's page and the library page. */
         private val WRITTEN = setOf(Exports.HUMAN_VIEWER, Exports.AUTO_VIEWER, "songbook.html", "index.html")

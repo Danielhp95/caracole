@@ -397,7 +397,7 @@ def test_every_rule_of_a_name_is_in_the_vectors(corpus):
     words = {r["words"].split(":")[0] for r in _records(corpus, "writers_names.jsonl") if "words" in r}
     assert words == {"A songbook's name can't hold a line break or a control character", "A songbook needs a name",
                      "A songbook's name is 80 characters at most",
-                     "A songbook's name can't start with a dot (its folder would be hidden)",
+                     "A songbook's name can't start with a dot (its folder would hide)",
                      "A songbook's name needs a letter or a digit"}
 
 

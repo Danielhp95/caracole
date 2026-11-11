@@ -62,19 +62,19 @@
 {"args":["\t\t"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook needs a name"}
 {"args":["\t\t"],"fn":"caracole.songbook.name_key","kw":{},"out":""}
 {"args":["\t\t"],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
-{"args":[".hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.hidden'"}
+{"args":[".hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '.hidden'"}
 {"args":[".hidden"],"fn":"caracole.songbook.name_key","kw":{},"out":".hidden"}
 {"args":[".hidden"],"fn":"caracole.songbook._folder_key","kw":{},"out":"hidden"}
-{"args":["  .hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.hidden'"}
+{"args":["  .hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '.hidden'"}
 {"args":["  .hidden"],"fn":"caracole.songbook.name_key","kw":{},"out":".hidden"}
 {"args":["  .hidden"],"fn":"caracole.songbook._folder_key","kw":{},"out":"hidden"}
-{"args":["."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.'"}
+{"args":["."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '.'"}
 {"args":["."],"fn":"caracole.songbook.name_key","kw":{},"out":"."}
 {"args":["."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
-{"args":[".."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '..'"}
+{"args":[".."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '..'"}
 {"args":[".."],"fn":"caracole.songbook.name_key","kw":{},"out":".."}
 {"args":[".."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
-{"args":["..."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '...'"}
+{"args":["..."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '...'"}
 {"args":["..."],"fn":"caracole.songbook.name_key","kw":{},"out":"..."}
 {"args":["..."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
 {"args":["---"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '---'"}
@@ -188,13 +188,13 @@
 {"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a '…"}
 {"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook.name_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
 {"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook._folder_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
-{"args":[".It's"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): \".It's\""}
+{"args":[".It's"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): \".It's\""}
 {"args":[".It's"],"fn":"caracole.songbook.name_key","kw":{},"out":".it's"}
 {"args":[".It's"],"fn":"caracole.songbook._folder_key","kw":{},"out":"it's"}
-{"args":[".\"quoted\""],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.\"quoted\"'"}
+{"args":[".\"quoted\""],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '.\"quoted\"'"}
 {"args":[".\"quoted\""],"fn":"caracole.songbook.name_key","kw":{},"out":".\"quoted\""}
 {"args":[".\"quoted\""],"fn":"caracole.songbook._folder_key","kw":{},"out":"quoted"}
-{"args":[".a\\b"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.a\\\\b'"}
+{"args":[".a\\b"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would hide): '.a\\\\b'"}
 {"args":[".a\\b"],"fn":"caracole.songbook.name_key","kw":{},"out":".a\\b"}
 {"args":[".a\\b"],"fn":"caracole.songbook._folder_key","kw":{},"out":"a-b"}
 {"args":["It's \"it\""],"fn":"caracole.songbook.check_name","kw":{},"out":"It's \"it\""}

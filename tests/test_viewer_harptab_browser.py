@@ -94,7 +94,7 @@ def test_no_sideways_scroll_on_a_phone(tmp_path, stem):
 def test_a_hole_tapped_sounds_its_note_on_the_harp_chosen_and_the_harps_plus_moves_it(tmp_path):
     with opened(tmp_path, written(tmp_path, tab("588_hotel-california"))) as b:
         assert b.js("document.getElementById('harp-name').textContent") == "D harp"
-        assert b.js("document.getElementById('harp-why').textContent") == "harptabs.com's key"
+        assert b.js("document.getElementById('harp-why').textContent") == "harptabs' key"
         b.click('#sheet .h[data-i="0"]')  # 8 blown
         assert b.wait("document.documentElement.dataset.heard === '%s'" % F_SHARP_6)
         lit = b.js("document.querySelector('#sheet .h[data-i=\"0\"]').classList.contains('on')")

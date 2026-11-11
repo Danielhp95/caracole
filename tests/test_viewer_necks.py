@@ -335,7 +335,7 @@ def test_the_rails_own_hide_button_at_its_top_hides_it_and_the_bars_button_bring
         b.press("Enter")  # the focus is on the bar's button now: Enter brings the rail back
         back = [b.js(RAIL), toggles(b)]
     assert 0 <= top[0] <= 8 and top[2] <= 345 and top[3] >= 44 * 1.15 - 1 and top[4] >= 44 * 1.15 - 1
-    assert top[5] == "Hide chord necks"
+    assert top[5] == "Hide necks"
     assert hidden[0]["rail"] is None and hidden[1]["pressed"] == "false" and hidden[1]["focus"] == "necks-toggle"
     assert back[0]["rail"]["width"] == 345 and back[1]["pressed"] == "true"
 

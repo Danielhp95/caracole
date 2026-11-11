@@ -450,7 +450,7 @@ def test_the_cases_meet_what_they_name(made):
         by_status.setdefault(out["status"], set()).add(out.get("title", ""))
     # A page, the bundle, and every refusal the routes make: Power Tab, past 8 MiB, not a file caracole keeps.
     assert by_status[200] == {""}
-    assert {"Not a Guitar Pro file", "A Power Tab file", "Not in the library", "Not found"} <= by_status[404]
+    assert {"Not a Guitar Pro file", "A Power Tab file", "Not in the book", "Not found"} <= by_status[404]
     assert by_status[413] == {"Too large"} and by_status[400] == {"Not an address"}
     assert by_status[503] == {"No alphaTab here"}
     pages = [out for (target, _), out in routes.items() if out["status"] == 200 and target.startswith("/guitar")]

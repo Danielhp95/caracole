@@ -386,7 +386,7 @@ def test_a_song_with_no_key_offers_chords_alone_and_says_why(tmp_path):
         b.click("#more")
         seen = b.js("""({chips: [...document.querySelectorAll('#names > button:not(:disabled)')].map((c) => c.textContent),
           hint: document.getElementById('names-hint').textContent, numerals: document.querySelectorAll('#sheet .nm').length})""")
-    assert seen == {"chips": ["Chords"], "hint": "caracole can't tell this song's key, so it can't number its chords.",
+    assert seen == {"chips": ["Chords"], "hint": "No key found, so no numerals.",
                     "numerals": 0}
 
 
@@ -602,8 +602,8 @@ def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(
     assert not bare["picture"] and bare["notes"] == [] and bare["off"] is None
 
 
-KEYBOARD = ["Keyboard ›", "Show the notes on a keyboard"]
-CIRCLE = ["‹ Circle", "Show the notes on a circle"]
+KEYBOARD = ["Keyboard ›", "Notes on a keyboard"]
+CIRCLE = ["‹ Circle", "Notes on a circle"]
 
 
 @in_chromium

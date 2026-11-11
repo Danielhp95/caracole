@@ -553,7 +553,7 @@ def test_each_active_filter_is_a_removable_tag(shelf, laptop):
     laptop.open(shelf.as_uri() + "#mode=minor")
     assert [t["text"] for t in laptop.js(TAGS)] == ["Minor", "Clear"]
     laptop.open(shelf.as_uri() + "#tonic=E&show=review")
-    assert [t["text"] for t in laptop.js(TAGS)] == ["Needs review", "E", "Clear"]
+    assert [t["text"] for t in laptop.js(TAGS)] == ["Needs your pick", "E", "Clear"]
     laptop.open(shelf.as_uri())
     assert laptop.js(TAGS) == [] and laptop.js("document.getElementById('tags').hidden")
 

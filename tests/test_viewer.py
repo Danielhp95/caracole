@@ -297,7 +297,7 @@ def test_then_the_key_the_sheet_gives():
 def test_then_a_key_estimated_from_the_chords():
     cho = UG_CHO.replace("{key: G}\n", "")
     data = data_of(build_viewer(cho, key="soda stereo|de musica ligera", key_source=None))
-    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "estimated from the chords"}
+    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "guessed from the chords"}
 
 
 def test_with_a_capo_the_key_line_says_the_shapes_the_capo_and_the_key_it_sounds_in():
@@ -383,7 +383,7 @@ def test_a_sheet_without_chords_has_no_key():
 
 @pytest.mark.parametrize(
     ("source", "label"),
-    [*SOURCES.items(), ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
+    [*SOURCES.items(), ("Musicbrainz", "from Musicbrainz"), (None, "from the song's entry")],
 )
 def test_where_the_key_came_from_is_said_in_words_as_keys_py_says_it(source, label):
     assert data_of(build_viewer(UG_CHO, key="G", key_source=source))["key"]["from"] == label
@@ -617,7 +617,7 @@ def test_every_song_has_a_capo_to_move(tmp_path):
     """)
     assert shown and offered == 0
     assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m estimated from the chords · no capo"]
-    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "the natural minor"]
+    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "natural minor"]
     assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
 
 

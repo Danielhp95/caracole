@@ -48,9 +48,9 @@ internal object HarmonicaPage {
     /** harmonica_routes.COMMAND: the command a post queues. */
     const val COMMAND = "harmonica"
 
-    private val NO_TAB get() = Refused(404, "Not found", "There's no such harmonica tab in the library.")
+    private val NO_TAB get() = Refused(404, "Not found", "No such harmonica tab in the book.")
     private val NOT_A_READING get() =
-        Refused(400, "Not a reading", "How should it be read? The form names no notation caracole knows.")
+        Refused(400, "Not a reading", "Read how? The form names no notation we know.")
 
     /** harmonica_cmd.SOURCES: where a reading came from, in words. */
     val SOURCES = mapOf("legend" to "from the tab's own legend", "pinned" to "as you set it", "guessed" to "guessed")
@@ -125,10 +125,10 @@ internal object HarmonicaPage {
     private fun isText(spec: JsonElement): Boolean = spec is JsonPrimitive && spec.isString
 
     private fun button(spec: JsonElement, reading: Reading): String = when {
-        spec == JsonPrimitive("legend") -> "Read it by its own legend"
-        spec == JsonPrimitive("signs") -> "As harptabs.com writes it"
-        isText(spec) -> "Read it as ${(spec as JsonPrimitive).content}"
-        else -> "Read it so: ${said(reading)}"
+        spec == JsonPrimitive("legend") -> "Use its legend"
+        spec == JsonPrimitive("signs") -> "As harptabs writes it"
+        isText(spec) -> "Read as ${(spec as JsonPrimitive).content}"
+        else -> "Read as: ${said(reading)}"
     }
 
     /** A reading as a form posts it: a notation's name as it is, a table as `json.dumps(spec, ensure_ascii=False)`. */
@@ -172,14 +172,14 @@ internal object HarmonicaPage {
             "<li class=\"reading${if (mine) " now" else ""}\"><span class=\"said\">${esc(said(reading))}</span> " +
                 "<span class=\"q\">Q ${PyFormat.fixed(reading.q, 2)}${if (mine) " · now" else ""}</span>\n$form</li>"
         }
-        var body = lede + "<h2 class=\"sub\">The ways caracole weighs, best first</h2>\n<ul class=\"readings\">\n" +
+        var body = lede + "<h2 class=\"sub\">Readings, best first</h2>\n<ul class=\"readings\">\n" +
             items.joinToString("\n") + "\n</ul>\n"
-        if (asked.pin != null) body += form(asked, csrf, "/harmonica/clear", "Back to caracole's guess")
-        body += "<p>caracole reads a harmonica tab in each notation it knows and keeps the one that explains the most " +
-            "of it as notes a harmonica plays (Q). One you choose here is kept in overrides.toml " +
-            "(<code>[harmonica]</code>), and the tab's page is made again.</p>\n"
+        if (asked.pin != null) body += form(asked, csrf, "/harmonica/clear", "Back to our guess")
+        body += "<p>We read the tab in every notation we know and keep the one that explains most of it as notes a " +
+            "harmonica plays (Q). Your choice goes in overrides.toml (<code>[harmonica]</code>) and the tab's page " +
+            "is remade.</p>\n"
         body += howItGoes(asked, job)
-        val back = "<a class=\"btn\" href=\"/${asked.folder}/${quote(asked.pageName)}\">Back to the tab</a>"
+        val back = "<a class=\"btn\" href=\"/${asked.folder}/${quote(asked.pageName)}\">Back to tab</a>"
         return Choices.page(200, "How it's read · ${song.display}", "$body<div class=\"confirm\">\n$back\n</div>", name,
                             Choices.refresh(job))
     }
@@ -196,24 +196,24 @@ internal object HarmonicaPage {
                     "<a href=\"/$details\">Output</a></p>\n"
             }
             Job.CANCELLED -> return "<p class=\"says cancelled\">Cancelled before it ran.</p>\n"
-            Job.INTERRUPTED -> return "<p class=\"says waiting\">Interrupted: caracole serve stopped before it was " +
-                "over. <a href=\"/$details\">Output</a></p>\n"
+            Job.INTERRUPTED -> return "<p class=\"says waiting\">Interrupted: the server stopped mid-way. " +
+                "<a href=\"/$details\">Output</a></p>\n"
         }
         if (job.state != Job.DONE) {
-            val state = if (job.state == Job.QUEUED) "Queued: it runs after the requests before it." else "Reading it as you set it…"
+            val state = if (job.state == Job.QUEUED) "Queued · runs after those ahead." else "Reading it as you set it…"
             return "<p class=\"says ${job.state}\">${esc(state)}</p>\n"
         }
         val clearing = "--clear" in job.steps[0].args
         if (clearing) {
-            if (asked.pin == null) return "<p class=\"says done\">Done: caracole guesses how it is read again.</p>\n"
-            return "<p class=\"says failed\">Done, but the [harmonica] entry is still there: see the request's " +
+            if (asked.pin == null) return "<p class=\"says done\">Done · we guess its reading again.</p>\n"
+            return "<p class=\"says failed\">Done, but the [harmonica] entry remains. See the " +
                 "<a href=\"/$details\">output</a>.</p>\n"
         }
         if (asked.pin == null) {
-            return "<p class=\"says failed\">Done, but no [harmonica] entry pins it: see the request's " +
+            return "<p class=\"says failed\">Done, but no [harmonica] entry pins it. See the " +
                 "<a href=\"/$details\">output</a>.</p>\n"
         }
-        return "<p class=\"says done\">Done: read as ${esc(said(asked.now))}, as you set it.</p>\n"
+        return "<p class=\"says done\">Done · read as ${esc(said(asked.now))}, as you set it.</p>\n"
     }
 
     /** The command a post queues, its title, its label, and the reading its key names: `caracole harmonica --tab=…
@@ -222,7 +222,7 @@ internal object HarmonicaPage {
         val song = asked.song
         val tab = asked.tab
         if (spec == null) {
-            return Triple("Back to caracole's guess: ${tab.name} of ${song.display}", "Going back to caracole's guess",
+            return Triple("Back to our guess: ${tab.name} of ${song.display}", "Going back to our guess",
                           listOf("--clear"))
         }
         val options = if (isText(spec)) {
@@ -232,7 +232,7 @@ internal object HarmonicaPage {
             listOf("--as=${(table["as"] as? JsonPrimitive)?.content ?: "signs"}") +
                 table.filterKeys { it != "as" }.map { (k, v) -> "--symbol=$k=${(v as JsonPrimitive).content}" }
         }
-        return Triple("Read ${tab.name} of ${song.display} as you set it", "Reading the harmonica tab as you set it",
+        return Triple("Read ${tab.name} of ${song.display} as you set it", "Reading the tab as you set it",
                       options)
     }
 

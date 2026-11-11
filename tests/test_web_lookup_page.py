@@ -123,7 +123,7 @@ def test_a_lookup_cancelled_on_the_requests_page_says_so(cfg, served, tmp_path):
     dom = dump_dom(f"http://127.0.0.1:{server.server_address[1]}/lookup?job=1", tmp_path)
 
     reader = shown(dom, 'section class="reader"')
-    assert "Cancelled before it ran: look it up again to get it." in reader and "No sheet this time" not in reader
+    assert "Cancelled before it ran. Look it up again to get it." in reader and "No sheet this time" not in reader
 
 
 @in_chromium
@@ -140,7 +140,7 @@ def test_the_search_lists_the_offline_index_as_you_type_in_a_real_browser(cfg, s
     dom = dump_dom(f"http://127.0.0.1:{server.server_address[1]}/lookup?q={quote('creep')}", tmp_path)
 
     results = shown(dom, 'div id="results"', until='<details class="by-name"')
-    assert "On Ultimate Guitar" in results
+    assert "On UG" in results
     assert results.index("Radiohead") < results.index("Stone Temple Pilots")
     assert results.count(">Get it<") == 2 and "1 chords" in results
     # A screen reader moving through the buttons hears which song each one gets.
@@ -159,7 +159,7 @@ def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg,
         emit(PROGRESS_PREFIX + json.dumps({"stage": "song", "state": "running",
                                            "detail": "waiting for another caracole (pid 42: run)"}))
         release.wait(20)
-        for event in ({"stage": "song", "state": "done", "detail": "in the library"},
+        for event in ({"stage": "song", "state": "done", "detail": "in the book"},
                       {"stage": "sheet", "state": "skipped", "detail": "the lookup requests are spent"},
                       {"stage": "lacuerda", "state": "failed", "detail": "LaCuerda failed (HTTP 500)"}):
             emit(PROGRESS_PREFIX + json.dumps(event))
@@ -386,7 +386,7 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
 
 
 # Each row of the results: whether it is a song you have, its name's colour against the page's (--text, --muted), the
-# wash behind it (--accent at --have-tint) and the width of its pill ("In your library", or "Found").
+# wash behind it (--accent at --have-tint) and the width of its pill ("In your logbook", or "Found").
 HAVE_ROWS = """
 (() => {
   const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
@@ -422,7 +422,7 @@ def test_a_song_you_have_stands_out_from_the_ones_you_have_not_on_the_lookup_pag
     assert browser.wait(f"{HITS} >= 2")
     rows = browser.js(HAVE_ROWS)
     assert len(rows) == 2 and all(r["have"] and r["ink"] and r["tinted"] for r in rows), rows  # its row and UG's
-    assert all(0 < r["pill"] <= 1 for r in rows), rows  # "Found", "In your library": said to a screen reader alone
+    assert all(0 < r["pill"] <= 1 for r in rows), rows  # "Found", "In your logbook": said to a screen reader alone
     browser.open(base + "/lookup")
     browser.type("creep")
     assert browser.wait(f"{HITS} >= 2")
@@ -577,7 +577,7 @@ def test_a_word_of_an_artists_name_leads_with_them_and_enter_lists_their_songs(c
     assert browser.wait("document.querySelector('#results .artist-hit') !== null")
     groups = browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)")
     # The artist first, Sam Grow's song after; LaCuerda's listings not read to L, Ask LaCuerda under them.
-    assert groups == ["Artists on Ultimate Guitar", "On Ultimate Guitar"]
+    assert groups == ["Artists on UG", "On UG"]
     assert browser.js("document.querySelector('#results .notes-line .ask-lacuerda').textContent") == \
         "Ask LaCuerda for “Lynyrd Skynyrd” (1 request)"
     browser.press("Enter")
@@ -754,7 +754,7 @@ def test_a_new_lookup_stops_following_the_one_before_even_with_its_answer_on_the
         heard = held.answered[0]
         held.until(lambda: held.polls("/api/jobs/2", since=heard) >= 3)  # the page has gone on a while since
         assert browser.js(TITLE) == "Soda Stereo - Musica Ligera"
-        assert browser.js("document.getElementById('said').textContent") == "Waiting for the request before it…"
+        assert browser.js("document.getElementById('said').textContent") == "Waiting for the one before…"
         assert held.polls("/api/jobs/1", since=heard) == 0, held.asked
     finally:
         held.close()

@@ -84,7 +84,7 @@ def test_a_merge_that_takes_nothing_says_so_and_still_deletes_the_file(tmp_path,
     result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(copy))
 
     assert result.exit_code == 0, result.output
-    assert events(result.stdout)[-1] == {"stage": "merge", "state": "done", "detail": "Nothing read more recently"}
+    assert events(result.stdout)[-1] == {"stage": "merge", "state": "done", "detail": "Nothing newer"}
     assert not copy.exists()
 
 

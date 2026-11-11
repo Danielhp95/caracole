@@ -242,7 +242,7 @@ def test_youtube_without_auto_chords_is_off_with_why(conn, cfg):
 def test_a_cooldown_reads_until_when_and_why(conn, cfg):
     state = health.record_block(conn, "musescore", NOW - timedelta(hours=1), "challenge page")
     status = status_of(conn, cfg, "musescore", NOW)
-    assert (status.state, status.label) == ("cooling", "Cooling down")
+    assert (status.state, status.label) == ("cooling", "Waiting out")
     assert shown(state.cooldown_until, local=True) in status.detail
     assert "challenge page" in status.detail
 

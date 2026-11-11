@@ -126,7 +126,7 @@ class Fake:
 
         stage("song", "running")
         sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
-        stage("song", "done", "in the library")
+        stage("song", "done", "in the book")
         stage("sheet", "running")
         time.sleep(0.2)
         song = find_song(conn, override_key(f"{args[-2]} - {args[-1]}"))
@@ -707,7 +707,7 @@ def test_a_songs_guitar_pro_mark_opens_its_page_served(serve, cfg, guitars, tmp_
             ["Creep", "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp", "set-gp",
              "Guitar Pro tab: Radiohead - Creep.gp, open it in the browser", None, "", "", "solid"],
             ["Hysteria"], WITHOUT]
-        assert page.js("document.querySelector('#songbooks .set-gp').title") == "Guitar Pro tab: open it in the browser"
+        assert page.js("document.querySelector('#songbooks .set-gp').title") == "Open the Guitar Pro tab"
         assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
         # Next to its title, on its line, before what else the line holds; a key's reach (Tab) like any link.
         beside = page.js("""Array.from(document.querySelectorAll('#songbooks .set-gp')).map((a) => {
@@ -862,7 +862,7 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         # Nothing on it to change but by making it again, from the Select bar (+ New songbook), which has the picks
         # and says why.
         assert page.js("document.querySelector('#songbooks .book .book-files .hint').textContent") == (
-            "Not made: + New songbook can make it again.")
+            "Not made. + New songbook makes it again.")
         assert page.js("document.querySelectorAll('#songbooks .book .set-line button:not([disabled]), "
                        "#songbooks .book .book-more button:not([disabled])').length") == 0
         assert page.js(f"!{SHOWN}('#songbooks .book .add-song')")
@@ -1014,7 +1014,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         shown = page.js(lines)
         assert [s[0] for s in shown] == ["Creep", "Hysteria", "De Música Ligera", "Debaser", "Uprising"]
         assert shown[1][1].startswith("Ready") and shown[4][1].startswith("Ready"), shown
-        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the library", shown
+        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the book", shown
         # Nothing left to get: its button goes (its room kept until your next click, so nothing moves).
         assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
                        f"{json.dumps(get)}))")

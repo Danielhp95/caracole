@@ -52,7 +52,7 @@
  "page": {
   "_SOURCES": {
    "tab": "from the tab",
-   "chords": "estimated from the chords",
+   "chords": "guessed from the chords",
    "audio": "from the audio"
   },
   "_OF_THE_SHAPES": [
@@ -297,7 +297,7 @@
   },
   "SOURCES": {
    "tab": "from the tab",
-   "chords": "estimated from the chords",
+   "chords": "guessed from the chords",
    "audio": "from the audio"
   },
   "SHEET_DOC": "sheet.json",

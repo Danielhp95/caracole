@@ -174,7 +174,7 @@ def test_overrides_that_cant_be_read_are_said_as_data(cfg, conn):
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text("[nonsense\n", encoding="utf-8")
     status, doc = answer(an_app(cfg), "/api/peer/state")
-    assert status == 503 and "overrides.toml can't be read" in doc["error"]
+    assert status == 503 and "Can't read overrides.toml" in doc["error"]
 
 
 # --- POST /peer/index: the index pages a phone's lookups read -------------------------------------------------------
@@ -234,7 +234,7 @@ def test_the_phones_index_pages_are_staged_privately_and_their_merge_queued(phon
     assert path.parent == cfg.state_dir / "peer" and path.read_bytes() == data
     assert stat.S_IMODE(path.stat().st_mode) == 0o600 and stat.S_IMODE(path.parent.stat().st_mode) == 0o700
     [job] = [j for j in phone_side.app.queue.snapshot() if j.id == job_id]
-    assert job.song_key == jobs.INDEX_MERGE + path.name and job.title == "Index pages from another caracole"
+    assert job.song_key == jobs.INDEX_MERGE + path.name and job.title == "Index pages from another scribe"
     assert [s.args for s in job.steps] == [("index", "merge", "--delete", "--progress", "--", str(path))]
 
 
