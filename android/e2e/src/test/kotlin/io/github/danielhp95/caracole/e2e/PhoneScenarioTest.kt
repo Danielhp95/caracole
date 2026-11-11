@@ -226,7 +226,7 @@ class PhoneScenarioTest {
         assertFalse(scenario.c1.key in cards || scenario.r.key in cards, "a removed song's card is gone")
         val c1 = phone.mirror.manifest()!!.entries.single { it.unit == scenario.c1.unit && it.path.endsWith("/sheet.html") }
         val sheet = phone.get("/" + quotePath(c1.path))
-        assertTrue("removed on the phone" in sheet.text, sheet.text.take(1000))
+        assertTrue("Removed from the phone" in sheet.text, sheet.text.take(1000))
 
         assertEquals(0, Requests.count, "the phone on its own sends nothing")
         buildJsonObject {
