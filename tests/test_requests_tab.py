@@ -573,8 +573,8 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
                                media={"prefers-color-scheme": scheme}, budget_ms=20000)
         shown = noted(dom, "data-shown")
         assert shown["selected"] == "tab-requests" and shown["library"] is True, shown
-        assert [t[0] for t in shown["tabs"]] == ["tab-library", "tab-songbooks", "tab-sites", "tab-sync",
-                                                 "tab-requests"]  # Requests last, Sync before it
+        assert [t[0] for t in shown["tabs"]] == ["tab-library", "tab-songbooks", "tab-sites", "tab-requests",
+                                                 "tab-sync"]  # Sync last
         assert shown["groups"] == ["Now", "Today"]
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
         assert shown["chips"] == ["✓ Song: done", "✓ Match UG: done", "✓ Sheet UG: done", "PDF: running",
@@ -694,11 +694,11 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             assert page.wait("!document.getElementById('library-view').hidden && document.getElementById('q').value"
                              " === 'Creep'")
             assert page.js("window.here") == 1 and page.js("document.getElementById('requests').hidden") is True
-            # The tablist's own keys: ← from the first goes round to the last, Requests; Home and End.
+            # The tablist's own keys: ← from the first goes round to the last, Sync; Home and End.
             page.js("document.getElementById('tab-library').focus()")
             page.press("ArrowLeft")
             assert page.js("[document.activeElement.id, document.querySelector('[aria-selected=true]').id]") == [
-                "tab-requests", "tab-requests"]
+                "tab-sync", "tab-sync"]
             page.press("Home")
             assert page.js("document.activeElement.id") == "tab-library"
             page.press("ArrowRight")

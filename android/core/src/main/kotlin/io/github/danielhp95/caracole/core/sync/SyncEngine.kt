@@ -552,7 +552,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val applied = step(stage, TAKE, done) {
             io {
                 database.write { db ->
-                    Take.backupBeforeSync(db, stateDir, now)
+                    Take.backupBeforeSync(db, stateDir, now, store)
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
                     Take.applyUnits(db, store, source, wanted, expectedHere, now) { _, _ ->
                         seen++

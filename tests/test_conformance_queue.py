@@ -175,6 +175,7 @@ COMMANDS: list[list[list[str]]] = [
     [["youtube", "--video=dQw4w9WgXcQ", "--progress"]],
     [["peer", "take", "--progress", "/state/peer/push-1"]],
     [["peer", "sync", "--push", "--progress", "--compared", "ab", "--", "http://laptop:8737"]],
+    [["peer", "import", "--yes", "--progress", "--compared=ab", "--", "/state/peer/import-0123456789abcdef"]],
     [["peer", "sync", "--", "--progress"]],
     [["peer", "pull", "--progress"]],
     [[*INDEX_MERGE_COMMAND, "--delete", "--progress", "--", "/x.sqlite"]],

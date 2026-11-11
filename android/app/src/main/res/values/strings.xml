@@ -61,8 +61,31 @@
     <!-- Milestone 6's hooks (each its lane's: backups and alerts alerts-backups', printing export-print's). -->
     <string name="backups_label">Backups</string>
     <string name="backups_open">Backups…</string>
-    <string name="backups_hint">Copies of the phone\'s library, to restore it from: not on the phone yet.</string>
-    <string name="backups_not_built">Backups aren\'t on the phone yet.</string>
+    <string name="backups_hint">Copies of the phone\'s library, to restore it from: made by hand, every day and before each sync.</string>
+    <string name="backups_about">Each backup holds the phone\'s songs, versions, songbooks and kept files (the indexes are imported again, not backed up). Three of each kind are kept: by hand, daily (while the phone is idle) and before a sync. A restore puts the library back as it was, and keeps the cooldowns, pace and settings the phone has now; the next sync gives the restored library to the computer.</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backups_none">No backup yet.</string>
+    <string name="backup_row">%1$s · %2$s · %3$s</string>
+    <string name="backup_row_missing">%1$s · %2$d of its files not kept</string>
+    <string name="backup_by_hand">By hand</string>
+    <string name="backup_daily">Daily</string>
+    <string name="backup_before_sync">Before a sync</string>
+    <string name="backup_other">Backup</string>
+    <string name="backup_export">Export…</string>
+    <string name="backup_restore">Restore…</string>
+    <string name="backup_working">Backing up the library…</string>
+    <string name="backup_restoring">Restoring the library…</string>
+    <string name="backup_exporting">Exporting the backup…</string>
+    <string name="backup_exported">Exported.</string>
+    <string name="backup_export_failed">Not exported: %1$s</string>
+    <string name="backup_no_picker">No app on this phone picks where a file goes.</string>
+    <string name="backup_queue_full">The phone\'s queue is full: try again in a moment.</string>
+    <string name="backup_restore_title">Restore the library of %1$s?</string>
+    <string name="backup_restore_message">The songs, their versions, songbooks and kept files go back to what this backup holds, and what changed since is gone from the phone. The cooldowns, pace and settings stay as they are now.</string>
+    <string name="backup_restore_yes">Restore</string>
     <string name="alerts_channel">Alerts</string>
-    <string name="print_not_built">Exporting a PDF isn\'t on the phone yet.</string>
+    <string name="alert_blocked">caracole: %1$s blocked</string>
+    <string name="alert_cooling">Cooling down until %1$s.</string>
+    <string name="print_refused">The phone\'s caracole didn\'t name that version (HTTP %1$d).</string>
+    <string name="print_failed">The sheet couldn\'t be printed: %1$s</string>
 </resources>

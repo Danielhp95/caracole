@@ -19,7 +19,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
-import io.ktor.util.cio.readChannel
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
@@ -156,7 +156,7 @@ class LocalServer(val app: App) : AutoCloseable {
                 override val status = status
                 override val contentType = contentType
                 override val contentLength = length
-                override fun readFrom(): ByteReadChannel = body.file.readChannel()
+                override fun readFrom(): ByteReadChannel = body.open().toByteReadChannel()
             }
             Body.Empty -> error("answered above")
         }
