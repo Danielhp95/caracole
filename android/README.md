@@ -549,9 +549,9 @@ background"; the app asks for the right to notify once, as the library screen op
 
 Tapping one opens the library.
 
-**Backups** are in Settings, Open the backups: each backup is a copy of the phone's library, its songs, their versions, the
-songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each file
-once however many backups hold it. The indexes aren't backed up: they come again from the computer.
+**Backups** are in Settings, Open the backups: each backup is a copy of the phone's library, its songs, their versions,
+the songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each
+file once however many backups hold it. The indexes aren't backed up: they come again from the computer.
 
 - **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
   one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
