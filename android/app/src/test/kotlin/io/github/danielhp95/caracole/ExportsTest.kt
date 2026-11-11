@@ -92,6 +92,10 @@ class ExportsTest {
         // second ask is the copy made.
         val again = assertIs<Exports.Copied.File>(Exports.copy(files { error("asked twice") }, export, folder.root))
         assertEquals(got.file, again.file)
+        // However each spells its address: the export is its id.
+        val spelled = assertIs<Exports.Copied.File>(Exports.copy(files { error("asked twice") },
+            "$origin/api/sync/export?x=1&export=0123456789abcdef#done", folder.root))
+        assertEquals(got.file, spelled.file)
         assertEquals(1, asked.size)
     }
 

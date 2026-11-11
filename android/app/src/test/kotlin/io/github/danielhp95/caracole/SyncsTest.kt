@@ -31,6 +31,8 @@ import kotlin.test.assertTrue
 class SyncsTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val notified = mutableListOf<Pair<Int, Boolean>>()
+    /** How many times a sync that left no conflict took the conflicts' notification back. */
+    private var cleared = 0
     private var server: ServerSocket? = null
 
     @After
@@ -69,8 +71,10 @@ class SyncsTest {
         return "http://127.0.0.1:${socket.localPort}"
     }
 
-    /** A queue whose sync job ends with [outcome] (null: it fails, as a compare that couldn't ask fails it). */
-    private fun phone(outcome: JsonObject?, queued: MutableList<String> = mutableListOf()): Syncs.Unattended {
+    /** A queue whose sync job ends with [outcome] (null: it fails, as a compare that couldn't ask fails it), its
+     * [failed] stage said failed and the job going on past it, as the engine goes on past its mirror stage. */
+    private fun phone(outcome: JsonObject?, queued: MutableList<String> = mutableListOf(),
+                      failed: Pair<String, String>? = null): Syncs.Unattended {
         val queue = JobQueue(scope)
         return Syncs.Unattended(
             alone = { address ->
@@ -80,6 +84,9 @@ class SyncsTest {
                     if (outcome == null) {
                         job.stage(SyncEngine.COMPARE, "failed", "No answer from $address (refused).")
                         throw IllegalStateException("No answer from $address (refused).")
+                    }
+                    for ((stage, _) in SyncEngine.STAGES) {
+                        job.stage(stage, if (stage == failed?.first) "failed" else "done", failed?.second.orEmpty())
                     }
                     job.outcome(outcome)
                 })).first
@@ -109,21 +116,21 @@ class SyncsTest {
     @Test
     fun `the probe of a Wi-Fi sync with nothing answering does nothing and says nothing`() = runBlocking {
         val asked = { error("the phone's caracole was asked") }
-        val quiet = settings(nothingAt())
-        assertNull(Syncs.run(quiet, probe = true, http = Http(), phone = asked) { n, songs -> notified.add(n to songs) })
-        assertEquals(SyncState.Idle, Caracole.status.value)
-        assertNull(quiet.lastOutcome, "the last outcome as it was")
-
-        val none = settings("")
-        assertNull(Syncs.run(none, probe = true, http = Http(), phone = asked) { n, songs -> notified.add(n to songs) })
-        assertEquals(SyncState.Idle, Caracole.status.value)
-
-        // Something else answers there: a Wi-Fi login page.
-        val portal = settings(answering("<html><body>Sign in to the café's Wi-Fi</body></html>"))
-        assertNull(Syncs.run(portal, probe = true, http = Http(), phone = asked) { n, songs -> notified.add(n to songs) })
-        assertEquals(SyncState.Idle, Caracole.status.value)
-        assertNull(portal.lastOutcome)
+        // What an earlier sync left: kept as it was, in the settings and on the screen, by each probe that finds none.
+        val earlier = Outcome(1_000L, true, "Up to date: 1 taken")
+        val shown = SyncState.Ended(earlier)
+        for (server in listOf(nothingAt(), "", answering("<html><body>Sign in to the café's Wi-Fi</body></html>"))) {
+            // Nothing answering there; no address; something else answering there, a Wi-Fi login page.
+            val settings = settings(server).also { it.lastOutcome = earlier }
+            Caracole.status.value = shown
+            assertNull(Syncs.run(settings, probe = true, http = Http(), phone = asked, cleared = { cleared++ }) { n, songs ->
+                notified.add(n to songs)
+            }, server)
+            assertEquals(shown, Caracole.status.value, "the screen's line as it was: $server")
+            assertEquals(earlier, settings.lastOutcome, "the last outcome as it was: $server")
+        }
         assertEquals(emptyList(), notified, "nothing said")
+        assertEquals(0, cleared, "no notification taken back either")
     }
 
     @Test
@@ -140,13 +147,14 @@ class SyncsTest {
     fun `a sync with no conflict left posts no notification`() = runBlocking {
         val queued = mutableListOf<String>()
         val clean = settings("192.168.1.20:8737")
-        val done = Syncs.run(clean, probe = true, http = Http(), ask = {},
+        val done = Syncs.run(clean, probe = true, http = Http(), ask = {}, cleared = { cleared++ },
                              phone = { phone(outcome("""{"taken": ["song/a/b"], "given": ["song/c/d", "song/e/f"],
                                  "left": [], "agreed": 9, "indexed": []}"""), queued) }) { n, songs -> notified.add(n to songs) }!!
         assertEquals(listOf("http://192.168.1.20:8737"), queued, "the address as the sync reads it")
         assertTrue(done.ok)
-        assertEquals("1 taken, 2 given", done.text)
+        assertEquals("Up to date: 1 taken, 2 given", done.text)
         assertEquals(emptyList(), notified)
+        assertEquals(1, cleared, "an earlier sync's notification of its conflicts taken back")
         assertEquals(done, clean.lastOutcome)
         assertEquals(SyncState.Ended(done), Caracole.status.value)
 
@@ -154,7 +162,7 @@ class SyncsTest {
                              phone = { phone(outcome("""{"taken": [], "given": [], "left": [], "agreed": 9}""")) }) { n, songs ->
             notified.add(n to songs)
         }!!
-        assertEquals("nothing changed", same.text)
+        assertEquals("Up to date", same.text)
         assertEquals(emptyList(), notified)
     }
 
@@ -167,8 +175,20 @@ class SyncsTest {
                              phone = { phone(JsonObject(mapOf("taken" to JsonArray(emptyList()), "given" to JsonArray(emptyList()),
                                                               "left" to left))) }) { n, songs -> notified.add(n to songs) }!!
         assertTrue(done.ok)
-        assertEquals("2 changed on both sides", done.text)
+        assertEquals("2 changed on both sides: tap Sync to choose", done.text, "never \"Up to date\" then")
         assertEquals(listOf(2 to true), notified)
+    }
+
+    @Test
+    fun `a sync that went on past a stage that failed is no sync up to date`() = runBlocking {
+        val mirror = SyncEngine.STAGES.single { it.first == SyncEngine.MIRROR }
+        val done = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                             phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
+                                             failed = SyncEngine.MIRROR to "No answer from http://192.168.1.20:8737.") }) { n, songs ->
+            notified.add(n to songs)
+        }!!
+        assertFalse(done.ok, "the copy of the computer's pages failed")
+        assertEquals("${mirror.second} failed: No answer from http://192.168.1.20:8737. (1 taken)", done.text)
     }
 
     @Test

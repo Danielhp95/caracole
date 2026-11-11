@@ -16,10 +16,8 @@ import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
-import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.jobs.Job
-import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,8 +32,9 @@ import java.util.concurrent.TimeUnit
  * 6 hours on an unmetered network ([onWifi]), once a caracole answers at the address Settings keeps (the probe: its
  * state read, nothing changed), the phone's own sync job of the three parts (SyncRoutes.alone: each one-sided change
  * taken or given, each conflict left as it is on both sides), awaited; then a notification only for the conflicts it
- * left ([conflictsLeft], "2 songs changed on both sides: tap to choose"), whose tap opens the sheet. No address,
- * nothing answering there, or something else answering (a Wi-Fi login page): it does nothing and says nothing.
+ * left ([conflictsLeft], "2 songs changed on both sides: tap to choose"), whose tap opens the sheet, and that
+ * notification taken back by a sync that left none. No address, nothing answering there, or something else answering
+ * (a Wi-Fi login page): it does nothing and says nothing.
  */
 object Syncs {
     private const val WIFI = "caracole-sync-wifi"
@@ -62,25 +61,28 @@ object Syncs {
     /**
      * The unattended sync with the address in the settings ([probe]: Sync on Wi-Fi's, silent when no caracole answers;
      * without, as a test asks it, that said as a failed outcome), its outcome kept ([Settings.lastOutcome]) and told to
-     * [Caracole.status]; the conflicts it left notified ([Notifications.conflictsLeft]). Null when it did nothing.
+     * [Caracole.status]; the conflicts it left notified ([Notifications.conflictsLeft]), or the last such notification
+     * taken back when it left none ([Notifications.noConflictsLeft]). Null when it did nothing.
      */
     suspend fun run(context: Context, probe: Boolean): Outcome? {
         val app = context.applicationContext
         return run(Settings(app), probe, Caracole.http(), phone = {
             val phone = Caracole.phone(app)
-            val sync = routes(phone)
-            Unattended(alone = sync::alone, await = phone.queue::await)
-        }) { count, songs -> Notifications.conflictsLeft(app, count, songs) }
+            Unattended(alone = phone.sync::alone, await = phone.queue::await)
+        }, cleared = { Notifications.noConflictsLeft(app) }) { count, songs -> Notifications.conflictsLeft(app, count, songs) }
     }
 
     /**
      * [run]'s own, over [settings]: the probe ([ask], the computer's state read through [http]; a [SyncError] or a
      * [PeerError] when no caracole answers), then the phone's sync ([phone], asked only once one does) queued and
-     * awaited, and [notify] told how many conflicts it left and whether all are songs, when it left any.
+     * awaited, and [notify] told how many conflicts it left and whether all are songs, when it left any, else
+     * [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the engine
+     * goes on past it) is a failed outcome, in that stage's words.
      */
     internal suspend fun run(settings: Settings, probe: Boolean, http: Http,
                              ask: (ServerAddress) -> Unit = { PeerClient(it, http).state(null) },
-                             phone: () -> Unattended, notify: (Int, Boolean) -> Unit): Outcome? {
+                             phone: () -> Unattended, cleared: () -> Unit = {},
+                             notify: (Int, Boolean) -> Unit): Outcome? {
         val status = Caracole.status
         val address = try {
             val server = ServerAddress.parse(settings.server)
@@ -104,8 +106,10 @@ object Syncs {
             val done = side.await(job.id)
             if (done.state == Job.DONE) {
                 val (left, songs) = conflictsLeft(done.outcome)
-                if (left > 0) notify(left, songs)
-                Outcome(System.currentTimeMillis(), true, said(done.outcome))
+                if (left > 0) notify(left, songs) else cleared()
+                val failed = done.stages.firstOrNull { it.state == Job.FAILED }
+                if (failed == null) Outcome(System.currentTimeMillis(), true, said(done.outcome))
+                else Outcome(System.currentTimeMillis(), false, failedStage(failed.label, failed.detail, done.outcome))
             } else {
                 Outcome(System.currentTimeMillis(), false, failure(done))
             }
@@ -140,16 +144,35 @@ object Syncs {
         return left.size to left.all { it.startsWith(SONG) }
     }
 
-    /** What a sync did, in the bar's line's words: "1 taken, 2 given, 2 changed on both sides", or "nothing changed". */
+    /**
+     * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date: 1 taken, 2 given",
+     * or, with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (never "Up to date" then).
+     */
     internal fun said(outcome: JsonObject?): String {
+        val left = conflictsLeft(outcome).first
+        val what = what(outcome)
+        return when {
+            left > 0 -> "$what$TO_CHOOSE"
+            what.isEmpty() -> UP_TO_DATE
+            else -> "$UP_TO_DATE: $what"
+        }
+    }
+
+    /** "1 taken, 2 given, 2 changed on both sides", or "" when it did nothing. */
+    private fun what(outcome: JsonObject?): String {
         fun count(name: String) = (outcome?.get(name) as? JsonArray)?.size ?: 0
         val left = conflictsLeft(outcome).first
-        val parts = listOfNotNull(
+        return listOfNotNull(
             count("taken").takeIf { it > 0 }?.let { "$it taken" },
             count("given").takeIf { it > 0 }?.let { "$it given" },
             left.takeIf { it > 0 }?.let { "$it changed on both sides" },
-        )
-        return if (parts.isEmpty()) NOTHING else parts.joinToString(", ")
+        ).joinToString(", ")
+    }
+
+    /** A sync that went on past a stage that failed: "Copying the computer's pages failed: No answer from … (1 taken)". */
+    internal fun failedStage(label: String, detail: String, outcome: JsonObject?): String {
+        val what = what(outcome)
+        return "$label failed" + (if (detail.isEmpty()) "" else ": $detail") + (if (what.isEmpty()) "" else " ($what)")
     }
 
     /** Why [job] failed, as the queue kept it: its last `error: …` line, else its failed stage's words. */
@@ -173,7 +196,7 @@ object Syncs {
      */
     fun tested(context: Context, typed: String): String = try {
         if (typed.isBlank()) throw SyncError.NoAddress()
-        val answer = routes(Caracole.phone(context)).tested(SyncEngine.peerAddress(typed))
+        val answer = Caracole.phone(context).sync.tested(SyncEngine.peerAddress(typed))
         (answer["said"] as? JsonPrimitive)?.contentOrNull ?: answer.toString()
     } catch (e: CancellationException) {
         throw e
@@ -182,12 +205,9 @@ object Syncs {
         words(e)
     }
 
-    /** The phone's sync routes: SyncRoutes among the phone's route modules (waiting on sync-phone, whose Phone.sync
-     * names it). */
-    internal fun routes(phone: Phone): SyncRoutes = phone.modules.filterIsInstance<SyncRoutes>().single()
-
     private const val SONG = "song/"
-    private const val NOTHING = "nothing changed"
+    private const val UP_TO_DATE = "Up to date"
+    private const val TO_CHOOSE = ": tap Sync to choose"
     /** How the phone's queue says what a failed job threw: its last line of output (JobQueue). */
     private const val ERROR_LINE = "error: "
 }

@@ -182,10 +182,12 @@ started again.
 parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
 sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
 something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
-the bar's line says so ("Up to date: 1 taken, 2 given" at its end). When it left conflicts, a notification on its
-own channel, Syncs, says so ("2 songs changed on both sides: tap to choose"), and its tap opens the sheet, whose
-cards ask. A sync with the computer already on its way (one from the sheet) is left to finish, and this one does
-nothing.
+the bar's line says so ("Syncing with the computer…"), and at its end what it did for a few seconds ("Up to date: 1
+taken, 2 given"; "2 changed on both sides: tap Sync to choose"; or why it failed, a stage that failed among it, such
+as the copy of the computer's pages). When it left conflicts, a notification on its own channel, Syncs, says so ("2
+songs changed on both sides: tap to choose"), and its tap opens the sheet, whose cards ask; the next one that leaves
+none takes it back. A sync with the computer already on its way (one from the sheet) is left to finish, and this one
+does nothing.
 
 The computer needs a caracole that syncs with the phone (sync format 3: `GET /api/peer/state` answers
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused as the two are compared,
@@ -274,10 +276,12 @@ the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
 page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables.
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
-never loads another loopback port, and a first start's database is made whole. SyncTabTest opens the Sync tab from
-the menu, compares with the computer and syncs, then compares again and finds nothing that differs (it changes the
-phone's library, so give it a computer of its own, such as `nix develop -c python -m tests.helpers.e2e_library serve
-DIR PORT --address 127.0.0.1`):
+never loads another loopback port, and a first start's database is made whole. SyncSheetTest opens the sheet with
+the bar's sync button and syncs a song changed on both sides, the computer's version kept, then finds nothing that
+differs; and opens it from the notification of a Sync on Wi-Fi that left such a conflict. ExportImportTest exports
+from Settings to the share sheet, and imports a file through the picker. They change the computer's library (one
+song's own version), so give them a computer of their own, such as `nix develop -c python -m tests.helpers.e2e_library
+serve DIR PORT --address 127.0.0.1`:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
@@ -294,9 +298,9 @@ first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-55
 port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
-    android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
-                                                          # each against a computer of its own
-    android/scripts/device-test.sh LocalServerTest NoSitesTest SyncTabTest=/tmp/lib   # classes, one a computer
+    android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
+                                                          # PhoneEndToEndTest, each against a computer of its own
+    android/scripts/device-test.sh LocalServerTest NoSitesTest SyncSheetTest=/tmp/lib   # classes, one a computer
 
 ## Lookups on the phone
 
@@ -331,7 +335,7 @@ socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest N
 
 ## Performance notes
 
-**The WAL after an import.** An import (Settings' Import indexes, or a sync's newer indexes) merges the computer's
+**The WAL after an import.** An import (a sync's newer indexes, or Settings' Import a file of them) merges the computer's
 indexes in a few big transactions, and SQLite's WAL grows with them: on the owner's phone it was left at 387 MB, and
 the first search after the import, or after a start, took more than 30 s while every search waited behind it. A WAL
 SQLite has copied back stays on disk at its largest unless told otherwise, every read before the next checkpoint

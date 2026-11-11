@@ -45,7 +45,7 @@
             android:src="@drawable/ic_more" />
     </LinearLayout>
 
-    <!-- The sync's line: "Syncing: 34 of 120 files", then "Up to date" or the error, briefly. -->
+    <!-- The unattended sync's line: "Syncing with the computer…", then what it came to or the error, briefly. -->
     <TextView
         android:id="@+id/status"
         android:layout_width="match_parent"

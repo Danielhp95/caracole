@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
@@ -309,14 +310,17 @@ class MainActivity : Activity() {
         popup.show()
     }
 
-    /** The sync's line: while it runs, how far; at its end, "Up to date" or the error, for a few seconds. */
+    /**
+     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs; at its end, for a few
+     * seconds, what it came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose",
+     * or why it failed). A sync from the sheet says how it goes in the sheet.
+     */
     private fun show(state: SyncState) {
         hiding?.cancel()
         when (state) {
             SyncState.Idle -> status.visibility = View.GONE
             is SyncState.Running -> {
-                val p = state.progress
-                status.text = if (p == null) getString(R.string.syncing_asking) else getString(R.string.syncing, p.done, p.total)
+                status.text = getString(R.string.syncing)
                 status.visibility = View.VISIBLE
             }
             is SyncState.Ended -> {
@@ -326,11 +330,7 @@ class MainActivity : Activity() {
                     status.visibility = View.GONE
                     return
                 }
-                status.text = when {
-                    !outcome.ok -> outcome.text
-                    outcome.text == "nothing changed" -> getString(R.string.up_to_date)
-                    else -> getString(R.string.up_to_date_changes, outcome.text)
-                }
+                status.text = outcome.text
                 status.visibility = View.VISIBLE
                 if (outcome.ok && !shown) showLibrary()
                 hiding = scope.launch {
@@ -350,6 +350,7 @@ class MainActivity : Activity() {
      * sheet ([Exports]). */
     private fun shareExport(url: String, disposition: String?) {
         val files = files ?: return
+        Log.i(TAG, "an export heard by the download listener: to the share sheet")
         screen.launch { Exports.share(this@MainActivity, files, url, disposition) }
     }
 
@@ -425,6 +426,7 @@ class MainActivity : Activity() {
             val url = request.url.toString()
             if (request.method != "GET" || !Exports.isExport(url, origin)) return null
             val files = files ?: return notFound()
+            Log.i(TAG, "an export asked by the WebView itself: read here, once")
             return try {
                 when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER))) {
                     is Exports.Copied.File -> WebResourceResponse(Exports.TYPE, null, 200, "OK",
@@ -591,6 +593,8 @@ class MainActivity : Activity() {
         const val SYNC = "sync"
 
         private const val SHOW_ENDED_MS = 5_000L
+        /** The log's tag for the sync sheet's export, which reaches the app by one way or the other. */
+        private const val TAG = "caracole-export"
         private const val NOTIFY = 1
         private const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
         private const val FADE_MS = 250L

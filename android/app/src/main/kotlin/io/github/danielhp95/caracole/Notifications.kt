@@ -17,8 +17,8 @@ object Notifications {
     const val JOBS = "jobs"
     const val SYNCS = "syncs"
 
-    /** The conflicts' notification: one, replaced by the next sync's. */
-    private const val CONFLICTS = 4
+    /** The conflicts' notification: one, replaced by the next sync's, taken back by one that left none. */
+    const val CONFLICTS = 4
 
     /** The [JOBS] channel, made once. */
     fun channel(context: Context) = made(context, JOBS, R.string.jobs_channel, NotificationManager.IMPORTANCE_LOW)
@@ -52,6 +52,12 @@ object Notifications {
         } catch (_: SecurityException) {
             // The right to notify taken back meanwhile: nothing is said.
         }
+    }
+
+    /** A sync that left no conflict: the notification of the conflicts an earlier one left, if any, taken back (they
+     * were settled since, in the sheet or on the computer). */
+    fun noConflictsLeft(context: Context) {
+        NotificationManagerCompat.from(context).cancel(CONFLICTS)
     }
 
     private fun made(context: Context, id: String, name: Int, importance: Int) {

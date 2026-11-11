@@ -44,10 +44,7 @@
     </plurals>
     <string name="working">Working…</string>
 
-    <string name="syncing_asking">Syncing: asking caracole…</string>
-    <string name="syncing">Syncing: %1$d of %2$d files</string>
-    <string name="up_to_date">Up to date</string>
-    <string name="up_to_date_changes">Up to date: %1$s</string>
+    <string name="syncing">Syncing with the computer…</string>
 
     <string name="missing">That file isn\'t on the phone: sync again.</string>
     <string name="not_served">The phone\'s caracole didn\'t give that file (HTTP %1$d).</string>

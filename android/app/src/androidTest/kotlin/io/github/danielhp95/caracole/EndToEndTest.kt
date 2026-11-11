@@ -28,7 +28,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import kotlinx.coroutines.runBlocking
+import io.github.danielhp95.caracole.mirror.ServerAddress
+import io.github.danielhp95.caracole.mirror.SyncEngine
 import java.io.File
 import java.security.MessageDigest
 
@@ -60,15 +61,17 @@ class EndToEndTest {
 
     @Test
     fun syncsThenShowsTheLibraryAndAViewerOfflineAndHandsFilesOff() {
-        // A fresh copy, synced as Sync on Wi-Fi syncs (Syncs.run: the three parts, the computer's pages with them).
+        // A fresh copy of the computer's pages alone: a sync's mirror stage by itself (mirror.SyncEngine), no song
+        // of the library taken, so that the viewer's links below are a copy's (the phone's whole sync, the bar's
+        // button's and Sync on Wi-Fi's, is SyncSheetTest's).
         val mirror = Caracole.mirror(context)
         File(context.filesDir, "blobs").deleteRecursively()
         File(context.filesDir, "manifest.json").delete()
         mirror.reload()
         Settings(context).server = server!!
-        val outcome = runBlocking { Syncs.run(context, probe = false) }!!
-        record("sync", outcome.text)
-        assertTrue(outcome.text, outcome.ok)
+        val copied = SyncEngine(mirror, Caracole.http()).sync(ServerAddress.parse(server))
+        Caracole.started()?.search?.invalidate()
+        record("sync", copied.summary())
         val manifest = mirror.reload()!!
         record("files", manifest.entries.size)
         assertTrue(manifest.entries.all { mirror.blob(it.sha256).isFile })

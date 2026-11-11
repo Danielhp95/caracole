@@ -83,12 +83,14 @@ object Exports {
     /**
      * The export at [url] read from the phone's server ([files], in this process) and copied into [root], in a folder
      * of its own, under its name ([nameOf] of the server's attachment, else of [disposition], the download listener's):
-     * written under a temporary name and renamed whole, so one cut short leaves nothing. The same [url] again is the
+     * written under a temporary name and renamed whole, so one cut short leaves nothing. The same export again (by its
+     * id, however its address is spelled: the request interceptor's and the download listener's may differ) is the
      * copy made (the server sends an export once). Copies a day old ([now]) go first.
      */
     fun copy(files: LocalFiles, url: String, root: File, disposition: String? = null,
              now: Long = System.currentTimeMillis()): Copied = synchronized(lock) {
-        copies[url]?.takeIf { it.file.isFile }?.let { return it }
+        val key = parse(url)?.let { exportOf(it.rawQuery) }?.let { PyUrl.unquote(it) }?.ifEmpty { null } ?: url
+        copies[key]?.takeIf { it.file.isFile }?.let { return it }
         root.mkdirs()
         root.listFiles()?.forEach { if (now - it.lastModified() > KEEP_MS) it.deleteRecursively() }
         val target = parse(url)?.let { u -> u.rawPath + (u.rawQuery?.let { "?$it" } ?: "") }
@@ -105,7 +107,7 @@ object Exports {
                     val file = File(dir, name)
                     if (!part.renameTo(file)) throw IOException("can't name the copy $name")
                     dir.setLastModified(now)
-                    Copied.File(file, got.disposition ?: DownloadNames.contentDisposition(name)).also { copies[url] = it }
+                    Copied.File(file, got.disposition ?: DownloadNames.contentDisposition(name)).also { copies[key] = it }
                 } catch (e: IOException) {
                     dir.deleteRecursively()
                     throw e
