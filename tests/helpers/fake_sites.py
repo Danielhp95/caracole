@@ -18,7 +18,8 @@ URL, quoted>``, with the headers it was sent with (the user agent). The site's U
   tests/fixtures/lacuerda/not_found.html);
 - gtptabs.com's artist pages (``/tabs/<n>/<artist>.html``, which a lookup asks for an artist gtptabs.com's index
   lists, as the computer's lists Traditional): gtptabs_site.py's page of the artist, listing none of the scenario's
-  songs, so that gtptabs.com has no Guitar Pro file of them.
+  songs, so that gtptabs.com has no Guitar Pro file of them;
+- harptabs.com's tab page of a song with a harmonica tab (``/tab/<id>/<slug>``), in harptabs_site.py's markup.
 
 ``serve`` says each request on stdout as it comes. A URL the scenario has no rule for gets its site's 404 and is
 logged as unknown (on stderr, ``known`` false), so that a caracole asking a URL the computer's wouldn't is seen, never
@@ -30,7 +31,8 @@ logged ``closed``. Every request is counted, in order, and its own routes, which
 - ``GET /scenario.json``: ``document(name)``, what each of the scenario's songs is for (below), with the names and
   keys a search of its index finds it by;
 - ``GET /index.sqlite``: Ultimate Guitar's index of the scenario's songs, as ``caracole index export`` writes one
-  (built from a sitemap as ``caracole index build --from`` reads one), for a phone to import as the computer's;
+  (built from a sitemap as ``caracole index build --from`` reads one), and harptabs.com's rows of its harmonica tab
+  (as site_index.py stores a sitemap it read), for a phone to import as the computer's;
 - ``GET /``: a line saying it is up.
 
 ``caracole SITES ARGS…`` runs caracole's CLI (``python -m caracole ARGS``) with every client's transport routed to the
@@ -38,7 +40,7 @@ server at SITES (``routed``, RoutedTransport's twin in httpx), so that the compu
 pages the phone does. In a test, ``FakeSites(name)`` is the server on a free port of 127.0.0.1, in a thread
 (``with FakeSites("lookups") as sites: sites.url``).
 
-The scenario ``lookups`` (``LOOKUPS``): five songs, each with a part (``role``) in the lookups the phase makes:
+The scenario ``lookups`` (``LOOKUPS``): seven songs, each with a part (``role``) in the lookups the phases make:
 
 - ``get_it``, Thomas Moore's The Minstrel Boy: four chords versions in UG's index and on each of its pages, the best
   rated first, and LRCLIB's timed lyrics. Get it on its search row keeps its sheet; Fetch them keeps more of its
@@ -51,6 +53,14 @@ The scenario ``lookups`` (``LOOKUPS``): five songs, each with a part (``role``) 
 - ``closed``, The Wild Rover (Traditional): its tab page answers a 301 to its print view, ``/tab/print?id=…``, which
   robots.txt closes: a redirect a caracole never follows, an error and never a miss.
 - ``blocked``, Whiskey in the Jar (Traditional): its tab page answers 403, a block.
+- ``chinese``, Kangding Love Song (Misc Traditional): two chords versions whose charts sing made-up Chinese words
+  (tests/helpers/e2e_library.py's ``chinese_words``, in Simplified characters), so that the page the phone makes of it
+  carries the readings Pinyin shows: Get it keeps its sheet and its other version beside it (milestone 5's pages
+  phase, lane pages-e2e).
+- ``harmonica``, Henry Clay Work's Marching Through Georgia: a chords version, and a harmonica tab on harptabs.com
+  (its sitemap's rows of the tab and of its artist's page, ``harptabs_rows``, in the scenario's index; the tab's page,
+  harptabs_site.py's markup of e2e_library.py's made-up ``harmonica_tab``): Get it keeps both, and the phone makes the
+  tab's page.
 
 The standard library alone at import, so that e2e_library.py can import its songs; caracole, httpx and the suite's
 helpers are imported where they are used.
@@ -59,6 +69,7 @@ helpers are imported where they are used.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import sqlite3
@@ -82,6 +93,7 @@ OWNERS_PORT = 8737  # caracole-web, the owner's service: never this server's
 NOW = datetime(2026, 10, 22, 3, 0, tzinfo=UTC)
 UG_TAB = "https://tabs.ultimate-guitar.com/tab/"
 UG_WWW = "https://www.ultimate-guitar.com"
+HARPTABS = "https://www.harptabs.com"
 VOTES_PER_READ = 3  # a page of the get_it song read again says this many votes more
 
 # Each site's hosts, by the provider caracole names it (config.DEFAULT_PROVIDERS).
@@ -126,6 +138,8 @@ class SiteSong:
     blocked: bool = False  # UG answers its tab page with a 403
     closed: bool = False  # UG answers its tab page with a 301 to its print view, which robots.txt closes
     query: str = ""  # what a search for it types (a song of UG's index)
+    chinese: bool = False  # its charts sing made-up Chinese words
+    harp: tuple[int, int] | None = None  # its harmonica tab on harptabs.com: the tab's id, its artist page's id
 
     def tab_url(self, tab: int) -> str:
         if self.bare is not None:
@@ -140,9 +154,22 @@ class SiteSong:
     def every_tab(self) -> tuple[int, ...]:
         return self.tabs if self.bare is None else (self.bare,)
 
+    @property
+    def harp_path(self) -> str | None:
+        """Its harmonica tab's page on harptabs.com, as the site's sitemap lists it (``tab/6101/marching-through-
+        georgia``); None for a song with none."""
+        return None if self.harp is None else f"tab/{self.harp[0]}/{slug(self.title)}"
+
+    @property
+    def harp_artist(self) -> str | None:
+        """Its artist's page on harptabs.com, as the sitemap lists it (``artist/701/henry-clay-work``)."""
+        return None if self.harp is None else f"artist/{self.harp[1]}/{slug(self.artist.name)}"
+
 
 THOMAS_MOORE = Artist("Thomas Moore", 70001)
 TRADITIONAL = Artist("Traditional", 70002)
+MISC_TRADITIONAL = Artist("Misc Traditional", 70003)
+HENRY_CLAY_WORK = Artist("Henry Clay Work", 70004)
 LOOKUPS = (
     SiteSong("get_it", THOMAS_MOORE, "The Minstrel Boy", "Am", ("Am", "G", "C", "E"),
              tabs=(7000001, 7000002, 7000003, 7000004), lyrics=True, query="minstrel boy"),
@@ -152,6 +179,10 @@ LOOKUPS = (
              query="wild rover"),
     SiteSong("blocked", TRADITIONAL, "Whiskey in the Jar", "G", ("G", "Em", "C", "D"), tabs=(7000031,),
              blocked=True, query="whiskey in the jar"),
+    SiteSong("chinese", MISC_TRADITIONAL, "Kangding Love Song", "Am", ("Am", "F", "C", "G"),
+             tabs=(7000051, 7000052), chinese=True, query="kangding love song"),
+    SiteSong("harmonica", HENRY_CLAY_WORK, "Marching Through Georgia", "C", ("C", "F", "G", "Am"), tabs=(7000061,),
+             harp=(6101, 701), query="marching through georgia"),
 )
 SCENARIOS = {"lookups": LOOKUPS}
 
@@ -178,16 +209,48 @@ def sitemap(rows: Sequence[tuple[str, str, int]]) -> str:
             f"{urls}</urlset>\n")
 
 
-def chart(title: str, chords: Sequence[str], version: int = 1) -> str:
-    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words."""
+def chart(title: str, chords: Sequence[str], version: int = 1, *, chinese: bool = False) -> str:
+    """A chart in Ultimate Guitar's markup: two verses and a chorus, each line's two chords over its made-up words;
+    with ``chinese``, Chinese words (tests/helpers/e2e_library.py's ``chinese_words``: the suite's helpers on
+    sys.path, as ``Sites`` puts them)."""
+    if chinese:
+        from helpers.e2e_library import chinese_words
     lines = [f"{title}: a chart made up for caracole's tests, version {version}"]
     for section in ("Verse 1", "Chorus", "Verse 2"):
         lines.append(f"[{section}]")
         for n in range(4):
             first, second = chords[n % len(chords)], chords[(n + 1) % len(chords)]
             lines.append(f"[tab][ch]{first}[/ch]" + " " * (16 - len(first)) + f"[ch]{second}[/ch]")
-            lines.append(f"Made-up words of {section.lower()}, line {n + 1}, for the lookups[/tab]")
+            said = chinese_words(section, n) if chinese else f"Made-up words of {section.lower()}, line {n + 1}, " \
+                                                               "for the lookups"
+            lines.append(f"{said}[/tab]")
     return "\r\n".join(lines) + "\r\n"
+
+
+def harptabs_rows(name: str = "lookups") -> list[tuple[str, str, int, str]]:
+    """harptabs.com's sitemap rows of the scenario's harmonica tabs, as ``harptabs_index`` keeps them
+    (``harptabs.parse_page_url``: path, kind, id, key): each tab's page, and its artist's, which the lookup's harptabs
+    stage needs listed to take the tab as a candidate."""
+    from caracole.harptabs import page_url, parse_page_url
+
+    rows = []
+    for song in SCENARIOS[name]:
+        if song.harp is not None:
+            rows += [tuple(parse_page_url(page_url(path))) for path in (song.harp_artist, song.harp_path)]
+    return rows
+
+
+def store_harptabs(conn: sqlite3.Connection, now: datetime, name: str = "lookups") -> None:
+    """The scenario's harptabs.com rows (``harptabs_rows``) into ``conn``'s ``harptabs_index``, as site_index.py
+    stores the site's one sitemap it read (its rows, its record and the index read whole), so that an index export
+    holds them and a merge takes them."""
+    from caracole import harptabs_fetch, site_index, stamps
+    from caracole.db import kv_set
+
+    site_index._store(conn, harptabs_fetch.SITE, site_index.ONE, harptabs_rows(name),
+                      {"etag": None, "last_modified": None}, now)
+    kv_set(conn, harptabs_fetch.SITE.complete_key, stamps.stamp(now))
+    kv_set(conn, harptabs_fetch.KEYS_KEY, harptabs_fetch.ROW_KEYS)
 
 
 def lyrics_lines() -> list[str]:
@@ -201,20 +264,23 @@ def lyrics_lines() -> list[str]:
 
 def build_index(conn: sqlite3.Connection, folder: Path, name: str = "lookups") -> None:
     """The scenario's songs into ``conn``'s UG index, read from a sitemap written in ``folder`` as ``caracole index
-    build --from`` reads one (its records, so that a merge takes them)."""
+    build --from`` reads one (its records, so that a merge takes them), and its harptabs.com rows
+    (``store_harptabs``)."""
     from caracole.ug.index import build_index as build
 
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "sitemap1.xml").write_text(sitemap(index_rows(name)), encoding="utf-8")
     build(conn, None, NOW, from_dir=folder)
+    store_harptabs(conn, NOW, name)
 
 
 def document(conn: sqlite3.Connection, name: str = "lookups") -> dict:
     """What each of the scenario's songs is for, by its part (``role``): its names as the scenario writes them and
     its identity key; for a song of the index, its query and the row a search finds it by (search.py's
     ``search_index`` over ``conn``'s index: the names it gives, their identity key, ``ug`` its pick,
-    artist-key/song-key); its tab pages and its artist's page; and the lookup limits it is held to
-    (config.DEFAULT_PROVIDERS': each provider's ``lookup_requests`` and ``lookup_per_hour``)."""
+    artist-key/song-key); its tab pages and its artist's page; whether its words are Chinese, and its harmonica tab's
+    page on harptabs.com (``harp``, or None); and the lookup limits it is held to (config.DEFAULT_PROVIDERS': each
+    provider's ``lookup_requests`` and ``lookup_per_hour``)."""
     from caracole.config import DEFAULT_PROVIDERS
     from caracole.normalize import identity_key, ug_slug_key
     from caracole.search import search_index
@@ -224,7 +290,9 @@ def document(conn: sqlite3.Connection, name: str = "lookups") -> dict:
         entry = {"artist": song.artist.name, "title": song.title, "key": identity_key(song.artist.name, song.title),
                  "tabs": [song.tab_url(t) for t in song.every_tab], "artist_page": song.artist.page,
                  "lyrics": song.lyrics, "blocked": song.blocked,
-                 "closed": [song.print_url(t) for t in song.every_tab] if song.closed else []}
+                 "closed": [song.print_url(t) for t in song.every_tab] if song.closed else [],
+                 "chinese": song.chinese,
+                 "harp": None if song.harp_path is None else f"{HARPTABS}/{song.harp_path}"}
         if song.query:
             want = (ug_slug_key(slug(song.artist.name)), ug_slug_key(slug(song.title)))  # as ug_index keeps them
             hit = next((h for h in search_index(conn, song.query) if (h.artist_key, h.song_key) == want), None)
@@ -299,7 +367,7 @@ class Sites:
         own = self._version(song, tab, reads)
         others = [self._version(song, t, reads) for t in song.every_tab if t != tab]
         n = song.every_tab.index(tab)
-        page = make_tab_page_html(own, others, content=chart(song.title, song.chords, n + 1),
+        page = make_tab_page_html(own, others, content=chart(song.title, song.chords, n + 1, chinese=song.chinese),
                                   artist_url=song.artist.page)
         return Answer(200, HTML, page.encode("utf-8"))
 
@@ -370,6 +438,20 @@ class Sites:
         name = " ".join(word.capitalize() for word in artist[1].split("-"))
         return Answer(200, HTML, artist_page(name, path.lstrip("/")).encode("utf-8"))
 
+    # harptabs.com.
+
+    def _harptabs(self, parts: urllib.parse.SplitResult) -> Answer | None:
+        from helpers.e2e_library import harmonica_tab
+        from helpers.harptabs_site import tab_page
+
+        for song in self.songs:
+            if song.harp is not None and not parts.query and parts.path == f"/{song.harp_path}":
+                page = tab_page(song.title.lower(), song.artist.name.lower(), views="12k", key="C",
+                                body=html.escape(harmonica_tab(song.title), quote=False),
+                                artist_path=song.harp_artist)
+                return Answer(200, HTML, page.encode("utf-8"))
+        return None
+
     # The rest: the suite's fakes, or the site's 404.
 
     def _fake(self, handler, url: str) -> Answer | None:
@@ -399,6 +481,8 @@ class Sites:
             found = Answer(404, HTML, _fixture("lacuerda/not_found.html"))
         elif provider == "gtptabs" and not parts.query:
             found = self._gtptabs_artist(parts.path)
+        elif provider == "harptabs" and parts.hostname == "www.harptabs.com":
+            found = self._harptabs(parts)
         if found is not None:
             return found
         return Answer(404, JSON if provider == "lrclib" else HTML, b"<html><title>Not Found</title></html>",

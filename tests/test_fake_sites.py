@@ -29,6 +29,7 @@ from helpers.fake_sites import (
     FakeSites,
     build_index,
     by_provider,
+    harptabs_rows,
     index_rows,
     log,
     routed,
@@ -161,6 +162,31 @@ def test_a_gtptabs_artist_page_lists_none_of_the_scenarios_songs(sites):
     assert [r["known"] for r in sites.requests] == [True]
 
 
+def test_the_chinese_songs_charts_sing_chinese_words(sites):
+    from caracole.ug.page import parse_tab_page
+    from caracole.viewer.page import written_script
+
+    song = ROLES["chinese"]
+    pages = [parse_tab_page(fetch(sites, song.tab_url(tab))[1].decode("utf-8")) for tab in song.tabs]
+    assert [p.tab.tab_id for p in pages] == list(song.tabs)
+    assert all("这是为测试编的歌词" in p.content and written_script(p.content) for p in pages)
+
+
+def test_harptabs_has_the_harmonica_songs_tab_by_its_artist(sites):
+    from caracole.harptabs import parse_tab_page
+    from helpers.e2e_library import harmonica_tab
+
+    song = ROLES["harmonica"]
+    url = f"https://www.harptabs.com/{song.harp_path}"
+    status, body = fetch(sites, url)
+    assert status == 200
+    tab = parse_tab_page(body.decode("utf-8"), url)
+    assert tab.artist == "henry clay work" and tab.title == "marching through georgia"
+    assert tab.body.strip() == harmonica_tab(song.title).strip() and tab.key == "C"
+    assert fetch(sites, "https://www.harptabs.com/tab/6102/another-tab")[0] == 404
+    assert [r["known"] for r in sites.requests] == [True, False]
+
+
 def test_it_never_takes_the_owners_port():
     with pytest.raises(ValueError, match="owner"):
         FakeSites("lookups", OWNERS_PORT)
@@ -173,6 +199,9 @@ def test_its_index_is_an_index_export_of_the_scenarios_songs_and_its_document_na
         assert conn.execute("SELECT COUNT(*) FROM caracole_export").fetchone()[0] >= 1
         rows = {t: path for t, path in conn.execute("SELECT tab_id, path FROM ug_index")}
     assert rows == {tab: f"{a}/{s}-chords-{tab}" for a, s, tab in index_rows()}  # each at its sitemap's path
+    with sqlite3.connect(index) as conn:  # harptabs.com's rows of the harmonica tab, and of its artist's page
+        harp = set(conn.execute("SELECT path, kind, page_id, key FROM harptabs_index"))
+    assert harp == set(harptabs_rows()) and {kind for _, kind, _, _ in harp} == {"artist", "tab"}
     document = json.loads(read(sites, "/scenario.json"))
     assert set(document["songs"]) == set(ROLES)
     found = document["songs"]["get_it"]["search"]
@@ -251,6 +280,39 @@ def test_caracole_looks_the_scenarios_songs_up_against_it_within_a_lookups_limit
         assert decided == {"closed": ("accept", 0), "blocked": ("accept", 1)}, decided
     finally:
         conn.close()
+
+
+def test_caracole_keeps_the_chinese_songs_other_version_beside_it_and_the_harmonica_tab(sites, cfg, monkeypatch,
+                                                                                     tmp_path):
+    from caracole.commands import _common
+    from caracole.get import LookupRequest, look_up
+    from caracole.render import FILES_KEY
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: routed(sites.url))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    conn = db.connect(cfg.db_path)
+    try:
+        build_index(conn, tmp_path / "sitemaps")
+    finally:
+        conn.close()
+    now = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
+    written = {}
+    for role in ("chinese", "harmonica"):
+        song = ROLES[role]
+        result = look_up(cfg, LookupRequest(song.artist.name, song.title), runner=Chordpro(), now=now)
+        conn = db.connect(cfg.db_path)
+        try:
+            written[role] = set(db.kv_get_json(conn, f"{FILES_KEY}{result.song_id}") or {})
+        finally:
+            conn.close()
+    chinese = ROLES["chinese"]
+    assert {f"version-{tab}.txt" for tab in chinese.tabs[1:]} <= {
+        p.name for p in (cfg.library_dir / chinese.artist.name / chinese.title).iterdir()}
+    assert written == {"chinese": {"sheet.cho", "sheet.html", *(f"version-{t}.html" for t in chinese.tabs[1:])},
+                       "harmonica": {"sheet.cho", "sheet.html", "harmonica-1.html"}}
+    every = sites.requests
+    assert [r for r in every if not r["known"] or r["closed"]] == []
+    assert [r["status"] for r in every if r["provider"] == "harptabs"] == [200]
 
 
 @pytest.mark.slow
