@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.e2e
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Reads
+import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncUnit
@@ -11,13 +12,17 @@ import io.github.danielhp95.caracole.mirror.Gate
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.PhoneGate
 import io.github.danielhp95.caracole.server.http.Response
+import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobCommands
+import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -96,7 +101,13 @@ import kotlin.test.fail
  *    `PhoneConfig.read`); Ultimate Guitar still cooling on the phone, as nothing of either side's politeness crosses;
  *    the index pages the phone read pushed (none noted left); every mirrored page served, and the pages the phone made
  *    of the songs it gave still its own, served as it wrote them (tests/test_android_e2e.py's step 11 holds them to
- *    Python's for the same inputs); then the phone's units written to DIR/phone/phone-state.json again.
+ *    Python's for the same inputs), and those of the song it took, which the computer rendered again as it looked it
+ *    up, forgotten (their record and files), the mirror's serving at the unit's digest the take moved it to; then the
+ *    phone's units written to DIR/phone/phone-state.json again.
+ * 7. A new build (PhoneRender's stamp another), every site refused: the render job makes the pages owed again, a
+ *    lookup queued as it starts runs between two songs, before the job ends, phase 5's pages, which the mirror holds
+ *    the computer's of now, forgotten for the mirror's, and its time over the library is written for the report,
+ *    with a pass's that makes every song's pages itself, as a phone with none of the computer's (no mirror).
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -430,6 +441,12 @@ class PhoneScenarioTest {
         assertTrue(Requests.paths.all { it == "/fetch" }, "${Requests.paths}")
         assertEquals(every.size, Requests.count, "every request the phone sent is one the fake sites counted")
 
+        // Get it's song's pages, the phone's own (its lookups' pdf stage): phase 6 takes it from the computer, which
+        // looks it up meanwhile and renders it, and the mirror's pages of it then serve in their place, the phone's
+        // forgotten.
+        val minstrelPages = ownPages(phone, minstrel.key)
+        assertTrue("sheet.html" in minstrelPages, "the phone made its sheet's page: $minstrelPages")
+
         val looked = listOf(getIt.found, fetchNow, rose.song, chinese.found, harmonica.found, wild.found, blocked.found)
         buildJsonObject {
             put("sites", every.size)
@@ -451,6 +468,10 @@ class PhoneScenarioTest {
                 }
             }))
             put("progression", playing)
+            put("superseded", buildJsonObject {
+                put("key", minstrel.key)
+                put("files", JsonObject(minstrelPages.mapValues { JsonPrimitive(it.value) }))
+            })
         }
     }
 
@@ -495,6 +516,12 @@ class PhoneScenarioTest {
         for (page in phone.mirror.manifest()!!.entries.filter { it.unit != null }) {
             assertEquals(Gate.SERVE, gate.check(page.unit!!, page.digest), page.path)
         }
+        // The song taken from the computer, which rendered it as it looked it up: the mirror's pages of it serve, at
+        // the unit's digest the take moved it to, and the pages the phone made of it in phase 5 are forgotten, their
+        // record and their files (PhoneRender.afterSync).
+        val superseded = five["superseded"]!!.jsonObject
+        assertEquals(both.key, superseded.text("key"), "phase 5's Get it is the song looked up on both sides")
+        mirrorsInPlaceOfOwn(phone, both.key, superseded["files"]!!.jsonObject)
         // The pages the phone made of the songs it gave, still its own, as it wrote them: the songs given as they
         // were, so the computer's pages of them (the mirror's now) supersede none.
         for ((role, made) in five["pages"]!!.jsonObject) {
@@ -516,6 +543,85 @@ class PhoneScenarioTest {
         }
     }
 
+    /** A new build of the app (PhoneRender's build stamp another): the render job makes the pages owed again over the
+     * scenario's library, a lookup queued as it starts runs between two songs, before the job ends, and the phone's
+     * own pages of phase 5's songs, which the mirror holds the computer's of now, are forgotten for the mirror's; how
+     * long it took is written for the report (milestone 5's check). Every site refused: the lookup's sites fail,
+     * never a miss. */
+    @Test fun phase7_aNewBuildMakesThePagesAgainAndALookupQueuedMeanwhileRunsBetweenTwoSongs() {
+        var phone: ScenarioPhone? = null
+        var lookup: Int? = null
+        val said = mutableListOf<String>()
+        var song: Song? = null
+        val newBuild: (PhoneDeps) -> PhoneRender = { deps ->
+            object : PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version) {
+                private val stamp = "e2e-new-build-${System.nanoTime()}"
+                override fun build(): String = stamp
+                override fun renderStale(between: () -> Unit, progress: (done: Int, total: Int) -> Unit): RenderStats =
+                    super.renderStale(between = {
+                        val queue = phone!!.phone.queue
+                        if (lookup == null) {
+                            val looked = song!!
+                            lookup = queue.submit(JobSpec("Look it up", looked.key, "song", emptyList(),
+                                                          commands = JobCommands.lookupSteps(looked.artist, looked.title)))
+                                .first.id
+                        }
+                        between()
+                        said += "between: the lookup ${queue.snapshot().first { it.id == lookup }.state}"
+                    }) { done, total ->
+                        said += "$done of $total"
+                        progress(done, total)
+                    }
+            }
+        }
+        phase(7, newBuild) { scenarioPhone, scenario ->
+            phone = scenarioPhone
+            val five = read(File(scenarioPhone.home, "phase-5.json"))
+            song = scenario.lookups.song("get_it").found
+            val render = scenarioPhone.phone.render
+            assertTrue(render.stale(), "a new build owes the pages again")
+            val started = System.nanoTime()
+            val job = scenarioPhone.phone.renderAgain()
+            val over = scenarioPhone.await(job.id)
+            val seconds = (System.nanoTime() - started) / 1e9
+            assertEquals(DONE, over.state, "${over.stages.single().detail}: $said")
+            val looked = scenarioPhone.await(lookup ?: fail("no lookup queued: the job had one song at most: $said"))
+            assertEquals(DONE, looked.state, looked.asJson().toString())
+            val betweens = said.filter { it.startsWith("between: ") }
+            assertTrue(betweens.isNotEmpty() && betweens.all { it == "between: the lookup $DONE" },
+                       "the lookup ran at the first song's end, before the job's next: $said")
+            assertTrue(said.indexOf(betweens.first()) < said.size - 1, "and before the job ended: $said")
+            assertTrue(!render.stale(), "the pages made at the new build")
+            // Phase 5's songs, which the phone gave and the computer took and rendered: the mirror holds the
+            // computer's pages of them at their units' digests, so the pass forgets the phone's own, the mirror's
+            // serving in their place (PhoneRender: a song the mirror serves gets its progressions, script and
+            // info.json alone).
+            for ((_, made) in five["pages"]!!.jsonObject) {
+                mirrorsInPlaceOfOwn(scenarioPhone, made.jsonObject.text("key"), made.jsonObject["files"]!!.jsonObject)
+            }
+            val total = said.last { !it.startsWith("between: ") }.substringAfter(" of ").toInt()
+            // And the whole library's pages made by the phone itself, as on a phone that holds none of the
+            // computer's (no mirror): every song with a sheet a pass that writes its pages, timed too.
+            val alone = PhoneRender(scenarioPhone.database, scenarioPhone.libraryDir, null, "e2e-alone")
+            val whole = System.nanoTime()
+            val made = alone.renderStale(between = {})
+            val wholeSeconds = (System.nanoTime() - whole) / 1e9
+            assertEquals(emptyMap(), made.failed, "every song's pages made")
+            assertTrue(made.written > 0, "the phone wrote pages: $made")
+            buildJsonObject {
+                put("seconds", seconds)
+                put("songs", total)
+                put("detail", over.stages.single().detail)
+                put("alone", buildJsonObject {
+                    put("seconds", wholeSeconds)
+                    put("written", made.written)
+                    put("unchanged", made.unchanged)
+                })
+                put("progress", JsonArray(said.map(::JsonPrimitive)))
+            }
+        }
+    }
+
     // --- the phases' plumbing ---------------------------------------------------------------------------------------
 
     private val phase: Int? = System.getProperty("caracole.e2e.phase")?.toIntOrNull()
@@ -525,7 +631,7 @@ class PhoneScenarioTest {
 
     /** Phase [n]'s [body], given the phone over DIR/phone/ and the scenario, if it is the phase asked for; what it
      * returns, and the requests the phone sent, written to DIR/phone/phase-N.json. */
-    private fun phase(n: Int, body: (ScenarioPhone, Scenario) -> JsonObject) {
+    private fun phase(n: Int, render: ((PhoneDeps) -> PhoneRender)? = null, body: (ScenarioPhone, Scenario) -> JsonObject) {
         Assume.assumeTrue("phase $n alone, against a computer (-Pcaracole.e2e.phase, .server, .dir)",
                           phase == n && server != null && dir != null)
         val home = File(dir, "phone")
@@ -533,7 +639,7 @@ class PhoneScenarioTest {
         Requests.install()
         Requests.reset()
         val scenario = Scenario.read(dir!!)
-        val result = ScenarioPhone(home, server!!, sites).use { phone -> body(phone, scenario) }
+        val result = ScenarioPhone(home, server!!, sites, render).use { phone -> body(phone, scenario) }
         write(File(home, "phase-$n.json"), JsonObject(result + mapOf(
             "phase" to JsonPrimitive(n), "requests" to JsonPrimitive(Requests.count),
         )))
@@ -751,6 +857,30 @@ class PhoneScenarioTest {
             assertTrue(served.bytes.contentEquals(bytes), "$path served as the phone wrote it")
         }
         return record.mapValues { it.value.sha256 }
+    }
+
+    /** The song of [key]'s pages are the mirror's now, at its unit's digest, each served as the mirror holds it, and
+     * the phone's own of it (phase 5's [own], by name, each one's SHA-256) forgotten: no record left, each file
+     * deleted. */
+    private fun mirrorsInPlaceOfOwn(phone: ScenarioPhone, key: String, own: JsonObject) {
+        val unit = "song/$key"
+        val id = idOf(phone, key)
+        val (record, digest) = phone.database.read { db -> WrittenPages.record(db, id) to Units.digestOf(db, unit) }
+        assertEquals(emptySet(), record.keys, "$key: the phone's own pages, forgotten")
+        val mirrored = phone.mirror.manifest()!!.entries.filter { it.unit == unit && it.isPage }
+        assertTrue(mirrored.any { it.name == "sheet.html" }, "$key: the mirror holds the computer's sheet: $mirrored")
+        for (entry in mirrored) {
+            assertEquals(digest, entry.digest, "${entry.path}: the computer's page at the unit's digest now")
+            val served = phone.get("/" + quotePath(entry.path))
+            assertEquals(200, served.status, "${entry.path}: ${served.text.take(500)}")
+            assertEquals(entry.sha256, sha256(served.bytes), "${entry.path}: the mirror's page served")
+        }
+        val folder = songFolder(phone, key)
+        for ((name, sha) in own) {
+            val file = File(folder, name)
+            assertFalse(file.isFile && sha256(file.readBytes()) == sha.jsonPrimitive.content,
+                        "$key: the phone's own $name is deleted")
+        }
     }
 
     /** The file [name] in the folder of the song of [key] on the phone. */
