@@ -871,8 +871,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         /** The stages an import of a file shows, in order, as (name, label): `caracole peer import --progress`'s
          * (jobs.PEER_IMPORT_STAGES), the phone's mirror of the file's pages in place of its render. */
         val FILE_STAGES = listOf(
-            CHECK to "Reading the file", TAKE to "Taking what changed there", MIRROR to "Keeping the file's pages",
-            AGREE to "What the two agree on", INDEX to "Merging the indexes",
+            CHECK to "Reading the file", TAKE to "Taking what they wrote", MIRROR to "Keeping the file's pages",
+            AGREE to "Noting where the books agree", INDEX to "Merging the indexes",
         )
 
         /** kv: a computer synced with, by its id: {address, name, synced_at}. */

@@ -45,8 +45,8 @@ object Compare {
     const val CONFLICT = "conflict"
 
     /** Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered. */
-    const val KEPT_HERE = "kept here, as you chose when a file of the other's was imported"
-    const val KEPT_THERE = "kept there, as you chose when a file of this one's was imported"
+    const val KEPT_HERE = "ours kept, as you chose when reading their file"
+    const val KEPT_THERE = "theirs kept, as you chose when they read our file"
 
     private const val ID_KEY = "sync:id"
     private const val BASE_KEY = "sync:base:"
@@ -200,7 +200,7 @@ object Compare {
             !aChanged && !bChanged -> if (pair.chooser == MINE) MINE to KEPT_HERE else THEIRS to KEPT_THERE
             aChanged && !bChanged -> MINE to changed("here", a, pair.here)
             bChanged && !aChanged -> THEIRS to changed("there", b, pair.there)
-            else -> CONFLICT to "changed on both sides since the last sync"
+            else -> CONFLICT to "both books changed it since the last share"
         }
     }
 

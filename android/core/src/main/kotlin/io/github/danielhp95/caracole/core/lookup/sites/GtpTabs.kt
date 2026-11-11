@@ -20,7 +20,7 @@ object GtpTabsStage : SiteStage {
     /** get.GTPTABS_KEPT, which the Requests tab's line reads. */
     const val KEPT = LookupWords.GTPTABS_KEPT
     const val NONE_THERE = "no file there"
-    const val NOT_WANTED = "no file wanted, or gtptabs.com's index doesn't know the artist"
+    const val NOT_WANTED = "no file wanted, or gtptabs doesn't list the artist"
 
     override fun run(ctx: StageContext): StageEnd {
         val asked = ctx.asking.ask(GtpTabsFetch.PROVIDER) { client ->

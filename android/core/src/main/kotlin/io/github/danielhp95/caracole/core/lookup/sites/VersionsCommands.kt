@@ -51,13 +51,13 @@ object VersionsCommands {
     /** KEPT_WORDS: what [UgFetch.keepVersion] came to, in words. */
     val KEPT_WORDS: Map<String, String> = linkedMapOf(
         "same" to "its text is the very text of {page}, which shows it",
-        "held" to "its text is the very text of another file kept in the song's folder, so it isn't kept again",
+        "held" to "same text as another file in the song's folder; not kept twice",
         "sheet" to "it is the sheet already",
-        "gone" to "Ultimate Guitar no longer has it",
-        "unreadable" to "its page can't be read now; it waits",
-        "closed" to "Ultimate Guitar moved its page where robots.txt keeps caracole out; nothing kept",
-        "no text" to "its page has no sheet caracole can keep",
-        "unknown" to "it isn't one of the song's chords versions caracole may use",
+        "gone" to "gone from UG",
+        "unreadable" to "couldn't read its page; it waits",
+        "closed" to "UG moved its page behind robots.txt; nothing kept",
+        "no text" to "its page has no sheet we can keep",
+        "unknown" to "not one of the song's chords versions we may use",
     )
 
     /** `keep`: tab [tab] of [song] kept beside its sheet in [library]; its last line. */
@@ -161,7 +161,7 @@ object VersionsCommands {
     private fun begun(c: CommandContext, song: SongRow) {
         event(c, JsonObject(linkedMapOf("song" to JsonObject(linkedMapOf(
             "id" to JsonPrimitive(song.id), "display" to JsonPrimitive(song.display))))))
-        stage(c, "song", "done", "in the library")
+        stage(c, "song", "done", "in the book")
         stage(c, "version", "running")
     }
 

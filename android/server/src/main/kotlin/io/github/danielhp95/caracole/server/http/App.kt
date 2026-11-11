@@ -237,11 +237,11 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         }
         if (request.body.size > route.limit) return message(413, "Too long", "That is too long.")
         if (route.body == Route.BYTES) return request.body
-        val text = PyText.utf8(request.body) ?: return message(400, "Not JSON", "That can't be read as JSON.")
+        val text = PyText.utf8(request.body) ?: return message(400, "Not JSON", "Can't read that as JSON.")
         return try {
             PyJson.loads(text)
         } catch (e: IllegalArgumentException) {
-            message(400, "Not JSON", "That can't be read as JSON.")
+            message(400, "Not JSON", "Can't read that as JSON.")
         }
     }
 

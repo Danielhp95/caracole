@@ -32,7 +32,7 @@ internal object Choices {
     const val REFRESH = 10
 
     /** The answer the address can't be read gets, for either page. */
-    val NOT_AN_ADDRESS get() = Refused(400, "Not an address", "That address can't be read.")
+    val NOT_AN_ADDRESS get() = Refused(400, "Not an address", "Can't read that address.")
 
     /** pages.page: [body] under the header, the library the phone shows in the header and the tab's title, [head]
      * before the icon (the refresh of a page that follows a request); the message pages' style and policy, no

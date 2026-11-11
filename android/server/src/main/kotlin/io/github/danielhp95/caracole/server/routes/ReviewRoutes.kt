@@ -76,13 +76,12 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
         }
         if (pick == null) LookupForms.notIgnored(song, overrides)
         if (pick == null && song.review) {
-            throw Refused(409, NOTHING, "${song.display} has no candidates to pick: caracole review offers a pin or an " +
+            throw Refused(409, NOTHING, "${song.display} has no candidates. caracole review offers a pin or an " +
                                         "ignore.")
         }
-        if (pick == null) throw Refused(409, NOTHING, "${song.display} doesn't need review: there's nothing to pick.")
+        if (pick == null) throw Refused(409, NOTHING, "${song.display} needs no review. Nothing to pick.")
         if (pick.choices.isEmpty()) {
-            throw Refused(409, NOTHING, "caracole search finds nothing close to ${song.display} in the offline Ultimate " +
-                                        "Guitar index.")
+            throw Refused(409, NOTHING, "Nothing close to ${song.display} in UG's index.")
         }
         val html = page(pick, csrf, LibraryName.phone(libraryName()))
         return Response(200, Body.Bytes(html.toByteArray(Charsets.UTF_8)),
@@ -105,15 +104,14 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
         }
         LookupForms.notIgnored(song, overrides)
         if (offered == null) {
-            throw Refused(409, NOTHING, "${song.display} doesn't need review any more: reload the library to see " +
-                                        "where it stands.")
+            throw Refused(409, NOTHING, "${song.display} needs no review now. Reload to see where it stands.")
         }
         val refs = offered.refs
         if (pick.isEmpty()) throw Refused(400, "No answer", "Pick a candidate, or None of these.")
         if (Py.split(form["shown"].orEmpty()) != refs || refs.isEmpty()) {
             throw Refused(409, "The candidates changed",
-                          "caracole matched ${song.display} again since this page was loaded, and its candidates " +
-                              "changed: reload the library and pick again.")
+                          "${song.display} was matched again since this page loaded; its candidates changed. " +
+                              "Reload and pick again.")
         }
         if (pick == NONE && offered.search) {
             throw Refused(400, "Not an answer", "A song not found takes one of its search hits, or nothing.")
@@ -124,7 +122,7 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
         var commands = if (pick == NONE) JobCommands.reviewSteps(song.display, seen = refs)
                        else JobCommands.reviewSteps(song.display, pick = pick)
         if (fetch) {  // the review matched it again already; the phone's lookup is its fetch
-            title += ", and fetch it"
+            title += ", and fetch"
             commands = commands + JobCommands.lookupSteps(song.artist, song.title)
         }
         val spec = JobSpec(title = title, key = song.key,
@@ -135,7 +133,7 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
         val (job, new) = parts.queue.submitOrRefuse(spec)
         if (!new) {
             throw Refused(409, "Wait for its request",
-                          "A request for ${song.display} is waiting or running: pick once it ends.")
+                          "A request for ${song.display} is queued or running. Pick once it ends.")
         }
         return Answers.queued(LookupForms.view(parts.database, parts.queue, parts.cards, job, clock()))
     }
@@ -164,12 +162,12 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
          * song not found's, with what `caracole search` finds for it. */
         fun page(pick: Pick, csrf: String, name: LibraryName): String {
             val lede = if (pick.search) {
-                "<p class=\"lede\">Nothing in the offline Ultimate Guitar index matched ${esc(pick.display)} closely " +
-                    "enough. These are what <code>caracole search</code> finds for its artist and title: pick one only " +
-                    "if it is the song, and caracole writes it under <code>[match]</code>.</p>"
+                "<p class=\"lede\">Nothing in UG's index matched ${esc(pick.display)} closely. These are what " +
+                    "<code>caracole search</code> finds for its artist and title: pick one only if it's the song, and " +
+                    "we note it under <code>[match]</code>.</p>"
             } else {
-                "<p class=\"lede\">caracole isn't sure which Ultimate Guitar song ${esc(pick.display)} is. Pick it " +
-                    "here, as <code>caracole review</code> would ask you.</p>"
+                "<p class=\"lede\">Not sure which UG song ${esc(pick.display)} is. Pick it here, as " +
+                    "<code>caracole review</code> would ask.</p>"
             }
             return MessagePage.html("Pick the match", "<div class=\"pick-page\">$lede${form(pick, csrf, focus = true)}</div>",
                                     name)
@@ -187,22 +185,21 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
                 val href = text(c, "href")
                 val page = if (href.startsWith("https://") || href.startsWith("http://")) {
                     "<a class=\"choice-link\" href=\"${esc(href)}\" target=\"_blank\" rel=\"noopener noreferrer\" " +
-                        "aria-label=\"${esc(name)} on Ultimate Guitar, in a new tab\">UG ↗</a>"
+                        "aria-label=\"${esc(name)} on UG, new tab\">UG ↗</a>"
                 } else ""
                 rows += choice(text(c, "ref"), "${text(c, "n")}. $name", why, autofocus = focus && n == 0) + page + "</div>"
             }
             val hint = if (pick.search) {
-                "Your pick goes into overrides.toml under [match], as caracole review --song --pick writes it, with no " +
-                    "[alias]: a hit under another artist's name may be a cover. Fetch it now then asks Ultimate Guitar " +
-                    "for it."
+                "Your pick goes in overrides.toml under [match], with no [alias]: a hit under another artist may be a " +
+                    "cover. Fetch then asks UG for it."
             } else {
-                rows += choice(NONE, "None of these", "caracole drops them for good and goes on looking for the song",
+                rows += choice(NONE, "None of these", "Drops them for good; we keep looking",
                                cls = "choice none") + "</div>"
-                "Your answer goes into overrides.toml, as caracole review writes it. Fetch it now then asks Ultimate " +
-                    "Guitar for the song picked; None of these fetches nothing."
+                "Your answer goes in overrides.toml. Fetch then asks UG for the song picked; None of these fetches " +
+                    "nothing."
             }
             val shown = pick.refs.joinToString(" ")
-            val question = "Which Ultimate Guitar song is “${pick.title}” by ${pick.artist}?"
+            val question = "Which UG song is “${pick.title}” by ${pick.artist}?"
             return "<form class=\"pick-form\" method=\"post\" action=\"/review\">\n" +
                 "  <input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">\n" +
                 "  <input type=\"hidden\" name=\"song\" value=\"${pick.songId}\">\n" +
@@ -210,7 +207,7 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
                 "  <fieldset class=\"choices\"><legend>${esc(question)}</legend>\n  " + rows.joinToString("\n  ") +
                 "\n  </fieldset>\n" +
                 "  <div class=\"pick-row\"><label class=\"pick-check\"><input type=\"checkbox\" name=\"fetch\" " +
-                "value=\"1\" checked>Fetch it now</label><button class=\"btn primary\" type=\"submit\">Pick</button></div>\n" +
+                "value=\"1\" checked>Fetch</label><button class=\"btn primary\" type=\"submit\">Pick</button></div>\n" +
                 "  <p class=\"pick-hint\">${esc(hint)}</p>\n</form>"
         }
 
