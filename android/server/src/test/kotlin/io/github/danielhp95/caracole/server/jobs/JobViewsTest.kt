@@ -112,7 +112,7 @@ class JobViewsTest {
             it.outcome(Json.parseToJsonElement(
                 """{"taken":[],"given":[],"left":[["song/a/b","changed here"]],"agreed":2,"indexed":[]}""").jsonObject)
         }
-        assertEquals(Line("waiting", "Synced: 1 change left as it was", details = "#tab=requests&job=${left.id}"),
+        assertEquals(Line("waiting", "Shared · 1 change left as it was", details = "#tab=requests&job=${left.id}"),
                      JobViews.line(left))
         // A failure: its failed stage's first sentence, else its error line's, else its command's (an add's stage's
         // label, a staged job's title).
@@ -175,7 +175,7 @@ class JobViewsTest {
             "state":"done","fetching":false,"line":{"tone":"ready","text":"Shared","link":null,"details":null},
             "details":"#tab=sync","steps":[{"name":"compare","label":"Compare","state":"done","detail":""},
             {"name":"take","label":"Take","state":"done","detail":""},{"name":"give","label":"Give","state":"done","detail":""},
-            {"name":"mirror","label":"Pages","state":"done","detail":""},{"name":"agree","label":"Agree","state":"done","detail":""},
+            {"name":"mirror","label":"Copy","state":"done","detail":""},{"name":"agree","label":"Agree","state":"done","detail":""},
             {"name":"index","label":"Indexes","state":"skipped","detail":"no index newer"}],"count":null,
             "outcome":{"taken":["song/a/b"],"given":[],"left":[],"agreed":12,"indexed":[]}}"""), view)
         // queued, its stages waiting and no outcome yet
@@ -244,12 +244,12 @@ class JobViewsTest {
         gate.complete(Unit)
         runCurrent()
         val over = queue.job(job.id)!!
-        assertEquals(Line("ready", "Pages made again for 10 songs"), JobViews.line(over))
+        assertEquals(Line("ready", "Pages remade · 10 songs"), JobViews.line(over))
         val view = JobViews.view(over, queue)
         assertEquals(JsonPrimitive("render"), view["kind"])
         assertEquals(null, view["steps"])  // a line of its own, never a song's or a sync's
         assertEquals(listOf(Chip("Making the pages", "done")), Outcomes.steps(over))
-        assertEquals(Outcome("ready", "Pages made again for 10 songs"),
+        assertEquals(Outcome("ready", "Pages remade · 10 songs"),
                      Outcomes.outcome(over, JobViews.line(over), null, null))
         val failed = phoneJob(queue, render, "build-2") { context ->
             context.stage("render", "failed", PhoneKinds.fill(render.failed, "why" to "the disk is full"))

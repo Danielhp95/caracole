@@ -82,7 +82,7 @@ class HarmonicaPageTest {
         assertTrue("<a class=\"back\" href=\"sheet%20%28auto%29.html\" data-sheet>‹ Chord sheet</a>" in html)
         assertTrue("<p class=\"reading\" id=\"reading-foot\" hidden>" in html)
         assertEquals(JsonPrimitive(10), data(html)["start"])
-        assertEquals("""{"10":"harptabs.com's key"}""", data(html)["why"].toString())
+        assertEquals("""{"10":"harptabs' key"}""", data(html)["why"].toString())
     }
 
     @Test fun aTabCaracoleCantReadIsItsTextAsWrittenWithTheBarOfOne() {

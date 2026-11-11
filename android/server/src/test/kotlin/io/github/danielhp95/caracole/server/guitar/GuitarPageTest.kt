@@ -120,7 +120,7 @@ class GuitarPageTest {
         library(alphaTab = at, state = "library/caracole tests") { test, path ->
             val refused = test.get(target(path))
             assertEquals(404, refused.status)
-            assertEquals(JsonPrimitive("That Guitar Pro file isn't in the library any more: the next caracole run " +
+            assertEquals(JsonPrimitive("That Guitar Pro file is gone from the book. Tonight's run " +
                                        "fetches it again, or files it from the inbox."), refused.data?.get("error"))
         }
     }

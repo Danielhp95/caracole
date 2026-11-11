@@ -292,7 +292,7 @@ class UnitsTest {
             database.read { db ->
                 val state = Units.libraryState(db)
                 assertEquals("alias of soda", state.getValue("alias/soda").label)
-                assertEquals("the UG page of Soda", state.getValue("artist_url/soda").label)
+                assertEquals("UG page of Soda", state.getValue("artist_url/soda").label)
                 assertEquals(Canonical.digest(buildJsonArray { add(JsonPrimitive("soda-stereo")) }), state.getValue("alias/soda").digest)
                 assertEquals(buildJsonObject { put("slugs", buildJsonArray { add(JsonPrimitive("soda-stereo")) }) },
                              Units.document(db, tmp.root, "alias/soda"))

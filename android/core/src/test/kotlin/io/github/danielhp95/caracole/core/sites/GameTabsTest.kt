@@ -131,15 +131,15 @@ class GameTabsTest {
     }
 
     @Test fun aSongWithNoCandidateIsSkippedAndNothingIsAsked() {
-        assertEquals(StageEnd("skipped", "no tab wanted, or gametabs.net's index has no tab of the title of its game " +
+        assertEquals(StageEnd("skipped", "no tab wanted, or gametabs lists none of this title for its game " +
                                              "or composer"),
                      stage("the title, by no game or composer of it: nothing asked"))
     }
 
     @Test fun aBlockIsSaidAsGetPySaysItNothingMarkedNotFound() {
         val end = stage("a block propagates and keeps nothing")
-        assertEquals(StageEnd("skipped", "gametabs.net blocked caracole (gametabs: 429: " +
-            "https://gametabs.net/tabs/hollow-knight/resting-grounds: HTTP 429): no more requests to it until later. " +
+        assertEquals(StageEnd("skipped", "gametabs.net turned us back (gametabs: 429: " +
+            "https://gametabs.net/tabs/hollow-knight/resting-grounds: HTTP 429). No more asks until later. " +
             "Nothing marked not on the sites."), end)
     }
 
@@ -168,9 +168,9 @@ class GameTabsTest {
                      LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Cooling(null)))
         val block = ProviderBlocked("gametabs", "https://gametabs.net/x", 403)
         val state = ProviderState("gametabs", strikes = java.math.BigInteger.ONE, cooldownUntil = Instant.parse("2026-11-05T02:00:00Z"))
-        assertEquals(StageEnd("skipped", "gametabs.net blocked caracole (${block.message}): no more requests to it " +
-            "until 2026-11-05 02:00 UTC. Nothing was marked not found."), LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Blocked(block, state)))
-        assertEquals(StageEnd("skipped", "this hour's 60 lookup requests to gametabs.net are spent; the nightly run " +
+        assertEquals(StageEnd("skipped", "gametabs.net turned us back (${block.message}). No more asks " +
+            "until 2026-11-05 02:00 UTC. Nothing marked not on the sites."), LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Blocked(block, state)))
+        assertEquals(StageEnd("skipped", "no more asks of gametabs.net this hour (60 spent); tonight's run " +
             "does the rest"), LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Spent(hour = true, keptForSheets = false)))
         assertEquals(StageEnd("skipped", "gametabs.net is off in caracole.toml"),
                      LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Off("gametabs.net is off in caracole.toml")))

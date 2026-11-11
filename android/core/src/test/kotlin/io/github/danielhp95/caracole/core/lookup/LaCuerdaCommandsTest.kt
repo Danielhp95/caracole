@@ -51,16 +51,16 @@ class LaCuerdaCommandsTest {
         fun line(asked: Asked<Nothing>) = LaCuerdaCommands.artist(Context(db, asking(asked), now), "Soda Stereo", null)
         assertEquals("Not read: this fetch's 6 asks of LaCuerda are spent. Ask again later.",
                      line(Asked.Spent(hour = false, keptForSheets = false)))
-        assertEquals("Not read: this hour's 60 lookup requests to LaCuerda are spent; ask again later.",
+        assertEquals("Not read: no more asks of LaCuerda this hour (60 spent). Ask again later.",
                      line(Asked.Spent(hour = true, keptForSheets = false)))
         val blocked = ProviderBlocked("lacuerda", "https://acordes.lacuerda.net/soda_stereo/", 403, "HTTP 403")
-        assertEquals("Not read: LaCuerda blocked caracole (lacuerda: 403: https://acordes.lacuerda.net/soda_stereo/: " +
-                         "HTTP 403); no more requests to it until 2026-11-04 14:00 UTC.",
+        assertEquals("Not read: LaCuerda turned us back (lacuerda: 403: https://acordes.lacuerda.net/soda_stereo/: " +
+                         "HTTP 403); no asks until 2026-11-04 14:00 UTC.",
                      line(Asked.Blocked(blocked, ProviderState("lacuerda", cooldownUntil = Instant.parse("2026-11-04T14:00:00Z")))))
-        assertEquals("Not read: LaCuerda failed (lacuerda: 500: x); nothing changed: try again later.",
+        assertEquals("Not read: LaCuerda failed (lacuerda: 500: x). Try again later.",
                      line(Asked.Failed(ProviderError("lacuerda", "x", 500))))
-        assertEquals("Not read: LaCuerda is cooling down after a block until 2026-11-04 14:00 UTC; caracole won't ask it " +
-                         "before then.", line(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
+        assertEquals("Not read: waiting out LaCuerda until " +
+                         "2026-11-04 14:00 UTC.", line(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
         assertEquals("Not read: no client for lacuerda; nothing changed.",
                      LaCuerdaCommands.artist(Context(db, FakeAsking(emptyMap()), now), "Soda Stereo", null))
         assertNull(Health.state(db, "lacuerda").cooldownUntil)  // the asking records a block, never the command
@@ -79,12 +79,12 @@ class LaCuerdaCommandsTest {
         assertNull(db.kvGet(LaCuerdaSearch.FAILED_KEY))
 
         val failed = Context(db, asking(Asked.Failed(ProviderError("lacuerda", "x", 500))), now)
-        assertEquals("Not searched: LaCuerda failed (lacuerda: 500: x); nothing changed: try again later.",
+        assertEquals("Not searched: LaCuerda failed (lacuerda: 500: x). Try again later.",
                      LaCuerdaCommands.search(failed, "corazón de tiza", auto = true))
         assertEquals("LaCuerda failed: lacuerda: 500: x", LaCuerdaSearch.failed(db, "corazon-tiza", now)?.error)
-        assertEquals("Not searched: LaCuerda's search for “corazón de tiza” failed less than an hour ago (LaCuerda failed: " +
-                         "lacuerda: 500: x), so the page won't send it by itself before 2026-11-03 13:00 UTC; its Ask " +
-                         "LaCuerda button, Try again or a terminal asks now.",
+        assertEquals("Not searched: LaCuerda's search for “corazón de tiza” failed within the hour (LaCuerda failed: " +
+                         "lacuerda: 500: x); not sent by itself before 2026-11-03 13:00 UTC. Ask LaCuerda or Try again " +
+                         "asks now.",
                      LaCuerdaCommands.search(failed, "corazón de tiza", auto = true))
     }
 

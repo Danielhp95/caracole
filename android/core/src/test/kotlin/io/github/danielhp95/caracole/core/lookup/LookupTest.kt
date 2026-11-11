@@ -187,7 +187,7 @@ class LookupTest {
         val result = lookup(stages(gtptabs = SiteStage { ctx -> throw SharedFolder(ctx.song, other, "guitar-1.gp5") }))
             .run(db)
         assertEquals("failed", result.states["gtptabs"])
-        assertTrue(result.details.getValue("gtptabs").endsWith("ask for it again under a shorter title."))
+        assertTrue(result.details.getValue("gtptabs").endsWith("ask again under a shorter title."))
         assertTrue(result.ok)
     }
 

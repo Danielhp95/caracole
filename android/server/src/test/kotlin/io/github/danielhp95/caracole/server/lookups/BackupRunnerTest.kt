@@ -126,8 +126,8 @@ class BackupRunnerTest {
             db.kvSet("phone:render-build", "b")
         }
         val spec = phone.runner.restore(backup)
-        assertEquals(listOf("Restore the library of 2026-11-03 12:00", "restore:${backup.file.name}", "restore",
-                            "The library of 2026-11-03 12:00"), listOf(spec.title, spec.key, spec.kind, spec.display))
+        assertEquals(listOf("Restore the book of 2026-11-03 12:00", "restore:${backup.file.name}", "restore",
+                            "The book of 2026-11-03 12:00"), listOf(spec.title, spec.key, spec.kind, spec.display))
         val job = run(phone, spec)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
         assertEquals(Line("ready", "Restored the library of 2026-11-03 12:00"), JobViews.line(job))

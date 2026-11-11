@@ -98,7 +98,7 @@ class WorkingTest {
         assertEquals("Estopa - Tu calorro · Adding to the book…", Working.lineOf(lookups.snapshot()))
         val known = JobViews.line(lookups.job(song.id)!!, facts = SongFacts()).text
         assertNotEquals("Adding to the book…", known)
-        assertEquals("Estopa - Tu calorro: $known", Working.lineOf(lookups.snapshot()) { SongFacts() })
+        assertEquals("Estopa - Tu calorro · $known", Working.lineOf(lookups.snapshot()) { SongFacts() })
         val read = CompletableDeferred<Unit>()
         val artist = lookup("Read the page of Estopa on LaCuerda", "${JobCommands.LACUERDA_ARTIST}estopa",
                             "Estopa on LaCuerda", JobCommands.lacuerdaArtistSteps("estopa", "Estopa"), read)

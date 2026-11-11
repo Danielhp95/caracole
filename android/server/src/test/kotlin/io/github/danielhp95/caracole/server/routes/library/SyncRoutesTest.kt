@@ -98,10 +98,10 @@ class SyncRoutesTest {
         assertEquals("'ftp://laptop' isn't a caracole serve address (http://HOST:PORT).",
                      answer.json.jsonObject.getValue("error").jsonPrimitive.content)
         for ((typed, said) in listOf(
-            "desk:80x" to "'desk:80x' isn't an address caracole can ask: Port could not be cast to integer value as '80x'",
-            "desk:99999" to "'desk:99999' isn't an address caracole can ask: Port out of range 0-65535",
+            "desk:80x" to "'desk:80x' isn't an address we can ask: Port could not be cast to integer value as '80x'",
+            "desk:99999" to "'desk:99999' isn't an address we can ask: Port out of range 0-65535",
             "http://desk:8737/peer" to "'http://desk:8737/peer' isn't a caracole serve address (http://HOST:PORT).",
-            "http://[::1:8737" to "'http://[::1:8737' isn't an address caracole can ask: Invalid IPv6 URL",
+            "http://[::1:8737" to "'http://[::1:8737' isn't an address we can ask: Invalid IPv6 URL",
         )) {
             val refused = app.postScript("/sync/compare", listOf("address" to typed))
             assertEquals(400, refused.status, typed)
@@ -273,7 +273,7 @@ class SyncRoutesTest {
         val view = io.github.danielhp95.caracole.server.jobs.JobViews.view(job, queue)
         assertEquals("Shared · 1 change left as it was", view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
         assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive("song/muse/hysteria"),
-                                                       JsonPrimitive("its request 1 there failed"))))),
+                                                       JsonPrimitive("their Journal entry 1: failed"))))),
                      view.getValue("outcome").jsonObject["left"])
     }
 

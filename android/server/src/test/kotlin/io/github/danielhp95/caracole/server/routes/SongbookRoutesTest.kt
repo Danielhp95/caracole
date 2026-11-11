@@ -178,7 +178,7 @@ class SongbookRoutesTest {
         assertEquals(409, refused.status)
         val mirrored = post("/songbook/add", "name" to "Campfire", "songs" to "-3")
         assertEquals(404, mirrored.status)
-        assertTrue("isn't in the library any more" in mirrored.json.jsonObject.toString(), mirrored.json.toString())
+        assertTrue("left the logbook" in mirrored.json.jsonObject.toString(), mirrored.json.toString())
         assertEquals(1, phone.queue.snapshot().size)
     }
 

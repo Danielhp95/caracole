@@ -150,7 +150,7 @@ class LibraryFilesTest {
             tombstone(test.database, key)
             val gone = test.get("/Soda Stereo/De Música Ligera/sheet.html")
             assertEquals(410, gone.status)
-            assertTrue("<p class=\"message\">Removed from the phone's book.</p>" in gone.text, gone.text)
+            assertTrue("<p class=\"message\">Removed from the phone&#x27;s book.</p>" in gone.text, gone.text)
             assertTrue("<h1>Removed on the phone</h1>" in gone.text)
             assertEquals("Removed from the phone's book.",
                          test.script("/Soda Stereo/De Música Ligera/sheet.html").json.jsonObject["error"]!!.jsonPrimitive.content)

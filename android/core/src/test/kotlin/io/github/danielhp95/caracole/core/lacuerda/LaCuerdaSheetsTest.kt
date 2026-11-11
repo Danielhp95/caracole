@@ -96,8 +96,8 @@ class LaCuerdaSheetsTest {
     @Test fun aBlockAnErrorAndASpentBudgetAreSaidAsGetPySaysThem() = world { db, lib ->
         val s = song(db, lib)
         val blocked = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(mapOf("GET $soda" to (403 to "no")))))))
-        assertEquals(StageEnd("skipped", "LaCuerda blocked caracole (lacuerda: 403: $soda: HTTP 403): no more requests to it " +
-                                  "until later. Nothing was marked not found."), blocked)
+        assertEquals(StageEnd("skipped", "LaCuerda turned us back (lacuerda: 403: $soda: HTTP 403). No more asks " +
+                                  "until later. Nothing marked not on the sites."), blocked)
         val failed = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(mapOf("GET $soda" to (500 to "x")))))))
         assertEquals(StageEnd("failed", "LaCuerda failed (lacuerda: 500: $soda: HTTP 500); tried again tonight"), failed)
         val spent = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(budget = 0)))))
@@ -115,8 +115,8 @@ class LaCuerdaSheetsTest {
                      said(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
         assertEquals(StageEnd("skipped", "no more asks of LaCuerda this hour (60 spent); tonight's run does the rest"),
                      said(Asked.Spent(hour = true, keptForSheets = false)))
-        assertEquals(StageEnd("skipped", "this hour's lookups have spent half of their 60 requests to LaCuerda, and the " +
-                                  "other half is kept for sheets; the nightly run does the rest"),
+        assertEquals(StageEnd("skipped", "half this hour's 60 asks of LaCuerda are spent; the rest " +
+                                  "is kept for sheets; tonight's run does the rest"),
                      said(Asked.Spent(hour = false, keptForSheets = true)))
         assertEquals(StageEnd("skipped", "LaCuerda failed earlier in this lookup; the nightly run tries again"),
                      said(Asked.Off("LaCuerda failed earlier in this lookup; the nightly run tries again")))

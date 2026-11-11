@@ -138,7 +138,7 @@ class HarmonicaRoutesTest {
         assertTrue("\"source\":\"pinned\"" in tabPage.readText(), "the page's reading is the pin")
         database.read { db -> assertTrue(WrittenPages.current(db, spokey().id, "harmonica-1.html")) }
         val after = navigate(location)
-        assertTrue("Done: read as b blow · d draw · * bend · - joins, as you set it." in after.text, after.text)
+        assertTrue("Done · read as b blow · d draw · * bend · - joins, as you set it." in after.text, after.text)
         assertTrue("Back to caracole&#x27;s guess" in after.text)
         assertEquals(409, post("/harmonica/pin", "page" to PAGE, "as" to "letters").status, "read so already")
 

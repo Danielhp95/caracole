@@ -104,7 +104,7 @@ class LibraryRoutesTest {
             listOf("artist" to "A", "title" to "T", "duration" to "four minutes") to
                 "The length 'four minutes' isn't a duration. Write m:ss, h:mm:ss or seconds.",
             listOf("artist" to "Simon - Garfunkel", "title" to "T") to
-                "caracole can't add this song: wanted.txt can't hold an artist name with ' - ' in it: 'Simon - Garfunkel'",
+                "Can't add this song: an artist name can't hold ' - ': 'Simon - Garfunkel'",
             listOf("q" to "x".repeat(501)) to "The text is too long: 500 characters at most.",
         )
         for ((fields, said) in cases) {
@@ -178,7 +178,7 @@ class LibraryRoutesTest {
         assertNotNull(song("Soda Stereo", "De Música Ligera"))
         val refused = app.postScript("/request", listOf("q" to "música"))
         assertEquals(400, refused.status)
-        assertTrue("doesn't say who the artist is" in error(refused))
+        assertTrue("names no artist" in error(refused))
     }
 
     @Test fun `Get it adds the song and answers a lookup's shape, which the page follows`() {

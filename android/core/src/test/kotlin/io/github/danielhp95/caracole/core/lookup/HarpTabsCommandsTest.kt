@@ -74,8 +74,8 @@ class HarpTabsCommandsTest {
 
     @Test fun anIndexEmptySaysSoAndAsksNothing() = db { db ->
         val (said, site) = run(db, "Billy Joel")
-        assertEquals("Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole harptabs " +
-                         "--index now.", said)
+        assertEquals("Not read: harptabs' index is empty; tonight's run reads its sitemap (or caracole harptabs " +
+                         "--index).", said)
         assertEquals(emptyList(), site.said)
     }
 
@@ -99,8 +99,8 @@ class HarpTabsCommandsTest {
     @Test fun aBlockCoolsTheSiteDownAndChangesNothing() = db { db ->
         index(db)
         val (said, _) = run(db, "The Beatles", mapOf("GET $beatles" to FakeTransport.answer(403, "Forbidden")))
-        assertEquals("Not read: harptabs.com blocked caracole (harptabs: 403: $beatles: HTTP 403); no more requests to " +
-                         "it until 2026-11-04 14:00 UTC.", said)
+        assertEquals("Not read: harptabs turned us back (harptabs: 403: $beatles: HTTP 403); no asks " +
+                         "until 2026-11-04 14:00 UTC.", said)
         assertNotNull(Health.state(db, "harptabs").cooldownUntil)
         assertNull(db.one("SELECT 1 FROM harptabs_artists") { true })
         val (again, site) = run(db, "The Beatles")

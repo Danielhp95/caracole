@@ -112,7 +112,7 @@ class LocalServerTest {
                 assertEquals("http://127.0.0.1:$port", server.origin)
                 val none = get(port, "/echo/x")
                 assertEquals(403, none.status)
-                assertEquals("Not this app's scribe.\\n", none.text)
+                assertEquals("Not this app's scribe.\n", none.text)
                 assertEquals("nosniff", none.header("X-Content-Type-Options"))
                 assertEquals(403, get(port, "/echo/x", cookie = "caracole-launch=wrong").status)
                 val cookie = "theme=dark; caracole-launch=${test.secret}"

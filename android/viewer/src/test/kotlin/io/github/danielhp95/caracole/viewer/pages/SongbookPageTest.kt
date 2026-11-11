@@ -64,8 +64,8 @@ class SongbookPageTest {
                            BookSong("Creep", "Radiohead", cho = cho, id = "b2", start = "t=2&capo=1"),
                            BookSong("Nothing", "Nobody", id = "c3"))
         val html = SongbookPage.build("Gig", songs, pdf = "songbook.pdf")
-        assertTrue("<span class=\"why\">Missing: no sheet yet</span>" in html)
-        assertTrue("<span class=\"why\">Missing: no sheet yet</span>" in html.substringAfter("Nothing"))  // none said
+        assertTrue("<span class=\"why\">Missing · no sheet yet</span>" in html)
+        assertTrue("<span class=\"why\">Missing · no sheet yet</span>" in html.substringAfter("Nothing"))  // none said
         assertTrue("<section class=\"song\" id=\"song-2\" data-n=\"2\" data-id=\"b2\"" in html)
         assertFalse("id=\"song-1\"" in html || "id=\"song-3\"" in html)
         assertTrue("<p class=\"pos\">Song 2 of 3</p>" in html)

@@ -16,9 +16,9 @@ class SyncErrorTest {
         val odd = RuntimeException(IllegalArgumentException("port out of range:99999"))
         val error = assertIs<SyncError.Unexpected>(SyncError.of(odd))
         assertSame(odd, error.cause)
-        assertEquals("Something went wrong that the app didn't expect " +
+        assertEquals("Unexpected error " +
             "(RuntimeException: java.lang.IllegalArgumentException: port out of range:99999).", error.message)
-        assertEquals("Something went wrong that the app didn't expect (IllegalStateException).",
+        assertEquals("Unexpected error (IllegalStateException).",
             SyncError.of(IllegalStateException()).message)
     }
 

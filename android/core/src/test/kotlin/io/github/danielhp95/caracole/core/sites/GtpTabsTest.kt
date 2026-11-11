@@ -188,7 +188,7 @@ class GtpTabsTest {
     @Test fun aBlockSkipsTheStageAndMarksNothing() =
         stage(mapOf(elton to FakeTransport.answer(403, "Forbidden"))) { db, end, _ ->
             assertEquals("skipped", end.state)
-            assertTrue(end.detail.startsWith("gtptabs.com blocked caracole (gtptabs: 403: $elton: HTTP 403)"), end.detail)
+            assertTrue(end.detail.startsWith("gtptabs.com turned us back (gtptabs: 403: $elton: HTTP 403)"), end.detail)
             assertNull(db.kvGet("gtptabs:checked:1"))
         }
 

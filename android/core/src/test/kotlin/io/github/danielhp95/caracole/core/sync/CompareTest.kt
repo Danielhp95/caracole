@@ -129,6 +129,6 @@ class CompareTest {
         assertEquals(theirs["song/a"], found[0].theirs)
         assertEquals("here's", found[0].label)
         assertEquals(listOf("conflict", "theirs"), found.map { it.proposal })
-        assertEquals(listOf("both books changed it since the last share", "new there since the last sync"), found.map { it.why })
+        assertEquals(listOf("both books changed it since the last share", "new there since the last share"), found.map { it.why })
     }
 }

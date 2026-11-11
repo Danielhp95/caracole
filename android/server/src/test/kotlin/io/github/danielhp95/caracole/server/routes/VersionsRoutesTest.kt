@@ -157,7 +157,7 @@ class VersionsRoutesTest {
         assertEquals(200, page.status)
         assertFalse("http-equiv=\"refresh\"" in page.text, "a job over reloads no more")
         // every site refused: nothing kept, said from the song's state, never from the command's exit
-        assertTrue(if (job.state == Job.DONE) "Done, but it wasn't kept" in page.text else "Failed" in page.text,
+        assertTrue(if (job.state == Job.DONE) "Done, not kept" in page.text else "Failed" in page.text,
                    page.text)
         // by the song's id, to the page's script: the job itself
         val again = post("/versions/keep", "song" to ligera().id.toString(), "tab" to OTHER, json = true)
@@ -213,8 +213,8 @@ class VersionsRoutesTest {
         }
         assertTrue(File(phone.parts.store.folderOf(ligera()), page).isFile)
         val said = navigate(posted.header("Location")!!).text
-        assertTrue("Done: it is kept beside the sheet." in said, said)
-        assertTrue("<a class=\"btn primary\" href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/$page\">Open it</a>" in said)
+        assertTrue("Done · kept beside the sheet." in said, said)
+        assertTrue("<a class=\"btn primary\" href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/$page\">Open</a>" in said)
     }
 
     @Test fun `the phone's own viewer of the song, once PhoneRender made it, names a sheet the page answers`() {

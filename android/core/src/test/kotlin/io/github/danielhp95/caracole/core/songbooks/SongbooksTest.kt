@@ -137,8 +137,8 @@ class SongbooksTest {
         assertEquals(listOf("songbook/late night"), done.taken)
         assertEquals(listOf(
             "songbook/.x" to "A songbook's name can't start with a dot (its folder would hide): '.x'",
-            "songbook/camp-fire" to "\"Camp-Fire\" would share the folder _songbooks/Camp-Fire with the songbook " +
-                "\"Camp/Fire\": pick another name"), done.left.sortedBy { it.first })
+            "songbook/camp-fire" to "\"Camp-Fire\" would share the folder _songbooks/Camp-Fire with " +
+                "\"Camp/Fire\". Pick another name."), done.left.sortedBy { it.first })
         assertEquals(listOf("Camp/Fire", "Late night"), database.read { db -> Songbooks.all(db).map { it.name } })
     }
 

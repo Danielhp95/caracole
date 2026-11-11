@@ -134,7 +134,7 @@ class ReviewRoutesTest {
         val id = answer.header("location")!!.substringAfter("job=").toInt()
         val job = done(id)
         assertEquals(listOf("review", "get"), job.steps.map { it.args.first() })
-        assertEquals("Pick radiohead/creep for Radiohead - Creep, and fetch it", job.spec.title)
+        assertEquals("Pick radiohead/creep for Radiohead - Creep, and fetch", job.spec.title)
         assertTrue(job.fetching)
         assertEquals("done", job.steps[0].state)
         assertEquals("accept", creep.matchDecision, "the lookup's match stage keeps the pick: ${creep.matchStep}")
@@ -190,7 +190,7 @@ class ReviewRoutesTest {
         try {
             val refused = post("/review", "song" to "${creep.id}", "pick" to "radiohead/creep", "shown" to SHOWN)
             assertEquals(409, refused.status, refused.text)
-            assertEquals("A request for Radiohead - Creep is waiting or running: pick once it ends.",
+            assertEquals("A request for Radiohead - Creep is queued or running. Pick once it ends.",
                          refused.json.jsonObject.getValue("error").jsonPrimitive.content)
             assertEquals(listOf(own.id), phone.queue.snapshot().map { it.id }, "nothing more was queued")
         } finally {

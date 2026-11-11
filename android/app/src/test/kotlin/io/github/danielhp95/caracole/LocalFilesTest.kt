@@ -62,7 +62,7 @@ class LocalFilesTest {
     @Test
     fun `anything but a file is a refusal, with the server's words when it gave some`() {
         val missing = assertIs<Fetched.Refused>(files {
-            Response(404, Body.Bytes("""{"error":"There's no such page or file in the library."}""".toByteArray()),
+            Response(404, Body.Bytes("""{"error":"No such page or file in the book."}""".toByteArray()),
                 mutableListOf("Content-Type" to "application/json; charset=utf-8"))
         }.get("Estopa/Tu calorro/sheet.pdf"))
         assertEquals(404, missing.status)
@@ -76,7 +76,7 @@ class LocalFilesTest {
         assertEquals("Removed from the phone's book.", removed.message, "the data a page's script would get")
 
         val bare = assertIs<Fetched.Refused>(files {
-            Response(403, Body.Bytes("Not this app's scribe.\\n".toByteArray()), mutableListOf("Content-Type" to "text/plain"))
+            Response(403, Body.Bytes("Not this app's scribe.\n".toByteArray()), mutableListOf("Content-Type" to "text/plain"))
         }.get("a/b.pdf"))
         assertEquals(403, bare.status)
         assertNull(bare.message)

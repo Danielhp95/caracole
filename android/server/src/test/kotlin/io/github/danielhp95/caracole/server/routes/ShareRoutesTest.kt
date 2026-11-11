@@ -108,7 +108,7 @@ class ShareRoutesTest {
         val html = page(phone.get(share("text" to "Eagles - Hotel California https://example.com/x?si=1")))
         assertTrue("We read <strong>Eagles – Hotel California</strong>." in html, shown(html))
         assertTrue("<h2 class=\"sub\">Best match</h2>" in html, shown(html))
-        assertTrue("Ultimate Guitar: chords ×1" in html, shown(html))
+        assertTrue("UG: chords ×1" in html, shown(html))
         assertFalse("In your logbook" in html.substringAfter("Best match").substringBefore("</ul>"), "not yours")
         val getIt = forms(html, "/lookup").first()
         assertEquals(listOf("csrf" to TestApp.CSRF, "artist" to "Eagles", "title" to "Hotel California",
