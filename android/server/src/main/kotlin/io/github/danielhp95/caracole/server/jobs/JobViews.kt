@@ -24,8 +24,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *   "sync", an index import "index" (the phone's alone), PhoneKinds' their own;
  * - a sync, a take, an index import and a merge are staged ([STAGED]): their stages are their steps, each named as
  *   the Requests tab names it ([stepName]), with `count` null and, once over, their `outcome` (§5.3);
- * - its line once done is its JobSpec's [JobSpec.doneLine] when it has one ("Added: the computer's next run fetches
- *   it."); an index import says "Merged" or "Nothing newer to merge"; PhoneKinds' say their table's words, the ones
+ * - its line once done is its JobSpec's [JobSpec.doneLine] when it has one ("Added: the nightly run looks for it"); an
+ *   index import says "Merged" or "Nothing newer to merge"; PhoneKinds' say their table's words, the ones
  *   their run filled in as their stage's detail (§5.3's table: "Making the pages again: 3 of 10", "Pages made again
  *   for 12 songs", "Not filed: why").
  * - `details` is the request's output in the Requests tab (`#tab=requests&job=N`), but a sync's, which the Sync tab

@@ -130,8 +130,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands))
-        // Each seam is NONE until its lane makes it the real one (PhoneRender's, SongbookPagesImpl's), so the lookup
-        // never calls a milestone's code before it lands.
+        // The lookup's seams are the real ones, PhoneRender's and SongbookPagesImpl's (SongPages.NONE and
+        // SongbookPages.NONE are the corpus's lookup replays', a caracole that makes no page).
         parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
                            songbookPages.seam, deps.alerts, deps.pacing, deps.searchesLacuerda)
         commands["get"] = GetRunner(parts)
