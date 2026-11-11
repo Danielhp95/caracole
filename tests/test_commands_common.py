@@ -432,8 +432,19 @@ def log_today(conn, provider: str, n: int, *, run: str, at: datetime) -> None:
                      [(run, stamp, provider, "https://api.megalobiz.com/api/public/v1/search", 200, "ok")] * n)
 
 
-def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, site):
+class _Noon(datetime):
+    """datetime, its now() today's noon UTC: an event stamped at midnight is today's and none of the last hour's,
+    whatever time of day the suite runs (in the UTC day's first hour, a lookup at midnight is of the last hour too)."""
+
+    @classmethod
+    def now(cls, tz=None):
+        noon = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+        return noon if tz is None else noon.astimezone(tz)
+
+
+def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, site, monkeypatch):
     # Megalobiz allows an address 1,000 requests a day: caracole sends 900 at most, every run's and lookup's together.
+    monkeypatch.setattr(_common, "datetime", _Noon)
     midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     log_today(conn, "megalobiz", 600, run="2026-10-19T03:30:00Z", at=midnight)
     log_today(conn, "megalobiz", 280, run="lookup:2026-10-19T12:00:00Z", at=midnight)
@@ -446,7 +457,7 @@ def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, s
     log_today(conn, "megalobiz", 17, run="lookup:2026-10-19T12:00:00Z", at=midnight)
     lookup = make_client(cfg, conn, "megalobiz", _common.lookup_run_id(_common.utcnow()), interactive=True)
     try:
-        assert lookup.policy.budget == 3
+        assert lookup.policy.budget == 3  # 900 a day, 897 sent today; none of the last hour's 60 a lookup
     finally:
         lookup.close()
     other = make_client(cfg, conn, "lrclib", "run")  # a site with no daily cap keeps its budget

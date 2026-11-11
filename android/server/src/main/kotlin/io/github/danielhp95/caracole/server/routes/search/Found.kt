@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.core.search.Suggest
 import io.github.danielhp95.caracole.core.search.Suggestion
 import io.github.danielhp95.caracole.core.sites.SiteSearch
 import io.github.danielhp95.caracole.server.page.SongCards
+import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -51,8 +52,8 @@ internal class IndexAnswers(
  * looked, a LaCuerda artist's page to read (`lacuerda_unlisted`, LaCuerdaUnlisted) and whether LaCuerda's own search may be
  * sent for it (`lacuerda_search`: LaCuerdaSearch.gate under [config] at [now], with its `why` when it failed lately;
  * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers). What the phone can't answer is
- * null: `progression` (M5's progressions) and `youtube` (the phone runs no yt-dlp). [check] is called between two of
- * its queries, and throws to stop it ([Superseded]).
+ * null: `youtube` (the phone runs no yt-dlp); `progression` is the records' (Progressions, lane library-cards's
+ * wiring). [check] is called between two of its queries, and throws to stop it ([Superseded]).
  */
 internal class Found(
     private val db: Db, private val enabled: Set<String>, private val cards: SongCards, private val forms: SongForms,
@@ -77,8 +78,10 @@ internal class Found(
         val leads = LaCuerda.lacuerdaLeads(kept.indexFound, kept.lcArtists)
         val songs = Songs.list(db)
         check()
+        val (progression, playing) = progression(q, mine.mapTo(HashSet()) { it.song.id })
+        check()
         val rows = Rows(db, songs, cards, forms, enabled)
-        val (library, hits, artists) = libraryAndIndexRows(rows, mine, kept)
+        val (library, hits, artists) = libraryAndIndexRows(rows, mine + playing, kept)
         check()
         // LaCuerda's group leads: Ultimate Guitar's artist a word names is no lead, and Enter opens LaCuerda's artist.
         val lead = if (leads && answer.lead == "artist") "song" else answer.lead
@@ -113,7 +116,7 @@ internal class Found(
         check()
         return obj(
             "query" to q, "library" to library, "index" to hits, "artists" to artists, "lead" to lead,
-            "best" to best(answer.best), "hint" to kept.hint, "progression" to null, "unseen" to kept.unseen,
+            "best" to best(answer.best), "hint" to kept.hint, "progression" to progression, "unseen" to kept.unseen,
             // the artist and the title the query names, which the request form is filled in with; null for none
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
             "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
@@ -122,6 +125,19 @@ internal class Found(
             "skipped" to skipped.map { it.json() }, "partial" to partial.map { it.json() },
             "looked" to looked.looked(skipped, partial),
         )
+    }
+
+    /** search_routes._progression: the progression the query types or names (Progressions.read), as the answer's
+     * `progression` says it (its key, how it is said, its catalogue name, how many of your songs play it:
+     * Progressions.songsWith, the records version-progressions' render keeps), and those songs the words didn't find
+     * already ([mine]), the first [LIBRARY_HITS], as your songs read by it (`via` "progression"); null and none for a
+     * query that is no progression. */
+    private fun progression(q: String, mine: Set<Long>): Pair<JsonObject?, List<LibraryHit>> {
+        val wanted = Progressions.read(q) ?: return null to emptyList()
+        val playing = Progressions.songsWith(db, wanted)
+        val said = obj("key" to wanted.key, "label" to wanted.label, "name" to wanted.name, "songs" to playing.size)
+        return said to playing.filter { it.song.id !in mine }.map { LibraryHit(it.song, 100.0, "progression") }
+            .take(LIBRARY_HITS)
     }
 
     /** search_routes._lacuerda_search_gate: what sending LaCuerda's search for [q] would be, with no request: null,

@@ -145,7 +145,7 @@ class GuitarPageTest {
             val parts = TestParts.of(db, dir, scope)
             listOf(GuitarRoutes(io.github.danielhp95.caracole.server.PhoneParts(
                 parts.database, parts.store, parts.stateDir, parts.config, parts.queue,
-                PhonePageData(MirrorPageData(mirror), parts.store, parts.config), parts.clients, parts.pages,
+                PhonePageData(MirrorPageData(mirror), parts.store), parts.clients, parts.pages,
                 parts.songbooks, parts.alerts, parts.pacing, parts.searchesLacuerda), alphaTab = { AlphaTabBundle.load(STANDINS) }))
         }).use { test ->
             val file = test.get(target(gp))

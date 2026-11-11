@@ -49,24 +49,13 @@
                 android:maxLines="1"
                 android:minHeight="48dp" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <!-- Test: the computer at that address asked what it holds, nothing changed (SyncRoutes.tested). Syncing
+                 itself is the bar's sync button's, on the library screen. -->
+            <Button
+                android:id="@+id/test"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/test"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/test" />
-
-                <Button
-                    android:id="@+id/sync"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/sync_now" />
-            </LinearLayout>
+                android:text="@string/test" />
 
             <TextView
                 android:id="@+id/test_result"
@@ -77,22 +66,6 @@
                 android:textIsSelectable="true"
                 android:textSize="14sp"
                 android:visibility="gone" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="@string/last_sync"
-                android:textColor="@color/muted"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/last_sync"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text"
-                android:textIsSelectable="true"
-                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/storage"
@@ -119,47 +92,33 @@
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
-            <TextView
+            <!-- Export and Import a file: the library page's sync sheet at that flow (MainActivity's SHEET extra), its
+                 file to the share sheet or from Android's file picker. -->
+            <Button
+                android:id="@+id/export"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:text="@string/import_label"
+                android:text="@string/export" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_hint"
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
-            <!-- The computer's site indexes, for the library page's search with the computer off (IndexImports). -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <Button
+                android:id="@+id/import_file"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/import_computer"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/import_computer" />
-
-                <Button
-                    android:id="@+id/import_file"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/import_file" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/last_import"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textColor="@color/text"
-                android:textIsSelectable="true"
-                android:textSize="14sp" />
+                android:layout_marginTop="12dp"
+                android:text="@string/import_file_row" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/import_hint"
+                android:text="@string/import_file_hint"
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 

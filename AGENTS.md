@@ -1273,8 +1273,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
 - `:app`: the Android app on its own server (`Caracole.kt`: one `Phone` a process, its server on
   `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
-  loads that exact origin alone, `mirror.Links`); Settings' Import indexes (from the computer's `GET /api/peer/index`
-  or a file, a foreground job); the Sync tab's sync in a foreground service (`SyncService`).
+  loads that exact origin alone, `mirror.Links`); the bar's sync button, the library page's sync sheet
+  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
+  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
+  sync among it, in a foreground service (`SyncService`).
 - `:viewer` (plain JVM, milestone 5): the page builder, viewer/ in Kotlin, with viewer/'s `.js`, `.css` and voicings
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
@@ -1294,7 +1297,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`.
 
 ##### core.http, core.health, core.config
 
@@ -1743,10 +1746,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `allow-scripts` and `allow-downloads` alone, as viewer_csp's; else `LayerPolicy.NOTHING`, one that runs and loads
     nothing): never `allow-same-origin`, which would give a file's page the phone server's origin, its form token and
     every write. An export carries the layer's headers on, never the file's.
-  - MirrorPageData gives a song the computer has no card of the card of the newest layer that keeps a page of it and
-    whose start page holds its identity, read as untrusted (`fromFile`: library_page.py's fields alone, each of its
-    JSON type, every `href` the library's or a site's over https, a kept file's the library's, its Lyrics link the
-    phone's own), else the minimal card.
+  - The phone's page makes every card of its songs itself (server/page's PhonePageData, library_page.song_cards'
+    port, vectors/web/cards_full.jsonl), linking the pages of a song's folder `pageFor` serves, a layer's too, and
+    saying what no sync carries (exports, a PDF's move, the sites' misses, a purchase) as the computer's card does
+    for a song the computer listed a file of at the digest the phone holds. MirrorPageData's own cards (M2–M3's: a
+    layer's card read as untrusted, `fromFile`, else the minimal card) are for a page with no library to make them of.
   - Layers are kept until a unit changes or the app's data is cleared; `storageBytes` counts them.
 - **Export and Import a file** (server/routes/SyncFileRoutes.kt, web/sync_file_routes.py's routes on the phone:
   `GET /api/sync/sizes`, `POST /sync/export`, `GET /api/sync/export`, `POST /sync/import/open`, `/part`, `/compare`,
@@ -1852,8 +1856,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     sync unit.
   - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
     text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
-    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
-    library-cards' to wire (Found.kt).
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`, which /api/search's `progression`
+    reads (Found.kt).
   - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
     tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
     (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of
@@ -2007,7 +2011,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
       writes none for), so the Requests tab says "Making the songbook failed." as caracole serve's does;
   - area songbook-tab (SongbookTabReplay, the routes' replays with it); SongbooksOnDeviceTest drives the tab in the
     WebView (Select's Make songbook, a song's chip, the songbook's Phone page).
-- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): not built yet.
+- A sheet's versions and a harmonica tab's readings chosen on the phone (versions-harmonica): server/routes'
+  `VersionsRoutes` and `HarmonicaRoutes`, their pages server/pages' (`VersionsPage`, `HarmonicaPage`, `Choices`).
+  - `GET /versions`, `POST /versions/choose`, `/keep`, `/clear` (versions_routes.py; Fetch them, `/versions/keep-more`,
+    is LookupRoutes'), and `GET /harmonica`, `POST /harmonica/pin`, `/clear` (harmonica_routes.py).
+  - Each page the server's own with no script (the message pages' style and policy), reached from the sandboxed
+    viewer by a plain GET (a top-level navigation: the launch's cookie is Lax), its forms posting with the form token
+    (Assembly gives both modules `deps.csrf`), one that follows a request reloading every 10 s; its words, refusals
+    and jobs Python's.
+  - A viewer is the phone's when the phone recorded writing it (kv `render:files:<id>`, WrittenPages): a computer's
+    page the mirror serves names no sheet (404), as LookupRoutes' keep-more by sheet.
+  - Each post a job: under the song's key, the `versions` runner (VersionsRunner, joined as jobs.py's `_pick`); or
+    under jobs.READING, the `harmonica` runner (HarmonicaRunner: harmonica_cmd.py's pin, clear and list, the pin
+    checked by `HarpTabs.checkSpec` and written by `OverrideWriters.addHarmonica`, then the song rendered again
+    through `PhoneParts.pages`).
+  - vectors/web/versions_routes.jsonl and harmonica_routes.jsonl (tests/test_conformance_choices.py: a library a
+    scene; every page whole but its stylesheet, every post's job, `caracole harmonica`'s runs), `ChoicesReplay`
+    (area `choices`).
 - Export PDF and Make this my version (export-print): `ExportRoutes`' `GET /export.pdf`, export_routes.py's checks
   and refusals in its words, answering `{name, label}` (download_names' name, `ExportSheet.label`) in place of a PDF.
   - A viewer is the library's where the phone recorded writing it (`WrittenPages.written`, render.written_file's kv
@@ -2138,7 +2158,58 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### Alerts and backups on the phone
 
-Not built yet. (alerts-backups.)
+- **Alerts** (the app's `AndroidAlerts`, core.health's `Alerts`, Caracole's from the phone's start), notifications on
+  the `alerts` channel:
+  - `blocked`: InteractiveAsk's block of a lookup, once a lookup, titled as `_common.alert_block` titles ntfy's
+    ("caracole: <provider name> blocked", `LookupWords.NAMES`), with the cooldown's end; once a cooldown, the cooldown
+    posted kept in the app's preferences (`AndroidAlerts.PREFS`), so a second block of the same cooldown posts none. On
+    the computer a lookup sends none; the phone has no nightly run to tell;
+  - `failed`: a job that failed (Assembly's `afterJob`, through `JobQueue.onEnd`) while no screen of the app's is
+    started (the activities' lifecycle; one started before the alerts were made counts by the process's importance
+    until a screen stops), titled by the job's display, its text its line (`JobViews.line`);
+  - nothing posted without the right to notify (`areNotificationsEnabled`); AlertsTest on the device.
+- **Backups** (core.backup, `Backups`): the take's backup made public, with labels (`by-hand`, `daily`,
+  `before-sync`), the newest `KEEP` (3) of each label, SQLite's quick check before a copy takes an old one's place, none
+  made without twice the room (`freeSpace`), `stateDir/backups/<label>-<UTC time>.sqlite`:
+  - the library's tables (`BackupTables.TABLES`: songs, versions, files, removed, kv and the phone's), the index tables
+    empty, and the library's kept files by SHA-256 in `stateDir/backups/blobs/`, each read once and checked as it is
+    copied, shared between backups and gone with the last that names it (`sweep`); a file that can't be read or no
+    longer holds its row's bytes is never kept as them (`Backup.missing` counts those a backup lacks, its job's line
+    says so), and a blob that can't be written makes no backup;
+  - `Take.backupBeforeSync(db, stateDir, now, store)` is the `before-sync` one, its store required, so every take keeps
+    the files too (an older app's before-sync copies hold the tables alone);
+  - `exportTo`: one zip of the copy and `blobs/<sha256>`, `exportName` its name, refused for a backup that lacks a
+    blob; a backup being exported is never rotated out nor its blobs swept until it ends;
+  - `restore(database, lib, file)`: in one write, this side's own records read (`OwnRecords.document`), the tables put
+    back exactly, and those records written over them (`OwnRecords.putBack`), one savepoint; then each kept file whose
+    bytes its file doesn't hold written from its blob, each kept file of before that the backup doesn't name deleted
+    while it holds its row's bytes, each song's lyrics files as its row has them (`Restored`: written, removed);
+  - refused whole, nothing changed, unless every kept file the backup names is held by its file now or by its blob,
+    checked by its SHA-256 (`NotRestorable`), and every path of the rows is a place in the library (no link); a write
+    that fails after the tables came back is `PartlyRestored` ("restore it again"), so no restore leaves a row naming
+    bytes no file holds;
+  - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
+    `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
+    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
+    restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
+    index push's notes and every index's progress records, and each song's records that gate a request (`SONGS`:
+    `megalobiz:checked:` and the other 30-day checks, `ug:artist_page_checked:`) by the song's identity key; the rest
+    of kv, and the songs' own columns, are the library's;
+  - BackupsTest on the JVM.
+- **The jobs**: server/lookups' `BackupRunner`, `backup --label LABEL` and `backup --restore NAME` (a name in
+  `stateDir/backups/` alone), run as jobs of the phone's own (`backup(label)`, `restore(backup)`: PhoneKinds' backup
+  and restore kinds, their words JobViews'), so on the queue's one worker, never beside a lookup's write; a restore
+  owes every page again in its savepoint (`owePages`: each `render:<id>:phone` and `phone:render-build` forgotten),
+  and the app then reloads the mirror, forgets the search's answers and queues the render job, after one done or one
+  failed once its tables came back (`BackupsActivity.afterRestore`; a restore run again from the Requests tab leaves
+  them to the next start's render job). Meanwhile written-pages' gating serves none of the phone's pages whose bytes or
+  unit the restored records no longer match, a songbook's as a song's, until the render job makes them again, its
+  songbooks' through `SongbookPagesImpl.renderOwn` (BackupRunnerTest).
+- **The app**: `BackupsActivity` (Settings' Backups row): the list, Back up now, Export… through
+  `ACTION_CREATE_DOCUMENT` (`application/zip`), Restore… asked first; `BackupWorker`, the daily backup, a periodic
+  WorkManager job while the phone is idle and its battery isn't low, which queues the backup and waits for it, kept
+  scheduled by `AndroidAlerts` at each start (the one start-time hook the app gives this lane). BackupsTest on the
+  device.
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
