@@ -27,7 +27,7 @@ class M6SkeletonTest {
         assertEquals(listOf("render", "inbox", "backup", "restore"), PhoneKinds.ALL.keys.toList())
         val render = PhoneKinds.RENDER
         assertEquals("render" to "Making the pages", render.stage)
-        assertEquals("Make the pages again" to "The phone's pages", render.title to render.display)
+        assertEquals("Remake the pages" to "The phone's pages", render.title to render.display)
         assertEquals("File a.gp5", PhoneKinds.fill(PhoneKinds.INBOX.title, "name" to "a.gp5"))
         assertEquals("The library of 2026-11-04", PhoneKinds.fill(PhoneKinds.RESTORE.display, "date" to "2026-11-04"))
         assertEquals("Making the pages again: 2 of 5", PhoneKinds.fill(render.running, "done" to 2, "total" to 5))

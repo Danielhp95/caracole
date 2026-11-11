@@ -154,7 +154,7 @@ class GuitarPageTest {
             for (other in listOf("Traditional/Greensleeves/sheet.html", "Traditional/Greensleeves/guitar-2.gp")) {
                 val refused = test.get(target(other))
                 assertEquals(404, refused.status, other)
-                assertEquals(JsonPrimitive("That isn't a Guitar Pro file caracole keeps in the library."), refused.data?.get("error"))
+                assertEquals(JsonPrimitive("Not a Guitar Pro file in the book."), refused.data?.get("error"))
             }
         }
     }

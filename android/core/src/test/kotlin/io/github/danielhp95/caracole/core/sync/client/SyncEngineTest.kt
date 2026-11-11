@@ -221,7 +221,7 @@ class SyncEngineTest {
     @Test fun `a skipped difference is left, and neither side takes it`() {
         val song = onComputer("Radiohead", "Creep")
         val outcome = apply(engine.compare(computer.address.toString()), mapOf(unitOf(song) to Side.SKIP))
-        assertEquals(listOf(unitOf(song) to "skipped, as chosen"), outcome.left)
+        assertEquals(listOf(unitOf(song) to "skipped, as you chose"), outcome.left)
         assertEquals(emptyMap(), phoneState())
         assertEquals("skipped", ended()["take"])
         assertEquals("skipped", ended()["give"])
@@ -261,7 +261,7 @@ class SyncEngineTest {
         }
         val outcome = apply(c)
         assertEquals(listOf(unitOf(karma)), outcome.taken)
-        assertEquals(listOf(unitOf(creep) to "changed there since the comparison"), outcome.left)
+        assertEquals(listOf(unitOf(creep) to "changed there since compared"), outcome.left)
         assertEquals(setOf(unitOf(karma)), phoneState().keys)
         // The base records what the two hold alike alone.
         val base = assertNotNull(phone.read { Compare.baseOf(it, computer.id) })
@@ -273,7 +273,7 @@ class SyncEngineTest {
         val c = engine.compare(computer.address.toString())
         onComputer("Radiohead", "Karma Police")
         val refused = assertFailsWith<SyncFailed> { apply(c) }
-        assertEquals("The two changed since that comparison: compare them again, and choose again.", refused.message)
+        assertEquals("Both books changed since that comparison. Compare again, then choose again.", refused.message)
         assertEquals(SyncEngine.STALE, stages.last().third)
         assertEquals("failed", ended()["compare"])
         assertEquals(setOf("compare"), ended().keys)
@@ -317,7 +317,7 @@ class SyncEngineTest {
         }
         val outcome = apply(c)
         assertEquals(listOf(unitOf(hysteria)), outcome.given)
-        assertEquals(listOf(unitOf(karma) to "changed here since the comparison"), outcome.left)
+        assertEquals(listOf(unitOf(karma) to "changed here since compared"), outcome.left)
     }
 
     @Test fun `the computer's request is followed with no lock held on the phone's database`() {
@@ -621,7 +621,7 @@ class SyncEngineTest {
             engine.compare(computer.address.toString())
         }
         assertEquals("The caracole at ${computer.address} is this one (the same id, $phoneId): its database is a " +
-                     "copy of this one's. Give one of them another: caracole peer new-id.", refused.message)
+                     "copy of ours. Give one a new id: caracole peer new-id.", refused.message)
     }
 
     /** A song of the phone's with a kept file, its bytes in its folder. */

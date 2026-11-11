@@ -416,7 +416,7 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
     private fun museScoreLinks(song: SongRow): List<JsonObject> {
         if (song.status == "ignored" || song.key in overrides.ignore) return emptyList()
         return MuseScorePages.songPages(db, song).map { p ->
-            JsonObject(linkedMapOf("label" to JsonPrimitive("${p.path.removePrefix("song/")} (possible match)"),
+            JsonObject(linkedMapOf("label" to JsonPrimitive("${p.path.removePrefix("song/")} (maybe)"),
                                    "href" to JsonPrimitive(p.url), "source" to JsonPrimitive("musescore")))
         }
     }
@@ -521,8 +521,8 @@ internal class Cards(private val db: Db, private val libraryDir: File, private v
         private val AUTO_OPENS = listOf("sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt")
         private val AUTO_FILES = listOf("sheet (auto).pdf" to "PDF", "sheet (auto, Traditional).pdf" to "PDF, Traditional",
                                         "sheet (auto).txt" to "Text", "sheet (auto).cho" to "ChordPro")
-        private val DOWNLOADED_FROM = mapOf("gtptabs" to "gtptabs.com", "harptabs" to "harptabs.com",
-                                            "gametabs" to "gametabs.net")
+        private val DOWNLOADED_FROM = mapOf("gtptabs" to "gtptabs", "harptabs" to "harptabs",
+                                            "gametabs" to "gametabs")
         private const val EXPORT_KV = "render:export:"
 
         /** The fields of a card made of what no sync carries, the computer's card's for a song it holds as the phone

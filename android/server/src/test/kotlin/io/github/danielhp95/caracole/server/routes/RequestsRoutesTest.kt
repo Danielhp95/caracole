@@ -121,7 +121,7 @@ class RequestsRoutesTest {
             assertEquals(listOf("Now", "Today"), groups.map { it.getValue("name").jsonPrimitive.content })
             val current = groups[0].getValue("requests").jsonArray.map { it.jsonObject }
             assertEquals(listOf(held.id, waiting.id), current.map { it.getValue("id").jsonPrimitive.content.toInt() })
-            assertEquals("Queued, next", says(current[1]))
+            assertEquals("Queued · next", says(current[1]))
             val over = groups[1].getValue("requests").jsonArray.single().jsonObject
             assertEquals(done.id, over.getValue("id").jsonPrimitive.content.toInt())
             val output = over.getValue("output").jsonObject
@@ -180,7 +180,7 @@ class RequestsRoutesTest {
             ended(queue, queue.submit(lookup("Picked")).first)
             val over = test.script("/requests.json").json.jsonObject.getValue("groups").jsonArray.single().jsonObject
                 .getValue("requests").jsonArray.single().jsonObject
-            assertEquals("Needs review", says(over))
+            assertEquals("Needs your pick", says(over))
             assertEquals("/review?song=$id",
                          over.getValue("actions").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content)
             val sheet = over.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
@@ -375,7 +375,7 @@ class RequestsRoutesTest {
     @Test fun aRequestOfThePhonesOwnReadBackFromTheHistoryHasNothingToRunAgain() {
         val history = JobHistory(tmp.newFile("requests.jsonl").also { it.delete() })
         val first = JobQueue(scope, history = history)
-        ended(first, first.submit(JobSpec("Import the index", "index", "index",
+        ended(first, first.submit(JobSpec("Import the computer's index", "index", "index",
                                           listOf("merge" to "Merging the index")) {}).first)
         val (test, queue) = app(queue = JobQueue(scope, history = history, commands = commands))
         test.use {

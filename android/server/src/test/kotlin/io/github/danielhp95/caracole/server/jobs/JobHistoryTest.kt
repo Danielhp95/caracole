@@ -77,7 +77,7 @@ class JobHistoryTest {
     @Test fun aHistoryInAFolderOfItsOwnIsPrivateToo() = runTest {
         val state = File(tmp.root, "made/state")
         val queue = JobQueue(backgroundScope, clock = clock, history = JobHistory.at(state))
-        queue.await(queue.submit(JobSpec("Add", "a/t", "add", listOf("add" to "Adding to the library")) {}).first.id)
+        queue.await(queue.submit(JobSpec("Add", "a/t", "add", listOf("add" to "Adding to the book")) {}).first.id)
         assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(state.toPath())))
         assertTrue(File(state, JobHistory.FILE_NAME).isFile)
         assertTrue(state.listFiles()!!.none { it.name.endsWith(".tmp") })
@@ -86,7 +86,7 @@ class JobHistoryTest {
     @Test fun aHistoryThatCantBeWrittenNeverStopsARequest() = runTest {
         val blocked = tmp.newFile("not-a-folder")  // its folder is a file: nothing can be written there
         val queue = JobQueue(backgroundScope, clock = clock, history = JobHistory(File(blocked, JobHistory.FILE_NAME)))
-        val job = queue.submit(JobSpec("Add", "a/t", "add", listOf("add" to "Adding to the library")) {
+        val job = queue.submit(JobSpec("Add", "a/t", "add", listOf("add" to "Adding to the book")) {
             it.stage("add", "done")
         }).first
         assertEquals(Job.DONE, queue.await(job.id).state)
@@ -98,14 +98,14 @@ class JobHistoryTest {
         val commands = Commands(mapOf("get" to CommandRunner { _, _ -> }))
         val first = JobQueue(backgroundScope, clock = clock, commands = commands, history = JobHistory.at(state))
         val add = first.submit(JobSpec("Add Radiohead - Creep", "radiohead/creep", "add",
-                                       listOf("add" to "Adding to the library"), display = "Radiohead - Creep",
+                                       listOf("add" to "Adding to the book"), display = "Radiohead - Creep",
                                        doneLine = "Added: the computer's next run fetches it.") {
             it.say("Added Radiohead - Creep to wanted.txt.")
             it.stage("add", "done")
         }).first
         val sync = first.submit(JobSpec("Sync", JobCommands.SYNCING + "http://computer:8737", "sync",
                                         listOf("compare" to "Comparing")) { it.stage("compare", "done") }).first
-        val render = first.submit(JobSpec("Make the pages again", "render:b1", "render",
+        val render = first.submit(JobSpec("Remake the pages", "render:b1", "render",
                                           listOf("render" to "Making the pages")) {
             it.say("Pages made again for 3 songs")
         }).first

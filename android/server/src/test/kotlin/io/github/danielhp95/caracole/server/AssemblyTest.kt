@@ -155,7 +155,7 @@ class AssemblyTest {
             phone.queue.onBusy = { heard += it }
             phone.start()
             val job = phone.queue.snapshot().single()
-            assertEquals(listOf("render", "render:build-1", "Make the pages again", "The phone's pages"),
+            assertEquals(listOf("render", "render:build-1", "Remake the pages", "The phone's pages"),
                          listOf(job.spec.kind, job.spec.key, job.spec.title, job.display))
             val over = runBlocking { phone.queue.await(job.id) }
             assertEquals(Job.DONE, over.state)

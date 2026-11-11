@@ -43,7 +43,7 @@ class MusicKeysTest {
         assertTrue(MusicKeys.sameKey("F# minor", "Gb minor"))
         assertFalse(MusicKeys.sameKey("A minor", "A"))
         assertEquals("A minor (from the tab)", SongKey("A minor", "tab").describe())
-        assertEquals("C major (estimated from the chords)", SongKey("C", "chords").describe())
+        assertEquals("C major (guessed from the chords)", SongKey("C", "chords").describe())
     }
 
     @Test fun aSheetStatesItsKeyBeforeItsChords() {

@@ -168,7 +168,7 @@ class SyncRoutesTest {
         val digest = computer.state().getValue("song/${creep.key}").digest
         assertEquals(JsonArray(listOf(JsonObject(linkedMapOf(
             "id" to JsonPrimitive("song/${creep.key}"), "label" to JsonPrimitive("Radiohead - Creep"),
-            "kind" to JsonPrimitive("song"), "proposal" to JsonPrimitive("theirs"), "why" to JsonPrimitive("only there"),
+            "kind" to JsonPrimitive("song"), "proposal" to JsonPrimitive("theirs"), "why" to JsonPrimitive("only in theirs"),
             "here" to JsonNull, "there" to JsonPrimitive(digest),
             "names" to JsonObject(linkedMapOf("artist" to JsonPrimitive("Radiohead"), "title" to JsonPrimitive("Creep"))),
             "change" to JsonArray(listOf(JsonNull, JsonPrimitive("new"))), "part" to JsonPrimitive("library"),

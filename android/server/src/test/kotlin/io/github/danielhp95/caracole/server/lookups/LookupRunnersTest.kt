@@ -119,7 +119,7 @@ class LookupRunnersTest {
         assertEquals("skipped" to LookupWords.NO_SHEET_YET, job.stages[3].state to job.stages[3].detail)
         val output = job.steps.single().output
         assertEquals("Song: ${LookupWords.ADDED}.", output.first())
-        assertEquals("Done in 0.0 s: 0 requests.", output.last())
+        assertEquals("Done in 0.0 s: 0 asks.", output.last())
         val song = database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!
         assertEquals(song.id, job.songId)
         assertEquals("Radiohead - Creep", job.songDisplay)
@@ -385,7 +385,7 @@ class LookupRunnersTest {
             // No page made after a block, as versions_cmd.py makes none: the queue's end skips the stages left.
             assertEquals(listOf("song" to "done", "version" to "skipped", "pdf" to "skipped", "pages" to "skipped"),
                          job.stages.map { it.name to it.state })
-            assertEquals("in the library", job.stages.first { it.name == "song" }.detail)
+            assertEquals("in the book", job.stages.first { it.name == "song" }.detail)
             assertEquals(words, job.stages.first { it.name == "version" }.detail)
             assertEquals(listOf(words), job.steps.single().output)  // its last line, said once it returned
             assertEquals(database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!.id, job.songId)

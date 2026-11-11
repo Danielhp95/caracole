@@ -49,7 +49,7 @@ class LaCuerdaCommandsTest {
 
     @Test fun anArtistsPageNotReadSaysWhy() = world { db ->
         fun line(asked: Asked<Nothing>) = LaCuerdaCommands.artist(Context(db, asking(asked), now), "Soda Stereo", null)
-        assertEquals("Not read: the lookup's 6 requests to LaCuerda are spent; ask again later.",
+        assertEquals("Not read: this fetch's 6 asks of LaCuerda are spent. Ask again later.",
                      line(Asked.Spent(hour = false, keptForSheets = false)))
         assertEquals("Not read: this hour's 60 lookup requests to LaCuerda are spent; ask again later.",
                      line(Asked.Spent(hour = true, keptForSheets = false)))
@@ -69,11 +69,11 @@ class LaCuerdaCommandsTest {
     @Test fun aSearchSaysItsStageThenItsLastLine() = world { db ->
         val none = Context(db, FakeAsking(emptyMap()), now)
         val line = LaCuerdaCommands.search(none, "sol y luz", auto = true)
-        assertEquals("Not searched: LaCuerda's search reads only words of 4 letters or more, and “sol y luz” has none.", line)
+        assertEquals("Not searched: LaCuerda needs a word of 4 letters or more; “sol y luz” has none.", line)
         assertEquals(listOf("caracole-progress: {\"stage\":\"search\",\"state\":\"skipped\",\"detail\":\"$line\"}"), none.said)
 
         val spent = Context(db, asking(Asked.Spent(hour = true, keptForSheets = false)), now)
-        assertEquals("Not searched: the search's one request to LaCuerda is spent; ask again later.",
+        assertEquals("Not searched: the search's one ask is spent. Ask again later.",
                      LaCuerdaCommands.search(spent, "corazón de tiza", auto = false))
         assertEquals(listOf("running", "skipped"), spent.said.map { it.substringAfter("\"state\":\"").substringBefore('"') })
         assertNull(db.kvGet(LaCuerdaSearch.FAILED_KEY))
@@ -91,7 +91,7 @@ class LaCuerdaCommandsTest {
     /** Without `--progress`, a search says its last line alone, as Python prints it. */
     @Test fun aSearchWithoutProgressSaysNothingButItsLastLine() = world { db ->
         val quiet = Context(db, asking(Asked.Spent(hour = true, keptForSheets = false)), now)
-        assertEquals("Not searched: the search's one request to LaCuerda is spent; ask again later.",
+        assertEquals("Not searched: the search's one ask is spent. Ask again later.",
                      LaCuerdaCommands.search(quiet, "corazón de tiza", auto = false, progress = false))
         assertEquals(emptyList(), quiet.said)
     }

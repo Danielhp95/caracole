@@ -178,7 +178,7 @@ class ExportRoutesTest {
         val jobs = handle("GET", "/jobs.json?jobs=${job.id}", mapOf("accept" to "application/json",
                                                                        TestApp.TOKEN_HEADER to TestApp.CSRF))
         val line = jobs.json.jsonObject.getValue("jobs").jsonArray.single().jsonObject.getValue("line").jsonObject
-        assertEquals(JsonPrimitive("Your version now"), line["text"], "$line")
+        assertEquals(JsonPrimitive("Your version"), line["text"], "$line")
         // back where the song plays as written: the entry goes
         val back = export("Soda Stereo/De Música Ligera/sheet.html", "t=0&mine=1")
         assertEquals(200, back.status)

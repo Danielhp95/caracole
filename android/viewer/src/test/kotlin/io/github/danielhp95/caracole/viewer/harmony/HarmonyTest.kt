@@ -120,13 +120,13 @@ class HarmonyTest {
 
     @Test fun explainSaysTheDegreeTheQualityTheBassAndTheKey() {
         assertEquals("vi: the 6th chord of C major, minor (lower case)", Harmony.explain(ch("Am"), c))
-        assertEquals("♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed from C minor",
+        assertEquals("♭VII: on the lowered 7th degree of C major, major (upper case); borrowed from C minor",
                      Harmony.explain(ch("Bb"), c))
         assertEquals("V/V: the V of V in C major, major (upper case); leads to G", Harmony.explain(ch("D"), c, ch("G")))
         assertEquals("V/vi: the V of vi in C major, major (upper case); points to Am", Harmony.explain(ch("E"), c, ch("F")))
         assertEquals("V7: the 5th chord of C major, major (upper case) with a 7th (7)", Harmony.explain(ch("G7"), c))
         assertEquals("I/2: the 1st chord of C major, major (upper case); D in the bass, the 2nd above its root, " +
-                         "not a note of the chord", Harmony.explain(ch("C/D"), c))
+                         "outside the chord", Harmony.explain(ch("C/D"), c))
         assertTrue(Harmony.explain(ch("Cadd9/D"), c).endsWith("; D in the bass, its 9th"))
     }
 

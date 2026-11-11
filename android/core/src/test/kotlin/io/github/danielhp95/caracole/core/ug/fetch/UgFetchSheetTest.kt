@@ -144,7 +144,7 @@ class UgFetchSheetTest {
     @Test fun aSongUltimateGuitarCantBeAskedAboutIsSkippedWithGetPysWords() {
         withContext(song(decision = "not_found")) { assertEquals(LookupWords.NOT_IN_INDEX, UgStages.notReady(it)) }
         withContext(song(decision = "review")) {
-            assertEquals("caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, or run " +
+            assertEquals("not sure which UG song this is: pick it on the lookup page, or run " +
                              "caracole review", UgStages.notReady(it))
             assertEquals(StageEnd("skipped", UgStages.REVIEW), UgSheetStage.run(it))
         }

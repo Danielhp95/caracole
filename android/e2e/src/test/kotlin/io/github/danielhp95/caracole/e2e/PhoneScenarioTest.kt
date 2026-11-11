@@ -1072,7 +1072,7 @@ class PhoneScenarioTest {
         const val SKIPPED = "skipped"
 
         /** status.py's line for a song added, no site asked (phase 2's add). */
-        const val ADDED = "Added: the nightly run looks for it"
+        const val ADDED = "Added · fetched tonight"
 
         /** status.py's line for a lookup over that found no sheet and checked nothing (phase 2's, every site refused). */
         const val NOT_FETCHED = "Not fetched yet"

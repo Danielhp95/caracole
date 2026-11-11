@@ -120,12 +120,12 @@ class LibraryRoutesTest {
         val answer = app.postScript("/request", listOf("artist" to "A", "title" to "T",
                                                        "youtube" to "https://youtu.be/dQw4w9WgXcQ"))
         assertEquals(409, answer.status)
-        assertEquals("A sheet from a YouTube video isn't on the phone yet.", error(answer))
+        assertEquals("A sheet from a YouTube video: not on the phone yet.", error(answer))
     }
 
     @Test fun `a removal of a song the library hasn't got is 404, and one naming none is 400`() {
         assertEquals(404, app.postScript("/remove", listOf("song" to "41")).status)
-        assertEquals("That song isn't in the library: removed already, maybe.", error(app.postScript("/remove", listOf("song" to "41"))))
+        assertEquals("That song isn't in the logbook. Removed already?", error(app.postScript("/remove", listOf("song" to "41"))))
         assertEquals(400, app.postScript("/remove", listOf("song" to "")).status)
         assertEquals(404, app.postScript("/lookup", listOf("song" to "41")).status)
     }
@@ -289,7 +289,7 @@ class LibraryRoutesTest {
         assertEquals(Normalize.identityKey("Soda Stereo", "De Música Ligera"), job.spec.key)
         val refused = app.postScript("/request", listOf("artist" to "\u200b", "title" to "T"))
         assertEquals(400, refused.status)
-        assertEquals("caracole can't add this song: a song needs an artist and a title", error(refused))
+        assertEquals("Can't add this song: it needs an artist and a title", error(refused))
     }
 
     @Test fun `a full queue is refused, 503, and nothing is added`() {
@@ -323,7 +323,7 @@ class LibraryRoutesTest {
             val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single().jsonObject
             assertEquals(JsonPrimitive(song.id), shown["songId"])
             assertEquals(JsonPrimitive("Blur - Song 2"), shown.getValue("card").jsonObject["display"])
-            assertEquals("Added: the nightly run looks for it", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+            assertEquals("Added · fetched tonight", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
         }
     }
 
@@ -346,7 +346,7 @@ class LibraryRoutesTest {
                          paged.database.read { Overrides.read(it) }.lacuerda[song.key]?.url)
             val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single()
                 .jsonObject.getValue("line").jsonObject
-            assertEquals("Added: tonight's run gets the sheet you picked on LaCuerda", shown.getValue("text").jsonPrimitive.content)
+            assertEquals("Added · your LaCuerda pick comes tonight", shown.getValue("text").jsonPrimitive.content)
 
             // a song of the library LaCuerda answered for lately: a new pick is asked for at once
             paged.database.writeBlocking { db ->

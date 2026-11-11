@@ -129,14 +129,14 @@ class LookupTest {
         assertNull(result.refused)
         assertEquals("[${song.id}]", db.kvGet("lookup:songs"))
         heard.clear()
-        assertEquals("in the library", lookup(stages()).run(db).details["song"])
+        assertEquals("in the book", lookup(stages()).run(db).details["song"])
     }
 
     @Test fun aSongIgnoredIsRefusedTheSongStageFailedAndTheRestSkipped() = phone { db ->
         val key = Normalize.identityKey("Radiohead", "Creep")
         val result = lookup(stages(match = SiteStage { error("asked") }), overrides = Overrides(ignore = setOf(key)))
             .run(db)
-        val why = "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up"
+        val why = "Radiohead - Creep is ignored (overrides.toml [ignore]). Take it out to fetch it"
         assertEquals(why, result.refused)
         assertEquals(listOf("song" to "failed") + LookupWords.STAGES.drop(1).map { it.first to "skipped" }, ends())
         assertEquals(why, result.details["song"])
@@ -201,7 +201,7 @@ class LookupTest {
         }
         val result = lookup(stages(ugSheet = sheet)).run(db)
         val running = heard.filter { it[0] == "stage" && it[1] == "sheet" && it[2] == "running" }.map { it[3] }
-        assertEquals(listOf("", "from Ultimate Guitar"), running)
+        assertEquals(listOf("", "from UG"), running)
         val readable = heard.filter { it[0] == "readable" }
         assertEquals(listOf(listOf("readable", mapOf("sheet" to "Radiohead/Creep/sheet.txt"), 2.5)), readable)
         assertEquals(2.5, result.secondsToSheet)
@@ -315,7 +315,7 @@ class LookupTest {
     @Test fun aTabOfAKindCaracoleDoesntUseIsRefusedBeforeAnythingIsWritten() = phone { db ->
         val tab = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-guitar-pro-224003"
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = tab)).run(db)
-        assertEquals("tab 224003 is not a chords, tabs or ukulele chords page", result.refused)
+        assertEquals("tab 224003 isn't chords, a tab or ukulele chords", result.refused)
         assertNull(Songs.byKey(db, Normalize.identityKey("Radiohead", "Creep")))
     }
 }

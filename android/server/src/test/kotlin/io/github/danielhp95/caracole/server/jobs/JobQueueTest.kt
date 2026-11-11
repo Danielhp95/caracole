@@ -38,7 +38,7 @@ class JobQueueTest {
     private val clock = { now.also { now = now.plusSeconds(1) } }
 
     private fun spec(key: String, kind: String = "add", join: Boolean = true,
-                     stages: List<Pair<String, String>> = listOf("add" to "Adding to the library"),
+                     stages: List<Pair<String, String>> = listOf("add" to "Adding to the book"),
                      run: suspend (JobContext) -> Unit = {}) =
         JobSpec(title = "Add $key", key = key, kind = kind, stages = stages, display = key, join = join, run = run)
 
@@ -63,7 +63,7 @@ class JobQueueTest {
         assertEquals(Json.parseToJsonElement("""{"id":1,"title":"Add radiohead/creep","display":"radiohead/creep",
             "state":"done","active":false,"note":"","queued_at":"2026-11-03T12:00:00Z",
             "started_at":"2026-11-03T12:00:01Z","finished_at":"2026-11-03T12:00:02Z",
-            "steps":[{"name":"add","label":"Adding to the library","state":"done","detail":"added"}],"commands":[],
+            "steps":[{"name":"add","label":"Adding to the book","state":"done","detail":"added"}],"commands":[],
             "song":{"id":7,"display":"Radiohead - Creep"},"files":{},"seconds_to_sheet":null,"units":[]}"""),
             over.asJson())
         // A stage it names that its spec didn't is one more, named by itself.
@@ -120,7 +120,7 @@ class JobQueueTest {
         runCurrent()
         assertFailsWith<QueueFull> { queue.submit(spec("c")) }
         val refused = assertFailsWith<Refused> { queue.submitOrRefuse(spec("c")) }
-        assertEquals(503 to "The queue is full: try again once it empties.", refused.status to refused.message)
+        assertEquals(503 to "The queue is full. Try again once it empties.", refused.status to refused.message)
         assertEquals(waiting.id, queue.submit(spec("b")).first.id)
         assertEquals(1, queue.submit(spec("a")).first.id)  // so does one that joins the job that runs
         gate.complete(Unit)
@@ -339,7 +339,7 @@ class JobQueueTest {
                 ran += args
                 context.stage("song", "running")
                 context.say("get: Radiohead - Creep is in the library")
-                context.stage("song", "done", "in the library")
+                context.stage("song", "done", "in the book")
                 context.readable(mapOf("sheet" to "Radiohead/Creep/sheet.txt"), 2.5)
             },
             "versions" to CommandRunner { args, _ -> ran += args; throw CommandExit(2, "No such version.") },
@@ -362,7 +362,7 @@ class JobQueueTest {
         assertEquals(listOf("error: No such version."), failed.output)
         // A command the phone has no runner for fails its step, as one that couldn't start.
         val none = queue.await(queue.submit(JobSpec("Match", "m", "song", emptyList(),
-                                                    commands = listOf(Command("Looking it up", listOf("match"))))).first.id)
+                                                    commands = listOf(Command("Matching", listOf("match"))))).first.id)
         assertEquals(listOf(Job.FAILED to null), none.steps.map { it.state to it.code })
         assertEquals(listOf("error: caracole match isn't on the phone"), none.output)
         assertEquals(2, ran.size)
@@ -478,7 +478,7 @@ class JobQueueTest {
             "lacuerda" to CommandRunner { _, _ -> log += "search" },
         ))
         val songs = CompletableDeferred<Unit>()
-        render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Making the pages")) {
+        render = queue.submit(JobSpec("Remake the pages", "render:b1", "render", listOf("render" to "Making the pages")) {
             context ->
             context.stage("render", "running", "1 of 2")
             log += "song 1"
@@ -518,7 +518,7 @@ class JobQueueTest {
         val yielded = AtomicInteger()
         val first = CompletableDeferred<Unit>()
         val songs = CompletableDeferred<Unit>()
-        val render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Pages")) {
+        val render = queue.submit(JobSpec("Remake the pages", "render:b1", "render", listOf("render" to "Pages")) {
             it.yieldToQueued()  // none queued
             yielded.incrementAndGet()
             first.complete(Unit)
@@ -548,7 +548,7 @@ class JobQueueTest {
         val queue = queue(mapOf("get" to CommandRunner { _, _ -> throw IllegalStateException("UG answered 500.") }))
         val songs = CompletableDeferred<Unit>()
         var after = false
-        val render = queue.submit(JobSpec("Make the pages again", "render:b1", "render", listOf("render" to "Pages")) {
+        val render = queue.submit(JobSpec("Remake the pages", "render:b1", "render", listOf("render" to "Pages")) {
             songs.await()
             it.yieldToQueued()
             after = true

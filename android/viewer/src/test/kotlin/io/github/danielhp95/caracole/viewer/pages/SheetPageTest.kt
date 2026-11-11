@@ -73,7 +73,7 @@ class SheetPageTest {
     }
 
     @Test fun theKeyLineSaysTheShapesTheCapoAndTheSound() {
-        assertEquals("Key <b>Em</b> <span class=\"from\">from the tab</span>",
+        assertEquals("Key <b>Em</b> · <span class=\"from\">from the tab</span>",
                      SheetPage.facts(Key(4, "aeolian"), "from the tab", 0))
         assertEquals("<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b>", SheetPage.facts(Key(4, "aeolian"), null, 2))
         assertEquals("Capo <b>3</b>", SheetPage.facts(null, "from the tab", 3))

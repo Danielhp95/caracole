@@ -58,7 +58,7 @@ object GuitarPage {
     fun build(title: String, artist: String, songId: Long, path: String, label: String, data: ByteArray, at: AlphaTab,
               sheet: String? = null, libraryName: LibraryName? = null): String {
         val href = "/" + PyUrl.quote(path)
-        val links = StringBuilder("<a class=\"navlink\" href=\"/#song=$songId\">‹ The song</a>")
+        val links = StringBuilder("<a class=\"navlink\" href=\"/#song=$songId\">‹ Song</a>")
         if (!sheet.isNullOrEmpty()) links.append("<a class=\"navlink\" href=\"/${esc(PyUrl.quote(sheet))}\">Sheet</a>")
         links.append("<a class=\"navlink\" href=\"${esc(href)}\" download>Download</a>")
         val name = path.substringAfterLast('/')

@@ -89,7 +89,7 @@ class LaCuerdaSheetsTest {
     @Test fun aSongNotForLaCuerdaIsSkippedWithNothingAsked() = world { db, lib ->
         val client = client()
         val end = LaCuerdaStage.run(ctx(db, lib, song(db, lib, "Oasis", "Wonderwall"), FakeAsking(mapOf("lacuerda" to client))))
-        assertEquals(StageEnd("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"), end)
+        assertEquals(StageEnd("skipped", "not for LaCuerda: not Spanish, a full sheet already, or asked this month"), end)
         assertEquals(0, client.requestsMade)
     }
 
@@ -127,20 +127,20 @@ class LaCuerdaSheetsTest {
         val pick = Overrides(lacuerda = mapOf(s.key to LaCuerdaPick("soda_stereo", "de_musica_ligera")))
         val asking = FakeAsking(mapOf("lacuerda" to client()))
         kept(db, lib, s, "lacuerda", "soda_stereo/de_musica_ligera-3")
-        assertEquals(StageEnd("done", "the LaCuerda sheet you picked is the sheet already"),
+        assertEquals(StageEnd("done", "your LaCuerda pick is the sheet already"),
                      LaCuerdaPickStage.run(ctx(db, lib, s, asking, pick)))
 
         val pinned = song(db, lib, "Soda Stereo", "Persiana Americana")
         kept(db, lib, pinned, "ug", "85053")
         val both = Overrides(lacuerda = mapOf(pinned.key to LaCuerdaPick("soda_stereo", "persiana_americana")),
                              pin = mapOf(pinned.key to listOf(85053L)))
-        assertEquals(StageEnd("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"),
+        assertEquals(StageEnd("skipped", "your pinned UG tab is kept over your LaCuerda pick"),
                      LaCuerdaPickStage.run(ctx(db, lib, pinned, asking, both)))
 
         val asked = song(db, lib, "Soda Stereo", "Cuando Pase el Temblor")
         Versions.updateSong(db, asked.id, mapOf("lacuerda_checked_at" to "2026-10-30T00:00:00Z"), stamp)
         val waits = Overrides(lacuerda = mapOf(asked.key to LaCuerdaPick("soda_stereo", "cuando_pase_el_temblor", 2)))
-        assertEquals(StageEnd("skipped", "your pick on LaCuerda waits: it was asked for this month"),
+        assertEquals(StageEnd("skipped", "your LaCuerda pick waits: asked this month already"),
                      LaCuerdaStage.run(ctx(db, lib, Songs.byId(db, asked.id)!!, asking, waits)))
         assertEquals(0, (asking.requests["lacuerda"] ?: 0))
     }

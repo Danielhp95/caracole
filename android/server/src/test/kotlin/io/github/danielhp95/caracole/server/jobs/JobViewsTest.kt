@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
 class JobViewsTest {
     private val sync = listOf("compare" to "Comparing", "take" to "Taking what changed there",
                               "give" to "Giving what changed here", "mirror" to "Copying the computer's pages",
-                              "agree" to "What the two agree on", "index" to "Bringing the indexes up to date")
+                              "agree" to "Noting where the books agree", "index" to "Updating the indexes")
 
     private fun TestScope.queue() = JobQueue(backgroundScope)
 
@@ -60,7 +60,7 @@ class JobViewsTest {
         runCurrent()
         assertEquals(listOf("queued", "Queued behind 1 request…", null),
                      line(JobViews.view(queue.job(second.id)!!, queue)))
-        assertEquals("Queued behind 2 requests…", JobViews.line(queue.job(third.id)!!, 2).text)
+        assertEquals("Queued · 2 requests ahead…", JobViews.line(queue.job(third.id)!!, 2).text)
         gate.complete(Unit)
     }
 
@@ -78,7 +78,7 @@ class JobViewsTest {
         assertEquals(listOf("running", "Comparing…", null), line(JobViews.view(queue.job(job.id)!!, queue)))
         step.complete(Unit)
         runCurrent()
-        assertEquals("Taking what changed there…", JobViews.line(queue.job(job.id)!!).text)  // between two stages
+        assertEquals("Taking their entries…", JobViews.line(queue.job(job.id)!!).text)  // between two stages
         gate.complete(Unit)
         val labelled = queue.submit(JobSpec("Odd", "odd", "other", listOf("odd" to "Doing the odd thing")) {
             it.stage("odd", "running"); CompletableDeferred<Unit>().await()
@@ -101,7 +101,7 @@ class JobViewsTest {
             return queue.job(job.id)!!
         }
         val add = run("add")
-        assertEquals(Line("added", "Added: the nightly run looks for it"), JobViews.line(add))
+        assertEquals(Line("added", "Added · fetched tonight"), JobViews.line(add))
         assertEquals(Line("added", "Added: the computer's next run fetches it."),
                      JobViews.line(run("add", "Added: the computer's next run fetches it.")))
         assertEquals(Line("removed", "Removed"), JobViews.line(run("remove")))
@@ -133,7 +133,7 @@ class JobViewsTest {
         }).text)  // the last error line, as status.py reads a command's output
         assertEquals("One failed.", JobViews.line(fakeFailed(add)).text)
         assertEquals("sync it failed.", JobViews.line(fakeFailed(run("sync"))).text)
-        assertEquals("It stopped before it was done.", JobViews.line(fakeFailed(add).also {
+        assertEquals("Stopped before the end.", JobViews.line(fakeFailed(add).also {
             it.stages.forEach { stage -> stage.state = Job.DONE }
         }).text)
         val long = "word ".repeat(60).trim()
@@ -275,13 +275,13 @@ class JobViewsTest {
             CompletableDeferred<Unit>().await()
         }
         runCurrent()
-        assertEquals(Line("running", "Backing up the library…"), JobViews.line(queue.job(backing.id)!!))
+        assertEquals(Line("running", "Backing up the book…"), JobViews.line(queue.job(backing.id)!!))
     }
 
     @Test fun thePhonesIndexImportSaysTheComputersIndexNotAnotherCaracolesPages() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()
-        val job = queue.submit(JobSpec("Import the index", "index", "index", listOf("merge" to "Merging the index"),
+        val job = queue.submit(JobSpec("Import the computer's index", "index", "index", listOf("merge" to "Merging the index"),
                                        display = "The computer's index") { context ->
             context.stage("merge", "running")
             gate.await()
@@ -318,7 +318,7 @@ class JobViewsTest {
         val sheet = view["steps"]!!.jsonArray[2].jsonObject
         assertEquals(Json.parseToJsonElement("""{"name":"Sheet","source":"LaCuerda","state":"running"}"""), sheet)
         // The song new to the library, its song stage adds it, as caracole add would.
-        assertEquals("Adding to the library…", Status.jobLine(fakeRunningSong(queue.job(job.id)!!), null).text)
+        assertEquals("Adding to the book…", Status.jobLine(fakeRunningSong(queue.job(job.id)!!), null).text)
         gate.complete(Unit)
     }
 

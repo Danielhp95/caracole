@@ -86,7 +86,7 @@ class PhoneRenderJobTest {
                 val looked = runBlocking { phone.queue.await(lookup!!) }
                 val pdf = looked.stages.first { it.name == "pdf" }
                 assertEquals("done" to LookupWords.PAGES_MADE, pdf.state to pdf.detail)
-                assertEquals("Pages made again for 2 songs", over.stages.single().detail)
+                assertEquals("Pages remade · 2 songs", over.stages.single().detail)
                 assertTrue(File(library, "Eagles/Hotel California/sheet.html").isFile)
                 val hotel = database.read { db -> db.one("SELECT id FROM songs WHERE title = 'Hotel California'") { it.long(0)!! }!! }
                 assertTrue(database.read { db -> WrittenPages.current(db, hotel, "sheet.html") })

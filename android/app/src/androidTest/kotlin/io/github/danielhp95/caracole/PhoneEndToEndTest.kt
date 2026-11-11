@@ -121,7 +121,7 @@ class PhoneEndToEndTest {
             assertEquals(200, page.first)
             val refused = get(library, null)
             assertEquals(403, refused.first)
-            assertEquals("Not this app's caracole.\n", refused.second)
+            assertEquals("Not this app's scribe.\\n", refused.second)
             record("cookie", JSONObject().put("webview", cookie.isNotEmpty()).put("without", refused.first))
 
             // Another loopback port: never loaded in the WebView.

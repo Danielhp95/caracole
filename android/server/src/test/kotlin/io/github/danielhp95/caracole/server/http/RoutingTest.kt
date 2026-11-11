@@ -60,7 +60,7 @@ class RoutingTest {
                     val response = test.handle(TestApp.request("GET", "/api/youtube/video?id=dQw4w9WgXcQ",
                                                                mapOf("host" to host), ByteArray(0), secret))
                     assertEquals(403, response.status, "$secret at $host")
-                    assertEquals("Not this app's caracole.\n", response.text)
+                    assertEquals("Not this app's scribe.\\n", response.text)
                     assertEquals(listOf("Content-Type" to "text/plain; charset=utf-8") + finished, response.headers)
                     assertNull(response.data)
                 }
@@ -69,7 +69,7 @@ class RoutingTest {
                 "content-type" to "application/x-www-form-urlencoded", "accept" to "application/json",
             ), TestApp.form(listOf("csrf" to test.csrf)), "wrong"))
             assertEquals(403, posted.status)
-            assertEquals("Not this app's caracole.\n", posted.text, "never JSON: no page of ours asked")
+            assertEquals("Not this app's scribe.\\n", posted.text, "never JSON: no page of ours asked")
             assertEquals(200, test.get("/api/youtube/video?id=dQw4w9WgXcQ").status, "with it, the route")
         }
     }

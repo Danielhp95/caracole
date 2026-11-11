@@ -343,7 +343,7 @@ class TakeTest {
         Files.createSymbolicLink(File(library, "Radiohead").toPath(), elsewhere.toPath())
         val folders = Folders(library)
         val refused = assertFailsWith<UnitError> { folders.write(listOf("Radiohead", "Creep"), "sheet.txt", ByteArray(1)) }
-        assertEquals("Radiohead/ is a symbolic link or no folder, which caracole doesn't follow", refused.message)
+        assertEquals("Radiohead/ is a symbolic link or no folder: we don't follow it", refused.message)
         assertFailsWith<UnitError> { folders.moveFolder("Radiohead", "radiohead") }
         folders.undo()
         assertEquals(emptyList(), elsewhere.list()!!.toList())

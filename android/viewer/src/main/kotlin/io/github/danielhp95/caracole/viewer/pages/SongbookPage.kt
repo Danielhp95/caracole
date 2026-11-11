@@ -98,7 +98,7 @@ object SongbookPage {
                 "${PyText.escape(song.title)}</span>" + (if (line.isNotEmpty()) "<span class=\"a\">$line</span>" else "")
             if (song.cho == null) {
                 val why = PyText.escape(song.missing?.takeIf { it.isNotEmpty() } ?: "no sheet yet")
-                "<li class=\"missing\"><span class=\"row\">$names<span class=\"why\">Missing: $why</span></span></li>"
+                "<li class=\"missing\"><span class=\"row\">$names<span class=\"why\">Missing · $why</span></span></li>"
             } else {
                 "<li><a class=\"row\" href=\"#song-$n\" data-id=\"${PyText.escape(song.id)}\">$names</a></li>"
             }

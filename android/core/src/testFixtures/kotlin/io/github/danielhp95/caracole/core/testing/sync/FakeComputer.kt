@@ -121,11 +121,11 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     private inner class Job(val id: Int, val key: String, val title: String, val count: Int,
                             val merging: String? = null) {
         @Volatile var state = "queued"
-        val stages = if (merging != null) linkedMapOf("merge" to Stage("Merging the other caracole's index pages"))
-                     else linkedMapOf("check" to Stage("What changed since the comparison"),
+        val stages = if (merging != null) linkedMapOf("merge" to Stage("Merging the other scribe's index pages"))
+                     else linkedMapOf("check" to Stage("What changed since compared"),
                                       "take" to Stage("Taking what changed there"),
                                       "render" to Stage("Rendering what was taken"),
-                                      "agree" to Stage("What the two agree on"))
+                                      "agree" to Stage("Noting where the books agree"))
         val units = CopyOnWriteArrayList<Triple<String, String, String>>()
         val over = CountDownLatch(1)
         @Volatile var polls = 0
@@ -144,7 +144,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     "state" to JsonPrimitive(stage.state), "detail" to JsonPrimitive(stage.detail))
             }),
             "commands" to JsonArray(listOf(obj(
-                "label" to JsonPrimitive(if (merging != null) "Merging the other caracole's index pages"
+                "label" to JsonPrimitive(if (merging != null) "Merging the other scribe's index pages"
                                          else "Taking $count ${if (count == 1) "change" else "changes"}"),
                 "args" to JsonArray((if (merging != null) listOf("index", "merge", "--delete", "--progress", "--", merging)
                                      else listOf("peer", "take", "--progress", "--", "push")).map(::JsonPrimitive)),
@@ -299,7 +299,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                    key, fileName) { it.text(0) to it.text(1) }
         }?.let { (path, sha) -> File(libraryDir, path!!).takeIf { it.isFile }?.readBytes()?.takeIf { Canonical.sha256Hex(it) == sha } }
         if (bytes == null) {
-            json(exchange, 404, obj("error" to JsonPrimitive("no such file kept, or it changed since caracole kept it")))
+            json(exchange, 404, obj("error" to JsonPrimitive("no such file kept, or it changed since")))
         } else {
             send(exchange, 200, bytes, "application/octet-stream")
         }
@@ -457,7 +457,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             val name = "index-${hex(8)}.sqlite"
             val file = File(staging, name).apply { writeBytes(bytes) }
             indexPushes.add(bytes)
-            Job(nextJob++, "index-merge:$name", "Index pages from another caracole", 1, merging = file.path)
+            Job(nextJob++, "index-merge:$name", "Index pages from another scribe", 1, merging = file.path)
                 .also { jobs[it.id] = it } to file
         }
         worker.execute { merge(job, file) }
@@ -472,7 +472,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             job.state = "running"
             stage.state = "running"
             val merged = database.writeBlocking { db -> IndexTransfer.merge(db, file, now) }
-            stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing read more recently"
+            stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing newer"
             stage.state = "done"
             job.state = "done"
         } catch (e: Throwable) {
@@ -587,7 +587,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     private fun notFromHere(from: String) {
         if (from == id) {
             throw Refusal(400, "That push comes from this caracole itself (the same id): its database is a copy of " +
-                               "this one's. Give one of them another: caracole peer new-id.")
+                               "Give one a new id: caracole peer new-id.")
         }
     }
 

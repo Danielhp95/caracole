@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.server.page.internal.cards
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -18,8 +19,8 @@ internal object SongSites {
 
     /** song_sites.ORDER and NAMES. */
     val ORDER = listOf("ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
-    private val NAMES = mapOf("ug" to "Ultimate Guitar", "lacuerda" to "LaCuerda", "lrclib" to "LRCLIB",
-                              "gtptabs" to "gtptabs.com", "harptabs" to "harptabs.com", "gametabs" to "gametabs.net",
+    private val NAMES = mapOf("ug" to "UG", "lacuerda" to "LaCuerda", "lrclib" to "LRCLIB",
+                              "gtptabs" to "gtptabs", "harptabs" to "harptabs", "gametabs" to "gametabs",
                               "musescore" to "MuseScore", "youtube" to "YouTube")
 
     /** song_sites.CHECKED: the steps' kv prefixes of a miss. */
@@ -94,15 +95,30 @@ internal object SongSites {
 
     private fun said(site: String, state: String, looked: String?, song: SongRow): String {
         val name = NAMES.getValue(site)
-        val when_ = if (!looked.isNullOrEmpty()) " (looked ${prefix(looked, 10)})" else ""
+        val when_ = if (!looked.isNullOrEmpty()) " · looked ${day(looked)}" else ""
         return when {
-            state == HAVE && site == "lrclib" && song.lyricsStatus == "instrumental" -> "$name: an instrumental, no words"
-            state == HAVE && site == "musescore" -> "$name: a possible match, by its title"
+            state == HAVE && site == "lrclib" && song.lyricsStatus == "instrumental" -> "$name: instrumental, no words"
+            state == HAVE && site == "musescore" -> "$name: maybe, by its title"
             state == HAVE -> "$name: has it"
-            state == NONE && site == "lrclib" && song.lyricsStatus == "found" -> "$name: nothing timed for it$when_"
-            state == NONE -> "$name: nothing for it$when_"
-            site == "ug" && song.matchDecision == "review" -> "$name: not sure which song yet"
+            state == NONE && site == "lrclib" && song.lyricsStatus == "found" -> "$name: nothing timed$when_"
+            state == NONE -> "$name: not there$when_"
+            site == "ug" && song.matchDecision == "review" -> "$name: unsure which song"
             else -> "$name: not asked yet"
+        }
+    }
+
+    /** song_sites._day: a stored time's day ("2026-10-18T03:30:00Z") as the pages write one, "18/10/26"; anything
+     * else as its first ten code points. */
+    private fun day(stamp: String): String {
+        val year = Py.slice(stamp, 0, 4)
+        val month = Py.slice(stamp, 5, 7)
+        val dd = Py.slice(stamp, 8, 10)
+        val digits = year + month + dd
+        val isDigit = digits.isNotEmpty() && digits.codePoints().allMatch { PyUnicode.isDigit(it) }
+        return if (Py.slice(stamp, 4, 5) == "-" && Py.slice(stamp, 7, 8) == "-" && isDigit) {
+            "$dd/$month/${Py.slice(year, 2, null)}"
+        } else {
+            Py.slice(stamp, 0, 10)
         }
     }
 

@@ -82,14 +82,14 @@ class HarpTabsCommandsTest {
     @Test fun aNameTheSitemapListsNoPageOfIsNotFoundAndAsksNothing() = db { db ->
         index(db)
         val (said, site) = run(db, "Nobody Known")
-        assertEquals("Not found: harptabs.com's sitemap lists no artist named Nobody Known.", said)
+        assertEquals("Not found: harptabs lists no artist named Nobody Known.", said)
         assertEquals(emptyList(), site.said)
     }
 
     @Test fun aPageGoneIsStoredAsGoneNotedAndAGoodRun() = db { db ->
         index(db)
         val (said, site) = run(db, "The Beatles", mapOf("GET $beatles" to FakeTransport.answer(404)))
-        assertEquals("Not found: harptabs.com no longer has the page of The Beatles.", said)
+        assertEquals("Not found: harptabs no longer has The Beatles's page.", said)
         assertEquals(listOf("GET $beatles"), site.said)
         assertEquals("", db.one("SELECT name FROM harptabs_artists WHERE path = 'artist/50/the-beatles'") { it.text(0) })
         assertEquals("2026-11-03T12:00:00Z", db.kvGet("${Reads.READ}harptabs:artist/50/the-beatles"))
@@ -113,7 +113,7 @@ class HarpTabsCommandsTest {
         index(db)
         db.kvSet(PhoneConfig.SETTINGS_KV, """{"providers": {"harptabs": {"enabled": false}}}""")
         val (said, site) = run(db, "Billy Joel")
-        assertEquals("Not read: harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked.", said)
+        assertEquals("Not read: harptabs is off (caracole.toml). Nothing asked.", said)
         assertEquals(emptyList(), site.said)
     }
 }

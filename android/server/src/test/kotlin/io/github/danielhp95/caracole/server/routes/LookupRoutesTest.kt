@@ -185,7 +185,7 @@ class LookupRoutesTest {
         phone.search.invalidate()
         val skipped = search("radiohead creep").getValue("skipped").jsonArray.map { it.jsonObject }
         val gtptabs = skipped.single { it.getValue("source").jsonPrimitive.content == "gtptabs" }
-        assertEquals("turned off in caracole.toml", gtptabs.getValue("why").jsonPrimitive.content)
+        assertEquals("off in caracole.toml", gtptabs.getValue("why").jsonPrimitive.content)
     }
 
     /** The M4 check's "the phone matches with the computer's [match]": a title 90.9 like UG's ("Creeps" and creep) is
@@ -213,7 +213,7 @@ class LookupRoutesTest {
     @Test fun `Fetch now on a card, an artist's Songs and Fetch them each queue their command`() {
         val added = done(jobOf(post("/request", "artist" to "Estopa", "title" to "Tu Calorro")))
         // a plain add asks no site: status.py's line for an add, the song's facts read
-        assertEquals(JsonPrimitive("Added: the nightly run looks for it"), shownLine(added.id)["text"])
+        assertEquals(JsonPrimitive("Added · fetched tonight"), shownLine(added.id)["text"])
         val id = assertNotNull(added.songId ?: phone.parts.database.read { Songs.byKey(it, "estopa/tu-calorro") }?.id)
         val fetched = done(jobOf(post("/fetch", "song" to "$id")))
         assertEquals(Job.DONE, fetched.state, fetched.asJson().toString())

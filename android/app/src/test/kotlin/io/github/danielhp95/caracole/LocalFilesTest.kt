@@ -66,17 +66,17 @@ class LocalFilesTest {
                 mutableListOf("Content-Type" to "application/json; charset=utf-8"))
         }.get("Estopa/Tu calorro/sheet.pdf"))
         assertEquals(404, missing.status)
-        assertEquals("There's no such page or file in the library.", missing.message)
+        assertEquals("No such page or file in the book.", missing.message)
 
         val removed = assertIs<Fetched.Refused>(files {
             Response(410, Body.Bytes("<html>…</html>".toByteArray()), mutableListOf("Content-Type" to "text/html"),
-                JsonObject(mapOf("error" to JsonPrimitive("This song was removed on the phone."))))
+                JsonObject(mapOf("error" to JsonPrimitive("Removed from the phone's book."))))
         }.get("Estopa/Tu calorro/sheet.pdf"))
         assertEquals(410, removed.status)
-        assertEquals("This song was removed on the phone.", removed.message, "the data a page's script would get")
+        assertEquals("Removed from the phone's book.", removed.message, "the data a page's script would get")
 
         val bare = assertIs<Fetched.Refused>(files {
-            Response(403, Body.Bytes("Not this app's caracole.\n".toByteArray()), mutableListOf("Content-Type" to "text/plain"))
+            Response(403, Body.Bytes("Not this app's scribe.\\n".toByteArray()), mutableListOf("Content-Type" to "text/plain"))
         }.get("a/b.pdf"))
         assertEquals(403, bare.status)
         assertNull(bare.message)

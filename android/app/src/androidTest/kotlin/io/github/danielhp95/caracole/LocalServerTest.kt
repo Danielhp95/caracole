@@ -84,7 +84,7 @@ class LocalServerTest {
         for (cookie in listOf(null, "${Security.SECRET_COOKIE}=${"0".repeat(64)}", "other=${Caracole.secret}")) {
             val refused = get("$origin/", cookie)
             assertEquals("cookie $cookie", 403, refused.first)
-            assertEquals("Not this app's caracole.\n", refused.second)
+            assertEquals("Not this app's scribe.\\n", refused.second)
         }
         assertEquals("a file of the library is the server's too", 403, get("$origin/index.html", null).first)
     }

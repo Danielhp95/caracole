@@ -30,7 +30,7 @@ class LibraryNameTest {
         assertEquals("Phone · caracole", phone.title())
         assertEquals("Phone · Not found · caracole", phone.title("Not found"))
         assertEquals("<p class=\"libname\"><span class=\"name\"></span> " +
-                         "<span class=\"scratch\" title=\"Not your usual library\">Phone</span></p>", phone.markup("p"))
+                         "<span class=\"scratch\" title=\"Scratch\">Phone</span></p>", phone.markup("p"))
         assertEquals("Phone · caracole · Music", LibraryName.phone("Music").title())
     }
 

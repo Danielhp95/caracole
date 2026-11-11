@@ -102,7 +102,7 @@ class SyncsTest {
         val mixed = outcome("""{"taken": ["song/estopa/tu calorro"], "given": [], "left": [
             ["song/eagles/hotel california", "${SyncEngine.UNSETTLED}"],
             ["songbook/campfire", "${SyncEngine.UNSETTLED}"],
-            ["song/estopa/como camaron", "changed here since the comparison"]], "agreed": 3, "indexed": []}""")
+            ["song/estopa/como camaron", "changed here since compared"]], "agreed": 3, "indexed": []}""")
         assertEquals(2 to false, Syncs.conflictsLeft(mixed), "a songbook among them: not all songs")
         val songs = outcome("""{"taken": [], "given": [], "left": [
             ["song/a/b", "${SyncEngine.UNSETTLED}"], ["song/c/d", "${SyncEngine.UNSETTLED}"]], "agreed": 0}""")

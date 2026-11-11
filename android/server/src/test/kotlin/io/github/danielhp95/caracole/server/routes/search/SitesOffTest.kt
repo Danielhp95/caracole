@@ -18,7 +18,7 @@ import kotlin.test.fail
 /**
  * A site turned off (caracole.toml's `enabled = false`: gtptabs.com, MuseScore, harptabs.com, gametabs.net; the
  * phone's [io.github.danielhp95.caracole.server.routes.SearchRoutes.enabled]) is searched no more, and the answer
- * says so as caracole serve's does: `skipped` and `looked` "turned off in caracole.toml", "…: off", its rows none, an
+ * says so as caracole serve's does: `skipped` and `looked` "off in caracole.toml", "…: off", its rows none, an
  * artist's songs on gtptabs.com 0 (search_routes._skipped, _harptabs_left_out, _looked, _gametabs_looked,
  * _gtptabs_songs). The answers below are caracole serve's over the same fixtures with the same caracole.toml.
  */

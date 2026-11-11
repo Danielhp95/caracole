@@ -149,11 +149,11 @@ class HarpTest {
         assertEquals(listOf("Scale", "Minor pentatonic", "Blues"), minor)
         assertEquals(listOf(0, 3, 5, 7, 10), Harp.keyScales("aeolian")[1].jsonArray[1].jsonArray.map { it.jsonPrimitive.int })
         // a D harp in B minor (Hotel California, offset 3) blows and draws B minor's notes; an A harp (10) a G#
-        assertEquals("Every note it blows or draws is in ", Harp.outside("aeolian", 3)[0].jsonPrimitive.content)
+        assertEquals("Every note it plays is in ", Harp.outside("aeolian", 3)[0].jsonPrimitive.content)
         val line = Harp.outside("aeolian", 10)
         assertEquals("Outside ", line[0].jsonPrimitive.content)
         assertEquals(" minor: ", line[2].jsonPrimitive.content)
         assertEquals(9, line[3].jsonPrimitive.int)
-        assertEquals("Every note it blows or draws is in ", Harp.outside("ionian", 0)[0].jsonPrimitive.content)
+        assertEquals("Every note it plays is in ", Harp.outside("ionian", 0)[0].jsonPrimitive.content)
     }
 }

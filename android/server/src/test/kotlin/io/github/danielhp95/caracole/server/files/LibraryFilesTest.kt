@@ -152,7 +152,7 @@ class LibraryFilesTest {
             assertEquals(410, gone.status)
             assertTrue("<p class=\"message\">This song was removed on the phone.</p>" in gone.text, gone.text)
             assertTrue("<h1>Removed on the phone</h1>" in gone.text)
-            assertEquals("This song was removed on the phone.",
+            assertEquals("Removed from the phone's book.",
                          test.script("/Soda Stereo/De Música Ligera/sheet.html").json.jsonObject["error"]!!.jsonPrimitive.content)
             assertEquals(200, test.get("/index.html").status, "a file of no unit is served whatever the gate")
         }

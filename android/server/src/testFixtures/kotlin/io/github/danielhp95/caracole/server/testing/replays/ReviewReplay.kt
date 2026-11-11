@@ -219,7 +219,7 @@ object ReviewReplay : AreaReplay {
         val form = form(r)
         if (r.getValue("busy").jsonPrimitive.boolean) {  // a request of the song's waits: its add, say
             val song = database.read { db -> Songs.byId(db, form.getValue("song").toLong()) }!!
-            queue.submit(JobSpec("Add ${song.display}", song.key, "add", listOf("add" to "Adding to the library"),
+            queue.submit(JobSpec("Add ${song.display}", song.key, "add", listOf("add" to "Adding to the book"),
                                  display = song.display, run = {}))
         }
         val route = routes(database, dir, queue).routes.first { it.method == "POST" }

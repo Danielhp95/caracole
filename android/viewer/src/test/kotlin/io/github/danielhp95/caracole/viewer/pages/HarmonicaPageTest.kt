@@ -31,7 +31,7 @@ class HarmonicaPageTest {
     @Test fun theHarpWithTheRecordAndHowWellItFits() {
         val choice = Choice(2, "record", listOf(Fit(2, 1.0, 24), Fit(5, 1.0 / 3, 24)), null, 0, 11)
         assertEquals("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>D harp</b> with the record (4th position, aeolian)</p>\n" +
-                         "<p class=\"why\">100% of the sung notes fall on the sheet's chords on a D harp, 33% on an F harp</p>\n",
+                         "<p class=\"why\">100% of the sung notes fit the sheet's chords on a D harp, 33% on an F harp</p>\n",
                      HarmonicaPage.harpLines(choice))
         assertEquals("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>A harp</b>, as the tab says</p>\n",
                      HarmonicaPage.harpLines(Choice(9, "tab", named = 9, page = 4)))

@@ -186,7 +186,7 @@ class VersionsRoutesTest {
         assertEquals(listOf("versions", "--clear", "--progress", "--", "Soda Stereo", "De Música Ligera"),
                      back.steps.single().args)
         assertEquals(emptyList(), pins(), "the sheet's pin out")
-        assertTrue("Done: caracole picks the sheet again." in navigate(cleared.header("Location")!!).text)
+        assertTrue("Done · we pick the sheet again." in navigate(cleared.header("Location")!!).text)
         assertEquals(409, post("/versions/clear", "sheet" to SHEET).status, "no pin of its sheet to go back from")
     }
 

@@ -305,9 +305,8 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
      * copy of the phone's. */
     private fun notThisOne(address: String, me: String, state: PeerState) {
         if (me == state.server) {
-            throw Refused(409, "The same caracole", "The caracole at $address is this one (the same id, $me): its " +
-                                                    "database is a copy of this one's. Give one of them another: " +
-                                                    "caracole peer new-id.")
+            throw Refused(409, "The same scribe", "The scribe at $address is this one (same id, $me): its database is " +
+                                                  "a copy of ours. Give one a new id: caracole peer new-id.")
         }
     }
 

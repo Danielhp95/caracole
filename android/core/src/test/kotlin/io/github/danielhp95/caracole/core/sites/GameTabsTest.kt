@@ -140,7 +140,7 @@ class GameTabsTest {
         val end = stage("a block propagates and keeps nothing")
         assertEquals(StageEnd("skipped", "gametabs.net blocked caracole (gametabs: 429: " +
             "https://gametabs.net/tabs/hollow-knight/resting-grounds: HTTP 429): no more requests to it until later. " +
-            "Nothing was marked not found."), end)
+            "Nothing marked not on the sites."), end)
     }
 
     @Test fun aSpentBudgetLeavesTheRestToTheNightlyRun() {
