@@ -130,7 +130,7 @@ class RequestsRoutesTest {
                          output.getValue("steps").jsonArray.single().jsonObject.getValue("lines").jsonArray.map {
                              it.jsonPrimitive.content
                          })
-            assertTrue(" · requested 2026-11-04 00:30 CET" in output.getValue("meta").jsonPrimitive.content,
+            assertTrue(" · asked 2026-11-04 00:30 CET" in output.getValue("meta").jsonPrimitive.content,
                        output.getValue("meta").toString())
             assertTrue("lines" !in current[0].getValue("output").jsonObject.getValue("steps").jsonArray.single().jsonObject)
             release(queue, held)
@@ -184,7 +184,7 @@ class RequestsRoutesTest {
             assertEquals("/review?song=$id",
                          over.getValue("actions").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content)
             val sheet = over.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
-                .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+                .single { it.getValue("label").jsonPrimitive.content == "Sheet" }
             assertEquals("Waits for a pick", sheet.getValue("badge").jsonObject.getValue("text").jsonPrimitive.content)
             assertEquals(Feed.PICK_STAGE, sheet.getValue("note").jsonPrimitive.content)
         }
@@ -225,7 +225,7 @@ class RequestsRoutesTest {
     /** The lookup's Sheet stage, as its output shows it. */
     private fun sheetStage(shown: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject =
         shown.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
-            .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+            .single { it.getValue("label").jsonPrimitive.content == "Sheet" }
 
     /** Each action as (label, its link or form, primary). */
     private fun said(shown: kotlinx.serialization.json.JsonObject): List<Triple<String, String, Boolean>> =
@@ -367,7 +367,7 @@ class RequestsRoutesTest {
             assertEquals(404, refused("999999999999").first)
             val (status, text) = refused("${held.id}")
             assertEquals(409, status)
-            assertTrue("still queued or running" in text, text)
+            assertTrue("Still queued or running" in text, text)
             release(queue, held)
         }
     }

@@ -287,7 +287,7 @@ class SyncEngineTest {
         val outcome = apply(engine.compare(computer.address.toString()))
         assertEquals(listOf(unitOf(creep)), outcome.taken)
         assertEquals(emptyList(), outcome.given)
-        assertEquals(listOf(unitOf(hysteria) to "its request 1 there failed"), outcome.left, "as peer sync --push says it")
+        assertEquals(listOf(unitOf(hysteria) to "their Journal entry 1: failed"), outcome.left, "as peer sync --push says it")
         assertEquals("done", ended()["give"])
         assertEquals("done", ended()["agree"])
         assertEquals(1, outcome.agreed)
@@ -397,7 +397,7 @@ class SyncEngineTest {
         assertEquals(emptyList(), outcome.indexed)
         assertEquals("done", ended()["index"])
         val detail = stages.last { it.first == "index" }.third
-        assertTrue(detail.startsWith("sent 2 pages read here, none left to send: its request "), detail)
+        assertTrue(detail.startsWith("sent 2 pages read here · its request "), detail)
         assertEquals(1, computer.indexPushes.size)
         computer.awaitTakes()
         assertEquals(mapOf("artist/1178/billy-joel" to 2L, "artist/50/the-beatles" to 1L), computerTabs())
@@ -432,7 +432,7 @@ class SyncEngineTest {
         assertEquals(listOf("gtptabs"), outcome.indexed)
         assertEquals("done", ended()["index"])
         val detail = stages.last { it.first == "index" }.third
-        assertTrue(detail.startsWith("merged gtptabs; sent 1 page read here, none left to send: its request "), detail)
+        assertTrue(detail.startsWith("merged gtptabs; sent 1 page read here · its request "), detail)
         val asked = computer.requests.filter { it.startsWith("GET /api/peer/index") || it == "POST /peer/index" }
         assertEquals(listOf("GET /api/peer/index?sites=gtptabs", "POST /peer/index"), asked,
                      "the computer's index merged first, then the phone's pushed")
@@ -468,7 +468,7 @@ class SyncEngineTest {
         val outcome = apply(engine.compare(computer.address.toString()))
 
         assertEquals("failed", ended()["index"])
-        assertEquals("1 page read here kept for the next sync: The caracole at ${computer.address} answered 409: " +
+        assertEquals("1 page read here kept for the next share · ${computer.address} answered 409: " +
                          "The index export was exported at schema version 16, and this caracole's database is at 15.",
                      stages.last { it.first == "index" }.third)
         assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
@@ -491,8 +491,8 @@ class SyncEngineTest {
             FakeComputer.json(exchange, 404, FakeComputer.obj("error" to JsonPrimitive("Not found")))
         }
         apply(engine.compare(computer.address.toString()))
-        assertEquals("1 page read here kept for the next sync: The caracole at ${computer.address} takes no index " +
-                         "pages: it may be older than the app.", stages.last { it.first == "index" }.third)
+        assertEquals("1 page read here kept for the next share · ${computer.address} takes no index " +
+                         "pages: its caracole may be older than the app.", stages.last { it.first == "index" }.third)
         assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
     }
 
@@ -522,8 +522,8 @@ class SyncEngineTest {
         val file = File(tmp.newFolder(), "huge.sqlite")
         RandomAccessFile(file, "rw").use { it.setLength(PeerClient.INDEX_MAX + 1) }
         val refused = assertFailsWith<PeerError> { PeerClient(computer.address).pushIndex(computer.token, file) }
-        assertEquals("The pages read here make an index export of 65 MiB, and the computer takes 64 MiB at most: " +
-                         "they stay here.", refused.message)
+        assertEquals("The pages read here make 65 MiB; the computer takes 64 MiB at most. " +
+                         "They stay here.", refused.message)
         assertEquals(emptyList(), computer.asked("POST", "/peer/index"))
     }
 
@@ -559,7 +559,7 @@ class SyncEngineTest {
         assertEquals(1, outcome.agreed)
         assertEquals(PyJson.dumps(FakeComputer.SETTINGS), settingsHeld())
         assertEquals(SyncEngine.STAGES.map { it.first }, stages.map { it.first }.distinct())
-        assertEquals("1 unit the two agree on", stages.last { it.first == "agree" }.third)
+        assertEquals("1 unit the books agree on", stages.last { it.first == "agree" }.third)
         assertEquals(emptyList(), engine.compare(computer.address.toString()).differences, "settings are no unit")
     }
 
@@ -620,7 +620,7 @@ class SyncEngineTest {
         val refused = assertFailsWith<io.github.danielhp95.caracole.core.sync.SameCaracole> {
             engine.compare(computer.address.toString())
         }
-        assertEquals("The caracole at ${computer.address} is this one (the same id, $phoneId): its database is a " +
+        assertEquals("The scribe at ${computer.address} is this one (same id, $phoneId): its database is a " +
                      "copy of ours. Give one a new id: caracole peer new-id.", refused.message)
     }
 
@@ -674,7 +674,7 @@ class SyncEngineTest {
             )))),
         ))
         val refused = assertFailsWith<io.github.danielhp95.caracole.core.sync.PeerError> { client.push(state.token, push, doc) }
-        assertEquals("The caracole at ${computer.address} answered 400: 1 file the push keeps was never sent, nor kept " +
+        assertEquals("${computer.address} answered 400: 1 file the push keeps was never sent, nor kept " +
                      "here: $sha.", refused.message)
         assertEquals(400, refused.status)
     }
@@ -686,7 +686,7 @@ class SyncEngineTest {
         }
         repeat(2) {
             val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
-            assertEquals("There couldn't be given its 1: The caracole at ${computer.address} answered 503: The file " +
+            assertEquals("Couldn't give them 1: ${computer.address} answered 503: The file " +
                          "couldn't be kept: disk full.", failed.message)
             assertEquals("failed", ended()["give"])
             assertNull(ended()["agree"], "no agreement recorded")
@@ -694,7 +694,7 @@ class SyncEngineTest {
         }
         assertEquals(2, computer.pushesHere)
         val third = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
-        assertEquals("There couldn't be given its 1: The caracole at ${computer.address} answered 409: Two pushes are " +
+        assertEquals("Couldn't give them 1: ${computer.address} answered 409: Two pushes are " +
                      "here already, waiting to be taken: try again once one is, or in an hour.", third.message)
         assertEquals(emptyList(), assertNotNull(third.outcome).given, "as peer sync --push fails, nothing given")
         assertNull(phone.read { Compare.baseOf(it, computer.id) })
@@ -706,12 +706,12 @@ class SyncEngineTest {
         computer.holdTakes = held
         val waiting = engine().also { it.pollEveryMs = 5; it.polls = 3 }
         val gaveUp = assertFailsWith<SyncFailed> { apply(waiting.compare(computer.address.toString()), on = waiting) }
-        assertEquals("There couldn't be given its 1: The caracole at ${computer.address} hasn't taken the push yet: its " +
-                     "request 1, in its Requests tab, goes on.", gaveUp.message)
+        assertEquals("Couldn't give them 1: ${computer.address} hasn't taken the push yet: its Journal entry 1 " +
+                     "goes on.", gaveUp.message)
         assertEquals(3, computer.asked("GET", "/api/jobs/1").size)
 
         val refused = assertFailsWith<SyncFailed> { apply(waiting.compare(computer.address.toString()), on = waiting) }
-        assertEquals("There couldn't be given its 1: The caracole at ${computer.address} answered 409: Changes from " +
+        assertEquals("Couldn't give them 1: ${computer.address} answered 409: Changes from " +
                      "Phone are being taken already (request 1): send them again once that is over.", refused.message)
         assertEquals(2, computer.pushesHere, "the push refused stays open, to send again")
 

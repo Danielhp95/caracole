@@ -32,7 +32,7 @@ class M6SkeletonTest {
         assertEquals("The library of 2026-11-04", PhoneKinds.fill(PhoneKinds.RESTORE.display, "date" to "2026-11-04"))
         assertEquals("Making the pages again: 2 of 5", PhoneKinds.fill(render.running, "done" to 2, "total" to 5))
         assertEquals("Pages made again for 3 songs", PhoneKinds.fill(render.done, "n" to 3))
-        assertEquals("Waiting for a song that fits: a.gp5", PhoneKinds.fill(PhoneKinds.INBOX.otherwise!!, "name" to "a.gp5"))
+        assertEquals("Waiting for its song: a.gp5", PhoneKinds.fill(PhoneKinds.INBOX.otherwise!!, "name" to "a.gp5"))
         assertEquals("Backed up (daily)", PhoneKinds.fill(PhoneKinds.BACKUP.done, "label" to "daily"))
         assertEquals("Not restored: {why}", PhoneKinds.RESTORE.failed, "a blank no value names stays")
         for (kind in PhoneKinds.ALL.values) assertEquals(kind.kind + ":", kind.key)

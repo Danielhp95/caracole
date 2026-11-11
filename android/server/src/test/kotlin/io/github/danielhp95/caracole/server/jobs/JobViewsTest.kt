@@ -58,7 +58,7 @@ class JobViewsTest {
         val second = queue.submit(JobSpec("Add b", "b", "add", emptyList()) {}).first
         val third = queue.submit(JobSpec("Add c", "c", "add", emptyList()) {}).first
         runCurrent()
-        assertEquals(listOf("queued", "Queued behind 1 request…", null),
+        assertEquals(listOf("queued", "Queued · 1 request ahead…", null),
                      line(JobViews.view(queue.job(second.id)!!, queue)))
         assertEquals("Queued · 2 requests ahead…", JobViews.line(queue.job(third.id)!!, 2).text)
         gate.complete(Unit)
@@ -75,7 +75,7 @@ class JobViewsTest {
             gate.await()
         }).first
         runCurrent()
-        assertEquals(listOf("running", "Comparing…", null), line(JobViews.view(queue.job(job.id)!!, queue)))
+        assertEquals(listOf("running", "Comparing books…", null), line(JobViews.view(queue.job(job.id)!!, queue)))
         step.complete(Unit)
         runCurrent()
         assertEquals("Taking their entries…", JobViews.line(queue.job(job.id)!!).text)  // between two stages
@@ -105,7 +105,7 @@ class JobViewsTest {
         assertEquals(Line("added", "Added: the computer's next run fetches it."),
                      JobViews.line(run("add", "Added: the computer's next run fetches it.")))
         assertEquals(Line("removed", "Removed"), JobViews.line(run("remove")))
-        assertEquals(Line("ready", "Synced"), JobViews.line(run("sync") {
+        assertEquals(Line("ready", "Shared"), JobViews.line(run("sync") {
             it.outcome(Json.parseToJsonElement("""{"taken":[],"given":[],"left":[],"agreed":3,"indexed":[]}""").jsonObject)
         }))
         val left = run("sync") {
@@ -172,7 +172,7 @@ class JobViewsTest {
         runCurrent()
         val view = JobViews.view(queue.job(job.id)!!, queue)
         assertEquals(Json.parseToJsonElement("""{"id":1,"display":"Sync with Laptop","songId":null,"kind":"sync",
-            "state":"done","fetching":false,"line":{"tone":"ready","text":"Synced","link":null,"details":null},
+            "state":"done","fetching":false,"line":{"tone":"ready","text":"Shared","link":null,"details":null},
             "details":"#tab=sync","steps":[{"name":"compare","label":"Compare","state":"done","detail":""},
             {"name":"take","label":"Take","state":"done","detail":""},{"name":"give","label":"Give","state":"done","detail":""},
             {"name":"mirror","label":"Pages","state":"done","detail":""},{"name":"agree","label":"Agree","state":"done","detail":""},
@@ -240,7 +240,7 @@ class JobViewsTest {
         assertEquals(Line("running", "Making the pages…"), JobViews.line(queue.job(job.id)!!))  // nothing filled yet
         step.complete(Unit)
         runCurrent()
-        assertEquals(Line("running", "Making the pages again: 3 of 10"), JobViews.line(queue.job(job.id)!!))
+        assertEquals(Line("running", "Remaking pages · 3 of 10"), JobViews.line(queue.job(job.id)!!))
         gate.complete(Unit)
         runCurrent()
         val over = queue.job(job.id)!!
@@ -267,8 +267,8 @@ class JobViewsTest {
             context.stage("file", "done", PhoneKinds.fill(inbox.otherwise!!, "name" to "other.gp5"))
         }
         runCurrent()
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Radiohead - Creep"), JobViews.line(queue.job(filed.id)!!))
-        assertEquals(Line("waiting", "Waiting for a song that fits: other.gp5", details = "#tab=requests&job=${waits.id}"),
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Radiohead - Creep"), JobViews.line(queue.job(filed.id)!!))
+        assertEquals(Line("waiting", "Waiting for its song: other.gp5", details = "#tab=requests&job=${waits.id}"),
                      JobViews.line(queue.job(waits.id)!!))
         val backing = phoneJob(queue, PhoneKinds.BACKUP, "by-hand") { context ->
             context.stage("backup", "running")

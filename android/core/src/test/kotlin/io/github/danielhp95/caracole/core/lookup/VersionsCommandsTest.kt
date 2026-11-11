@@ -116,8 +116,8 @@ class VersionsCommandsTest {
     @Test fun whatAskingCameToIsSaidAsVersionsCmdSaysIt() = withSong { db, library, song ->
         val until = Instant.parse("2026-11-04T14:00:00Z")
         val words = mapOf<Asked<Nothing>, String>(
-            Asked.Cooling(until) to "Ultimate Guitar is cooling down after a block, until 2026-11-04 14:00 UTC; nothing kept.",
-            Asked.Cooling(null) to "Ultimate Guitar is cooling down after a block, until later; nothing kept.",
+            Asked.Cooling(until) to "Waiting out Ultimate Guitar until 2026-11-04 14:00 UTC; nothing kept.",
+            Asked.Cooling(null) to "Waiting out Ultimate Guitar until later; nothing kept.",
             Asked.Blocked(ProviderBlocked("ug", "https://x", 403), ProviderState("ug", cooldownUntil = until)) to
                 "Ultimate Guitar blocked caracole (ug: 403: https://x): no more requests to it until 2026-11-04 14:00 " +
                 "UTC; nothing kept.",
@@ -136,7 +136,7 @@ class VersionsCommandsTest {
     @Test fun aCooldownAsksNothingAndNothingLeftToKeepSaysSo() = withSong { db, library, song ->
         Health.recordBlock(db, "ug", NOW.minusSeconds(3600), "ug: 403")
         val cooling = VersionsCommands.keep(Said(db, UgFetchReplay.TurnAsking(db, NoClient, NOW)), library, song, 103)
-        assertTrue(cooling, cooling.startsWith("Ultimate Guitar is cooling down after a block, until 2026-11-04 "))
+        assertTrue(cooling, cooling.startsWith("Waiting out Ultimate Guitar until 2026-11-04 "))
         db.kvSet("sheet_versions:unkeepable:${song.id}", "[\"103\"]")
         assertEquals("Nothing more to keep of Soda Stereo - Persiana Americana: every Ultimate Guitar version caracole " +
                          "may keep is kept already, or can't be.",

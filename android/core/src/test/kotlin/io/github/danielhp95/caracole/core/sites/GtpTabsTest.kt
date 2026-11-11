@@ -194,7 +194,7 @@ class GtpTabsTest {
 
     @Test fun aServerErrorFailsTheStageNeverAMiss() =
         stage(mapOf(elton to FakeTransport.answer(500, "oops"))) { db, end, _ ->
-            assertEquals(StageEnd("failed", "gtptabs.com failed (gtptabs: 500: $elton: HTTP 500); the nightly run tries again"),
+            assertEquals(StageEnd("failed", "gtptabs.com failed (gtptabs: 500: $elton: HTTP 500); tried again tonight"),
                          end)
             assertNull(db.kvGet("gtptabs:checked:1"))
         }

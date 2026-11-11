@@ -144,13 +144,13 @@ class GameTabsTest {
     }
 
     @Test fun aSpentBudgetLeavesTheRestToTheNightlyRun() {
-        assertEquals(StageEnd("skipped", "the lookup's 6 requests to gametabs.net are spent; the nightly run does the rest"),
+        assertEquals(StageEnd("skipped", "this fetch's 6 asks of gametabs.net are spent; tonight's run does the rest"),
                      stage("a spent budget ends the pass, no miss", budget = 1))
     }
 
     @Test fun anErrorFailsTheStageNeverAMiss() {
         assertEquals(StageEnd("failed", "gametabs.net failed (gametabs: 502: " +
-            "https://gametabs.net/tabs/hollow-knight/resting-grounds-2: HTTP 502); the nightly run tries again"),
+            "https://gametabs.net/tabs/hollow-knight/resting-grounds-2: HTTP 502); tried again tonight"),
                      stage("a server error leaves the song for the next run"))
     }
 
@@ -162,9 +162,9 @@ class GameTabsTest {
     /** The envelope's other ends, LookupWords.end's for gametabs.net, its name get.NAMES'. */
     @Test fun theEnvelopesOtherEndsInGetPysWords() {
         val cfg = PhoneConfig.DEFAULTS
-        assertEquals(StageEnd("skipped", "gametabs.net is cooling down after a block, until 2026-11-04 14:00 UTC"),
+        assertEquals(StageEnd("skipped", "Waiting out gametabs.net until 2026-11-04 14:00 UTC"),
                      LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Cooling(Instant.parse("2026-11-04T14:00:30Z"))))
-        assertEquals(StageEnd("skipped", "gametabs.net is cooling down after a block, until later"),
+        assertEquals(StageEnd("skipped", "Waiting out gametabs.net until later"),
                      LookupWords.end(cfg, GameTabsPages.PROVIDER, Asked.Cooling(null)))
         val block = ProviderBlocked("gametabs", "https://gametabs.net/x", 403)
         val state = ProviderState("gametabs", strikes = java.math.BigInteger.ONE, cooldownUntil = Instant.parse("2026-11-05T02:00:00Z"))

@@ -97,7 +97,7 @@ class UgFetchSheetTest {
 
     @Test fun theLookupsTwoStagesAreItsTwoPassesWordedAsGetPyWordsThem() {
         val ends = stages(record("a lookup's sheet pass, then the rest"), UgSheetStage, UgStage)
-        assertEquals(listOf(StageEnd("done", "tab 102 from Ultimate Guitar"),
+        assertEquals(listOf(StageEnd("done", "tab 102 from UG"),
                             StageEnd("done", "sheet 103 · tab 202 · kept beside it: tab 104, tab 102")), ends)
     }
 

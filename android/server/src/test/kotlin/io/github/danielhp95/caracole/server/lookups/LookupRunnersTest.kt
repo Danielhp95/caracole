@@ -130,7 +130,7 @@ class LookupRunnersTest {
         mapOf("get" to GetRunner(p, stages = stages()))  // Overrides.read, the phone's
     }) { job, database ->
         assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", job.stages[0].detail)
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [match] radiohead/creep", job.stages[0].detail)
         val key = Normalize.identityKey("Radiohead", "Creep")
         assertEquals("radiohead" to "creep", database.read { Overrides.read(it) }.match[key])
     }
@@ -140,7 +140,7 @@ class LookupRunnersTest {
     }) { job, _ ->
         assertEquals(Job.FAILED, job.state)
         assertEquals(1, job.steps.single().code)
-        val why = "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up"
+        val why = "Radiohead - Creep is ignored (overrides.toml [ignore]). Take it out to fetch it"
         assertEquals("failed" to why, job.stages[0].state to job.stages[0].detail)
         assertEquals("error: Nothing looked up: $why.", job.steps.single().output.last())
     }
@@ -291,7 +291,7 @@ class LookupRunnersTest {
         val noIndex = "Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole " +
             "harptabs --index now."  // lane harptabs': nothing asked of a phone with no index
         for ((args, said) in listOf(
-            listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no artist page for soda stereo.",
+            listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no page for soda stereo.",
             listOf("harptabs", "--artist=Billy Joel") to noIndex,
             listOf("lacuerda", "--search=de musica ligera", "--progress") to
                 "Not searched: LaCuerda failed (lacuerda: 500: $lacuerdaSearch: HTTP 500); nothing changed: try again later.",

@@ -80,7 +80,7 @@ class LyricsStagesTest {
             // Remembered for Megalobiz and AZLyrics before the stage says it failed: they ask about it after LRCLIB.
             assertEquals(Stamps.of(w.now), w.db { it.kvGet("${Lrclib.FAILED}${song.id}") })
             val (spent, _) = stage(w, LrclibStage::run, song, "lrclib", mapOf(soda to answer(404, "{}")), budget = 1)
-            assertEquals(StageEnd("skipped", "the lookup's 6 requests to LRCLIB are spent; the nightly run does the rest"), spent)
+            assertEquals(StageEnd("skipped", "this fetch's 6 asks of LRCLIB are spent; tonight's run does the rest"), spent)
         }
     }
 
@@ -109,8 +109,8 @@ class LyricsStagesTest {
         LyricsWorld(tmp.newFolder()).use { w ->
             val song = w.song("Pomme", "mononoke", null, "lyrics_status" to "missing")
             val (blocked, _) = stage(w, AzLyricsStage::run, song, "azlyrics", mapOf(pomme to fixture("azlyrics/block.html")))
-            assertEquals(StageEnd("skipped", "AZLyrics blocked caracole (azlyrics: 200: https://www.azlyrics.com/p/pomme.html: " +
-                                      "challenge page): no more requests to it until later. Nothing was marked not found."), blocked)
+            assertEquals(StageEnd("skipped", "AZLyrics turned us back (azlyrics: 200: https://www.azlyrics.com/p/pomme.html: " +
+                                      "challenge page). No more asks until later. Nothing marked not on the sites."), blocked)
             val hit = mapOf(pomme to fixture("azlyrics/artist_pomme.html"), mononoke to fixture("azlyrics/lyrics_mononoke.html"))
             assertEquals(StageEnd("done", "lyrics from AZLyrics"), stage(w, AzLyricsStage::run, song, "azlyrics", hit).first)
             val again = w.db { io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!! }

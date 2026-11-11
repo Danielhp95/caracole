@@ -91,7 +91,7 @@ class InboxRunnerTest {
         val shared = share("Oasis - Wonderwall.gp5", "GP-DATA".toByteArray())
         assertEquals("Oasis - Wonderwall.gp5", shared.name)
         val job = await(shared.job!!)
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(job))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(job))
         assertEquals("inbox", job.spec.kind)
         assertEquals("inbox:Oasis - Wonderwall.gp5", job.key)
         assertEquals(song.id, job.songId)
@@ -105,7 +105,7 @@ class InboxRunnerTest {
     @Test fun aFileNoSongFitsWaitsAndIsFiledAfterTheAddThatBringsItsSong() {
         wired()
         val shared = share("Blur - Song 2.pdf", "%PDF-score".toByteArray())
-        assertEquals(Line("waiting", "Waiting for a song that fits: Blur - Song 2.pdf",
+        assertEquals(Line("waiting", "Waiting for its song: Blur - Song 2.pdf",
                           details = "#tab=requests&job=${shared.job!!.id}"), line(shared.job!!))
         assertEquals(listOf("Blur - Song 2.pdf"), folder.waiting())
         // A job of another kind tries nothing; an add, the song's, files it.
@@ -115,7 +115,7 @@ class InboxRunnerTest {
             add("Blur", "Song 2")
         })).first)
         val again = waitFor { queue.snapshot().firstOrNull { it.spec.kind == "inbox" && it.id != shared.job!!.id } }
-        assertEquals(Line("ready", "Filed as score-1.pdf of Blur - Song 2"), line(again))
+        assertEquals(Line("ready", "Filed · score-1.pdf of Blur - Song 2"), line(again))
         assertEquals(emptyList(), folder.waiting())
         // Nothing waits now: the next lookup queues nothing more.
         await(queue.submit(JobSpec("Look it up", "blur/song-2", "song", emptyList(), run = {})).first)
@@ -138,7 +138,7 @@ class InboxRunnerTest {
         val song = add("Oasis", "Wonderwall")
         await(share("Oasis - Wonderwall.gp5", "GP-DATA".toByteArray()).job!!)
         val again = share("download.gp5", "GP-DATA".toByteArray())
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(again.job!!))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), line(again.job!!))
         assertEquals(listOf("guitar-1.gp5"), database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
         assertEquals(emptyList(), folder.waiting())
         assertEquals(1, rendered.size)  // a duplicate changes no page
@@ -150,7 +150,7 @@ class InboxRunnerTest {
         val kept = File(parts.store.folderOf(song), "score-1.pdf")
         assertTrue(kept.delete())
         val again = share("download (3).pdf", "%PDF".toByteArray())
-        assertEquals(Line("ready", "Filed as score-1.pdf of Oasis - Wonderwall"), line(again.job!!))
+        assertEquals(Line("ready", "Filed · score-1.pdf of Oasis - Wonderwall"), line(again.job!!))
         assertEquals("%PDF", kept.readText())
         assertEquals(2, rendered.size)
     }
@@ -169,7 +169,7 @@ class InboxRunnerTest {
         val gp5 = byteArrayOf(24) + "FICHIER GUITAR PRO v5.00".toByteArray() + ByteArray(10)
         val shared = share("Oasis - Wonderwall", gp5, type = "application/octet-stream")
         assertEquals("Oasis - Wonderwall.gp5", shared.name)
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(shared.job!!))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), line(shared.job!!))
         assertEquals(listOf("guitar-1.gp5"), database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
     }
 
@@ -178,8 +178,8 @@ class InboxRunnerTest {
         val one = share("Oasis - Wonderwall.gp5", "one".toByteArray())
         val two = share("Oasis - Wonderwall.gp5", "two".toByteArray())
         assertEquals("Oasis - Wonderwall (2).gp5", two.name)
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(one.job!!))
-        assertEquals(Line("ready", "Filed as guitar-2.gp5 of Oasis - Wonderwall"), line(two.job!!))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), line(one.job!!))
+        assertEquals(Line("ready", "Filed · guitar-2.gp5 of Oasis - Wonderwall"), line(two.job!!))
         assertEquals(listOf("guitar-1.gp5", "guitar-2.gp5"),
                      database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
     }
@@ -191,7 +191,7 @@ class InboxRunnerTest {
                                  parts.songbooks, parts.alerts, parts.pacing, parts.searchesLacuerda)
         val shared = InboxShare.share(failing, "Oasis - Wonderwall.gp5", null, "GP".toByteArray()) { now }
         val over = await(shared.job!!)
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(over))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), JobViews.line(over))
         assertTrue("pages not made: no font" in over.output)
         assertEquals(listOf("guitar-1.gp5"), database.read { db -> Kept.keptFiles(db, song.id) }.map { it.name })
         assertEquals(emptyList(), folder.waiting())
@@ -232,7 +232,7 @@ class InboxRunnerTest {
         assertTrue(kept.delete())
         await(queue.submit(JobSpec("Sync", "sync:2", "sync", emptyList(), run = {})).first)
         val put = waitFor { queue.snapshot().firstOrNull { it.spec.kind == "inbox" && it.id > again.job!!.id } }
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(put))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), line(put))
         assertEquals("GP-DATA", kept.readText())
     }
 
@@ -264,7 +264,7 @@ class InboxRunnerTest {
         assertTrue(place.delete())  // the song's folder free again
         ended("song", "oasis/wonderwall:2")  // a day on, a lookup tries it
         assertEquals(3, inboxJobs())
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"),
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"),
                      JobViews.line(latestInbox()))
         assertEquals(emptyList(), folder.waiting())
         assertNull(folder.failedAt("Oasis - Wonderwall.gp5"))
@@ -277,7 +277,7 @@ class InboxRunnerTest {
         wired()
         await(queue.submit(JobSpec("Export", "export:1", "export", emptyList(), run = {})).first)
         val filed = waitFor { queue.snapshot().firstOrNull { it.spec.kind == "inbox" } }
-        assertEquals(Line("ready", "Filed as guitar-1.gp5 of Oasis - Wonderwall"), line(filed))
+        assertEquals(Line("ready", "Filed · guitar-1.gp5 of Oasis - Wonderwall"), line(filed))
         folder.stage("Oasis - Wonderwall (ver 2).gp5", "GP2".toByteArray(), now)
         await(queue.submit(JobSpec("Export", "export:2", "export", emptyList(), run = {})).first)
         assertEquals(1, queue.snapshot().count { it.spec.kind == "inbox" })  // the process's first job alone

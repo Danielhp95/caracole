@@ -99,9 +99,9 @@ class LaCuerdaSheetsTest {
         assertEquals(StageEnd("skipped", "LaCuerda blocked caracole (lacuerda: 403: $soda: HTTP 403): no more requests to it " +
                                   "until later. Nothing was marked not found."), blocked)
         val failed = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(mapOf("GET $soda" to (500 to "x")))))))
-        assertEquals(StageEnd("failed", "LaCuerda failed (lacuerda: 500: $soda: HTTP 500); the nightly run tries again"), failed)
+        assertEquals(StageEnd("failed", "LaCuerda failed (lacuerda: 500: $soda: HTTP 500); tried again tonight"), failed)
         val spent = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(budget = 0)))))
-        assertEquals(StageEnd("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"), spent)
+        assertEquals(StageEnd("skipped", "this fetch's 6 asks of LaCuerda are spent; tonight's run does the rest"), spent)
         assertEquals(null, Songs.byId(db, s.id)!!.lacuerdaCheckedAt)  // an error is never a miss
     }
 
@@ -111,9 +111,9 @@ class LaCuerdaSheetsTest {
             override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> = asked
             override val requests: Map<String, Int> = emptyMap()
         }))
-        assertEquals(StageEnd("skipped", "LaCuerda is cooling down after a block, until 2026-11-04 14:00 UTC"),
+        assertEquals(StageEnd("skipped", "Waiting out LaCuerda until 2026-11-04 14:00 UTC"),
                      said(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
-        assertEquals(StageEnd("skipped", "this hour's 60 lookup requests to LaCuerda are spent; the nightly run does the rest"),
+        assertEquals(StageEnd("skipped", "no more asks of LaCuerda this hour (60 spent); tonight's run does the rest"),
                      said(Asked.Spent(hour = true, keptForSheets = false)))
         assertEquals(StageEnd("skipped", "this hour's lookups have spent half of their 60 requests to LaCuerda, and the " +
                                   "other half is kept for sheets; the nightly run does the rest"),

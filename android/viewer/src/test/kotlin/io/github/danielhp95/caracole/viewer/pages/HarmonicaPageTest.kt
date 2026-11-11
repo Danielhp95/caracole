@@ -43,8 +43,8 @@ class HarmonicaPageTest {
 
     @Test fun theFootLinksTheTabsTextAndWhereItCameFrom() {
         val foot = HarmonicaPage.footer("harmonica 1 (x).txt", "javascript:alert(1)", placed = true, change = true)
-        assertTrue("<a class=\"pdf\" href=\"harmonica%201%20%28x%29.txt\">The tab as text</a>" in foot)
-        assertTrue("<a href=\"https://www.harptabs.com/\">harptabs.com</a>, as its tabber wrote it; caracole placed" in foot)
+        assertTrue("<a class=\"pdf\" href=\"harmonica%201%20%28x%29.txt\">Tab as text</a>" in foot)
+        assertTrue("<a href=\"https://www.harptabs.com/\">harptabs.com</a>, as its tabber wrote it. We placed" in foot)
         assertTrue("id=\"reading-foot\" hidden" in foot)
         val kept = HarmonicaPage.footer("harmonica-1.txt", "https://www.harptabs.com/tab/588/x", placed = false)
         assertTrue("<a href=\"https://www.harptabs.com/tab/588/x\">harptabs.com</a>, as its tabber wrote it.</p>" in kept)
@@ -58,7 +58,7 @@ class HarmonicaPageTest {
         assertEquals(listOf("key", "none", "holes"), harp.keys.toList())
         assertEquals(12, harp.getValue("holes").jsonArray.size)
         val keyless = HarmonicaPage.overlayData(Choice(0, "usual"), "{title: X}\nwords alone\n", null, null)
-        assertTrue(keyless.getValue("harp").jsonObject.getValue("none").toString().contains("no key in its chord sheet"))
+        assertTrue(keyless.getValue("harp").jsonObject.getValue("none").toString().contains("The chord sheet has no key"))
     }
 
     private val hotel = String(Corpus.fixture("harptabs/tabs/588_hotel-california.txt"), Charsets.UTF_8)
@@ -77,7 +77,7 @@ class HarmonicaPageTest {
     @Test fun aTabInHarptabsComsOwnNotationHasItsLegendAndWhatHarptabsComSaysOfIt() {
         val facts = Json.parseToJsonElement("""{"difficulty": "Beginner", "views": 224000, "rating": 3.3}""").jsonObject
         val html = page(facts = facts, pageKey = "Bb", back = "sheet (auto).html")
-        assertTrue("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>Bb harp</b>, as harptabs.com's key says</p>" in html)
+        assertTrue("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>Bb harp</b>, as harptabs' key says</p>" in html)
         assertTrue("(<span class=\"b\">4</span> <span class=\"b\">5</span>)</span> together · Beginner · 224k views · 3.3★</p>" in html)
         assertTrue("<a class=\"back\" href=\"sheet%20%28auto%29.html\" data-sheet>‹ Chord sheet</a>" in html)
         assertTrue("<p class=\"reading\" id=\"reading-foot\" hidden>" in html)
@@ -88,7 +88,7 @@ class HarmonicaPageTest {
     @Test fun aTabCaracoleCantReadIsItsTextAsWrittenWithTheBarOfOne() {
         val html = page("ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n", pageKey = "C")
         assertTrue("<pre class=\"tab\">ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6</pre>" in html)
-        assertTrue("caracole can't read its notation." in html && HarmonicaPage.BAR_RAW in html && "\"groups\"" !in html)
+        assertTrue("We can't read its notation." in html && HarmonicaPage.BAR_RAW in html && "\"groups\"" !in html)
         assertTrue("<a class=\"back\" href=\"../../index.html\">‹ Library</a>" in html)
     }
 }

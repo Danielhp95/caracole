@@ -151,7 +151,7 @@ class LookupTest {
         val asks = SiteStage { ctx -> LookupWords.end(ctx.config, "ug", ctx.asking.ask("ug") { it.get(ug); StageEnd("done", "x") }) }
         val result = lookup(stages(ugSheet = asks, ug = asks), alerts = alerts).run(db)
         val block = result.details.getValue("sheet")
-        assertTrue(block.startsWith("Ultimate Guitar blocked caracole (ug: 403: $ug"), block)
+        assertTrue(block.startsWith("Ultimate Guitar turned us back (ug: 403: $ug"), block)
         assertEquals("skipped" to LookupWords.blockedEarlier("ug"), result.states["ug"] to result.details["ug"])
         assertEquals(listOf("ug"), alerts.blocks)
         assertEquals(mapOf("ug" to 1), result.requests)
@@ -275,7 +275,7 @@ class LookupTest {
 
     @Test fun aPickIsRecordedInTheOverridesAndSaidInTheSongStage() = phone { db ->
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", ug = "radiohead/creep")).run(db)
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", result.details["song"])
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [match] radiohead/creep", result.details["song"])
     }
 
     @Test fun aTabPickedKeepsThePinsOfTheOtherKindGroupAsWrittenAndReplacesTheRest() = phone { db ->
@@ -292,7 +292,7 @@ class LookupTest {
         val before = Overrides(pin = mapOf(key to listOf(5000L, 6000L, 6500L, 9999L, 7000L)),
                                pinUrls = mapOf(key to listOf(pasted)))
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = ug), overrides = before).run(db)
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [pin] tab 4169", result.details["song"])
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [pin] tab 4169", result.details["song"])
         val after = Overrides.read(db)
         assertEquals(listOf(4169L, 5000L, 7000L), after.pin[key])  // the tabs beside the chords picked
         assertEquals(listOf(ug, pasted, "https://tabs.ultimate-guitar.com/tab/7000"), after.pinUrls[key])

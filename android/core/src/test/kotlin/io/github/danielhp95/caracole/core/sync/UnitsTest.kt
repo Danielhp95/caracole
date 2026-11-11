@@ -190,7 +190,7 @@ class UnitsTest {
         TestDb.fresh(tmp.newFolder("blocks")).use { database ->
             database.writeBlocking { OverridesStore.putBlock(it, 77, true); OverridesStore.putBlock(it, 0, true) }
             database.read { db ->
-                assertEquals(mapOf("block/0" to "the blocked tab 0", "block/77" to "the blocked tab 77"),
+                assertEquals(mapOf("block/0" to "blocked tab 0", "block/77" to "blocked tab 77"),
                              Units.libraryState(db).mapValues { it.value.label })
                 assertEquals(JsonPrimitive(true), Units.value(db, "block/77"))
                 assertEquals(buildJsonObject { put("tab", 77) }, Units.document(db, tmp.root, "block/77"))
@@ -291,7 +291,7 @@ class UnitsTest {
             }
             database.read { db ->
                 val state = Units.libraryState(db)
-                assertEquals("the alias of soda", state.getValue("alias/soda").label)
+                assertEquals("alias of soda", state.getValue("alias/soda").label)
                 assertEquals("the UG page of Soda", state.getValue("artist_url/soda").label)
                 assertEquals(Canonical.digest(buildJsonArray { add(JsonPrimitive("soda-stereo")) }), state.getValue("alias/soda").digest)
                 assertEquals(buildJsonObject { put("slugs", buildJsonArray { add(JsonPrimitive("soda-stereo")) }) },

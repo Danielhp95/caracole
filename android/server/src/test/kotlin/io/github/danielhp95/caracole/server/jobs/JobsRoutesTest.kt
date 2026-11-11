@@ -69,10 +69,10 @@ class JobsRoutesTest {
         test.use {
             val page = test.get("/jobs.json")
             assertEquals(403, page.status)
-            assertTrue("reload it" in page.text, page.text)
+            assertTrue("Reload it" in page.text, page.text)
             val script = test.get("/jobs.json", "accept" to "application/json")
             assertEquals(403, script.status)
-            assertEquals("""{"error":"caracole serve has restarted since this page was opened: reload it."}""", script.text)
+            assertEquals("""{"error":"caracole serve restarted since this page opened. Reload it."}""", script.text)
             assertEquals(403, test.script("/jobs.json", TestApp.TOKEN_HEADER to "an old token").status)
             val fine = test.script("/jobs.json")
             assertEquals(200, fine.status)
@@ -201,7 +201,7 @@ class JobsRoutesTest {
             fun refused(job: String) = test.postScript("/jobs/cancel", listOf("job" to job)).let {
                 it.status to it.json.jsonObject["error"]!!.jsonPrimitive.content
             }
-            assertEquals(409 to "That request has started, and caracole never stops a command halfway: it runs to its end.",
+            assertEquals(409 to "Already running. We never stop a command halfway.",
                          refused("${running.id}"))
             assertEquals(404 to "No longer queued.", refused("${waiting.id}"))  // cancelled already
             assertEquals(404 to "No longer queued.", refused("77"))
@@ -303,7 +303,7 @@ class JobsRoutesTest {
             val found = queue.submit(lookup()).first
             runCurrent()
             // Not found, with no link: the phone has no to-do page.
-            assertEquals(listOf("missing", "Not found", null, null), line(view(test, found.id)))
+            assertEquals(listOf("missing", "Not on the sites", null, null), line(view(test, found.id)))
             assertEquals(listOf("waiting", "Not fetched yet", null, "#tab=requests&job=${waited.id}"),
                          line(view(test, waited.id)))  // a job over keeps what it came to
         }
@@ -341,7 +341,7 @@ class JobsRoutesTest {
             }
             val job = queue.submit(lookup()).first
             runCurrent()
-            assertEquals(listOf("review", "Needs review", """{"label":"Pick the match","href":"review?song=$id"}""", null),
+            assertEquals(listOf("review", "Needs your pick", """{"label":"Pick","href":"review?song=$id"}""", null),
                          line(view(test, job.id)))
             song(test.database, "Muse", "Hysteria", "muse/hysteria")
             test.database.writeBlocking { db ->

@@ -54,7 +54,7 @@ class SyncEngineTest {
         assertContentEquals(server.manifest, mirror.manifestFile.readBytes())
         assertEquals(SyncReport(4, library.values.sumOf { it.size.toLong() }, 4, 0, 0, 4, emptyList()), report)
         assertEquals((0..4).map { Progress(it, 4) }, seen)
-        assertEquals("4 files new", report.summary())
+        assertEquals("4 new files", report.summary())
         assertTrue("/%C3%91and%C3%BA/Canci%C3%B3n%20%231/sheet.cho" in server.requests, server.requests.toString())
     }
 
@@ -75,7 +75,7 @@ class SyncEngineTest {
         assertEquals(1, report.changed)
         assertEquals(1, report.removed)
         assertEquals(2, report.downloaded)
-        assertEquals("1 file new, 1 changed, 1 removed", report.summary())
+        assertEquals("1 new file, 1 changed, 1 removed", report.summary())
         assertEquals(
             setOf("/api/offline", "/Estopa/Tu%20calorro/sheet.html", "/Estopa/Tu%20calorro/version-39144.html"),
             server.requests.toSet(),
@@ -153,7 +153,7 @@ class SyncEngineTest {
             val pdf = entries.first { it.path == "new.pdf" }
             server.answers[pdf.url] = { FakeCaracole.send(it, 200, "%PDF mew".toByteArray(), "application/pdf") }
         }
-        assertTrue("sync again" in error.message!!, error.message)
+        assertTrue("Sync again" in error.message!!, error.message)
         assertTrue("new.pdf" in error.message!!, error.message)
     }
 
@@ -169,7 +169,7 @@ class SyncEngineTest {
                 } catch (e: java.io.IOException) { /* the app stopped reading */ }
             }
         }
-        assertTrue("longer than 8 bytes" in error.message!!, error.message)
+        assertTrue("it's over 8 bytes" in error.message!!, error.message)
     }
 
     @Test(timeout = 20_000)
@@ -185,7 +185,7 @@ class SyncEngineTest {
             exchange.responseBody.write("%PDF".toByteArray())
         }
         val error = assertFailsWith<SyncError.Changed> { engine.sync(server.address) }
-        assertTrue("it is 4 bytes, not ${Long.MAX_VALUE}" in error.message!!, error.message)
+        assertTrue("it's 4 bytes, not ${Long.MAX_VALUE}" in error.message!!, error.message)
         assertEquals(before, snapshot())
     }
 
@@ -195,7 +195,7 @@ class SyncEngineTest {
             val pdf = entries.first { it.path == "new.pdf" }
             server.answers[pdf.url] = { FakeCaracole.send(it, 200, "%PDF new and more".toByteArray(), "application/pdf") }
         }
-        assertTrue("it is 17 bytes, not 8" in error.message!!, error.message)
+        assertTrue("it's 17 bytes, not 8" in error.message!!, error.message)
     }
 
     @Test
@@ -314,7 +314,7 @@ class SyncEngineTest {
             FakeCaracole.send(it, 503, "{\"error\": ${FakeCaracole.quote(why)}}".toByteArray(), "application/json; charset=utf-8")
         }
         val error = assertFailsWith<SyncError.Unavailable> { engine.sync(server.address) }
-        assertEquals("caracole at ${server.address} can't share its library now: $why", error.message)
+        assertEquals("${server.address} can't share its book now: $why", error.message)
         assertEquals(before, snapshot())
 
         server.answers["/api/offline"] = { FakeCaracole.send(it, 503, "busy".toByteArray(), "text/plain") }
@@ -328,7 +328,7 @@ class SyncEngineTest {
         val report = engine.sync(server.address)
         assertMirrors(library)
         assertEquals(1, report.skipped.size)
-        assertEquals("4 files new; 1 left out (the server listed them wrong)", report.summary())
+        assertEquals("4 new files · 1 left out, listed wrong", report.summary())
     }
 
     @Test

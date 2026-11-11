@@ -95,12 +95,12 @@ class SyncRoutesTest {
     @Test fun `the address is read before anything, as peer_address reads one`() {
         val answer = app.postScript("/sync/compare", listOf("address" to "ftp://laptop"))
         assertEquals(400, answer.status)
-        assertEquals("'ftp://laptop' isn't the address of a caracole serve (http://HOST:PORT)",
+        assertEquals("'ftp://laptop' isn't a caracole serve address (http://HOST:PORT).",
                      answer.json.jsonObject.getValue("error").jsonPrimitive.content)
         for ((typed, said) in listOf(
             "desk:80x" to "'desk:80x' isn't an address caracole can ask: Port could not be cast to integer value as '80x'",
             "desk:99999" to "'desk:99999' isn't an address caracole can ask: Port out of range 0-65535",
-            "http://desk:8737/peer" to "'http://desk:8737/peer' isn't the address of a caracole serve (http://HOST:PORT)",
+            "http://desk:8737/peer" to "'http://desk:8737/peer' isn't a caracole serve address (http://HOST:PORT).",
             "http://[::1:8737" to "'http://[::1:8737' isn't an address caracole can ask: Invalid IPv6 URL",
         )) {
             val refused = app.postScript("/sync/compare", listOf("address" to typed))
@@ -259,7 +259,7 @@ class SyncRoutesTest {
                      view.getValue("steps").jsonArray.associate {
                          it.jsonObject.getValue("name").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content
                      })
-        assertEquals("The caracole at ${computer.address} answered 503: The push couldn't be opened: disk full.",
+        assertEquals("${computer.address} answered 503: The push couldn't be opened: disk full.",
                      view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content.removePrefix("There couldn't be given its 1: "))
     }
 
@@ -271,7 +271,7 @@ class SyncRoutesTest {
         val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
         assertEquals("done", job.state)
         val view = io.github.danielhp95.caracole.server.jobs.JobViews.view(job, queue)
-        assertEquals("Synced: 1 change left as it was", view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+        assertEquals("Shared · 1 change left as it was", view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
         assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive("song/muse/hysteria"),
                                                        JsonPrimitive("its request 1 there failed"))))),
                      view.getValue("outcome").jsonObject["left"])
@@ -289,7 +289,7 @@ class SyncRoutesTest {
             .getValue("error").jsonPrimitive.content, "a comparison queued is kept no more")
         val refused = app.postScript("/sync/apply", listOf("comparison" to second))
         assertEquals(409, refused.status)
-        assertEquals("A sync with ${computer.address} is on its way already (request 1): compare again once it is over.",
+        assertEquals("Already sharing with ${computer.address} (request 1). Compare again once it's done.",
                      refused.json.jsonObject.getValue("error").jsonPrimitive.content)
         computer.holdTakes!!.countDown()
         computer.holdTakes = null
@@ -368,8 +368,8 @@ class SyncRoutesTest {
         computer.database.writeBlocking { it.kvSet("sync:id", me) }
         val same = app.postScript("/sync/test", listOf("address" to address))
         assertEquals(409, same.status)
-        assertEquals("The caracole at $address is this one (the same id, $me): its database is a copy of this one's. " +
-                     "Give one of them another: caracole peer new-id.", same.json.jsonObject.getValue("error").jsonPrimitive.content)
+        assertEquals("The scribe at $address is this one (same id, $me): its database is a copy of ours. " +
+                     "Give one a new id: caracole peer new-id.", same.json.jsonObject.getValue("error").jsonPrimitive.content)
         computer.close()
         assertEquals(502, app.postScript("/sync/test", listOf("address" to address)).status)
     }

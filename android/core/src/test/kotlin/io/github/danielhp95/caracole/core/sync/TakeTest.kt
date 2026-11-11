@@ -88,7 +88,7 @@ class TakeTest {
         val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { id, what -> told += id to what } }
         assertEquals(listOf("song/nobody/here", "removed/oasis/wonderwall"), done.taken)
         assertEquals(listOf("removed/b/c" to Take.CHANGED_THERE, "removed/broken/one" to "the computer went away",
-                            "nonsense/x" to "this caracole doesn't know units of kind 'nonsense'"), done.left)
+                            "nonsense/x" to "we don't know entries of kind 'nonsense'"), done.left)
         assertEquals(listOf("song/nobody/here" to "taken", "removed/b/c" to "left", "removed/broken/one" to "left",
                             "removed/oasis/wonderwall" to "taken", "nonsense/x" to "left"), told)
         assertEquals(Applied(done.taken, done.left, emptyList(), emptyList(), false), done)
@@ -187,7 +187,7 @@ class TakeTest {
         val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) }
         assertEquals(listOf("songbook/home"), done.taken)
         assertEquals(listOf("songbook/campfire" to "a setting: capo must be a fret from 0 to 11, got 12",
-                            "songbook/road" to "its document can't be read (TypeError: check_setting() got an unexpected " +
+                            "songbook/road" to "its entry can't be read (TypeError: check_setting() got an unexpected " +
                                 "keyword argument 'tempo')"), done.left)
         phone.write { db -> assertEquals(listOf("Home"), io.github.danielhp95.caracole.core.library.SongbookStore.all(db).map { it.name }) }
     }

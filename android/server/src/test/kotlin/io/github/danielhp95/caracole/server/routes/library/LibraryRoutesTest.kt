@@ -102,7 +102,7 @@ class LibraryRoutesTest {
             listOf("artist" to "A", "title" to "T", "duration" to "0:00") to
                 "The length is a bad duration '0:00': it must be longer than zero.",
             listOf("artist" to "A", "title" to "T", "duration" to "four minutes") to
-                "The length 'four minutes' isn't a duration: write m:ss, h:mm:ss or whole seconds.",
+                "The length 'four minutes' isn't a duration. Write m:ss, h:mm:ss or seconds.",
             listOf("artist" to "Simon - Garfunkel", "title" to "T") to
                 "caracole can't add this song: wanted.txt can't hold an artist name with ' - ' in it: 'Simon - Garfunkel'",
             listOf("q" to "x".repeat(501)) to "The text is too long: 500 characters at most.",
@@ -206,7 +206,7 @@ class LibraryRoutesTest {
         val removal = question.json.jsonObject.getValue("removal").jsonObject
         assertEquals(listOf("song", "key", "display", "brief", "goes", "stays", "notes"), removal.keys.toList())
         assertEquals(JsonPrimitive(wonderwall.key), removal["key"])
-        assertEquals(JsonPrimitive("Deletes its record."), removal["brief"])
+        assertEquals(JsonPrimitive("Deletes its entry."), removal["brief"])
         assertNotNull(song("Oasis", "Wonderwall"), "the question changes nothing")
 
         val refused = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1", "key" to "oasis/other"))
@@ -275,7 +275,7 @@ class LibraryRoutesTest {
         // Its line names it as the library does, and says it is there already.
         val again = added(listOf("artist" to "radiohead", "title" to "creep"))
         assertEquals("Add Radiohead - Creep", again.spec.title)
-        assertEquals("In your library as Radiohead - Creep.", again.stages.single().detail)
+        assertEquals("In your book as Radiohead - Creep.", again.stages.single().detail)
     }
 
     @Test fun `a new song's names are those wanted dot txt's line would hold`() {
@@ -375,7 +375,7 @@ class LibraryRoutesTest {
                        db.lastRowid(), calorro.id, "ab".repeat(32))
         }
         val removal = app.postScript("/remove", listOf("song" to calorro.id.toString())).json.jsonObject.getValue("removal").jsonObject
-        assertEquals(JsonPrimitive("Deletes the phone's 1 file for it and its record."), removal["brief"])
+        assertEquals(JsonPrimitive("Deletes the phone's 1 file for it and its entry."), removal["brief"])
         assertTrue(removal.getValue("goes").jsonArray.first().jsonPrimitive.content.endsWith("guitar-1.gp5"))
     }
 }

@@ -39,7 +39,7 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
 
     /** A listed file didn't come as listed: the library changed while the sync ran. */
     class Changed(path: String, why: String) :
-        SyncError("“$path” changed on the computer while we copied ($why). Copy pages again.")
+        SyncError("“$path” changed on the computer while we copied ($why). Sync again.")
 
     /** The phone's own storage failed. */
     class Storage(why: String, cause: Throwable? = null) : SyncError("The phone's storage failed: $why.", cause)
