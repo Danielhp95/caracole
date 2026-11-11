@@ -198,7 +198,7 @@ class PhoneEndToEndTest {
             val theirs = js("document.body.textContent") as String
             record("sandboxed read", theirs.take(300))
             assertTrue("the sandbox's read is refused as another site's (Sec-Fetch-Site): $theirs",
-                       "another site" in theirs && !theirs.startsWith("Not this app's"))
+                       "Another site" in theirs && !theirs.startsWith("Not this app's"))
 
             // A query typed into the box: /api/search's rows, a song of the computer's index the library hasn't got.
             reload(main, library)
@@ -240,7 +240,7 @@ class PhoneEndToEndTest {
                 js("(() => { const f = document.getElementById('found'); " +
                    "return f.dataset.query === ${JSONObject.quote(QUERY)} && !f.hasAttribute('aria-busy'); })()") == true
             }
-            val getIt = "button[aria-label^=\"Get \"][aria-label*=\"$TITLE_WORD\" i]"
+            val getIt = "button[aria-label^=\"Fetch \"][aria-label*=\"$TITLE_WORD\" i]"
             waitUntil("the index's row and its Get it") { js("document.querySelector(${JSONObject.quote(getIt)}) !== null") == true }
             val row = js("""(() => { const b = document.querySelector(${JSONObject.quote(getIt)});
                 const line = b.closest('[data-hit]') || b.parentElement;
