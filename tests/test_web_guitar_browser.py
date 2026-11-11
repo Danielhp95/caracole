@@ -563,6 +563,13 @@ def test_the_sheet_mutes_at_once_and_closes_by_escape_a_tap_outside_or_back(serv
         assert page.js(f"{ROWS}[3].querySelector('.mute').getAttribute('aria-pressed')") == "true"
         assert page.js("document.documentElement.dataset.track") == "1"
         assert page.js(f"{SHEET}.open") is True
+        # A tap on the sheet's own box where no child is (its top strip, beside the grip) is no tap outside.
+        corner = page.js(f"(() => {{ const r = {SHEET}.getBoundingClientRect(); return [r.left + 10, r.top + 10]; }})()")
+        assert page.js(f"document.elementFromPoint({corner[0]}, {corner[1]}) === {SHEET}") is True
+        tap(page, *corner)
+        assert page.js(FRAMES)
+        assert page.js(f"{SHEET}.open") is True
+        assert page.js(OURS) is True
         # Escape: closed, and its history entry taken away.
         page.press("Escape")
         assert page.wait(f"!{SHEET}.open && !({OURS})", 5)

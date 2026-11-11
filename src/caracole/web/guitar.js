@@ -439,7 +439,12 @@
     done.addEventListener("click", closeSheet);
     // Escape closes a modal dialog by itself; a close event that comes late, once it is open again, is not this one's.
     sheet.addEventListener("close", () => { if (!sheet.open) closeSheet(); });
-    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });  // the backdrop is the dialog's
+    // The backdrop is the dialog's own target, as is its box where no child is: only a tap outside its box closes.
+    sheet.addEventListener("click", (e) => {
+      const box = sheet.getBoundingClientRect();
+      const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+      if (e.target === sheet && !inside) closeSheet();
+    });
     window.addEventListener("popstate", () => {
       if (skip) {
         skip -= 1;
