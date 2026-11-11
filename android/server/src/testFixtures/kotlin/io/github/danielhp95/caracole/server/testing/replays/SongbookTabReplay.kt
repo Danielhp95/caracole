@@ -51,7 +51,9 @@ import java.nio.file.attribute.FileTime
  *   record's `before` (its setting checked by Versions.settingProblem, a refusal in its words);
  * - songbook/tab.jsonl: SongbookSection.data with the phone's files, the songbooks' files dated as the record says,
  *   whole; and each songbook's BookSongs as SongbookPagesImpl makes them of its entries, with the page of them;
- * - viewer/songbook_pages.jsonl: SongbookPage.build, page by page, by its pieces.
+ * - viewer/songbook_pages.jsonl: SongbookPage.build, page by page, by its pieces;
+ * - songbook/routes.jsonl and routes_runner.jsonl: the Songbooks tab's forms and the commands they queue
+ *   (SongbookRoutesReplay, lane songbook-routes).
  */
 object SongbookTabReplay : AreaReplay {
     override val area = "songbook-tab"
@@ -67,6 +69,8 @@ object SongbookTabReplay : AreaReplay {
         entries(misses)
         tab(misses)
         pages(misses)
+        SongbookRoutesReplay.replay(misses)
+        SongbookRoutesReplay.runner(misses)
     }
 
     /** vectors/songbook/entries.jsonl. */

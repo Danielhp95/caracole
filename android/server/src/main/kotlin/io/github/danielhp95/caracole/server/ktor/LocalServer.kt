@@ -23,6 +23,8 @@ import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -75,7 +77,8 @@ class LocalServer(val app: App) : AutoCloseable {
     private fun bindFailed(e: Throwable?): Boolean = generateSequence(e) { it.cause }.any { it is BindException }
 
     private fun listen(port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
-        val server = embeddedServer(CIO, host = HOST, port = port) {
+        val server = CoroutineScope(BIND_FAILED).embeddedServer(CIO, port = port, host = HOST,
+                                                                parentCoroutineContext = BIND_FAILED) {
             intercept(ApplicationCallPipeline.Call) {
                 val method = call.request.httpMethod.value
                 val target = call.request.uri
@@ -168,5 +171,19 @@ class LocalServer(val app: App) : AutoCloseable {
         const val BUG = "caracole hit a bug; its log says where.\n"
         const val UNREAD = "That request's body can't be read.\n"
         val log: Logger = Logger.getLogger("caracole.server")
+
+        /**
+         * CIO binds in a coroutine of its own: a port another app holds (the owner's caracole beside a copy of it)
+         * fails [start] with the BindException, and that coroutine throws it too, which, uncaught, kills an Android
+         * process. Here it is the failure [start] falls back from; any other is the thread's to handle, as before.
+         */
+        val BIND_FAILED = CoroutineExceptionHandler { _, e ->
+            if (generateSequence(e) { it.cause }.any { it is BindException }) {
+                log.log(Level.FINE, "caracole: the preferred port is taken", e)
+            } else {
+                val thread = Thread.currentThread()
+                thread.uncaughtExceptionHandler?.uncaughtException(thread, e)
+            }
+        }
     }
 }

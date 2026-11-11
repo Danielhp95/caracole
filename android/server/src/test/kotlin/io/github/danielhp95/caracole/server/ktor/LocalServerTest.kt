@@ -268,4 +268,28 @@ class LocalServerTest {
             again.use { assertEquals(free, port) }
         }
     }
+
+    /** The preferred port held by another app (the owner's caracole, beside a copy of it on one phone): the server
+     * falls back with no exception left uncaught on any thread, which on Android kills the process (the M4 check
+     * found CIO's accept coroutine throwing its BindException there, NoNetworkTest's process crashed on the Sony). */
+    @Test fun aPreferredPortAnotherHoldsLeavesNoExceptionUncaught() {
+        val uncaught = java.util.Collections.synchronizedList(ArrayList<Throwable>())
+        val before = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            TestApp(tmp.root, { listOf(echo) }).use { test ->
+                ServerSocket(0, 50, InetAddress.getByName("127.0.0.1")).use { taken ->
+                    val (server, port) = server(test, preferred = taken.localPort)
+                    server.use {
+                        assertNotEquals(taken.localPort, port)
+                        assertEquals(403, get(port, "/echo/x").status)
+                    }
+                }
+            }
+            Thread.sleep(500)  // a coroutine that failed on another thread has said so by now
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(before)
+        }
+        assertEquals(emptyList(), uncaught.map { it.toString() }, "uncaught as the server started")
+    }
 }
