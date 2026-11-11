@@ -293,7 +293,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     assert "Done · the one now." in browser.js("document.body.textContent")
     # The page it was asked from went (the version is sheet.html now): back to the sheet is the song's sheet
     assert browser.js("[...document.querySelectorAll('a.btn')].map((a) => [a.textContent, a.getAttribute('href')])") == [
-        ["Open the sheet", f"/{FOLDER}/sheet.html"], ["Back to the sheet", f"/{FOLDER}/sheet.html"]]
+        ["Open sheet", f"/{FOLDER}/sheet.html"], ["Back to sheet", f"/{FOLDER}/sheet.html"]]
 
     assert "sheet 103" in (folder / "sheet.txt").read_text("utf-8")
     assert load_overrides(tmp_path / "library" / "overrides.toml").pin["radiohead/creep"] == (103,)
