@@ -81,6 +81,15 @@ class ScenarioPhone(val home: File, val server: String, val sites: String? = nul
         TestApp.form(listOf("csrf" to TestApp.CSRF) + fields),
     )
 
+    /** A JSON document posted by the page's script ([body]), the form token in its header, from the page's own
+     * origin: a `json` route's (`POST /sync/export`). */
+    fun json(target: String, body: String): Response = handle(
+        "POST", target,
+        mapOf("sec-fetch-site" to "same-origin", "origin" to "http://${TestApp.HOST}", "content-type" to "application/json",
+              "accept" to "application/json", TestApp.TOKEN_HEADER to TestApp.CSRF),
+        body.toByteArray(Charsets.UTF_8),
+    )
+
     private fun handle(method: String, target: String, headers: Map<String, String>, body: ByteArray = ByteArray(0)) =
         phone.app.handle(TestApp.request(method, target, headers, body, TestApp.SECRET))
 

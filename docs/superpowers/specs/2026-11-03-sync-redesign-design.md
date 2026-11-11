@@ -1,6 +1,9 @@
 # Syncing, made one clear flow, with export and import (design)
 
-Date: 2026-11-03. Status: design, agreed with the owner in conversation, reviewed by a builder; not built.
+Date: 2026-11-03. Status: design, agreed with the owner in conversation, reviewed by a builder; built
+(2026-11-10, the plan's lanes sync-rules to sync-app): AGENTS.md's peer_file.py, sync_routes.py,
+sync_file_routes.py and "Syncing on the phone" sections say how, android/README.md's "Sync from the phone" and
+docs/usage.md's "The Sync tab" how it is used.
 Mockups the owner settled on: [phone.html](2026-11-03-sync-redesign/phone.html) and
 [laptop.html](2026-11-03-sync-redesign/laptop.html) (open them in a browser; they're throwaway HTML, not the
 pages' code).

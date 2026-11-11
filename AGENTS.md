@@ -1242,13 +1242,16 @@ It is rows.js's, shared by both pages:
   nix/module.nix's do, so a change to a unit there changes them too.
 - install.md, and the design files above.
 - web-search.md designs a search-API fallback for matching, not built.
-- android_port.md plans caracole in Kotlin on the phone, to share, not built (its research:
+- android_port.md: caracole in Kotlin on the phone, its plan and what is built of it, milestones 1 to 6 (its research:
   superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 - screenshots/: the README's pictures, of a demo library of public-domain songs, and make.py, which builds that
   library with no request and takes them again (its docstring says how): retake them when the pages they show change.
-- superpowers/plans/2026-11-03-android-port-m1-m3.md: the Kotlin port's plan for milestones 1–3, its lanes and their
-  interfaces; specs/2026-11-03-conformance-corpus.md and specs/2026-11-03-canonical-json.md, the contracts it rests
-  on; spikes/2026-11-03-android/, the spikes' Kotlin, kept as `.kt.txt`.
+- superpowers/plans/2026-11-03-android-port-m1-m3.md and 2026-11-03-android-port-m4-m6.md: the Kotlin port's plans
+  for milestones 1–3 and 4–6, their lanes and their interfaces; plans/2026-11-03-sync-redesign.md with
+  specs/2026-11-03-sync-redesign-design.md, the sync sheet and the `.caracole` file;
+  specs/2026-11-03-conformance-corpus.md, specs/2026-11-03-canonical-json.md, specs/2026-11-03-html-parsing.md and
+  specs/2026-11-03-politeness-crossing.md, the contracts it rests on; spikes/2026-11-03-android/, the spikes'
+  Kotlin, kept as `.kt.txt`.
 
 #### android/
 
@@ -1266,7 +1269,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `search/`, `ug/`, `sites/`, `lacuerda/`: search.py, ug/key_search.py, ug/artist_tabs.py, lacuerda_index.py and
     the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge;
   - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
-    and the phone's sync engine and peer client.
+    and the phone's sync engine and peer client;
+  - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
+    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`.
   - testFixtures: `Corpus`, `Fixtures`, `TestDb`: how every Kotlin test reads the corpus and makes a database.
 - `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
@@ -1282,14 +1287,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
-- Milestones 1–3 are built (docs/android_port.md's status); lookups, the page builder, songbooks and PDFs on the phone
-  are later rounds' (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5):
-  - each route a module of its own, answering "…: not on the phone yet." (409) until its lane lands;
-    `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, for good;
-  - a declaration not built yet is `TODO("lane <id>")` in a file its lane owns, or, for a seam the phone already
-    calls (`PhoneRender`, `SongbookPagesImpl`, `InboxRetry`), a neutral answer;
-  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, `SongPages.NONE` and
-    `SongbookPages.NONE` until their lanes make it the real one, so it calls no milestone's code before it lands.
+- Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
+  own:
+  - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
+    (409), for good: the phone runs no yt-dlp, and the library page's search does the lookup page's work;
+  - no declaration is left a lane's stub (`TODO("lane <id>")`); a later round that adds one names its lane so, in a
+    file that lane owns;
+  - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, the real ones in `Phone`;
+    `SongPages.NONE` and `SongbookPages.NONE`, a caracole that makes no page, are what the corpus's lookup replays
+    run with, as get.py's words for one (`NO_PDFS`) are recorded.
 - Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
   the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
@@ -1297,7 +1303,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`.
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
+  milestones 4–6's: `ColdSearchTest`, `LookupOfflineTest`, `NoNetworkTest`, `RealTransportOnDeviceTest`,
+  `LookupOnDeviceTest` and `PagesOnDeviceTest` (with `--sites`), `PagesServedTest`, `SongbooksOnDeviceTest`,
+  `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`.
 
 ##### core.http, core.health, core.config
 
@@ -1472,7 +1481,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     pin, a complete one retiring the auto sheet) and the tab slot; `Beside`: the versions kept beside the sheet, beside
     a pin from the cache alone, yours, one text under one name (kv `sheet_versions:same:`);
   - `SongFetch`: `_finish` (status, `ug_dirty`, `ug_checked_at`, kv `ug:blocked:`), `_drop_undone`, `keep_version`'s
-    answers; info.json is the viewer's (M5): the phone writes none, and a song's `updated_at` is the fetch's time;
+    answers; info.json is PhoneRender's (`InfoJson`, as the lookup's pdf stage makes the song's pages): the fetch
+    writes none, and a song's `updated_at` is the fetch's time;
   - `ArtistPages`: the artist-page route (ug-fetch-artist's, below).
 - The lookup's UG stages (core/lookup/sites/Ug.kt): `UgSheetStage`, the first pass (one versions page, one sheet
   scored, nothing kept beside it, no tab: "tab N from Ultimate Guitar"), `UgStage` the rest ("sheet N · tab M · kept
@@ -1536,7 +1546,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `lyrics.lrc` and `lyrics_json` byte for byte.
   - kv `lyrics:failed:`, `megalobiz:checked:` and `azlyrics:checked:` as Python's: an error never a miss, a song
     LRCLIB missed back to pending; Megalobiz's per-day limit is the lookup's client's (`Pace.withinTheDay`); info.json,
-    the link back's, is milestone 5's.
+    the link back's, is PhoneRender's (`InfoJson`), written as the lookup's pdf stage makes the song's pages.
   - tests/test_conformance_lyrics.py writes vectors/sites/{lrclib,megalobiz,azlyrics}.jsonl (the parsers and pickers
     over tests/fixtures/) and vectors/lookup/ the same (each pass of one song as a scenario record): `LyricsReplay`.
 - LaCuerda's pages and search (lacuerda-pages), core.lacuerda:
@@ -1580,7 +1590,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     Python's), their counts by `PyFloat` and `PyInt`, whole as Python's int: one past SQLite's integers is its
     OverflowError only where it is written (`HarpTabsPages.sqliteInteger`), never on a page passed over;
   - a song's candidates, its artist by name forms, the most viewed kept as `harmonica-N.txt` (`Numbering`, `Kept`,
-    `Versions`; no info.json, milestone 5's), kv `harptabs:checked:` and `:pick`;
+    `Versions`; info.json is PhoneRender's), kv `harptabs:checked:` and `:pick`;
   - an artist page stored (`store_artist_page`, `store_gone`), each noted for the next push (`Reads.note`, site
     `harptabs`, the page's path);
   - the lookup's harptabs stage (`HarpTabsStage`, the rest of what asking came to `LookupWords.end`'s) and
@@ -1613,7 +1623,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     candidates (internal `GtpPass`: by the artist keys, "Last, First" and without hyphens; sorted by (-stars,
     version, id)), artist pages cached 30 days (a stale copy BudgetExhausted), three downloads at most past the
     cache, the file kept as the lowest free `guitar-N` (Kept, Versions, Numbering), kv `gtptabs:checked:` and
-    `gtptabs:unusable:`, `PagesNotFiles`; never a replace or a delete; no info.json (M5's).
+    `gtptabs:unusable:`, `PagesNotFiles`; never a replace or a delete; info.json is PhoneRender's.
   - `sniff` reads a Guitar Pro 7 zip's central directory as CPython's zipfile does (internal `ZipNames`: the end
     records, zip64's, cp437 and UTF-8 names, the Unicode Path field), never java.util.zip's stream; inbox-share
     reuses it.
@@ -1681,8 +1691,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   agree takes none.
 - `PhoneConfig.read` lays it over config.json's defaults, value by value as config.py would hold it (`[rank]`'s
   `line_match` and `prior_votes` numbers, 82.5 too, so `RankPolicy`'s are Doubles; a provider the phone doesn't know
-  passed over). Assembly reads it for each lookup's clients and the cards; the library's `name` is shown nowhere yet,
-  the phone's pages naming it `AppConfig.libraryName`, "Phone", until that reads `PhoneConfig.read(db).libraryName`.
+  passed over). Assembly reads it for each lookup's clients and the cards, and the library's `name` for every page
+  of the phone's (`AppConfig.libraryName`, ShareRoutes', GuitarRoutes' and the choices' pages: `LibraryName.phone`),
+  which names it after caracole's, with the Phone badge.
 - It is no unit: a take changes no unit's digest and no other record (SettingsTest), and the phone sends no settings
   back. Nothing of either side's politeness crosses (Two caracoles, each its own politeness, below).
 - `SettingsReplay` (area `settings`) replays vectors/sync/settings.jsonl (each caracole.toml's document taken, then

@@ -4,7 +4,9 @@ A small app that keeps a copy of your caracole library on the phone and shows it
 page, every sheet in caracole's own viewer (key, capo, chord diagrams, harmony, pinyin, strum), the songbooks,
 and the PDFs. It shows the pages caracole writes into the library as they are. When caracole is upgraded, the
 pages change with it, and the app doesn't need an update. With the computer's indexes imported, its search finds
-songs on the sites with the computer off ([below](#search-with-the-computer-off)).
+songs on the sites with the computer off ([below](#search-with-the-computer-off)), and caracole's own rules on the
+phone look them up there, make their pages, songbooks and versions, file what you share to it and back it all up,
+for the next sync to give the computer ([Lookups on the phone](#lookups-on-the-phone) and the sections after it).
 
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
@@ -81,8 +83,13 @@ A PDF, a ChordPro file or a Guitar Pro file opens in another app on the phone. A
 than one can open it, and the app says so when none can. Links to Ultimate Guitar, MuseScore and other sites
 open in the browser, and so does a link to caracole serve.
 
-What doesn't work offline: fetching sheets from the sites, Export PDF, choosing versions, and the other pages that
-need caracole serve. They say they're not on the phone yet. Use caracole serve in a browser for those.
+What needs a network: looking songs up, which asks the sites from the phone itself ([Lookups on the
+phone](#lookups-on-the-phone)) or a sheet's other version from Ultimate Guitar, and a sync with the computer. Making
+a songbook, Export PDF (which prints) and Make this my version, a backup, and filing a shared file all work with
+none. What isn't on the phone
+at all says so ("…: not on the phone yet."): a sheet from a YouTube video and YouTube's suggestions (the computer
+runs yt-dlp, the phone never does), and caracole serve's lookup page (the library page's search does its work). Use
+caracole serve in a browser for those.
 
 The pages come from the app's own server, with the same Content-Security-Policy and sandbox headers caracole serve
 sends, so the viewers run sandboxed as they do there.
@@ -132,7 +139,8 @@ merge's words ("the file was exported at schema version 14…": export it again 
 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
-artist's songs. LaCuerda's own search and YouTube's suggestions need the computer.
+artist's songs. LaCuerda's own search goes from the phone itself, as on the computer ([Lookups on the
+phone](#lookups-on-the-phone)); YouTube's suggestions need the computer.
 
 ## Sync from the phone
 
@@ -194,14 +202,16 @@ The computer needs a caracole that syncs with the phone (sync format 3: `GET /ap
 `"format": 3`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused as the two are compared,
 with the reason; upgrade caracole there.
 
-**Your changes on the phone.** A song you add on the phone (a search row's Fetch, or the request form) is in your
-library at once, and the computer's next run fetches it after a sync gives it there: the phone asks no site. Its
-line says "Added · fetched tonight". A song you remove on the phone leaves the library page at
-once, and its pages answer "Removed from the phone's book." until a sync settles it: given to the computer,
-which removes it too, or taken back from it. A song the phone holds otherwise than the computer did when it made its
-pages answers "Changed on the phone since the computer wrote this page.", with a link to the phone's own
-sheet when it has one. A sync settles that too: the computer renders the song again as it takes the change, and the
-same sync then copies its new pages.
+**Your changes on the phone.** A song you add on the phone is in your library at once. A search row's Fetch, or
+the request form with Fetch ticked, looks it up on the phone then ([Lookups on the phone](#lookups-on-the-phone)), and
+the phone makes its pages; one asked for without Fetch asks no site, its line saying "Added · fetched tonight", and
+the computer's next run fetches it once a sync gives it there. A song you remove on the phone
+leaves the library page at once, and its pages answer "Removed from the phone's book." until a sync settles it:
+given to the computer, which removes it too, or taken back from it. A song the phone holds otherwise than the
+computer did when it made its pages is shown in the pages the phone makes of it ([Pages built on the
+phone](#pages-built-on-the-phone)); until they are made, the computer's answers "Changed on the phone since the
+computer wrote this page.", with a link to the phone's own sheet when it has one. A sync gives the change to the
+computer, which renders the song again as it takes it, and a later sync copies its new pages.
 
 ## caracole itself on the phone (experimental)
 
@@ -393,8 +403,9 @@ builds share.
 Neither the emulator nor the JVM shows the phone's 30 s: over an index in the page cache the first search's own steps
 take about 0.13 s cold on the emulator (`ColdSearch.Result.steps`), which the warm-up now pays. What was cold on the
 phone is what a big WAL costs on its storage: the rebuild of the WAL's index from a 387 MB file at a start, and reads
-through it until a checkpoint, which the import's checkpoint now leaves none of. The owner's phone's numbers are the
-M4 check's to take.
+through it until a checkpoint, which the import's checkpoint now leaves none of. On the owner's phone (Sony XQ-DQ72,
+Android 15, the M4 check's ColdSearchTest): the 300,000 rows merged in 7.6 s, the first search after a start
+118 ms, a warm one 24 ms.
 
 Run them with `nix develop ./android -c gradle -p android bench` (CheckpointBench, ColdSearchBench, its two runs each
 in a JVM of its own, and MergeSpeedBench) and `android/scripts/device-test.sh
@@ -477,8 +488,9 @@ viewer's print style (a light page, the margins).
 
 A song's Guitar Pro file (filed from the inbox or downloaded from gtptabs.com) opens on a page of its own in the app,
 as it does in caracole serve: the score drawn by alphaTab and played by its synthesizer (Play, Stop, Tempo), Tab only
-or Score and tab, each track shown or muted. **Download** gives the file to another app. A Power Tab file is a
-download alone.
+or Score and tab, each track shown or muted (on a phone, one button names the track shown and opens a sheet of the
+tracks: a tick to show each and its speaker to mute it). **Download** gives the file to another app. A Power Tab file
+is a download alone.
 
 alphaTab (MPL-2.0), its Bravura music font (SIL OFL 1.1) and the Sonivox SoundFont (Apache-2.0) are in the app, their
 licences beside them in its assets (`alphatab/licenses/`): nothing is downloaded. A Guitar Pro file of a song only the

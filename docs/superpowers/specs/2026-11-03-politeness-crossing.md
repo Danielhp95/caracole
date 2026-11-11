@@ -3,6 +3,18 @@
 docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §4, as the owner settled it on 2026-11-03. Lanes
 crossing-computer (the computer's side), crossing-phone (the phone's) and index-push.
 
+Status: built (milestone 4, 2026-11-10), as this spec says, and nothing more:
+
+- the settings document, `politeness.settings_document` in `GET /api/peer/state`'s `settings`, taken by the phone's
+  sync in its agree stage (`SyncEngine.takeSettings`, `PhoneConfig.take`) and read for each lookup's clients, the
+  cards and the pages' name (`PhoneConfig.read`); vectors/sync/settings.jsonl and settings_take.jsonl;
+- the index push: `core.index.Reads`, the sync's index stage, `POST /peer/index` and `caracole index merge --delete
+  --progress`;
+- no politeness crossing: no schema change (15), no health document, no `POST /peer/health`. The end to end holds
+  it (tests/test_android_e2e.py, steps 10 and 14): a 403 cools Ultimate Guitar on the phone alone, and the
+  computer's `events`, pace, health and lookup records are the same before and after each sync. A restore on the
+  phone keeps its own politeness records as they are (core.backup's `OwnRecords`).
+
 ## Each caracole's politeness is its own
 
 The owner's choice ("Don't share between devices", then "Don't do the polite request across 2 devices"): a phone and

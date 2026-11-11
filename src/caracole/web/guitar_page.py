@@ -7,8 +7,10 @@ stays at the top while the score scrolls: on one row Play (Pause while it plays)
 alphaTab's ``playbackSpeed``) and Tab only or Score and tab ("Tab" and "Score" on a phone; tab only from the start on
 a screen under 600 px wide, where the tab is drawn at 0.8 of its size: three or four bars a line on a phone); under
 it the score's tracks, laid out (guitar.js: the one it opens on, and how to show several; none for a score of one
-track), each a button that shows it, pressed while it is shown, with a speaker on it that mutes it; they wrap on a wide screen and scroll sideways in their own row on a
-phone. Then the score, in the page's light or dark colours. Every target is 44 px each way at the least.
+track): on a wide screen a chip each, a button that shows the track, pressed while it is shown, with a speaker on it
+that mutes it, wrapping; on a screen under 600 px one button naming the track shown, which opens a sheet of every
+track (a modal ``<dialog>`` at the bottom: a tick to show it, several at once, its name and kind, and its speaker to
+mute it at once; the score is drawn once, when the sheet closes by Done, a tap outside, Escape or Back). Then the score, in the page's light or dark colours. Every target is 44 px each way at the least.
 
 The page holds the file's bytes (base64, in a ``<script type="application/octet-stream">`` block, which nothing
 runs), its stylesheet (base.css, then guitar.css) and its script (guitar.js), and loads one thing: alphaTab's

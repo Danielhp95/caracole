@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonObject
  * says of an index read in part, and the keys made again from the names it stores. It reads the tables alone and asks
  * LaCuerda nothing. tests/conformance/vectors/search/lacuerda.jsonl holds it to Python's answers (LaCuerdaTest).
  *
- * `lacuerda_unlisted` is not here: the phone answers null for it until milestone 4.
+ * `lacuerda_unlisted` is not here: it is core.search's LaCuerdaUnlisted.
  *
  * The store writers ([storeSongs], [storeArtistPage], [storeSearch]) are lacuerda_index.py's, for what a lookup reads:
  * an artist page's songs in place of those it gave before, and the rows LaCuerda's own search answered beside what
