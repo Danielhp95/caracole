@@ -78,8 +78,8 @@ internal fun hitJson(db: Db, h: IndexHit): JsonObject {
  * The rows of one answer, as search_routes.py draws them, over the library's [songs] (`list_songs`'s): your songs'
  * rows with their cards, each site's rows with the song of yours each is (`_owners`, [Mine]), and the artists'.
  *
- * A card is the library page's ([SongCards], by song id), read as result_cards' four members: its files (`links`, the
- * page card's `files`), where its sheet came from (`source`), its key and what it holds for one instrument. A row of
+ * A card is library_page.result_cards' ([SongCards.results], by song id): its files (`links`, as its line has them
+ * with no site's name), where its sheet came from (`source`), its key and what it holds for one instrument. A row of
  * your songs says where its sheet can be read (`files`, get.readable_files): its kept sheet, by the database, and its
  * PDF and viewer where its card lists them.
  */
@@ -222,14 +222,14 @@ internal class Rows(private val db: Db, val songs: List<SongRow>, private val ca
         init {
             val distinct = LinkedHashMap<Long, SongRow>()
             for (s in songs) distinct[s.id] = s
-            page = if (distinct.isEmpty()) emptyMap() else cards.cards(db, distinct.values.toList())
+            page = if (distinct.isEmpty()) emptyMap() else cards.results(db, distinct.values.toList())
         }
 
         /** result_cards' card: `links`, `source`, `key`, `instruments`. */
         fun result(id: Long): JsonObject {
             val card = page[id]
             return obj(
-                "links" to (card?.get("files") ?: JsonArray(emptyList())), "source" to (card?.get("source") ?: JsonNull),
+                "links" to (card?.get("links") ?: JsonArray(emptyList())), "source" to (card?.get("source") ?: JsonNull),
                 "key" to (card?.get("key") ?: JsonNull), "instruments" to (card?.get("instruments") ?: JsonArray(emptyList())),
             )
         }
@@ -250,7 +250,7 @@ internal class Rows(private val db: Db, val songs: List<SongRow>, private val ca
             val path = kept.getValue(name)
             val base = path.substringBeforeLast('/', "")
             val stem = name.substringBeforeLast('.')
-            val listed = (page[song.id]?.get("files") as? JsonArray).orEmpty()
+            val listed = (page[song.id]?.get("links") as? JsonArray).orEmpty()
                 .mapNotNull { ((it as? JsonObject)?.get("name") as? JsonPrimitive)?.content }.toSet()
             val files = LinkedHashMap<String, Any?>()
             files["sheet"] = path

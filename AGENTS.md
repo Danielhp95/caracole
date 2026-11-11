@@ -1743,10 +1743,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `allow-scripts` and `allow-downloads` alone, as viewer_csp's; else `LayerPolicy.NOTHING`, one that runs and loads
     nothing): never `allow-same-origin`, which would give a file's page the phone server's origin, its form token and
     every write. An export carries the layer's headers on, never the file's.
-  - MirrorPageData gives a song the computer has no card of the card of the newest layer that keeps a page of it and
-    whose start page holds its identity, read as untrusted (`fromFile`: library_page.py's fields alone, each of its
-    JSON type, every `href` the library's or a site's over https, a kept file's the library's, its Lyrics link the
-    phone's own), else the minimal card.
+  - The phone's page makes every card of its songs itself (server/page's PhonePageData, library_page.song_cards'
+    port, vectors/web/cards_full.jsonl), linking the pages of a song's folder `pageFor` serves, a layer's too, and
+    saying what no sync carries (exports, a PDF's move, the sites' misses, a purchase) as the computer's card does
+    for a song the computer listed a file of at the digest the phone holds. MirrorPageData's own cards (M2–M3's: a
+    layer's card read as untrusted, `fromFile`, else the minimal card) are for a page with no library to make them of.
   - Layers are kept until a unit changes or the app's data is cleared; `storageBytes` counts them.
 - **Export and Import a file** (server/routes/SyncFileRoutes.kt, web/sync_file_routes.py's routes on the phone:
   `GET /api/sync/sizes`, `POST /sync/export`, `GET /api/sync/export`, `POST /sync/import/open`, `/part`, `/compare`,
@@ -1852,8 +1853,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     sync unit.
   - `viewer.progressions`' `Progressions`, progressions.py's: `record` (kv `render:progressions:<song id>`, json.dumps'
     text, written only when what json.loads reads there changed), `forget`, `library`, `read`, `songsWith` (the
-    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`; /api/search's `progression` is
-    library-cards' to wire (Found.kt).
+    library's keys as they are: it re-keys none), `catalogue`, `label`, `keyWords`, which /api/search's `progression`
+    reads (Found.kt).
   - Their constants and patterns exported to data/caracole/viewer/version.json (`version` and `progressions`) by
     tests/test_conformance_viewer_version.py, which writes vectors/viewer/version.jsonl and progressions.jsonl
     (`VersionReplay`, the `version` area), a batch's answers by a 16-digit digest where the viewer area is short of

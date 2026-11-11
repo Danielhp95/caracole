@@ -110,8 +110,9 @@ again, and the next sync brings them to the phone.
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
 `http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
-caracole's own page, built from the same files caracole serve builds it from, with your songs' cards taken from the
-copy. Sheets, PDFs and songbooks are the copy's files.
+caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
+the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
+holds the song as the computer did, else the pages the phone makes itself.
 
 **Only the app can use that server.** At each launch the app makes a random secret and sets it as a cookie
 (`caracole-launch`) in its WebView. The server refuses any request without it ("Not this app's caracole."), so
