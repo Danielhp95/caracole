@@ -256,7 +256,7 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
     cho = (folder(setup) / "songbook.cho").read_text(encoding="utf-8")
     assert "De Música Ligera" not in cho and "斑马" in cho  # an app gets the songs it can play
     page =(folder(setup) / "songbook.html").read_text(encoding="utf-8")
-    assert re.search(r'<li class="missing">.*?De Música Ligera.*?Missing: not in the logbook', page, re.S)
+    assert re.search(r'<li class="missing">.*?De Música Ligera.*?Missing · not in the logbook', page, re.S)
 
     out = run(setup, "remove", "Campfire", "Soda Stereo - De Música Ligera")  # taken out by its name
     assert out.exit_code == 0, out.output
