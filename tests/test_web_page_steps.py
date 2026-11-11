@@ -199,14 +199,14 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
         # Asking Ultimate Guitar for the sheet: the song and its match over, the sheet lit with its site.
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"],
                                         *WAITING])
-        wait_for(page, said(line), ["Fetching from Ultimate Guitar…", "2 of 7 done"])
+        wait_for(page, said(line), ["Fetching from UG…", "2 of 7 done"])
         fits(page, line)
         runner.go()
         # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, four of seven over.
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["done", "✓ Sheet UG"],
                                         ["done", "✓ PDF"], ["running", "Lyrics"], ["waiting", "Extras"],
                                         ["waiting", "Songbooks"]])
-        wait_for(page, said(line), ["Fetching the lyrics from LRCLIB…", "4 of 7 done"])
+        wait_for(page, said(line), ["Fetching lyrics…", "4 of 7 done"])
         assert page.js(f"document.querySelector('{line} .step-chips').getAttribute('aria-label')") == "Steps"
         assert page.js(f"document.querySelector('{line} .step-chips [aria-current=step]').textContent") == (
             "Lyrics: running")
@@ -248,7 +248,7 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
         runner.go()
         # Not found: the line says so with its next step, as before, and the steps stay; those that turned out not to
         # apply (no sheet, so no PDF; no songbook lists it) are gone.
-        wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not found·see the to-do page")
+        wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
                                         ["failed", "✕ Sheet LaCuerda"], ["done", "✓ Lyrics"], ["failed", "✕ Extras"]])
         assert page.js(f"!!document.querySelector('{line} .progress .steps-over')") is False  # over: no count
@@ -267,10 +267,10 @@ def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_you
         # Its request line in its Get it's place, and the steps under it, in the result's own row.
         row = RYAN
         wait_for(page, steps_of(row), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"], *WAITING])
-        wait_for(page, said(row), ["Fetching from Ultimate Guitar…", "2 of 7 done"])
+        wait_for(page, said(row), ["Fetching from UG…", "2 of 7 done"])
         fits(page, row)
         runner.go()
-        wait_for(page, said(row), ["Fetching the lyrics from LRCLIB…", "4 of 7 done"])
+        wait_for(page, said(row), ["Fetching lyrics…", "4 of 7 done"])
         fits(page, row)
         runner.go()
         # Over, and Ready: the row is the song's own line, yours, its sheet's button on it; no steps, no Ready · Open

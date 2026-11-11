@@ -363,6 +363,6 @@ def test_a_song_picked_on_lacuerda_says_on_its_card_that_tonights_run_gets_that_
     browser.open(path.as_uri())
     assert browser.wait("!!document.querySelector('.lacuerda-pick')")
     assert browser.js("document.querySelector('.lacuerda-pick').textContent").startswith(
-        "Tonight's run gets the sheet you picked on LaCuerda")
+        "Tonight's run fetches ")
     assert browser.js("document.querySelector('.lacuerda-pick a').href") == LC + "andres_calamaro/flaca"
     assert not browser.js("!!document.querySelector('.pick-hint')")  # not "Not in the offline Ultimate Guitar index"

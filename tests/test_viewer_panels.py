@@ -511,7 +511,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
         b.click("#more")
         served_rows = b.js(PLACES)
     assert folded["rows"] == [
-        ["harmony-open", "Harmony", "progressions, scale", None, None],
+        ["harmony-open", "Harmony", "progressions, scales", None, None],
         ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
         ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
         ["export-fold", "Export PDF", "D Dorian, capo 2", None, None]]  # the version in words
@@ -520,7 +520,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
     assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
     assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
     assert [row[:3] for row in served_rows["rows"]] == [
-        ["harmony-open", "Harmony", "progressions, scale"], ["", "Guitar Pro tab", "in the browser"],
+        ["harmony-open", "Harmony", "progressions, scales"], ["", "Guitar Pro tab", "in the browser"],
         ["export", "Export PDF", "D Major"]]
     assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
     assert served_rows["rows"][2][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
@@ -692,7 +692,7 @@ def test_while_the_song_scrolls_by_itself_a_card_docks_on_the_bar_under_the_pill
     assert docked["name"] == "C" and paused == "Resume" and not docked["inert"]
     assert card["bottom"] == docked["bar"]["top"] and pill["bottom"] <= card["top"]  # on the bar, the pill above
     # Counting down again with the card open, nothing moves under the thumb: the bar stays under the card.
-    assert again == "Start now"
+    assert again == "Start"
     assert [resumed[k] for k in ("card", "pill", "bar")] == [docked[k] for k in ("card", "pill", "bar")]
     assert closed["card"] is None and closed["bar"] is None and closed["pill"] == alone["pill"]
 
@@ -1158,7 +1158,7 @@ def test_a_changed_version_asks_before_downloading(tmp_path):
     link = EXPORTS + "&capo=2"
     assert asked == {"title": "Make this your version of In E?", "version": "D Major, capo 2",  # D shapes, sounding E
                      "what": "Its PDF, sheet and songbooks start there.",
-                     "answers": [["Download and make it mine", link + "&mine=1", True], ["Just download", link, False],
+                     "answers": [["Make mine", link + "&mine=1", True], ["Download only", link, False],
                                  ["Cancel", None, False]],
                      "modal": True, "focus": True}
     assert went == [[link, True]]  # the press itself went nowhere

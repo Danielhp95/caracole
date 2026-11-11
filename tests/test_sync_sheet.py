@@ -642,8 +642,8 @@ def test_a_conflict_stops_it_card_by_card_with_each_sides_lines_and_the_sides_na
         on = ("On this computer", "On Studio") if device == "computer" else ("On the phone", "On the computer")
         assert page.js(CARD) == {
             "name": "Eagles · Hotel California", "at": "1 of 2", "heads": list(on),
-            "here": ["Its own key", "A minor, capo 2", "Its sheet", "Ultimate Guitar · tab 1234567"],
-            "there": ["Its own key", "as the sheet's", "Its sheet", "Ultimate Guitar · tab 7654321"],
+            "here": ["Its own key", "A minor, capo 2", "Its sheet", "UG · tab 1234567"],
+            "there": ["Its own key", "as the sheet's", "Its sheet", "UG · tab 7654321"],
             "keep": [here, there], "same": "Same for the other 1"}
         assert fake.gets("/api/sync/unit") == ["/api/sync/unit?comparison=5a1c0ffee0ddba11&id=song%2Feagles%2Fhotel%20"
                                                "california"]
@@ -790,7 +790,7 @@ def test_escape_while_the_sync_is_sent_hides_it_and_the_sync_is_followed_all_the
         assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
         conflicts = next(s for s in page.js(SUMMARY) if s["kind"] == "conflicts")
         assert conflicts["rows"][0] == ["Hotel California – Eagles", "this computer's version kept: its own key, A "
-                                        "minor, capo 2, its sheet, Ultimate Guitar · tab 1234567"]
+                                        "minor, capo 2, its sheet, UG · tab 1234567"]
         page.click("#sync-go")  # Done
         assert page.wait(f"!{SHEET}.open")
         # Over, a sync is a new one: the next opening compares afresh.
@@ -873,7 +873,7 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
             [["Barbara Allen – Traditional", "added on this computer"],
              ["the alias of soda-stereo", "changed on this computer"]],
             [["Hotel California – Eagles", "this computer's version kept: its own key, A minor, capo 2, its sheet, "
-                                           "Ultimate Guitar · tab 1234567"],
+                                           "UG · tab 1234567"],
              ["Wonderwall – Oasis", "Studio's version kept: its lyrics, found"]],
             [["Campfire", "3 songs added"], ["Wedding set", "12 songs"]],
             [["Ultimate Guitar · ", "+12,340 tabs", "1,503,236 → 1,515,576 tabs tracked · read by Studio on 03/11/26"],

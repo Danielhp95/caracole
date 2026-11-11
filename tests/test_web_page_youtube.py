@@ -391,8 +391,8 @@ def test_a_pasted_link_youtube_cant_be_asked_about_now_is_offered_unnamed(able, 
     browser.open(base)
     paste(browser, f"youtu.be/{VIKINGOS}?si=abc")
     note = "document.querySelector('#found .link-note')"
-    assert browser.wait(f"{note} !== null && {note}.textContent.startsWith(\"Can't read\")")
-    assert browser.js(f"{note}.textContent") == "Can't read the video (YouTube is paused after a block): name it, then add it."
+    assert browser.wait(f"{note} !== null && {note}.textContent.startsWith(\"Couldn't read\")")
+    assert browser.js(f"{note}.textContent") == "Couldn't read the video (YouTube turned us back). Name it, then add it."
     assert browser.js("[...document.querySelectorAll('#found .link-panel input')].map((i) => i.value)") == ["", ""]
     assert posted == [] and sheet.videos == []
 

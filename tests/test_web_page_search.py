@@ -1183,7 +1183,7 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
     assert [w[0] for w in words] == NOWHERE_SAID
     assert all(w[1] == w[0] + "\n" + w[2] for w in words[1:]), words
     assert "being read: 1 artist so far, with #, A–C read whole" in words[3][1]
-    assert words[4][2] == "MuseScore is blocking caracole, so its index is empty."
+    assert words[4][2] == "MuseScore turned us back: its index is empty."
     # Quiet where it found nothing (an index empty yet too), amber in part, red only where a site blocks caracole.
     done, empty, partial, blocked = (browser.js(SHADE.replace("STATE", state))
                                      for state in ("done", "empty", "partial", "blocked"))
@@ -1311,7 +1311,7 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
     assert browser.js("!!document.querySelector('#results .notes-line details.why-unseen')")
     assert browser.js(OLD_NOTES) == 0
     # Under results the request form is the one Request, and Back to your songs the way back.
-    assert browser.js(REQUESTS) == ["Not in the list? Request it by name"]
+    assert browser.js(REQUESTS) == ["Not here? Request it by name"]
     assert browser.js(BACK) is True
     # Another answer, other counts: heard as words, the marks drawn again. A site's count is its songs, as its lines
     # show them: the three of Billy Joel's group (his artist's, his most viewed songs), never one for the artist.
