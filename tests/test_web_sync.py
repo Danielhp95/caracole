@@ -52,10 +52,14 @@ def computers(tmp_path, monkeypatch):
         answer = there.app.handle(Request(request.method, request.url.raw_path.decode(), dict(request.headers),
                                           request.content))
         answer = WebApp.finish(answer)
-        return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
+        body = answer.body if answer.stream is None else answer.stream.read()  # an index streamed whole
+        if answer.stream is not None:
+            answer.stream.close()
+        return httpx.Response(answer.status, headers=answer.headers, content=body)
 
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    monkeypatch.setattr("caracole.commands.peer._sleep", lambda seconds: None)
     monkeypatch.setattr(sync_routes, "transport", lambda: transport)
     monkeypatch.setattr("caracole.render.render_all", lambda conn, cfg, overrides, **kw: None)
     yield here, there, asked
@@ -611,61 +615,122 @@ def test_a_sync_that_leaves_a_unit_says_how_many_and_why_and_its_next_step_is_a_
                                                        ("Agree", "done")]
 
 
-def test_the_library_page_has_the_sync_tab_before_requests(computers):
+def test_the_library_page_has_the_sync_tab_last(computers):
     here, _, _ = computers
     page = get(here.app, "/").body.decode("utf-8")
-    assert page.index('id="tab-sync"') < page.index('id="tab-requests"')
-    assert '<section class="view sync" id="sync"' in page
+    assert page.index('id="tab-requests"') < page.index('id="tab-sync"')
+    assert '<section class="view sync" id="sync"' in page and page.count('<dialog class="sync-sheet" id="sync-sheet"') == 1
 
 
-# --- the shapes the tab's tests draw (test_sync_tab.py's FakeSync), as the real routes answer them ---------------
+# --- the shapes the sheet's tests draw (test_sync_sheet.py's FakeSync), as the real routes answer them -----------
 
 
 def shape(value):
-    """A value's shape: an object's keys each with its value's shape, a list's first item's, else its type's name
-    (a null and a string alike: either may stand where the other does)."""
+    """A value's shape: an object's keys each with its value's shape (``songbooks``, a comparison's map by unit, its
+    first value's alone), a list's first item's, else its type's name: a string "text", a null "null" (which stands
+    where any value may)."""
     if isinstance(value, dict):
-        return {k: shape(v) for k, v in value.items()}
+        return {k: ({"<unit>": shape(next(iter(v.values())))} if k == "songbooks" and isinstance(v, dict) and v
+                    else shape(v)) for k, v in value.items()}
     if isinstance(value, list):
         return [shape(value[0])] if value else []
-    return "text" if value is None or isinstance(value, str) else type(value).__name__
+    return "null" if value is None else "text" if isinstance(value, str) else type(value).__name__
 
 
-def within(fake, real) -> bool:
-    """Whether the shape ``fake`` is the shape ``real`` has where it says anything: each member of an object's (the
-    real one may hold more, which the fake's page doesn't read), each list's first item's, else the same. The page's
-    fakes (test_sync_tab.py, lane sync-page's) predate the redesign's members (``device``, ``songs``, ``songbooks``;
-    a comparison's ``holds``, ``names``, ``change``, ``part``, ``with``, ``songbooks`` and ``indexes``): once its
-    sheet's fakes carry them, sync-page makes this an equality of shapes again."""
+def fits(fake, real, *, whole: bool = True) -> bool:
+    """Whether the shape ``fake`` (the sheet's fake's) is the shape ``real`` (the route's): an object's members each
+    fitting, the same members (``whole``) or the fake's among the real's (a document the page reads some of); a list's
+    first items; a null for any value, on either side; else the same."""
+    if fake == "null" or real == "null":
+        return True
     if isinstance(fake, dict):
-        return isinstance(real, dict) and all(k in real and within(v, real[k]) for k, v in fake.items())
+        return isinstance(real, dict) and (not whole or set(fake) == set(real)) and all(
+            k in real and fits(v, real[k], whole=whole) for k, v in fake.items())
     if isinstance(fake, list):
-        return isinstance(real, list) and (not fake or not real or within(fake[0], real[0]))
+        return isinstance(real, list) and (not fake or not real or fits(fake[0], real[0], whole=whole))
     return fake == real
 
 
-def test_the_tabs_fake_answers_are_shaped_as_the_real_routes_answer(computers):
-    from test_sync_tab import COMPARISON, STATE, VIEWS
+def unit_fits(fake, real) -> bool:
+    """A GET /api/sync/unit's answer as the fake's: its members whole, each document's those the page reads."""
+    return set(fake) == set(real) and all(fits(shape(fake[k]), shape(real[k]), whole=False)
+                                          for k in ("here", "there")) and fake["id"].split("/")[0] == "song"
+
+
+def polled(app, job_id):
+    """A job's view once over, as /jobs.json gives it to the page, its queue run first."""
+    app.queue.run_pending()
+    _, seen = script(app, f"/jobs.json?jobs={job_id}")
+    over = dict(seen["jobs"][0])
+    over.pop("songbooks", None)  # the Songbooks tab's, which /jobs.json adds to a job asked about once it is over
+    return over
+
+
+def test_the_sheets_fake_answers_are_shaped_as_the_real_routes_answer(computers):
+    """Every answer test_sync_sheet.py's FakeSync gives is shaped as the real route's: GET /api/sync, POST /sync/test,
+    POST /sync/compare (a songbook and an index differing), GET /api/sync/unit (a network sync's and a file's), POST
+    /sync/apply and the sync's view as it is queued and once over with its report, GET /api/sync/sizes, POST
+    /sync/export, POST /sync/import/compare and a file's Sync, its view and its report."""
+    from caracole import gtptabs_fetch, site_index
+
+    from test_sync_sheet import (COMPARISON, EXPORTED, FILE_COMPARISON, FILE_REPORT, REPORT, SIZES, STATE, TESTED,
+                                 UNITS, VIEWS)
+    from test_web_sync_files import file_compared, sent
+    from test_web_sync_files import script as json_script
 
     here, there, _ = computers
     two_conflicts(here, there)
-    db.kv_set_json(here.conn, "sync:peer:0f1e2d3c4b5a6978", {"address": THERE, "name": "Desk",
-                                                            "synced_at": "2026-11-02T21:04:00Z"})
-    assert within(shape(STATE), shape(script(here.app, "/api/sync")[1]))
+    make_songbook(songbooks_file(there.cfg.library_dir), "Campfire", ["Radiohead - Creep"])  # a songbook differs
+    site = gtptabs_fetch.SITE  # and an index, read there alone
+    site_index._store(there.conn, site, "sitemap-tabs-1.xml", [site.row("https://gtptabs.com/tabs/2/blur.html")],
+                      {"etag": '"1"', "last_modified": None}, datetime(2026, 11, 2, 8, tzinfo=UTC))
+    db.kv_set_json(here.conn, f"sync:peer:{sync.own_id(there.conn)}", {
+        "address": THERE, "name": "Desk", "synced_at": "2026-11-02T21:04:00Z"})
+    status, state = script(here.app, "/api/sync")
+    assert status == 200 and state["peers"] and fits(shape(STATE), shape(state))
+    status, tested = script(here.app, "/sync/test", {"address": THERE})
+    assert status == 200 and fits(shape(TESTED), shape(tested)), (shape(TESTED), shape(tested))
     found = compared(here)
-    assert within(shape(COMPARISON), shape(dict(found, synced_before="2026-11-02T21:04:00Z")))
+    assert found["songbooks"] and found["indexes"] and by_id(found)[CREEP]["with"] == ["songbook/campfire"]
+    assert fits(shape(COMPARISON), shape(dict(found, synced_before="2026-11-02T21:04:00Z"))), (
+        shape(COMPARISON), shape(found))
     assert {d["kind"] for d in found["differences"]} <= set(sync_routes_kinds())
-    ids = {d["label"]: d["id"] for d in found["differences"]}
-    status, answer = script(here.app, "/sync/apply", {
-        "comparison": found["comparison"], "prefer": "here",
-        "choices": f"there\t{ids['Oasis - Wonderwall']}\nskip\t{ids['Radiohead - Creep']}"})
-    assert shape(answer["job"]) == shape(VIEWS[0])
-    here.app.queue.run_pending()
-    _, polled = script(here.app, f"/jobs.json?jobs={answer['job']['id']}")
-    over = dict(polled["jobs"][0])
-    over.pop("songbooks")  # the Songbooks tab's, which /jobs.json adds to a job asked about once it is over
-    # Once over, a sync's outcome carries its report too (``peer_outcome``), which the tab's older fakes lack.
-    assert within(shape(VIEWS[-1]), shape(over)) and "report" in over["outcome"]
+    status, unit = script(here.app, f"/api/sync/unit?comparison={found['comparison']}&id={CREEP}")
+    fake_unit = {"id": "song/eagles/hotel california", **UNITS["song/eagles/hotel california"]}
+    assert status == 200 and unit_fits(fake_unit, unit), (shape(fake_unit), shape(unit))
+
+    # Export and import: there's library in a file, imported here as a sync with it.
+    status, sizes = script(there.app, "/api/sync/sizes")
+    assert status == 200 and fits(shape(SIZES), shape(sizes)), (shape(SIZES), shape(sizes))
+    status, made = json_script(there.app, "/sync/export", {"parts": ["library", "songbooks"]})
+    assert status == 200 and fits(shape(EXPORTED), shape(made)), made
+    file = get(there.app, f"/api/sync/export?export={made['export']}")
+    data = file.stream.read() if file.stream is not None else file.body
+    if file.stream is not None:
+        file.stream.close()
+    status, from_file = file_compared(here.app, sent(here.app, data, made["name"]))
+    assert status == 200 and fits(shape(FILE_COMPARISON), shape(from_file)), (shape(FILE_COMPARISON),
+                                                                              shape(from_file))
+    status, unit = script(here.app, f"/api/sync/unit?comparison={from_file['comparison']}&id={CREEP}")
+    assert status == 200 and unit["there"] is not None and unit_fits(fake_unit, unit), unit
+    choices = "\n".join(f"here\t{d['id']}" for d in from_file["differences"] if d["proposal"] == "conflict")
+    status, answer = script(here.app, "/sync/apply", {"comparison": from_file["comparison"], "prefer": "",
+                                                       "choices": choices})
+    assert status == 200 and fits(shape(VIEWS[0]), shape(answer["job"])), (shape(VIEWS[0]), shape(answer["job"]))
+    over = polled(here.app, answer["job"]["id"])
+    assert over["state"] == "done", over
+    assert fits(shape(VIEWS[-1]), shape(over)) and fits(shape(FILE_REPORT), shape(over["outcome"]["report"]))
+
+    # The network sync, compared again since the import, its view queued and once over, with its report.
+    found = compared(here)
+    status, answer = script(here.app, "/sync/apply", {"comparison": found["comparison"], "prefer": "here",
+                                                       "choices": ""})
+    assert status == 200 and fits(shape(VIEWS[0]), shape(answer["job"])), (shape(VIEWS[0]), shape(answer["job"]))
+    over = polled(here.app, answer["job"]["id"])
+    assert over["state"] == "done", over
+    report = over["outcome"]["report"]
+    assert report["indexes"] and fits(shape(VIEWS[-1]), shape(over)), (shape(VIEWS[-1]), shape(over))
+    assert fits(shape(REPORT), shape(report)), (shape(REPORT), shape(report))
 
 
 def sync_routes_kinds():

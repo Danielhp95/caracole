@@ -790,7 +790,57 @@ It is rows.js's, shared by both pages:
     songbooks.js let it go (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity
     alone).
 - The page's tabs are tabs.js's (body.html's tablist, `tab-NAME` buttons, `#tab=NAME`, `window.caracoleTabs`,
-  "caracole:tab"; Requests last, served alone: a tab goes before it, test_requests_tab.py fits four on a phone).
+  "caracole:tab"): Library, Songbooks, Sites, then Requests, served alone, then Sync, the last, on caracole serve's
+  page alone (the phone's has none); from 720 px Library and Songbooks on the left, Sites, Requests and Sync on the
+  right (sync.css), a phone's one row unsplit (test_sync_sheet.py, test_requests_tab.py fits five on a phone).
+
+##### The Sync tab and its sheet
+
+- One flow on both devices, written once in library_assets/ (sync.js, sync-words.js, sync-sheet.html, sync-panel.html,
+  sync.css; the plan: docs/superpowers/plans/2026-11-03-sync-redesign.md §3.4–3.7, §9), served byte for byte by
+  caracole serve and the phone; `WebControls.sync` says which page has what:
+  - `"tab"`, caracole serve's: the Sync tab, its three panels (Sync with a server: the address remembered, Test, the
+    last sync, Sync; Export; Import a file) and the sheet;
+  - `"sheet"`, the phone's (`ServerControls.sync`): the sheet alone, which the app's sync button opens; None, neither.
+- The sheet (`<dialog id="sync-sheet">`, `data-view` what, conflict, going, done) opens from the tab's buttons and
+  from the address: `#sheet=sync`, `#sheet=export`, `#sheet=import`, taken out once open; `#tab=sync` on a page with no
+  Sync tab is `#sheet=sync` (outcome.py's Compare again).
+- **What to sync**: it compares as it opens (`POST /sync/compare`, or `/sync/import/compare` for a file), then the three
+  parts, Library, Songbooks and Site indexes, ticked, each with what waits in it, and above them ↓ to take, ↑ to give,
+  ⚠ changed on both, counted in the parts ticked as `peer_sync.in_scope` counts them for `POST /sync/apply` (sync.js
+  `inScope`, with `_removes`: a song a songbook lists comes along with Songbooks, but a removal of it is the
+  library's), and the chips Compared, Your choice and the parts. A part a file doesn't hold: "Not in this file".
+- **A card for each conflict** in those parts: its two documents (`GET /api/sync/unit`, once a card; a file's read from
+  the file) told apart by sync-words.js's `differ`, this device on the left; a button for each side, named for it
+  (Phone and Computer, This computer and the server's name, File: `#sync-keep-here`, `#sync-keep-there`), and Same
+  for the other N, `#sync-same`, a checkbox the next side pressed applies to every conflict left. No Skip, and nothing
+  who changed what, or when.
+- **Cancel queues nothing**, at any step before Sync goes, and forgets every side chosen on a card; Escape is Cancel
+  before it and Done after it. Sync posts the parts and each conflict's side in one field (`POST /sync/apply`); a 409
+  says the server's words and compares again, keeping, within that opening, the side of each conflict as it was.
+- **A sync on its way** (the page's, or the server's `jobs` as it loads: a reload, a second tab, the phone's
+  notification) is followed quietly (`caracoleLibrary.track`), never started again; the sheet opened meanwhile shows
+  it. Once `POST /sync/apply` is sent its answer is followed whatever the sheet does meanwhile (`posting`: Escape, as
+  Hide, only hides it).
+- **What it did**: "Synced with:" and the other side's name (the summary's one bold text), when, the two sides as
+  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|left]`,
+  `left` the units the sync left as they were, with why), each a button that opens its rows, closed at first; drawn
+  from the comparison, the choices and the cards' documents the sheet sent, and the view's `outcome` and its `report`
+  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section.
+- **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
+  file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
+  phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404
+  after). **Import a file**: `#sync-file` (`accept=".caracole,.sqlite"`, the phone's picker), sent in parts of 8 MiB,
+  one at a time (`POST /sync/import/open`, `/sync/import/part`, `Blob.slice`), then the sheet as a sync with the file;
+  a file no Sync took (a Cancel, the sheet closed after its comparison, an upload that failed) is dropped at once
+  (`POST /sync/import/drop`), so that the next one needn't wait: caracole serve stages one at a time.
+- Where it departs from §3.7's words: an override's line says its value where it is a text or a list (a pin's
+  address), "set" else, so that two sides holding it differently read apart; an own key names the instrument it is
+  played on (", on the ukulele", version.py `instrument_words`).
+- Its words are sync-words.js's (`window.caracoleSyncWords`, frozen: texts alone, never an element): sides, changes,
+  numbers grouped by hand, dates in the device's time (test_sync_words.py pins them in Madrid's zone).
+- Every request relative, the reads with the form token in their header; no `innerHTML`
+  (test_sync_sheet.py's `FakeSync` answers §3.4's shapes, which test_web_sync.py holds to the real routes).
 
 ##### The Songbooks tab
 
@@ -1039,8 +1089,8 @@ It is rows.js's, shared by both pages:
     `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
     newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
     conflict it proposes chosen first);
-  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now (a comparison
-    of another `source` than a peer's, a file's, refused);
+  - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now, an import's
+    read from its staged file (`sync_file_routes.file_unit`, as the phone's `SyncEngine.documents` reads a file's);
   - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
     phone, a client, reads;
   - `POST /sync/apply`: `parts` (`parts_of`; none sent, all three), a conflict of those parts (`peer_sync.in_scope`)

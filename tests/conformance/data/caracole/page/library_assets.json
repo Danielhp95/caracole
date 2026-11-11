@@ -7,6 +7,7 @@
   "tabs.js",
   "songbooks.js",
   "sites.js",
+  "sync-words.js",
   "sync.js",
   "requests.js",
   "drawn.js"
@@ -31,6 +32,7 @@
   "request.html",
   "requested.html",
   "sync-tab.html",
-  "sync-panel.html"
+  "sync-panel.html",
+  "sync-sheet.html"
  ]
 }
