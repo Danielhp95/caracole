@@ -162,7 +162,7 @@ def test_every_source_has_a_name_a_tag_and_a_badge():
         source = icons.SOURCES[key]
         assert source.key == key and source.name and source.tag and source.letters
         assert source.label == f"from {source.name}"
-    assert icons.SOURCES["ug"].name == "Ultimate Guitar" and icons.SOURCES["ug"].tag == "UG"
+    assert icons.SOURCES["ug"].name == "UG" and icons.SOURCES["ug"].tag == "UG"
     assert icons.SOURCES["lacuerda"].tag == "LaCuerda"
     # The audio model and the inbox are no site: a glyph of caracole's own, never fetched.
     assert icons.SOURCES["auto"].site is None and icons.SOURCES["inbox"].site is None
@@ -191,7 +191,7 @@ def test_the_page_gets_every_sources_name_and_badge_and_the_icons_there_are(tmp_
     shown = icons.page_icons(tmp_path)
     assert set(shown) == set(icons.SOURCES)
     assert shown["lacuerda"]["src"].startswith("data:image/png;base64,")
-    assert "src" not in shown["ug"] and shown["ug"] == {"name": "Ultimate Guitar", "letters": "UG"}
+    assert "src" not in shown["ug"] and shown["ug"] == {"name": "UG", "letters": "UG"}
     assert shown["auto"]["glyph"] is True and "src" not in shown["auto"]
 
 
@@ -547,7 +547,7 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     result = icons_command(tmp_path, monkeypatch, sites)
     assert result.exit_code == 0, result.output
     out = result.output
-    assert "Ultimate Guitar: icon fetched" in out and "YouTube: icon fetched" in out
+    assert "UG: icon fetched" in out and "YouTube: icon fetched" in out
     assert "MuseScore blocked caracole" in out
     assert "index.html" in out and (tmp_path / "lib" / "index.html").is_file()
     assert sorted(p.name for p in (tmp_path / "cache" / "icons").iterdir()) == [
@@ -561,7 +561,7 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     again = icons_command(tmp_path, monkeypatch, sites)
     assert again.exit_code == 0, again.output
     assert {k: len(s.asked) for k, s in sites.items()} == asked
-    assert "Ultimate Guitar: kept already" in again.output and "MuseScore: cooling down" in again.output
+    assert "UG: kept already" in again.output and "MuseScore: cooling down" in again.output
 
 
 def test_caracole_icons_sends_one_alert_for_a_block_as_the_nightly_run_does(tmp_path, monkeypatch):
@@ -613,7 +613,7 @@ def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alon
     sites["lrclib"].pages = {}
     result = icons_command(tmp_path, monkeypatch, sites, "[providers.gtptabs]\nenabled = false\n")
     assert result.exit_code == 0, result.output
-    assert not sites["gtptabs"].asked and "gtptabs.com: turned off" in result.output
+    assert not sites["gtptabs"].asked and "gtptabs: turned off" in result.output
     assert "LRCLIB: no icon there; its badge stands in, and the site is asked again in a week" in result.output
 
 
@@ -623,7 +623,7 @@ def test_caracole_icons_leaves_youtube_alone_once_its_provider_is_turned_off(tmp
     result = icons_command(tmp_path, monkeypatch, sites, "[providers.youtube]\nenabled = false\n")
     assert result.exit_code == 0, result.output
     assert not sites["youtube"].asked and "YouTube: turned off ([providers.youtube] enabled = false)" in result.output
-    assert "Ultimate Guitar: icon fetched" in result.output
+    assert "UG: icon fetched" in result.output
 
 
 def test_caracole_icons_answered_from_the_cache_alone_leaves_a_sites_strikes_as_they_are(tmp_path, monkeypatch):

@@ -220,7 +220,7 @@ def test_artist_reads_one_page_now_at_the_lookup_pace_and_once_in_30_days(tmp_pa
     result = run(tmp_path, "--artist", "Billy Joel")
 
     assert result.exit_code == 0, result.output
-    assert result.stdout == "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now.\n"
+    assert result.stdout == "Read: harptabs' page of billy joel lists 7 of their 98 tabs.\n"
     assert served(result) == "Read: harptabs' page of billy joel lists 7 of their 98 tabs."
     assert sites.harptabs.requests == [BILLY]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
@@ -238,7 +238,7 @@ def test_artist_the_sitemap_lists_no_page_of_is_not_found_and_asks_nothing(tmp_p
     indexed(tmp_path, sites)
     result = run(tmp_path, "--artist", "Nobody Known")
     assert result.exit_code == 0, result.output
-    assert result.stdout == "Not found: harptabs.com's sitemap lists no artist named Nobody Known.\n"
+    assert result.stdout == "Not found: harptabs lists no artist named Nobody Known.\n"
     assert served(result) == "Not found: harptabs lists no artist named Nobody Known."
     assert sites.harptabs.requests == []
 
@@ -246,7 +246,7 @@ def test_artist_the_sitemap_lists_no_page_of_is_not_found_and_asks_nothing(tmp_p
 def test_artist_with_the_index_empty_says_so_and_asks_nothing(tmp_path, sites, quick):
     result = run(tmp_path, "--artist", "Billy Joel")
     assert result.exit_code == 0, result.output
-    assert result.stdout.startswith("Not read: harptabs.com's index is empty")
+    assert result.stdout.startswith("Not read: harptabs' index is empty")
     assert sites.harptabs.requests == []
 
 
@@ -254,21 +254,21 @@ def test_artist_gone_block_and_error_exit_0(tmp_path, sites, quick):
     indexed(tmp_path, sites)
     sites.harptabs.page("artist/50/the-beatles", "<html>gone</html>", status=404)
     result = run(tmp_path, "--artist", "The Beatles")
-    assert result.exit_code == 0 and result.stdout == "Not found: harptabs.com no longer has the page of The Beatles.\n"
+    assert result.exit_code == 0 and result.stdout == "Not found: harptabs no longer has The Beatles's page.\n"
     sites.harptabs.page("artist/7829/ritchie-valens", "oops", status=500)
     result = run(tmp_path, "--artist", "Ritchie Valens")
-    assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs.com failed (")
-    assert served(result) == "Not read: harptabs.com failed."
+    assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs failed (")
+    assert served(result) == "Not read: harptabs failed."
     sites.harptabs.page("artist/7829/ritchie-valens", "Forbidden", status=403)
     result = run(tmp_path, "--artist", "Ritchie Valens")
-    assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs.com blocked caracole (")
+    assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs turned us back (")
     asked = len(sites.harptabs.requests)
     result = run(tmp_path, "--artist", "Billy Joel")
-    assert result.stdout.startswith("Not read: harptabs.com is cooling down after a block until ")
+    assert result.stdout.startswith("Not read: waiting out harptabs until ")
     assert len(sites.harptabs.requests) == asked
 
 
 def test_artist_turned_off_asks_nothing(tmp_path, sites, quick):
     result = run(tmp_path, "--artist", "Billy Joel", enabled=False)
     assert result.exit_code == 0
-    assert result.stdout.startswith("Not read: harptabs.com is off") and sites.harptabs.requests == []
+    assert result.stdout.startswith("Not read: harptabs is off") and sites.harptabs.requests == []
