@@ -477,8 +477,9 @@ viewer's print style (a light page, the margins).
 
 A song's Guitar Pro file (filed from the inbox or downloaded from gtptabs.com) opens on a page of its own in the app,
 as it does in caracole serve: the score drawn by alphaTab and played by its synthesizer (Play, Stop, Tempo), Tab only
-or Score and tab, each track shown or muted. **Download** gives the file to another app. A Power Tab file is a
-download alone.
+or Score and tab, each track shown or muted (on a phone, one button names the track shown and opens a sheet of the
+tracks: a tick to show each and its speaker to mute it). **Download** gives the file to another app. A Power Tab file
+is a download alone.
 
 alphaTab (MPL-2.0), its Bravura music font (SIL OFL 1.1) and the Sonivox SoundFont (Apache-2.0) are in the app, their
 licences beside them in its assets (`alphatab/licenses/`): nothing is downloaded. A Guitar Pro file of a song only the

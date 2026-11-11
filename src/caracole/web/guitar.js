@@ -187,7 +187,8 @@
   // the tracks, a modal <dialog>: a row each with a tick (shown), its name and kind, and a speaker (muted). The
   // ticks only choose: the tracks ticked are drawn once, when the sheet closes, since alphaTab draws the whole
   // score again for a change of tracks, which takes a moment on a phone. The page's one track shown can't be
-  // unticked. Both are built whatever the screen, for a score of two tracks or more, and each shows by its width.
+  // unticked. Done, a tap outside the sheet, Escape and Android's Back close it, and so does a screen widened past
+  // 599 px. Both are built whatever the screen, for a score of two tracks or more, and each shows by its width.
   const HOLD = 450;
   const bar = $("tracks");
   const trackName = (track, index) => String(track.name || "").trim() || "Track " + (index + 1);
