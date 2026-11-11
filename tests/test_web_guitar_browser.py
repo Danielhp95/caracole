@@ -449,6 +449,14 @@ PHONE = {"width": 390, "height": 844, "mobile": True}
 SHEET = "document.getElementById('tracks-sheet')"
 ROWS = "[...document.querySelectorAll('#tracks-sheet .row')]"
 TICK = "#tracks-sheet .row:nth-child({n}) input"
+ROW_MUTE = "#tracks-sheet .row:nth-child({n}) .mute"
+OURS = "!!(history.state && history.state.tracksSheet)"  # the sheet's own entry is the page's current one
+
+
+def open_sheet(page):
+    """The sheet opened by its button, and still: it slides up (guitar.css), which a click aimed at a row would miss."""
+    page.click("#tracks-open")
+    assert page.wait(f"{SHEET}.open && {SHEET}.getAnimations().length === 0", 5)
 
 
 def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
@@ -466,8 +474,7 @@ def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
         assert page.js(f"{opener}.getAttribute('aria-haspopup')") == "dialog"
         assert page.js(f"{opener}.getAttribute('aria-expanded')") == "false"
         assert page.js(f"{SHEET}.open") is False
-        page.click("#tracks-open")
-        assert page.wait(f"{SHEET}.open", 5)
+        open_sheet(page)
         assert page.js(f"{opener}.getAttribute('aria-expanded')") == "true"
         assert page.js(f"{SHEET}.contains(document.activeElement)") is True
         # One row a track, its name and kind as the chips say them, a tick on those shown.
@@ -479,6 +486,10 @@ def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
         # The last one shown can't be unticked.
         assert page.js(f"{ROWS}.map((r) => r.querySelector('input').disabled)") == [False, True, False, False, False]
         assert page.js(f"{SHEET}.getBoundingClientRect().height") <= 0.7 * 844
+        # Every target is 44 px each way at the least.
+        assert page.js(f"{ROWS}.every((r) => r.getBoundingClientRect().height >= 44)") is True
+        assert page.js("[...document.querySelectorAll('#tracks-sheet .mute, #tracks-done')].every((b) => {"
+                       " const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })") is True
         assert page.js("getComputedStyle(document.querySelector('.tracks-list')).overflowY") == "auto"
         # A name too long for its row is cut, whole in the label's title; the sheet stays within the screen.
         assert page.js(f"{ROWS}[0].querySelector('label').title") == VOCALS
@@ -503,8 +514,7 @@ def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
         assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar", "Bass"]
         assert page.js(f"{opener}.querySelector('.now').textContent") == "Lead guitar + 1"
         # Unticked again: only that one.
-        page.click("#tracks-open")
-        assert page.wait(f"{SHEET}.open", 5)
+        open_sheet(page)
         assert page.js(f"{ROWS}.map((r) => r.querySelector('input').checked)") == [False, True, True, False, False]
         page.click(TICK.format(n=3))
         page.click("#tracks-done")
@@ -512,21 +522,123 @@ def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
         assert page.wait("Number(document.documentElement.dataset.rendered) >= 3", 30)
         # Done with nothing changed draws nothing.
         drawn = page.js("document.documentElement.dataset.rendered")
-        page.click("#tracks-open")
-        assert page.wait(f"{SHEET}.open", 5)
+        open_sheet(page)
         page.click("#tracks-done")
         assert page.wait(f"!{SHEET}.open", 5)
         assert page.js(FRAMES)
         assert page.js("document.documentElement.dataset.rendered") == drawn
         # Escape closes it as Done does.
-        page.click("#tracks-open")
-        assert page.wait(f"{SHEET}.open", 5)
+        open_sheet(page)
         page.click(TICK.format(n=4))
         page.press("Escape")
         assert page.wait(f"!{SHEET}.open", 5)
         assert page.wait("document.documentElement.dataset.track === '1,3'", 5)
         assert page.js("document.activeElement.id") == "tracks-open"
         assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def tap(page, x, y):
+    for kind in ("mousePressed", "mouseReleased"):
+        page.send("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", clickCount=1)
+
+
+def test_the_sheet_mutes_at_once_and_closes_by_escape_a_tap_outside_or_back(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        page.js(SPY_MUTE)
+        href = page.js("location.href")
+        # A speaker mutes at once, the sheet stays open and the ticks stay as they were.
+        open_sheet(page)
+        assert page.js(OURS) is True
+        page.click(ROW_MUTE.format(n=4))
+        assert page.wait("window.mutes.length === 1", 5)
+        assert page.js("window.mutes") == [[[3], True]]
+        assert page.js("window.caracoleGuitar.score.tracks[3].playbackInfo.isMute") is True
+        assert page.js(f"{ROWS}[3].classList.contains('muted')") is True
+        assert page.js("document.querySelector('#tracks .track:nth-child(4)').classList.contains('muted')") is True
+        assert page.js(f"{ROWS}[3].querySelector('.mute').getAttribute('aria-pressed')") == "true"
+        assert page.js("document.documentElement.dataset.track") == "1"
+        assert page.js(f"{SHEET}.open") is True
+        # Escape: closed, and its history entry taken away.
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        # A tap above the sheet, on the backdrop.
+        open_sheet(page)
+        tap(page, 195, 40)
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        assert page.js("document.activeElement.id") == "tracks-open"
+        # Android's Back closes it and leaves the page where it is.
+        open_sheet(page)
+        page.js("history.back()")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js("location.href") == href
+        assert page.js(RENDERED) is True
+        assert page.js(OURS) is False
+        # Done takes its own entry back too, and a second Back then leaves nothing to close.
+        open_sheet(page)
+        assert page.js(OURS) is True
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        assert page.js("location.href") == href
+        assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def test_a_sheet_open_as_the_screen_widens_closes_and_keeps_its_ticks(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        open_sheet(page)
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        page.send("Emulation.setDeviceMetricsOverride", width=800, height=1000, deviceScaleFactor=1, mobile=True)
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        assert page.js(OURS) is False
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") != "none"
+        assert page.js("[...document.querySelectorAll('#tracks .show')].map((b) => b.getAttribute('aria-pressed'))"
+                       ) == ["false", "true", "true", "false", "false"]
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+    finally:
+        page.close()
+
+
+def test_the_only_tick_left_shuts_without_the_keyboard_losing_the_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        open_sheet(page)
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        # Lead guitar's box is unticked while Bass's has the focus: Bass's is the one left, and shut.
+        page.js(f"{ROWS}[2].querySelector('input').focus()")
+        page.js(f"{ROWS}[1].querySelector('input').click()")
+        assert page.wait(f"{ROWS}[2].querySelector('input').disabled", 5)
+        assert page.js(f"{SHEET}.contains(document.activeElement)") is True
+        assert page.js("document.activeElement.tagName") == "BUTTON"
+    finally:
+        page.close()
+
+
+def test_the_sheet_slides_up_unless_motion_is_reduced(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        for motion, moves in (("no-preference", True), ("reduce", False)):
+            page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": motion}])
+            page.click("#tracks-open")
+            assert page.wait(f"{SHEET}.open", 5)
+            assert (page.js(f"getComputedStyle({SHEET}).animationName") != "none") is moves
+            page.press("Escape")
+            assert page.wait(f"!{SHEET}.open", 5)
     finally:
         page.close()
 
@@ -564,15 +676,17 @@ def test_a_score_of_one_track_has_no_button_on_a_phone(cfg, conn, tmp_path):
     finally:
         maker.close()
     server, _, url = serving(cfg, conn, data)
-    page = opened(tmp_path, url, **PHONE)
     try:
-        assert page.wait(RENDERED, 30)
-        assert page.js("window.caracoleGuitar.score.tracks.length") == 1
-        assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
-        assert page.js("document.getElementById('tracks-open')") is None
-        assert page.js("document.querySelector('dialog')") is None
+        page = opened(tmp_path, url, **PHONE)
+        try:
+            assert page.wait(RENDERED, 30)
+            assert page.js("window.caracoleGuitar.score.tracks.length") == 1
+            assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
+            assert page.js("document.getElementById('tracks-open')") is None
+            assert page.js("document.querySelector('dialog')") is None
+        finally:
+            page.close()
     finally:
-        page.close()
         server.shutdown()
         server.server_close()
 

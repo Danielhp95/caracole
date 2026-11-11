@@ -326,6 +326,13 @@
 
   let sheet = null;
   let pending = null;  // the tracks ticked while the sheet is open, in the score's order; none while it is shut
+  // The sheet holds a history entry while it is open (no address: the page's sandbox has an opaque origin), so that
+  // Android's Back closes it and leaves the page. Closing any other way takes the entry away with history.back(),
+  // whose popstate is `skip`ped, not read as a Back; a sheet asked for before it comes waits for it (`again`), so
+  // that the traversal never takes the new entry.
+  let entry = false;
+  let skip = 0;
+  let again = false;
   const rowTitles = () => rows.forEach(({ label, name, text }) => {
     if (text.scrollWidth > text.clientWidth) label.title = name;
     else label.removeAttribute("title");
@@ -335,20 +342,38 @@
     const ticked = pending;
     pending = null;
     if (sheet.open) sheet.close();
+    if (entry) {
+      entry = false;
+      skip += 1;
+      history.back();
+    }
     opener.setAttribute("aria-expanded", "false");
     opener.focus();
     if (ticked.join() !== shown.join()) showTracks(ticked);
   };
   const openSheet = () => {
+    if (pending && !sheet.open) closeSheet();  // Escape shut it, and its close event hasn't come yet
+    if (pending) return;
+    if (skip) {
+      again = true;
+      return;
+    }
     pending = shown.slice();
     rows.forEach(({ tick }, index) => { tick.checked = pending.includes(index); });
     lockLast();
+    history.pushState({ tracksSheet: true }, "");
+    entry = true;
     sheet.showModal();
     opener.setAttribute("aria-expanded", "true");
     rowTitles();
   };
   // The only tick left is shut: a track stays shown.
-  const lockLast = () => rows.forEach(({ tick }, index) => { tick.disabled = pending.length === 1 && pending[0] === index; });
+  // Its row's speaker takes the keyboard then, which a box shut would lose to the page.
+  const lockLast = () => rows.forEach(({ tick, mute: speaker }, index) => {
+    const shut = pending.length === 1 && pending[0] === index;
+    if (shut && document.activeElement === tick) speaker.focus();
+    tick.disabled = shut;
+  });
   if (!bar.hidden) {
     opener = document.createElement("button");
     opener.type = "button";
@@ -404,6 +429,7 @@
       silence.title = "Mute " + name;
       silence.appendChild(speaker());
       rows.push({ li, label, tick, text, name, mute: silence });
+      silence.addEventListener("click", () => mute(index, silence.getAttribute("aria-pressed") !== "true"));
       tick.addEventListener("change", () => {
         pending = tick.checked ? pending.concat(index).sort((a, b) => a - b) : pending.filter((i) => i !== index);
         lockLast();
@@ -411,7 +437,23 @@
     });
     opener.addEventListener("click", openSheet);
     done.addEventListener("click", closeSheet);
-    sheet.addEventListener("close", closeSheet);  // Escape closes a modal dialog by itself
+    // Escape closes a modal dialog by itself; a close event that comes late, once it is open again, is not this one's.
+    sheet.addEventListener("close", () => { if (!sheet.open) closeSheet(); });
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });  // the backdrop is the dialog's
+    window.addEventListener("popstate", () => {
+      if (skip) {
+        skip -= 1;
+        if (!skip && again) {
+          again = false;
+          openSheet();
+        }
+      } else if (pending) {
+        entry = false;  // Back took it
+        closeSheet();
+      }
+    });
+    // A screen that widens past a phone's has the chips, no sheet: it closes, its ticks drawn.
+    narrow.addEventListener("change", () => { if (!narrow.matches) closeSheet(); });
   }
   mark();
   const titles = () => buttons.forEach(({ show, label, name }) => {

@@ -53,7 +53,8 @@
 .track.muted .show .name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .track.muted .show:not([aria-pressed="true"]) { color: var(--muted); }
 /* The phone's button and sheet, which a wide screen has none of (the phone block below shows the button). The sheet is
-   a modal dialog fixed to the bottom, at most 70 % of the screen, its list scrolling inside it. */
+   a modal dialog fixed to the bottom, at most 70 % of the screen, its list scrolling inside it, sliding up as it opens
+   (a moment, and none for a reader who asks for less motion). */
 .gp-bar .tracks-open { display: none; justify-content: space-between; gap: 12px; width: 100%; padding: 0 14px;
   text-align: left; font-weight: 600; }
 .tracks-open .now { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -62,6 +63,10 @@
   max-height: 70vh; margin: 0; padding: 0; overflow: hidden; border: 0; border-top: 1px solid var(--border-strong);
   border-radius: 16px 16px 0 0; background: var(--surface); color: var(--text); }
 .tracks-sheet[open] { display: flex; flex-direction: column; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .tracks-sheet[open] { animation: sheet-up .2s ease-out; }
+}
 .tracks-sheet::backdrop { background: rgb(0 0 0 / 45%); }
 .tracks-sheet .grip { flex: none; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px;
   background: var(--border-strong); }
