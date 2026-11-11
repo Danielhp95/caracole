@@ -394,8 +394,10 @@ class WebControls:
     countdown (5000); the page users get carries none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
     web/alphatab.py), so a song's Guitar Pro files offer Open in the browser beside Download. ``badge``: the server's
     badge for a library that isn't the usual one (library_name.py: "Scratch library", ``caracole serve --label``),
-    beside the library's name and first in the title; the file never has one. ``sync``: whether it has the Sync tab
-    (sync-tab.html and sync-panel.html, put in as they are), before Requests.
+    beside the library's name and first in the title; the file never has one. ``sync``: how it syncs with another
+    caracole (sync.js): ``"tab"``, caracole serve's, the Sync tab last, after Requests, with its panel and the sync's
+    sheet (sync-tab.html, sync-panel.html and sync-sheet.html, put in as they are); ``"sheet"``, the sheet alone, as
+    the phone's page has it (the app's sync button opens it); None, neither.
     """
 
     csrf: str
@@ -407,7 +409,7 @@ class WebControls:
     timers: Mapping[str, int] | None = None
     guitar: bool = False
     badge: str | None = None
-    sync: bool = False
+    sync: str | None = None
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -1174,8 +1176,8 @@ def _haystack(texts: list[str]) -> str:
 # pages share, are importable from here too.
 STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css",
                "library-screens.css", "songbooks.css", "sites.css", "sync.css", "requests.css")
-SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "sites.js", "sync.js",
-           "requests.js", "drawn.js")
+SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "sites.js", "sync-words.js",
+           "sync.js", "requests.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)
@@ -1193,20 +1195,26 @@ _CSP = (
 # request.html, the form caracole serve adds under the search's results (a song for wanted.txt, written
 # as `caracole add` writes it; the script fills it in from what was searched, and without the script it
 # posts as a form); requested.html, what caracole serve adds under the bar (the songs just requested,
-# each a line with its request line, and the requests, a short list in a corner); sync-tab.html and sync-panel.html,
-# the Sync tab and its panel, put in as they are where the page has them (``WebControls.sync``).
-TEMPLATES = ("head.html", "body.html", "request.html", "requested.html", "sync-tab.html", "sync-panel.html")
-_HEAD, _BODY, _REQUEST, _REQUESTED, _SYNC_TAB, _SYNC_PANEL = (read_asset(name) for name in TEMPLATES)
+# each a line with its request line, and the requests, a short list in a corner); sync-tab.html, sync-panel.html and
+# sync-sheet.html, the Sync tab, its panel and the sync's sheet, put in as they are where the page has them
+# (``WebControls.sync``).
+TEMPLATES = ("head.html", "body.html", "request.html", "requested.html", "sync-tab.html", "sync-panel.html",
+             "sync-sheet.html")
+_HEAD, _BODY, _REQUEST, _REQUESTED, _SYNC_TAB, _SYNC_PANEL, _SYNC_SHEET = (read_asset(name) for name in TEMPLATES)
 
 
 def _sync_tab(controls: WebControls | None) -> str:
-    """The Sync tab, before Requests, where the page has it (``WebControls.sync``); else none."""
-    return _SYNC_TAB if controls is not None and controls.sync else ""
+    """The Sync tab, the last, after Requests, on caracole serve's page (``WebControls.sync`` ``"tab"``); else none:
+    the phone's page has the sheet alone, which its sync button opens."""
+    return _SYNC_TAB if controls is not None and controls.sync == "tab" else ""
 
 
 def _sync_panel(controls: WebControls | None) -> str:
-    """The Sync tab's panel (sync.js draws it), where the page has the tab; else none."""
-    return _SYNC_PANEL if controls is not None and controls.sync else ""
+    """What sync.js draws the sync in: the Sync tab's panel (Sync with a server, Export, Import a file) and the sheet
+    for ``"tab"``, the sheet alone for ``"sheet"`` (the phone's), else none."""
+    if controls is None or controls.sync not in ("tab", "sheet"):
+        return ""
+    return (_SYNC_PANEL if controls.sync == "tab" else "") + _SYNC_SHEET
 
 
 def _requests_tab(controls: WebControls | None) -> str:
