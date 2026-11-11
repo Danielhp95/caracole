@@ -20,7 +20,8 @@ class Commands(val runners: Map<String, CommandRunner>) {
     fun runnerFor(args: List<String>): CommandRunner? = args.firstOrNull()?.let { runners[it] }
 }
 
-/** A command that ended as caracole exits with [code] (2 for a refusal, say), [message] its `error:` line. */
+/** A command that ended as caracole exits with [code] (2 for a refusal, say), [message] its `error:` line; an empty
+ * [message] writes none, as typer.Exit(code) with no words (the command said why itself, a warning, say). */
 class CommandExit(val code: Int, message: String) : Exception(message)
 
 /**
