@@ -4767,8 +4767,12 @@ beside those shown, or take it away from them; on a touch screen, press and hold
 it for that. The speaker on each track mutes it, and again unmutes it: at once,
 while it plays too, whichever track is shown, until you close the page; a
 muted track is struck through. On a screen under 600 px wide the bar is
-compact (the switch reads **Tab** or **Score**, and the tracks scroll sideways
-in their own row, which starts at the track shown) and the page starts with the tab alone, a little smaller,
+compact (the switch reads **Tab** or **Score**) and the tracks are one button,
+the name of the track shown and how many there are, which opens a sheet of
+every track: a tick to show it (tick several to show them together; the one
+track still ticked can't be unticked), its name and kind, and its speaker to mute it, at once.
+**Done**, a tap outside the sheet, Escape or Android's Back close it, and the
+score is drawn then, once, if the ticks changed. The page starts with the tab alone, a little smaller,
 three or four bars a line; a track with no tab (a piano's, the drums') is
 shown as a score whatever the switch says. Playing, the page follows the
 cursor. It is dark or light as your system is, the score too: its title,

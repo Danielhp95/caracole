@@ -35,18 +35,25 @@ document.addEventListener("securitypolicyviolation", (e) => window.caracoleViola
 RENDERED = "Number(document.documentElement.dataset.rendered) >= 1 && !!document.querySelector('#score canvas')"
 
 
-@pytest.fixture
-def served(cfg, conn):
-    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is the synthetic score; the address
-    of its Guitar Pro page."""
+def serving(cfg, conn, data):
+    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is ``data``: it, its base address and
+    the address of its Guitar Pro page (the caller shuts the server down)."""
     cfg = replace(cfg, alphatab_dir=alphatab_dir())
     song = add_song(conn, "caracole tests", "Synthetic Study")
-    path = keep_guitar(conn, cfg, song, SYNTHETIC.read_bytes())
+    path = keep_guitar(conn, cfg, song, data)
     app = WebApp(cfg, JobQueue(lambda args, emit: 0), allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}/"
-    yield base, base + "guitar?" + urlencode({"file": path})
+    return server, base, base + "guitar?" + urlencode({"file": path})
+
+
+@pytest.fixture
+def served(cfg, conn):
+    """caracole serve on a socket, with alphaTab and a song whose Guitar Pro file is the synthetic score; the address
+    of its Guitar Pro page."""
+    server, base, url = serving(cfg, conn, SYNTHETIC.read_bytes())
+    yield base, url
     server.shutdown()
     server.server_close()
 
@@ -98,6 +105,9 @@ TRACKS = "[...document.querySelectorAll('#tracks .track')]"
 VOCALS = "Vocals, the melody written as a tab"
 SHOW = "#tracks .track:nth-child({n}) .show"
 MUTE = "#tracks .track:nth-child({n}) .mute"
+# Every call to renderTracks, counted.
+SPY_DRAW = """(() => { const api = window.caracoleGuitar; const real = api.renderTracks.bind(api);
+  window.draws = 0; api.renderTracks = (tracks) => { window.draws += 1; return real(tracks); }; })()"""
 # Every call to changeTrackMute, noted: the tracks' indexes and whether muted.
 SPY_MUTE = """(() => { const api = window.caracoleGuitar; const real = api.changeTrackMute.bind(api);
   window.mutes = []; api.changeTrackMute = (tracks, muted) => {
@@ -221,7 +231,8 @@ FRAMES = "new Promise((done) => requestAnimationFrame(() => requestAnimationFram
 
 def test_a_long_press_shows_a_track_beside_those_shown_on_a_touch_screen(served, tmp_path):
     _, url = served
-    page = opened(tmp_path, url, width=390, height=844, mobile=True)
+    # A wide touch screen: a phone has the sheet instead of the chips.
+    page = opened(tmp_path, url, width=800, height=1000, mobile=True)
     try:
         assert page.wait(RENDERED, 30)
         # Held, the bass is shown beside the guitar, at once, the finger still down; let go, nothing more.
@@ -414,22 +425,16 @@ def test_a_phone_gets_the_tab_alone_with_no_sideways_scroll(served, tmp_path):
         assert page.js("window.caracoleGuitar.settings.display.staveProfile") == page.js("alphaTab.StaveProfile.Tab")
         assert page.js("window.caracoleGuitar.settings.display.scale") == 0.8
         assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
-        # Every control a thumb's target.
+        # Every control a thumb's target (the chips are hidden: the tracks' button stands for them).
         small = page.js("[...document.querySelectorAll('#gp-bar button, #gp-bar .view label,"
-                        " #gp-bar input[type=range], .links a')].map((e) => e.getBoundingClientRect())"
+                        " #gp-bar input[type=range], .links a')].filter((e) => !e.closest('#tracks'))"
+                        ".map((e) => e.getBoundingClientRect())"
                         ".filter((r) => r.height < 44 || r.width < 44).length")
         assert small == 0
-        # The bar is compact: Play, Stop, the tempo and the switch on one row, the tracks on one more, which
-        # scrolls sideways itself when they don't fit.
+        # The bar is compact: Play, Stop, the tempo and the switch on one row, the tracks' button on one more.
         bar = page.js("document.getElementById('gp-bar').getBoundingClientRect().height")
         assert bar <= 0.15 * 844, bar
-        assert page.js("getComputedStyle(document.getElementById('tracks')).overflowX") == "auto"
-        # The track it opens on, the second, is in that row's view, whole, off its edge.
         assert page.js("document.documentElement.dataset.track") == "1"
-        chip = page.js("(() => { const r = document.querySelector('#tracks .track:nth-child(2)')"
-                       ".getBoundingClientRect(); return [r.left, r.right]; })()")
-        assert chip[0] >= 16 and chip[1] <= 390 - 15, chip
-        assert page.js("document.getElementById('tracks').scrollLeft") > 0
         assert page.js("scrollY") == 0
         middles = page.js("[...document.querySelectorAll('#gp-bar .gp-play > *')]"
                           ".map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; })")
@@ -441,6 +446,448 @@ def test_a_phone_gets_the_tab_alone_with_no_sideways_scroll(served, tmp_path):
         assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
     finally:
         page.close()
+
+
+PHONE = {"width": 390, "height": 844, "mobile": True}
+SHEET = "document.getElementById('tracks-sheet')"
+ROWS = "[...document.querySelectorAll('#tracks-sheet .row')]"
+TICK = "#tracks-sheet .row:nth-child({n}) input"
+ROW_MUTE = "#tracks-sheet .row:nth-child({n}) .mute"
+OURS = "!!(history.state && history.state.tracksSheet)"  # the sheet's own entry is the page's current one
+
+
+def open_sheet(page):
+    """The sheet opened by its button, and still: it slides up (guitar.css), which a click aimed at a row would miss."""
+    page.click("#tracks-open")
+    assert page.wait(f"{SHEET}.open && {SHEET}.getAnimations().length === 0", 5)
+
+
+def test_a_phone_s_tracks_are_one_button_that_opens_a_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        # The chips give way to one button under Play: the track shown, and how many there are.
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
+        opener = "document.getElementById('tracks-open')"
+        assert page.js(f"getComputedStyle({opener}).display") != "none"
+        assert page.js(f"{opener}.getBoundingClientRect().height") >= 44
+        assert page.js(f"{opener}.querySelector('.now').textContent") == "Lead guitar"
+        assert page.js(f"{opener}.querySelector('.count').textContent").startswith("5 tracks")
+        assert page.js(f"{opener}.getAttribute('aria-haspopup')") == "dialog"
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "false"
+        assert page.js(f"{SHEET}.open") is False
+        open_sheet(page)
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "true"
+        assert page.js(f"{SHEET}.contains(document.activeElement)") is True
+        # One row a track, its name and kind as the chips say them, a tick on those shown.
+        assert page.js(f"{ROWS}.map((r) => [r.querySelector('.name').textContent,"
+                       " (r.querySelector('.kind') || {}).textContent])") == [
+            [VOCALS, "6 strings"], ["Lead guitar", "6 strings"], ["Bass", "4 strings"], ["Keys", "no tab"],
+            ["Drums", None]]
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').checked)") == [False, True, False, False, False]
+        # The last one shown can't be unticked.
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').disabled)") == [False, True, False, False, False]
+        assert page.js(f"{SHEET}.getBoundingClientRect().height") <= 0.7 * 844
+        # Every target is 44 px each way at the least.
+        assert page.js(f"{ROWS}.every((r) => r.getBoundingClientRect().height >= 44)") is True
+        assert page.js("[...document.querySelectorAll('#tracks-sheet .mute, #tracks-done')].every((b) => {"
+                       " const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })") is True
+        assert page.js("getComputedStyle(document.querySelector('.tracks-list')).overflowY") == "auto"
+        # A name too long for its row is cut, whole in the label's title; the sheet stays within the screen.
+        assert page.js(f"{ROWS}[0].querySelector('label').title") == VOCALS
+        assert page.js(f"{ROWS}[0].querySelector('.name').scrollWidth > {ROWS}[0].querySelector('.name').clientWidth")
+        assert page.js(f"{SHEET}.getBoundingClientRect().right") <= 390
+        assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
+        # A tick draws nothing yet: the tracks are drawn once, when the sheet closes.
+        before = page.js("document.documentElement.dataset.rendered")
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        assert page.js(f"{ROWS}[1].querySelector('input').disabled") is False
+        assert page.js(f"{ROWS}[2].querySelector('input').disabled") is False
+        assert page.js(FRAMES)
+        assert page.js("document.documentElement.dataset.track") == "1"
+        assert page.js("document.documentElement.dataset.rendered") == before
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js(f"{opener}.getAttribute('aria-expanded')") == "false"
+        assert page.js("document.activeElement.id") == "tracks-open"
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+        assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar", "Bass"]
+        assert page.js(f"{opener}.querySelector('.now').textContent") == "Lead guitar + 1"
+        # Unticked again: only that one.
+        open_sheet(page)
+        assert page.js(f"{ROWS}.map((r) => r.querySelector('input').checked)") == [False, True, True, False, False]
+        page.click(TICK.format(n=3))
+        page.click("#tracks-done")
+        assert page.wait("document.documentElement.dataset.track === '1'", 5)
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 3", 30)
+        # Done with nothing changed draws nothing.
+        page.js(SPY_DRAW)
+        open_sheet(page)
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js(FRAMES)
+        assert page.js("window.draws") == 0
+        # Escape closes it as Done does.
+        open_sheet(page)
+        page.click(TICK.format(n=4))
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.wait("document.documentElement.dataset.track === '1,3'", 5)
+        assert page.js("document.activeElement.id") == "tracks-open"
+        assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def tap(page, x, y):
+    for kind in ("mousePressed", "mouseReleased"):
+        page.send("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", clickCount=1)
+
+
+def test_the_sheet_mutes_at_once_and_closes_by_escape_a_tap_outside_or_back(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        page.js(SPY_MUTE)
+        href = page.js("location.href")
+        # A speaker mutes at once, the sheet stays open and the ticks stay as they were.
+        open_sheet(page)
+        assert page.js(OURS) is True
+        page.click(ROW_MUTE.format(n=4))
+        assert page.wait("window.mutes.length === 1", 5)
+        assert page.js("window.mutes") == [[[3], True]]
+        assert page.js("window.caracoleGuitar.score.tracks[3].playbackInfo.isMute") is True
+        assert page.js(f"{ROWS}[3].classList.contains('muted')") is True
+        assert page.js("document.querySelector('#tracks .track:nth-child(4)').classList.contains('muted')") is True
+        assert page.js(f"{ROWS}[3].querySelector('.mute').getAttribute('aria-pressed')") == "true"
+        assert page.js("document.documentElement.dataset.track") == "1"
+        assert page.js(f"{SHEET}.open") is True
+        # A tap on the sheet's own box where no child is (its top strip, beside the grip) is no tap outside.
+        corner = page.js(f"(() => {{ const r = {SHEET}.getBoundingClientRect(); return [r.left + 10, r.top + 10]; }})()")
+        assert page.js(f"document.elementFromPoint({corner[0]}, {corner[1]}) === {SHEET}") is True
+        tap(page, *corner)
+        assert page.js(FRAMES)
+        assert page.js(f"{SHEET}.open") is True
+        assert page.js(OURS) is True
+        # Escape: closed, and its history entry taken away.
+        page.press("Escape")
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        # A tap above the sheet, on the backdrop.
+        open_sheet(page)
+        tap(page, 195, 40)
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        assert page.js("document.activeElement.id") == "tracks-open"
+        # Android's Back closes it and leaves the page where it is.
+        open_sheet(page)
+        page.js("history.back()")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.js("location.href") == href
+        assert page.js(RENDERED) is True
+        assert page.js(OURS) is False
+        # Done takes its own entry back too.
+        open_sheet(page)
+        assert page.js(OURS) is True
+        page.click("#tracks-done")
+        assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+        assert page.js("location.href") == href
+        assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def test_a_sheet_open_as_the_screen_widens_closes_and_keeps_its_ticks(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        open_sheet(page)
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        page.send("Emulation.setDeviceMetricsOverride", width=800, height=1000, deviceScaleFactor=1, mobile=True)
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        assert page.wait(f"!({OURS})", 5)  # the entry goes with history.back(), which is asynchronous
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") != "none"
+        # The focus goes to the chip of the first track shown (the tracks' button it was on is hidden now).
+        assert page.wait("document.activeElement === document.querySelector('#tracks .track:nth-child(2) .show')", 5)
+        assert page.js("[...document.querySelectorAll('#tracks .show')].map((b) => b.getAttribute('aria-pressed'))"
+                       ) == ["false", "true", "true", "false", "false"]
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+    finally:
+        page.close()
+
+
+def test_the_only_tick_left_shuts_without_the_keyboard_losing_the_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        open_sheet(page)
+        page.click(TICK.format(n=3))
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        # Lead guitar's box is unticked while Bass's has the focus: Bass's is the one left, and shut.
+        page.js(f"{ROWS}[2].querySelector('input').focus()")
+        page.js(f"{ROWS}[1].querySelector('input').click()")
+        assert page.wait(f"{ROWS}[2].querySelector('input').disabled", 5)
+        assert page.js(f"{SHEET}.contains(document.activeElement)") is True
+        assert page.js("document.activeElement.tagName") == "BUTTON"
+    finally:
+        page.close()
+
+
+def test_space_ticks_mutes_and_closes_in_the_open_sheet_and_plays_nothing(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(PLAYER.format(state="ready") + " && !document.getElementById('play').disabled", 30)
+        page.js(SPY_PLAY)
+        page.js(SPY_MUTE)
+        open_sheet(page)
+        # Space on a box ticks it, as in any dialog; it doesn't press Play.
+        page.js(f"{ROWS}[2].querySelector('input').focus()")
+        page.press(" ")
+        assert page.wait(f"{ROWS}[2].querySelector('input').checked", 5)
+        assert page.js(FRAMES)
+        assert page.js("window.toggles") == 0
+        assert page.js(PLAYER.format(state="ready")) is True
+        # On a speaker it mutes.
+        page.js(f"{ROWS}[3].querySelector('.mute').focus()")
+        page.press(" ")
+        assert page.wait("window.mutes.length === 1", 5)
+        assert page.js("window.toggles") == 0
+        # On Done it closes the sheet, the ticks drawn.
+        page.js("document.getElementById('tracks-done').focus()")
+        page.press(" ")
+        assert page.wait(f"!{SHEET}.open", 5)
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        assert page.js("window.toggles") == 0
+        # Shut, Space plays as before.
+        page.js("document.activeElement.blur()")
+        page.press(" ")
+        assert page.wait(PLAYER.format(state="playing"), 15)
+        assert page.js("window.toggles") == 1
+    finally:
+        page.close()
+
+
+def test_a_sheet_that_is_ticked_and_asked_for_again_at_once_opens_once_the_entry_is_taken_back(served, tmp_path):
+    """Done, or the dialog's own close, then the button before the history entry the close takes away has gone: the
+    sheet waits for it (the traversal must never take the new entry), opens, and Back then closes it."""
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        href = page.js("location.href")
+        for close in ("document.getElementById('tracks-done').click()", f"{SHEET}.close()"):
+            open_sheet(page)
+            assert page.js(OURS) is True
+            page.js(f"(() => {{ {close}; document.getElementById('tracks-open').click(); }})()")
+            assert page.wait(f"{SHEET}.open && {OURS}", 5)
+            assert page.js("location.href") == href
+            page.js("history.back()")
+            assert page.wait(f"!{SHEET}.open && !({OURS})", 5)
+            assert page.js("location.href") == href
+            assert page.js(RENDERED) is True
+        assert page.js("window.caracoleViolations") == []
+    finally:
+        page.close()
+
+
+def test_the_button_is_hidden_and_inert_while_the_screen_is_wide(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, width=1280, height=800)
+    try:
+        assert page.wait(RENDERED, 30)
+        length = page.js("history.length")
+        page.js("document.getElementById('tracks-open').click()")
+        assert page.js(FRAMES)
+        assert page.js(f"{SHEET}.open") is False
+        assert page.js("history.length") == length
+        assert page.js(OURS) is False
+    finally:
+        page.close()
+
+
+def test_the_button_is_named_by_its_words_and_the_triangle_is_decoration(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        name, = accessible_names(page, "#tracks-open")
+        assert "Lead guitar" in name and "5 tracks" in name, name
+        assert "\u25b4" not in name, name
+        assert page.js("document.querySelector('#tracks-open [aria-hidden=true]').textContent") == "\u25b4"
+    finally:
+        page.close()
+
+
+def test_done_is_a_44_px_target_under_a_fine_pointer_too(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, width=500, height=800)  # a desktop window as narrow as a phone: the sheet, a mouse
+    try:
+        assert page.wait(RENDERED, 30)
+        assert page.js("matchMedia('(pointer: coarse)').matches") is False  # base.css's 44 px for a finger isn't it
+        open_sheet(page)
+        assert page.js("(() => { const r = document.getElementById('tracks-done').getBoundingClientRect();"
+                       " return r.width >= 44 && r.height >= 44; })()") is True
+    finally:
+        page.close()
+
+
+def tracks_of(count):
+    """AlphaTex of ``count`` tracks of one bar, each a guitar's."""
+    head = "\\title \"Many tracks\"\n\\tempo 96\n.\n"
+    one = ("\\track \"Track {n}\"\n\\staff {{score tabs}}\n\\tuning e4 b3 g3 d3 a2 e2\n\\instrument 27\n"
+           ":4 0.1 2.1 3.1 0.1 |\n")
+    return head + "".join(one.format(n=n) for n in range(1, count + 1))
+
+
+MUTED = """\\title "Muted in the file"
+\\tempo 96
+.
+\\track "Lead guitar"
+\\staff {score tabs}
+\\tuning e4 b3 g3 d3 a2 e2
+\\instrument 27
+:4 0.1 2.1 3.1 0.1 | 3.2 1.2 0.2 1.2 |
+\\track "Guide" { mute }
+\\staff {score tabs}
+\\tuning e4 b3 g3 d3 a2 e2
+\\instrument 27
+:4 0.1 2.1 3.1 0.1 | 3.2 1.2 0.2 1.2 |
+"""
+
+
+def served_from_tex(cfg, conn, tmp_path, tex):
+    """caracole serve with the Guitar Pro file alphaTab writes of ``tex``: the server, and the page's address."""
+    try:
+        maker = Browser(tmp_path / "maker")
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    try:
+        data = export_alphatex(maker, tex)
+    finally:
+        maker.close()
+    server, _, url = serving(cfg, conn, data)
+    return server, url
+
+
+def test_with_many_tracks_the_sheet_stays_within_its_cap_and_its_list_scrolls(cfg, conn, tmp_path):
+    server, url = served_from_tex(cfg, conn, tmp_path, tracks_of(20))
+    try:
+        page = opened(tmp_path, url, width=390, height=500, mobile=True)
+        try:
+            assert page.wait(RENDERED, 30)
+            assert page.js("window.caracoleGuitar.score.tracks.length") == 20
+            open_sheet(page)
+            assert page.js(f"{SHEET}.getBoundingClientRect().height") <= 0.7 * 500
+            list_ = "document.querySelector('.tracks-list')"
+            assert page.js(f"{list_}.scrollHeight > {list_}.clientHeight") is True
+            # The last row can be scrolled into view, and Done, outside the list, never leaves.
+            page.js(f"{list_}.scrollTop = {list_}.scrollHeight")
+            assert page.js(f"(() => {{ const l = {list_}.getBoundingClientRect(), "
+                           f"r = {ROWS}.at(-1).getBoundingClientRect(); "
+                           "return r.top >= l.top - 1 && r.bottom <= l.bottom + 1; })()") is True
+            assert page.js("(() => { const r = document.getElementById('tracks-done').getBoundingClientRect();"
+                           " return r.top >= 0 && r.bottom <= innerHeight; })()") is True
+            assert page.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
+        finally:
+            page.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize("size", [PHONE, {"width": 1280, "height": 800}], ids=["phone", "wide"])
+def test_a_track_the_file_saves_muted_is_shown_unmuted_for_the_page_mutes_nothing_of_itself(cfg, conn, tmp_path, size):
+    """alphaTab never applies a track's saved mute to the synthesizer, so showing it would be a lie."""
+    server, url = served_from_tex(cfg, conn, tmp_path, MUTED)
+    try:
+        page = opened(tmp_path, url, **size)
+        try:
+            assert page.wait(RENDERED, 30)
+            assert page.js("window.caracoleGuitar.score.tracks.map((t) => t.playbackInfo.isMute)") == [False, True]
+            assert page.js("document.querySelectorAll('#tracks .track.muted, #tracks-sheet .muted').length") == 0
+            assert pressed(page, "#tracks .mute, #tracks-sheet .mute") == ["false"] * 4
+            # The first tap mutes it, as it does any track.
+            page.js(SPY_MUTE)
+            page.js("document.querySelector('#tracks .track:nth-child(2) .mute').click()")
+            assert page.wait("window.mutes.length === 1", 5)
+            assert page.js("window.mutes") == [[[1], True]]
+            assert pressed(page, "#tracks .mute, #tracks-sheet .mute") == ["false", "true", "false", "true"]
+        finally:
+            page.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_sheet_slides_up_unless_motion_is_reduced(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, **PHONE)
+    try:
+        assert page.wait(RENDERED, 30)
+        for motion, moves in (("no-preference", True), ("reduce", False)):
+            page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": motion}])
+            page.click("#tracks-open")
+            assert page.wait(f"{SHEET}.open", 5)
+            assert (page.js(f"getComputedStyle({SHEET}).animationName") != "none") is moves
+            page.press("Escape")
+            assert page.wait(f"!{SHEET}.open", 5)
+    finally:
+        page.close()
+
+
+def test_a_wide_screen_keeps_its_chips_and_no_sheet(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, width=1280, height=800)
+    try:
+        assert page.wait(RENDERED, 30)
+        assert page.js("getComputedStyle(document.getElementById('tracks')).display") != "none"
+        assert page.js("getComputedStyle(document.getElementById('tracks-open')).display") == "none"
+        assert page.js(f"{SHEET}.open") is False
+    finally:
+        page.close()
+
+
+ONE_TRACK = """\\title "One track"
+\\tempo 96
+.
+\\track "Lead guitar"
+\\staff {score tabs}
+\\tuning e4 b3 g3 d3 a2 e2
+\\instrument 27
+:4 0.1 2.1 3.1 0.1 | 3.2 1.2 0.2 1.2 |
+"""
+
+
+def test_a_score_of_one_track_has_no_button_on_a_phone(cfg, conn, tmp_path):
+    try:
+        maker = Browser(tmp_path / "maker")
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    try:
+        data = export_alphatex(maker, ONE_TRACK)
+    finally:
+        maker.close()
+    server, _, url = serving(cfg, conn, data)
+    try:
+        page = opened(tmp_path, url, **PHONE)
+        try:
+            assert page.wait(RENDERED, 30)
+            assert page.js("window.caracoleGuitar.score.tracks.length") == 1
+            assert page.js("getComputedStyle(document.getElementById('tracks')).display") == "none"
+            assert page.js("document.getElementById('tracks-open')") is None
+            assert page.js("document.querySelector('dialog')") is None
+        finally:
+            page.close()
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_a_wide_screen_starts_with_the_score_and_the_tab(served, tmp_path):

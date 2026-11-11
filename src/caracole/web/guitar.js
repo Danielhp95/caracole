@@ -179,10 +179,18 @@
   // a piano's), pressed while it is shown, and a speaker on it that mutes it. A name cut short is whole in the
   // button's title, and a kind the name says already ("Drums") isn't said twice. A tap shows that track alone; with
   // Shift, Ctrl or ⌘ held it is shown beside those shown, or taken away from them (the last one stays), and so on a
-  // touch screen with a long press (HOLD ms, the finger still: a finger that moves scrolls the row), whose tap at
-  // the end does nothing more. A track stays muted, whichever is shown, while the page is open: the synthesizer
-  // mutes its channels at once, playing or not, and keeps them muted (alphaTab never resets them; and the track's
-  // playbackInfo says so too).
+  // touch screen with a long press (HOLD ms, the finger still), whose tap at the end does nothing more. A track
+  // stays muted, whichever is shown, while the page is open: the synthesizer mutes its channels at once, playing or
+  // not, and keeps them muted (alphaTab never resets them; and the track's playbackInfo says so too). The page
+  // keeps which are muted itself, none at first: a track the file saves muted (its playbackInfo says so) is
+  // heard, alphaTab never applying that to the synthesizer, so it is shown as heard.
+  //
+  // On a phone (guitar.css, under 600 px) the chips give way to one button, #tracks-open, which opens a sheet of
+  // the tracks, a modal <dialog>: a row each with a tick (shown), its name and kind, and a speaker (muted). The
+  // ticks only choose: the tracks ticked are drawn once, when the sheet closes, since alphaTab draws the whole
+  // score again for a change of tracks, which takes a moment on a phone. The page's one track shown can't be
+  // unticked. Done, a tap outside the sheet, Escape and Android's Back close it, and so does a screen widened past
+  // 599 px (a button pressed while the screen is wide opens nothing). Both are built whatever the screen, for a score of two tracks or more, and each shows by its width.
   const HOLD = 450;
   const bar = $("tracks");
   const trackName = (track, index) => String(track.name || "").trim() || "Track " + (index + 1);
@@ -209,10 +217,28 @@
     shape("M16 9l6 6M22 9l-6 6", "cross");
     return svg;
   };
-  const buttons = [];
+  const buttons = [];  // each track's chip
+  const rows = [];  // each track's row in the sheet, index for index with buttons
+  let opener = null;  // the button that opens the sheet, once built
+  const silenced = score.tracks.map(() => false);  // each track's mute, as this page set it
+  const markMuted = () => buttons.forEach(({ item, button }, index) => {
+    const muted = silenced[index];
+    item.classList.toggle("muted", muted);
+    button.setAttribute("aria-pressed", String(muted));
+    if (rows[index]) {
+      rows[index].li.classList.toggle("muted", muted);
+      rows[index].mute.setAttribute("aria-pressed", String(muted));
+    }
+  });
   const mark = () => {
     root.dataset.track = shown.join(",");
     buttons.forEach(({ show }, index) => show.setAttribute("aria-pressed", String(shown.includes(index))));
+    rows.forEach(({ tick }, index) => { tick.checked = shown.includes(index); });
+    markMuted();
+    if (opener) {
+      opener.querySelector(".now").textContent = trackName(score.tracks[shown[0]], shown[0]) +
+        (shown.length > 1 ? " + " + (shown.length - 1) : "");
+    }
   };
   const showTracks = (indexes) => {
     shown = indexes;
@@ -224,11 +250,10 @@
   };
   const mute = (index, muted) => {
     const track = score.tracks[index];
+    silenced[index] = muted;
     track.playbackInfo.isMute = muted;
     api.changeTrackMute([track], muted);
-    const { item, button } = buttons[index];
-    item.classList.toggle("muted", muted);
-    button.setAttribute("aria-pressed", String(muted));
+    markMuted();
   };
   score.tracks.forEach((track, index) => {
     const name = trackName(track, index);
@@ -302,9 +327,149 @@
     });
   });
   bar.hidden = score.tracks.length < 2;
+
+  let sheet = null;
+  let pending = null;  // the tracks ticked while the sheet is open, in the score's order; none while it is shut
+  // The sheet holds a history entry while it is open (no address: the page's sandbox has an opaque origin), so that
+  // Android's Back closes it and leaves the page. Closing any other way takes the entry away with history.back(),
+  // whose popstate is `skip`ped, not read as a Back; a sheet asked for before it comes waits for it (`again`), so
+  // that the traversal never takes the new entry.
+  let entry = false;
+  let skip = 0;
+  let again = false;
+  const rowTitles = () => rows.forEach(({ label, name, text }) => {
+    if (text.scrollWidth > text.clientWidth) label.title = name;
+    else label.removeAttribute("title");
+  });
+  const closeSheet = () => {
+    if (!pending) return;  // Done and the dialog's own close (Escape) both end here, once
+    const ticked = pending;
+    pending = null;
+    if (sheet.open) sheet.close();
+    if (entry) {
+      entry = false;
+      skip += 1;
+      history.back();
+    }
+    opener.setAttribute("aria-expanded", "false");
+    if (ticked.join() !== shown.join()) showTracks(ticked);
+    // The button is hidden once the screen is wide: the focus goes to the chip of the first track shown instead.
+    (narrow.matches ? opener : buttons[shown[0]].show).focus();
+  };
+  const openSheet = () => {
+    if (!narrow.matches) return;  // a button left from a phone's screen: a wide one has the chips
+    if (pending && !sheet.open) closeSheet();  // Escape shut it, and its close event hasn't come yet
+    if (pending) return;
+    if (skip) {
+      again = true;
+      return;
+    }
+    pending = shown.slice();
+    rows.forEach(({ tick }, index) => { tick.checked = pending.includes(index); });
+    lockLast();
+    history.pushState({ tracksSheet: true }, "");
+    entry = true;
+    sheet.showModal();
+    opener.setAttribute("aria-expanded", "true");
+    rowTitles();
+  };
+  // The only tick left is shut: a track stays shown.
+  // Its row's speaker takes the keyboard then, which a box shut would lose to the page.
+  const lockLast = () => rows.forEach(({ tick, mute: speaker }, index) => {
+    const shut = pending.length === 1 && pending[0] === index;
+    if (shut && document.activeElement === tick) speaker.focus();
+    tick.disabled = shut;
+  });
+  if (!bar.hidden) {
+    opener = document.createElement("button");
+    opener.type = "button";
+    opener.id = "tracks-open";
+    opener.className = "btn tracks-open";
+    opener.setAttribute("aria-haspopup", "dialog");
+    opener.setAttribute("aria-expanded", "false");
+    for (const [cls, text] of [["now", ""], ["count", score.tracks.length + " tracks "]]) {
+      const span = opener.appendChild(document.createElement("span"));
+      span.className = cls;
+      span.textContent = text;
+    }
+    const arrow = opener.querySelector(".count").appendChild(document.createElement("span"));
+    arrow.setAttribute("aria-hidden", "true");  // a picture of the sheet's way, never read out
+    arrow.textContent = "\u25b4";
+    bar.after(opener);
+
+    sheet = document.body.appendChild(document.createElement("dialog"));
+    sheet.id = "tracks-sheet";
+    sheet.className = "tracks-sheet";
+    sheet.setAttribute("aria-labelledby", "tracks-title");
+    sheet.appendChild(document.createElement("div")).className = "grip";
+    const head = sheet.appendChild(document.createElement("div"));
+    head.className = "tracks-head";
+    const title = head.appendChild(document.createElement("h2"));
+    title.id = "tracks-title";
+    title.textContent = "Tracks";
+    const done = head.appendChild(document.createElement("button"));
+    done.type = "button";
+    done.id = "tracks-done";
+    done.className = "btn";
+    done.textContent = "Done";
+    const list = sheet.appendChild(document.createElement("ul"));
+    list.className = "tracks-list";
+    score.tracks.forEach((track, index) => {
+      const name = trackName(track, index);
+      const li = list.appendChild(document.createElement("li"));
+      li.className = "row";
+      const label = li.appendChild(document.createElement("label"));
+      const tick = label.appendChild(document.createElement("input"));
+      tick.type = "checkbox";
+      const text = label.appendChild(document.createElement("span"));
+      text.className = "name";
+      text.textContent = name;
+      const kind = trackKind(track);
+      if (!says(name, kind)) {
+        const small = label.appendChild(document.createElement("span"));
+        small.className = "kind";
+        small.textContent = kind;
+      }
+      const silence = li.appendChild(document.createElement("button"));
+      silence.type = "button";
+      silence.className = "mute";
+      silence.setAttribute("aria-label", "Mute " + name);
+      silence.setAttribute("aria-pressed", "false");
+      silence.title = "Mute " + name;
+      silence.appendChild(speaker());
+      rows.push({ li, label, tick, text, name, mute: silence });
+      silence.addEventListener("click", () => mute(index, silence.getAttribute("aria-pressed") !== "true"));
+      tick.addEventListener("change", () => {
+        pending = tick.checked ? pending.concat(index).sort((a, b) => a - b) : pending.filter((i) => i !== index);
+        lockLast();
+      });
+    });
+    opener.addEventListener("click", openSheet);
+    done.addEventListener("click", closeSheet);
+    // Escape closes a modal dialog by itself; a close event that comes late, once it is open again, is not this one's.
+    sheet.addEventListener("close", () => { if (!sheet.open) closeSheet(); });
+    // The backdrop is the dialog's own target, as is its box where no child is: only a tap outside its box closes.
+    sheet.addEventListener("click", (e) => {
+      const box = sheet.getBoundingClientRect();
+      const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+      if (e.target === sheet && !inside) closeSheet();
+    });
+    window.addEventListener("popstate", () => {
+      if (skip) {
+        skip -= 1;
+        if (!skip && again) {
+          again = false;
+          openSheet();
+        }
+      } else if (pending) {
+        entry = false;  // Back took it
+        closeSheet();
+      }
+    });
+    // A screen that widens past a phone's has the chips, no sheet: it closes, its ticks drawn.
+    narrow.addEventListener("change", () => { if (!narrow.matches) closeSheet(); });
+  }
   mark();
-  // The track it opens on, in the view of the row of tracks, which on a phone scrolls sideways.
-  if (!bar.hidden) buttons[shown[0]].item.scrollIntoView({ block: "nearest", inline: "nearest" });
   const titles = () => buttons.forEach(({ show, label, name }) => {
     if (label.scrollWidth > label.clientWidth) show.title = name;
     else show.removeAttribute("title");
@@ -342,9 +507,11 @@
   stop.addEventListener("click", () => api.stop());
   // Space plays and pauses, as Play does, wherever the focus is: a button it is on (Play itself, a track's) is not
   // pressed too, nor a switch moved, and the page doesn't scroll. The page has no field to type in. Before the sound
-  // has loaded, or with a modifier held, Space is the browser's.
+  // has loaded, or with a modifier held, Space is the browser's, and so it is in the open sheet, where it ticks a box,
+  // mutes a speaker and presses Done as in any dialog.
   document.addEventListener("keydown", (e) => {
     if (e.key !== " " || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || play.disabled) return;
+    if (sheet && sheet.open) return;
     e.preventDefault();
     if (!e.repeat) play.click();
   });
