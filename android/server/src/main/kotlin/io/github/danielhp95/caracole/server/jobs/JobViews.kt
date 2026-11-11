@@ -24,10 +24,10 @@ import kotlinx.serialization.json.JsonPrimitive
  *   "sync", an index import "index" (the phone's alone), PhoneKinds' their own;
  * - a sync, a take, an index import and a merge are staged ([STAGED]): their stages are their steps, each named as
  *   the Requests tab names it ([stepName]), with `count` null and, once over, their `outcome` (§5.3);
- * - its line once done is its JobSpec's [JobSpec.doneLine] when it has one ("Added: the nightly run looks for it"); an
- *   index import says "Merged" or "Nothing newer to merge"; PhoneKinds' say their table's words, the ones
- *   their run filled in as their stage's detail (§5.3's table: "Making the pages again: 3 of 10", "Pages made again
- *   for 12 songs", "Not filed: why").
+ * - its line once done is its JobSpec's [JobSpec.doneLine] when it has one ("Added · fetched
+ *   tonight"); an index import says "Merged" or "Nothing newer"; PhoneKinds' say their table's words, the ones
+ *   their run filled in as their stage's detail (§5.3's table: "Remaking pages · 3 of 10", "Pages remade · 12
+ *   songs", "Not filed: why").
  * - `details` is the request's output in the Requests tab (`#tab=requests&job=N`), but a sync's, which the Sync tab
  *   shows (`#tab=sync`).
  */
@@ -48,8 +48,8 @@ object JobViews {
     /** The phone's index import's running line (its "merge" stage), apart from another caracole's index pages merged. */
     private const val INDEX_LINE = "Merging the computer's index"
 
-    /** `caracole peer sync`'s and `take`'s agree stage, done: how many units the two agree on. */
-    private val AGREED = PyRegex.compile("""^(\d+) units? the two agree on$""")
+    /** `caracole peer sync`'s and `take`'s agree stage, done: how many units the books agree on. */
+    private val AGREED = PyRegex.compile("""^(\d+) units? the books agree on$""")
 
     /** The job's output in the library page's Requests tab, open (status.py's details_href). */
     fun detailsHref(id: Int): String = Status.detailsHref(id)
@@ -168,7 +168,7 @@ object JobViews {
         job.spec.doneLine?.let { return Line(if (job.spec.kind == "remove") "removed" else "added", it) }
         if (job.spec.kind == "index") {
             return Line("added", if ((job.outcome?.get("changed") as? JsonPrimitive)?.content == "true") "Merged"
-                                 else "Nothing newer to merge")
+                                 else "Nothing newer")
         }
         return null
     }

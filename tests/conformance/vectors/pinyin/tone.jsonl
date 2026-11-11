@@ -1681,8 +1681,8 @@
 {"args":["Señorita","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","",""]}
 {"args":["Soda Stereo - De Música Ligera","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Soda Stereo - De Música Ligera"]}
 {"args":["Soda Stereo - De Música Ligera","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
-{"args":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)"]}
-{"args":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
+{"args":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)"]}
+{"args":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
 {"args":["Song (Acústico)","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Song (Acústico)"]}
 {"args":["Song (Acústico)","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","",""]}
 {"args":["Song (Versión Acústica)","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Song (Versión Acústica)"]}

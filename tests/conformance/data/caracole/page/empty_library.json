@@ -22,7 +22,7 @@
  },
  "icons": {
   "ug": {
-   "name": "Ultimate Guitar",
+   "name": "UG",
    "letters": "UG"
   },
   "lacuerda": {
@@ -42,7 +42,7 @@
    "letters": "AZ"
   },
   "gtptabs": {
-   "name": "gtptabs.com",
+   "name": "gtptabs",
    "letters": "GT"
   },
   "musescore": {
@@ -50,11 +50,11 @@
    "letters": "MS"
   },
   "harptabs": {
-   "name": "harptabs.com",
+   "name": "harptabs",
    "letters": "HT"
   },
   "gametabs": {
-   "name": "gametabs.net",
+   "name": "gametabs",
    "letters": "GM"
   },
   "youtube": {

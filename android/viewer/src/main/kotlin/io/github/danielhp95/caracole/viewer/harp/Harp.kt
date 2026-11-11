@@ -382,7 +382,7 @@ object Harp {
         val scale = Theory.SCALES.getValue(mode)
         val out = ionian.map { Math.floorMod(offset + it, 12) }.filter { it !in scale }
         if (out.isEmpty()) {
-            return JsonArray(listOf(JsonPrimitive("Every note it blows or draws is in "), JsonPrimitive(0),
+            return JsonArray(listOf(JsonPrimitive("Every note it plays is in "), JsonPrimitive(0),
                                     JsonPrimitive("$words.")))
         }
         val text = mutableListOf<JsonElement>(JsonPrimitive("Outside "), JsonPrimitive(0), JsonPrimitive("$words: "))

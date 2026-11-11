@@ -17,11 +17,11 @@ internal object Address {
         val parts = try {
             split(typed)
         } catch (e: IllegalArgumentException) {
-            throw PeerError("${repr(text)} isn't an address caracole can ask: ${e.message}")
+            throw PeerError("${repr(text)} isn't an address we can ask: ${e.message}")
         }
         if (parts.scheme !in setOf("http", "https") || parts.hostname.isNullOrEmpty() || parts.query.isNotEmpty() ||
             parts.fragment.isNotEmpty() || parts.path !in setOf("", "/")) {
-            throw PeerError("${repr(text)} isn't the address of a caracole serve (http://HOST:PORT)")
+            throw PeerError("${repr(text)} isn't a caracole serve address (http://HOST:PORT).")
         }
         return typed.trimEnd('/')
     }

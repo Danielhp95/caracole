@@ -555,7 +555,7 @@ Below the table, a section for each step whose modules have more to say.
   credible).
 - Every path that turns text into a name uses it:
   - `/api/search`'s `names` (with the YouTube video suggested for the query), which the library page's request form,
-    its Make the sheet and the lookup page's form by name fill in, each field until you type into it (no page splits
+    its Make sheet and the lookup page's form by name fill in, each field until you type into it (no page splits
     a text itself: test_web_page_names.py);
   - a pasted video's guess (youtube_routes.py `pasted_video`);
   - `/request` and `/lookup` given one text, `q` (library_routes.py `named_form`);
@@ -689,7 +689,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     by song_names.py, the library's song of it).
   - For a video not read yet, it sends `POST /youtube/video` once (a queued `caracole youtube --video --progress`: one
     yt-dlp run of its metadata and its thumbnail).
-  - Only its Add and make the sheet sends the request form (`POST /request` with the video): nothing is downloaded
+  - Only its Add and make sheet sends the request form (`POST /request` with the video): nothing is downloaded
     before.
 - **LaCuerda's own search** is one of the two requests a search may bring.
   - Both pages send it by themselves (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) once the
@@ -704,7 +704,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     an artist's songs Enter opened on the lookup page staying open, and a search refused or failed has the button its
     words name: test_web_page_lacuerda_search.py.
   - One LaCuerda button on the screen at a time, worded Ask LaCuerda:
-    - the search's own, "Ask LaCuerda for “…” (1 request)", only where the results offer no name's page;
+    - the search's own, "Ask LaCuerda: “…” · 1 request", only where the results offer no name's page;
     - where they do (`lacuerda_unlisted`), Ask LaCuerda's under the chevron of `nothingFound`'s line or in
       `notesLine` stands for both, sending the search while its gate says `auto` or `button` (the searcher's `ask`,
       which the pages' `does.ask` tries first) and reading the name's page else, the search's line then its words
@@ -721,7 +721,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   `harptabs`):
   - its artists, named from their page once read (harptabs_index.py);
   - and a song's tabs by an artist whose page caracole read, a song a line, the most viewed first under its "⋯"
-    (rows.js `harpTabsOf`), each Get it a lookup that keeps that tab (`harptabs`, `caracole get --harptabs`,
+    (rows.js `harpTabsOf`), each Fetch a lookup that keeps that tab (`harptabs`, `caracole get --harptabs`,
     `[harptabs]`);
   - a tab no page read names is a title alone, as MuseScore's pages, apart.
   - An artist's group ends with "+ N more by … on harptabs.com" (`/api/artist?harptabs=`) or, for a page never read,
@@ -731,7 +731,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     tooltip).
 - **gametabs.net's tracks of games** (`search.search_gametabs`, `/api/search`'s `gametabs`) are songs whose artist is
   their game:
-  - a line in the game's group, their tabs under its "⋯" (rows.js `gameTabsOf`), each Get it a lookup that keeps that
+  - a line in the game's group, their tabs under its "⋯" (rows.js `gameTabsOf`), each Fetch a lookup that keeps that
     tab (`gametabs`, `caracole get --gametabs`, `[gametabs]`);
   - their instruments badges, none while it is turned off;
   - its `looked` mark says how far its game pages are read ("gametabs.net: 2 of 7 games", search_routes.py
@@ -767,7 +767,7 @@ It is rows.js's, shared by both pages:
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).
-- A hit's name there and on the lookup page presses its Get it (or Add again), disabled while that button is (rows.js
+- A hit's name there and on the lookup page presses its Fetch (or Add again), disabled while that button is (rows.js
   `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
 - **An artist's name**:
   - Served, an artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
@@ -856,7 +856,7 @@ It is rows.js's, shared by both pages:
   (`caracole:songbooks`).
 - library.js posts the Select bar's songbook too, and gives the bar its ticks back when that make fails
   (`caracole:unmade`; the songbook stays on the tab until it is made, under its name or with those ticks under
-  another, or its Forget it is pressed: songbooks.js `letGo`).
+  another, or its Forget is pressed: songbooks.js `letGo`).
 - A song's chip sends the capo with the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and
   the instrument once it changes (on one with no capo, the key it sounds in, `at.sounds`, its capo menu off).
 - Add a song looks a song the library hasn't got up first (`/songbook/add-song`: `search_routes.lookup_request`, then
@@ -872,8 +872,8 @@ It is rows.js's, shared by both pages:
 - A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
-  came from, how many; the lyrics none), Fetch now's download glyph where it has one (rows.js `fetchIcon`, a site's
-  song's Get it too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
+  came from, how many; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
+  song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
   its chevron open it as a card (card.js `caracoleCard`, card.css):
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
@@ -1078,8 +1078,8 @@ It is rows.js's, shared by both pages:
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
-- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html), the
-  sync redesign's §3.4.1:
+- **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
+  sync-panel.html), the sync redesign's §3.4.1:
   - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
   - `POST /sync/test`: one `GET /api/peer/state` of the other caracole, nothing written, its counts, newest index read
     and the last sync in words (`tested_words`), refused as a comparison is;
@@ -1155,24 +1155,24 @@ It is rows.js's, shared by both pages:
 - Beyond a wanted.txt line, every change runs as a `caracole` command queued in jobs.py (One caracole at a time,
   below).
 - The one line a request shows is status.py's, read from the job's steps and the song's state, never from which
-  commands ran: a step's label is that line while it runs ("Adding to the library…").
-- The library page's Requests tab, its last, says that line its own way (outcome.py): `#tab=requests`,
+  commands ran: a step's label is that line while it runs ("Adding to the book…").
+- The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
 - The library page's lines read only its steps (`outcome.progress`: a lookup's chips under its line while it runs,
   kept when it ends otherwise than Ready), never the rest: a finished one's outcome, a reason from its stages and its
-  song's state (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
+  song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step.
 - Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, never one that runs, with the jobs
   `submit_all` queued `together` with it), keeping it in the history as over ("cancelled"), so a page that follows it
   hears it ended.
 - Try again queues a finished one's steps again (a removal's asks its question again).
 - **A sandboxed viewer reaches a form** only through a GET page of the server's own, whose form posts with the token:
-  - `/versions` (versions_routes.py: Make this the one, Keep it and back to caracole's pick,
+  - `/versions` (versions_routes.py: Make this the one, Keep and Back to our pick,
     `caracole versions --choose`, `--keep` and `--clear`, with `--progress`: the job's stages, a lookup's for
     `--choose` and `--clear`, which run `caracole get`), each a job under the song's key, which jobs.py's `_pick` joins
     as a lookup's `--tab`;
-  - and `/harmonica` (harmonica_routes.py: a harmonica tab's readings, each pinned, or back to caracole's guess,
+  - and `/harmonica` (harmonica_routes.py: a harmonica tab's readings, each pinned, or Back to our guess,
     `caracole harmonica --as` or `--clear`), linked from the tab's page by harptab.js when served, each job under
     `jobs.READING`, the song's change as Make this my version's `EXPORTING` is (status.py, jobs_routes.py).
 - What a done job came to is read from the song's state and overrides.toml again (`caracole get` exits 0 on a block or
@@ -1185,8 +1185,8 @@ It is rows.js's, shared by both pages:
   - The viewer's Export PDF is a link to it, which its sandbox may download (`viewer_csp`: `allow-downloads`, nothing
     else added), the page staying where it is.
   - On a version whose music differs from the song's own (key, mode, capo, swaps, shapes: viewer.js `musicOf`; never
-    a reading setting nor the instrument, the player's), a modal dialog asks first, Download and make it mine
-    (`mine=1`), Just download or Cancel (test_viewer_panels.py, test_web_server.py's download in the real sandbox).
+    a reading setting nor the instrument, the player's), a modal dialog asks first, Make mine
+    (`mine=1`), Download only or Cancel (test_viewer_panels.py, test_web_server.py's download in the real sandbox).
 
 #### `autochords/`
 
@@ -1289,7 +1289,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   tests/test_android_e2e.py, below).
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
-  - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "… isn't on the phone yet."
+  - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
     (409), for good: the phone runs no yt-dlp, and the library page's search does the lookup page's work;
   - no declaration is left a lane's stub (`TODO("lane <id>")`); a later round that adds one names its lane so, in a
     file that lane owns;
@@ -1421,7 +1421,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `LookupLines` and `LookupWords.totals` its output; a refusal or a bug exits 1), `VersionsRunner` (`--keep` and
   `--keep-more` to `VersionsCommands`; `--choose` as get `--tab` at the version's address; `--clear` as `removePin`,
   then get), `LaCuerdaRunner` (`--artist`, `--search` to `LaCuerdaCommands`) and `HarpTabsRunner` (`--artist`).
-  - A refused lookup's step ends with `error: Nothing looked up: ….` and a bug's with `error: a bug in caracole: …`
+  - A refused lookup's step ends with `error: Nothing fetched: ….` and a bug's with `error: a bug in caracole: …`
     (the queue writes an `error:` line for every step that fails), where the computer's says the first plainly and
     logs the second; the stage the library page's line reads says the same on both.
 - A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`) runs in
@@ -2067,11 +2067,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 ##### An uncertain match reviewed on the phone
 
 - server's `ReviewRoutes` is review_routes.py:
-  - `GET /review?song=ID`, the picker's page (the Requests tab's Pick the match, a song not found's Look in the
+  - `GET /review?song=ID`, the picker's page (the Journal's Pick, a song not found's Search the
     index), pages.picker_form's markup in the message page's frame and policy (`MessagePage.html`: no script);
   - `POST /review`, its answer and the card's picker's: `caracole review --song=… --pick=…` (or `--none --seen=…`)
     queued under the song's key, never joined (`join` false), refused while the song's own request waits or runs;
-  - a pick with Fetch it now is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
+  - a pick with Fetch ticked is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
     caracole serve's `caracole fetch --song` and `render --song`, which the phone hasn't: its line, while the review
     runs, the lookup's first stage's, as status.py says it of a job with a lookup ("Finding the song…");
   - the page's form token is Assembly's (`ReviewRoutes(parts, csrf)`, no default), so its Pick posts as the card's.
@@ -2147,7 +2147,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - the names through `SongNames.readNames` (a link's service's, "Read from Spotify's page: …"), searched as
     `/api/search` searches (`SearchRoutes.answer`);
   - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
-  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+  - Fetch the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
     and policy (`MessagePage.html`: no script).
 - ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
 
@@ -2559,7 +2559,7 @@ picks one).
   by default.
 - The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
   counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
-- Nothing is sent to a tab site before Get it.
+- Nothing is sent to a tab site before Fetch.
 
 #### Either pace
 

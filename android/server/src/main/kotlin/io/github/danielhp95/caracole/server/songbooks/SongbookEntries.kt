@@ -68,7 +68,7 @@ object SongbookEntries {
     const val MISSING_SHEET = "no sheet yet"
 
     /** songbook.MISSING_SONG: an entry the library has no song of. */
-    const val MISSING_SONG = "not in the library"
+    const val MISSING_SONG = "not in the logbook"
 
     /** songbook.KEY_UNKNOWN: what [playsIn] says of a setting or a key a sheet with no key can't take. */
     const val KEY_UNKNOWN = "key unknown, as written"

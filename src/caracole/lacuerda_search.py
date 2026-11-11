@@ -124,10 +124,10 @@ class Failure:
         from caracole.stamps import shown
 
         if self.own:
-            return (f"LaCuerda's search for {query} failed less than an hour ago ({self.error}), so the page won't "
-                    f"send it by itself before {shown(self.until)}")
-        return (f"{self.count} searches of LaCuerda failed in the last hour (the last: {self.error}), so the page "
-                f"sends none by itself before {shown(self.until)}")
+            return (f"LaCuerda's search for {query} failed within the hour ({self.error}); "
+                    f"not sent by itself before {shown(self.until)}")
+        return (f"{self.count} LaCuerda searches failed this hour (last: {self.error}); "
+                f"none sent by itself before {shown(self.until)}")
 
 
 def _failures(conn: sqlite3.Connection, now: datetime) -> dict[str, dict[str, str]]:

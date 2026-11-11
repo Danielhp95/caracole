@@ -506,7 +506,7 @@ def test_lacuerda_says_which_song_waits_for_a_folder_another_songs_name_makes(tm
     result = run(tmp_path, "lacuerda")
     assert result.exit_code == 0, result.output
     assert ("LaCuerda: 1 tried, 0 sheets kept, 0 missing, 0 errors\nRodrigo - Concierto, part two's sheet.json isn't "
-            "kept: its folder is Rodrigo - Concierto, part one's too") in result.stdout
+            "kept: Rodrigo - Concierto, part one shares its folder") in result.stdout
 
 
 def test_lacuerda_with_nothing_to_try(tmp_path, sites):
@@ -671,8 +671,8 @@ def test_lacuerda_artist_reads_one_page_into_the_index_at_the_lookup_pace(tmp_pa
     sites.lacuerda.pages[SODA] = (LACUERDA_FIXTURES / "artist.html").read_text(encoding="utf-8")
     result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
     assert result.exit_code == 0, result.output
-    assert result.stdout == "Read: LaCuerda's page of Soda Stereo lists 14 songs, in the index now.\n"
-    assert served(result) == "Read: LaCuerda's page of Soda Stereo lists 14 songs, in the index now."
+    assert result.stdout == "Read: LaCuerda's page of Soda Stereo lists 14 songs.\n"
+    assert served(result) == "Read: LaCuerda's page of Soda Stereo lists 14 songs."
     assert sites.lacuerda.requests == [SODA]
     conn = open_db(tmp_path)
     try:
@@ -682,30 +682,30 @@ def test_lacuerda_artist_reads_one_page_into_the_index_at_the_lookup_pace(tmp_pa
     finally:
         conn.close()
     again = run(tmp_path, "lacuerda", "--artist", "Soda Stereo")  # by their name too; from the cache
-    assert again.stdout == "Read: LaCuerda's page of Soda Stereo lists 14 songs, in the index now.\n"
+    assert again.stdout == "Read: LaCuerda's page of Soda Stereo lists 14 songs.\n"
     assert sites.lacuerda.requests == [SODA]
 
 
 def test_lacuerda_artist_lacuerda_has_no_page_for_says_so(tmp_path, sites, quick):
     result = run(tmp_path, "lacuerda", "--artist", "Nadie Conocido")
     assert result.exit_code == 0, result.output
-    assert result.stdout == "Not found: LaCuerda has no artist page for Nadie Conocido.\n"
-    assert served(result) == "Not found: LaCuerda has no artist page for Nadie Conocido."
+    assert result.stdout == "Not found: LaCuerda has no page for Nadie Conocido.\n"
+    assert served(result) == "Not found: LaCuerda has no page for Nadie Conocido."
 
 
 def test_lacuerda_artist_block_cooldown_error_and_spent_lookup_budget_exit_0(tmp_path, sites, quick):
     sites.lacuerda.status = 500
     result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
-    assert result.exit_code == 0 and "LaCuerda failed" in result.stdout and "try again" in result.stdout
+    assert result.exit_code == 0 and "LaCuerda failed" in result.stdout and "Try again" in result.stdout
     assert served(result) == "Not read: LaCuerda failed."
     sites.lacuerda.status = 403
     result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
-    assert result.exit_code == 0 and "LaCuerda blocked caracole" in result.stdout
-    assert served(result) == "Not read: LaCuerda blocked caracole."
+    assert result.exit_code == 0 and "LaCuerda turned us back" in result.stdout
+    assert served(result) == "Not read: LaCuerda turned us back."
     asked = len(sites.lacuerda.requests)
     result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
-    assert "LaCuerda is cooling down" in result.stdout and len(sites.lacuerda.requests) == asked
-    assert served(result).startswith("Not read: LaCuerda is cooling down after a block until ")
+    assert "waiting out LaCuerda" in result.stdout and len(sites.lacuerda.requests) == asked
+    assert served(result).startswith("Not read: waiting out LaCuerda until ")
     conn = open_db(tmp_path)
     try:
         conn.execute("DELETE FROM kv WHERE key = 'provider:lacuerda'")  # the cooldown over
@@ -716,8 +716,8 @@ def test_lacuerda_artist_block_cooldown_error_and_spent_lookup_budget_exit_0(tmp
         conn.close()
     sites.lacuerda.status = None
     result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
-    assert result.exit_code == 0 and "this hour's 60 lookup requests to LaCuerda are spent" in result.stdout
-    assert served(result) == "Not read: this hour's 60 lookup requests to LaCuerda are spent."
+    assert result.exit_code == 0 and "no more asks of LaCuerda this hour (60 spent)" in result.stdout
+    assert served(result) == "Not read: no more asks of LaCuerda this hour."
     assert len(sites.lacuerda.requests) == asked
 
 
@@ -767,8 +767,8 @@ def test_lacuerda_search_asks_once_and_puts_what_it_answers_in_the_index(tmp_pat
     sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
     result = run(tmp_path, "lacuerda", "--search", "Corazón de tiza")
     assert result.exit_code == 0, result.output
-    assert result.stdout == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index now.\n"
-    assert searched(result) == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index now."
+    assert result.stdout == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index.\n"
+    assert searched(result) == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index."
     assert sites.lacuerda.requests == [SEARCH_URL]  # one request, of the songs: "de" is no word to LaCuerda
     conn = open_db(tmp_path)
     try:
@@ -783,8 +783,8 @@ def test_lacuerda_search_asks_once_and_puts_what_it_answers_in_the_index(tmp_pat
         conn.close()
     # Asked within 30 days: no request, under any spelling LaCuerda reads the same.
     again = run(tmp_path, "lacuerda", "--search", "corazon tiza")
-    assert again.exit_code == 0 and again.stdout.startswith("Searched: LaCuerda was asked for “corazon tiza” on ")
-    assert again.stdout.endswith(": 2 songs, in the index.\n")
+    assert again.exit_code == 0 and again.stdout.startswith("Searched: LaCuerda, asked for “corazon tiza” on ")
+    assert again.stdout.endswith(": 2 songs.\n")
     assert sites.lacuerda.requests == [SEARCH_URL]
 
 
@@ -833,10 +833,10 @@ def test_lacuerda_search_that_finds_nothing_says_so_and_a_query_it_cant_read_ask
     assert result.exit_code == 0 and result.stdout == "Nothing found: LaCuerda has no song for “corazon de tiza”.\n"
     assert searched(result) == "Nothing found: LaCuerda has no song for “corazon de tiza”."
     # Its answer counts: asked again, within 30 days, it asks nothing.
-    assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda was asked")
+    assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda, asked for")
     result = run(tmp_path, "lacuerda", "--search", "el sol y tu")
     assert result.exit_code == 0 and result.stdout == (
-        "Not searched: LaCuerda's search reads only words of 4 letters or more, and “el sol y tu” has none.\n")
+        "Not searched: LaCuerda needs a word of 4 letters or more; “el sol y tu” has none.\n")
     assert sites.lacuerda.requests == [SEARCH_URL]
 
 
@@ -845,9 +845,8 @@ def test_lacuerda_search_keeps_to_its_share_of_the_hours_lookups_unless_asked_by
     lookup_events(tmp_path, "lookup:lacuerda-search:x", 20)
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--auto")
     assert result.exit_code == 0 and sites.lacuerda.requests == []
-    assert result.stdout.startswith("Not searched: this hour's 20 searches of LaCuerda the page sends by itself "
-                                    "are spent")
-    assert searched(result) == "Not searched: this hour's 20 searches of LaCuerda the page sends by itself are spent."
+    assert result.stdout.startswith("Not searched: this hour's 20 automatic searches are spent")
+    assert searched(result) == "Not searched: this hour's 20 automatic searches are spent. Ask LaCuerda asks anyway."
     # Asked by hand (the page's button, or a terminal), within the hour's lookups.
     assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda has 2")
     assert sites.lacuerda.requests == [SEARCH_URL]
@@ -855,7 +854,7 @@ def test_lacuerda_search_keeps_to_its_share_of_the_hours_lookups_unless_asked_by
     lookup_events(tmp_path, "lookup:x", 39)  # with the 21 searches, the hour's 60 lookup requests
     result = run(tmp_path, "lacuerda", "--search", "corazon de papel")
     assert result.exit_code == 0 and sites.lacuerda.requests == [SEARCH_URL]
-    assert searched(result) == "Not searched: this hour's 60 lookup requests to LaCuerda are spent."
+    assert searched(result) == "Not searched: no more asks of LaCuerda this hour."
 
 
 def test_lacuerda_search_block_cooldown_and_error_exit_0_and_mark_nothing_asked(tmp_path, sites, quick):
@@ -865,10 +864,10 @@ def test_lacuerda_search_block_cooldown_and_error_exit_0_and_mark_nothing_asked(
     assert searched(result) == "Not searched: LaCuerda failed."
     sites.lacuerda.status = 403
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
-    assert result.exit_code == 0 and searched(result) == "Not searched: LaCuerda blocked caracole."
+    assert result.exit_code == 0 and searched(result) == "Not searched: LaCuerda turned us back."
     asked = len(sites.lacuerda.requests)
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
-    assert searched(result).startswith("Not searched: LaCuerda is cooling down after a block until ")
+    assert searched(result).startswith("Not searched: waiting out LaCuerda until ")
     assert len(sites.lacuerda.requests) == asked
     conn = open_db(tmp_path)
     try:
@@ -896,7 +895,7 @@ def test_lacuerda_search_progress_says_how_it_goes_for_the_job_page(tmp_path, si
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--progress")
     events = [e for e in map(read_progress_line, result.stdout.splitlines()) if e is not None]
     assert [(e["stage"], e["state"]) for e in events] == [("search", "running"), ("search", "done")]
-    assert events[-1]["detail"] == "Searched: LaCuerda has 2 songs for “corazon de tiza”, in the index now."
+    assert events[-1]["detail"] == "Searched: LaCuerda has 2 songs for “corazon de tiza”, in the index."
     assert result.stdout.splitlines()[-1] == events[-1]["detail"]
 
 
@@ -912,9 +911,9 @@ def test_lacuerda_search_that_failed_isnt_sent_by_the_page_again_within_the_hour
     sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
     result = run(tmp_path, "lacuerda", "--search", "tiza corazon", "--auto")
     assert result.exit_code == 0 and sites.lacuerda.requests == [SEARCH_URL]
-    assert searched(result) == "Not searched: LaCuerda's search for “tiza corazon” failed less than an hour ago."
-    assert "so the page won't send it by itself before " in result.stdout and "HTTP 500" in result.stdout
-    assert result.stdout.rstrip().endswith("its Ask LaCuerda button, Try again or a terminal asks now.")
+    assert searched(result) == "Not searched: LaCuerda's search for “tiza corazon” failed within the hour."
+    assert "not sent by itself before " in result.stdout and "HTTP 500" in result.stdout
+    assert result.stdout.rstrip().endswith("Ask LaCuerda or Try again asks now.")
     # By hand (its button, Try again, a terminal) it asks, and an answer clears the failure.
     assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda has 2")
     assert sites.lacuerda.requests == [SEARCH_URL] * 2
@@ -933,8 +932,8 @@ def test_lacuerda_search_after_three_failures_in_an_hour_the_page_sends_none_by_
     sites.lacuerda.status = None
     sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
     result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--auto")
-    assert searched(result) == "Not searched: 3 searches of LaCuerda failed in the last hour."
-    assert "so the page sends none by itself before " in result.stdout and len(sites.lacuerda.requests) == 3
+    assert searched(result) == "Not searched: 3 LaCuerda searches failed this hour."
+    assert "none sent by itself before " in result.stdout and len(sites.lacuerda.requests) == 3
     # An hour after the first of them, two failed in the last hour: the page's own searches go again.
     conn = open_db(tmp_path)
     try:
@@ -962,10 +961,9 @@ def test_lacuerda_search_that_the_index_or_your_library_answers_sends_no_request
         conn.close()
     result = run(tmp_path, "lacuerda", "--search", "persiana americana", "--auto")
     assert result.exit_code == 0 and sites.lacuerda.requests == [SODA]
-    assert result.stdout == ("Found already: caracole has “persiana americana” already, in your library or its copy "
-                             "of LaCuerda's index; no request sent.\n")
-    assert searched(result) == ("Found already: caracole has “persiana americana” already, in your library or its "
-                                "copy of LaCuerda's index.")
+    assert result.stdout == ("Found already: “persiana americana” is in your book or LaCuerda's index. "
+                             "No ask sent.\n")
+    assert searched(result) == "Found already: “persiana americana” is in your book or LaCuerda's index. No ask sent."
     # A song of yours the query names: you are looking through your songs, and LaCuerda isn't asked.
     seed(tmp_path, ("Oasis", "Wonderwall"))
     result = run(tmp_path, "lacuerda", "--search", "oasis wonderwall")

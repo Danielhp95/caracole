@@ -118,7 +118,7 @@ def test_billy_joel_is_harptabs_coms_artist_with_his_songs_whose_get_it_keeps_th
     assert browser.js(f"{HT_ROWS}[0].querySelector('.line-sources .source').dataset.source") == "harptabs"
     assert browser.js(f"{HT_ROWS}.map((h) => h.querySelector('.badge.instrument').textContent)") == ["Harmonica"] * 3
     assert "harmonica tab ×4" in browser.js(f"{HT_ROWS}[0].textContent")
-    assert "on harptabs.com" in browser.js("document.getElementById('bar-status').textContent")
+    assert "on harptabs" in browser.js("document.getElementById('bar-status').textContent")
     assert queue.snapshot() == []
     # "+ 1 more": the song of his the index holds that the row left out, from /api/artist, asking no site.
     assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by billy joel on harptabs.com"
@@ -162,8 +162,8 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
     mark = browser.js("(() => { const c = document.querySelector('#bar-counts li[data-state=partial]'); "
                       "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
-    assert mark[0] == "harptabs" and mark[1].endswith(" on harptabs.com: index in part, 2 of 3 artists")
-    assert "still being read: 2 of 3 artists" in mark[2]
+    assert mark[0] == "harptabs" and mark[1].endswith(" on harptabs.com · index in part, 2 of 3 artists")
+    assert "being read: 2 of 3 artists" in mark[2]
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
     browser.click("#results .read-page button")
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
@@ -200,7 +200,7 @@ def test_a_read_that_left_no_songs_names_harptabs_com_never_lacuerda(cfg, live, 
     browser.click("#results .read-page button")
     assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
-    assert "LaCuerda" not in said and said.startswith("harptabs.com "), said
+    assert "LaCuerda" not in said and said.startswith("harptabs "), said
     browser.open(base + "lookup?q=ritchie%20valens")
     assert browser.wait(f"{HT_ROWS}.length === 1")
     browser.click("#results .hit[data-slug='artist/7829/ritchie-valens'] .row-action button")
@@ -208,7 +208,7 @@ def test_a_read_that_left_no_songs_names_harptabs_com_never_lacuerda(cfg, live, 
     browser.click("#results .read-page button")
     assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
-    assert "LaCuerda" not in said and said.startswith("harptabs.com "), said
+    assert "LaCuerda" not in said and said.startswith("harptabs "), said
 
 
 def test_the_lookup_page_lists_harptabs_com_last_and_its_artists_songs(cfg, live, browser):
@@ -217,9 +217,9 @@ def test_the_lookup_page_lists_harptabs_com_last_and_its_artists_songs(cfg, live
     harptabs(cfg)
     browser.open(base + "lookup?q=billy%20joel")
     assert browser.wait("[...document.querySelectorAll('#results .group')].some((g) => g.textContent === "
-                        "'On harptabs.com')")
+                        "'On harptabs')")
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups[-1] == "On harptabs.com", groups
+    assert groups[-1] == "On harptabs", groups
     browser.click("#results .hit[data-slug='artist/1178/billy-joel'] .row-action button")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 4")
     browser.js(f"{HT_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Vienna!')"

@@ -189,7 +189,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val me = database.read { Compare.ownId(it) }
         val peer = client(address).state(me)
         val server = peer.server
-            ?: throw PeerError("The caracole at $address has no id to sync by: it may be older than the app.")
+            ?: throw PeerError("$address has no id to share logs by: it may be older than the app.")
         if (server == me) throw sameCaracole(address, me)
         val syncedAt = database.read { db -> Documents.text((db.kvGetJson(PEER_KEY + server) as? JsonObject)?.get("synced_at")) }
         return Tested(peer, address, peer.units.keys.count { it.startsWith("song/") },
@@ -248,7 +248,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         if (Scope.LIBRARY !in asked) {
             stage(MIRROR, SKIPPED_STATE, LIBRARY_LEFT_OUT)
         } else if (refresh == null) {
-            stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages on this phone")
+            stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages here")
         } else {
             stage(MIRROR, RUNNING, "")
             try {
@@ -279,7 +279,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             done.at = at
             after
         }
-        stage(AGREE, DONE, "${plural(done.agreed, "unit")} the two agree on")
+        stage(AGREE, DONE, "${plural(done.agreed, "unit")} the books agree on")
 
         // 6. index
         if (Scope.INDEXES !in asked) stage(INDEX, SKIPPED_STATE, INDEXES_LEFT_OUT)
@@ -489,7 +489,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val me = database.read { Compare.ownId(it) }
         val peer = client.state(me)
         val server = peer.server
-            ?: throw PeerError("The caracole at $address has no id to sync by: it may be older than the app.")
+            ?: throw PeerError("$address has no id to share logs by: it may be older than the app.")
         if (server == me) throw sameCaracole(address, me)
         val read = database.read { db ->
             val ours = Compare.baseOf(db, server)
@@ -537,8 +537,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     /** The comparison with the computer refused: it is this phone (the same id). */
     private fun sameCaracole(address: String, me: String) =
-        SameCaracole("The caracole at $address is this one (the same id, $me): its database is a copy of " +
-                     "this one's. Give one of them another: caracole peer new-id.")
+        SameCaracole("The scribe at $address is this one (same id, $me): its database is a copy of ours. " +
+                     "Give one a new id: caracole peer new-id.")
 
     /** The take stage: a backup of the phone's database, then each unit of [toTake] taken from [source], each left
      * that changed on either side since the comparison. */
@@ -602,13 +602,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             sent = entries.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
             for (entry in entries) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
             job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
-            stage(GIVE, RUNNING, "the computer's request $job takes ${plural(sent.size, "change")}")
+            stage(GIVE, RUNNING, "the computer's Journal entry $job takes ${plural(sent.size, "change")}")
             ended = awaitJob(client, job)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             val why = said(e)
             stage(GIVE, FAILED, why)
-            throw SyncFailed("There couldn't be given its ${entries.size}: $why", done.outcome(), e)
+            throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)
         }
         val units = Give.units(ended)
         val jobState = Give.text(ended["state"])
@@ -618,7 +618,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 done.given.add(entry.id)
             } else {
                 done.left.add(entry.id to why.ifEmpty {
-                    if (jobState != "done") "its request $job there $jobState" else "not taken there"
+                    if (jobState != "done") "their Journal entry $job: $jobState" else "not taken there"
                 })
             }
         }
@@ -636,8 +636,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 else -> return job
             }
         }
-        throw PeerError("The caracole at ${client.address} hasn't taken the push yet: its request $id, in its " +
-                        "Requests tab, goes on.")
+        throw PeerError("${client.address} hasn't taken the push yet: its Journal entry $id goes on.")
     }
 
     /** The computer's newer indexes merged, then the pages the phone's lookups read pushed, merged or not; each
@@ -676,7 +675,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 failed = true
-                parts.add("${pagesRead(noted)} kept for the next sync: ${said(e)}")
+                parts.add("${pagesRead(noted)} kept for the next share · ${said(e)}")
             }
         }
         stage(INDEX, if (failed) FAILED else DONE, parts.joinToString("; "))
@@ -747,7 +746,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                     }
                 }
             }
-            return "sent ${pagesRead(pages)}, none left to send: its request $job merges them"
+            return "sent ${pagesRead(pages)} · its request $job merges them"
         } finally {
             file.delete()
         }
@@ -763,7 +762,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** `stateDir/cache/`, made when missing; a PeerError in the phone's words when it can't be. */
     private fun cache(): File {
         val cache = File(stateDir, "cache")
-        if (!cache.isDirectory && !cache.mkdirs()) throw PeerError("The phone's storage failed: $cache can't be made.")
+        if (!cache.isDirectory && !cache.mkdirs()) throw PeerError("The phone's storage failed: can't make $cache.")
         return cache
     }
 
@@ -804,9 +803,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         /** The stages a sync job shows, in order, as (name, label): `caracole peer sync --progress`'s
          * (jobs.PEER_SYNC_STAGES), and the phone's mirror and index between and after them. */
         val STAGES = listOf(
-            COMPARE to "Comparing", TAKE to "Taking what changed there", GIVE to "Giving what changed here",
-            MIRROR to "Copying the computer's pages", AGREE to "What the two agree on",
-            INDEX to "Bringing the indexes up to date",
+            COMPARE to "Comparing", TAKE to "Taking what they wrote", GIVE to "Giving what we wrote",
+            MIRROR to "Copying the computer's pages", AGREE to "Noting where the books agree",
+            INDEX to "Updating the indexes",
         )
 
         /** The mirror stage's words with Library unticked, and the index stage's with Site indexes unticked. */
@@ -872,8 +871,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         /** The stages an import of a file shows, in order, as (name, label): `caracole peer import --progress`'s
          * (jobs.PEER_IMPORT_STAGES), the phone's mirror of the file's pages in place of its render. */
         val FILE_STAGES = listOf(
-            CHECK to "Reading the file", TAKE to "Taking what changed there", MIRROR to "Keeping the file's pages",
-            AGREE to "What the two agree on", INDEX to "Merging the indexes",
+            CHECK to "Reading the file", TAKE to "Taking what they wrote", MIRROR to "Keeping the file's pages",
+            AGREE to "Noting where the books agree", INDEX to "Merging the indexes",
         )
 
         /** kv: a computer synced with, by its id: {address, name, synced_at}. */
@@ -883,12 +882,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val INDEX_KEY = "sync:index:"
 
         /** The index stage's words with no index newer there and no page read here. */
-        const val NOTHING_TO_INDEX = "no index is newer there, and no page read here to send"
+        const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"
 
         /** "3 pages read here", of Reads.since's pages. */
         fun pagesRead(pages: Map<String, List<String>>): String = plural(pages.values.sumOf { it.size }, "page") + " read here"
 
-        private fun sending(pages: Map<String, List<String>>) = "sending the ${pagesRead(pages)}"
+        private fun sending(pages: Map<String, List<String>>) = "sending ${pagesRead(pages)}"
 
         /** Those of Reads' [pages] an export holds (IndexExport.PAGES' sites): a note of another site's, which no
          * site lane makes, never stops the rest from going. */
@@ -903,17 +902,17 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val POLLS = 600
 
         /** Why a unit is left, in commands/peer.py's and peer_sync.py's words. */
-        const val SKIPPED = "skipped, as chosen"
-        const val UNSETTLED = "a conflict: choose a side for it"
-        const val CHANGED_HERE = "changed here since the comparison"
-        const val FILE_CHANGED = "a file it keeps changed here since caracole kept it"
+        const val SKIPPED = "skipped, as you chose"
+        const val UNSETTLED = "both books changed it: choose one"
+        const val CHANGED_HERE = "changed here since compared"
+        const val FILE_CHANGED = "a file it keeps changed here since we kept it"
 
-        /** commands/peer.py's STALE: the two changed since the comparison. */
-        const val STALE = "The two changed since that comparison: compare them again, and choose again."
-        const val NO_BACKUP = "Nothing taken: no backup of the database first, not enough room."
+        /** sync_routes.STALE (and commands/peer.py's): the two changed since the comparison. */
+        const val STALE = "Both books changed since that comparison. Compare again, then choose again."
+        const val NO_BACKUP = "Nothing taken: no backup first (not enough room)."
 
         /** sync_routes.apply's refusal of a conflict settled neither way. */
-        fun unsettled(n: Int) = "Choose a side for every conflict first: $n ${if (n == 1) "has" else "have"} none."
+        fun unsettled(n: Int) = "Choose a book for every conflict: $n ${if (n == 1) "has" else "have"} none."
 
         /** peer_sync.peer_address: the address of another caracole serve as typed ("192.168.1.20:8737",
          * "http://phone.lan:8737/"), as caracole asks it: `http://` when no scheme is given, no trailing `/`. A

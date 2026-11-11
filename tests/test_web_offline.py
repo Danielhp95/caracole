@@ -300,7 +300,7 @@ def test_without_the_units_there_is_no_copy(app, library, name):
     broken.write_text("[unclosed\n", encoding="utf-8")
     response = get(app, "/api/offline")
     assert response.status == 503 and header(response, "content-type") == JSON_TYPE
-    assert f"{name} can't be read" in json.loads(response.body)["error"]
+    assert f"Can't read {name}" in json.loads(response.body)["error"]
 
 
 # --- only what serve sends now ------------------------------------------------------------------------------
@@ -441,7 +441,7 @@ def test_another_sites_page_cant_read_it_and_the_app_can(app, library, site, all
     if allowed:
         assert response.status == 200 and json.loads(response.body)["format"] == 1
     else:
-        assert response.status == 403 and "another site" in json.loads(response.body)["error"]
+        assert response.status == 403 and "Another site" in json.loads(response.body)["error"]
 
 
 def test_the_manifest_asks_no_site_takes_no_lock_and_writes_nothing(app, library, conn, queue, monkeypatch):

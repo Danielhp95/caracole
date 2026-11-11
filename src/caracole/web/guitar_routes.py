@@ -40,12 +40,12 @@ ROUTES = (
     Route("GET", ASSETS, lambda app, asked: asset(app, address(asked)[len(ASSETS):]), under=True),
 )
 
-NOT_KEPT = Refused(404, "Not a Guitar Pro file", "That isn't a Guitar Pro file caracole keeps in the library.")
-POWER_TAB = Refused(404, "A Power Tab file", "alphaTab can't read Power Tab files, so this one is a download alone: "
-                                             "find it under its song's ⋯ in the library.")
-NO_ALPHATAB = Refused(503, "No alphaTab here", "This caracole serve has no alphaTab (CARACOLE_ALPHATAB_DIR isn't set), "
-                                               "so it can't show Guitar Pro files in the browser: download the file "
-                                               "from its song's ⋯ in the library instead.")
+NOT_KEPT = Refused(404, "Not a Guitar Pro file", "Not a Guitar Pro file in the book.")
+POWER_TAB = Refused(404, "A Power Tab file", "alphaTab can't read Power Tab files. Download it from its song's ⋯ "
+                                             "in the book.")
+NO_ALPHATAB = Refused(503, "No alphaTab here", "No alphaTab on this server (CARACOLE_ALPHATAB_DIR isn't set), so no "
+                                               "Guitar Pro in the browser. Download the file from its song's ⋯ in "
+                                               "the book.")
 
 
 def alphatab(app: WebApp) -> AlphaTab:
@@ -70,7 +70,7 @@ def guitar(app: WebApp, target: str) -> Response:
     try:
         fields = parse_qs(urlsplit(target).query, errors="strict", max_num_fields=4)
     except (UnicodeDecodeError, ValueError):
-        raise Refused(400, "Not an address", "That address can't be read.") from None
+        raise Refused(400, "Not an address", "Can't read that address.") from None
     asked = fields.get("file", [])
     if len(asked) != 1 or not asked[0] or len(asked[0]) > MAX_PATH or any(ord(c) < 32 for c in asked[0]):
         raise NOT_KEPT
@@ -89,10 +89,10 @@ def guitar(app: WebApp, target: str) -> Response:
         data, _kind, _download = read_library_file(app.cfg.library_dir, path,
                                                    hidden=(app.cfg.state_dir, app.cfg.cache_dir))
     except NotServed:
-        raise Refused(404, "Not in the library", "That Guitar Pro file isn't in the library any more: the next "
-                                                 "caracole run fetches it again, or files it from the inbox.") from None
+        raise Refused(404, "Not in the book", "That Guitar Pro file is gone from the book. Tonight's run fetches it "
+                                              "again, or files it from the inbox.") from None
     if len(data) > MAX_FILE:
-        raise Refused(413, "Too large", "That Guitar Pro file is too large to show here: download it instead.")
+        raise Refused(413, "Too large", "Too large to show here. Download it.")
     sheet = sheet_href(app.cfg.library_dir, song)
     viewer = _viewer_path(sheet)
     html = guitar_page.build_page(title=song.title, artist=", ".join(song.artists or [song.artist]), song_id=song.id,
@@ -120,9 +120,9 @@ def asset(app: WebApp, name: str) -> Response:
     try:
         at = load(app.cfg.alphatab_dir)
     except Missing:
-        raise Refused(404, "Not found", "This caracole serve has no alphaTab (CARACOLE_ALPHATAB_DIR isn't set).") from None
+        raise Refused(404, "Not found", "No alphaTab on this server (CARACOLE_ALPHATAB_DIR isn't set).") from None
     if name != at.name:
-        raise Refused(404, "Not found", "There's no such file of alphaTab's here.")
+        raise Refused(404, "Not found", "No such alphaTab file here.")
     return Response(200, at.body, [
         ("Content-Type", "text/javascript; charset=utf-8"),
         ("Access-Control-Allow-Origin", "*"),

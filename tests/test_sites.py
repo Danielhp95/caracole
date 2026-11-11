@@ -15,8 +15,13 @@ from caracole.lacuerda import LETTERS
 from caracole.lacuerda_index import letters_read
 from caracole.sites import (SITES, Indexed, Progress, Status, index_figures, more_paths, refresh_counts, sites_data,
                             status_of)
-from caracole.stamps import shown
+from caracole.sites import _local
 from caracole.youtube_fetch import route_problem
+
+
+def shown(dt, local=True):
+    """A time as the Sites tab shows it (sites._local: dd/mm/yy, the server's zone)."""
+    return _local(dt)
 
 
 def site(key):
@@ -43,7 +48,7 @@ def test_youtubes_paths_are_named_from_its_robots_txt_and_said_to_be_gone_agains
     assert [path for path, _ in youtube.paths] == ["/results", "/youtubei/"]
     assert youtube.hosts == () and more_paths(youtube) == 0
     assert all(path in ROBOTS_DISALLOW["www.youtube.com"] for path, _ in youtube.paths)
-    assert "caracole goes against" in youtube.robots
+    assert "we go against them" in youtube.robots
 
 
 def test_the_three_sites_of_the_owners_exceptions_carry_their_terms():
@@ -75,7 +80,7 @@ def test_only_the_sites_with_no_index_say_how_they_are_asked():
 def test_megalobiz_is_an_api_whose_fair_use_caracole_keeps():
     megalobiz = site("megalobiz")
     assert megalobiz.role.startswith("Timed lyrics") and megalobiz.domain == "megalobiz.com"
-    assert "no robots" in megalobiz.robots and "links back" in megalobiz.robots
+    assert "no robots" in megalobiz.robots and "linked back" in megalobiz.robots
     assert megalobiz.paths == () and more_paths(megalobiz) == len(ROBOTS_DISALLOW["megalobiz.com"])
 
 
@@ -113,7 +118,7 @@ def test_lacuerda_leads_with_the_songs_caracole_knows_and_gives_the_listings_tot
                   ("estopa/como_camaron", "estopa", "Estopa", "estopa", "Como Camarón", "como camaron", 0),
                   ("extremoduro/so_payaso", "extremoduro", "Extremoduro", "extremoduro", "So Payaso", "so payaso", 0))
     indexed, _ = index_figures(conn)["lacuerda"]
-    assert indexed == Indexed(3, "songs", "of 42 its listings count, 2 artists")
+    assert indexed == Indexed(3, "songs", "of 42 its listings count · 2 artists")
 
 
 def test_lacuerda_progress_is_letters_read(conn):
@@ -242,7 +247,7 @@ def test_youtube_without_auto_chords_is_off_with_why(conn, cfg):
 def test_a_cooldown_reads_until_when_and_why(conn, cfg):
     state = health.record_block(conn, "musescore", NOW - timedelta(hours=1), "challenge page")
     status = status_of(conn, cfg, "musescore", NOW)
-    assert (status.state, status.label) == ("cooling", "Cooling down")
+    assert (status.state, status.label) == ("cooling", "Waiting out")
     assert shown(state.cooldown_until, local=True) in status.detail
     assert "challenge page" in status.detail
 
@@ -287,7 +292,7 @@ def test_lyrics_count_songs_and_the_synced_ones(conn, cfg):
     cards = [card(files=[("lyrics.txt", "lrclib"), ("lyrics.lrc", "lrclib")]), card(files=[("lyrics.txt", "lrclib")]),
              card()]
     assert line(sites_data(conn, cfg, cards, NOW), "lrclib")["kept"] == {
-        "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them synced"}
+        "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them timed"}
 
 
 def test_megalobizs_lyrics_count_as_lrclibs_do(conn, cfg):
@@ -295,7 +300,7 @@ def test_megalobizs_lyrics_count_as_lrclibs_do(conn, cfg):
              card(files=[("lyrics.txt", "lrclib")])]
     data = sites_data(conn, cfg, cards, NOW)
     assert line(data, "megalobiz")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1,
-                                               "detail": "1 of them synced"}
+                                               "detail": "1 of them timed"}
     assert line(data, "lrclib")["kept"]["count"] == 1
 
 
@@ -367,7 +372,7 @@ def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     assert line(data, "ug")["robots"]["paths"][0] == ["/search.php", "its search"]
     assert line(data, "ug")["robots"]["more"] == more_paths(site("ug"))
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
-    assert line(data, "ug")["name"] == "Ultimate Guitar"
+    assert line(data, "ug")["name"] == "UG"
     assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
     assert data["totals"] == {"sites": 10, "indexed": 0, "kept": 0}
 
@@ -415,20 +420,20 @@ def test_the_crawl_delay_reported_is_the_one_gametabs_robots_txt_asks():
 
 def test_gametabs_sentence_says_the_pace_caracole_keeps_there(conn, cfg):
     robots = line(sites_data(conn, cfg, [], NOW), "gametabs")["robots"]["text"]
-    assert "asks for 5 s between requests" in robots and "caracole waits 0.25 s, by your choice" in robots
+    assert "asks 5 s between requests" in robots and "we wait 0.25 s, by your choice" in robots
     slow = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0))})
     robots = line(sites_data(conn, slow, [], NOW), "gametabs")["robots"]["text"]
-    assert "caracole waits 10–20 s" in robots and "by your choice" not in robots
+    assert "we wait 10–20 s" in robots and "by your choice" not in robots
 
 
 def test_megalobizs_sentence_says_caracole_may_ask_quicker_than_its_api_allows(conn, cfg):
     # Its API allows 30 requests a minute, 2 s apart; the owner's choice of 2026-11-03 waits a quarter of what it did.
     robots = line(sites_data(conn, cfg, [], NOW), "megalobiz")["robots"]["text"]
     assert "its 1,000 requests a day" in robots and "its limits" not in robots
-    assert "Its API allows 30 requests a minute; caracole waits 0.5–1 s, by your choice." in robots
+    assert "Its API allows 30 requests a minute; we wait 0.5–1 s, by your choice." in robots
     slow = dataclasses.replace(cfg, providers={**cfg.providers, "megalobiz": ProviderPolicy(60, (2.0, 4.0))})
     robots = line(sites_data(conn, slow, [], NOW), "megalobiz")["robots"]["text"]
-    assert "caracole waits 2–4 s." in robots and "by your choice" not in robots
+    assert "we wait 2–4 s." in robots and "by your choice" not in robots
 
 
 def test_the_total_kept_leaves_musescores_links_out(conn, cfg):
@@ -469,7 +474,7 @@ def test_counts_kept_by_another_version_of_the_counting_are_counted_again(conn, 
 def test_azlyrics_says_how_it_is_asked_and_that_its_lyrics_link_back():
     azlyrics = site("azlyrics")
     assert azlyrics.role.startswith("Plain lyrics") and azlyrics.domain == "azlyrics.com"
-    assert "artist's page" in azlyrics.robots and "links back" in azlyrics.robots
+    assert "artist's page" in azlyrics.robots and "linked back" in azlyrics.robots
     assert [path for path, _ in azlyrics.paths] == sorted(ROBOTS_DISALLOW["www.azlyrics.com"], key=(
         "/search/", "/suggest/", "/song/", "/lyricsdb/").index)
 
@@ -478,6 +483,6 @@ def test_its_lyrics_count_as_lrclibs_do_and_a_site_with_no_budget_shows_what_it_
     kv_set_json(conn, "run:last", {**RUN, "requests": {**RUN["requests"], "azlyrics": 4}})
     cards = [card(files=[("lyrics.txt", "azlyrics")])]
     data = sites_data(conn, cfg, cards, NOW)
-    assert line(data, "azlyrics")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1, "detail": "0 of them synced"}
+    assert line(data, "azlyrics")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1, "detail": "0 of them timed"}
     assert line(data, "azlyrics")["night"] == {"used": 4, "budget": None, "unit": "requests"}
     assert line(data, "azlyrics")["pace"] == "0 s between requests"

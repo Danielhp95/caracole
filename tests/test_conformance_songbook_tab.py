@@ -456,7 +456,7 @@ def test_the_entries_cover_what_they_should(library):
     records = entries_records(library)
     entries = [e for r in records if r["fn"].endswith("songbook_entries") for e in r["out"]]
     missing = {e["missing"] for e in entries}
-    assert {None, "no sheet yet", "not in the library"} <= missing
+    assert {None, "no sheet yet", "not in the logbook"} <= missing
     assert any(e["plays"] == "key unknown, as written" for e in entries)
     assert any(e["keeps_key"] for e in entries) and any(e["key_source"] == "estimated" or e["key"] for e in entries)
     assert any(e["cho"] and e["key_source"] for e in entries)
@@ -518,7 +518,7 @@ def test_the_tab_covers_what_it_should(library):
 
 STARTS = (None, "t=2", "mode=dorian", "?t=-1&mode=aeolian", "#capo=3", "t=0&capo=0&inst=ukulele", "inst=piano",
           "t=5&mode=mixolydian&capo=2&inst=guitar", "t=1&at=0.2", "capo=1&alt=ionian.0.9.m.")
-MISSING = ("no sheet yet", "not in the library", None)
+MISSING = ("no sheet yet", "not in the logbook", None)
 NAMES = ("Campfire", "Road trip #1", "<b>Rock</b> & \"Roll\" 'n'", "篝火晚会", "", "A " * 30)
 
 

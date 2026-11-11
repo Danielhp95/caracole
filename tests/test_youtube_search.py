@@ -133,11 +133,11 @@ def test_none_goes_while_youtube_cools_down_or_once_the_hours_searches_are_spent
                      "'ok')", (f"youtube-search:2026-10-29T19:{n:02d}:00Z", f"2026-10-29T19:{n:02d}:00Z",
                                f"ytsearch1:song {n}"))
     said = gate(able, conn, QUERY, on_screen=False, now=NOW)
-    assert (said.state, said.why) == ("spent", f"this hour's {SEARCHES_PER_HOUR} YouTube lookups are spent")
+    assert (said.state, said.why) == ("spent", f"no more YouTube asks this hour ({SEARCHES_PER_HOUR} spent)")
     assert gate(able, conn, QUERY, on_screen=False, now=NOW + timedelta(hours=1)).state == "auto"
     record_block(conn, "youtube", NOW, "bot check")
     assert gate(able, conn, QUERY, on_screen=False, now=NOW + timedelta(hours=1)).why == (
-        "YouTube is paused after a block")
+        "YouTube turned us back")
 
 
 def test_a_search_that_failed_isnt_sent_for_an_hour_nor_any_after_three_failed(able, conn):
@@ -183,7 +183,7 @@ def test_a_pasted_video_goes_by_the_same_gate_under_its_own_key(able, conn, cfg,
     record_failure(conn, f"video:{'x' * 11}", NOW, "HTTP Error 500")
     assert video_gate(able, conn, "x" * 11, now=NOW).state == "failed"
     record_block(conn, "youtube", NOW, "bot check")
-    assert video_gate(able, conn, "y" * 11, now=NOW).why == "YouTube is paused after a block"
+    assert video_gate(able, conn, "y" * 11, now=NOW).why == "YouTube turned us back"
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     off = video_gate(able, conn, "y" * 11, now=NOW)
     assert (off.state, off.why) == ("off", "auto-chords isn't installed")

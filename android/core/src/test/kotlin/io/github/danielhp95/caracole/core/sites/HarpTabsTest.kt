@@ -108,8 +108,8 @@ class HarpTabsTest {
         val c = client(tmp.newFolder(), mapOf("GET ${HarpTabs.BASE_URL}/tab/89/la-bamba" to FakeTransport.answer(403, "no")))
         val end = stage(db, lib, bamba, c)
         assertEquals("skipped", end.state)
-        assertEquals("harptabs.com blocked caracole (harptabs: 403: ${HarpTabs.BASE_URL}/tab/89/la-bamba: HTTP 403): no " +
-                         "more requests to it until later. Nothing was marked not found.", end.detail)
+        assertEquals("harptabs.com turned us back (harptabs: 403: ${HarpTabs.BASE_URL}/tab/89/la-bamba: HTTP 403). No " +
+                         "more asks until later. Nothing marked not on the sites.", end.detail)
         assertNull(db.kvGet("${HarpTabsFetch.CHECKED_PREFIX}${bamba.id}"))
     }
 
@@ -120,7 +120,7 @@ class HarpTabsTest {
         val c = client(tmp.newFolder(), mapOf("GET ${HarpTabs.BASE_URL}/tab/89/la-bamba" to FakeTransport.answer(530, "x")))
         val end = stage(db, lib, bamba, c)
         assertEquals("failed" to "harptabs.com failed (harptabs: 530: ${HarpTabs.BASE_URL}/tab/89/la-bamba: HTTP 530); " +
-                         "the nightly run tries again", end.state to end.detail)
+                         "tried again tonight", end.state to end.detail)
         assertNull(db.kvGet("${HarpTabsFetch.CHECKED_PREFIX}${bamba.id}"))
     }
 

@@ -135,7 +135,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
     files = pdf_line([(f, label, twin) for f, label, twin in
-                      ((pdf, "PDF", pdf_traditional), (cho, "ChordPro, for a songbook app", None)) if f])
+                      ((pdf, "PDF", pdf_traditional), (cho, "ChordPro file", None)) if f])
     body = (
         '<div class="page">\n<header class="head book-head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
@@ -167,7 +167,7 @@ def _contents(songs: list[BookSong], about: dict[int, str], files: str,
                  + (f'<span class="a">{line}</span>' if line else ""))
         if song.cho is None:
             why = escape(song.missing or "no sheet yet")
-            items.append(f'<li class="missing"><span class="row">{names}<span class="why">Missing: {why}</span>'
+            items.append(f'<li class="missing"><span class="row">{names}<span class="why">Missing · {why}</span>'
                          "</span></li>")
         else:
             items.append(f'<li><a class="row" href="#song-{n}" data-id="{escape(song.id)}">{names}</a></li>')
@@ -196,7 +196,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + artist_line(song.artist, names)
         + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + _song_html(sheet, f"-{n}", song.title)
-        + _pager("Songs, after the sheet", prev, nxt, names)  # at the end of a long sheet, no scrolling back up
+        + _pager("Songs, end of sheet", prev, nxt, names)  # at the end of a long sheet, no scrolling back up
     )
     return html, data, _key_and_capo(key, _opens_in(song), sheet.capo)
 

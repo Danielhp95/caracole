@@ -28,8 +28,8 @@ from caracole.songs import Song
 
 HAVE, NONE, UNASKED = "have", "none", "unasked"
 ORDER = ("ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
-NAMES = {"ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "lrclib": "LRCLIB", "gtptabs": "gtptabs.com",
-         "harptabs": "harptabs.com", "gametabs": "gametabs.net", "musescore": "MuseScore", "youtube": "YouTube"}
+NAMES = {"ug": "UG", "lacuerda": "LaCuerda", "lrclib": "LRCLIB", "gtptabs": "gtptabs", "harptabs": "harptabs",
+         "gametabs": "gametabs", "musescore": "MuseScore", "youtube": "YouTube"}
 # The steps' own kv prefixes of a miss (gtptabs_fetch.py, harptabs_fetch.py, gametabs_fetch.py: their CHECKED_PREFIX),
 # written here so the page imports none of the steps.
 CHECKED = {"gtptabs": "gtptabs:checked:", "harptabs": "harptabs:checked:", "gametabs": "gametabs:checked:"}
@@ -105,18 +105,26 @@ def song_sites(song: Song, sites: tuple[str, ...], *, origins: Mapping[str, str]
     return marks
 
 
+def _day(stamp: str) -> str:
+    """A stored time's day ("2026-10-18T03:30:00Z") as the pages write one: "18/10/26"; anything else as it is."""
+    year, month, day = stamp[:4], stamp[5:7], stamp[8:10]
+    if stamp[4:5] == "-" and stamp[7:8] == "-" and (year + month + day).isdigit():
+        return f"{day}/{month}/{year[2:]}"
+    return stamp[:10]
+
+
 def _said(site: str, state: str, looked: str | None, song: Song) -> str:
     name = NAMES[site]
     if state == HAVE:
         if site == "lrclib" and song.lyrics_status == "instrumental":
-            return f"{name}: an instrumental, no words"
+            return f"{name}: instrumental, no words"
         if site == "musescore":
-            return f"{name}: a possible match, by its title"
+            return f"{name}: maybe, by its title"
         return f"{name}: has it"
     if state == NONE and site == "lrclib" and song.lyrics_status == "found":
-        return f"{name}: nothing timed for it" + (f" (looked {looked[:10]})" if looked else "")
+        return f"{name}: nothing timed" + (f" · looked {_day(looked)}" if looked else "")
     if state == NONE:
-        return f"{name}: nothing for it" + (f" (looked {looked[:10]})" if looked else "")
+        return f"{name}: not there" + (f" · looked {_day(looked)}" if looked else "")
     if site == "ug" and song.match_decision == "review":
-        return f"{name}: not sure which song yet"
+        return f"{name}: unsure which song"
     return f"{name}: not asked yet"

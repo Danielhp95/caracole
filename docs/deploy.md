@@ -931,7 +931,7 @@ is restored the same way.
   library** (or what `--label` says) is another caracole serve's, of a library
   in a temporary folder: caracole-web's pages carry no badge
   ([usage.md](usage.md#caracole-serve)). What each request did is in the
-  Requests tab, kept across restarts in `/var/lib/caracole/state/requests.jsonl`.
+  Journal, kept across restarts in `/var/lib/caracole/state/requests.jsonl`.
 - **Syncthing says "permission denied":** `ls -ld /var/lib/caracole/library`
   shows `drwxrwsr-x caracole caracole`, and `id syncthing` lists `caracole`?
   Restart Syncthing after a group change, and tick Ignore Permissions.

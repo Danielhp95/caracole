@@ -45,8 +45,8 @@ object Compare {
     const val CONFLICT = "conflict"
 
     /** Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered. */
-    const val KEPT_HERE = "kept here, as you chose when a file of the other's was imported"
-    const val KEPT_THERE = "kept there, as you chose when a file of this one's was imported"
+    const val KEPT_HERE = "ours kept, as you chose when reading their file"
+    const val KEPT_THERE = "theirs kept, as you chose when they read our file"
 
     private const val ID_KEY = "sync:id"
     private const val BASE_KEY = "sync:base:"
@@ -185,7 +185,7 @@ object Compare {
                 when {
                     aChanged && !bChanged -> MINE to changed("here", a, was)
                     bChanged && !aChanged -> THEIRS to changed("there", b, was)
-                    else -> CONFLICT to "changed on both sides since the last sync"
+                    else -> CONFLICT to "both books changed it since the last share"
                 }
             }
             found.add(Difference(id, label, a, b, proposal, why))
@@ -200,20 +200,20 @@ object Compare {
             !aChanged && !bChanged -> if (pair.chooser == MINE) MINE to KEPT_HERE else THEIRS to KEPT_THERE
             aChanged && !bChanged -> MINE to changed("here", a, pair.here)
             bChanged && !aChanged -> THEIRS to changed("there", b, pair.there)
-            else -> CONFLICT to "changed on both sides since the last sync"
+            else -> CONFLICT to "both books changed it since the last share"
         }
     }
 
     private fun firstTime(a: SyncUnit?, b: SyncUnit?): Pair<String, String> = when {
-        b == null -> MINE to "only here"
-        a == null -> THEIRS to "only there"
-        else -> CONFLICT to "on both sides, different, and never synced"
+        b == null -> MINE to "only in our book"
+        a == null -> THEIRS to "only in theirs"
+        else -> CONFLICT to "in both books, different, never shared"
     }
 
     private fun changed(where: String, unit: SyncUnit?, was: String?): String = when {
-        unit == null -> "gone $where since the last sync"
-        was == null -> "new $where since the last sync"
-        else -> "changed $where since the last sync"
+        unit == null -> "gone $where since the last share"
+        was == null -> "new $where since the last share"
+        else -> "changed $where since the last share"
     }
 
     /** Which differences this side takes ([THEIRS]) and which the peer takes ([MINE]): each as proposed, each conflict

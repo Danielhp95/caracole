@@ -159,7 +159,7 @@ def test_the_switcher_steps_through_the_kept_versions_pages_and_lists_them_all(
     assert [r.split(" · ")[0] for r in seen["rows"]] == ["Ver 2", "Ver 3", "Ver 1", "Ver 4"]
     assert "the album version" in seen["rows"][0]
     assert seen["acts"] == [["Make this the one", None]]  # from a file, a button showing the command
-    assert seen["keep"] == [["On UG", f"{TAB}radiohead/creep-chords-104"], ["Keep it", None]]
+    assert seen["keep"] == [["On UG", f"{TAB}radiohead/creep-chords-104"], ["Keep", None]]
 
     seen = step(browser, "#ver-next", "version-101.html")
     assert seen["line"] == "Ver 1 of 4 · 4.90★ (100)" and seen["next"] is None
@@ -271,7 +271,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     seen = browser.js(SWITCHER)
     assert seen["acts"] == [["Make this the one", f"/versions?sheet={quote(FOLDER + '/version-103.html', safe='')}"
                                                   "&tab=103&do=choose"]]
-    assert seen["keep"] == [["Keep it", f"/versions?sheet={quote(FOLDER + '/version-103.html', safe='')}"
+    assert seen["keep"] == [["Keep", f"/versions?sheet={quote(FOLDER + '/version-103.html', safe='')}"
                                         "&tab=104&do=keep"]]
     browser.click("#ver-now")  # the list, where it is offered
     assert browser.wait("!document.querySelector('#version-list').hidden")
@@ -290,10 +290,10 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     browser.js("window.before = true")
     browser.js("location.reload()")
     assert browser.wait("!window.before && document.readyState === 'complete'")
-    assert "Done: it is the one now." in browser.js("document.body.textContent")
+    assert "Done · the one now." in browser.js("document.body.textContent")
     # The page it was asked from went (the version is sheet.html now): back to the sheet is the song's sheet
     assert browser.js("[...document.querySelectorAll('a.btn')].map((a) => [a.textContent, a.getAttribute('href')])") == [
-        ["Open the sheet", f"/{FOLDER}/sheet.html"], ["Back to the sheet", f"/{FOLDER}/sheet.html"]]
+        ["Open sheet", f"/{FOLDER}/sheet.html"], ["Back to sheet", f"/{FOLDER}/sheet.html"]]
 
     assert "sheet 103" in (folder / "sheet.txt").read_text("utf-8")
     assert load_overrides(tmp_path / "library" / "overrides.toml").pin["radiohead/creep"] == (103,)
@@ -316,7 +316,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
     browser.click("#ver-now")
     assert browser.wait("!document.querySelector('#version-list').hidden")
-    assert browser.js(SWITCHER)["acts"] == [["Back to caracole's pick", f"/versions?sheet={quote(FOLDER + '/sheet.html', safe='')}"
+    assert browser.js(SWITCHER)["acts"] == [["Back to our pick", f"/versions?sheet={quote(FOLDER + '/sheet.html', safe='')}"
                                                                         "&do=clear"]]
     browser.js("window.before = true")
     browser.click("#ver-items > li:nth-child(4) .ver-acts a")
@@ -331,7 +331,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     browser.js("window.before = true")
     browser.js("location.reload()")
     assert browser.wait("!window.before && document.readyState === 'complete'")
-    assert "Done: it is kept beside the sheet." in browser.js("document.body.textContent")
+    assert "Done · kept beside the sheet." in browser.js("document.body.textContent")
     browser.js("window.before = true")
     browser.click("a.btn.primary")  # Open it
     assert browser.wait("!window.before && location.pathname.endsWith('/version-104.html')"

@@ -185,13 +185,13 @@ object LaCuerda {
     fun lacuerdaLeftOut(db: Db): Pair<String, String>? {
         val state = indexState(db)
         if (state.artists == 0 && state.songs == 0) {
-            return "empty" to "index is empty: the nightly run reads its listings of every artist"
+            return "empty" to "index is empty: tonight's run reads its listings of every artist"
         }
         if (state.complete) return null
         val letters = lettersText(state.letters)
         val whole = if (letters.isNotEmpty()) ", with $letters read whole" else ""
-        return "partial" to ("index is still being read: ${SiteText.grouped(state.artists)} artist" +
-            "${if (state.artists == 1) "" else "s"} so far$whole; the nightly run reads the rest")
+        return "partial" to ("index is being read: ${SiteText.grouped(state.artists)} artist" +
+            "${if (state.artists == 1) "" else "s"} so far$whole; tonight's run reads the rest")
     }
 
     /**

@@ -90,8 +90,8 @@ def test_the_route_needs_auto_chords_its_models_and_yt_dlp(ycfg, cfg, tmp_path, 
     no_ytdlp = dataclasses.replace(ycfg, ytdlp_bin=str(tmp_path / "no-yt-dlp"))
     assert yf.route_problem(no_ytdlp) == f"yt-dlp isn't there ({tmp_path / 'no-yt-dlp'})"
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch", "librosa"])
-    assert yf.route_problem(ycfg) == ("this caracole was built without auto-chords (missing: torch, librosa), "
-                                      "so it has nothing to make of the audio")
+    assert yf.route_problem(ycfg) == ("built without auto-chords (missing: torch, librosa): nothing "
+                                      "to make of the audio")
 
 
 def test_in_the_tests_a_config_read_from_the_environment_finds_no_real_yt_dlp(tmp_path, monkeypatch):

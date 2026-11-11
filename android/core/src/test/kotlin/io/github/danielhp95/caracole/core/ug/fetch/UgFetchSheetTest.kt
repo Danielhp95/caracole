@@ -97,7 +97,7 @@ class UgFetchSheetTest {
 
     @Test fun theLookupsTwoStagesAreItsTwoPassesWordedAsGetPyWordsThem() {
         val ends = stages(record("a lookup's sheet pass, then the rest"), UgSheetStage, UgStage)
-        assertEquals(listOf(StageEnd("done", "tab 102 from Ultimate Guitar"),
+        assertEquals(listOf(StageEnd("done", "tab 102 from UG"),
                             StageEnd("done", "sheet 103 · tab 202 · kept beside it: tab 104, tab 102")), ends)
     }
 
@@ -108,13 +108,13 @@ class UgFetchSheetTest {
 
     @Test fun aBlockAndASpentBudgetEndTheStageWithTheEnvelopesWords() {
         val blocked = said(record("a block raises"))
-        assertEquals(listOf(StageEnd("skipped", "Ultimate Guitar blocked caracole (ug: 403: https://tabs.ultimate-guitar.com/" +
-            "tab/soda-stereo/persiana-americana-chords-101: HTTP 403): no more requests to it until later. Nothing was " +
-            "marked not found.")), stages(blocked, UgStage))
+        assertEquals(listOf(StageEnd("skipped", "Ultimate Guitar turned us back (ug: 403: https://tabs.ultimate-guitar.com/" +
+            "tab/soda-stereo/persiana-americana-chords-101: HTTP 403). No more asks until later. Nothing " +
+            "marked not on the sites.")), stages(blocked, UgStage))
         // The record's client had 2 requests left, fewer than a lookup's 6: the hour's were spent, as get.py says.
         val spent = said(record("a spent budget raises"))
-        assertEquals(listOf(StageEnd("skipped", "this hour's 60 lookup requests to Ultimate Guitar are spent; the " +
-            "nightly run does the rest")), stages(spent, UgStage, asking = ::envelope))
+        assertEquals(listOf(StageEnd("skipped", "no more asks of Ultimate Guitar this hour (60 spent); " +
+            "tonight's run does the rest")), stages(spent, UgStage, asking = ::envelope))
     }
 
     @Test fun aSheetThatWouldGoWhereAnotherSongKeepsOneFailsTheStageInReportsWords() {
@@ -122,7 +122,7 @@ class UgFetchSheetTest {
         val message = shared.getValue("raises").jsonObject.getValue("message").jsonPrimitive.content
         val (end) = stages(said(shared), UgStage)
         assertEquals("failed", end.state)
-        assertTrue(end.detail, end.detail.startsWith("$message. Nothing is written over it, and the song waits"))
+        assertTrue(end.detail, end.detail.startsWith("$message. Nothing written over it. The song waits"))
     }
 
     @Test fun everyWordOfTheTwoStagesAndOfUgReadyIsGetPys() {
@@ -144,7 +144,7 @@ class UgFetchSheetTest {
     @Test fun aSongUltimateGuitarCantBeAskedAboutIsSkippedWithGetPysWords() {
         withContext(song(decision = "not_found")) { assertEquals(LookupWords.NOT_IN_INDEX, UgStages.notReady(it)) }
         withContext(song(decision = "review")) {
-            assertEquals("caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, or run " +
+            assertEquals("not sure which UG song this is: pick it on the lookup page, or run " +
                              "caracole review", UgStages.notReady(it))
             assertEquals(StageEnd("skipped", UgStages.REVIEW), UgSheetStage.run(it))
         }

@@ -104,10 +104,10 @@ def test_mine_queues_make_this_my_version_and_still_answers_the_pdf(app, queue, 
     queue.run_pending()
     assert recorder.calls == [["render", f"--song={song.display}", "--version=t=2&capo=0", "--mine"]]
     [done] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
-    assert done["line"] == {"tone": "ready", "text": "Your version now",
-                            "link": {"label": "Open sheet", "href": sheet_href(cfg.library_dir, song)}, "details": None}
+    assert done["line"] == {"tone": "ready", "text": "Your version",
+                            "link": {"label": "Open", "href": sheet_href(cfg.library_dir, song)}, "details": None}
     shown = json.dumps(answer(get_json(app, "/requests.json")))  # the Requests tab says what it made
-    assert "Your version now" in shown and "Added" not in shown
+    assert "Your version" in shown and "Added" not in shown
 
 
 def test_mine_is_a_plain_link_with_no_token_but_the_host_check_still_holds(app, queue, recorder, conn, cfg, printed):

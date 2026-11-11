@@ -41,11 +41,10 @@ internal object SongForm {
         if (text.isEmpty() || Py.strip(form["artist"].orEmpty()).isNotEmpty() || Py.strip(form["title"].orEmpty()).isNotEmpty()) {
             return form
         }
-        if (Py.len(text) > TEXT_LIMIT) throw Refused(400, "Too long", "The text is too long: $TEXT_LIMIT characters at most.")
+        if (Py.len(text) > TEXT_LIMIT) throw Refused(400, "Too long", "Too long: $TEXT_LIMIT characters at most.")
         val named = database.read { db -> SongNames.readNames(db, text, Songs.list(db)) }
         if (named == null || named.first.isEmpty() || named.second.isEmpty()) {
-            throw Refused(400, "Not a song", "“$text” doesn't say who the artist is: write it as “Artist - Title”, or " +
-                                             "give the artist and the title.")
+            throw Refused(400, "Not a song", "“$text” names no artist. Write “Artist - Title”, or fill in both.")
         }
         return form + mapOf("artist" to named.first, "title" to named.second)
     }
@@ -70,16 +69,16 @@ internal object SongForm {
                 parseDuration(duration)
             } catch (e: IllegalArgumentException) {
                 throw Refused(400, "Not a length", "The length is a ${e.message}.")
-            } ?: throw Refused(400, "Not a length", "The length '$duration' isn't a duration: write m:ss, h:mm:ss or " +
-                                                     "whole seconds.")
+            } ?: throw Refused(400, "Not a length", "The length '$duration' isn't a duration. Write m:ss, h:mm:ss or " +
+                                                     "seconds.")
         }
         if (SEPARATOR.containsMatchIn(clean(artist))) {
-            throw Refused(400, "Not added", "caracole can't add this song: wanted.txt can't hold an artist name with " +
-                                            "' - ' in it: ${PyStr.repr(artist)}")
+            throw Refused(400, "Not added", "Can't add this song: an artist name can't hold ' - ': " +
+                                            PyStr.repr(artist))
         }
         val written = clean(artist) to clean(title)
         if (written.first.isEmpty() || written.second.isEmpty()) {
-            throw Refused(400, "Not added", "caracole can't add this song: a song needs an artist and a title")
+            throw Refused(400, "Not added", "Can't add this song: it needs an artist and a title")
         }
         if (picks) checkPicks(form)
         val album = values.getValue("album").takeIf { it.isNotEmpty() }?.let(::clean)?.ifEmpty { null }

@@ -177,8 +177,8 @@ def needed(conn: sqlite3.Connection | None, library_dir: Path, files: Sequence[s
 
 def _not_from_here(sender: str, own: str | None) -> None:
     if own is not None and sender == own:
-        raise PushError("That push comes from this caracole itself (the same id): its database is a copy of this "
-                        "one's. Give one of them another: caracole peer new-id.")
+        raise PushError("That push comes from this same scribe (same id): its database is a copy of ours. "
+                        "Give one a new id: caracole peer new-id.")
 
 
 def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequence[str], own: str | None,
@@ -193,7 +193,7 @@ def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequen
     with _lock:
         root = state_dir / FOLDER
         if len(_pushes(root)) >= OPEN:
-            raise PushError("Two pushes are here already, waiting to be taken: try again once one is, or in an "
+            raise PushError("Two pushes wait here already. Try again once one is taken, or in an "
                             "hour.", 409)
         state_dir.mkdir(parents=True, exist_ok=True)
         _private_dir(root)
@@ -233,7 +233,7 @@ def stage_file(state_dir: Path, push_id: str, digest: str, data: bytes) -> None:
         if target.exists():
             return
         if _staged_bytes(folder) + len(data) > PUSH_MAX:
-            raise PushError("That push's files would pass 2 GiB: push fewer changes at a time.")
+            raise PushError("That push's files pass 2 GiB. Push fewer changes at a time.")
         _write_private(target, data)
 
 
@@ -379,11 +379,11 @@ def held(folder: Path) -> Iterator[None]:
     try:
         fd = os.open(folder / DOCUMENT, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
-        raise PushError("That push is gone: it was never sent, or was left over an hour. Sync again.") from None
+        raise PushError("That push is gone: never sent, or left over an hour. Share again.") from None
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         if not (folder / DOCUMENT).exists():  # a sweep deleted it as the take came
-            raise PushError("That push is gone: it was left over an hour. Sync again.")
+            raise PushError("That push is gone: left over an hour. Share again.")
         yield
     finally:
         os.close(fd)
@@ -541,8 +541,8 @@ def send(state_dir: Path, push_id: str, push: Push, document: Mapping[str, Any],
             raise PushError("That push was opened by another caracole.")
         missing = sorted(files - _staged(folder) - kept)
         if missing:
-            raise PushError(f"{len(missing)} {'file' if len(missing) == 1 else 'files'} the push keeps "
-                            f"{'was' if len(missing) == 1 else 'were'} never sent, nor kept here: "
+            raise PushError(f"{len(missing)} {'file' if len(missing) == 1 else 'files'} of the push never came, "
+                            f"nor {'is' if len(missing) == 1 else 'are'} kept here: "
                             + ", ".join(missing[:3]) + ("…" if len(missing) > 3 else "") + ".")
         _write_private(folder / DOCUMENT, json.dumps(document, ensure_ascii=False).encode("utf-8"))
     return folder
@@ -561,7 +561,7 @@ def read_sent(folder: Path) -> Push:
     """The push sent in ``folder`` (``sent_folder``), as ``send`` kept it; PushError when it can't be read."""
     data = _read_json(folder / DOCUMENT)
     if data is None:
-        raise PushError("That push can't be read: sync again.")
+        raise PushError("That push can't be read. Share again.")
     push = read_push_document(data)
     check_digests(push)
     return push
@@ -603,8 +603,8 @@ class StagedSource:
         except (OSError, ValueError):
             data = None
         if data is None or hashlib.sha256(data).hexdigest() != sha256:
-            raise sync.PeerError(f"{name} wasn't sent with the push, nor is it kept here as it was: the song is "
-                                 "left as it was here.")
+            raise sync.PeerError(f"{name} wasn't sent with the push, nor kept here as it was: the song stays as it "
+                                 "was here.")
         return data
 
 
@@ -644,7 +644,7 @@ class Pusher(sync.Peer):
                 response = self._client.post(self.address + path, params=params, content=content, headers={
                     "Content-Type": kind, "Accept": "application/json", "X-Caracole-Form-Token": self.token or ""})
             except httpx.HTTPError as e:
-                raise sync.PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+                raise sync.PeerError(f"{self.address} stopped answering: {e}") from None
             if response.status_code == 403 and not again and _says_reload(response):
                 self.token = None  # older than the server: its state gives the token again
                 continue
@@ -653,8 +653,7 @@ class Pusher(sync.Peer):
             try:
                 return response.json()
             except ValueError:
-                raise sync.PeerError(f"The caracole at {self.address} answered {path} with something it can't "
-                                     "read.") from None
+                raise sync.PeerError(f"{self.address} answered {path} in a form we can't read.") from None
         raise AssertionError("unreachable")
 
     def push_new(self, sender: str, files: Sequence[str]) -> tuple[str, list[str]]:
@@ -665,7 +664,7 @@ class Pusher(sync.Peer):
         push, need = answer.get("push"), answer.get("need")
         if not (isinstance(push, str) and ID.fullmatch(push) and isinstance(need, list)
                 and all(isinstance(f, str) and SHA256.fullmatch(f) for f in need)):
-            raise sync.PeerError(f"The caracole at {self.address} opened a push it can't name.")
+            raise sync.PeerError(f"{self.address} opened a push it can't name.")
         return push, list(need)
 
     def push_file(self, push: str, sha256: str, data: bytes) -> None:
@@ -677,7 +676,7 @@ class Pusher(sync.Peer):
         answer = self._post(PUSH_PATH, _json(document), "application/json", {"push": push})
         job = answer.get("job") if isinstance(answer, dict) else None
         if not (isinstance(job, dict) and type(job.get("id")) is int):
-            raise sync.PeerError(f"The caracole at {self.address} took the push, but named no job for it.")
+            raise sync.PeerError(f"{self.address} took the push but named no Journal entry for it.")
         return job["id"]
 
     def job(self, job_id: int) -> dict[str, Any]:
@@ -690,8 +689,7 @@ class Pusher(sync.Peer):
         except ValueError:
             data = None
         if not (isinstance(data, dict) and isinstance(data.get("state"), str)):
-            raise sync.PeerError(f"The caracole at {self.address} answered its job {job_id} with something it "
-                                 "can't read.")
+            raise sync.PeerError(f"{self.address} answered about entry {job_id} in a form we can't read.")
         return data
 
 
@@ -754,7 +752,7 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: 
     if unreadable:
         for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
             take.remove(entry)
-            left.append((entry["id"], "a file it keeps changed here since caracole kept it"))
+            left.append((entry["id"], "a file it keeps changed here since we kept it"))
     document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version, "at": at,
                 "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": take}
     return Pushed(pusher.push(push_id, document), tuple(e["id"] for e in take), tuple(left))
@@ -771,8 +769,7 @@ def wait_for(pusher: Pusher, job_id: int, *, timeout: float = WAIT, every: float
         if job["state"] not in ("queued", "running"):
             return job
         if clock() >= end:
-            raise sync.PeerError(f"The caracole at {pusher.address} hasn't taken the push yet: its request "
-                                 f"{job_id}, in its Requests tab, goes on.")
+            raise sync.PeerError(f"{pusher.address} hasn't taken the push yet: its Journal entry {job_id} goes on.")
         sleep(every)
 
 

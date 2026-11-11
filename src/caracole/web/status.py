@@ -5,12 +5,12 @@ It is read from the job (jobs.py) and, once the job is over, from what the
 library knows of its song (``SongFacts``), never from which commands the job
 ran. So a job of other commands reads the same way:
 
-- **Queued**: "Queued…", or "Queued behind 2 requests…".
-- **Running**: its running step's label, as "Adding to the library…". A
+- **Queued**: "Queued…", or "Queued · 2 requests ahead…".
+- **Running**: its running step's label, as "Adding to the book…". A
   step's label is written to be this line. A lookup, one ``caracole get``,
   says its running stage's line instead (``STAGE_LINES``), as "Fetching from
-  Ultimate Guitar…" ("Fetching from LaCuerda…" while its sheet stage says it
-  asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for another caracole…"
+  UG…" ("Fetching from LaCuerda…" while its sheet stage says it
+  asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for the book…"
   while its lock is held by a nightly run that lets it go first at its next
   pause.
 - **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
@@ -22,16 +22,16 @@ ran. So a job of other commands reads the same way:
   are the fetch's usual refusals, worded for a terminal.
 - **Done**: "Ready", with a link to the song's sheet (the Requests tab's Open;
   on the library page the song's line opens it itself, and its request's line
-  says "Ready" alone: ``song_line``); "Needs review", with a
+  says "Ready" alone: ``song_line``); "Needs your pick", with a
   link to the song's picker when its review has candidates to pick from
-  ("Pick the match"), else to the to-do page; "Not found", with the to-do
+  ("Pick"), else to the to-do page; "Not on the sites", with the to-do
   page's link, only for a song the
   fetch looked up during this request (``SongFacts.checked_now``); or "Not
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
   (``jobs.REMOVING``), whose song is gone once it is done, says "Removed";
   Make this my version (``jobs.EXPORTING``, export_routes.py), none of its
-  song's own requests, what it made: "Your version now", with a link to the
+  song's own requests, what it made: "Your version", with a link to the
   song's sheet;
   a songbook's change (songbooks.py), which has no song, what it did:
   "Made", "Moved", "Changed", "Renamed"…, "Made" and "Added" with a link to
@@ -51,14 +51,14 @@ ran. So a job of other commands reads the same way:
   chords stage made the sheet (an auto sheet of an earlier video is none of
   its doing), else "Not made yet" (a block, a cooldown, a spent budget or a
   site's error, which exit 0), the Requests tab saying which stage stopped it.
-  A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Synced", and a push
+  A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
-  left as it was (the owner skipped it, or it changed on a side since the comparison), "Synced: 2 changes left as
+  left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
   they were", a wait; and a stage that failed though the command ended (a take with no backup first), in that stage's
-  words, a wait too. While one runs, its running stage's line (``STAGE_LINES``: "Taking what changed there…").
+  words, a wait too. While one runs, its running stage's line (``STAGE_LINES``: "Taking their entries…").
   Another caracole's index pages merged (``caracole index merge --progress``) say "Merged".
 
-A caracole with no to-do page (the phone's, ``job_line``'s ``todo=None``) says a Not found and a review with
+A caracole with no to-do page (the phone's, ``job_line``'s ``todo=None``) says a Not on the sites and a review with
 nothing to pick in the same words, with no link.
 
 A line that ends in a failure or a wait also links to the job's output in
@@ -100,39 +100,39 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
 # What a song's card says while a stage of a lookup (get.STAGES) runs, as a step's label would.
 STAGE_LINES = {
     "song": "Finding the song",
-    "match": "Looking it up",
-    "sheet": "Fetching from Ultimate Guitar",
-    "version": "Fetching the version from Ultimate Guitar",  # caracole versions --keep's (jobs.KEEP_STAGES)
-    "pdf": "Rendering the sheet",
-    "lyrics": "Fetching the lyrics from LRCLIB",
-    "ug": "Fetching from Ultimate Guitar",
+    "match": "Matching",
+    "sheet": "Fetching from UG",
+    "version": "Fetching the version from UG",  # caracole versions --keep's (jobs.KEEP_STAGES)
+    "pdf": "Making the PDF",
+    "lyrics": "Fetching lyrics",
+    "ug": "Fetching from UG",
     "lacuerda": "Fetching from LaCuerda",
-    "gtptabs": "Fetching from gtptabs.com",
-    "harptabs": "Fetching from harptabs.com",
-    "gametabs": "Fetching from gametabs.net",
-    "pages": "Writing the library page",
+    "gtptabs": "Fetching from gtptabs",
+    "harptabs": "Fetching from harptabs",
+    "gametabs": "Fetching from gametabs",
+    "pages": "Writing the logbook page",
     "songbooks": "Remaking its songbooks",
     "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)
     "audio": "Getting the audio",  # caracole youtube --sheet's (youtube_sheet.STAGES)
     "chords": "Working out the chords",
     "video": "Searching YouTube",  # caracole youtube --search's (jobs.YOUTUBE_SEARCH_STAGES)
     "thumbnail": "Getting the thumbnail",
-    "compare": "Comparing",  # caracole peer sync --progress's (jobs.PEER_SYNC_STAGES), and the phone's sync's
-    "take": "Taking what changed there",
-    "give": "Giving what changed here",
+    "compare": "Comparing books",  # caracole peer sync --progress's (jobs.PEER_SYNC_STAGES), and the phone's sync's
+    "take": "Taking their entries",
+    "give": "Sharing our entries",
     "mirror": "Copying the computer's pages",  # the phone's alone
-    "agree": "Recording what the two agree on",
-    "index": "Bringing the indexes up to date",  # caracole peer sync's and import's, and the phone's
-    "check": "Checking what changed since the comparison",  # caracole peer take's and import's (jobs.PEER_TAKE_STAGES)
-    "render": "Rendering what was taken",
-    "merge": "Merging the other caracole's index pages",  # caracole index merge --progress's (jobs.INDEX_MERGE_STAGES)
+    "agree": "Noting where the books agree",
+    "index": "Updating the indexes",  # caracole peer sync's and import's, and the phone's
+    "check": "Checking for changes since the compare",  # caracole peer take's and import's (jobs.PEER_TAKE_STAGES)
+    "render": "Making pages of what was taken",
+    "merge": "Merging the other scribe's index pages",  # caracole index merge --progress's (jobs.INDEX_MERGE_STAGES)
 }
 # What a sync's or a take's command is (its first step's ``caracole peer`` subcommand), as the page names its kind.
 PEER_KINDS = {"sync": "sync", "take": "peer-push", "pull": "peer-pull", "import": "sync"}  # import: a file's sync
 INDEX_MERGE_KIND = "index-merge"  # ``caracole index merge --progress``: another caracole's index pages merged
 # How each says it is done.
-_PEER_DONE = {"sync": "Synced", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
-_WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
+_PEER_DONE = {"sync": "Shared", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
+_WAITING = "waiting for the book"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",
@@ -234,7 +234,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     ``todo``: the to-do page a Not found or a review with nothing to pick links, None for a caracole with none (the
     phone's): the same words, with no link."""
     if job.state == "queued":
-        return Line("queued", f"Queued behind {plural(ahead, 'request')}…" if ahead else "Queued…")
+        return Line("queued", f"Queued · {plural(ahead, 'request')} ahead…" if ahead else "Queued…")
     if job.state == "running":
         if job.stages:
             return Line("running", _stage_line(job.stages, new=song is None))
@@ -249,9 +249,9 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:
             if song.review:
-                return Line("review", "Needs review", _review_link(song, todo), details)
+                return Line("review", "Needs your pick", _review_link(song, todo), details)
             if song.not_found:
-                return Line("missing", "Not found", _todo_link(todo), details)
+                return Line("missing", "Not on the sites", _todo_link(todo), details)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     kind = peer_kind(job)
     if kind is not None:  # no song's: what it took, gave and left
@@ -259,11 +259,11 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
     if job.song_key.startswith(EXPORTING):  # Make this my version, none of the song's own requests: what it made
-        return Line("ready", "Your version now", ("Open sheet", song.sheet) if song and song.sheet else None)
+        return Line("ready", "Your version", ("Open", song.sheet) if song and song.sheet else None)
     if job.song_key.startswith(READING):  # a harmonica tab's reading pinned or cleared (harmonica_routes.py)
         page = _harmonica_page(job)
-        said = "read as caracole guesses" if any("--clear" in s.args for s in job.steps) else "read as you set it"
-        return Line("ready", f"Its harmonica tab {said}", ("Open the tab", page) if page else None)
+        said = "read as we guess" if any("--clear" in s.args for s in job.steps) else "read as you set it"
+        return Line("ready", f"Tab {said}", ("Open tab", page) if page else None)
     songbook = songbook_of(job.song_key)
     if songbook is not None:  # a songbook's change: no song at all; a deletion says so as a removal does
         action = str(songbook["action"])
@@ -276,20 +276,20 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.song_key.startswith(YOUTUBE_SHEET):  # Ready once its chords are made, never on an earlier sheet
         made = any(stage.name == "chords" and stage.state == "done" for stage in job.stages)
         if made and song is not None and song.sheet:
-            return Line("ready", READY, ("Open sheet", song.sheet))
+            return Line("ready", READY, ("Open", song.sheet))
         return Line("waiting", "Not made yet", details=details)
     if song is not None and song.sheet:
-        return Line("ready", READY, ("Open sheet", song.sheet))
+        return Line("ready", READY, ("Open", song.sheet))
     if song is not None and song.ignored:
-        return Line("added", "Ignored in overrides.toml")
+        return Line("added", "Ignored · overrides.toml")
     if song is not None and song.review:
-        return Line("review", "Needs review", _review_link(song, todo))
+        return Line("review", "Needs your pick", _review_link(song, todo))
     if not job.fetching and song is not None and song.lacuerda:
-        return Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
+        return Line("added", "Added · your LaCuerda pick comes tonight")
     if not job.fetching or song is None:
-        return Line("added", "Added: the nightly run looks for it")
+        return Line("added", "Added · fetched tonight")
     if song.checked_now:
-        return Line("missing", "Not found", _todo_link(todo))
+        return Line("missing", "Not on the sites", _todo_link(todo))
     return Line("waiting", "Not fetched yet", details=details)
 
 
@@ -317,14 +317,14 @@ def _artist_read(steps: list[Step], details: str) -> Line:
 
 
 def _peer_done(job: Job, kind: str, details: str) -> Line:
-    """A sync, a take or a pull that is done: "Synced" or "Taken"; with a unit left as it was (``Job.units``), how many,
+    """A sync, a take or a pull that is done: "Shared" or "Taken"; with a unit left as it was (``Job.units``), how many,
     a wait; a stage that failed though its command ended (``caracole peer take`` with no backup first), its words."""
     failed = _stage_failure(job.stages)
     if failed is not None:
         return Line("waiting", failed, details=details)
     left = sum(1 for _, outcome, _ in job.units if outcome == "left")
     if left:
-        return Line("waiting", f"{_PEER_DONE[kind]}: {plural(left, 'change')} left as "
+        return Line("waiting", f"{_PEER_DONE[kind]} · {plural(left, 'change')} left as "
                                f"{'it was' if left == 1 else 'they were'}", details=details)
     return Line("ready", _PEER_DONE[kind])
 
@@ -332,12 +332,12 @@ def _peer_done(job: Job, kind: str, details: str) -> Line:
 def _review_link(song: SongFacts, todo: str | None) -> tuple[str, str] | None:
     """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page (none
     without one)."""
-    return ("Pick the match", song.picker) if song.picker else _todo_link(todo)
+    return ("Pick", song.picker) if song.picker else _todo_link(todo)
 
 
 def _todo_link(todo: str | None) -> tuple[str, str] | None:
     """The to-do page's link, or None for a caracole with no to-do page (``todo`` None, the phone's)."""
-    return ("see the to-do page", todo) if todo is not None else None
+    return ("To-do page", todo) if todo is not None else None
 
 
 def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
@@ -348,9 +348,9 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
     if stage is None:
         return "Running…"
     if stage.state == "running" and stage.detail.startswith(_WAITING):
-        return "Waiting for another caracole…"
+        return "Waiting for the book…"
     if stage.name == "song" and new:
-        return "Adding to the library…"
+        return "Adding to the book…"
     if stage.state == "running" and stage.name == "sheet" and stage.detail in _SHEET_LINES:
         return f"{_SHEET_LINES[stage.detail]}…"
     if stage.state == "running" and stage.name == "songbooks" and stage.detail:
@@ -372,7 +372,7 @@ def _stage_failure(stages: list[Stage]) -> str | None:
 def _failure(steps: list[Step]) -> str:
     failed = next((s for s in steps if s.state == "failed"), None)
     if failed is None:
-        return "It stopped before it was done."
+        return "Stopped before the end."
     said = next((m.group(1).strip() for line in reversed(failed.output) if (m := _ERROR.match(line))), None)
     if not said:
         return f"{failed.label} failed."

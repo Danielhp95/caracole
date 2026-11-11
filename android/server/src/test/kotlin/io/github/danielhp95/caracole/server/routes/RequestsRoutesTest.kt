@@ -121,7 +121,7 @@ class RequestsRoutesTest {
             assertEquals(listOf("Now", "Today"), groups.map { it.getValue("name").jsonPrimitive.content })
             val current = groups[0].getValue("requests").jsonArray.map { it.jsonObject }
             assertEquals(listOf(held.id, waiting.id), current.map { it.getValue("id").jsonPrimitive.content.toInt() })
-            assertEquals("Queued, next", says(current[1]))
+            assertEquals("Queued · next", says(current[1]))
             val over = groups[1].getValue("requests").jsonArray.single().jsonObject
             assertEquals(done.id, over.getValue("id").jsonPrimitive.content.toInt())
             val output = over.getValue("output").jsonObject
@@ -130,7 +130,7 @@ class RequestsRoutesTest {
                          output.getValue("steps").jsonArray.single().jsonObject.getValue("lines").jsonArray.map {
                              it.jsonPrimitive.content
                          })
-            assertTrue(" · requested 2026-11-04 00:30 CET" in output.getValue("meta").jsonPrimitive.content,
+            assertTrue(" · asked 2026-11-04 00:30 CET" in output.getValue("meta").jsonPrimitive.content,
                        output.getValue("meta").toString())
             assertTrue("lines" !in current[0].getValue("output").jsonObject.getValue("steps").jsonArray.single().jsonObject)
             release(queue, held)
@@ -180,11 +180,11 @@ class RequestsRoutesTest {
             ended(queue, queue.submit(lookup("Picked")).first)
             val over = test.script("/requests.json").json.jsonObject.getValue("groups").jsonArray.single().jsonObject
                 .getValue("requests").jsonArray.single().jsonObject
-            assertEquals("Needs review", says(over))
+            assertEquals("Needs your pick", says(over))
             assertEquals("/review?song=$id",
                          over.getValue("actions").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content)
             val sheet = over.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
-                .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+                .single { it.getValue("label").jsonPrimitive.content == "Sheet" }
             assertEquals("Waits for a pick", sheet.getValue("badge").jsonObject.getValue("text").jsonPrimitive.content)
             assertEquals(Feed.PICK_STAGE, sheet.getValue("note").jsonPrimitive.content)
         }
@@ -225,7 +225,7 @@ class RequestsRoutesTest {
     /** The lookup's Sheet stage, as its output shows it. */
     private fun sheetStage(shown: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject =
         shown.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
-            .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+            .single { it.getValue("label").jsonPrimitive.content == "Sheet" }
 
     /** Each action as (label, its link or form, primary). */
     private fun said(shown: kotlinx.serialization.json.JsonObject): List<Triple<String, String, Boolean>> =
@@ -367,7 +367,7 @@ class RequestsRoutesTest {
             assertEquals(404, refused("999999999999").first)
             val (status, text) = refused("${held.id}")
             assertEquals(409, status)
-            assertTrue("still queued or running" in text, text)
+            assertTrue("Still queued or running" in text, text)
             release(queue, held)
         }
     }
@@ -375,7 +375,7 @@ class RequestsRoutesTest {
     @Test fun aRequestOfThePhonesOwnReadBackFromTheHistoryHasNothingToRunAgain() {
         val history = JobHistory(tmp.newFile("requests.jsonl").also { it.delete() })
         val first = JobQueue(scope, history = history)
-        ended(first, first.submit(JobSpec("Import the index", "index", "index",
+        ended(first, first.submit(JobSpec("Import the computer's index", "index", "index",
                                           listOf("merge" to "Merging the index")) {}).first)
         val (test, queue) = app(queue = JobQueue(scope, history = history, commands = commands))
         test.use {

@@ -122,9 +122,9 @@ class SheetsTest {
     }
 
     @Test fun aKeyNamedComesFromItsSourceInWords() {
-        assertEquals("from info.json", SheetView.origin(null))
+        assertEquals("from the song's entry", SheetView.origin(null))
         assertEquals("from the tab", SheetView.origin("tab"))
-        assertEquals("estimated from the chords", SheetView.origin("  Chords "))
+        assertEquals("guessed from the chords", SheetView.origin("  Chords "))
         assertEquals("from MusicBrainz Lookup", SheetView.origin("MusicBrainz \t Lookup"))
         assertEquals("from " + "x".repeat(40), SheetView.origin("x".repeat(50)))
         val sheet = Sheets.parse("{title: T}\n{key: A}\n{capo: 2}\n[Am]la [E7]la [G]la [D]la [F]la [C]la [Dm]la [E]la\n")

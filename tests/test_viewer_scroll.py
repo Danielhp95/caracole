@@ -112,7 +112,7 @@ def test_the_pill_is_on_the_page_hidden_until_scrolling_starts():
     pill = re.search(r'<div class="pill" id="pill"([^>]*)>(.*?)</div>', html, re.S)
     assert pill, "no pill"
     attrs, inside = pill.groups()
-    assert " hidden" in attrs and 'role="group"' in attrs and 'aria-label="Scrolling by itself"' in attrs
+    assert " hidden" in attrs and 'role="group"' in attrs and 'aria-label="Auto-scroll"' in attrs
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', inside) == [
         ("go", "Pause"), ("pill-slower", "Slower"), ("pill-faster", "Faster"), ("pill-end", "Stop scrolling")]
     assert '<output id="pill-speed">6</output>' in inside
@@ -122,7 +122,7 @@ def test_the_pill_is_on_the_page_hidden_until_scrolling_starts():
     # A live region outside the pill, there before it shows, says when it starts and stops.
     assert re.search(r'<p class="vh" id="scroll-status" role="status"></p>', html)
     # ▶ in the bar starts it; the pill's − and + set the speed, a number: no slider without one.
-    assert re.search(r'<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself">', html)
+    assert re.search(r'<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll">', html)
     assert 'id="speed"' not in html and 'type="range"' not in html
 
 
@@ -249,8 +249,8 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
     # The pill takes the bar's place, counting down on its first button, which has the focus:
     # press it again to start at once.
     assert counting["pill"] and not counting["bar"] and counting["focus"] == "go"
-    assert counting["go"] == "Start now" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
-    assert counting["status"] == "Scrolling in 3 seconds" and counting["y"] == 0
+    assert counting["go"] == "Start" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
+    assert counting["status"] == "Scrolling in 3 s" and counting["y"] == 0
     assert ring == "drain"  # the ring empties as the seconds pass
     assert colours[1] == colours[2] == colours[0]
     assert later["tick"] == "2" and later["y"] == 0
@@ -297,7 +297,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
     assert faster["hash"] == "#speed=8"
     assert paused["go"] == "Resume" and paused["icons"] == ["i-play"] and paused["pill"]
     assert paused["status"] == "Paused" and still == paused["y"]
-    assert resumed["go"] == "Start now" and resumed["tick"] == "3"  # a countdown again, to get your hands back
+    assert resumed["go"] == "Start" and resumed["tick"] == "3"  # a countdown again, to get your hands back
     assert card["go"] == "Resume" and card["pill"] and not card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
     assert not ended["pill"] and ended["bar"] and ended["focus"] == "scroll" and ended_still
@@ -365,7 +365,7 @@ def test_paused_or_at_the_end_the_bar_is_back_under_the_pill(tmp_path):
         assert b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Resume'", 2)  # by hand
         b.click("#go")
         b.click("#go")
-        assert b.wait("document.querySelector('#scroll-status').textContent === 'Paused at the end of the song'", 5)
+        assert b.wait("document.querySelector('#scroll-status').textContent === 'Paused · end of song'", 5)
         end, end_at = look(b), b.js(boxes)
     assert running["bar"] is None and running["pill"]
     assert touched["go"] == "Resume" and touched["bar"] and touched["pill"]
@@ -505,7 +505,7 @@ def test_the_pill_answers_the_keyboard(tmp_path):
         b.press("Tab")
         b.press("Enter")  # stop
         ended = look(b)
-    assert counting["focus"] == "go" and counting["go"] == "Start now"
+    assert counting["focus"] == "go" and counting["go"] == "Start"
     assert running["go"] == "Pause" and running["focus"] == "go"
     assert slower["focus"] == "pill-slower" and slower["speed"] == "5" and slower["go"] == "Pause"
     assert not ended["pill"] and ended["focus"] == "scroll"

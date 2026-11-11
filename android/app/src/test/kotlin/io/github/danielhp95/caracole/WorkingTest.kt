@@ -53,12 +53,12 @@ class WorkingTest {
     @Test
     fun `the line names the job that runs, a sync as syncing with its computer, and those after it`() {
         val sync = CompletableDeferred<Unit>()
-        val first = submit("sync", "Sync with Daniel's library", sync)
+        val first = submit("sync", "Share with Daniel's library", sync)
         running(first.id)
-        assertEquals("Syncing with Daniel's library…", Working.lineOf(queue.snapshot()))
+        assertEquals("Sharing logs with Daniel's library…", Working.lineOf(queue.snapshot()))
         val add = CompletableDeferred<Unit>()
         submit("add", "Estopa - Tu calorro", add)
-        assertEquals("Syncing with Daniel's library… (1 more waiting)", Working.lineOf(queue.snapshot()))
+        assertEquals("Sharing logs with Daniel's library… · 1 waiting", Working.lineOf(queue.snapshot()))
         sync.complete(Unit)
         waitFor("the add to run") { queue.snapshot().any { it.spec.kind == "add" && it.state == "running" } }
         assertEquals("Adding Estopa - Tu calorro…", Working.lineOf(queue.snapshot()))
@@ -95,10 +95,10 @@ class WorkingTest {
         assertTrue(Working.isLookup(song))
         waitFor("the lookup's song stage") { lookups.job(song.id)?.stages?.any { it.state == "running" } == true }
         // the library page's line: a song new to the library is being added; one it has is being looked up
-        assertEquals("Estopa - Tu calorro: Adding to the library…", Working.lineOf(lookups.snapshot()))
+        assertEquals("Estopa - Tu calorro · Adding to the book…", Working.lineOf(lookups.snapshot()))
         val known = JobViews.line(lookups.job(song.id)!!, facts = SongFacts()).text
-        assertNotEquals("Adding to the library…", known)
-        assertEquals("Estopa - Tu calorro: $known", Working.lineOf(lookups.snapshot()) { SongFacts() })
+        assertNotEquals("Adding to the book…", known)
+        assertEquals("Estopa - Tu calorro · $known", Working.lineOf(lookups.snapshot()) { SongFacts() })
         val read = CompletableDeferred<Unit>()
         val artist = lookup("Read the page of Estopa on LaCuerda", "${JobCommands.LACUERDA_ARTIST}estopa",
                             "Estopa on LaCuerda", JobCommands.lacuerdaArtistSteps("estopa", "Estopa"), read)
@@ -107,7 +107,7 @@ class WorkingTest {
         val waiting = lookup("Search LaCuerda for “corazones rotos”", "${JobCommands.LACUERDA_SEARCH}corazones-rotos",
                              "“corazones rotos” on LaCuerda",
                              JobCommands.lacuerdaSearchSteps("corazones rotos", auto = true), search)
-        assertEquals("Estopa - Tu calorro: $known (2 more waiting)", Working.lineOf(lookups.snapshot()) { SongFacts() })
+        assertEquals("Estopa - Tu calorro · $known · 2 waiting", Working.lineOf(lookups.snapshot()) { SongFacts() })
         first.complete(Unit)
         waitFor("the read to run") { lookups.job(artist.id)?.state == "running" }
         read.complete(Unit)
@@ -123,7 +123,7 @@ class WorkingTest {
         val asked = CompletableDeferred<Unit>()
         lookup("Fetch Estopa - Fuego", "estopa/fuego", "Estopa - Fuego", JobCommands.lookupSteps("Estopa", "Fuego"),
                asked)
-        assertEquals("Fetch Estopa - Fuego: waiting its turn", Working.lineOf(lookups.snapshot()))
+        assertEquals("Waiting · Fetch Estopa - Fuego", Working.lineOf(lookups.snapshot()))
         merge.complete(Unit)
         asked.complete(Unit)
     }
@@ -146,7 +146,7 @@ class WorkingTest {
         assertNull(Working.lineOf(queue.snapshot()))
         val removal = CompletableDeferred<Unit>()
         submit("remove", "Estopa - Tu calorro", removal)
-        assertEquals("Remove Estopa - Tu calorro: waiting its turn", Working.lineOf(queue.snapshot()))
+        assertEquals("Waiting · Remove Estopa - Tu calorro", Working.lineOf(queue.snapshot()))
         merge.complete(Unit)
         removal.complete(Unit)
     }
@@ -158,8 +158,8 @@ class WorkingTest {
         queue.onBusy = working::busy
 
         val sync = CompletableDeferred<Unit>()
-        submit("sync", "Sync with Daniel's library", sync)
-        waitFor("the line") { working.line.value == "Syncing with Daniel's library…" }
+        submit("sync", "Share with Daniel's library", sync)
+        waitFor("the line") { working.line.value == "Sharing logs with Daniel's library…" }
         assertEquals(1, starts.get())
         sync.complete(Unit)
         waitFor("the line to go") { working.line.value == null }
@@ -174,11 +174,11 @@ class WorkingTest {
 
         // A sync asked for while it merges: no busy edge comes, and the service is started all the same.
         val after = CompletableDeferred<Unit>()
-        submit("sync", "Sync with Daniel's library", after)
-        waitFor("the waiting sync's line") { working.line.value == "Sync with Daniel's library: waiting its turn" }
+        submit("sync", "Share with Daniel's library", after)
+        waitFor("the waiting sync's line") { working.line.value == "Waiting · Share with Daniel's library" }
         assertEquals(2, starts.get())
         merge.complete(Unit)
-        waitFor("the sync to run") { working.line.value == "Syncing with Daniel's library…" }
+        waitFor("the sync to run") { working.line.value == "Sharing logs with Daniel's library…" }
         assertEquals(2, starts.get(), "started once for as long as it has a line")
         after.complete(Unit)
         waitFor("the line to go") { working.line.value == null }

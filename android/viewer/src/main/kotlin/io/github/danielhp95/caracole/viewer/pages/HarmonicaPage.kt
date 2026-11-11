@@ -63,7 +63,8 @@ object HarmonicaPage {
     /** A line played: a hole a beat. */
     val BPM: Int by lazy { json.getValue("BPM").jsonPrimitive.int }
     val SITE: String by lazy { text("SITE") }
-    /** What the header and the bar say of the harp the page starts on, by why it was chosen (HarpFit.WHY). */
+    /** What the bar says of the harp the page starts on, by why it was chosen (HarpFit.WHY): the header says it in
+     * words of its own ([harpLines]). */
     private val SAID: Map<String, String> by lazy { texts("_SAID") }
     private val BRACKETS: Map<String, Pair<String, String>> by lazy {
         json.getValue("_BRACKETS").jsonObject.mapValuesTo(LinkedHashMap()) { (_, v) ->
@@ -78,7 +79,7 @@ object HarmonicaPage {
     /** The bar, hidden until the script runs; a tab shown as written has the overlay's buttons, Aa and ▶ alone. */
     val BAR: String by lazy { text("_BAR") }
     val BAR_RAW: String by lazy { text("_BAR_RAW") }
-    /** Scrolling by itself, as the viewer's: the pill that steers it, above the bar's place. */
+    /** Auto-scroll, as the viewer's: the pill that steers it, above the bar's place. */
     val PILL: String by lazy { text("_PILL") }
 
     /**
@@ -262,7 +263,7 @@ object HarmonicaPage {
             "<h1${SheetPage.zhAttr(named, names)}>${PyText.escape(named)}</h1>\n" +
             SheetPage.artistLine(artist, names) +
             (if (readable) harpLines(choice) else
-                "<p class=\"facts\" id=\"facts\">Harmonica tab, as its tabber wrote it: caracole can't read its notation.</p>\n") +
+                "<p class=\"facts\" id=\"facts\">Harmonica tab, as written. We can't read its notation.</p>\n") +
             (if (readable) readAs(tab.reading, facts) else "") +
             "</header>\n"
     }
@@ -275,9 +276,9 @@ object HarmonicaPage {
         val said = when (choice.why) {
             "record" -> "<b>$name harp</b> with the record$where"
             "tab" -> "<b>$name harp</b>, as the tab says$where"
-            "page" -> "<b>$name harp</b>, as harptabs.com's key says$where"
+            "page" -> "<b>$name harp</b>, as harptabs' key says$where"
             "song" -> "<b>$name harp</b> for the song's key$where"
-            "usual" -> "<b>$name harp</b>, as tabs are written when they name none$where"
+            "usual" -> "<b>$name harp</b>, the default when a tab names none$where"
             else -> throw NoSuchElementException(choice.why)
         }
         val bits = mutableListOf("Harmonica tab", said)
@@ -288,7 +289,7 @@ object HarmonicaPage {
         if (choice.why == "record" && choice.fits.size > 1) {
             val best = choice.fits[0]
             val runner = choice.fits[1]
-            html += "<p class=\"why\">${PyFormat.percent(best.share, 0)} of the sung notes fall on the sheet's chords on " +
+            html += "<p class=\"why\">${PyFormat.percent(best.share, 0)} of the sung notes fit the sheet's chords on " +
                 "${a(Harp.HARP_KEYS[best.harp])}, ${PyFormat.percent(runner.share, 0)} on ${a(Harp.HARP_KEYS[runner.harp])}</p>\n"
         }
         return html
@@ -421,7 +422,7 @@ object HarmonicaPage {
         val rows = data.rows!!
         rows.add(JsonArray((first until groups.size).map(::JsonPrimitive)))
         return "$line<button type=\"button\" class=\"rp\" data-row=\"${rows.size - 1}\" " +
-            "aria-label=\"Play this line\" aria-pressed=\"false\">$PLAY_ICON</button></p>"
+            "aria-label=\"Play line\" aria-pressed=\"false\">$PLAY_ICON</button></p>"
     }
 
     /** _cells: a row's groups in their order, [space] between two, none between two run together; in a row played
@@ -480,10 +481,10 @@ object HarmonicaPage {
     fun footer(tabFile: String, url: String?, placed: Boolean, change: Boolean = false): String {
         val site = if (url != null && url.startsWith(SITE)) url else SITE
         return "<footer class=\"foot\">\n" +
-            "<p><a class=\"pdf\" href=\"${PyText.escape(PyUrl.quote(tabFile))}\">The tab as text</a></p>\n" +
+            "<p><a class=\"pdf\" href=\"${PyText.escape(PyUrl.quote(tabFile))}\">Tab as text</a></p>\n" +
             "<p>Tab from <a href=\"${PyText.escape(site)}\">harptabs.com</a>, as its tabber wrote it" +
-            (if (placed) "; caracole placed each hole over its syllable.</p>\n" else ".</p>\n") +
-            "<p>Keep this page private: the lyrics and the tab are other people's work.</p>\n" +
+            (if (placed) ". We placed each hole over its syllable.</p>\n" else ".</p>\n") +
+            "<p>Private page: the lyrics and the tab are other people's work.</p>\n" +
             (if (change) "<p class=\"reading\" id=\"reading-foot\" hidden><a href=\"#\">Change how it's read</a></p>\n" else "") +
             "</footer>\n"
     }

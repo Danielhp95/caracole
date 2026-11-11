@@ -257,7 +257,7 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
             is Looked.Page -> Response(200, Body.FromFile(looked.file, looked.file.length()),
                                        (listOf("Content-Type" to looked.entry.type) + looked.entry.headers.toList()).toMutableList())
             is Looked.Gated -> when (looked.gate) {
-                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "This song was removed on the phone.", name = name())
+                Gate.REMOVED -> MessagePage.page(410, "Removed on the phone", "Removed from the phone's book.", name = name())
                 else -> MessagePage.page(409, "Changed on the phone",
                                          if (looked.entry.unit?.startsWith(SONGBOOK_UNIT) == true) CHANGED_SONGBOOK
                                          else CHANGED_SONG,
@@ -318,7 +318,7 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         const val MOVED_SONGBOOK = "This songbook changed since the phone made its page, so that page isn't sent."
 
         /** What the computer's page says of a unit the phone changed since the computer made it. */
-        const val CHANGED_SONG = "This song changed on the phone since the computer made its page."
+        const val CHANGED_SONG = "Changed on the phone since the computer wrote this page."
         const val CHANGED_SONGBOOK = "This songbook changed on the phone since the computer made its page."
     }
 }

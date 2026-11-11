@@ -133,13 +133,13 @@ object SheetView {
         val named = Theory.namedKey(s.key, capo, played)
         if (named != null) return Theory.shapesKey(named, capo, played) to "from the sheet"
         val estimated = Theory.estimateKey(played)
-        return estimated to (if (estimated != null) "estimated from the chords" else null)
+        return estimated to (if (estimated != null) "guessed from the chords" else null)
     }
 
     /** _origin: where a key came from, in words: one of [SOURCES]' words, else "from <source>" (its first 40
-     * characters, its spaces made one), "from info.json" for none. */
+     * characters, its spaces made one), "from the song's entry" for none. */
     fun origin(source: String?): String {
-        if (source == null) return "from info.json"
+        if (source == null) return "from the song's entry"
         val words = Py.slice(Py.split(source).joinToString(" "), 0, 40)
         return SOURCES[PyUnicode.lower(words)] ?: "from $words"
     }

@@ -73,20 +73,20 @@ internal object LyricsStages {
     fun end(ctx: StageContext, provider: String, asked: Asked<String>): StageEnd = when (asked) {
         is Asked.Done -> StageEnd("done", asked.value)
         is Asked.Off -> StageEnd("skipped", asked.why)
-        is Asked.Cooling -> StageEnd("skipped", "${name(provider)} is cooling down after a block, until ${until(asked.until)}")
-        is Asked.Blocked -> StageEnd("skipped", "${name(asked.error.provider)} blocked caracole (${asked.error.message}): " +
-            "no more requests to it until ${until(asked.state.cooldownUntil)}. Nothing was marked not found.")
+        is Asked.Cooling -> StageEnd("skipped", "Waiting out ${name(provider)} until ${until(asked.until)}")
+        is Asked.Blocked -> StageEnd("skipped", "${name(asked.error.provider)} turned us back (${asked.error.message}). " +
+            "No more asks until ${until(asked.state.cooldownUntil)}. Nothing marked not on the sites.")
         is Asked.Spent -> {
             val p = ctx.config.provider(provider)
             val spent = when {
-                asked.keptForSheets -> "this hour's lookups have spent half of their ${p.lookupPerHour} requests to " +
-                    "${name(provider)}, and the other half is kept for sheets"
-                asked.hour -> "this hour's ${p.lookupPerHour} lookup requests to ${name(provider)} are spent"
-                else -> "the lookup's ${p.lookupRequests} requests to ${name(provider)} are spent"
+                asked.keptForSheets -> "half this hour's ${p.lookupPerHour} asks of ${name(provider)} are spent; the rest " +
+                    "is kept for sheets"
+                asked.hour -> "no more asks of ${name(provider)} this hour (${p.lookupPerHour} spent)"
+                else -> "this fetch's ${p.lookupRequests} asks of ${name(provider)} are spent"
             }
-            StageEnd("skipped", "$spent; the nightly run does the rest")
+            StageEnd("skipped", "$spent; tonight's run does the rest")
         }
-        is Asked.Failed -> StageEnd("failed", "${name(asked.error.provider)} failed (${asked.error.message}); the " +
-            "nightly run tries again")
+        is Asked.Failed -> StageEnd("failed", "${name(asked.error.provider)} failed (${asked.error.message}); tried " +
+            "again tonight")
     }
 }

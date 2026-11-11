@@ -129,14 +129,14 @@ class LookupTest {
         assertNull(result.refused)
         assertEquals("[${song.id}]", db.kvGet("lookup:songs"))
         heard.clear()
-        assertEquals("in the library", lookup(stages()).run(db).details["song"])
+        assertEquals("in the book", lookup(stages()).run(db).details["song"])
     }
 
     @Test fun aSongIgnoredIsRefusedTheSongStageFailedAndTheRestSkipped() = phone { db ->
         val key = Normalize.identityKey("Radiohead", "Creep")
         val result = lookup(stages(match = SiteStage { error("asked") }), overrides = Overrides(ignore = setOf(key)))
             .run(db)
-        val why = "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up"
+        val why = "Radiohead - Creep is ignored (overrides.toml [ignore]). Take it out to fetch it"
         assertEquals(why, result.refused)
         assertEquals(listOf("song" to "failed") + LookupWords.STAGES.drop(1).map { it.first to "skipped" }, ends())
         assertEquals(why, result.details["song"])
@@ -151,7 +151,7 @@ class LookupTest {
         val asks = SiteStage { ctx -> LookupWords.end(ctx.config, "ug", ctx.asking.ask("ug") { it.get(ug); StageEnd("done", "x") }) }
         val result = lookup(stages(ugSheet = asks, ug = asks), alerts = alerts).run(db)
         val block = result.details.getValue("sheet")
-        assertTrue(block.startsWith("Ultimate Guitar blocked caracole (ug: 403: $ug"), block)
+        assertTrue(block.startsWith("Ultimate Guitar turned us back (ug: 403: $ug"), block)
         assertEquals("skipped" to LookupWords.blockedEarlier("ug"), result.states["ug"] to result.details["ug"])
         assertEquals(listOf("ug"), alerts.blocks)
         assertEquals(mapOf("ug" to 1), result.requests)
@@ -187,7 +187,7 @@ class LookupTest {
         val result = lookup(stages(gtptabs = SiteStage { ctx -> throw SharedFolder(ctx.song, other, "guitar-1.gp5") }))
             .run(db)
         assertEquals("failed", result.states["gtptabs"])
-        assertTrue(result.details.getValue("gtptabs").endsWith("ask for it again under a shorter title."))
+        assertTrue(result.details.getValue("gtptabs").endsWith("ask again under a shorter title."))
         assertTrue(result.ok)
     }
 
@@ -201,7 +201,7 @@ class LookupTest {
         }
         val result = lookup(stages(ugSheet = sheet)).run(db)
         val running = heard.filter { it[0] == "stage" && it[1] == "sheet" && it[2] == "running" }.map { it[3] }
-        assertEquals(listOf("", "from Ultimate Guitar"), running)
+        assertEquals(listOf("", "from UG"), running)
         val readable = heard.filter { it[0] == "readable" }
         assertEquals(listOf(listOf("readable", mapOf("sheet" to "Radiohead/Creep/sheet.txt"), 2.5)), readable)
         assertEquals(2.5, result.secondsToSheet)
@@ -275,7 +275,7 @@ class LookupTest {
 
     @Test fun aPickIsRecordedInTheOverridesAndSaidInTheSongStage() = phone { db ->
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", ug = "radiohead/creep")).run(db)
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", result.details["song"])
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [match] radiohead/creep", result.details["song"])
     }
 
     @Test fun aTabPickedKeepsThePinsOfTheOtherKindGroupAsWrittenAndReplacesTheRest() = phone { db ->
@@ -292,7 +292,7 @@ class LookupTest {
         val before = Overrides(pin = mapOf(key to listOf(5000L, 6000L, 6500L, 9999L, 7000L)),
                                pinUrls = mapOf(key to listOf(pasted)))
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = ug), overrides = before).run(db)
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [pin] tab 4169", result.details["song"])
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [pin] tab 4169", result.details["song"])
         val after = Overrides.read(db)
         assertEquals(listOf(4169L, 5000L, 7000L), after.pin[key])  // the tabs beside the chords picked
         assertEquals(listOf(ug, pasted, "https://tabs.ultimate-guitar.com/tab/7000"), after.pinUrls[key])
@@ -315,7 +315,7 @@ class LookupTest {
     @Test fun aTabOfAKindCaracoleDoesntUseIsRefusedBeforeAnythingIsWritten() = phone { db ->
         val tab = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-guitar-pro-224003"
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = tab)).run(db)
-        assertEquals("tab 224003 is not a chords, tabs or ukulele chords page", result.refused)
+        assertEquals("tab 224003 isn't chords, a tab or ukulele chords", result.refused)
         assertNull(Songs.byKey(db, Normalize.identityKey("Radiohead", "Creep")))
     }
 }

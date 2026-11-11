@@ -148,7 +148,7 @@ def format_line(
     """The wanted.txt line for a song, escaped so that it parses back to the same song."""
     artist, title = _clean(artist), _clean(title)
     if not artist or not title:
-        raise ValueError("a song needs an artist and a title")
+        raise ValueError("it needs an artist and a title")
     album = _clean(album) if album else ""
     parts = [f"{_escape(artist)} - {_escape(title)}"]
     if album:
@@ -378,7 +378,7 @@ def _checked_line(
 ) -> tuple[str, WantedLine]:
     """The text of a song's line and what it parses back to; ValueError if that's another song."""
     if _SEPARATOR.search(_clean(artist)):
-        raise ValueError(f"wanted.txt can't hold an artist name with ' - ' in it: {artist!r}")
+        raise ValueError(f"an artist name can't hold ' - ': {artist!r}")
     text = format_line(artist, title, album, duration_ms)
     lines, errors = parse_wanted(text)
     seconds = None if duration_ms is None else (duration_ms + 500) // 1000 * 1000

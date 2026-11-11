@@ -102,10 +102,10 @@ class LibraryRoutesTest {
             listOf("artist" to "A", "title" to "T", "duration" to "0:00") to
                 "The length is a bad duration '0:00': it must be longer than zero.",
             listOf("artist" to "A", "title" to "T", "duration" to "four minutes") to
-                "The length 'four minutes' isn't a duration: write m:ss, h:mm:ss or whole seconds.",
+                "The length 'four minutes' isn't a duration. Write m:ss, h:mm:ss or seconds.",
             listOf("artist" to "Simon - Garfunkel", "title" to "T") to
-                "caracole can't add this song: wanted.txt can't hold an artist name with ' - ' in it: 'Simon - Garfunkel'",
-            listOf("q" to "x".repeat(501)) to "The text is too long: 500 characters at most.",
+                "Can't add this song: an artist name can't hold ' - ': 'Simon - Garfunkel'",
+            listOf("q" to "x".repeat(501)) to "Too long: 500 characters at most.",
         )
         for ((fields, said) in cases) {
             for (path in listOf("/request", "/lookup")) {
@@ -120,12 +120,12 @@ class LibraryRoutesTest {
         val answer = app.postScript("/request", listOf("artist" to "A", "title" to "T",
                                                        "youtube" to "https://youtu.be/dQw4w9WgXcQ"))
         assertEquals(409, answer.status)
-        assertEquals("A sheet from a YouTube video isn't on the phone yet.", error(answer))
+        assertEquals("A sheet from a YouTube video: not on the phone yet.", error(answer))
     }
 
     @Test fun `a removal of a song the library hasn't got is 404, and one naming none is 400`() {
         assertEquals(404, app.postScript("/remove", listOf("song" to "41")).status)
-        assertEquals("That song isn't in the library: removed already, maybe.", error(app.postScript("/remove", listOf("song" to "41"))))
+        assertEquals("That song isn't in the logbook. Removed already?", error(app.postScript("/remove", listOf("song" to "41"))))
         assertEquals(400, app.postScript("/remove", listOf("song" to "")).status)
         assertEquals(404, app.postScript("/lookup", listOf("song" to "41")).status)
     }
@@ -178,7 +178,7 @@ class LibraryRoutesTest {
         assertNotNull(song("Soda Stereo", "De Música Ligera"))
         val refused = app.postScript("/request", listOf("q" to "música"))
         assertEquals(400, refused.status)
-        assertTrue("doesn't say who the artist is" in error(refused))
+        assertTrue("names no artist" in error(refused))
     }
 
     @Test fun `Get it adds the song and answers a lookup's shape, which the page follows`() {
@@ -206,7 +206,7 @@ class LibraryRoutesTest {
         val removal = question.json.jsonObject.getValue("removal").jsonObject
         assertEquals(listOf("song", "key", "display", "brief", "goes", "stays", "notes"), removal.keys.toList())
         assertEquals(JsonPrimitive(wonderwall.key), removal["key"])
-        assertEquals(JsonPrimitive("Deletes its record."), removal["brief"])
+        assertEquals(JsonPrimitive("Deletes its entry."), removal["brief"])
         assertNotNull(song("Oasis", "Wonderwall"), "the question changes nothing")
 
         val refused = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1", "key" to "oasis/other"))
@@ -275,7 +275,7 @@ class LibraryRoutesTest {
         // Its line names it as the library does, and says it is there already.
         val again = added(listOf("artist" to "radiohead", "title" to "creep"))
         assertEquals("Add Radiohead - Creep", again.spec.title)
-        assertEquals("In your library as Radiohead - Creep.", again.stages.single().detail)
+        assertEquals("In your book as Radiohead - Creep.", again.stages.single().detail)
     }
 
     @Test fun `a new song's names are those wanted dot txt's line would hold`() {
@@ -289,7 +289,7 @@ class LibraryRoutesTest {
         assertEquals(Normalize.identityKey("Soda Stereo", "De Música Ligera"), job.spec.key)
         val refused = app.postScript("/request", listOf("artist" to "\u200b", "title" to "T"))
         assertEquals(400, refused.status)
-        assertEquals("caracole can't add this song: a song needs an artist and a title", error(refused))
+        assertEquals("Can't add this song: it needs an artist and a title", error(refused))
     }
 
     @Test fun `a full queue is refused, 503, and nothing is added`() {
@@ -323,7 +323,7 @@ class LibraryRoutesTest {
             val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single().jsonObject
             assertEquals(JsonPrimitive(song.id), shown["songId"])
             assertEquals(JsonPrimitive("Blur - Song 2"), shown.getValue("card").jsonObject["display"])
-            assertEquals("Added: the nightly run looks for it", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+            assertEquals("Added · fetched tonight", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
         }
     }
 
@@ -346,7 +346,7 @@ class LibraryRoutesTest {
                          paged.database.read { Overrides.read(it) }.lacuerda[song.key]?.url)
             val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single()
                 .jsonObject.getValue("line").jsonObject
-            assertEquals("Added: tonight's run gets the sheet you picked on LaCuerda", shown.getValue("text").jsonPrimitive.content)
+            assertEquals("Added · your LaCuerda pick comes tonight", shown.getValue("text").jsonPrimitive.content)
 
             // a song of the library LaCuerda answered for lately: a new pick is asked for at once
             paged.database.writeBlocking { db ->
@@ -375,7 +375,7 @@ class LibraryRoutesTest {
                        db.lastRowid(), calorro.id, "ab".repeat(32))
         }
         val removal = app.postScript("/remove", listOf("song" to calorro.id.toString())).json.jsonObject.getValue("removal").jsonObject
-        assertEquals(JsonPrimitive("Deletes the phone's 1 file for it and its record."), removal["brief"])
+        assertEquals(JsonPrimitive("Deletes the phone's 1 file for it and its entry."), removal["brief"])
         assertTrue(removal.getValue("goes").jsonArray.first().jsonPrimitive.content.endsWith("guitar-1.gp5"))
     }
 }

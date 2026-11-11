@@ -127,7 +127,7 @@ class FakeCaracole:
         if self.slow_add:
             self.polls.wait(2, timeout=30)
         sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
-        stage("song", "done", "in the library")
+        stage("song", "done", "in the book")
         stage("sheet", "running")
         self.polls.wait(2)
         if display in self.fail:
@@ -292,12 +292,12 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
 
     assert '<main class="list" id="list">' in dom  # still the library: no other page
     seen = attribute(dom, "data-seen")
-    assert "Fetching from Ultimate Guitar…" in seen, seen
+    assert "Fetching from UG…" in seen, seen
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'role="status"' in line and 'data-tone="ready"' in line  # read out as it changes
     # Ready, alone: the line folds it away (a screen reader hears it), and the song's own line opens the sheet.
-    assert "Ready" in line and "<a" not in line and "Open sheet" not in line
+    assert "Ready" in line and "<a" not in line and "Open" not in line
     # Once done, the line shows what the library has now: the sheet's button, and no Fetch now.
     assert re.search(SHEET_BUTTON, shown) and 'action="/fetch"' not in shown
     assert 'data-status="found"' in shown
@@ -390,10 +390,10 @@ def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, t
     # Its line is the one "Sending…" was written in: a screen reader hears it change, to the end.
     assert shown.count('class="progress"') == 1 and attribute(dom, "data-same") == {"requested Creep": True}
     seen = attribute(dom, "data-seen")
-    assert "Adding to the library…" in seen or "Queued…" in seen, seen
+    assert "Adding to the book…" in seen or "Queued…" in seen, seen
     assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
     # The masthead counts what is wanted, and the bar's placeholder the songs.
-    assert re.search(r'<li class="stat"><b>1</b> wanted</li>', dom) and 'placeholder="Search 2 songs, or the sites"' in dom
+    assert re.search(r'<li class="stat"><b>1</b> wanted</li>', dom) and 'placeholder="Search songs and sites"' in dom
     # One song: no list of requests.
     assert re.search(r'<aside[^>]*id="tray"[^>]*hidden', dom)
 
@@ -417,9 +417,9 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
     assert [href for href, _, _ in lines] == ["Muse/Hysteria/sheet.pdf", "Oasis/Wonderwall/sheet.pdf",
                                               "Radiohead/Creep/sheet.pdf"]
     assert "step-chips" not in tray.group(1)  # one line each: the songs' lines have the steps
-    assert "3 requests" in tray.group(1) and 'href="#tab=requests"' in tray.group(1)  # Details: the Requests tab
-    # One Details link, the list's own: its lines say how each goes, and the cards link their details.
-    assert tray.group(1).count(">Details<") == 1 and "job=" not in tray.group(1)
+    assert "3 requests" in tray.group(1) and 'href="#tab=requests"' in tray.group(1)  # Journal: the Requests tab
+    # One Journal link, the list's own: its lines say how each goes, and the cards link their details.
+    assert tray.group(1).count(">Journal<") == 1 and "job=" not in tray.group(1)
     # The lines in the list aren't read out a second time: the cards' are.
     assert 'role="status"' not in tray.group(1)
     # Folded, on a desktop too: a pill in the corner, over no card.
@@ -429,7 +429,7 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
 OPENS_THE_TRAY = """
 const opened = () => {
   const tray = document.getElementById("tray");
-  if (tray.hidden || !/all done/.test(tray.textContent)) return setTimeout(opened, 50);
+  if (tray.hidden || !/· done/.test(tray.textContent)) return setTimeout(opened, 50);
   const folded = tray.getBoundingClientRect();
   document.getElementById("tray-toggle").click();
   const head = document.querySelector(".tray-head").getBoundingClientRect();
@@ -479,7 +479,7 @@ def test_a_refused_request_says_why_on_its_line(serve, cfg, conn, tmp_path):
     dom = dump_dom(url, tmp_path)
 
     shown = card(dom, "Mrs Robinson")
-    assert 'data-tone="failed"' in shown and "caracole can't add this song" in shown
+    assert 'data-tone="failed"' in shown and "Can't add this song" in shown
     assert not cfg.wanted_file.exists()
 
 
@@ -494,7 +494,7 @@ def test_the_progress_fits_a_phone(serve, cfg, conn, tmp_path):
 
     assert attribute(dom, "data-wide") <= attribute(dom, "data-page")  # nothing wider than the screen
     assert re.search(r'<aside[^>]*id="tray"(?![^>]*hidden)', dom)
-    # Folded: only its one line shows ("2 requests · all done"), over cards that say the same.
+    # Folded: only its one line shows ("2 requests · done"), over cards that say the same.
     assert re.search(r'<button[^>]*id="tray-toggle"[^>]*aria-expanded="false"', dom)
     assert re.search(r'<ol[^>]*id="tray-list"[^>]*hidden', dom)
 
@@ -515,7 +515,7 @@ def test_a_new_songs_request_shows_after_a_reload(serve, cfg, conn, tmp_path):
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
     assert "Radiohead" in shown and "Ready" in shown and re.search(SHEET_BUTTON, shown)
-    assert "Adding to the library…" in attribute(dom, "data-seen")
+    assert "Adding to the book…" in attribute(dom, "data-seen")
 
 
 def test_a_server_that_doesnt_answer_says_so_on_the_line_then_goes_on(serve, cfg, conn, tmp_path):
@@ -606,16 +606,16 @@ def test_a_request_cancelled_elsewhere_ends_on_the_line_and_its_fetch_now_comes_
         with browser.Browser(tmp_path / "chrome") as page:
             page.open(url)
             assert page.wait(f"{line} !== null && {line}.textContent.startsWith('Queued') && {fetch} === null")
-            assert page.wait(f"{tray} === '2 requests · 2 to go'"), page.js(tray)
+            assert page.wait(f"{tray} === '2 of 2 requests to go'"), page.js(tray)
             cancel = urllib.request.Request(url + "jobs/cancel", data=b"csrf=tok&job=2", headers={
                 "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json",
                 "Origin": url.rstrip("/"), "Sec-Fetch-Site": "same-origin"})
             assert json.loads(urllib.request.urlopen(cancel).read()) == {"cancelled": 2}
             assert page.wait(f"{line} !== null && {line}.textContent === 'Cancelled'"), page.js(f"{line}.textContent")
             assert page.wait(f"{fetch} !== null && !{fetch}.querySelector('button').disabled")
-            assert page.wait(f"{tray} === '2 requests · 1 to go'"), page.js(tray)
+            assert page.wait(f"{tray} === '1 of 2 requests to go'"), page.js(tray)
             go.set()
-            assert page.wait(f"{tray} === '2 requests · all done'"), page.js(tray)
+            assert page.wait(f"{tray} === '2 requests · done'"), page.js(tray)
             assert page.js(f"{line}.textContent") == "Cancelled"
     finally:
         go.set()
@@ -661,19 +661,19 @@ def test_a_pick_on_a_line_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
 
     assert '<main class="list" id="list">' in dom  # still the library: no other page
     seen = attribute(dom, "data-seen")
-    assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
+    assert "Noting your answer in overrides.toml…" in seen and "Fetching from UG…" in seen, seen
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
-    assert re.search(SHEET_BUTTON, shown) and 'class="picker"' not in shown and "Needs review" not in shown
+    assert 'data-tone="ready"' in line and "Open" not in line  # folded away: the line opens the sheet
+    assert re.search(SHEET_BUTTON, shown) and 'class="picker"' not in shown and "Needs your pick" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
-# Clicks the "Pick the match" of Creep's request line once it shows, then notes where the page is, whether the
+# Clicks the "Pick" of Creep's request line once it shows, then notes where the page is, whether the
 # song's picker is open (its "⋯" with it), and which candidate has the focus.
 FOLLOWS_THE_LINE = """
 const timer = setInterval(() => {
-  const go = Array.from(cardOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick the match");
+  const go = Array.from(cardOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick");
   if (!go) return;
   clearInterval(timer);
   go.click();
@@ -709,7 +709,7 @@ def test_a_request_that_ends_in_a_review_offers_its_picker_on_the_line(serve, cf
 
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="review"' in line and "Needs review" in line and "needs review first" not in line
+    assert 'data-tone="review"' in line and "Needs your pick" in line and "needs review first" not in line
     assert attribute(dom, "data-after") == {"path": "/", "href": f"review?song={creep.id}", "open": True,
                                             "focus": "radiohead/creep"}
     assert 'action="/review"' in shown and 'action="/fetch"' not in shown
@@ -747,13 +747,13 @@ r.querySelector("form.pick-form button[type=submit]").click();
 
     assert attribute(dom, "data-opened") == {"panel": True, "picker": True}
     seen = attribute(dom, "data-seen")
-    assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
+    assert "Noting your answer in overrides.toml…" in seen and "Fetching from UG…" in seen, seen
     assert '<article class="card' not in listed(dom) and '<article class="row' not in listed(dom)
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
+    assert 'data-tone="ready"' in line and "Open" not in line  # folded away: the line opens the sheet
     assert re.search(SHEET_BUTTON, shown)
-    assert 'class="picker"' not in shown and "line-pick" not in shown and "Needs review" not in shown
+    assert 'class="picker"' not in shown and "line-pick" not in shown and "Needs your pick" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
@@ -936,7 +936,7 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     assert counts == {"summary": ["12 wanted"],
                       "chips": {"all": "0" if searched else "12", "found": "0", "wanted": "0" if searched else "12",
                                 "review": "0"},
-                      "count": "0 of 12 songs" if searched else ""}, counts  # said once the list is narrowed
+                      "count": "0/12 songs" if searched else ""}, counts  # said once the list is narrowed
 
 
 def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cfg, conn, tmp_path):
@@ -1093,7 +1093,7 @@ def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_
     assert counts["summary"] == ["1 wanted"]
     assert counts["chips"] == {"all": "1", "found": "0", "wanted": "1", "review": "0"}, counts
     assert hidden is (left == ""), hidden
-    assert (listed, count) == ([], "0 of 1 song")
+    assert (listed, count) == ([], "0/1 song")
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])

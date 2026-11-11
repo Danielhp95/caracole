@@ -435,7 +435,7 @@ def test_the_phones_page_has_the_requests_tab_counting_the_requests_that_wait_or
         page = phone_page(objects[name], controls)
         tab, panel = library_page._requests_tab(served), library_page._requests_panel(served)
         assert page.count(tab) == page.count(panel) == 1
-        assert f'Requests <span class="n">{controls["active"] or ""}</span>' in tab
+        assert f'Journal <span class="n">{controls["active"] or ""}</span>' in tab
         assert objects[name]["server"]["active"] == controls["active"]
     assert {controls["active"] for _, controls in CASES} == {0, 2}
 

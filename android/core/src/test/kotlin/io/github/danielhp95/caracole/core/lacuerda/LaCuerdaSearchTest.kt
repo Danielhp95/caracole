@@ -35,8 +35,8 @@ class LaCuerdaSearchTest {
     @Test fun aFailureIsSaidAsTheRouteSaysItWithItsFullStop() {
         val failure = LaCuerdaSearch.Failure(true, 1, "a page cut short", Stamps.micros(Instant.parse("2026-11-03T12:55:00Z")))
         assertEquals(SearchGate("failed", "la flaca", "flaca",
-                                "LaCuerda's search for “la flaca” failed less than an hour ago (a page cut short), so the " +
-                                    "page won't send it by itself before 2026-11-03 12:55 UTC."),
+                                "LaCuerda's search for “la flaca” failed within the hour (a page cut short); not " +
+                                    "sent by itself before 2026-11-03 12:55 UTC."),
                      SearchGate.of("la flaca", LaCuerdaSearch.Gate("failed", "flaca", failure = failure)))
         assertNull(SearchGate.of("la flaca", null))
     }

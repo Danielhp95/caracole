@@ -24,7 +24,7 @@ merges): a side that takes a song renders it again, so two caracoles of differen
 A unit's ``digest`` is the SHA-256 of its canonical JSON (``digest_of``: canonical.py, which the phone's caracole
 writes byte for byte alike), and a stored JSON text in it is hashed by the JSON it holds (``canonical.stored_hash``),
 so that two caracoles that wrote one record in two texts agree; its ``label`` what the owner reads
-("Eagles - Hotel California", "the songbook Campfire"). A unit's document (``unit_document``, what ``GET
+("Eagles - Hotel California", "songbook Campfire"). A unit's document (``unit_document``, what ``GET
 /api/peer/unit`` answers) holds everything another side needs to take it, and its value, the digest's, is read back
 from it alone (``value_of_document``), so a side checks what it is given before it takes it.
 
@@ -128,11 +128,11 @@ LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
 # votes as they are the day it is read, so two caracoles that read one tab on two days hold one version (FORMAT 3).
 VOLATILE_RAW = {"ug": ("rating", "votes")}
 # Why a unit is left: either side holds it otherwise than when the two were compared.
-CHANGED_HERE = "changed here since the comparison"
-CHANGED_THERE = "changed there since the comparison"
+CHANGED_HERE = "changed here since compared"
+CHANGED_THERE = "changed there since compared"
 # Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered.
-KEPT_HERE = "kept here, as you chose when a file of the other's was imported"
-KEPT_THERE = "kept there, as you chose when a file of this one's was imported"
+KEPT_HERE = "ours kept, as you chose when reading their file"
+KEPT_THERE = "theirs kept, as you chose when they read our file"
 
 
 @dataclass(frozen=True)
@@ -367,14 +367,14 @@ def library_state(conn: sqlite3.Connection, overrides, books: Iterable) -> dict[
     for key, artist, title in conn.execute("SELECT key, artist, title FROM removed"):
         add(f"removed/{key}", f"{artist} - {title} (removed)", removed_value(artist, title))
     for book in books:
-        add(f"songbook/{name_key(book.name)}", f"the songbook {book.name}", songbook_value(book))
+        add(f"songbook/{name_key(book.name)}", f"songbook {book.name}", songbook_value(book))
     for artist, slugs in overrides.alias.items():
-        add(f"alias/{artist}", f"the alias of {artist}", list(slugs))
+        add(f"alias/{artist}", f"alias of {artist}", list(slugs))
     for artist, page in overrides.artist_url.items():
         name = overrides.artist_url_names.get(artist, artist)
-        add(f"artist_url/{artist}", f"the UG page of {name}", artist_url_value(name, page))
+        add(f"artist_url/{artist}", f"UG page of {name}", artist_url_value(name, page))
     for tab in sorted(overrides.block):
-        add(f"block/{tab}", f"the blocked tab {tab}", True)
+        add(f"block/{tab}", f"blocked tab {tab}", True)
     return units
 
 
@@ -601,8 +601,8 @@ def value_of_document(unit_id: str, doc: Mapping[str, Any] | None) -> Any:
                 raise TypeError("a tab that isn't a number")
             return True
     except (KeyError, TypeError, ValueError) as e:
-        raise UnitError(f"its document can't be read ({type(e).__name__}: {e})") from None
-    raise UnitError(f"this caracole doesn't know units of kind {kind!r}")
+        raise UnitError(f"its entry can't be read ({type(e).__name__}: {e})") from None
+    raise UnitError(f"we don't know entries of kind {kind!r}")
 
 
 def _text(value: Any) -> str:
@@ -710,7 +710,7 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
             elif b_changed and not a_changed:
                 proposal, why = THEIRS, _changed("there", b, was)
             else:
-                proposal, why = CONFLICT, "changed on both sides since the last sync"
+                proposal, why = CONFLICT, "both books changed it since the last share"
         found.append(Difference(unit_id, label, a, b, proposal, why))
     return sorted(found, key=_order)
 
@@ -725,23 +725,23 @@ def _since_kept(a: Unit | None, b: Unit | None, pair: KeptPair) -> tuple[str, st
         return MINE, _changed("here", a, was_here)
     if b_changed and not a_changed:
         return THEIRS, _changed("there", b, was_there)
-    return CONFLICT, "changed on both sides since the last sync"
+    return CONFLICT, "both books changed it since the last share"
 
 
 def _first_time(a: Unit | None, b: Unit | None) -> tuple[str, str]:
     if b is None:
-        return MINE, "only here"
+        return MINE, "only in our book"
     if a is None:
-        return THEIRS, "only there"
-    return CONFLICT, "on both sides, different, and never synced"
+        return THEIRS, "only in theirs"
+    return CONFLICT, "in both books, different, never shared"
 
 
 def _changed(where: str, unit: Unit | None, was: str | None) -> str:
     if unit is None:
-        return f"gone {where} since the last sync"
+        return f"gone {where} since the last share"
     if was is None:
-        return f"new {where} since the last sync"
-    return f"changed {where} since the last sync"
+        return f"new {where} since the last share"
+    return f"changed {where} since the last share"
 
 
 _KINDS = ("song", "removed", "songbook", "alias", "artist_url", "block")
@@ -919,10 +919,10 @@ def peer_address(text: str) -> str:
         parts = urlsplit(typed)
         parts.port  # noqa: B018 - a port that isn't a number raises ValueError
     except ValueError as e:
-        raise PeerError(f"{text!r} isn't an address caracole can ask: {e}") from None
+        raise PeerError(f"{text!r} isn't an address we can ask: {e}") from None
     if parts.scheme not in ("http", "https") or not parts.hostname or parts.query or parts.fragment or (
             parts.path not in ("", "/")):
-        raise PeerError(f"{text!r} isn't the address of a caracole serve (http://HOST:PORT)")
+        raise PeerError(f"{text!r} isn't a caracole serve address (http://HOST:PORT).")
     return typed.rstrip("/")
 
 
@@ -952,8 +952,8 @@ class Peer:
         try:
             return self._client.get(self.address + path, params=params, headers={"Accept": "application/json"})
         except httpx.HTTPError as e:
-            raise PeerError(f"Nothing answered at {self.address}: {e}. Is caracole serve running there, on an "
-                            "address this machine can reach (caracole serve --address 0.0.0.0)?") from None
+            raise PeerError(f"No answer at {self.address}: {e}. Is caracole serve running there, on an "
+                            "address we can reach (caracole serve --address 0.0.0.0)?") from None
 
     def _refused(self, response) -> PeerError:
         try:
@@ -961,21 +961,21 @@ class Peer:
         except ValueError:
             data = None
         said = data.get("error") if isinstance(data, dict) else None
-        return PeerError(f"The caracole at {self.address} answered {response.status_code}"
+        return PeerError(f"{self.address} answered {response.status_code}"
                          + (f": {said}" if said else "."))
 
     def state(self, asking: str | None = None) -> PeerState:
         """Its ``state_document``, with its base for ``asking`` (this side's id)."""
         response = self._get(STATE_PATH, {"peer": asking} if asking else None)
         if response.status_code == 404:
-            raise PeerError(f"{self.address} answered, but not as a caracole that syncs: is it an older caracole, "
+            raise PeerError(f"{self.address} answered, but not as a caracole that shares. An older caracole, "
                             "or something else?")
         if response.status_code != 200:
             raise self._refused(response)
         try:
             return read_state_document(response.json())
         except (ValueError, StateError) as e:
-            raise PeerError(f"The caracole at {self.address} answered {e}.") from None
+            raise PeerError(f"{self.address} answered {e}.") from None
 
     def unit(self, unit_id: str) -> dict[str, Any] | None:
         """The unit's document (its ``unit_document``'s ``"unit"``), or None for a unit it hasn't got."""
@@ -990,7 +990,7 @@ class Peer:
             doc = None
         if not (isinstance(doc, Mapping) and doc.get("format") == FORMAT and doc.get("id") == unit_id
                 and isinstance(doc.get("digest"), str) and isinstance(doc.get("unit"), Mapping)):
-            raise PeerError(f"The caracole at {self.address} answered {unit_id} with something it can't read.")
+            raise PeerError(f"{self.address} sent {unit_id} in a form we can't read.")
         return dict(doc["unit"])
 
     def file(self, key: str, name: str, sha256: str) -> bytes:
@@ -999,8 +999,8 @@ class Peer:
         if response.status_code != 200:
             raise self._refused(response)
         if hashlib.sha256(response.content).hexdigest() != sha256:
-            raise PeerError(f"The caracole at {self.address} sent {name} other than it said it is: it changed "
-                            "there since, so the song is left as it was here.")
+            raise PeerError(f"{self.address} sent {name} changed since compared. "
+                            "The song stays as it was here.")
         return response.content
 
     def index(self, to: Path, sites: Sequence[str]) -> None:
@@ -1059,7 +1059,7 @@ class Peer:
                 self.address + PULL_PATH, data={"csrf": token, "from": here, "units": "\n".join(units)},
                 headers={"Origin": self.address, "Sec-Fetch-Site": "same-origin", "Accept": "application/json"})
         except httpx.HTTPError as e:
-            raise PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+            raise PeerError(f"{self.address} stopped answering: {e}") from None
         if response.status_code not in (200, 202):
             raise self._refused(response)
         try:
@@ -1119,7 +1119,7 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
             except (KeyError, TypeError, AttributeError) as e:
                 # A document whose digest checks out may still lack what the take reads beyond its value (a file's
                 # kept_rank, a tombstone's removed_at, a setting's parts): left, whole, as any unit that can't be.
-                raise UnitError(f"its document can't be read ({type(e).__name__}: {e})") from e
+                raise UnitError(f"its entry can't be read ({type(e).__name__}: {e})") from e
         except (UnitError, PeerError, OverridesError, SongbookError, OSError, ValueError, sqlite3.IntegrityError) as e:
             done.left.append((unit_id, str(e)))
             if on_unit is not None:
@@ -1182,7 +1182,7 @@ def _apply(conn, cfg, source: UnitSource, unit_id: str, doc: Mapping[str, Any] |
             raise UnitError(f"{rest!r} isn't a tab's id")
         ov.put_block(cfg.overrides_file, tab, doc is not None)
     else:
-        raise UnitError(f"this caracole doesn't know units of kind {kind!r}")
+        raise UnitError(f"we don't know entries of kind {kind!r}")
 
 
 def _songbook_name(cfg, key: str) -> str | None:
@@ -1248,7 +1248,7 @@ def _names_of(doc: Mapping[str, Any], key: str) -> dict[str, Any]:
             and all(isinstance(a, str) for a in artists)):
         raise UnitError("its names can't be read")
     if identity_key(artist, title) != key:
-        raise UnitError(f"its names, {artist} - {title}, are another song's here (caracole's versions differ?)")
+        raise UnitError(f"its names, {artist} - {title}, are another song's here (different caracole versions?)")
     album, duration, variant = names.get("album"), names.get("duration_ms"), names.get("variant")
     if not ((album is None or isinstance(album, str)) and (duration is None or type(duration) is int)
             and (variant is None or isinstance(variant, str))):
@@ -1300,7 +1300,7 @@ def _take_song(conn, cfg, source: UnitSource, key: str, doc: Mapping[str, Any], 
             # Read once wanted.txt is synced, so that a song of the artist whose line was waiting is respelled too.
             respell = _to_respell(conn, names["artist"], key)
             if here is not None and _respells(respell, here) != respelled_here:
-                raise UnitError("its artist's songs here changed while it was taken: compare again")
+                raise UnitError("its artist's songs changed here meanwhile: compare again")
             respelled = _respell(conn, folders, respell, names["artist"], now)
             if current is not None and current != new_parts:
                 folders.move_files(current, new_parts, moving)
@@ -1359,7 +1359,7 @@ def _fetched(source: UnitSource, key: str, name: str, sha256: str) -> bytes:
     """A kept file of the song from ``source``, checked against ``sha256``."""
     data = source.file(key, name, sha256)
     if hashlib.sha256(data).hexdigest() != sha256:
-        raise UnitError(f"{name} came other than it is there: it changed there since, so the song is left as it was "
+        raise UnitError(f"{name} changed there meanwhile: the song stays as it was "
                         "here")
     return data
 
@@ -1519,8 +1519,8 @@ class _Folders:
                 self._undo.append(lambda: os.rmdir(name, dir_fd=parent))
                 fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
             except OSError as e:
-                raise UnitError(f"{'/'.join(parts)}/ is a symbolic link or no folder, which caracole doesn't "
-                                "follow") from e
+                raise UnitError(f"{'/'.join(parts)}/ is a symbolic link or no folder: we don't "
+                                "follow it") from e
         self._open.append(fd)
         self._fds[parts] = fd
         return fd
@@ -1556,7 +1556,7 @@ class _Folders:
         if held is None:
             return
         if not stat.S_ISDIR(held.st_mode):
-            raise UnitError(f"{old}/ is a symbolic link or no folder, which caracole doesn't follow")
+            raise UnitError(f"{old}/ is a symbolic link or no folder: we don't follow it")
         there = self._entry(root, new)
         self._forget((old,))
         if there is None or os.path.samestat(held, there):
@@ -1568,7 +1568,7 @@ class _Folders:
         assert src is not None and dst is not None
         for name in sorted(os.listdir(src)):
             if self._entry(dst, name) is not None:
-                raise UnitError(f"{new}/{name} is there already, so {old}/ can't be moved into it")
+                raise UnitError(f"{new}/{name} is there already, so {old}/ can't move into it")
             self._rename(src, name, dst, name)
         self._done.append(lambda: self._prune(root, old))
 
@@ -1621,7 +1621,7 @@ class _Folders:
         if held is None:
             return
         if not stat.S_ISREG(held.st_mode):
-            raise UnitError(f"{name} there is no regular file, which caracole doesn't replace")
+            raise UnitError(f"{name} there isn't a regular file: we don't replace it")
         aside = self._temporary(name)
         self._rename(folder, name, folder, aside)
         self._done.append(lambda: self._unlink(folder, aside))

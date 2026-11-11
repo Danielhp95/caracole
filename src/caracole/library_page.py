@@ -647,8 +647,8 @@ def pages_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str,
 
 
 # What a server says for a library page it won't send (web/offline_routes.py): the Android app asks for it first.
-PAGE_REFUSED = ("This library page isn't the one caracole last wrote here (it was changed on a synced device, say, "
-                "or caracole has no record of it yet), so the server won't send it: caracole todo writes it again.")
+PAGE_REFUSED = ("This logbook page isn't the one we last wrote here (changed on a synced device, or not recorded "
+                "yet), so it isn't sent. caracole todo writes it again.")
 
 
 def page_csp(page: bytes) -> str:
@@ -716,17 +716,17 @@ def _musescore_links(conn: sqlite3.Connection, song: Song, overrides: Overrides)
     """The song's MuseScore pages, each a possible match: the sitemaps give titles only."""
     if song.status == "ignored" or song.key in overrides.ignore:
         return []
-    return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url, "source": "musescore"}
+    return [{"label": f"{p.path.removeprefix('song/')} (maybe)", "href": p.url, "source": "musescore"}
             for p in song_pages(conn, song)]
 
 
 _YOUTUBE_NOTES = {
-    QUEUED: "No human sheet yet: caracole takes the audio from YouTube next",
-    BLOCKED: "No human sheet yet: YouTube is blocking caracole for now, so its audio waits",
-    DOWNLOADED: "Audio from YouTube: auto-chords works out the chords next",
+    QUEUED: "No human sheet yet · we take its audio from YouTube next",
+    BLOCKED: "No human sheet yet · YouTube turned us back; its audio waits",
+    DOWNLOADED: "Audio from YouTube · auto-chords works out the chords next",
     CHORDS: "Auto sheet from YouTube audio",
-    MISSING: "Nothing on YouTube fits: see the to-do page",
-    UNUSABLE: "The video under [youtube] can't be downloaded: see the to-do page",
+    MISSING: "Nothing on YouTube fits · see the to-do page",
+    UNUSABLE: "The [youtube] video can't be downloaded · see the to-do page",
 }
 
 
@@ -1122,12 +1122,12 @@ def guitar_pages(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     return found
 
 
-_DOWNLOADED_FROM = {"gtptabs": "gtptabs.com", "harptabs": "harptabs.com", "gametabs": "gametabs.net"}
+_DOWNLOADED_FROM = {"gtptabs": "gtptabs", "harptabs": "harptabs", "gametabs": "gametabs"}
 
 
 def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     """The files caracole downloaded from gtptabs.com, harptabs.com and gametabs.net, as {song id: {file name:
-    "gtptabs.com"}}."""
+    "gtptabs"}}: each site by its short name."""
     found: dict[int, dict[str, str]] = {}
     rows = conn.execute(
         "SELECT f.song_id, f.name, v.provider FROM files f JOIN versions v ON v.id = f.version_id "
@@ -1225,7 +1225,7 @@ def _requests_tab(controls: WebControls | None) -> str:
         return ""
     n = str(controls.active) if controls.active else ""
     return ('<button type="button" class="tab" role="tab" id="tab-requests" aria-controls="requests" '
-            f'aria-selected="false" tabindex="-1">Requests <span class="n">{n}</span></button>')
+            f'aria-selected="false" tabindex="-1">Journal <span class="n">{n}</span></button>')
 
 
 def _requests_panel(controls: WebControls | None) -> str:
@@ -1241,7 +1241,7 @@ _YOUTUBE_FIELD = (
     '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
     'placeholder="youtube.com/watch?v=…"></label>'
 )
-_YOUTUBE_HINT = '<p class="hint">With a YouTube video, the sheet is made from it (a few minutes).</p>'
+_YOUTUBE_HINT = '<p class="hint">Sheet made from video</p>'
 
 
 def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:

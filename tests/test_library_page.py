@@ -248,7 +248,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     found = add_song(conn, "Soda Stereo", "De Música Ligera")
     update_song(conn, found.id, status="found")
     job = {"id": 4, "display": "Radiohead - Creep", "songId": wanted.id, "state": "running", "fetching": True,
-           "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "link": None},
+           "line": {"tone": "running", "text": "Fetching from UG…", "link": None},
            "details": "jobs?job=4#job-4"}
     controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2, removing=frozenset({found.id}),
                            jobs=(job,))
@@ -302,7 +302,7 @@ def test_the_bar_has_a_status_line_and_no_search_all_button_in_both_pages(conn, 
         marks = re.search(r'<ul class="counts" id="bar-counts"([^>]*)></ul>\s*<p class="bar-status"', bar)
         assert marks and " hidden" in marks.group(1) and "aria-live" not in marks.group(1)
         assert re.search(r'<input id="q"[^>]*aria-describedby="bar-status"', bar, re.S)
-        assert re.search(r'<section class="results" id="results" aria-label="Search results">', html)
+        assert re.search(r'<section class="results" id="results" aria-label="Results">', html)
 
 
 def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
@@ -312,7 +312,7 @@ def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
     bar, results, form = html.index('id="q"'), html.index('id="results"'), html.index('action="/request"')
     assert bar < results < form < html.index('class="toolbar"')
     box = re.search(r'<details class="request" id="request-box">\s*<summary>(.*?)</summary>', html, re.S)
-    assert box and "Not in the list? Request it by name" in box.group(1)
+    assert box and "Not here? Request it by name" in box.group(1)
     # The songs just requested show under the bar in both modes, above the results and the grid.
     assert html.index('id="q"') < html.index('id="requested"') < html.index('id="results"')
     assert 'href="/lookup"' not in html  # the bar is the way in: no Look up link in the masthead
@@ -346,11 +346,11 @@ def test_the_masthead_links_no_page_and_requests_are_its_last_tab_served(conn, c
     assert TAB.findall(served) == [("library", "library-view", "Library", ""),
                                    ("songbooks", "songbooks", "Songbooks ", ""),
                                    ("sites", "sites", "Sites", ""),
-                                   ("requests", "requests", "Requests ", "2")]
+                                   ("requests", "requests", "Journal ", "2")]
     assert re.search(r'<section class="view reqs" id="requests" role="tabpanel" aria-labelledby="tab-requests" '
                      r'hidden></section>', whole)
     idle = masthead(build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok")))
-    assert TAB.findall(idle)[-1] == ("requests", "requests", "Requests ", "")  # none waits: no count shown
+    assert TAB.findall(idle)[-1] == ("requests", "requests", "Journal ", "")  # none waits: no count shown
 
 
 # --- files ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
     html = page(conn, cfg, Overrides(ignore=frozenset({ignored.key})))
     cards = songs_of(html)
     assert cards[oasis.display]["museScore"] == [
-        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101",
+        {"label": "wonderwall-680101 (maybe)", "href": "https://musescore.com/song/wonderwall-680101",
          "source": "musescore"}]
     assert cards[ignored.display]["museScore"] == []
     assert '"Scores on MuseScore"' in html  # the card's heading for them
@@ -424,7 +424,7 @@ def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
                            rating=0, votes=0, version=1, label=None, url="", raw={}, now="2026-10-18T03:30:00Z")
     keep_file(conn, cfg.library_dir, song=s, version_id=filed, name="guitar-2.gp5", data=b"gp5", rank=2)
     files = {f["name"]: f["label"] for f in songs_of(page(conn, cfg))["Blur - Song 2"]["files"]}
-    assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs.com", "guitar-2.gp5": "Guitar Pro 2"}
+    assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs", "guitar-2.gp5": "Guitar Pro 2"}
 
 
 def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where_it_came_from(conn, cfg):
@@ -437,7 +437,7 @@ def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where
     files = songs_of(page(conn, cfg))[s.display]["files"]
     assert [(f["name"], f["label"], f["source"]) for f in files] == [
         ("sheet.html", "Sheet viewer", None), ("score-1.pdf", "Score 1 (PDF)", None),
-        ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
+        ("harmonica-1.txt", "Harmonica tab 1 · harptabs", "harptabs"), ("tab.txt", "Tab", None)]
 
 
 def test_a_tab_of_game_music_from_gametabs_is_listed_after_the_harmonica_tabs_and_linked_as_text(conn, cfg):
@@ -453,9 +453,9 @@ def test_a_tab_of_game_music_from_gametabs_is_listed_after_the_harmonica_tabs_an
     files = songs_of(html)[s.display]["files"]
     assert [(f["name"], f["label"], f["source"], f["href"]) for f in files] == [
         ("harmonica-1.txt", "Harmonica tab 1", None, "Hollow%20Knight/Resting%20Grounds/harmonica-1.txt"),
-        ("gametab-1.txt", "Game music tab 1 · gametabs.net", "gametabs",
+        ("gametab-1.txt", "Game music tab 1 · gametabs", "gametabs",
          "Hollow%20Knight/Resting%20Grounds/gametab-1.txt"),
-        ("gametab-2.txt", "Game music tab 2 · gametabs.net", "gametabs",
+        ("gametab-2.txt", "Game music tab 2 · gametabs", "gametabs",
          "Hollow%20Knight/Resting%20Grounds/gametab-2.txt"),
         ("tab.txt", "Tab", None, "Hollow%20Knight/Resting%20Grounds/tab.txt")]
     # The Android app's copy takes each, as the page links it.
@@ -667,11 +667,11 @@ def test_with_the_youtube_route_on_a_card_says_where_its_audio_comes_from_and_of
     kv_set_json(conn, f"youtube:{missing.id}", {"missing_at": "2026-10-18T03:30:00Z"})
     songs = songs_of(page(conn, on, Overrides(youtube={declined.key: None})))
     assert songs[queued.display]["youtube"] == {
-        "text": "No human sheet yet: caracole takes the audio from YouTube next", "video": None}
+        "text": "No human sheet yet · we take its audio from YouTube next", "video": None}
     assert songs[downloaded.display]["youtube"] == {
-        "text": "Audio from YouTube: auto-chords works out the chords next",
+        "text": "Audio from YouTube · auto-chords works out the chords next",
         "video": {"label": "Creep (Radiohead - Topic)", "href": "https://www.youtube.com/watch?v=XFkzRNyygfk"}}
-    assert songs[missing.display]["youtube"]["text"] == "Nothing on YouTube fits: see the to-do page"
+    assert songs[missing.display]["youtube"]["text"] == "Nothing on YouTube fits · see the to-do page"
     for s in (queued, downloaded, missing):
         assert songs[s.display]["buy"] == [], s.display
         assert [link["label"] for link in songs[s.display]["links"]] == ["Chordify", "YouTube"]
@@ -702,7 +702,7 @@ def test_with_the_youtube_route_on_one_page_write_asks_where_each_song_stands_on
     todo_md, index_html = todo.write_pages(conn, on, Overrides(), NOW)
     assert len(calls) == 1
     assert songs_of(index_html.read_text(encoding="utf-8"))[song.display]["youtube"]["text"] == (
-        "No human sheet yet: caracole takes the audio from YouTube next")
+        "No human sheet yet · we take its audio from YouTube next")
     listed = todo_md.read_text(encoding="utf-8").split(f"## {todo.NO_SHEET_TITLE}", 1)[1]
     assert song.display in listed
 
@@ -728,7 +728,7 @@ def test_with_the_youtube_route_on_a_one_song_card_asks_about_its_own_song_alone
     monkeypatch.setattr(yf, "song_state", counted)
     [card] = song_cards(conn, on, Overrides(), NOW, [get_song(conn, songs[1].id)])
     assert asked == [songs[1].id]
-    assert card["youtube"]["text"] == "No human sheet yet: caracole takes the audio from YouTube next"
+    assert card["youtube"]["text"] == "No human sheet yet · we take its audio from YouTube next"
 
 
 def test_without_the_youtube_route_no_card_mentions_youtube_audio(conn, cfg):
@@ -1151,7 +1151,7 @@ def test_a_lines_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_p
     shown = listing(dump_dom(path, tmp_path))
     note = re.search(r'<p class="youtube">(.*?)</p>', shown, re.S)
     assert note, shown[-2000:]
-    assert note.group(1).startswith("Audio from YouTube: auto-chords works out the chords next · <a")
+    assert note.group(1).startswith("Audio from YouTube · auto-chords works out the chords next · <a")
     assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
     assert "Creep (Radiohead - Topic) ↗" in note.group(1) and 'rel="noopener noreferrer"' in note.group(1)
 
@@ -1217,7 +1217,7 @@ def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp
 
     dom = dump_dom(path, tmp_path)
     shown = listing(dom)
-    assert "Key A minor (estimated from the chords)" in shown and "Key G major (from the tab)" in shown
+    assert "Key A minor (guessed from the chords)" in shown and "Key G major (from the tab)" in shown
     assert 'aria-label="A: 1 song"' in dom and 'aria-label="G: 1 song"' in dom  # the Filter panel's tonics
 
     shown = listing(dump_dom(path, tmp_path, "#key=" + quote("A minor")))
@@ -1323,7 +1323,7 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     forms = re.findall(r'<form[^>]*action="/fetch"[^>]*>(.*?)</form>', shown, re.S)
     assert len(forms) == 1
     assert f'name="song" value="{wanted.id}"' in forms[0] and 'name="csrf" value="tok"' in forms[0]
-    assert 'aria-label="Fetch Creep by Radiohead now"' in forms[0]
+    assert 'aria-label="Fetch Creep by Radiohead"' in forms[0]
     # The song with a job queued says so instead, on a line of its own.
     assert "Fetching" in line_of(shown, "Wonderwall") and "/fetch" not in line_of(shown, "Wonderwall")
     # The song caracole fetch would refuse until it's reviewed says so instead of offering a fetch.
@@ -1348,7 +1348,7 @@ def test_the_served_page_offers_a_remove_on_every_line(conn, cfg, tmp_path):
     assert sorted(re.search(r'name="song" value="(\d+)"', f).group(1) for f in forms) == sorted(
         str(s.id) for s in (wanted, found, ignored))
     assert all('name="csrf" value="tok"' in f and ">Remove</button>" in f for f in forms)
-    assert 'aria-label="Remove Creep by Radiohead from caracole"' in shown
+    assert 'aria-label="Remove Creep by Radiohead from your logbook"' in shown
     going = line_of(shown, "Wonderwall")
     assert "Removing…" in going and "/remove" not in going
     assert "/fetch" not in going  # a fetch now would run before the removal and fetch for nothing
@@ -1462,9 +1462,9 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
     shown = listing(dom)
     # Under the page's h1, each artist is a heading, each of their songs one under it; each button names its song.
     heads = [re.sub(r"<[^>]+>", "", h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", shown, re.S)]
-    assert heads == ["The Beatles · you have 1", "Radiohead · you have 1"] and titles_in(shown) == ["Yesterday", "Creep"]
-    assert 'aria-label="Fetch Creep by Radiohead now"' in shown
-    assert 'aria-label="Fetch Yesterday by The Beatles now"' in shown
+    assert heads == ["The Beatles · yours 1", "Radiohead · yours 1"] and titles_in(shown) == ["Yesterday", "Creep"]
+    assert 'aria-label="Fetch Creep by Radiohead"' in shown
+    assert 'aria-label="Fetch Yesterday by The Beatles"' in shown
     # After a jump, the next Tab goes on from the artist jumped to, not from the strip.
     assert re.search(r'<body[^>]*data-focus="radiohead"', dom), dom[-1500:]
 
@@ -1688,7 +1688,7 @@ def test_the_address_shows_the_songs_with_a_progression_in_any_of_its_readings(c
     assert sorted(titles_in(listing(dom))) == ["Blues", "Synthetic Song"] and prog_line(dom) == "Songs with I–IV–V · Show all"
     for typed in ("ii V I", "I ii V"):  # said by its name, which is its numerals
         dom = dump_dom(path, tmp_path, "#prog=" + quote(typed))
-        assert "No songs of yours play ii–V–I." in listing(dom) and prog_line(dom) == "Songs with ii–V–I · Show all"
+        assert "None of your songs play ii–V–I." in listing(dom) and prog_line(dom) == "Songs with ii–V–I · Show all"
     # An address typed by hand, in any rotation, repeat or spelling, is the progression it plays.
     for typed in ("vi IV I V", "vi–IV–I–V", "IV I V vi IV I V vi"):
         dom = dump_dom(path, tmp_path, "#prog=" + quote(typed))
@@ -1797,7 +1797,7 @@ def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(
     assert 'name="shown" value="radiohead/creep jeff-buckley/creep misc-musicals/creep-the-musical"' in fields
     radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)" required="">', fields)
     assert radios == ["radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
-    assert re.search(r"<fieldset[^>]*><legend>Which Ultimate Guitar song is “Crep” by Radio Head\?</legend>", fields)
+    assert re.search(r"<fieldset[^>]*><legend>Which UG song is “Crep” by Radio Head\?</legend>", fields)
     assert re.search(r'<input type="checkbox" name="fetch" value="1" checked="">', fields)
     assert re.search(r'<button[^>]*type="submit"[^>]*>Pick</button>', fields)
     assert "None of these" in fields
@@ -1824,7 +1824,7 @@ def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_reques
     choices = re.search(r'<ol class="choices"[^>]*>(.*?)</ol>', picker, re.S)
     assert choices and re.findall(r'<span class="choice-name">([^<]*)</span>', choices.group(1)) == [
         "1. Radiohead – Creep", "2. Jeff Buckley – Creep", "3. Misc Musicals – Creep The Musical"]
-    assert '<p class="pick-hint">A request for this song is running: pick one once it ends.</p>' in picker
+    assert '<p class="pick-hint">This song is being fetched. Pick once it ends.</p>' in picker
     assert "Fetching…" in card
 
 
@@ -1845,7 +1845,7 @@ def test_the_served_picker_is_read_only_while_any_request_of_its_song_waits(conn
     assert re.findall(r'<form[^>]*action="([^"]*)"', card) == ["/remove"]
     picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
     assert "<input" not in picker
-    assert '<p class="pick-hint">A request for this song is running: pick one once it ends.</p>' in picker
+    assert '<p class="pick-hint">This song is being fetched. Pick once it ends.</p>' in picker
     assert card.index('class="progress"') < card.index('class="picker"')  # its line, above the picker
 
 
@@ -2037,7 +2037,7 @@ def test_the_served_line_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     update_song(conn, lost.id, match_decision="not_found")
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     card = line_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
-    assert re.search(rf'<a class="btn small" href="/review\?song={lost.id}"[^>]*>Look in the index</a>',
+    assert re.search(rf'<a class="btn small" href="/review\?song={lost.id}"[^>]*>Look in index</a>',
                      panel_of(card))
     assert "/fetch" in card  # its artist's UG page may have it: Fetch now still asks
     on_file = line_of(listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)), "Crep")
@@ -2045,7 +2045,7 @@ def test_the_served_line_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     # The file can't search: it names the line that lists the hits, numbered as --pick takes them.
     hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
     assert hint and "<code>caracole review --song 'Radio Head - Crep'</code>" in hint.group(1), on_file
-    assert "caracole search finds for it" in hint.group(1)
+    assert "lists what it finds, to pick one" in hint.group(1)
 
 
 def marks_of(dom: str) -> list[dict]:
@@ -2064,7 +2064,7 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), UNFOLD + MARKS))
     marks = marks_of(dump_dom(path, tmp_path))
     ug = [m for m in marks if m["source"] == "ug"]
-    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
+    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from UG" for m in ug), ug
     # Under a song's chevron, the chips of each tile say where what it holds came from ("From [UG] Ultimate Guitar",
     # "From [LR] LRCLIB"), and a link elsewhere names its site.
     assert all(m["where"] in ("chip", "link") for m in marks), marks
@@ -2146,7 +2146,7 @@ def test_a_songs_title_is_no_link_and_its_buttons_open_what_it_holds(conn, cfg, 
     creep = line_of(shown, "Creep")
     assert '<a class="line-title"' not in creep and re.search(r'<div class="line-title opens-card"><h3', creep), creep
     assert play_links(creep) == [
-        ("Radiohead/Creep/sheet.html", "Open the chord sheet of Creep, from Ultimate Guitar"),
+        ("Radiohead/Creep/sheet.html", "Open the chord sheet of Creep, from UG"),
         ("Radiohead/Creep/guitar-1.gp5", "Download the Guitar Pro file of Creep"),
         ("Radiohead/Creep/tab.txt", "Open the guitar tab of Creep")], creep
     assert re.search(r'<div class="line-action"></div>', creep), creep
@@ -2493,7 +2493,7 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
         "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"}})
     drawer = card_notes(conn, cfg, tmp_path, 'chipOf("Wonderwall", "ug").click();\nnote("drawer", noteDrawer("Wonderwall"));',
                         "drawer")
-    assert drawer["said"] == "4 versions on the site · 3 kept in your library"
+    assert drawer["said"] == "4 on UG · 3 in your logbook"
     assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
         ("Ver 3", "4.86★ · 408 votes", ["In use", "Open"]), ("Ver 1", "4.85★ · 12,629 votes", ["Open"]),
         ("Ver 2", "4.70★ · 3,000 votes", ["Open"])], drawer
@@ -2503,7 +2503,7 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
     line = line_of(shown, "Wonderwall")
     assert play_links(line)[0] == ("Oasis/Wonderwall/sheet.html",
-                                   "Open the chord sheet of Wonderwall, from Ultimate Guitar, 3 versions"), line
+                                   "Open the chord sheet of Wonderwall, from UG, 3 versions"), line
     assert ">PDF · G Dorian, capo 0</a>" in line
 
 
@@ -2565,7 +2565,7 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         phone.js(f"{q}.focus()")
         phone.press("Tab")
         assert phone.js("document.activeElement.getAttribute('aria-label')") == (
-            "Open the chord sheet of Creep, from Ultimate Guitar")
+            "Open the chord sheet of Creep, from UG")
         phone.click(line + " .line-title h3")
         assert phone.wait(f"{q}.querySelector('.line-panel').hidden")
         phone.click(line + " .line-plays a")
@@ -2580,7 +2580,7 @@ def test_an_artists_name_shows_it_is_a_filter_over_their_songs_and_on_a_line_alo
     head = re.search(r'<section class="artist" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     flat = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Creep")  # no group over it: its own
     for shown in (head.group(1), flat):
-        who = re.search(r'<button class="artist[^"]*" type="button" title="Show only Radiohead\'s songs">(.*?)</button>',
+        who = re.search(r'<button class="artist[^"]*" type="button" title="Radiohead\'s songs">(.*?)</button>',
                         shown)
         assert who, shown
         # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
@@ -2742,7 +2742,7 @@ def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_acti
     top = creep.split('class="line-panel"', 1)[0]
     # A button for its sheet, marked with where it came from; its lyrics none; found, it needs no badge.
     assert re.search(r'<h3[^>]*>Creep</h3>', top)
-    assert play_links(top) == [("Radiohead/Creep/sheet.pdf", "Open the chord sheet of Creep, from Ultimate Guitar")]
+    assert play_links(top) == [("Radiohead/Creep/sheet.pdf", "Open the chord sheet of Creep, from UG")]
     assert re.findall(r'class="source[^"]*"[^>]*data-source="([^"]*)"', top) == ["ug"]  # its button's mark alone
     assert 'class="badge' not in top and "line-sites" not in top
     assert "Key G major (from the tab)" in top
@@ -2754,7 +2754,7 @@ def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_acti
     # The rest waits behind a small button, closed.
     more = re.search(r'<button class="line-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
     assert more and re.search(rf'<div class="line-panel" id="{more.group(1)}" hidden', creep)
-    assert ">More for Creep<" in creep and "Lyrics" in panel_of(creep)
+    assert ">More: Creep<" in creep and "Lyrics" in panel_of(creep)
     soda = line_of(shown, "De Música Ligera")
     assert 'aria-label="from LaCuerda"' in panel_of(soda)
     assert play_links(soda)[0][1] == "Open the chord sheet of De Música Ligera, from LaCuerda"
@@ -2953,7 +2953,7 @@ def test_the_row_renderer_takes_any_search_result_in_a_real_browser(conn, cfg, t
     assert re.search(r'data-api="icons,resultRow,sourceMark"', dom)
     results = re.search(r'<div class="rows" id="results">(.*?)</div>\s*</body>', dom, re.S).group(1)
     creep = row_of(results, "Creep")
-    assert 'alt="from Ultimate Guitar"' in creep and "chords×3 tabs×2" in creep
+    assert 'alt="from UG"' in creep and "chords×3 tabs×2" in creep
     main = re.search(r'<div class="row-action"><a ([^>]*)>Chords ↗</a>', creep)
     assert main and 'target="_blank"' in main.group(1) and 'rel="noopener noreferrer"' in main.group(1)
     assert "javascript:" not in creep and 'href="#"' in creep  # an unsafe link goes nowhere
@@ -3100,12 +3100,12 @@ def test_a_card_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(co
     parts = line_parts(conn, cfg, tmp_path)
     potato = parts["Digging my potato"]
     assert potato["badges"] == [] and potato["marks"] == [], potato
-    assert [p["said"] for p in potato["plays"]] == ["Open the harmonica tab of Digging my potato, from harptabs.com"]
+    assert [p["said"] for p in potato["plays"]] == ["Open the harmonica tab of Digging my potato, from harptabs"]
     sites = {source: (state, tip) for source, state, tip, _ in potato["sites"]}
     assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"], sites
-    assert sites["harptabs"] == ("have", "harptabs.com: has it")
-    assert sites["ug"] == ("none", "Ultimate Guitar: nothing for it (looked 2026-10-16)")
-    assert sites["gtptabs"] == ("none", "gtptabs.com: nothing for it (looked 2026-10-13)")
+    assert sites["harptabs"] == ("have", "harptabs: has it")
+    assert sites["ug"] == ("none", "UG: not there · looked 16/10/26")
+    assert sites["gtptabs"] == ("none", "gtptabs: not there · looked 13/10/26")
     assert sites["lacuerda"] == ("unasked", "LaCuerda: not asked yet")
     assert all(tip == said for _, _, tip, said in potato["sites"]), potato
 
@@ -3145,7 +3145,7 @@ def test_a_line_has_a_button_for_what_the_song_holds_not_a_mark_of_its_sources(c
     assert auto["said"].startswith("Open the auto sheet of") and "auto" in auto["cls"].split(), auto
     assert [g["kind"] for g in parts["Creep"]["plays"]] == ["sheet", "tab"]
     [uke] = parts["Riptide"]["plays"]
-    assert uke["said"] == "Open the ukulele chords of Riptide, from Ultimate Guitar"
+    assert uke["said"] == "Open the ukulele chords of Riptide, from UG"
     assert uke["glyph"] == "glyph glyph-ukulele" and parts["Riptide"]["badges"] == []
     assert parts["Desperado"]["plays"] is None and parts["Desperado"]["marks"] == []
     assert all(p["marks"] == [] for p in parts.values()), parts
@@ -3202,8 +3202,8 @@ def test_the_fold_button_is_a_chevron_named_more_for_the_song(conn, cfg, tmp_pat
     put(cfg, creep, "sheet.pdf", "lyrics.txt")
     update_song(conn, creep.id, status="found")
     more = line_parts(conn, cfg, tmp_path)["Creep"]["more"]
-    assert more == {"glyph": "glyph glyph-chevron", "hidden": "true", "title": "More for Creep",
-                    "name": "More for Creep", "dots": False}, more
+    assert more == {"glyph": "glyph glyph-chevron", "hidden": "true", "title": "More: Creep",
+                    "name": "More: Creep", "dots": False}, more
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TURNS))
     # Without motion, as the turn's transition runs on a clock virtual time doesn't move.
     turns = attribute_of(dump_dom(path, tmp_path, media={"prefers-reduced-motion": "reduce"}), "data-turns")
@@ -3216,7 +3216,7 @@ def test_the_fold_button_is_a_chevron_named_more_for_the_song(conn, cfg, tmp_pat
 BADGES_AND_KEYS = """
 (() => {
   const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy", sources: ["ug", "lacuerda", "gtptabs"],
-    badges: [{ kind: "found", text: "In your library" }, { kind: "instrument harmonica", text: "Harmonica" }],
+    badges: [{ kind: "found", text: "In your logbook" }, { kind: "instrument harmonica", text: "Harmonica" }],
     facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
   hit.classList.add("hit");
   document.querySelector("#list section.artist .lines").appendChild(hit);
@@ -3242,7 +3242,7 @@ def test_a_badge_never_covers_the_key_column(conn, cfg, tmp_path, width):
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), BADGES_AND_KEYS))
     boxes = attribute_of(dump_dom(path, tmp_path, size=f"{width},900"), "data-boxes")
     badges = boxes["badges"]
-    assert sorted(b["text"] for b in badges) == ["Harmonica", "In your library", "Needs review"], boxes
+    assert sorted(b["text"] for b in badges) == ["Harmonica", "In your logbook", "Needs review"], boxes
     [key] = boxes["keys"]
     for b in badges:
         left, right, _, _ = b["box"]
@@ -3258,7 +3258,7 @@ MARKS_DRAWN = """
 (() => {
   const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy",
     sources: ["ug", "lacuerda", "gtptabs", "harptabs", "gametabs"],
-    badges: [{ kind: "found", text: "In your library" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
+    badges: [{ kind: "found", text: "In your logbook" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
   hit.classList.add("hit");
   (document.querySelector("#list section.artist .lines") || document.querySelector("#list .lines")).appendChild(hit);
   const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
@@ -3499,7 +3499,7 @@ def test_the_file_page_filters_your_songs_and_enter_shows_the_command(conn, cfg,
     assert driven.wait(f"{SHOWN_TITLES}.join() === 'Wish You Were Here'")
     assert driven.js("document.querySelector('#list section.artist .artist-name').textContent") == "Pink Floyd"
     assert driven.js("document.getElementById('results').hidden") is True  # typing alone asks for nothing more
-    assert "Enter" in driven.js("document.getElementById('bar-status').textContent")
+    assert driven.js("document.getElementById('bar-status').textContent") == "Search sites"
     driven.js(COMPOSING_ENTER)  # the Enter that ends a pinyin word: still typing
     assert driven.js("document.getElementById('results').hidden") is True
     driven.press("Enter")
@@ -3567,14 +3567,14 @@ def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, dri
         driven.send("Page.navigate", url="about:blank")
         driven.open(path.as_uri() + "#q=" + quote("a minor") + "&all=1")  # an address asking the sites for a key
         assert driven.wait(f"{SHOWN_TITLES}.join() === 'De Música Ligera'")
-        assert driven.js(status) == "A key filters your songs alone: the sites know no keys"
+        assert driven.js(status) == "Filter your songs"
         assert driven.js("document.getElementById('results').hidden") is True
         driven.js("document.getElementById('q').focus()")
         driven.press("Enter")
         assert driven.js("document.getElementById('results').hidden") is True  # still your songs alone
         driven.js("document.getElementById('q').select()")
         driven.type("f# minor")  # no song in that key: nothing below to run or press
-        assert driven.wait(f"{status} === 'None of yours match: the sites know no keys'")
+        assert driven.wait(f"{status} === 'No local or remote matches'")
         assert driven.js(f"{SHOWN_TITLES}.length") == 0
         driven.press("Enter")
         assert driven.js("document.querySelectorAll('.file-answer, #list .btn.primary').length") == 0
@@ -3672,18 +3672,18 @@ def test_the_top_is_one_bar_then_the_search_with_its_tools(conn, cfg, tmp_path):
         if n:
             update_song(conn, song.id, status="found")
     served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
-    for html, sites in ((served, ", or the sites"), (page(conn, cfg), "")):
+    for html, said in ((served, "Search songs and sites"), (page(conn, cfg), "Search 3 songs")):
         path = write_library_page(cfg.library_dir, with_script(html, ONE_BAR))
         dom = dump_dom(path, tmp_path, size="1280,900")
         bar = attribute_of(dom, "data-bar")
-        assert bar["placeholder"] == "Search 3 songs" + sites, bar
+        assert bar["placeholder"] == said, bar
         assert abs(bar["word"] - bar["tabs"]) < 16 and (bar["links"] is None or abs(bar["word"] - bar["links"]) < 16), bar
         assert abs(bar["filter"] - bar["field"]) < 8 and bar["list"] < 215, bar  # the tools are the search's row
         assert bar["title"] <= 1, bar  # the h1 is there for a screen reader alone
         assert bar["mark"] and 14 <= bar["mark"][0] <= 28 and bar["mark"][1] and bar["mark"][2], bar  # the icon's "¿", in the wordmark's colour
         assert bar["hint"] == ["", 0] and bar["count"] == 0, bar  # nothing to say at rest
         assert bar["stats"] == ["1 wanted"], bar
-        assert attribute_of(dom, "data-narrowed") == [True, "1 of 3 songs"]  # said once the list is narrowed
+        assert attribute_of(dom, "data-narrowed") == [True, "1/3 songs"]  # said once the list is narrowed
 
 
 # The buttons shown beside the search: Filter and Sort (the tags aside).
@@ -3807,9 +3807,9 @@ def test_the_library_is_lines_grouped_by_artist_a_to_z(conn, cfg, tmp_path):
     groups = noted(dom, "data-groups")
     # Artists A to Z by their sort keys: "The Beatles" under B, 宋冬野 by pinyin after Soda Stereo; each header
     # names the artist and how many of the songs listed are yours.
-    assert [g["heading"] for g in groups] == ["2Pac · you have 1", "The Beatles · you have 1",
-                                              "Radiohead · you have 1", "Soda Stereo · you have 2",
-                                              "宋冬野 · you have 1"], groups
+    assert [g["heading"] for g in groups] == ["2Pac · yours 1", "The Beatles · yours 1",
+                                              "Radiohead · yours 1", "Soda Stereo · yours 2",
+                                              "宋冬野 · yours 1"], groups
     soda = groups[3]
     assert soda["artist"] == songs["Soda Stereo - De Música Ligera"]["sortArtist"]
     assert soda["titles"] == ["De Música Ligera", "Persiana Americana"]  # its songs A to Z
@@ -3984,15 +3984,15 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', lost) and ">Not found<" not in lost
     assert 'data-source="ug" data-state="none"' in lost.split('class="line-panel"', 1)[1]
     menu = lost.split('class="line-panel"', 1)[1]
-    assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>', menu)
-    assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (possible match)" in menu
+    assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in index</a>', menu)
+    assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (maybe)" in menu
     # Found: a button for its sheet and its key on the line, no other action and no badge; its files, its key in
     # words, its transposition, Add to a songbook… and Remove under its chevron.
     soda = line_of(shown, "De Música Ligera")
     assert re.search(r'<div class="line-action"></div>', soda), soda
     assert re.search(r'<span class="line-key"[^>]*>', soda) and "Key A minor (from the tab)" in soda
     top = soda.split('class="line-panel"', 1)[0]
-    assert [said for _, said in play_links(top)] == ["Open the chord sheet of De Música Ligera, from Ultimate Guitar"]
+    assert [said for _, said in play_links(top)] == ["Open the chord sheet of De Música Ligera, from UG"]
     assert 'class="badge' not in top
     menu = soda.split('class="line-panel"', 1)[1]
     assert 'aria-label="Download the Text of De Música Ligera"' in menu and "−2" in menu
@@ -4029,7 +4029,7 @@ def test_filters_key_sort_and_letters_work_on_the_lines(conn, cfg, tmp_path):
     assert titles_in(shown("#key=G")) == ["Creep"]
     assert titles_in(shown("#show=wanted")) == ["Creep"]
     assert titles_in(shown("#q=dancing")) == ["Dancing Queen"]
-    assert "Queen · you have 2" in re.sub(r"<[^>]+>", "", shown("#artist=queen"))
+    assert "Queen · yours 2" in re.sub(r"<[^>]+>", "", shown("#artist=queen"))
     # Sorted by title or by when they came, the lines stand alone, each with its artist (a filter, as a header's is).
     by_title = shown("#sort=title")
     assert titles_in(by_title) == ["Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
@@ -4038,9 +4038,9 @@ def test_filters_key_sort_and_letters_work_on_the_lines(conn, cfg, tmp_path):
                      line_of(by_title, "Dancing Queen"))
     assert titles_in(shown("#sort=recent")) == ["Creep", "Dancing Queen", "Don't Stop Me Now", "Bohemian Rhapsody"]
     # Whatever the search or a filter leaves out, an artist's header counts every song of theirs you have.
-    for fragment, heads, titles in (("#q=bohemian", ["Queen · you have 2"], ["Bohemian Rhapsody"]),
-                                    ("#key=F", ["Queen · you have 2"], ["Don't Stop Me Now"]),
-                                    ("#q=queen", ["ABBA · you have 1", "Queen · you have 2"],
+    for fragment, heads, titles in (("#q=bohemian", ["Queen · yours 2"], ["Bohemian Rhapsody"]),
+                                    ("#key=F", ["Queen · yours 2"], ["Don't Stop Me Now"]),
+                                    ("#q=queen", ["ABBA · yours 1", "Queen · yours 2"],
                                      ["Dancing Queen", "Bohemian Rhapsody", "Don't Stop Me Now"])):
         found = shown(fragment)
         assert ([re.sub(r"<[^>]+>", "", h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", found, re.S)],
@@ -4089,7 +4089,7 @@ def test_there_is_no_cards_rows_switch(conn, cfg, tmp_path):
     assert noted(dom, "data-hash") == "#q=song"
     # The letters: R's group takes the focus, so the next Tab goes on from there.
     dom = dump_dom(write_library_page(cfg.library_dir, with_script(html, script)), tmp_path)
-    assert noted(dom, "data-jump") == "radiohead:Radiohead · you have 20"
+    assert noted(dom, "data-jump") == "radiohead:Radiohead · yours 20"
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])

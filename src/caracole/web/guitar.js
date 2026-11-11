@@ -20,7 +20,7 @@
   const at = window.caracoleAlphaTab;
   const lib = window.alphaTab;
   if (!at || !lib) {
-    say("alphaTab didn't load, so the tab can't be drawn here: download the file instead.", true);
+    say("alphaTab didn't load. Download the file instead.", true);
     return;
   }
   const bytesOf = (text) => {
@@ -148,7 +148,7 @@
   settings.display.layoutMode = lib.LayoutMode.Page;
 
   const failed = (e) => say("alphaTab couldn't read this file (" + String((e && (e.message || e)) || "an error") +
-    "): download it instead.", true);
+    "). Download it instead.", true);
   try {
     score = lib.importer.ScoreLoader.loadScoreFromBytes(bytesOf($("gp").textContent.trim()), settings);
   } catch (e) {

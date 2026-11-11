@@ -8529,8 +8529,8 @@
 {"args":["Señorita"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["Soda Stereo - De Música Ligera"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Soda Stereo - De Música Ligera"]}
 {"args":["Soda Stereo - De Música Ligera"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
-{"args":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)"]}
-{"args":["Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)"]}
+{"args":["Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["Song (Acústico)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Song (Acústico)"]}
 {"args":["Song (Acústico)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["Song (Versión Acústica)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Song (Versión Acústica)"]}

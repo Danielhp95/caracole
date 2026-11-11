@@ -1,7 +1,7 @@
 <body class="drawing">
 <div class="page">
 <header class="masthead lib">
-  <h1 class="visually-hidden">Your library</h1>
+  <h1 class="visually-hidden">Your Library</h1>
   <p class="app">__MARK__<span class="word">caracole</span></p>
   __LIBRARY__
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -18,12 +18,12 @@
 <div class="view" id="library-view" role="tabpanel" aria-labelledby="tab-library">
 <div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
 <div class="searchbar" role="search">
-  <label class="visually-hidden" for="q">Search your songs</label>
+  <label class="visually-hidden" for="q">Search songs</label>
   <div class="bar-row">
     <div class="field">
-      <input id="q" type="search" placeholder="Search your songs" autocomplete="off" autocapitalize="off"
+      <input id="q" type="search" placeholder="Search songs" autocomplete="off" autocapitalize="off"
         autocorrect="off" spellcheck="false" enterkeyhint="search" aria-describedby="bar-status">
-      <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
+      <button type="button" id="clear" class="clear" aria-label="Clear search" hidden>×</button>
     </div>
     <div class="tools" id="tools">
       <button type="button" class="tool" id="filter" aria-expanded="false" aria-controls="filter-panel">Filter <span
@@ -38,20 +38,20 @@
     </div>
   </div>
   <div class="bar-said counts-row">
-    <ul class="counts" id="bar-counts" aria-label="Found on each site" hidden></ul>
+    <ul class="counts" id="bar-counts" aria-label="Found" hidden></ul>
     <p class="bar-status" id="bar-status" aria-live="polite"></p>
   </div>
 </div>
-__REQUESTED__<section class="results" id="results" aria-label="Search results">
+__REQUESTED__<section class="results" id="results" aria-label="Results">
 <div class="found" id="found" hidden></div>
 __REQUEST__</section>
 <div class="toolbar">
   <div class="tags" id="tags" role="group" aria-label="Filters on">
     <button type="button" class="tag person" id="artist" hidden></button>
-    <button type="button" class="clear-filters" id="clear-filters" aria-label="Clear every filter (the search stays)"
+    <button type="button" class="clear-filters" id="clear-filters" aria-label="Clear filters"
       hidden>Clear</button>
   </div>
-  <dialog class="filter-panel" id="filter-panel" aria-label="Filter your songs">
+  <dialog class="filter-panel" id="filter-panel" aria-label="Filter songs">
     <div class="grab" aria-hidden="true"></div>
     <div class="fsec">
       <p class="fhead" id="f-status">Status</p>
@@ -66,11 +66,11 @@ __REQUEST__</section>
       </div>
     </div>
     <div class="fsec" id="f-insts" hidden>
-      <p class="fhead" id="f-inst">Has something for <em>any of these</em></p>
+      <p class="fhead" id="f-inst">Matches</p>
       <div class="fchips" role="group" aria-labelledby="f-inst">
-        <button type="button" class="fchip" data-inst="sheet" aria-pressed="false">Chord sheet <span
+        <button type="button" class="fchip" data-inst="sheet" aria-pressed="false">Chords <span
           class="n"></span></button>
-        <button type="button" class="fchip" data-inst="guitar" aria-pressed="false">Guitar tab <span
+        <button type="button" class="fchip" data-inst="guitar" aria-pressed="false">Guitar <span
           class="n"></span></button>
         <button type="button" class="fchip" data-inst="ukulele" aria-pressed="false">Ukulele <span
           class="n"></span></button>
@@ -96,11 +96,11 @@ __REQUEST__</section>
   </dialog>
 </div>
 <p class="prog-filter" id="prog" aria-live="polite" hidden></p>
-<nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>
+<nav class="jump" id="jump" aria-label="Jump to letter" hidden></nav>
 <p class="count" id="count" aria-live="polite"></p>
 <main class="list" id="list"></main>
 <noscript><p class="empty">This page needs JavaScript to list your songs and songbooks. Each song's files are in its
-  folder, and each songbook's in _songbooks/, next to this page.</p></noscript>
+  folder, each songbook's in _songbooks/, beside this page.</p></noscript>
 </div>
 <section class="view books" id="songbooks" role="tabpanel" aria-labelledby="tab-songbooks" hidden></section>
 <section class="view sites" id="sites" role="tabpanel" aria-labelledby="tab-sites" hidden></section>
@@ -108,6 +108,5 @@ __REQUESTS____SYNC__<template id="guitar-glyph"><svg viewBox="1.5 1.5 21 21" ari
   transform="rotate(40 12 12)" d="M10.3 1.4Q10.3.9 10.8 .9H13.2Q13.7.9 13.7 1.4V4.2H10.3ZM11 4.2H13V9.9H11Z
   M9.08 14.74A3.4 3.4 0 1 1 14.92 14.74A4.6 4.6 0 1 1 9.08 14.74Z
   M13.45 15.4A1.45 1.45 0 1 0 10.55 15.4A1.45 1.45 0 1 0 13.45 15.4ZM10.2 19.3V20.2H13.8V19.3Z"/></svg></template>
-<footer class="footer"><span id="updated"></span>Keep this library private: the sheets and lyrics are other
-  people's work.</footer>
+<footer class="footer"><span id="updated"></span></footer>
 </div>

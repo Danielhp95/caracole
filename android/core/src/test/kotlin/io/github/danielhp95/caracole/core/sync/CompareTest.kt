@@ -32,7 +32,7 @@ class CompareTest {
     @Test fun theComparedHashIsPythons() = replayed("sync/compared_hash.jsonl", SyncReplay::comparedHash)
 
     @Test fun theOrderIsKindThenLabelInAnyCaseThenId() {
-        fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only there")
+        fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only in theirs")
         val found = listOf(d("other/x", "a"), d("block/1", "a"), d("song/b", "b"), d("removed/a", "a"),
                            d("song/a2", "A"), d("song/a1", "a"), d("songbook/x", "a"), d("artist_url/x", "a"),
                            d("alias/x", "a"))
@@ -43,7 +43,7 @@ class CompareTest {
     }
 
     @Test fun aLabelInAnyCaseIsItsCasefoldNeverItsLowercase() {
-        fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only there")
+        fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only in theirs")
         val found = listOf(d("song/c", "Straße"), d("song/a", "STRASSE x"), d("song/b", "strasse"), d("song/z1", "ﬁ"),
                            d("song/z0", "fj"))
         // Python: sorted(ids, key=lambda i: (label[i].casefold(), i)); by .lower() it would be z0, b, a, c, z1.
@@ -52,7 +52,7 @@ class CompareTest {
 
     @Test fun decideLeavesAConflictNobodyChoseAndTakesAnEmptyChoiceAsNone() {
         val conflict = Difference("song/a", "a", SyncUnit("song/a", "a", "1"), SyncUnit("song/a", "a", "2"),
-                                  "conflict", "changed on both sides since the last sync")
+                                  "conflict", "both books changed it since the last share")
         assertEquals(emptyList<Difference>() to emptyList(), Compare.decide(listOf(conflict)))
         assertEquals(listOf(conflict) to emptyList(), Compare.decide(listOf(conflict), "theirs") { "" })
         assertEquals(emptyList<Difference>() to listOf(conflict), Compare.decide(listOf(conflict), null) { "mine" })
@@ -129,6 +129,6 @@ class CompareTest {
         assertEquals(theirs["song/a"], found[0].theirs)
         assertEquals("here's", found[0].label)
         assertEquals(listOf("conflict", "theirs"), found.map { it.proposal })
-        assertEquals(listOf("changed on both sides since the last sync", "new there since the last sync"), found.map { it.why })
+        assertEquals(listOf("both books changed it since the last share", "new there since the last share"), found.map { it.why })
     }
 }

@@ -37,16 +37,15 @@ object HarpTabsCommands {
     }
 
     fun artist(c: CommandContext, artist: String): String {
-        val off = "${NOT_READ}harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked."
+        val off = "${NOT_READ}harptabs is off (caracole.toml). Nothing asked."
         val policy = PhoneConfig.read(c.db).provider(HarpTabsFetch.PROVIDER)
         if (!policy.enabled) return off
         val paths = HarpTabsFetch.artistPaths(c.db, artist)
         if (paths.isEmpty()) {
             return if (c.db.one("SELECT 1 FROM harptabs_index LIMIT 1") { true } == null) {
-                "${NOT_READ}harptabs.com's index is empty: the nightly run reads its sitemap, or caracole harptabs " +
-                    "--index now."
+                "${NOT_READ}harptabs' index is empty; tonight's run reads its sitemap (or caracole harptabs --index)."
             } else {
-                "Not found: harptabs.com's sitemap lists no artist named $artist."
+                "Not found: harptabs lists no artist named $artist."
             }
         }
         val page: HarpArtistPage?
@@ -55,30 +54,28 @@ object HarpTabsCommands {
         }) {
             is Asked.Done -> page = asked.value
             is Asked.Off -> return off
-            is Asked.Cooling -> return "${NOT_READ}harptabs.com is cooling down after a block until " +
-                "${shown(asked.until)}; caracole won't ask it before then."
-            is Asked.Blocked -> return "${NOT_READ}harptabs.com blocked caracole (${asked.error.message}); no more " +
-                "requests to it until ${shown(asked.state.cooldownUntil)}."
+            is Asked.Cooling -> return "${NOT_READ}waiting out harptabs until ${shown(asked.until)}."
+            is Asked.Blocked -> return "${NOT_READ}harptabs turned us back (${asked.error.message}); no asks until " +
+                "${shown(asked.state.cooldownUntil)}."
             is Asked.Spent -> {
-                val spent = if (asked.hour) "this hour's ${policy.lookupPerHour} lookup requests to harptabs.com are spent"
-                            else "the lookup's ${policy.lookupRequests} requests to harptabs.com are spent"
-                return "$NOT_READ$spent; ask again later."
+                val spent = if (asked.hour) "no more asks of harptabs this hour (${policy.lookupPerHour} spent)"
+                            else "this fetch's ${policy.lookupRequests} asks of harptabs are spent"
+                return "$NOT_READ$spent. Ask again later."
             }
-            is Asked.Failed -> return "${NOT_READ}harptabs.com failed (${asked.error.message}); nothing changed: try " +
-                "again later."
+            is Asked.Failed -> return "${NOT_READ}harptabs failed (${asked.error.message}). Try again later."
         }
         val sent = c.asking.requests[HarpTabsFetch.PROVIDER] ?: 0
         if (Health.answeredAny(c.db, Pace.lookupRunId(c.now), HarpTabsFetch.PROVIDER, sent)) {
             Health.recordOk(c.db, HarpTabsFetch.PROVIDER, c.now)
         }
-        if (page == null) return "Not found: harptabs.com no longer has the page of $artist."
+        if (page == null) return "Not found: harptabs no longer has $artist's page."
         val listed = page.listed.size
         val lists = when {
             page.tabs > listed.toBigInteger() -> "$listed of their ${plural(page.tabs, "tab")}"
             listed > 0 -> "their ${plural(listed.toBigInteger(), "tab")}"
             else -> "no tab"
         }
-        return "Read: harptabs.com's page of ${page.name} lists $lists, in the index now."
+        return "Read: harptabs' page of ${page.name} lists $lists."
     }
 
     /** report.plural: "1 tab", "98 tabs". */

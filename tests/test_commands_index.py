@@ -84,7 +84,7 @@ def test_a_merge_that_takes_nothing_says_so_and_still_deletes_the_file(tmp_path,
     result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(copy))
 
     assert result.exit_code == 0, result.output
-    assert events(result.stdout)[-1] == {"stage": "merge", "state": "done", "detail": "Nothing read more recently"}
+    assert events(result.stdout)[-1] == {"stage": "merge", "state": "done", "detail": "Nothing newer"}
     assert not copy.exists()
 
 
@@ -149,7 +149,7 @@ def test_a_database_it_cant_open_fails_its_stage_and_keeps_the_file_for_try_agai
     assert result.exit_code == 2
     [running, failed] = events(result.stdout)
     assert running["state"] == "running"
-    assert failed["state"] == "failed" and failed["detail"].startswith("Not merged: caracole's lock or its database")
+    assert failed["state"] == "failed" and failed["detail"].startswith("Not merged: couldn't get the lock or the database")
     assert path.exists()
 
 

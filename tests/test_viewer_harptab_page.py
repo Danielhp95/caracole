@@ -96,20 +96,20 @@ def test_its_note_tables_are_harp_pys_and_its_names_each_harps_keys():
 def test_the_harp_with_the_record_in_the_header_and_the_bar():
     html = page(a_tab(), cho=a_sheet("D", key="Bm"), page_key="C", facts=FACTS)
     assert text_of(html, "facts") == "Harmonica tab · D harp with the record (4th position, aeolian)"
-    assert text_of(html, "why") == "100% of the sung notes fall on the sheet's chords on a D harp, 33% on an F harp"
+    assert text_of(html, "why") == "100% of the sung notes fit the sheet's chords on a D harp, 33% on an F harp"
     data = data_of(html)
     assert data["start"] == 2
-    assert data["why"] == {"2": "with the record", "0": "harptabs.com's key"}
+    assert data["why"] == {"2": "with the record", "0": "harptabs' key"}
     assert data["positions"][2] == "4th position, aeolian" and data["positions"][11] == "1st position"
 
 
 def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
     assert text_of(page(JUKE, page_key="E"), "facts") == "Harmonica tab · A harp, as the tab says"
-    assert data_of(page(JUKE, page_key="E"))["why"] == {"9": "as the tab says", "4": "harptabs.com's key"}
-    assert text_of(page(HOTEL, page_key="Bb"), "facts") == "Harmonica tab · Bb harp, as harptabs.com's key says"
+    assert data_of(page(JUKE, page_key="E"))["why"] == {"9": "the tab's", "4": "harptabs' key"}
+    assert text_of(page(HOTEL, page_key="Bb"), "facts") == "Harmonica tab · Bb harp, as harptabs' key says"
     other = a_sheet("G", key="G", lines=("other words", "than the tab"))
     assert text_of(page(HOTEL, cho=other), "facts") == "Harmonica tab · G harp for the song's key (1st position)"
-    assert text_of(page(HOTEL), "facts") == "Harmonica tab · C harp, as tabs are written when they name none"
+    assert text_of(page(HOTEL), "facts") == "Harmonica tab · C harp, the default when a tab names none"
     assert data_of(page(HOTEL))["positions"] is None and data_of(page(HOTEL))["why"] == {}
 
 
@@ -153,8 +153,8 @@ def test_a_tab_shown_as_written_can_still_be_read_another_way():
 
 def test_spokey_dokey_says_it_was_read_by_its_own_legend():
     html = page(SPOKEY, facts={"difficulty": "Expert", "views": 23000})
-    assert text_of(html, "legend") == ("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the "
-                                       "tab's own legend · Expert · 23k views")
+    assert text_of(html, "legend") == ("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from its "
+                                       "legend · Expert · 23k views")
     guessed = page("\n".join(line for line in SPOKEY.split("\n") if " = " not in line and "= " not in line))
     assert re.fullmatch(r"Read as: b blow · d draw · \* bend · - joins, guessed \(0\.8\d\)", text_of(guessed, "legend"))
     data = data_of(html)
@@ -213,7 +213,7 @@ def test_a_row_read_with_low_confidence_keeps_its_words_above_it_where_the_tab_w
 
 
 def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
-    assert "caracole placed each hole over its syllable" in page()
+    assert "We placed each hole over its syllable" in page()
     assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
 
 
@@ -227,7 +227,7 @@ def test_back_to_the_songs_sheet_or_the_library():
 
 def test_its_foot_links_the_tabs_text_and_its_page_on_harptabs_com_alone():
     html = page(url="https://www.harptabs.com/tab/588/hotel-california")
-    assert '<a class="pdf" href="harmonica-1.txt">The tab as text</a>' in html
+    assert '<a class="pdf" href="harmonica-1.txt">Tab as text</a>' in html
     assert '<a href="https://www.harptabs.com/tab/588/hotel-california">harptabs.com</a>' in html
     assert '<a href="https://www.harptabs.com/">harptabs.com</a>' in page(url="javascript:alert(1)")
 
@@ -235,7 +235,7 @@ def test_its_foot_links_the_tabs_text_and_its_page_on_harptabs_com_alone():
 def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
     html = page(ARROWS, page_key="C")
     assert '<pre class="tab">' in html and "↑3 ↓3 ↑4" in html
-    assert text_of(html, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
+    assert text_of(html, "facts") == "Harmonica tab, as written. We can't read its notation."
     assert 'class="h"' not in html and 'class="rp"' not in html
     assert 'id="h-up"' not in html and 'id="notes"' not in html and 'id="size"' in html and 'id="scroll"' in html
     assert 'id="necks-toggle"' in html and 'id="necks-open"' in html  # the overlay's, the rail's and the sheet's
@@ -248,7 +248,7 @@ def test_the_harp_harptabs_com_names_reaches_the_reading():
     # A tab its page calls Chromatic is its text as written, a slide pressed or not; Diatonic, a "*" is a bend
     chromatic = page(HOTEL, harp="Chromatic")
     assert '<pre class="tab">' in chromatic and 'class="h"' not in chromatic
-    assert text_of(chromatic, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
+    assert text_of(chromatic, "facts") == "Harmonica tab, as written. We can't read its notation."
     assert '<pre class="tab">' not in page(HOTEL, harp="Diatonic")
     starred = "-1 -2 -3* -3**\nla la la la\n"
     assert '<pre class="tab">' in page(starred)  # no chip: "*" is a chromatic's slide
@@ -334,7 +334,7 @@ def test_a_sheet_with_no_key_has_its_guitar_tab_and_says_so_of_the_harps():
     keyless = "{title: Synthetic Song}\n{artist: Placeholder Band}\n[N.C.]la la [Hm]lo lo\n"
     overlay = data_of(page(TAB_D, cho=keyless))["overlay"]
     assert overlay["guitar"] is not None and overlay["harp"]["key"] is None
-    assert overlay["harp"]["none"] == "With no key in its chord sheet, caracole can't tell which harp plays the song."
+    assert overlay["harp"]["none"] == "The chord sheet has no key: no harp to suggest."
 
 
 def test_a_harp_its_page_guesses_is_no_tabs():

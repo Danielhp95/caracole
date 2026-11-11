@@ -549,7 +549,7 @@ def test_the_pages_bring_info_json_up_to_date(conn, cfg):
 
 def test_a_song_key_reads_as_its_source_says():
     assert SongKey("A minor", "tab").describe() == "A minor (from the tab)"
-    assert SongKey("C", "chords").describe() == "C major (estimated from the chords)"
+    assert SongKey("C", "chords").describe() == "C major (guessed from the chords)"
     assert SongKey("F#", "audio").describe() == "F# major (from the audio)"
 
 

@@ -99,16 +99,16 @@ class VersionsCommandsTest {
 
     @Test fun theSheetAndAVersionKeptBesideItAskNothing() = withSong { db, library, song ->
         val c = Said(db, FakeAsking(emptyMap()))
-        assertEquals("Tab 101 is the sheet of Soda Stereo - Persiana Americana already.",
+        assertEquals("Tab 101 is Soda Stereo - Persiana Americana's sheet already.",
                      VersionsCommands.keep(c, library, song, 101))
         assertEquals(listOf(
             """caracole-progress: {"song":{"id":${song.id},"display":"Soda Stereo - Persiana Americana"}}""",
-            """caracole-progress: {"stage":"song","state":"done","detail":"in the library"}""",
+            """caracole-progress: {"stage":"song","state":"done","detail":"in the book"}""",
             """caracole-progress: {"stage":"version","state":"running","detail":""}""",
-            """caracole-progress: {"stage":"version","state":"skipped","detail":"Tab 101 is the sheet of Soda Stereo - """ +
-                """Persiana Americana already."}""",
+            """caracole-progress: {"stage":"version","state":"skipped","detail":"Tab 101 is Soda Stereo - """ +
+                """Persiana Americana's sheet already."}""",
         ), c.lines)
-        assertEquals("Tab 102 is kept beside the sheet of Soda Stereo - Persiana Americana already; it stays kept now.",
+        assertEquals("Tab 102 is kept beside Soda Stereo - Persiana Americana's sheet already. It stays.",
                      VersionsCommands.keep(c, library, song, 102))
         assertEquals("[\"102\"]", db.kvGet("sheet_versions:yours:${song.id}"))
     }
@@ -116,15 +116,15 @@ class VersionsCommandsTest {
     @Test fun whatAskingCameToIsSaidAsVersionsCmdSaysIt() = withSong { db, library, song ->
         val until = Instant.parse("2026-11-04T14:00:00Z")
         val words = mapOf<Asked<Nothing>, String>(
-            Asked.Cooling(until) to "Ultimate Guitar is cooling down after a block, until 2026-11-04 14:00 UTC; nothing kept.",
-            Asked.Cooling(null) to "Ultimate Guitar is cooling down after a block, until later; nothing kept.",
+            Asked.Cooling(until) to "Waiting out UG until 2026-11-04 14:00 UTC. Nothing kept.",
+            Asked.Cooling(null) to "Waiting out UG until later. Nothing kept.",
             Asked.Blocked(ProviderBlocked("ug", "https://x", 403), ProviderState("ug", cooldownUntil = until)) to
-                "Ultimate Guitar blocked caracole (ug: 403: https://x): no more requests to it until 2026-11-04 14:00 " +
-                "UTC; nothing kept.",
+                "UG turned us back (ug: 403: https://x). No more asks until 2026-11-04 14:00 " +
+                "UTC. Nothing kept.",
             Asked.Failed(ProviderError("ug", "https://x", 500)) to
-                "Ultimate Guitar failed (ug: 500: https://x); nothing kept. Ask again later.",
+                "UG failed (ug: 500: https://x). Nothing kept. Ask again later.",
             Asked.Spent(hour = true, keptForSheets = false) to
-                "The lookup requests to Ultimate Guitar are spent (6 a lookup, 60 an hour); nothing kept. Ask again later.",
+                "No more asks of UG (6 a fetch, 60 an hour). Nothing kept. Ask again later.",
         )
         for ((asked, said) in words) {
             assertEquals(said, VersionsCommands.keep(Said(db, Answers(asked)), library, song, 103))
@@ -136,10 +136,10 @@ class VersionsCommandsTest {
     @Test fun aCooldownAsksNothingAndNothingLeftToKeepSaysSo() = withSong { db, library, song ->
         Health.recordBlock(db, "ug", NOW.minusSeconds(3600), "ug: 403")
         val cooling = VersionsCommands.keep(Said(db, UgFetchReplay.TurnAsking(db, NoClient, NOW)), library, song, 103)
-        assertTrue(cooling, cooling.startsWith("Ultimate Guitar is cooling down after a block, until 2026-11-04 "))
+        assertTrue(cooling, cooling.startsWith("Waiting out UG until 2026-11-04 "))
         db.kvSet("sheet_versions:unkeepable:${song.id}", "[\"103\"]")
-        assertEquals("Nothing more to keep of Soda Stereo - Persiana Americana: every Ultimate Guitar version caracole " +
-                         "may keep is kept already, or can't be.",
+        assertEquals("Nothing more to keep of Soda Stereo - Persiana Americana: every UG version we may keep is " +
+                         "kept, or can't be.",
                      VersionsCommands.keepMore(Said(db, FakeAsking(emptyMap())), library, song))
     }
 
@@ -163,7 +163,7 @@ class VersionsCommandsTest {
         val pdf = listOf(stage("pdf", "running"), stage("pdf", "done", "the version's page made"))
         val pages = listOf(stage("pages", "running"), stage("pages", "done", "_todo.md and index.html rewritten"))
         val kept = Said(db, Gives("kept"))
-        assertEquals("Kept tab 103 beside the sheet of Soda Stereo - Persiana Americana: " +
+        assertEquals("Kept tab 103 beside Soda Stereo - Persiana Americana's sheet: " +
                          File(library.folderOf(song), "version-103.txt").path,
                      VersionsCommands.keep(kept, library, song, 103))
         assertEquals(pdf + pages, after(kept.lines))

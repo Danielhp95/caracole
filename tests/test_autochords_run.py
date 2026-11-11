@@ -310,7 +310,7 @@ def test_a_song_whose_auto_sheet_goes_where_another_songs_is_waits_without_runni
     assert (stats.generated, stats.skipped, stats.failed, stats.errors, stats.failures) == (1, 1, 0, [], [])
     assert "part one" in auto_sheet(cfg, conn, one)
     assert kept_files(conn, two.id) == [] and get_song(conn, two.id).autochords_mtime is None
-    assert f"part two's {AUTO_SHEET} isn't kept: its folder is" in caplog.text
+    assert f"part two's {AUTO_SHEET} isn't kept: " in caplog.text and "shares its folder" in caplog.text
 
 
 def test_pending_selects_only_songs_without_human_sheet(conn, cfg, tmp_path):

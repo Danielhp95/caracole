@@ -58,7 +58,7 @@ internal object PageHtml {
         if (key == null) return if (capo != 0) "Capo <b>$capo</b>" else ""
         if (capo == 0) {
             return "Key <b>${escape(Theory.keyName(key))}</b>" +
-                (if (source.isNotEmpty()) " <span class=\"from\">$source</span>" else "")
+                (if (source.isNotEmpty()) " · <span class=\"from\">$source</span>" else "")
         }
         return "<b>${escape(Theory.keyName(key))}</b> shapes · capo <b>$capo</b> · sounds " +
             "<b>${escape(Theory.keyName(Theory.sounding(key, capo)))}</b>" +
@@ -69,8 +69,8 @@ internal object PageHtml {
     fun footer(links: String): String =
         "<footer class=\"foot\">\n" + links +
             "<p>Chord shapes from <a href=\"${PageConstants.CREDIT_URL}\">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n" +
-            "<details class=\"licence\"><summary>The chords-db licence</summary><pre>${escape(PageConstants.CREDIT_NOTICE)}</pre></details>\n" +
-            "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n" +
+            "<details class=\"licence\"><summary>chords-db licence</summary><pre>${escape(PageConstants.CREDIT_NOTICE)}</pre></details>\n" +
+            "<p>Private page: the lyrics and chords are other people's work.</p>\n" +
             "</footer>\n"
 
     /** _song_html: what follows a song's header: an auto sheet's notice, the credit's place, the rail of necks, the

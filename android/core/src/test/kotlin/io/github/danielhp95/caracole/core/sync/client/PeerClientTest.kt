@@ -88,9 +88,9 @@ class PeerClientTest {
         assertTrue("not a caracole sync state of format 3" in other.message!!, other.message)
         answer("GET /api/peer/state", 404, """{"error":"no"}""")
         val none = assertFailsWith<PeerError> { client.state("me") }
-        assertTrue("not as a caracole that syncs" in none.message!!, none.message)
+        assertTrue("not as a caracole that shares" in none.message!!, none.message)
         answer("GET /api/peer/state", 503, """{"error":"songbooks.toml can't be read: line 3."}""")
-        assertEquals("The caracole at ${computer.address} answered 503: songbooks.toml can't be read: line 3.",
+        assertEquals("${computer.address} answered 503: songbooks.toml can't be read: line 3.",
                      assertFailsWith<PeerError> { client.state("me") }.message)
         answer("GET /api/peer/state", 200, state.replace("\"label\":\"Oasis - Wonderwall (removed)\",", ""))
         assertTrue("a unit that can't be read" in assertFailsWith<PeerError> { client.state("me") }.message!!)
@@ -138,7 +138,7 @@ class PeerClientTest {
         assertContentEquals(bytes, client.file("soda stereo/de música", "sheet.pdf", Canonical.sha256Hex(bytes)))
         assertEquals("song=soda%20stereo%2Fde%20m%C3%BAsica&name=sheet.pdf", got.single().query)
         val other = assertFailsWith<PeerError> { client.file("a/b", "sheet.pdf", sha) }
-        assertTrue("changed there since" in other.message!!, other.message)
+        assertTrue("changed since compared" in other.message!!, other.message)
         answer("GET /api/peer/file", 404, """{"error":"no such file kept, or it changed since caracole kept it"}""")
         assertTrue("404" in assertFailsWith<PeerError> { client.file("a/b", "x", sha) }.message!!)
     }
@@ -212,7 +212,7 @@ class PeerClientTest {
         answer("POST /peer/push/new", 200, """{"push":"0123456789abcdef","need":["${"ef".repeat(32)}"]}""")
         assertFailsWith<PeerError> { client.pushNew("t", "a1b2c3d4e5f60718", listOf(sha)) }
         answer("POST /peer/push", 400, """{"error":"song/a/b: given other than its state says."}""")
-        assertEquals("The caracole at ${computer.address} answered 400: song/a/b: given other than its state says.",
+        assertEquals("${computer.address} answered 400: song/a/b: given other than its state says.",
                      assertFailsWith<PeerError> { client.push("t", "0123456789abcdef", JsonObject(emptyMap())) }.message)
     }
 
@@ -223,7 +223,7 @@ class PeerClientTest {
         computer.answers.clear()
         assertTrue("answered 404" in assertFailsWith<PeerError> { client.job(8) }.message!!)
         answer("GET /api/jobs/9", 200, """{"id":9,"state":null}""")
-        assertEquals("The caracole at ${computer.address} answered its job 9 with something it can't read.",
+        assertEquals("${computer.address} answered about entry 9 in a form we can't read.",
                      assertFailsWith<PeerError> { client.job(9) }.message)
     }
 

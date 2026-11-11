@@ -30,7 +30,7 @@ SONGS = [
     BookSong("Synthetic Test Song", "The Placeholders", cho=UG_CHO, id="aaaa"),
     BookSong("Hysteria", "Muse", missing="no sheet yet", id="bbbb"),
     BookSong("Minor Song", "Others", cho=MINOR, key="Am", key_source="tab", transpose=2, id="cccc"),
-    BookSong("Removed Song", "Gone Band", missing="not in the library", id="dddd"),
+    BookSong("Removed Song", "Gone Band", missing="not in the logbook", id="dddd"),
     BookSong("斑马斑马", "宋冬野", cho=ZH, id="eeee"),
 ]
 
@@ -67,7 +67,7 @@ def test_the_contents_list_every_song_in_order_and_name_the_missing_ones():
     assert titles == ["Synthetic Test Song", "Hysteria", "Minor Song", "Removed Song", "斑马斑马"]
     assert re.findall(r'<a class="row" href="#song-(\d+)"', toc) == ["1", "3", "5"]
     missing = re.findall(r'<li class="missing">(.*?)</li>', toc, re.DOTALL)
-    assert len(missing) == 2 and "Missing: no sheet yet" in missing[0] and "Missing: not in the library" in missing[1]
+    assert len(missing) == 2 and "Missing · no sheet yet" in missing[0] and "Missing · not in the logbook" in missing[1]
     assert "href" not in "".join(missing)  # nothing to open
 
 
@@ -99,7 +99,7 @@ def test_each_song_says_what_its_capo_means_as_its_sheet_html_does():
     first = re.search(r'<p class="facts" id="facts-1">(.*?)</p>', html).group(1)
     minor = re.search(r'<p class="facts" id="facts-3">(.*?)</p>', html).group(1)
     assert first == '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
-    assert minor == 'Key <b>Am</b> <span class="from">from the tab</span>'
+    assert minor == 'Key <b>Am</b> · <span class="from">from the tab</span>'
 
 
 def test_the_pager_is_above_each_sheet_and_after_it_too():
@@ -163,9 +163,9 @@ def test_the_contents_give_each_songs_key_and_capo_under_its_title():
     html = page()
     assert toc_rows(html) == [
         "1 | Synthetic Test Song | The Placeholders · G · capo 2",  # its sheet's key and capo
-        "2 | Hysteria | Muse | Missing: no sheet yet",
+        "2 | Hysteria | Muse | Missing · no sheet yet",
         "3 | Minor Song | Others · Bm",  # in Am, up 2: its [transpose], the key the viewer opens it in
-        "4 | Removed Song | Gone Band | Missing: not in the library",
+        "4 | Removed Song | Gone Band | Missing · not in the logbook",
         "5 | 斑马斑马 | 宋冬野 · C",  # estimated from its chords
     ]
     first = re.search(r'<span class="a">(.*?)</span>(?=</a>)', contents(html)).group(1)
@@ -247,7 +247,7 @@ def test_the_page_loads_nothing_and_credits_the_fingerings():
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.IGNORECASE)
     hrefs = re.findall(r'href="([^"]*)"', shell)
     assert [h for h in hrefs if "://" in h] == ["https://github.com/tombatossals/chords-db"]
-    assert "MIT License" in html and "Keep this page private" in html
+    assert "MIT License" in html and "Private page: the lyrics and chords are other people's work." in html
 
 
 def test_a_songbook_without_a_sheet_is_its_contents():

@@ -65,5 +65,5 @@ def test_the_phone_with_no_name_says_caracole_and_its_badge_once():
     assert phone.title() == "Phone · caracole"
     assert phone.title("Look up") == "Phone · Look up · caracole"
     assert phone.markup("p") == ('<p class="libname"><span class="name"></span> '
-                                 '<span class="scratch" title="Not your usual library">Phone</span></p>')
+                                 '<span class="scratch" title="Scratch">Phone</span></p>')
     assert LibraryName("Music", PHONE).title() == "Phone · caracole · Music"

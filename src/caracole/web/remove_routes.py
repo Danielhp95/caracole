@@ -48,7 +48,7 @@ def remove(app: WebApp, form: dict[str, str]) -> Response:
     asked = song_id(form.get("song", ""))
     confirmed = form.get("confirm") == "1"
     back = _back(form.get("back", ""))
-    with no_such_song("That song isn't in the library: removed already, maybe."), app.db() as conn:
+    with no_such_song("That song isn't in the logbook. Removed already?"), app.db() as conn:
         song = get_song(conn, asked)
         plan = None if confirmed else plan_removal(conn, app.cfg, song)
     if plan is not None:
@@ -61,8 +61,8 @@ def remove(app: WebApp, form: dict[str, str]) -> Response:
                                      "brief": brief(plan), "goes": goes, "stays": stays, "notes": notes}}
         return question
     if form.get("key") != song.key:
-        raise Refused(409, "Not that song", "The library changed since this page was made, so nothing was "
-                                            "removed: reload the library and try again.")
+        raise Refused(409, "Not that song", "The logbook changed since this page was made: nothing removed. "
+                                            "Reload and try again.")
     job, _ = app.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
                         display=song.display, song_id=song.id)
     return app.queued(job, _library_at(back, song.id))  # its card says Removing…, then Removed

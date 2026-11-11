@@ -90,7 +90,7 @@ def test_the_settings_offer_each_instrument_the_viewer_draws_the_guitar_first(tm
     assert seen["row"] and seen["chips"] == [[n, "true" if n == "Guitar" else "false"] for n in NAMES]
     assert seen["hint"] == "Standard tuning, E A D G B E." and seen["hash"] == ""
     assert [c[1] for c in uke["chips"]] == ["false", "true"] + ["false"] * 6
-    assert uke["hint"] == "G C E A, the G string high." and uke["hash"] == "#inst=ukulele"
+    assert uke["hint"] == "G C E A, high G." and uke["hash"] == "#inst=ukulele"
 
 
 @pytest.mark.parametrize("inst", [UKULELE, UKULELE_LOW_G, BARITONE], ids=lambda i: i.id)
@@ -121,8 +121,8 @@ def test_a_chord_the_ukulele_has_no_shape_for_says_what_it_shows(tmp_path):
             b.click(f'#sheet .c[data-c="{i}"]')
             assert b.wait(f"document.getElementById('card-name').textContent === {json.dumps(['C5', 'C/E', 'G9'][i])}")
             notes.append(b.js("document.getElementById('shape-note').textContent"))
-    assert notes == ["No shape for this chord here: C is the closest.", "Shown without its bass, E.",
-                     "No shape for this chord here: G7 is the closest."]
+    assert notes == ["No shape for this chord. Closest: C.", "Without its bass, E.",
+                     "No shape for this chord. Closest: G7."]
 
 
 def test_the_piano_draws_each_chord_as_a_keyboard_its_notes_lit_and_its_bass_marked(tmp_path):
@@ -143,8 +143,8 @@ def test_the_piano_draws_each_chord_as_a_keyboard_its_notes_lit_and_its_bass_mar
         assert board["bass"] == [position[0]] and board["on"] == position[1:]
     c_e = chord_shapes(PIANO, parse_chord("C/E"))
     assert card[0]["bass"] == [52] and card[0]["on"] == c_e[0][1:] and card[1] == "1 of 3"
-    assert card[2] == "Root position; E in the bass, left hand."
-    assert second[0]["on"] == c_e[1][1:] and second[1] == "1st inversion; E in the bass, left hand."
+    assert card[2] == "Root position · E in the bass, left hand"
+    assert second[0]["on"] == c_e[1][1:] and second[1] == "1st inversion · E in the bass, left hand"
     assert card[0]["keys"] == second[0]["keys"]  # one keyboard for all three: the card keeps its width
     assert wide[0] >= 170 and wide[1] == 390
 
@@ -168,9 +168,9 @@ def test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back(tmp_path
     assert guitar[0] == "Em shapes · capo 2 · sounds F#m · key from the sheet" and guitar[1] == ["Em", "C", "G", "D"]
     assert moved[0].startswith("D#m shapes · capo 3 · sounds F#m") and moved[1] == ["D#m", "B", "F#", "C#"]
     # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row.
-    assert piano[0]["facts"] == "Key F#m from the sheet" and not piano[0]["capo"]
+    assert piano[0]["facts"] == "Key F#m · from the sheet" and not piano[0]["capo"]
     assert piano[1] == ["F#m", "D", "A", "E"] and piano[2].startswith("F#m") and "capo" not in piano[2]
-    assert card == ["F#m", "Root position; F# in the bass, left hand."]
+    assert card == ["F#m", "Root position · F# in the bass, left hand"]
     assert back[0].startswith("D#m shapes · capo 3 · sounds F#m") and back[1] == ["D#m", "B", "F#", "C#"]
 
 
@@ -302,7 +302,7 @@ def test_the_instrument_is_kept_for_every_sheet_and_in_the_address(tmp_path):
     assert reloaded["chips"][1][1] == "true" and reloaded["hash"] == "#inst=ukulele"
     assert elsewhere[0]["chips"][1][1] == "true" and elsewhere[0]["hash"] == "#inst=ukulele"
     assert guitar["chips"][0][1] == "true" and guitar["hash"] == ""
-    assert asked["chips"][4][1] == "true" and asked["facts"] == "Key C from the sheet"
+    assert asked["chips"][4][1] == "true" and asked["facts"] == "Key C · from the sheet"
     assert unknown["chips"][0][1] == "true" and unknown["hash"] == ""  # one the viewer doesn't draw: the guitar
 
 
@@ -468,6 +468,6 @@ def test_an_instrument_a_script_registers_is_offered_then_drawn_by_it(tmp_path, 
         heard = b.wait("document.documentElement.dataset.heard === '369.99'")  # F#4: its notes, as it says
     assert [c[0] for c in before["chips"]] == NAMES and before["chips"][0][1] == "true"  # not drawn yet: the guitar
     assert [c[0] for c in after["chips"]] == [*NAMES, "Kazoo"]
-    assert on[0]["facts"] == "Key F#m from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
+    assert on[0]["facts"] == "Key F#m · from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
     assert on[0]["hint"] == "Hum along." and not on[0]["capo"] and on[2] == "Kazoo at 2"
     assert bare == ["hum F#", "hum D", "hum A", "hum E"] and card == "hum F#" and heard

@@ -236,7 +236,7 @@ def test_a_lookup_sends_a_few_requests_at_most_and_leaves_the_rest_for_the_night
 
     assert len(sites.ug()) == 2
     assert progress.readable_after == 1 and progress.states()["ug"] == "skipped"
-    assert "nightly run" in result.details["ug"]
+    assert "tonight's run" in result.details["ug"]
     song = find_song(c, "radiohead/creep")
     assert song.ug_dirty is True and song.match_decision == "accept"  # the night goes on from here
     c.close()
@@ -261,7 +261,7 @@ def test_half_of_the_hours_lookup_requests_are_kept_for_sheets(cfg, conn, sites)
 
     assert progress.readable_after == 1 and len(sites.ug()) == 1  # the sheet, and nothing more
     assert progress.states()["ug"] == "skipped"
-    assert "kept for sheets" in result.details["ug"] and "nightly run" in result.details["ug"]
+    assert "kept for sheets" in result.details["ug"] and "tonight's run" in result.details["ug"]
     assert find_song(conn, "radiohead/creep").ug_dirty is True  # the night goes on from here
     # Later that hour, another song still gets its sheet.
     serve_wonderwall(sites, conn)
@@ -420,7 +420,7 @@ def test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_w
         result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=tab)
 
         assert progress.states()["song"] == "failed" and sites.requests == []
-        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords, tabs or ukulele chords page"
+        assert result.details["song"] == f"tab {tab_id_from_url(tab)} isn't chords, a tab or ukulele chords"
     assert not cfg.wanted_file.exists() and not cfg.overrides_file.exists()
 
 
@@ -503,7 +503,7 @@ def test_a_lookup_waiting_for_the_lock_says_where_it_is_let_in(cfg, conn, sites)
     assert done and done[0].sheet is not None
     [said] = details
     assert "pid 4242: autochords" in said
-    assert "at its next pause" in said and "between two songs" in said
+    assert "a fetch goes first at its next pause" in said
 
 
 # --- errors are never misses ---------------------------------------------------------------------------
@@ -530,7 +530,7 @@ def test_a_site_cooling_down_is_left_alone(cfg, conn, sites):
     result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
     assert sites.ug() == [] and progress.states()["sheet"] == "skipped"
-    assert "cooling down" in result.details["sheet"]
+    assert "Waiting out" in result.details["sheet"]
 
 
 def test_a_server_error_leaves_the_song_for_the_night(cfg, conn, sites):
@@ -589,7 +589,7 @@ def test_a_sheet_that_would_go_where_another_songs_is_says_so_and_waits(cfg, con
     two = next(s for s in list_songs(conn) if s.title.endswith("take two"))
     assert song_dir(cfg.library_dir, two) == song_dir(cfg.library_dir, one) and two.id != one.id
     assert result.ok and progress.states()["sheet"] == "failed"  # no bug: it waits, as after a site's error
-    assert "sheet.txt isn't kept: its folder is" in result.details["sheet"]
+    assert "sheet.txt isn't kept: " in result.details["sheet"] and "shares its folder" in result.details["sheet"]
     assert (song_dir(cfg.library_dir, one) / "sheet.txt").read_bytes() == b"take one"
 
 
@@ -662,7 +662,7 @@ def test_a_lacuerda_pick_lacuerda_cant_answer_now_leaves_the_sheet_to_ultimate_g
     song = find_song(conn, "estopa/como-camaron")
     assert song.lacuerda_checked_at is None  # an error is never a miss: the nightly run asks for the pick
     assert "estopa/como-camaron" in load_overrides(cfg.overrides_file).lacuerda and result.ok
-    assert result.details["sheet"].startswith("LaCuerda is cooling down after a block")  # said where it's looked for
+    assert result.details["sheet"].startswith("Waiting out LaCuerda")  # said where it's looked for
 
 
 def test_a_lacuerda_pick_that_fails_says_so_where_the_sheet_ultimate_guitar_gave_is_said(cfg, conn, sites):
@@ -673,7 +673,7 @@ def test_a_lacuerda_pick_that_fails_says_so_where_the_sheet_ultimate_guitar_gave
 
     assert CAMARON_2 in sites.requests
     sheet_said = result.details["sheet"]
-    assert sheet_said.startswith("LaCuerda failed (") and sheet_said.endswith("tab 201 from Ultimate Guitar")
+    assert sheet_said.startswith("LaCuerda failed (") and sheet_said.endswith("tab 201 from UG")
     assert progress.states()["lacuerda"] == "failed" and "LaCuerda failed (" in result.details["lacuerda"]
     assert find_song(conn, "estopa/como-camaron").lacuerda_checked_at is None and result.ok  # no miss
 
@@ -837,7 +837,7 @@ def test_the_sheet_stage_says_which_site_it_asks(cfg, conn, sites):
 
 
 def test_the_match_stage_says_a_song_the_index_lacks_in_the_words_caracole_serve_reads(cfg, conn, sites):
-    # caracole serve's Match step reads it as "Match: not on UG" (outcome.py).
+    # caracole serve's Match step reads it as "Match · not on UG" (outcome.py).
     from caracole.get import MATCH_NOT_FOUND
 
     result, _ = look_up(cfg, sites=sites, artist="Nobody", title="Nothing At All")
@@ -854,7 +854,7 @@ def test_a_tab_you_pinned_on_ultimate_guitar_is_said_to_be_kept_over_a_lacuerda_
 
     assert CAMARON_2 not in sites.requests  # the pin wins: LaCuerda is asked nothing
     assert "sheet 202" in (folder(cfg, "Estopa", "Como Camarón") / "sheet.txt").read_text(encoding="utf-8")
-    said = "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
+    said = "your pinned UG tab is kept over your LaCuerda pick"
     assert result.details["sheet"].startswith(said) and said in result.details["lacuerda"]
     assert "this month" not in result.details["lacuerda"]
 
@@ -1045,7 +1045,7 @@ def test_a_song_fetched_now_remakes_the_songbooks_it_is_in_and_no_other(cfg, con
     assert (cfg.library_dir / "_songbooks" / "Campfire" / "songbook.html").is_file()
     assert not (cfg.library_dir / "_songbooks" / "Other").exists()
     assert ("songbooks", "running", "Campfire") in progress.said  # caracole serve's "Remaking songbook Campfire…"
-    assert ("songbooks", "done", "Campfire made again") in progress.said
+    assert ("songbooks", "done", "Campfire remade") in progress.said
 
 
 def test_the_library_page_is_written_after_the_songbooks_a_lookup_made_again(cfg, conn, sites):
@@ -1082,7 +1082,7 @@ def test_a_song_in_no_songbook_remakes_none(cfg, conn, sites):
 
     _, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
-    assert ("songbooks", "skipped", "no songbook lists it") in progress.said
+    assert ("songbooks", "skipped", "in no songbook") in progress.said
     assert not (cfg.library_dir / "_songbooks").exists()
 
 
@@ -1097,7 +1097,7 @@ def test_a_broken_songbooks_file_is_said_and_stops_nothing(cfg, conn, sites):
     assert result.ok and result.refused is None
     assert (folder(cfg, "Radiohead", "Creep") / "sheet.pdf").is_file()
     state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
-    assert state == "skipped" and "songbooks.toml can't be read" in detail
+    assert state == "skipped" and "can't read songbooks.toml" in detail
 
 
 def test_a_songbook_that_cant_be_made_is_said_and_the_lookups_sheet_stands(cfg, conn, sites):

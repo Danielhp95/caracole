@@ -325,7 +325,7 @@ def test_a_finger_on_a_numeral_shows_its_line_and_on_the_name_the_card(tmp_path)
         tap_at(b, *name)
         assert b.wait("!document.getElementById('card').hidden")
         card = b.js("[document.getElementById('card-name').textContent, document.getElementById('tip').hidden]")
-    assert tipped["line"] == "♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed from C minor"
+    assert tipped["line"] == "♭VII: on the lowered 7th degree of C major, major (upper case); borrowed from C minor"
     assert not tipped["card"] and escaped is None and elsewhere is None
     assert card == ["Bb · ♭VII", True]
 
@@ -386,7 +386,7 @@ def test_a_song_with_no_key_offers_chords_alone_and_says_why(tmp_path):
         b.click("#more")
         seen = b.js("""({chips: [...document.querySelectorAll('#names > button:not(:disabled)')].map((c) => c.textContent),
           hint: document.getElementById('names-hint').textContent, numerals: document.querySelectorAll('#sheet .nm').length})""")
-    assert seen == {"chips": ["Chords"], "hint": "caracole can't tell this song's key, so it can't number its chords.",
+    assert seen == {"chips": ["Chords"], "hint": "No key found, so no numerals.",
                     "numerals": 0}
 
 
@@ -589,7 +589,7 @@ def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(
     swap = f"alt=ionian.4.{alt[0]}.{quote(alt[1], safe='')}.{'' if alt[2] is None else alt[2]}"
     with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both&" + swap, **DESKTOP) as b:
         chosen = tip_on(b, 6)
-    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: your swap for D7."
     assert chosen["picture"] and [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
     unnamed = tmp_path / "Unnamed" / "Title" / "sheet.html"
     unnamed.parent.mkdir(parents=True)
@@ -602,8 +602,8 @@ def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(
     assert not bare["picture"] and bare["notes"] == [] and bare["off"] is None
 
 
-KEYBOARD = ["Keyboard ›", "Show the notes on a keyboard"]
-CIRCLE = ["‹ Circle", "Show the notes on a circle"]
+KEYBOARD = ["Keyboard ›", "Notes on a keyboard"]
+CIRCLE = ["‹ Circle", "Notes on a circle"]
 
 
 @in_chromium
@@ -783,7 +783,7 @@ def test_it_follows_the_chord_played_now(tmp_path):
         b.click("#card-tip")
         assert b.wait("!document.getElementById('tip').hidden")
         chosen = b.js(SEEN)
-    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: your swap for D7."
     assert [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
 
 

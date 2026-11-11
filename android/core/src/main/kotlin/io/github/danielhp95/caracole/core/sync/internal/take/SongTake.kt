@@ -104,7 +104,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                 // Read once the song is here, so that a song new here is respelled with its artist's.
                 val respell = toRespell(names.artist)
                 if (here != null && respell.any { it.id == here.id } != respelledHere) {
-                    throw UnitError("its artist's songs here changed while it was taken: compare again")
+                    throw UnitError("its artist's songs changed here meanwhile: compare again")
                 }
                 val respelled = respell(folders, respell, names.artist)
                 if (current != null && current != newParts) {
@@ -162,7 +162,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         }
         for (prefix in CARRIED_KV) SongKv.deletePrefixed(db, prefix, id)
         val carried = doc["kv"] ?: JsonObject(emptyMap())
-        if (carried !is JsonObject) throw UnitError("its kv can't be read")
+        if (carried !is JsonObject) throw UnitError("its records can't be read")
         for ((name, value) in carried) {
             val prefix = name.substringBefore('|')
             val more = name.substringAfter('|', "")
@@ -180,7 +180,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
             throw UnitError("its names can't be read")
         }
         if (Normalize.identityKey(artist, title) != key) {
-            throw UnitError("its names, $artist - $title, are another song's here (caracole's versions differ?)")
+            throw UnitError("its names, $artist - $title, are another song's here (different caracole versions?)")
         }
         val album = names["album"]
         val duration = names["duration_ms"]
@@ -213,8 +213,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
     private fun fetched(name: String, sha256: String): ByteArray {
         val data = source.file(key, name, sha256)
         if (Canonical.sha256Hex(data) != sha256) {
-            throw UnitError("$name came other than it is there: it changed there since, so the song is left as it " +
-                            "was here")
+            throw UnitError("$name changed there meanwhile: the song stays as it was here")
         }
         return data
     }
@@ -293,7 +292,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         /** A document's member the take reads: UnitError in Python's words for one it lacks (peer_sync._apply's
          * KeyError). */
         fun need(obj: JsonObject, key: String): JsonElement =
-            obj[key] ?: throw UnitError("its document can't be read (KeyError: ${PyRepr.str(key)})")
+            obj[key] ?: throw UnitError("its entry can't be read (KeyError: ${PyRepr.str(key)})")
 
         /** Python's `str()` of a JSON value a document gives where text goes: a string as it is, a number as its
          * literal, a literal as Python names it. */

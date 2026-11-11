@@ -51,7 +51,7 @@ class FakeLookup:
             emit(PROGRESS_PREFIX + json.dumps({"stage": name, "state": state, "detail": detail}))
 
         stage("song", "running")
-        stage("song", "done", "in the library")
+        stage("song", "done", "in the book")
         stage("sheet", "running")
         time.sleep(0.5)  # long enough for the page to show it
         self.hold.wait(30)
@@ -217,7 +217,7 @@ def test_use_lacuerdas_sheet_posts_your_pick_as_the_lookup_pages_lacuerda_row_do
                                        "lacuerda": [LC + "estopa/como_camaron"]}
     assert shows_its_request(browser, song)
     # The lookup page's LaCuerda row of the song, Get it again, posts the very same form.
-    lookup_page_presses(browser, base, "como camaron", "Get Estopa - Como Camarón again from LaCuerda")
+    lookup_page_presses(browser, base, "como camaron", "Fetch Estopa - Como Camarón again from LaCuerda")
     assert posted.next(1) == body
 
 
@@ -248,7 +248,7 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)],
                                        "lacuerda": [LC + "estopa/como_camaron"]}
     assert shows_its_request(browser, song)
-    lookup_page_presses(browser, base, "como camaron", "Get Estopa - Como Camarón again from LaCuerda")
+    lookup_page_presses(browser, base, "como camaron", "Fetch Estopa - Como Camarón again from LaCuerda")
     assert posted.next(1) == body
 
 

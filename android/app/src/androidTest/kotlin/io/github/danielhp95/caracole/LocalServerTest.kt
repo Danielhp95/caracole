@@ -40,7 +40,7 @@ import kotlin.concurrent.thread
  *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
  *
  * Its server listens on 127.0.0.1 and answers its library page at `/` to a request with the launch's cookie, and
- * refuses one without it (403, "Not this app's caracole."), so no other app on the phone can use it. The WebView
+ * refuses one without it (403, "Not this app's scribe."), so no other app on the phone can use it. The WebView
  * carries that cookie and loads the server's exact origin alone: another server on another loopback port (as a
  * Termux caracole serve on 8737 would be) never hears from it, neither when the app is told to load it, nor when the
  * page follows a link to it, which opens in the browser instead, nor when a page there asks it for a resource. And
@@ -84,7 +84,7 @@ class LocalServerTest {
         for (cookie in listOf(null, "${Security.SECRET_COOKIE}=${"0".repeat(64)}", "other=${Caracole.secret}")) {
             val refused = get("$origin/", cookie)
             assertEquals("cookie $cookie", 403, refused.first)
-            assertEquals("Not this app's caracole.\n", refused.second)
+            assertEquals("Not this app's scribe.\n", refused.second)
         }
         assertEquals("a file of the library is the server's too", 403, get("$origin/index.html", null).first)
     }

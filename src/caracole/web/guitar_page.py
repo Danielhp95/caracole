@@ -71,7 +71,7 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
     song ``song_id`` (``title`` by ``artist``), its bytes ``data``; ``sheet``, the library path of the song's sheet
     viewer, when it has one; ``library_name``, the library the server shows (library_name.py)."""
     href = "/" + quote(path)
-    links = [f'<a class="navlink" href="/#song={song_id}">‹ The song</a>']
+    links = [f'<a class="navlink" href="/#song={song_id}">‹ Song</a>']
     if sheet:
         links.append(f'<a class="navlink" href="/{escape(quote(sheet))}">Sheet</a>')
     links.append(f'<a class="navlink" href="{escape(href)}" download>Download</a>')

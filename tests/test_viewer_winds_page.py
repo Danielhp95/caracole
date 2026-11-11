@@ -89,7 +89,7 @@ def test_the_harmonica_line_names_the_harps_for_the_song_and_follows_the_key(tmp
         b.click("#t-up")
         up = b.js(FACTS)
     assert "Harmonica" not in guitar
-    assert here == "Key G from the sheet" + "Harmonica: G harp (1st position) · C harp (2nd)"
+    assert here == "Key G · from the sheet" + "Harmonica: G harp (1st position) · C harp (2nd)"
     assert here.endswith(harp.header_line(G, chords_in(G, CHORDS)))
     assert up.endswith("Harmonica: A harp (1st position) · D harp (2nd)")
 
@@ -100,7 +100,7 @@ def test_with_a_capo_the_harmonica_plays_the_key_the_song_sounds_in(tmp_path):
         names = b.js("[...document.querySelectorAll('#sheet .c')].map((c) => c.textContent)")
     sounding = Key(6, "aeolian")  # F#m
     assert names == ["F#m", "D", "A", "E"]
-    assert facts == "Key F#m from the sheet" + harp.header_line(sounding, chords_in(sounding, names))
+    assert facts == "Key F#m · from the sheet" + harp.header_line(sounding, chords_in(sounding, names))
     assert facts.endswith("Harmonica: E harp (3rd position, dorian) · D harp (5th, phrygian) · A harp (4th, aeolian)")
 
 
@@ -146,8 +146,8 @@ def test_the_harmonica_row_links_each_of_the_songs_harmonica_tabs_page_and_its_t
         text = b.js("document.body.textContent")
     assert found["title"] == ["Harmonica tabs"]
     # harptabs.com's Key chip is the song's key on some tabs and the harp's on others: never named a harp here.
-    said = "The key harptabs.com's page names: the song's on some tabs, the harp's on others"
-    assert found["tabs"] == [["harmonica-1", "harmonica-1.html#inst=harmonica", "key C (harptabs.com)", said,
+    said = "The key harptabs' page names: the song's or the harp's"
+    assert found["tabs"] == [["Tab 1", "harmonica-1.html#inst=harmonica", "key C (harptabs)", said,
                               "harmonica-1.txt"],
                              ["harmonica-2.txt", "harmonica-2.txt", None, None, None]]
     assert "the tab's page" in text

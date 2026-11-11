@@ -106,10 +106,10 @@ class ShareRoutesTest {
     @Test fun `a text naming an index's song shows it the best match, and Get it queues the library page's lookup`() {
         val phone = phone()
         val html = page(phone.get(share("text" to "Eagles - Hotel California https://example.com/x?si=1")))
-        assertTrue("caracole read <strong>Eagles – Hotel California</strong>." in html, shown(html))
-        assertTrue("<h2 class=\"sub\">The best match</h2>" in html, shown(html))
-        assertTrue("Ultimate Guitar: chords ×1" in html, shown(html))
-        assertFalse("In your library" in html.substringAfter("The best match").substringBefore("</ul>"), "not yours")
+        assertTrue("We read <strong>Eagles – Hotel California</strong>." in html, shown(html))
+        assertTrue("<h2 class=\"sub\">Best match</h2>" in html, shown(html))
+        assertTrue("UG: chords ×1" in html, shown(html))
+        assertFalse("In your logbook" in html.substringAfter("Best match").substringBefore("</ul>"), "not yours")
         val getIt = forms(html, "/lookup").first()
         assertEquals(listOf("csrf" to TestApp.CSRF, "artist" to "Eagles", "title" to "Hotel California",
                             "ug" to "eagles/hotel-california"), getIt)
@@ -130,8 +130,8 @@ class ShareRoutesTest {
         val html = page(phone.get(share("text" to "I've found a song for you... Hotel California by Eagles \uD83D\uDD25 Listen now " +
                                                   "on #Deezer https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm")))
         assertTrue("<h1>Shared from Deezer</h1>" in html, shown(html))
-        assertTrue("caracole read <strong>Eagles – Hotel California</strong>." in html, shown(html))
-        val best = html.substringAfter("The best match").substringBefore("</ul>")
+        assertTrue("We read <strong>Eagles – Hotel California</strong>." in html, shown(html))
+        val best = html.substringAfter("Best match").substringBefore("</ul>")
         assertEquals("eagles/hotel-california", forms(best, "/lookup").single().toMap()["ug"])
         assertEquals(0, asked.get())
     }
@@ -140,11 +140,11 @@ class ShareRoutesTest {
         val phone = phone()
         val html = page(phone.get(share("text" to "Radiohead - Creep", "from" to "org.example.player")))
         assertTrue("A shared song" in html, "an app caracole doesn't know")
-        val best = html.substringAfter("The best match").substringBefore("</ul>")
+        val best = html.substringAfter("Best match").substringBefore("</ul>")
         assertTrue("Radiohead - Creep" in best, best)
-        assertTrue("In your library" in best, best)
+        assertTrue("In your logbook" in best, best)
         assertTrue("href=\"/#song=1\"" in best, "its line in the library, with no page on the phone: $best")
-        assertTrue(">Get it again</button>" in best, best)
+        assertTrue(">Fetch again</button>" in best, best)
         assertEquals(listOf("csrf" to TestApp.CSRF, "song" to "1", "ug" to "radiohead/creep"), forms(best, "/lookup").single())
     }
 
@@ -152,10 +152,10 @@ class ShareRoutesTest {
         val phone = phone()
         val html = page(phone.get(share("text" to "https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm", "from" to "deezer.android.app")))
         assertTrue("<h1>Shared from Deezer</h1>" in html, shown(html))
-        assertTrue("Deezer shared a link alone, which names no song: <code>https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm" +
-                       "</code>. caracole doesn't ask Deezer what it is" in html, shown(html))
+        assertTrue("Deezer shared a bare link, no song named: <code>https://link.deezer.com/s/34URX4HSZ3LKo4ZRnW3Sm" +
+                       "</code>. We don't ask Deezer." in html, shown(html))
         assertTrue("<details class=\"picker\" open><summary class=\"btn\">Edit</summary>" in html, "Edit, open")
-        assertFalse("The best match" in html)
+        assertFalse("Best match" in html)
         assertEquals(emptyList(), forms(html, "/lookup"), "no Get it without names")
         assertTrue("<a class=\"btn\" href=\"/share/cancel\">Cancel</a>" in html)
         assertEquals(0, asked.get())
@@ -240,8 +240,8 @@ class ShareRoutesTest {
         val phone = phone()
         val html = page(phone.get(share("artist" to "Radiohead", "title" to "Karma Police", "app" to "Deezer")))
         assertTrue("<h1>Shared from Deezer</h1>" in html, shown(html))
-        assertTrue("caracole searched for <strong>Radiohead – Karma Police</strong>." in html, shown(html))
-        val best = html.substringAfter("The best match").substringBefore("</ul>")
+        assertTrue("We searched for <strong>Radiohead – Karma Police</strong>." in html, shown(html))
+        val best = html.substringAfter("Best match").substringBefore("</ul>")
         assertEquals("radiohead/karma-police", forms(best, "/lookup").single().toMap()["ug"])
         assertTrue("name=\"artist\" value=\"Radiohead\"" in html && "name=\"title\" value=\"Karma Police\"" in html)
         assertTrue("<input type=\"hidden\" name=\"app\" value=\"Deezer\">" in html, "the app kept for the next Edit")
@@ -250,8 +250,8 @@ class ShareRoutesTest {
     @Test fun `a text whose artist read_names can't tell is searched whole, its title filled in`() {
         val phone = phone()
         val html = page(phone.get(share("text" to "hotel california")))
-        assertTrue("caracole read <strong>“hotel california”</strong>, but can't tell who its artist is" in html, shown(html))
-        val best = html.substringAfter("The best match").substringBefore("</ul>")
+        assertTrue("We read <strong>“hotel california”</strong> but can't tell the artist" in html, shown(html))
+        val best = html.substringAfter("Best match").substringBefore("</ul>")
         assertEquals("eagles/hotel-california", forms(best, "/lookup").single().toMap()["ug"], "the search's best")
         assertTrue("name=\"artist\" value=\"\"" in html && "name=\"title\" value=\"hotel california\"" in html, shown(html))
     }
@@ -259,8 +259,8 @@ class ShareRoutesTest {
     @Test fun `a song no index has is got by its names`() {
         val phone = phone()
         val html = page(phone.get(share("text" to "Nadie Sabe - Cancion Inventada Zzyzx")))
-        assertFalse("The best match" in html)
-        assertTrue("The phone's indexes have no such song. Get it looks up <strong>Nadie Sabe – Cancion " +
+        assertFalse("Best match" in html)
+        assertTrue("Not in the phone's indexes. Fetch looks up <strong>Nadie Sabe – Cancion " +
                        "Inventada Zzyzx</strong>" in html, shown(html))
         assertEquals(listOf(listOf("csrf" to TestApp.CSRF, "artist" to "Nadie Sabe", "title" to "Cancion Inventada Zzyzx")),
                      forms(html, "/lookup"))
@@ -269,7 +269,7 @@ class ShareRoutesTest {
     @Test fun `with no index the page says how to bring the computer's`() {
         val phone = phone(fixture = null)
         val html = page(phone.get(share("text" to "Eagles - Hotel California")))
-        assertTrue("The phone has no Ultimate Guitar index yet: Settings › Import indexes" in html, shown(html))
+        assertTrue("No UG index on the phone yet. Settings › Import indexes" in html, shown(html))
     }
 
     @Test fun `what the app sent is shown as it came, escaped`() {

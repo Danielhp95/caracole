@@ -171,7 +171,7 @@ const caracoleRows = (icons, does) => {
   const artistFilter = (name, whose, onArtist, cls) => {
     const who = el("button", cls ? "artist " + cls : "artist");
     who.type = "button";
-    who.title = "Show only " + whose + "'s songs";
+    who.title = whose + "'s songs";
     who.appendChild(el("span", "artist-name", name));
     const mark = el("span", "filter-mark");
     mark.setAttribute("aria-hidden", "true");
@@ -184,7 +184,7 @@ const caracoleRows = (icons, does) => {
   const artistSearch = (name, onSearch, cls) => {
     const who = el("button", cls ? "artist artist-search " + cls : "artist artist-search");
     who.type = "button";
-    who.title = "Search for " + name;
+    who.title = "Search " + name;
     who.appendChild(el("span", "artist-name", name));
     who.addEventListener("click", onSearch);
     return who;
@@ -194,8 +194,8 @@ const caracoleRows = (icons, does) => {
   const artistOnly = (whose, onArtist) => {
     const only = el("button", "artist-only");
     only.type = "button";
-    only.title = "Only " + whose + "'s songs";
-    only.setAttribute("aria-label", "Only " + whose + "'s songs");
+    only.title = whose + "'s songs";
+    only.setAttribute("aria-label", whose + "'s songs");
     const mark = el("span", "filter-mark");
     mark.setAttribute("aria-hidden", "true");
     only.appendChild(mark);
@@ -253,7 +253,7 @@ const caracoleRows = (icons, does) => {
     button.type = "button";
     button.setAttribute("aria-expanded", "false");
     button.setAttribute("aria-controls", panel.id);
-    button.title = "More for " + title;
+    button.title = "More: " + title;
     if (kind === "line") {
       button.appendChild(glyph("chevron"));
     } else {
@@ -261,7 +261,7 @@ const caracoleRows = (icons, does) => {
       dots.setAttribute("aria-hidden", "true");
       button.appendChild(dots);
     }
-    button.appendChild(el("span", "visually-hidden", "More for " + title));
+    button.appendChild(el("span", "visually-hidden", "More: " + title));
     button.addEventListener("click", () => {
       const open = button.getAttribute("aria-expanded") !== "true";
       button.setAttribute("aria-expanded", String(open));
@@ -361,6 +361,12 @@ const caracoleRows = (icons, does) => {
   // (indexLine, below), its sites' rows on it. ``get(pick, display, row, button)`` is what a Get it does: ``pick``
   // is the form POST /lookup takes (a song of yours by its id, else its artist and title; the UG song, the tab).
   const many = (n, word) => Number(n || 0).toLocaleString("en") + " " + word + (Number(n) === 1 ? "" : "s");
+  // A stored day (ISO 8601: "2026-10-18", or a time that starts with one) as the pages write it, dd/mm/yy; anything
+  // else as it is.
+  const shortDate = (stamp) => {
+    const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(stamp || ""));
+    return day ? day[3] + "/" + day[2] + "/" + day[1].slice(2) : String(stamp || "").slice(0, 10);
+  };
   const button = (label, cls, onclick, aria) => {
     const b = el("button", "btn " + (cls || "small"), label);
     b.type = "button";
@@ -418,7 +424,7 @@ const caracoleRows = (icons, does) => {
     .map((x) => ({ kind: "instrument " + x, text: INSTRUMENTS[x] }));
   // The sites whose index names a title alone, and the instrument their pages are for.
   const TITLE_SITES = { musescore: { name: "MuseScore", instrument: "score" },
-    harptabs: { name: "harptabs.com", instrument: "harmonica" } };
+    harptabs: { name: "harptabs", instrument: "harmonica" } };
   // An Ultimate Guitar song's instruments, by its tabs per type: ukulele, when UG has its Ukulele Chords.
   const ugInstruments = (c) => (c && typeof c === "object" && Number(c.ukulele) > 0 ? ["ukulele"] : []);
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
@@ -435,9 +441,9 @@ const caracoleRows = (icons, does) => {
   const laterGroup = (later, pick, display, row) => {
     const box = el("div", "row-group later");
     box.appendChild(el("p", "subhead", "Later"));
-    const go = button("Add for tonight's run", "small", (e) => later(pick, display, row(), e.currentTarget),
-      "Add " + display + " for tonight's run");
-    go.title = "Into wanted.txt, as caracole add writes it: the nightly run looks it up";
+    const go = button("Add for tonight", "small", (e) => later(pick, display, row(), e.currentTarget),
+      "Add " + display + " for tonight");
+    go.title = "Into wanted.txt. Tonight's run fetches it.";
     box.appendChild(go);
     return box;
   };
@@ -452,12 +458,12 @@ const caracoleRows = (icons, does) => {
       const kind = own.call(KINDS, t.type) ? KINDS[t.type] : String(t.type);
       const name = kind + " " + nth[t.type] + " of " + (of[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
       const item = el("li", "version");
-      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + name + ", " + display));
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Fetch " + name + ", " + display));
       const ug = el("a", "on-ug", "on UG");
       ug.href = /^https:[/][/]/i.test(String(t.url || "")) ? String(t.url) : "#";
       ug.target = "_blank";
       ug.rel = "noopener noreferrer";
-      ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
+      ug.setAttribute("aria-label", name + ", " + display + ", on UG");
       item.appendChild(ug);
       versions.appendChild(item);
     }
@@ -475,18 +481,18 @@ const caracoleRows = (icons, does) => {
         : ""].filter(Boolean).join(" · ");
       const name = String(t.title || "") + (said ? " · " + said : "");
       const item = el("li", "version");
-      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + display + " with the tab " +
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Fetch " + display + " with the tab " +
         String(t.title || "")));
-      const there = el("a", "on-ug", "on harptabs.com");
+      const there = el("a", "on-ug", "on harptabs");
       there.href = https(t.url) ? String(t.url) : "#";
       there.target = "_blank";
       there.rel = "noopener noreferrer";
-      there.setAttribute("aria-label", String(t.title || "") + ", " + display + ", on harptabs.com");
+      there.setAttribute("aria-label", String(t.title || "") + ", " + display + ", on harptabs");
       item.appendChild(there);
       list.appendChild(item);
     }
     const box = el("div", "row-group");
-    box.appendChild(el("p", "subhead", "Harmonica tabs on harptabs.com"));
+    box.appendChild(el("p", "subhead", "Harmonica tabs on harptabs"));
     box.appendChild(list);
     return box;
   };
@@ -499,17 +505,17 @@ const caracoleRows = (icons, does) => {
         Number(t.views) ? Number(t.views).toLocaleString("en") + " views" : ""].filter(Boolean).join(" · ");
       const name = "Tab " + (n + 1) + (said ? " · " + said : "");
       const item = el("li", "version");
-      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + display + " with " + name));
-      const there = el("a", "on-ug", "on gametabs.net");
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Fetch " + display + " with " + name));
+      const there = el("a", "on-ug", "on gametabs");
       there.href = https(t.url) ? String(t.url) : "#";
       there.target = "_blank";
       there.rel = "noopener noreferrer";
-      there.setAttribute("aria-label", name + ", " + display + ", on gametabs.net");
+      there.setAttribute("aria-label", name + ", " + display + ", on gametabs");
       item.appendChild(there);
       list.appendChild(item);
     });
     const box = el("div", "row-group");
-    box.appendChild(el("p", "subhead", "Tabs on gametabs.net"));
+    box.appendChild(el("p", "subhead", "Tabs on gametabs"));
     box.appendChild(list);
     return box;
   };
@@ -525,23 +531,23 @@ const caracoleRows = (icons, does) => {
     const display = mine ? String(mine.display || "") : artist + " - " + title;
     const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, { ug: hit.ug }, extra);
     let row = null;
-    const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick({}), display, row, e.currentTarget),
-      (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
+    const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick({}), display, row, e.currentTarget),
+      (mine ? "Fetch " + display + " again" : "Fetch " + display) + " from UG");
     const more = [];
     const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object");
     if (tabs.length) more.push(versionsOf(tabs, hit.counts, display, (t, go) => get(pick({ tab: t.url }), display, row, go)));
     const opens = mine ? opener(mine.links) : null;
-    if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+    if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
     if (later && !mine && !hit.no_ones) more.push(laterGroup(later, { artist, title }, display, () => row));
     row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "ug", facts: counts(hit.counts),
-      badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(ugInstruments(hit.counts))],
+      badges: [...(mine ? [{ kind: "found", text: "In your logbook" }] : []), ...instrumentBadges(ugInstruments(hit.counts))],
       action: main, more });
     row.classList.add("hit");
     if (held(mine)) row.classList.add("have");
     row.dataset.ug = String(hit.ug || "");
     row.dataset.source = "ug";
-    nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+    nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     const dots = row.querySelector(".row-more");
     if (dots && tabs.length) {  // what "⋯" holds, said: its versions
       dots.title = "Versions of " + display;
@@ -552,7 +558,7 @@ const caracoleRows = (icons, does) => {
   // An artist of the offline index, with their most tabbed songs said: ``open(a)`` lists every one.
   const artistHit = (a, open) => {
     const top = listOf(a && a.top).map((t) => t && t.title).filter(Boolean);
-    const go = button("Songs", "small primary", () => open(a), "Songs by " + String(a.artist) + " on Ultimate Guitar");
+    const go = button("Songs", "small primary", () => open(a), "Songs by " + String(a.artist) + " on UG");
     const row = resultRow({ title: a.artist, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "ug",
       facts: many(a.songs, "song"), action: go });
     row.classList.add("hit", "artist-hit");
@@ -577,76 +583,76 @@ const caracoleRows = (icons, does) => {
       const chords = /^https:[/][/]/i.test(String(hit.sheet || "")) && /^https:[/][/]/i.test(String(hit.url || ""));
       const picked = chords ? { lacuerda: String(hit.url) } : {};
       const pick = Object.assign(mine ? { song: mine.id } : { artist, title }, picked);
-      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick, display, row, e.currentTarget),
-        (mine ? "Get " + display + " again" : "Get " + display) + (chords ? " from LaCuerda" : ""));
-      main.title = chords ? "Looks the song up now, and keeps this LaCuerda sheet"
-        : "Looks the song up now: LaCuerda has no chords for it";
+      const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
+        (mine ? "Fetch " + display + " again" : "Fetch " + display) + (chords ? " from LaCuerda" : ""));
+      main.title = chords ? "Fetches the song and keeps this LaCuerda sheet"
+        : "Fetches the song. LaCuerda has no chords for it.";
       const more = [{ heading: "On LaCuerda", links: [{ label: "Its page", href: hit.url, source: "lacuerda" }] }];
       const opens = mine ? opener(mine.links) : null;
-      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
       if (later && !mine) more.push(laterGroup(later, Object.assign({ artist, title }, picked), display, () => row));
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "lacuerda",
         facts: many(Number(hit.versions) || 1, "version") + (chords ? "" : " · no chords"),
-        badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
-      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+        badges: mine ? [{ kind: "found", text: "In your logbook" }] : [], action: main, more });
+      nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     } else if (hit.source === "harptabs" && hit.artist) {  // harptabs.com's song, by an artist whose page was read
       const mine = yours(hit);
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
       const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { harptabs: String(url) });
-      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick(hit.url), display, row,
-        e.currentTarget), (mine ? "Get " + display + " again" : "Get " + display) + " with its harmonica tab");
-      main.title = "Looks the song up now, and keeps this harptabs.com tab";
+      const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick(hit.url), display, row,
+        e.currentTarget), (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its harmonica tab");
+      main.title = "Fetches the song and keeps this harptabs tab";
       const more = [];
       if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => get(pick(t.url), display, row, go)));
       const opens = mine ? opener(mine.links) : null;
-      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "harptabs",
         facts: many(Number(hit.uploads) || 1, "harmonica tab"),
-        badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(["harmonica"])],
+        badges: [...(mine ? [{ kind: "found", text: "In your logbook" }] : []), ...instrumentBadges(["harmonica"])],
         action: main, more });
-      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+      nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     } else if (hit.source === "gametabs") {  // gametabs.net's track of a game: the game is its artist
       const mine = yours(hit);
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
       const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { gametabs: String(url) });
-      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick(hit.url), display, row,
-        e.currentTarget), (mine ? "Get " + display + " again" : "Get " + display) + " with its tab from gametabs.net");
-      main.title = "Looks the song up now, and keeps this gametabs.net tab";
+      const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick(hit.url), display, row,
+        e.currentTarget), (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its gametabs tab");
+      main.title = "Fetches the song and keeps this gametabs tab";
       const more = [];
       if (tabs.length) more.push(gameTabsOf(tabs, display, (t, go) => get(pick(t.url), display, row, go)));
       const opens = mine ? opener(mine.links) : null;
-      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
       const composers = listOf(hit.composers);
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "gametabs",
         facts: many(Number(hit.uploads) || 1, "tab") + (composers.length ? " · by " + composers.join(", ") : ""),
-        badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(gameInstruments(hit))],
+        badges: [...(mine ? [{ kind: "found", text: "In your logbook" }] : []), ...instrumentBadges(gameInstruments(hit))],
         action: main, more });
-      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+      nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
       const site = TITLE_SITES[hit.source];
-      row = resultRow({ title, artist: "Same title: maybe another song", source: hit.source,
+      row = resultRow({ title, artist: "Same title, maybe another song", source: hit.source,
         badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
       const open = row.querySelector(".row-action a");
-      if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", in a new tab");
+      if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", new tab");
     } else {
       const mine = yours(hit);
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const pick = mine ? { song: mine.id } : { artist, title };
-      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick, display, row, e.currentTarget),
-        (mine ? "Get " + display + " again" : "Get " + display) + ", with a Guitar Pro file from gtptabs.com");
-      main.title = "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com";
+      const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
+        (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with a Guitar Pro file from gtptabs");
+      main.title = "Fetches the sheet, then a Guitar Pro file from gtptabs";
       const uploads = Number(hit.uploads) || 1;
-      const more = [{ heading: "On gtptabs.com", links: [{ label: "Its page", href: hit.url, source: "gtptabs" }] }];
+      const more = [{ heading: "On gtptabs", links: [{ label: "Its page", href: hit.url, source: "gtptabs" }] }];
       if (later && !mine) more.push(laterGroup(later, { artist, title }, display, () => row));
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "gtptabs",
         facts: uploads > 1 ? many(uploads, "upload") : "Guitar Pro",
-        badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
-      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+        badges: mine ? [{ kind: "found", text: "In your logbook" }] : [], action: main, more });
+      nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     }
     row.classList.add("hit");
     if (held(yours(hit))) row.classList.add("have");
@@ -695,20 +701,20 @@ const caracoleRows = (icons, does) => {
     if (gone) {
       const back = { artist, title };
       main = fetchIcon("Add " + display + " again", (e) => a.again(back, display, here(), e.currentTarget));
-      main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
+      main.title = "Back into wanted.txt, and fetched";
     } else {
       const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : game ? pick(game)
         : pick(sheet);
-      main = fetchIcon((mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar"
-        : chords ? " from LaCuerda" : harp ? " with its harmonica tab from harptabs.com"
-          : game ? " with its tab from gametabs.net" : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""),
+      main = fetchIcon((mine ? "Fetch " + display + " again" : "Fetch " + display) + (ug ? " from UG"
+        : chords ? " from LaCuerda" : harp ? " with its harptabs harmonica tab"
+          : game ? " with its gametabs tab" : gtp ? " with a Guitar Pro file from gtptabs" : ""),
       (e) => a.get(chosen, display, here(), e.currentTarget));
-      main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
-        : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
-        : harp ? "Looks the song up now, and keeps this harptabs.com tab"
-        : game ? "Looks the song up now, and keeps this gametabs.net tab"
-        : gtp ? "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com"
-        : "Looks the song up now: LaCuerda has no chords for it";
+      main.title = ug ? "Fetches songs"
+        : chords ? "Fetches the song and keeps this LaCuerda sheet"
+        : harp ? "Fetches the song and keeps this harptabs tab"
+        : game ? "Fetches the song and keeps this gametabs tab"
+        : gtp ? "Fetches the sheet, then a Guitar Pro file from gtptabs"
+        : "Fetches the song. LaCuerda has no chords for it.";
     }
     const more = [];
     const tabs = ug ? listOf(ug.tabs).filter((t) => t && typeof t === "object") : [];
@@ -720,14 +726,14 @@ const caracoleRows = (icons, does) => {
       box.appendChild(el("p", "subhead", "On LaCuerda"));
       const actions = el("div", "actions");
       if (chords && (ug || gone)) {  // the line's own button is another's: this one keeps LaCuerda's sheet
-        actions.appendChild(button("Get it with this sheet", "small", (e) => a.get(pick(sheet), display, here(), e.currentTarget),
-          "Get " + display + ", keeping LaCuerda's sheet"));
+        actions.appendChild(button("Fetch with this sheet", "small", (e) => a.get(pick(sheet), display, here(), e.currentTarget),
+          "Fetch " + display + ", keeping LaCuerda's sheet"));
       }
       actions.appendChild(link({ label: "Its page", href: lc.url, source: "lacuerda" }, "btn small", true));
       box.appendChild(actions);
       more.push(box);
     }
-    if (gtp) more.push({ heading: "On gtptabs.com", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
+    if (gtp) more.push({ heading: "On gtptabs", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
     if (ht) {  // its harmonica tabs, each a Get it that keeps that tab (the line's own button may be another site's)
       const tabs = listOf(ht.tabs).filter((t) => t && typeof t === "object" && https(t.url));
       if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => a.get(pick({ harptabs: String(t.url) }), display, here(), go)));
@@ -737,16 +743,16 @@ const caracoleRows = (icons, does) => {
       if (tabs.length) more.push(gameTabsOf(tabs, display, (t, go) => a.get(pick({ gametabs: String(t.url) }), display, here(), go)));
     }
     const opens = mine ? opener(mine.links) : null;
-    if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+    if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
     if (a.later && !mine && !(ug && ug.no_ones)) more.push(laterGroup(a.later, pick(ug ? {} : sheet), display, here));
     const facts = [ug ? tabCounts(ug.counts) : "",
-      lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : ", no chords") : "",
+      lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : " no chords") : "",
       gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
       ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : "",
       gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : ""];
-    const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
-      : mine ? [{ kind: "found", text: "In your library" }] : [];
+    const badges = gone ? [{ kind: "removed", text: "Removed " + shortDate(gone.removed_at) }]
+      : mine ? [{ kind: "found", text: "In your logbook" }] : [];
     line = resultRow({ dense: true, title, artist,
       sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"].filter(Boolean),
       facts: facts.filter(Boolean).join(" · "),
@@ -759,7 +765,7 @@ const caracoleRows = (icons, does) => {
     line.dataset.hit = String(it.key || "");
     line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
-    nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
+    nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Fetch " + display + " again" : "Fetch " + display);
     return line;
   };
   // A page of a site whose index names a title alone (MuseScore's, a score; harptabs.com's, a harmonica tab: its
@@ -772,7 +778,7 @@ const caracoleRows = (icons, does) => {
     const line = resultRow({ dense: true, title, sources: [source], facts: "same title, maybe another song",
       badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
     const open = line.querySelector(".line-action a");
-    if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", in a new tab");
+    if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", new tab");
     line.classList.add("hit");
     line.dataset.source = source;
     line.dataset.hit = source + ":" + String(hit.url || "");
@@ -801,26 +807,26 @@ const caracoleRows = (icons, does) => {
   const siteArtistSongs = (page, group, get, later, read) => {
     const p = page && typeof page === "object" ? page : {};
     const harp = p.source === "harptabs";
-    const site = harp ? "harptabs.com" : "LaCuerda";
+    const site = harp ? "harptabs" : "LaCuerda";
     const songs = listOf(p.songs).filter((h) => h && typeof h === "object");
     if (p.read) {
-      return group(site + (harp ? ", the most viewed first · " : ", the most popular first · ") + many(songs.length, "song"),
+      return group((harp ? "harptabs · most viewed first · " : "LaCuerda · most popular first · ") +
+        many(songs.length, "song"),
         songs.map((h) => siteHit(h, get, later)));
     }
     const name = String(p.artist || "");
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on " + site + " yet" +
-      (harp ? "" : ", which lists " + many(p.listed, "song")) + ". Reading it is one request to " + site +
-      ", at a lookup's pace."));
-    box.appendChild(button("Read their page", "small primary", (e) => read(e.currentTarget, box),
-      "Read the page of " + name + " on " + site));
+    box.appendChild(el("p", null, name + "'s page on " + site + " not read yet" +
+      (harp ? "" : ": " + many(p.listed, "song") + " listed") + ". Reading it costs 1 request."));
+    box.appendChild(button("Read page", "small primary", (e) => read(e.currentTarget, box),
+      "Read " + name + "'s page on " + site));
     return [el("h2", "group", site), box];
   };
   // A job of LaCuerda's index queued (POST ``address``, the form ``body``), then followed until it is over;
   // ``said(text)`` hears how it goes, in ``words`` (``asking``, ``running``; ``failed``, a refusal without words).
   // Resolves with the job, or with why there is none.
   const queueAndFollow = (address, body, said, words) => new Promise((resolve) => {
-    const gone = () => resolve({ error: "caracole serve can't be reached: is it still running?" });
+    const gone = () => resolve({ error: "No answer from caracole serve. Is it running?" });
     said(words.asking);
     fetch(address, { method: "POST", body, headers: { Accept: "application/json" } })
       .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
@@ -833,9 +839,9 @@ const caracoleRows = (icons, does) => {
           .then((r) => (r.ok ? r.json() : null))
           .then((job) => {
             if (!job || typeof job !== "object") {
-              resolve({ error: "That request is gone: caracole serve restarted, maybe." });
+              resolve({ error: "Request lost. caracole serve may have restarted." });
             } else if (job.active) {
-              said(job.state === "queued" ? "Waiting for the request before it…" : words.running);
+              said(job.state === "queued" ? "Waiting for the one before…" : words.running);
               setTimeout(follow, 700);
             } else {
               resolve({ job });
@@ -852,22 +858,22 @@ const caracoleRows = (icons, does) => {
     const w = who && typeof who === "object" ? who : {};
     if (w.harptabs) {
       return queueAndFollow("harptabs/artist", new URLSearchParams({ csrf: String(csrf || ""), path: String(w.harptabs) }),
-        said, { asking: "Asking for the page…", running: "Reading the page on harptabs.com…",
-          failed: "caracole didn't read the page." });
+        said, { asking: "Asking…", running: "Reading harptabs…",
+          failed: "Page not read." });
     }
     const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
       : { csrf: String(csrf || ""), name: String(w.name || "") });
-    return queueAndFollow("lacuerda/artist", body, said, { asking: "Asking for the page…",
-      running: "Reading the page on LaCuerda…", failed: "caracole didn't read the page." });
+    return queueAndFollow("lacuerda/artist", body, said, { asking: "Asking…",
+      running: "Reading LaCuerda…", failed: "Page not read." });
   };
   // LaCuerda's own search for a query, now (POST lacuerda/search: caracole lacuerda --search, a job in the queue),
   // sent by the page by itself, or ``byHand`` (its button); then the job followed, as readArtistPage does.
   const searchLaCuerda = (csrf, query, byHand, said) => {
     const body = new URLSearchParams({ csrf: String(csrf || ""), q: String(query || "") });
     if (byHand) body.set("by_hand", "1");
-    const searching = "Searching LaCuerda for “" + String(query || "") + "”…";
+    const searching = "Searching LaCuerda for “" + String(query || "") + "”";
     return queueAndFollow("lacuerda/search", body, said, { asking: searching, running: searching,
-      failed: "caracole didn't search LaCuerda." });
+      failed: "LaCuerda not searched." });
   };
   // LaCuerda's own search for the query a page shows the results of (/api/search's ``lacuerda_search``, the gate:
   // its ``state``, the ``query`` and its ``key``), one line under the results. State "auto": sent by itself once
@@ -910,7 +916,7 @@ const caracoleRows = (icons, does) => {
       sent.add(key);
       running.add(key);
       const line = lineOf(key);
-      const words = el("p", "hint lacuerda-search-said", "Searching LaCuerda for “" + query + "”…");
+      const words = el("p", "hint lacuerda-search-said", "Searching LaCuerda for “" + query + "”");
       words.setAttribute("role", "status");
       line.replaceChildren(words);
       searchLaCuerda(csrf, query, byHand, (text) => { words.textContent = text; }).then((asked) => {
@@ -922,7 +928,7 @@ const caracoleRows = (icons, does) => {
           const job = asked.job && typeof asked.job === "object" ? asked.job : {};
           const said = job.line && typeof job.line === "object" && typeof job.line.text === "string"
             ? job.line.text : "";
-          words.textContent = said || "LaCuerda's search is over.";
+          words.textContent = said || "LaCuerda searched.";
         }
         done(query);  // its rows; or, refused or failed, what the gate says now
       });
@@ -946,11 +952,11 @@ const caracoleRows = (icons, does) => {
         line.replaceChildren(...(why ? [el("p", "hint lacuerda-search-said", why)] : []));
       }
       if (!go && !asks) {
-        go = button("Ask LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
+        go = button("Ask LaCuerda: “" + query + "” · 1 request", "small lacuerda-search-go", () => {
           go.disabled = true;
           send(gate, query, true);
-        }, "Ask LaCuerda for “" + query + "”: one request");
-        go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
+        }, "Ask LaCuerda for “" + query + "”, 1 request");
+        go.title = "LaCuerda's own search, 1 request. Adding to index";
         line.appendChild(go);
       }
       return drawn(line, asks);
@@ -1008,8 +1014,8 @@ const caracoleRows = (icons, does) => {
       if (byHand) return offer(g, query, asks);
       if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
         const line = el("div", "lacuerda-search");
-        line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
-          "block, or this hour's lookups to it are spent."));
+        line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda turned us back, or no more asks this hour. " +
+          "Its search waits."));
         return line;
       }
       if (g.state === "auto" && !(pending && pending.key === key && pending.query === query)) {
@@ -1048,18 +1054,18 @@ const caracoleRows = (icons, does) => {
     return { show, typed, enter, leave, ask };
   };
   // A read that left no songs to list: what the site answered (LaCuerda's, or harptabs.com's: ``harp``), as its
-  // request's line says it ("Not read: LaCuerda is cooling down…", "Not found: …"), and its output in the library
+  // request's line says it ("Not read: waiting out LaCuerda until…", "Not found: …"), and its output in the library
   // page's Requests tab.
   const readOutcome = (job, harp) => {
     const j = job && typeof job === "object" ? job : {};
     const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
     const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found|Found already): /.test(line)
       ? line + " "
-      : (harp ? "harptabs.com" : "LaCuerda") + " gave caracole no songs of theirs this time. ";
+      : (harp ? "harptabs" : "LaCuerda") + " gave us none of their songs this time. ";
     const why = el("p", "hint read-outcome", said);
     const id = Number(j.id);
     if (Number.isInteger(id) && id > 0) {
-      const details = el("a", null, "See what it answered");
+      const details = el("a", null, "See it in the Journal");
       details.href = "/#tab=requests&job=" + id;
       why.appendChild(details);
       why.appendChild(document.createTextNode("."));
@@ -1103,7 +1109,7 @@ const caracoleRows = (icons, does) => {
       }
       const name = String(s.artist);
       const go = button("Their songs", "small primary their-songs", (e) => open(s, e.currentTarget),
-        "Their songs, by " + name);
+        "Songs by " + name);
       const row = resultRow({ title: name, artist: "Artist", source: String(s.source || ""), facts: songsOn(s),
         action: go });
       row.classList.add("suggestion");
@@ -1119,7 +1125,7 @@ const caracoleRows = (icons, does) => {
   // it (foundOn): in the text's colour where it found some, muted where it found none, and where it wasn't searched
   // none, and its state in a glyph as well as a colour, never in a colour alone: amber and a pie with a slice cut where
   // its index is read in part, red and a ban where it blocks caracole, "off" on a dashed edge turned off, a dashed edge
-  // where its index is empty yet. A mark is no control: its name for a screen reader says it all ("0 on LaCuerda: index in part,
+  // where its index is empty yet. A mark is no control: its name for a screen reader says it all ("0 on LaCuerda · index in part,
   // up to C"), its tooltip that and its detail, which is its description too. countsSaid says the counts in words,
   // those that aren't 0, for the line a screen reader hears as the answer comes.
   const STATES = ["done", "partial", "empty", "blocked", "off"];
@@ -1158,13 +1164,13 @@ const caracoleRows = (icons, does) => {
   const countSaid = (s, n) => {
     const name = siteName(s);
     const state = stateOf(s);
-    if (state === "blocked") return name + ": blocked";
-    if (state === "off") return name + ": turned off";
-    if (state === "empty") return number(n) + " on " + name + ": index empty";
+    if (state === "blocked") return name + ": turned us back";
+    if (state === "off") return name + ": off";
+    if (state === "empty") return number(n) + " on " + name + " · index empty";
     if (state !== "partial") return number(n) + " on " + name;
     const label = String(s.label || "");
     const how = label.indexOf(name + ": ") === 0 ? label.slice(name.length + 2) : "";
-    return number(n) + " on " + name + ": index in part" + (how && how !== "in part" ? ", " + how : "");
+    return number(n) + " on " + name + " · index in part" + (how && how !== "in part" ? ", " + how : "");
   };
   const named = (mark, said) => {
     if (mark.localName === "img") {
@@ -1233,7 +1239,7 @@ const caracoleRows = (icons, does) => {
     const mine = Number(yours) > 0 ? [yoursSaid(yours)] : [];
     const sites = sitesOf(d.looked).map((s) => [siteName(s), foundIn(d, found, String(s.source || ""))])
       .filter(([, n]) => n > 0).map(([name, n]) => number(n) + " on " + name);
-    return mine.concat(sites.length ? sites : [mine.length ? "nothing on the sites" : "Nothing on the sites"])
+    return mine.concat(sites.length ? sites : [mine.length ? "not on the sites" : "Not on the sites"])
       .join(" · ");
   };
   // Why the query may name an artist the Ultimate Guitar index can't see (``unseen``), folded: what to paste into
@@ -1242,16 +1248,16 @@ const caracoleRows = (icons, does) => {
     const u = unseen && typeof unseen === "object" ? unseen : null;
     if (!u) return null;
     const fold = el("details", "why-unseen");
-    fold.appendChild(el("summary", null, "Why can't caracole find it?"));
-    fold.appendChild(el("p", null, "Ultimate Guitar's sitemaps name some artists only by a number, mostly those with " +
-      "accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so caracole can't see their tabs. If “" + query +
-      "” is such an artist, find their page on ultimate-guitar.com and paste its address into overrides.toml:"));
+    fold.appendChild(el("summary", null, "Why isn't it found?"));
+    fold.appendChild(el("p", null, "UG's sitemaps name some artists by a number only, mostly names with " +
+      "accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so we can't see their tabs. If “" + query +
+      "” is one, find their page on ultimate-guitar.com and paste its address into overrides.toml:"));
     const entry = el("pre");
     entry.appendChild(el("code", null, String(u.entry || "")));
     fold.appendChild(entry);
-    fold.appendChild(el("p", null, "The nightly run then looks there for the songs you add by them."));
+    fold.appendChild(el("p", null, "The nightly run then looks there for their songs."));
     if (u.add) {
-      const title = el("p", null, "If it's a title, caracole needs its artist too: ");
+      const title = el("p", null, "A title needs its artist too: ");
       title.appendChild(el("code", null, String(u.add)));
       title.appendChild(document.createTextNode("."));
       fold.appendChild(title);
@@ -1267,15 +1273,13 @@ const caracoleRows = (icons, does) => {
     if (!u) return null;
     const name = String(u.name || "");
     const letter = String(u.letter || "");
-    const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda · 1 request",
+    const go = button(named ? "Ask LaCuerda: “" + name + "” · 1 request" : "Ask LaCuerda · 1 request",
       "small ask-lacuerda", (e) => ask(e.currentTarget, box),
-      "Ask LaCuerda for “" + name + "”: one request");
+      "Ask LaCuerda for “" + name + "”, 1 request");
     go.title = search
-      ? "LaCuerda's own search for “" + search + "”, one request at a lookup's pace: its songs go into caracole's " +
-        "copy of its index. Once it is asked, caracole reads LaCuerda's page for “" + name + "” instead, as its " +
-        "list doesn't reach " + letter + " yet."
-      : "LaCuerda's list doesn't reach " + letter + " yet: caracole reads its page for “" + name + "”, one request " +
-        "at a lookup's pace.";
+      ? "LaCuerda's own search for “" + search + "”, 1 request. Its songs join our copy of its index. " +
+        "Once asked, we read its page for “" + name + "” instead: its list doesn't reach " + letter + " yet."
+      : "LaCuerda's list doesn't reach " + letter + " yet. We read its page for “" + name + "”, 1 request.";
     return go;
   };
   // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Not on
@@ -1296,7 +1300,7 @@ const caracoleRows = (icons, does) => {
     box.setAttribute("aria-labelledby", head.id);
     const said = String(does.requestLabel || "Request “" + query + "” by name");
     const request = button(String(does.requestText || "Request"), "small primary", () => does.request(), said);
-    request.title = said + ": the form, filled in from the search";
+    request.title = said + ": opens the form, filled from the search";
     const rest = el("div", "row-group miss-more");
     const actions = el("div", "actions");
     const ask = d.lacuerda_unlisted && does.ask
@@ -1332,7 +1336,7 @@ const caracoleRows = (icons, does) => {
     return line;
   };
   return { resultRow, sourceMark, siteMarks, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly,
-    button, fetchIcon, many, counts, opener, instrumentBadges, ugHit, artistHit,
+    button, fetchIcon, many, shortDate, counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     songsOn, meantName, didYouMean, countMarks, countsSaid, nothingFound, notesLine };
 };

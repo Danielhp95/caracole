@@ -136,9 +136,9 @@ def test_diff_lists_the_songs_each_side_has_alone_and_changes_nothing(two):
     assert "The two never synced: a unit on one side alone is that side's, and one both hold, differently, a " \
            "conflict." in out
     assert "3 differences, 1 conflict:" in out
-    assert "keep here's Radiohead - Creep (only here)" in out
-    assert "take there's Estopa - Tu Calorro (only there)" in out
-    assert "CONFLICT Oasis - Wonderwall (on both sides, different, and never synced)" in out
+    assert "ours goes there Radiohead - Creep (only in our book)" in out
+    assert "theirs comes here Estopa - Tu Calorro (only in theirs)" in out
+    assert "CONFLICT Oasis - Wonderwall (in both books, different, never shared)" in out
     assert sync.base_of(here.conn, sync.own_id(there.conn)) is None  # nothing written
 
 
@@ -158,7 +158,7 @@ def test_nothing_answering_is_said_plainly(two, monkeypatch):
         raise httpx.ConnectError("refused")
     monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: httpx.MockTransport(refused))
     result = run(here, "peer", "diff", "192.168.1.20:8737")
-    assert result.exit_code == 1 and "Nothing answered at http://192.168.1.20:8737" in result.output
+    assert result.exit_code == 1 and "No answer at http://192.168.1.20:8737" in result.output
 
 
 # --- taking units ------------------------------------------------------------------------------------------------
@@ -242,8 +242,8 @@ def test_once_synced_a_song_removed_there_is_removed_here(two):
     remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, theirs.key)))
     result = run(here, "peer", "diff", HOST, "--json")
     found = {d["id"]: (d["proposal"], d["why"]) for d in json.loads(result.output)["differences"]}
-    assert found == {f"song/{theirs.key}": ("theirs", "gone there since the last sync"),
-                     f"removed/{theirs.key}": ("theirs", "new there since the last sync")}
+    assert found == {f"song/{theirs.key}": ("theirs", "gone there since the last share"),
+                     f"removed/{theirs.key}": ("theirs", "new there since the last share")}
     result = run(here, "peer", "sync", HOST, "--yes")
     assert result.exit_code == 0, result.output
     assert find_song(here.conn, theirs.key) is None and removed_song(here.conn, theirs.key) is not None
@@ -361,7 +361,7 @@ def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
         ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
         ("give", "done"), ("agree", "running"), ("agree", "done"), ("index", "skipped")]
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
-        (unit["Radiohead - Creep"], "left", "skipped, as chosen"), (unit["Oasis - Wonderwall"], "taken", ""),
+        (unit["Radiohead - Creep"], "left", "skipped, as you chose"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])
     found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
     assert [(d["id"], d["proposal"]) for d in found] == [(unit["Radiohead - Creep"], "conflict")]
@@ -372,8 +372,8 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(two):
     unit = two_conflicts(here, there)
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 0, result.output
-    assert f"Left {unit['Radiohead - Creep']}: a conflict: choose a side for it" in result.output
-    assert f"Left {unit['Oasis - Wonderwall']}: a conflict: choose a side for it" in result.output
+    assert f"Left {unit['Radiohead - Creep']}: both books changed it: choose one" in result.output
+    assert f"Left {unit['Oasis - Wonderwall']}: both books changed it: choose one" in result.output
     found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
     assert sorted(d["id"] for d in found) == sorted([unit["Radiohead - Creep"], unit["Oasis - Wonderwall"]])
 

@@ -125,7 +125,7 @@ def test_list_and_show_say_what_each_songbook_holds(setup):
     lines = shown.output.splitlines()
     assert "  1. Soda Stereo - De Música Ligera" in lines
     assert "  2. Muse - Hysteria (missing: no sheet yet)" in lines
-    assert "  3. Gone Band - Removed Song (missing: not in the library)" in lines
+    assert "  3. Gone Band - Removed Song (missing: not in the logbook)" in lines
     assert str(folder(setup) / "songbook.html") in shown.output
     assert run(setup, "show", "Picnic").exit_code == 1
 
@@ -212,7 +212,7 @@ def gig(setup):
 def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_alone(setup, gig):
     lines = run(setup, "show", "Gig").output.splitlines()
     assert lines[1:4] == ["  1. Radiohead - Karma Police", "  2. Oasis - Wonderwall (missing: no sheet yet)",
-                          "  3. Radiohead - Karma Police Live (missing: not in the library)"]
+                          "  3. Radiohead - Karma Police Live (missing: not in the logbook)"]
     assert "Gig: 3 songs, 2 without a sheet" in run(setup, "list").output
 
     moved = run(setup, "move", "--", "Gig", "Radiohead - Karma Police Live", "1")  # as the page's ↑ queues it
@@ -242,21 +242,21 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
     assert books(setup) == [Songbook("Campfire", ("Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马"))]
 
     shown = run(setup, "show", "Campfire").output.splitlines()
-    assert shown[1:3] == ["  1. Soda Stereo - De Música Ligera (missing: not in the library)", "  2. 宋冬野 - 斑马，斑马"]
+    assert shown[1:3] == ["  1. Soda Stereo - De Música Ligera (missing: not in the logbook)", "  2. 宋冬野 - 斑马，斑马"]
     index = (cfg.library_dir / "index.html").read_text(encoding="utf-8")  # caracole remove rewrote it
     data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', index, re.S).group(1))
     first = data["songbooks"]["books"][0]["set"][0]  # what its Songbooks tab shows
-    assert (first["title"], first["missing"], first["id"]) == ("De Música Ligera", "not in the library", None)
+    assert (first["title"], first["missing"], first["id"]) == ("De Música Ligera", "not in the logbook", None)
 
     rendered = run(setup, "render", "Campfire")
     assert rendered.exit_code == 0, rendered.output
     assert "1 rendered, 0 up to date, 0 failed" in rendered.output
     pdf = (folder(setup) / "songbook.pdf").read_text(encoding="utf-8")  # the stand-in's: its inputs
-    assert "{title: De Música Ligera}\n{artist: Soda Stereo · missing: not in the library}" in pdf
+    assert "{title: De Música Ligera}\n{artist: Soda Stereo · missing: not in the logbook}" in pdf
     cho = (folder(setup) / "songbook.cho").read_text(encoding="utf-8")
     assert "De Música Ligera" not in cho and "斑马" in cho  # an app gets the songs it can play
     page =(folder(setup) / "songbook.html").read_text(encoding="utf-8")
-    assert re.search(r'<li class="missing">.*?De Música Ligera.*?Missing: not in the library', page, re.S)
+    assert re.search(r'<li class="missing">.*?De Música Ligera.*?Missing · not in the logbook', page, re.S)
 
     out = run(setup, "remove", "Campfire", "Soda Stereo - De Música Ligera")  # taken out by its name
     assert out.exit_code == 0, out.output

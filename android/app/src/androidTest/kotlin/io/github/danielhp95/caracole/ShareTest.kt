@@ -89,7 +89,7 @@ class ShareTest {
     @Test fun aGuitarProFileSharedIsFiledForItsSong() {
         val song = add("Share Test", "A Song Filed")
         val said = share("application/octet-stream", uri("Share Test - A Song Filed.gp5", gp5))
-        assertEquals("Filed as guitar-1.gp5 of Share Test - A Song Filed", said)
+        assertEquals("Filed · guitar-1.gp5 of Share Test - A Song Filed", said)
         assertEquals(listOf("guitar-1.gp5"), kept(song))
         assertTrue(File(phone.parts.store.folderOf(song), "guitar-1.gp5").readBytes().contentEquals(gp5))
         assertFalse("Share Test - A Song Filed.gp5" in waiting())
@@ -101,8 +101,8 @@ class ShareTest {
         val song = add("Share Test", "Two At Once")
         val said = share("*/*", uri("Share Test - Two At Once.pdf", "%PDF-1.4 score".toByteArray()),
                          uri("Share Test - Not Yet.mscz", "PK-mscz".toByteArray()))
-        assertEquals("Filed as score-1.pdf of Share Test - Two At Once\n" +
-                         "Waiting for a song that fits: Share Test - Not Yet.mscz", said)
+        assertEquals("Filed · score-1.pdf of Share Test - Two At Once\n" +
+                         "Waiting for its song: Share Test - Not Yet.mscz", said)
         assertEquals(listOf("score-1.pdf"), kept(song))
         assertEquals(listOf("Share Test - Not Yet.mscz"), waiting())
         // The song it is of added (an add, as the request form queues one): the file that waited is filed.

@@ -106,7 +106,7 @@ class PageRoutesTest {
         for (path in listOf("/", "/index.html", "/favicon.ico")) {
             val response = test.handle(TestApp.request("GET", path, emptyMap(), ByteArray(0), secret = null))
             assertEquals(403, response.status, path)
-            assertEquals("Not this app's caracole.\n", response.text)
+            assertEquals("Not this app's scribe.\n", response.text)
             assertFalse("<script" in response.text)
         }
     }

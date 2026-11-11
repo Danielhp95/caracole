@@ -111,7 +111,7 @@ def test_a_song_gone_from_the_library_is_missing_with_no_id(conn, cfg):
     make_songbook(songbooks_file(cfg.library_dir), "Gig", ["Radiohead - Creep", "Pixies - Debaser"])
     debaser = books_of(page(conn, cfg))[0]["set"][1]
     assert (debaser["title"], debaser["artist"], debaser["id"], debaser["missing"], debaser["get"]) == (
-        "Debaser", "Pixies", None, "not in the library", False)
+        "Debaser", "Pixies", None, "not in the logbook", False)
     assert debaser["key"] == "pixies/debaser"  # its entry's
 
 
@@ -395,7 +395,7 @@ def test_select_mode_needs_a_name_and_a_song(library, tmp_path):
       q(".pickbar-form button[type=submit]").click();
       out = {disabled, shown: !q(".pick-command").hidden, said: q(".pick-error").textContent};
     """)
-    assert out["disabled"] and not out["shown"] and "name" in out["said"]
+    assert out["disabled"] and not out["shown"] and "Name" in out["said"]
 
 
 @in_chromium

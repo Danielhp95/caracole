@@ -156,6 +156,6 @@ class LibraryPageTest {
             val made = page.served(cases.first().getValue("data").jsonObject, ServerControls("tok", active = active), name)
             assertTrue(r.out!!.jsonPrimitive.content in made, "$active")
         }
-        assertTrue("Requests <span class=\"n\"></span>" in page.requests.tab(0))
+        assertTrue("Journal <span class=\"n\"></span>" in page.requests.tab(0))
     }
 }

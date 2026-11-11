@@ -84,7 +84,7 @@ class BackupRunnerTest {
     @Test fun aBackupByHandIsAQueuedJobOfItsKindSaidInItsWords() {
         val phone = phone()
         val spec = phone.runner.backup(Backups.BY_HAND)
-        assertEquals(listOf("Back up the library", "backup:by-hand", "backup", "A backup (by-hand)"),
+        assertEquals(listOf("Back up the book", "backup:by-hand", "backup", "A backup (by-hand)"),
                      listOf(spec.title, spec.key, spec.kind, spec.display))
         assertEquals(emptyList(), spec.commands, "a job of the phone's own, its run the runner's")
         assertEquals(listOf(PhoneKinds.BACKUP.stage), spec.stages)
@@ -126,11 +126,11 @@ class BackupRunnerTest {
             db.kvSet("phone:render-build", "b")
         }
         val spec = phone.runner.restore(backup)
-        assertEquals(listOf("Restore the library of 2026-11-03 12:00", "restore:${backup.file.name}", "restore",
-                            "The library of 2026-11-03 12:00"), listOf(spec.title, spec.key, spec.kind, spec.display))
+        assertEquals(listOf("Restore the book of 2026-11-03 12:00", "restore:${backup.file.name}", "restore",
+                            "The book of 2026-11-03 12:00"), listOf(spec.title, spec.key, spec.kind, spec.display))
         val job = run(phone, spec)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
-        assertEquals(Line("ready", "Restored the library of 2026-11-03 12:00"), JobViews.line(job))
+        assertEquals(Line("ready", "Restored the book of 2026-11-03 12:00"), JobViews.line(job))
         phone.parts.database.read { db ->
             assertEquals("Creep", Songs.byId(db, creep.id)!!.title)
             assertTrue(Health.isCooling(db, "ug", now), "the cooldown met since is kept")
@@ -234,7 +234,7 @@ class BackupRunnerTest {
             assertTrue(inside.await(30, TimeUnit.SECONDS))
             val lookup = phone.queue.submit(JobSpec("Fetch it", "radiohead/creep", "song", emptyList(),
                                                     commands = listOf(Command(
-                                                        "Looking it up", listOf("get", "--", "Radiohead", "Creep"))))).first
+                                                        "Matching", listOf("get", "--", "Radiohead", "Creep"))))).first
             Thread.sleep(200)
             assertEquals(Job.QUEUED, phone.queue.job(lookup.id)!!.state, "the lookup waits for the backup")
             release.countDown()

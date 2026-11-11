@@ -118,7 +118,7 @@ def test_a_pages_title_names_caracole_and_the_library_and_a_badge_first():
     assert LibraryName("Tabs").title() == "caracole · Tabs"
     assert LibraryName("Tabs").title("Look up") == "Look up · caracole · Tabs"
     assert LibraryName("test-lib", SCRATCH).title() == "Scratch library · caracole · test-lib"
-    assert LibraryName("Tabs", "Demo").title("Pick the match") == "Demo · Pick the match · caracole · Tabs"
+    assert LibraryName("Tabs", "Demo").title("Pick") == "Demo · Pick · caracole · Tabs"
 
 
 def test_the_name_and_the_badge_are_escaped_markup():
@@ -126,7 +126,7 @@ def test_the_name_and_the_badge_are_escaped_markup():
     assert plain == '<span class="libname"><span class="name">Tabs &amp; &lt;b&gt;chords&lt;/b&gt;</span></span>'
     badged = LibraryName("lib", '"Demo"').markup("p")
     assert badged == ('<p class="libname"><span class="name">lib</span> '
-                      '<span class="scratch" title="Not your usual library">&quot;Demo&quot;</span></p>')
+                      '<span class="scratch" title="Scratch">&quot;Demo&quot;</span></p>')
 
 
 def test_a_badged_library_has_its_own_icon():

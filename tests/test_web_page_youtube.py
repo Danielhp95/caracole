@@ -358,7 +358,7 @@ def test_a_pasted_youtube_link_is_a_song_to_add_its_name_guessed_and_one_press_a
     assert browser.js(f"{panel}.querySelector('.yt-meta').textContent") == "kintanedu · 3:42"
     # A link is no words to search: no site search, no LaCuerda, no YouTube suggestion for it.
     assert not any(t.startswith("/api/search") for t in posted.read)
-    assert browser.js("document.getElementById('bar-status').textContent") == "A YouTube video: add it as a song"
+    assert browser.js("document.getElementById('bar-status').textContent") == "Extract from YouTube video"
     # In words, which show: no site was searched, so no mark says what one found.
     assert browser.js("document.getElementById('bar-status').getBoundingClientRect().width") > 1
     assert browser.js("document.getElementById('bar-counts').checkVisibility()") is False
@@ -391,8 +391,8 @@ def test_a_pasted_link_youtube_cant_be_asked_about_now_is_offered_unnamed(able, 
     browser.open(base)
     paste(browser, f"youtu.be/{VIKINGOS}?si=abc")
     note = "document.querySelector('#found .link-note')"
-    assert browser.wait(f"{note} !== null && {note}.textContent.startsWith(\"Can't read\")")
-    assert browser.js(f"{note}.textContent") == "Can't read the video (YouTube is paused after a block): name it, then add it."
+    assert browser.wait(f"{note} !== null && {note}.textContent.startsWith(\"Couldn't read\")")
+    assert browser.js(f"{note}.textContent") == "Couldn't read the video (YouTube turned us back). Name it, then add it."
     assert browser.js("[...document.querySelectorAll('#found .link-panel input')].map((i) => i.value)") == ["", ""]
     assert posted == [] and sheet.videos == []
 

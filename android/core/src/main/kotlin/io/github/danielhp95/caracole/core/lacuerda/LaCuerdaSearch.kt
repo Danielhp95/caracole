@@ -120,11 +120,9 @@ object LaCuerdaSearch {
     data class Failure(val own: Boolean, val count: Int, val error: String, val until: Long) {
         /** Why, in a sentence without its full stop, [query] as it is shown ("“corazon tiza”"). */
         fun said(query: String): String = if (own) {
-            "LaCuerda's search for $query failed less than an hour ago ($error), so the page won't send it by itself " +
-                "before ${shown(until)}"
+            "LaCuerda's search for $query failed within the hour ($error); not sent by itself before ${shown(until)}"
         } else {
-            "$count searches of LaCuerda failed in the last hour (the last: $error), so the page sends none by itself " +
-                "before ${shown(until)}"
+            "$count LaCuerda searches failed this hour (last: $error); none sent by itself before ${shown(until)}"
         }
     }
 

@@ -189,7 +189,7 @@ def test_a_song_new_to_the_library_gets_its_sheet_from_the_video(setup, conn, fa
     assert result.ok, result
     assert [e[1] for e in heard.events if e[0] == "stage" and e[2] != "running"] == [name for name, _ in STAGES]
     ends = heard.ends()
-    assert ends["song"] == ("done", f"added to wanted.txt, line 16; recorded under [youtube]: https://www.youtube.com/watch?v={VIKINGOS}")
+    assert ends["song"] == ("done", f"added to wanted.txt, line 16; noted under [youtube]: https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["audio"] == ("done", f"downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["lyrics"] == ("done", "found, timed")
     assert ends["chords"] == ("done", "chords over the lyrics")
@@ -265,7 +265,7 @@ def test_lrclib_failing_leaves_the_chords_alone_and_says_what_comes_of_the_lyric
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["lyrics"] == ("failed", "no lyrics yet (LRCLIB unavailable); tonight's run tries again")
+    assert heard.ends()["lyrics"] == ("failed", "no lyrics yet (LRCLIB unavailable); tried again tonight")
     assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     assert get_song(conn, find_song(conn, result_key(conn)).id).lyrics_status == "pending"  # never a miss
 
@@ -290,7 +290,7 @@ def test_lyrics_the_song_had_are_kept(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok and heard.ends()["lyrics"] == ("done", "already there") and lrclib.requests == []
-    assert heard.ends()["song"][1].startswith("in the library")
+    assert heard.ends()["song"][1].startswith("in the book")
 
 
 # --- refused: asked nothing -----------------------------------------------------------------------------
@@ -305,7 +305,7 @@ def keep_human_sheet(conn, cfg, song):
 
 @pytest.mark.parametrize("case,said", [
     ("human", "already has a sheet"),
-    ("ignored", "is ignored in overrides.toml"),
+    ("ignored", "is ignored (overrides.toml)"),
     ("purchase", "has bought audio in Music/"),
 ])
 def test_a_song_youtube_isnt_for_is_refused_and_youtube_is_asked_nothing(setup, conn, fake, sites, tmp_path,
@@ -350,7 +350,7 @@ def test_a_block_cools_youtube_down_sends_one_alert_and_makes_nothing(setup, con
     result, heard = make(setup)
     assert result.ok  # a wait, never a failure
     state, detail = heard.ends()["audio"]
-    assert state == "skipped" and detail.startswith("YouTube blocked caracole; paused until ")
+    assert state == "skipped" and detail.startswith("YouTube turned us back; waiting until ")
     assert heard.ends()["chords"] == ("skipped", "no audio")
     assert heard.ends()["pdf"][0] == "skipped"
     assert is_cooling(conn, "youtube", NOW) and get_state(conn, "youtube").strikes == 1
@@ -365,7 +365,7 @@ def test_while_youtube_cools_down_it_asks_nothing(setup, conn, fake, sites, tmp_
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok and fake.argvs() == []
-    assert heard.ends()["audio"][0] == "skipped" and "paused after a block" in heard.ends()["audio"][1]
+    assert heard.ends()["audio"][0] == "skipped" and "waiting out YouTube" in heard.ends()["audio"][1]
 
 
 def test_a_video_youtube_wont_give_fails_for_good(setup, conn, fake, sites, tmp_path):
@@ -396,7 +396,7 @@ def test_the_audio_it_has_is_not_asked_for_again(setup, conn, fake, sites, tmp_p
     recognizer = Recognizer()
     result, heard = make(setup, recognizer=recognizer)
     assert result.ok and len(fake.argvs()) == 1 and recognizer.calls == []
-    assert heard.ends()["audio"] == ("done", f"it has the audio of https://www.youtube.com/watch?v={VIKINGOS} already")
+    assert heard.ends()["audio"] == ("done", f"has the audio of https://www.youtube.com/watch?v={VIKINGOS} already")
     assert heard.ends()["chords"] == ("done", "up to date: chords over the lyrics")
 
 

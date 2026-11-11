@@ -67,7 +67,7 @@
   nameInput.maxLength = 80;
   nameInput.placeholder = "Songbook name";
   nameInput.autocomplete = "off";
-  nameInput.setAttribute("aria-label", "The songbook's name");
+  nameInput.setAttribute("aria-label", "Songbook name");
   nameLabel.appendChild(nameInput);
   const submit = el("button", "btn primary", "Make songbook");
   submit.type = "submit";
@@ -86,7 +86,7 @@
   const copy = el("button", "btn small", "Copy");
   copy.type = "button";
   copy.setAttribute("aria-label", "Copy the command");
-  copy.title = "Copy the command, to run where caracole runs";
+  copy.title = "Copy it, to run where caracole runs";
   command.append(commandFold, copy);
   const fields = {};
   if (server) {
@@ -304,12 +304,12 @@
     error.textContent = "";
     if (!picked.length) {
       e.preventDefault();
-      error.textContent = "Pick a song or more first.";
+      error.textContent = "Pick a song first.";
       return;
     }
     if (!name || name.startsWith(".")) {
       e.preventDefault();
-      error.textContent = name ? "A songbook's name can't start with a dot." : "Give the songbook a name.";
+      error.textContent = name ? "A songbook's name can't start with a dot." : "Name the songbook.";
       nameInput.focus();
       return;
     }

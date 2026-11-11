@@ -119,7 +119,7 @@ class LookupRunnersTest {
         assertEquals("skipped" to LookupWords.NO_SHEET_YET, job.stages[3].state to job.stages[3].detail)
         val output = job.steps.single().output
         assertEquals("Song: ${LookupWords.ADDED}.", output.first())
-        assertEquals("Done in 0.0 s: 0 requests.", output.last())
+        assertEquals("Done in 0.0 s: 0 asks.", output.last())
         val song = database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!
         assertEquals(song.id, job.songId)
         assertEquals("Radiohead - Creep", job.songDisplay)
@@ -130,7 +130,7 @@ class LookupRunnersTest {
         mapOf("get" to GetRunner(p, stages = stages()))  // Overrides.read, the phone's
     }) { job, database ->
         assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
-        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", job.stages[0].detail)
+        assertEquals("${LookupWords.ADDED}; noted in overrides.toml: [match] radiohead/creep", job.stages[0].detail)
         val key = Normalize.identityKey("Radiohead", "Creep")
         assertEquals("radiohead" to "creep", database.read { Overrides.read(it) }.match[key])
     }
@@ -140,9 +140,9 @@ class LookupRunnersTest {
     }) { job, _ ->
         assertEquals(Job.FAILED, job.state)
         assertEquals(1, job.steps.single().code)
-        val why = "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up"
+        val why = "Radiohead - Creep is ignored (overrides.toml [ignore]). Take it out to fetch it"
         assertEquals("failed" to why, job.stages[0].state to job.stages[0].detail)
-        assertEquals("error: Nothing looked up: $why.", job.steps.single().output.last())
+        assertEquals("error: Nothing fetched: $why.", job.steps.single().output.last())
     }
 
     @Test fun aBugFailsTheStepOnceTheOtherStagesRan() = job(JobCommands.lookupSteps("Radiohead", "Creep"), { p ->
@@ -288,13 +288,13 @@ class LookupRunnersTest {
     }
 
     @Test fun eachLookupCommandIsItsRunnersAndSaysItsLastLine() {
-        val noIndex = "Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole " +
-            "harptabs --index now."  // lane harptabs': nothing asked of a phone with no index
+        val noIndex = "Not read: harptabs' index is empty; tonight's run reads its sitemap (or caracole " +
+            "harptabs --index)."  // lane harptabs': nothing asked of a phone with no index
         for ((args, said) in listOf(
-            listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no artist page for soda stereo.",
+            listOf("lacuerda", "--artist=soda  stereo") to "Not found: LaCuerda has no page for soda stereo.",
             listOf("harptabs", "--artist=Billy Joel") to noIndex,
             listOf("lacuerda", "--search=de musica ligera", "--progress") to
-                "Not searched: LaCuerda failed (lacuerda: 500: $lacuerdaSearch: HTTP 500); nothing changed: try again later.",
+                "Not searched: LaCuerda failed (lacuerda: 500: $lacuerdaSearch: HTTP 500). Try again later.",
         )) {
             job(listOf(io.github.danielhp95.caracole.server.jobs.Command("Ask", args)), { p ->
                 mapOf("lacuerda" to LaCuerdaRunner(p), "harptabs" to HarpTabsRunner(p))
@@ -379,13 +379,13 @@ class LookupRunnersTest {
             assertEquals(listOf("GET $ug"), site.said)
             val until = database.read { Health.state(it, "ug").cooldownUntil }
             assertNotNull(until)
-            val words = "Ultimate Guitar blocked caracole (ug: 403: $ug: HTTP 403): no more requests to it until " +
+            val words = "UG turned us back (ug: 403: $ug: HTTP 403). No more asks until " +
                 java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(java.time.ZoneOffset.UTC)
-                    .format(until) + "; nothing kept."
+                    .format(until) + ". Nothing kept."
             // No page made after a block, as versions_cmd.py makes none: the queue's end skips the stages left.
             assertEquals(listOf("song" to "done", "version" to "skipped", "pdf" to "skipped", "pages" to "skipped"),
                          job.stages.map { it.name to it.state })
-            assertEquals("in the library", job.stages.first { it.name == "song" }.detail)
+            assertEquals("in the book", job.stages.first { it.name == "song" }.detail)
             assertEquals(words, job.stages.first { it.name == "version" }.detail)
             assertEquals(listOf(words), job.steps.single().output)  // its last line, said once it returned
             assertEquals(database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!.id, job.songId)

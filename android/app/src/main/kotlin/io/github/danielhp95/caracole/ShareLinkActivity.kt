@@ -10,8 +10,8 @@ import android.util.Log
  * Audile…): ACTION_SEND of text/plain alone, as the manifest names it, never a file (those are ShareActivity's). What
  * the app sent (EXTRA_TEXT, else the share's ClipData text; EXTRA_SUBJECT, EXTRA_TITLE, and the sender's package when
  * Android gives it, the referrer) is logged under [SharedLink.TAG], then shown on the library screen as the page of
- * the phone's server that reads the song it names, searches for it and offers Get it ([SharedLink.page], ShareRoutes'
- * `/share`). Nothing is sent to any site, nor to the music app, before the owner taps Get it there.
+ * the phone's server that reads the song it names, searches for it and offers Fetch ([SharedLink.page], ShareRoutes'
+ * `/share`). Nothing is sent to any site, nor to the music app, before the owner taps Fetch there.
  */
 class ShareLinkActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {

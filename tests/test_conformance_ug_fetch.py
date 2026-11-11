@@ -1591,7 +1591,7 @@ def test_the_stages_words_cover_every_answer_of_ug_ready(made):
     assert said["matched"] is None and said["not found, nothing known of its artist"] == NOT_IN_INDEX
     assert said["not found, a tab page pasted that leads to no artist page"] == NOT_IN_INDEX
     assert said["not found, an empty page learned is none"] == NOT_IN_INDEX
-    assert said["a review of UG songs"].startswith("caracole isn't sure")
+    assert said["a review of UG songs"].startswith("not sure which UG song")
     known = [c for c, s in said.items() if c.startswith("not found") and s is None]
     assert len(known) == 9, known
 
@@ -1684,11 +1684,11 @@ def test_keep_and_keep_more_say_what_versions_cmd_says(made):
     assert [t.get("error", "")[:20] for t in turns[:3]] == ["Ultimate Guitar no l", "Tab 999 isn't one of",
                                                             "Tab 110 is under [bl"]
     last = [t["lines"][-1] for t in turns[3:]]
-    assert last[0].startswith("Kept tab 101 beside the sheet") and last[0].endswith("/version-101.txt")
-    assert last[-1].startswith("Ultimate Guitar failed (ug: 500")
+    assert last[0].startswith("Kept tab 101 beside ") and last[0].endswith("/version-101.txt")
+    assert last[-1].startswith("UG failed (ug: 500")
     more = records["keep-more until the lookup's budget is spent, then again with none left"]["out"]["result"]
     assert more[0]["lines"][-1].endswith("; 6 more not kept: ask again.")
-    assert more[1]["lines"][-1].endswith("nothing kept. Ask again later.")
+    assert more[1]["lines"][-1].endswith("Nothing kept. Ask again later.")
     for r in records.values():
         for turn in (r.get("out") or r["after"])["result"]:
             for line in turn.get("lines", []):

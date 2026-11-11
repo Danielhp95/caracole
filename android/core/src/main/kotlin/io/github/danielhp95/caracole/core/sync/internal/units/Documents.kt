@@ -111,8 +111,8 @@ internal object Documents {
                 }
             }
         } catch (e: Python.Unread) {
-            throw UnitError("its document can't be read (${e.kind}: ${e.message})")
+            throw UnitError("its entry can't be read (${e.kind}: ${e.message})")
         }
-        throw UnitError("this caracole doesn't know units of kind ${Python.repr(kind)}")
+        throw UnitError("we don't know entries of kind ${Python.repr(kind)}")
     }
 }

@@ -259,7 +259,7 @@
 {"args":["Enanitos"],"fixture":"ug","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"ug","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"ug","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"ug","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: the nightly run reads its listings of every artist"]}
+{"args":[],"fixture":"ug","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: tonight's run reads its listings of every artist"]}
 {"args":[],"fixture":"ug","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"by_word","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"by_word","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -560,7 +560,7 @@
 {"args":["Enanitos"],"fixture":"by_word","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"by_word","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"by_word","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"by_word","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is still being read: 22 artists so far; the nightly run reads the rest"]}
+{"args":[],"fixture":"by_word","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is being read: 22 artists so far; tonight's run reads the rest"]}
 {"args":[],"fixture":"by_word","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"titles","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"titles","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -777,7 +777,7 @@
 {"args":["Enanitos"],"fixture":"titles","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"titles","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"titles","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"titles","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is still being read: 3 artists so far; the nightly run reads the rest"]}
+{"args":[],"fixture":"titles","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is being read: 3 artists so far; tonight's run reads the rest"]}
 {"args":[],"fixture":"titles","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"sites","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"sites","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -1015,7 +1015,7 @@
 {"args":["Enanitos"],"fixture":"sites","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"sites","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"sites","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"sites","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: the nightly run reads its listings of every artist"]}
+{"args":[],"fixture":"sites","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: tonight's run reads its listings of every artist"]}
 {"args":[],"fixture":"sites","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"lacuerda","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"lacuerda","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -1378,7 +1378,7 @@
 {"args":["Enanitos"],"fixture":"lacuerda","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"lacuerda","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"lacuerda","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"lacuerda","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is still being read: 43 artists so far, with A, B read whole; the nightly run reads the rest"]}
+{"args":[],"fixture":"lacuerda","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is being read: 43 artists so far, with A, B read whole; tonight's run reads the rest"]}
 {"args":[],"fixture":"lacuerda","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":["a","b"]}
 {"args":[""],"fixture":"names","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"names","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -1553,7 +1553,7 @@
 {"args":["Enanitos"],"fixture":"names","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"names","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"names","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"names","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is still being read: 3 artists so far; the nightly run reads the rest"]}
+{"args":[],"fixture":"names","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is being read: 3 artists so far; tonight's run reads the rest"]}
 {"args":[],"fixture":"names","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"common","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"common","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -1740,7 +1740,7 @@
 {"args":["Enanitos"],"fixture":"common","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"common","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"common","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"common","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is still being read: 50 artists so far; the nightly run reads the rest"]}
+{"args":[],"fixture":"common","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["partial","index is being read: 50 artists so far; tonight's run reads the rest"]}
 {"args":[],"fixture":"common","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.lacuerda_index.find","kw":{},"out":{"artists":[],"songs":[]}}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_lacuerda","kw":{},"out":[[],[]]}
@@ -1870,5 +1870,5 @@
 {"args":["Enanitos"],"fixture":"empty","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":["Nobody"],"fixture":"empty","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
 {"args":[""],"fixture":"empty","fn":"caracole.search.lacuerda_artist_named","kw":{},"out":null}
-{"args":[],"fixture":"empty","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: the nightly run reads its listings of every artist"]}
+{"args":[],"fixture":"empty","fn":"caracole.search.lacuerda_left_out","kw":{},"out":["empty","index is empty: tonight's run reads its listings of every artist"]}
 {"args":[],"fixture":"empty","fn":"caracole.lacuerda_index.letters_read","kw":{},"out":[]}

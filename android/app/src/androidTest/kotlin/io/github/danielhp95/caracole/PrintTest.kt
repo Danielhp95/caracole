@@ -156,7 +156,7 @@ class PrintTest {
         val phone = phone()
         val said = Printer.ask(phone.app::handle, URI(phone.server.origin), Caracole.secret,
                                phone.server.origin + "/export.pdf?sheet=Nobody/Nothing/sheet.html&t=2")
-        assertEquals(Printer.Named.Refused(404, "There's no such sheet in the library."), said)
+        assertEquals(Printer.Named.Refused(404, "No such sheet in the book."), said)
         assertEquals(queued, jobIds())
     }
 

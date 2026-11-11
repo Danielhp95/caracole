@@ -143,7 +143,7 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
                                             "songs": f"{songs['hysteria'].id},{songs['soda'].id}"})
     assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
-    assert job.title == 'Make the songbook "Beach nights" (2 songs)'
+    assert job.title == 'Make songbook "Beach nights" (2 songs)'
     assert steps(queue) == [[("songbook", "make", "--", "Beach nights", "Muse - Hysteria",
                               "Soda Stereo - De Música Ligera")]]
     assert books(setup) == []  # the server writes no songbook: the command does, under caracole's lock
@@ -194,7 +194,7 @@ def test_the_songbook_forms_queue_move_remove_rename_and_delete(app, setup, queu
             assert books(setup) == [Songbook("Beach", ("Muse - Hysteria", "Soda Stereo - De Música Ligera"))]
     assert [job.title for job in queue.snapshot()[::-1]] == [
         'Move Muse - Hysteria to 1 in "Campfire"', 'Take Radiohead - Creep out of "Campfire"',
-        'Rename "Campfire" to "Beach"', 'Delete the songbook "Beach"']
+        'Rename "Campfire" to "Beach"', 'Delete songbook "Beach"']
     assert steps(queue) == [
         [("songbook", "move", "--", "Campfire", "Muse - Hysteria", "1")],
         [("songbook", "remove", "--", "Campfire", "Radiohead - Creep")],
@@ -225,7 +225,7 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
                   ["Radiohead - Karma Police", "Muse - Hysteria", "Radiohead - Karma Police Live"])
     conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
     gone = page_books(app)[0]["set"][2]
-    assert (gone["entry"], gone["missing"], gone["id"]) == ("Radiohead - Karma Police Live", "not in the library", None)
+    assert (gone["entry"], gone["missing"], gone["id"]) == ("Radiohead - Karma Police Live", "not in the logbook", None)
 
     assert post(app, "/songbook/move", {"name": "Gig", "song": "Radiohead - Karma Police Live",
                                         "position": "2"}).status == 303
@@ -250,7 +250,7 @@ def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missi
     assert conn.execute("SELECT count(*) FROM songs WHERE id = ?", (creep.id,)).fetchone()[0] == 0
     first = page_books(app)[0]["set"][0]
     assert (first["n"], first["title"], first["entry"], first["missing"]) == (1, "Creep", "Radiohead - Creep",
-                                                                            "not in the library")
+                                                                            "not in the logbook")
     assert get(app, PAGE).status == 200  # the page caracole wrote, until the next render writes it again
 
     assert post(app, "/songbook/remove", {"name": "Campfire", "song": "Radiohead - Creep"}).status == 303
@@ -271,10 +271,10 @@ def test_the_same_change_sent_twice_is_queued_once(app, setup, queue, campfire):
 @pytest.mark.parametrize("path,fields,status,said", [
     ("/songbook/make", {"name": "Beach", "songs": ""}, 400, "Pick a song"),
     ("/songbook/make", {"name": "Beach", "songs": "1,x"}, 400, "Which songs"),
-    ("/songbook/make", {"name": "Beach", "songs": "999"}, 404, "isn't in the library"),
-    ("/songbook/make", {"name": "Beach", "songs": "99999999999999999999999"}, 404, "isn't in the library"),
-    ("/songbook/make", {"name": "Beach", "songs": "-99999999999999999999999"}, 404, "isn't in the library"),
-    ("/songbook/add", {"name": "Campfire", "songs": "1,99999999999999999999999"}, 404, "isn't in the library"),
+    ("/songbook/make", {"name": "Beach", "songs": "999"}, 404, "left the logbook"),
+    ("/songbook/make", {"name": "Beach", "songs": "99999999999999999999999"}, 404, "left the logbook"),
+    ("/songbook/make", {"name": "Beach", "songs": "-99999999999999999999999"}, 404, "left the logbook"),
+    ("/songbook/add", {"name": "Campfire", "songs": "1,99999999999999999999999"}, 404, "left the logbook"),
     ("/songbook/make", {"name": "   ", "songs": "1"}, 400, "needs a name"),
     ("/songbook/make", {"name": ".hidden", "songs": "1"}, 400, "dot"),
     ("/songbook/make", {"name": "x" * 81, "songs": "1"}, 400, "80 characters"),
@@ -301,7 +301,7 @@ def test_a_form_that_cant_be_done_is_refused_before_anything_is_queued(app, setu
 def test_a_songbooks_file_that_cant_be_read_is_said_and_nothing_is_queued(app, setup, queue):
     (setup[1].library_dir / FILE_NAME).write_text("[Campfire\n", encoding="utf-8")
     response = post(app, "/songbook/make", {"name": "Beach", "songs": str(setup[3]["creep"].id)})
-    assert response.status == 503 and "songbooks.toml can" in response.body.decode("utf-8")
+    assert response.status == 503 and "read songbooks.toml" in response.body.decode("utf-8")
     assert queue.snapshot() == []
 
 
@@ -429,7 +429,7 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert made["says"] == {"tone": "ready", "text": "Made"}  # the Requests tab
     assert made["actions"] == [{"label": "Open songbook", "primary": True,
                                 "href": "/_songbooks/Beach%20nights/songbook.html"}]
-    assert "nightly run" not in json.dumps(made)  # a song's line, "Added: the nightly run looks for it", misleads here
+    assert "nightly run" not in json.dumps(made)  # a song's line, "Added · fetched tonight", misleads here
     # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
     # the older lines.
     for n, path, fields, done, page in [
@@ -619,7 +619,7 @@ def test_add_a_song_your_library_has_by_its_names_needs_no_lookup(app, setup, qu
 
 @pytest.mark.parametrize("fields,status,said", [
     ({"name": "Picnic", "song": "1"}, 404, 'No songbook named "Picnic"'),
-    ({"name": "Campfire", "song": "999"}, 404, "isn't in the library"),
+    ({"name": "Campfire", "song": "999"}, 404, "isn't in the logbook"),
     ({"name": "Campfire"}, 400, "Which song"),
 ])
 def test_add_a_song_that_cant_be_added_is_refused_before_anything_is_queued(app, setup, queue, campfire, fields,
@@ -730,7 +730,7 @@ def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songboo
         [("songbook", "render", "--", "Gig")],  # once they are done: the songbook made again with their sheets
     ]
     assert [job.title for job in queue.snapshot()[::-1]] == [
-        "Fetch Muse - Hysteria", "Fetch Muse - Uprising", 'Make "Gig" again, with the songs it got']
+        "Fetch Muse - Hysteria", "Fetch Muse - Uprising", 'Remake "Gig" with the songs fetched']
     # Asked again while they wait, nothing new is queued.
     post(app, "/songbook/get", {"name": "Gig"})
     assert len(queue.snapshot()) == 3
@@ -739,11 +739,11 @@ def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songboo
 def test_the_pages_script_gets_the_songbooks_job_and_each_lookup(app, setup, queue, gig):
     queue._limit = 10
     data = json.loads(post(app, "/songbook/get", {"name": "Gig"}, accept=JSON).body)
-    assert data["job"]["kind"] == "songbook" and data["job"]["line"]["text"] == "Queued behind 2 requests…"
+    assert data["job"]["kind"] == "songbook" and data["job"]["line"]["text"] == "Queued · 2 requests ahead…"
     assert data["job"]["songbook"] == {"action": "render", "name": "Gig", "after": "Gig"}
     assert [(v["kind"], v["songId"], v["display"], v["line"]["text"]) for v in data["jobs"]] == [
         ("song", gig["hysteria"].id, "Muse - Hysteria", "Queued…"),
-        ("song", gig["uprising"].id, "Muse - Uprising", "Queued behind 1 request…")]
+        ("song", gig["uprising"].id, "Muse - Uprising", "Queued · 1 request ahead…")]
     assert data["left"] == 0
 
 

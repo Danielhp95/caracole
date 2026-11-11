@@ -28,7 +28,7 @@ data class PeerState(val format: Int, val server: String?, val caracole: String,
         fun read(document: JsonElement): PeerState = try {
             Documents.state(document)
         } catch (e: Documents.Unreadable) {
-            throw PeerError("A state document that can't be read: ${e.message}.", cause = e)
+            throw PeerError("The computer's state can't be read: ${e.message}.", cause = e)
         }
     }
 }
@@ -70,14 +70,14 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         this.asking = asking
         val answer = get(STATE_PATH + (asking?.let { "?peer=" + Documents.quote(it) } ?: ""), STATE_TIMEOUT_MS)
         if (answer.status == 404) {
-            throw PeerError("$address answered, but not as a caracole that syncs: is it an older caracole, or " +
+            throw PeerError("$address answered, but not as a caracole that shares. An older caracole, or " +
                             "something else?", 404)
         }
         if (answer.status != 200) throw refused(answer)
         return try {
             Documents.state(answer.json())
         } catch (e: Documents.Unreadable) {
-            throw PeerError("The caracole at $address answered ${e.message}.", 200, e)
+            throw PeerError("$address answered ${e.message}.", 200, e)
         }
     }
 
@@ -93,7 +93,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         val push = Documents.text(data?.get("push"))
         val need = (data?.get("need") as? JsonArray)?.map { Documents.text(it) }
         if (push == null || !PUSH_ID.matches(push) || need == null || need.any { it == null || it !in files }) {
-            throw PeerError("The caracole at $address answered the push with something the phone can't read.", 200)
+            throw PeerError("$address answered our changes with something we can't read.", 200)
         }
         return push to need.map { it!! }
     }
@@ -115,7 +115,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
             is JsonPrimitive -> job.takeIf { !it.isString }?.contentOrNull?.toIntOrNull()
             else -> null
         }
-        return id ?: throw PeerError("The caracole at $address took the push, but didn't say which request takes it.",
+        return id ?: throw PeerError("$address took the push but named no Journal entry for it.",
                                      answer.status)
     }
 
@@ -130,7 +130,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
             null
         } as? JsonObject
         if (job == null || Documents.text(job["state"]) == null) {
-            throw PeerError("The caracole at $address answered its job $id with something it can't read.", 200)
+            throw PeerError("$address answered about entry $id in a form we can't read.", 200)
         }
         return job
     }
@@ -144,8 +144,8 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
     fun pushIndex(token: String, file: File): Int {
         val length = file.length()
         if (length > INDEX_MAX) {
-            throw PeerError("The pages read here make an index export of ${(length + MIB - 1) / MIB} MiB, and the " +
-                            "computer takes ${INDEX_MAX / MIB} MiB at most: they stay here.")
+            throw PeerError("The pages read here make ${(length + MIB - 1) / MIB} MiB; the computer takes " +
+                            "${INDEX_MAX / MIB} MiB at most. They stay here.")
         }
         val answer = posting(token) { use ->
             http.post(address, address.resolve(INDEX_PUSH_PATH), OCTETS, mapOf(TOKEN_HEADER to use, "Accept" to JSON),
@@ -154,13 +154,12 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
             }
         }
         if (answer.status == 404) {
-            throw PeerError("The caracole at $address takes no index pages: it may be older than the app.", 404)
+            throw PeerError("$address takes no index pages: its caracole may be older than the app.", 404)
         }
         if (answer.status != 202 && answer.status != 200) throw refused(answer)
         val job = (answer.json() as? JsonObject)?.get("job")
         return (job as? JsonPrimitive)?.takeIf { !it.isString }?.contentOrNull?.toIntOrNull()
-            ?: throw PeerError("The caracole at $address took the index pages, but didn't say which request merges " +
-                               "them.", answer.status)
+            ?: throw PeerError("$address took the index pages but named no request to merge them.", answer.status)
     }
 
     /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], [INDEX_TIMEOUT_MS] at
@@ -225,7 +224,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         val unit = doc?.get("unit")
         if (doc == null || !Documents.isNumber(doc["format"], Units.FORMAT) || Documents.text(doc["id"]) != id ||
             Documents.text(doc["digest"]) == null || unit !is JsonObject) {
-            throw PeerError("The caracole at $address answered $id with something the phone can't read.", 200)
+            throw PeerError("$address sent $id in a form we can't read.", 200)
         }
         return unit
     }
@@ -237,8 +236,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         if (answer.status != 200) throw refused(answer)
         val bytes = answer.bytes
         if (bytes == null || Canonical.sha256Hex(bytes) != sha256) {
-            throw PeerError("The caracole at $address sent $name other than it said it is: it changed there since, " +
-                            "so the song is left as it was here.", 200)
+            throw PeerError("$address sent $name changed since compared. The song stays as it was here.", 200)
         }
         return bytes
     }
@@ -250,11 +248,11 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
 
     private fun Answered.json(): JsonElement {
         val text = bytes?.toString(Charsets.UTF_8)
-            ?: throw PeerError("The caracole at $address answered with more than the phone reads.", status)
+            ?: throw PeerError("$address answered with more than we read.", status)
         return try {
             Canonical.parse(text)
         } catch (e: CanonicalError) {
-            throw PeerError("The caracole at $address answered with something that isn't JSON.", status, e)
+            throw PeerError("$address answered with something that isn't JSON.", status, e)
         }
     }
 
@@ -299,7 +297,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         } catch (e: PeerError) {
             null
         }
-        return PeerError("The caracole at $address answered ${answer.status}" + (said?.let { ": $it" } ?: "."),
+        return PeerError("$address answered ${answer.status}" + (said?.let { ": $it" } ?: "."),
                          answer.status)
     }
 

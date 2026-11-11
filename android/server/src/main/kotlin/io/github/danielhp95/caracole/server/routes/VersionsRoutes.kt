@@ -59,8 +59,7 @@ class VersionsRoutes(val parts: PhoneParts, private val csrf: String,
         val params = Choices.query(target)
         val doing = params["do"].orEmpty()
         if (doing !in VersionsPage.DOINGS) {
-            throw Refused(400, "Not a version", "Make this the one, Keep it or Back to caracole's pick? The address " +
-                                                "names none.")
+            throw Refused(400, "Not a version", "Make this the one, Keep or Back to our pick? The address names none.")
         }
         val asked = params["job"]
         if (asked != null && !Choices.digits(asked, 11)) throw Choices.NOT_AN_ADDRESS

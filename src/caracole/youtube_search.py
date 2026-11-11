@@ -115,9 +115,9 @@ def failed(conn: sqlite3.Connection, key: str, now: datetime) -> str | None:
     """Why no search of ``key`` goes now, its own or ``FAILURES_PAUSE`` failing within the hour; None when neither."""
     failures = _failures(conn, now)
     if key in failures:
-        return f"its search failed less than an hour ago ({failures[key]['error']})"
+        return f"it failed within the hour ({failures[key]['error']})"
     if len(failures) >= FAILURES_PAUSE:
-        return f"{len(failures)} searches failed in the last hour"
+        return f"{len(failures)} searches failed this hour"
     return None
 
 
@@ -183,9 +183,9 @@ def _gate(conn: sqlite3.Connection, key: str, now: datetime) -> Gate:
     if was is not None:
         return Gate("found" if isinstance(was.get("video"), dict) else "none", key, was)
     if is_cooling(conn, PROVIDER, now):
-        return Gate("spent", key, why="YouTube is paused after a block")
+        return Gate("spent", key, why="YouTube turned us back")
     if searches_used(conn, now) >= SEARCHES_PER_HOUR:
-        return Gate("spent", key, why=f"this hour's {SEARCHES_PER_HOUR} YouTube lookups are spent")
+        return Gate("spent", key, why=f"no more YouTube asks this hour ({SEARCHES_PER_HOUR} spent)")
     why = failed(conn, key, now)
     if why is not None:
         return Gate("failed", key, why=why)

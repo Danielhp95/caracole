@@ -674,9 +674,9 @@
   const drawGoing = (job) => {
     setView("going");
     check.hidden = true;
-    // The sheet's own sync by the name it compared with; one it didn't start by its request's name ("Sync with a
-    // file from Phone").
-    const shown = String(job && job.display || "").replace(/^Sync with /, "");
+    // The sheet's own sync by the name it compared with; one it didn't start by its request's name ("Share with
+    // Desk", "Sync with a file from Phone").
+    const shown = String(job && job.display || "").replace(/^(?:Share with |Sync with )/, "");
     title.textContent = sent && sent.title ? sent.title : "Syncing with " + (shown || "another caracole");
     sub.textContent = sent && sent.compared && source && source.address ? source.address : "";
     const line = job && objOf(job.line) ? job.line : {};
@@ -782,7 +782,7 @@
     const outcome = objOf(job.outcome) || {};
     const report = objOf(outcome.report);
     const withWhom = report ? objOf(report.with) || {} : {};
-    const fromDisplay = String(job.display || "").replace(/^Sync with (a file from )?/, "");
+    const fromDisplay = String(job.display || "").replace(/^(?:Share with |Sync with (?:a file from )?)/, "");
     const file = withWhom.kind ? withWhom.kind === "file" : was ? was.flow === "import" || (was.compared && objOf(
       was.compared.peer) && was.compared.peer.kind === "file") : /^Sync with a file from /.test(String(job.display));
     const name = String(withWhom.name || (was && was.sides ? was.sides.there.name : "") || fromDisplay

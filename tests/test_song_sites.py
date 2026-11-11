@@ -35,7 +35,7 @@ def test_a_song_never_asked_has_every_site_grey_and_unasked_in_their_order(conn,
     # The sites on by default; YouTube only where its route runs, which needs auto-chords.
     assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"]
     assert {state for state, _ in sites.values()} == {"unasked"}
-    assert sites["harptabs"][1] == "harptabs.com: not asked yet"
+    assert sites["harptabs"][1] == "harptabs: not asked yet"
 
 
 def test_the_digging_my_potato_case_ug_has_none_and_harptabs_has_it(conn, cfg):
@@ -48,12 +48,12 @@ def test_the_digging_my_potato_case_ug_has_none_and_harptabs_has_it(conn, cfg):
     kv_set(conn, f"gametabs:checked:{s.id}", "2026-10-12T03:00:00Z")
     kv_set(conn, f"gametabs:checked:{s.id}:pick", "some-pick")  # the tab picked then: no stamp, never read as one
     sites = sites_of(conn, cfg, s)
-    assert sites["harptabs"] == ("have", "harptabs.com: has it")
-    assert sites["ug"] == ("none", "Ultimate Guitar: nothing for it (looked 2026-10-16)")
-    assert sites["lacuerda"] == ("none", "LaCuerda: nothing for it (looked 2026-10-14)")
-    assert sites["lrclib"] == ("none", "LRCLIB: nothing for it (looked 2026-10-15)")
-    assert sites["gtptabs"] == ("none", "gtptabs.com: nothing for it (looked 2026-10-13)")
-    assert sites["gametabs"] == ("none", "gametabs.net: nothing for it (looked 2026-10-12)")
+    assert sites["harptabs"] == ("have", "harptabs: has it")
+    assert sites["ug"] == ("none", "UG: not there · looked 16/10/26")
+    assert sites["lacuerda"] == ("none", "LaCuerda: not there · looked 14/10/26")
+    assert sites["lrclib"] == ("none", "LRCLIB: not there · looked 15/10/26")
+    assert sites["gtptabs"] == ("none", "gtptabs: not there · looked 13/10/26")
+    assert sites["gametabs"] == ("none", "gametabs: not there · looked 12/10/26")
 
 
 def test_ug_has_a_song_its_index_matched_even_when_its_sheet_came_from_elsewhere(conn, cfg):
@@ -63,7 +63,7 @@ def test_ug_has_a_song_its_index_matched_even_when_its_sheet_came_from_elsewhere
     sites = sites_of(conn, cfg, s)
     assert sites["ug"][0] == sites["lacuerda"][0] == sites["lrclib"][0] == "have"
     update_song(conn, s.id, match_decision="review")  # caracole isn't sure yet: UG is still to say
-    assert sites_of(conn, cfg, s)["ug"] == ("unasked", "Ultimate Guitar: not sure which song yet")
+    assert sites_of(conn, cfg, s)["ug"] == ("unasked", "UG: unsure which song")
 
 
 def test_lacuerda_has_a_song_whose_sheets_caracole_met_though_none_was_kept(conn, cfg):
@@ -78,15 +78,15 @@ def test_lacuerda_has_a_song_whose_sheets_caracole_met_though_none_was_kept(conn
 def test_lrclib_says_an_instrumental_has_no_words(conn, cfg):
     s = add_song(conn, "Cowboy Bebop", "Tank!")
     update_song(conn, s.id, lyrics_status="instrumental")
-    assert sites_of(conn, cfg, s)["lrclib"] == ("have", "LRCLIB: an instrumental, no words")
+    assert sites_of(conn, cfg, s)["lrclib"] == ("have", "LRCLIB: instrumental, no words")
 
 
 def test_musescore_has_a_possible_match_and_none_once_its_index_is_read(conn, cfg):
     s = add_song(conn, "Eagles", "Desperado")
     other = add_song(conn, "Eagles", "Take It Easy")
     conn.execute("INSERT INTO musescore_index (page_id, path, title_key, sitemap) VALUES (1, 'song/desperado-1', 'desperado', 's')")
-    assert sites_of(conn, cfg, s)["musescore"] == ("have", "MuseScore: a possible match, by its title")
-    assert sites_of(conn, cfg, other)["musescore"] == ("none", "MuseScore: nothing for it")
+    assert sites_of(conn, cfg, s)["musescore"] == ("have", "MuseScore: maybe, by its title")
+    assert sites_of(conn, cfg, other)["musescore"] == ("none", "MuseScore: not there")
 
 
 def test_a_site_turned_off_is_left_out(conn, cfg):
@@ -119,4 +119,4 @@ def test_lyrics_from_megalobiz_leave_lrclib_with_nothing_timed(conn, cfg):
         url="https://megalobiz.com/lrc/1/x").to_json(), lyrics_at="2026-10-15T03:30:00Z")
     sites = sites_of(conn, cfg, s)
     assert "megalobiz" not in sites
-    assert sites["lrclib"] == ("none", "LRCLIB: nothing timed for it (looked 2026-10-15)")
+    assert sites["lrclib"] == ("none", "LRCLIB: nothing timed · looked 15/10/26")

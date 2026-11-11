@@ -1148,4 +1148,4 @@ def test_the_commands_end_as_caracole_serve_reads_them(commands):
     assert all(len(said) == 1 for said in lines.values())
     assert {said[0].split(": ")[0] for said in lines.values()} == {"Read", "Not found", "Not read"}
     assert lines["an artist's page read now, by their name"] == [
-        "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now."]
+        "Read: harptabs' page of billy joel lists 7 of their 98 tabs."]

@@ -57,7 +57,7 @@ class JobsRoutesTest {
         database.writeBlocking { db -> insert(db, artist, title, key) }
 
     private fun add(database: Database, artist: String, title: String, key: String) = JobSpec(
-        "Add $artist - $title", key, "add", listOf("add" to "Adding to the library"), display = "$artist - $title",
+        "Add $artist - $title", key, "add", listOf("add" to "Adding to the book"), display = "$artist - $title",
     ) { context ->
         context.stage("add", "running")
         database.write { db -> insert(db, artist, title, key) }  // the job's write, as every write on the phone
@@ -69,10 +69,10 @@ class JobsRoutesTest {
         test.use {
             val page = test.get("/jobs.json")
             assertEquals(403, page.status)
-            assertTrue("reload it" in page.text, page.text)
+            assertTrue("Reload it" in page.text, page.text)
             val script = test.get("/jobs.json", "accept" to "application/json")
             assertEquals(403, script.status)
-            assertEquals("""{"error":"caracole serve has restarted since this page was opened: reload it."}""", script.text)
+            assertEquals("""{"error":"caracole serve restarted since this page opened. Reload it."}""", script.text)
             assertEquals(403, test.script("/jobs.json", TestApp.TOKEN_HEADER to "an old token").status)
             val fine = test.script("/jobs.json")
             assertEquals(200, fine.status)
@@ -106,7 +106,7 @@ class JobsRoutesTest {
             assertEquals(listOf("songbooks", "card"), over.keys.toList().takeLast(2))  // jobs_routes.views' order
             assertEquals(JsonPrimitive(id), over["songId"])
             assertEquals(JsonPrimitive("radiohead/creep"), over["identity"])
-            assertEquals("Added: the nightly run looks for it", over["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+            assertEquals("Added · fetched tonight", over["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
             assertNull(asked.first().jsonObject["card"])  // the sync runs still
             assertEquals(JsonPrimitive("running"), asked.first().jsonObject["state"])
             gate.complete(Unit)
@@ -129,7 +129,7 @@ class JobsRoutesTest {
             val waiting = views.getValue(again.id).jsonObject
             assertEquals(JsonPrimitive(id), waiting["songId"])  // jobs_routes.song_of: by its key, queued or not
             assertEquals(JsonPrimitive("radiohead/creep"), waiting["identity"])
-            assertEquals("Queued behind 1 request…", waiting["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+            assertEquals("Queued · 1 request ahead…", waiting["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
             assertNull(waiting["card"])  // not over: no card, no songbooks
             assertNull(waiting["songbooks"])
             val new = views.getValue(fresh.id).jsonObject
@@ -201,16 +201,16 @@ class JobsRoutesTest {
             fun refused(job: String) = test.postScript("/jobs/cancel", listOf("job" to job)).let {
                 it.status to it.json.jsonObject["error"]!!.jsonPrimitive.content
             }
-            assertEquals(409 to "That request has started, and caracole never stops a command halfway: it runs to its end.",
+            assertEquals(409 to "Already running. We never stop a command halfway.",
                          refused("${running.id}"))
-            assertEquals(404 to "That request isn't queued any more.", refused("${waiting.id}"))  // cancelled already
-            assertEquals(404 to "That request isn't queued any more.", refused("77"))
-            assertEquals(400 to "Which request? The form names none.", refused("two"))
-            assertEquals(400 to "Which request? The form names none.", refused("1234567890123"))
+            assertEquals(404 to "No longer queued.", refused("${waiting.id}"))  // cancelled already
+            assertEquals(404 to "No longer queued.", refused("77"))
+            assertEquals(400 to "Which entry? The form names none.", refused("two"))
+            assertEquals(400 to "Which entry? The form names none.", refused("1234567890123"))
             assertEquals(400, test.postScript("/jobs/cancel").status)
             gate.complete(Unit)
             runCurrent()
-            assertEquals(409 to "That request is over: there's nothing left to cancel.", refused("${running.id}"))
+            assertEquals(409 to "Already over: nothing to cancel.", refused("${running.id}"))
             assertEquals(403, test.postScript("/jobs/cancel", listOf("job" to "1"), token = "old").status)
         }
     }
@@ -303,7 +303,7 @@ class JobsRoutesTest {
             val found = queue.submit(lookup()).first
             runCurrent()
             // Not found, with no link: the phone has no to-do page.
-            assertEquals(listOf("missing", "Not found", null, null), line(view(test, found.id)))
+            assertEquals(listOf("missing", "Not on the sites", null, null), line(view(test, found.id)))
             assertEquals(listOf("waiting", "Not fetched yet", null, "#tab=requests&job=${waited.id}"),
                          line(view(test, waited.id)))  // a job over keeps what it came to
         }
@@ -341,7 +341,7 @@ class JobsRoutesTest {
             }
             val job = queue.submit(lookup()).first
             runCurrent()
-            assertEquals(listOf("review", "Needs review", """{"label":"Pick the match","href":"review?song=$id"}""", null),
+            assertEquals(listOf("review", "Needs your pick", """{"label":"Pick","href":"review?song=$id"}""", null),
                          line(view(test, job.id)))
             song(test.database, "Muse", "Hysteria", "muse/hysteria")
             test.database.writeBlocking { db ->
@@ -350,7 +350,7 @@ class JobsRoutesTest {
             }
             val ignored = queue.submit(lookup("muse/hysteria")).first
             runCurrent()
-            assertEquals("Ignored in overrides.toml", line(view(test, ignored.id))[1])
+            assertEquals("Ignored · overrides.toml", line(view(test, ignored.id))[1])
         }
     }
 

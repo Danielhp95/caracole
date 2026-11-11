@@ -144,7 +144,7 @@ class EndToEndTest {
                 answered.put(href, status)
                 if (href.startsWith("/export.pdf?") || href.startsWith("/versions?")) {
                     assertEquals("$href on the phone: $text", 404, status)
-                    assertTrue("$href: $text", "no such sheet in the library" in text)
+                    assertTrue("$href: $text", "such sheet in the book" in text)
                     continue
                 }
                 if (href.startsWith("/guitar")) {

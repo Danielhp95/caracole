@@ -102,32 +102,32 @@ object Status {
     /** What a song's card says while a stage of a lookup (or another command's) runs (status.py's STAGE_LINES). */
     val STAGE_LINES: Map<String, String> = linkedMapOf(
         "song" to "Finding the song",
-        "match" to "Looking it up",
-        "sheet" to "Fetching from Ultimate Guitar",
-        "version" to "Fetching the version from Ultimate Guitar",
-        "pdf" to "Rendering the sheet",
-        "lyrics" to "Fetching the lyrics from LRCLIB",
-        "ug" to "Fetching from Ultimate Guitar",
+        "match" to "Matching",
+        "sheet" to "Fetching from UG",
+        "version" to "Fetching the version from UG",
+        "pdf" to "Making the PDF",
+        "lyrics" to "Fetching lyrics",
+        "ug" to "Fetching from UG",
         "lacuerda" to "Fetching from LaCuerda",
-        "gtptabs" to "Fetching from gtptabs.com",
-        "harptabs" to "Fetching from harptabs.com",
-        "gametabs" to "Fetching from gametabs.net",
-        "pages" to "Writing the library page",
+        "gtptabs" to "Fetching from gtptabs",
+        "harptabs" to "Fetching from harptabs",
+        "gametabs" to "Fetching from gametabs",
+        "pages" to "Writing the logbook page",
         "songbooks" to "Remaking its songbooks",
         "search" to "Searching LaCuerda",
         "audio" to "Getting the audio",
         "chords" to "Working out the chords",
         "video" to "Searching YouTube",
         "thumbnail" to "Getting the thumbnail",
-        "compare" to "Comparing",
-        "take" to "Taking what changed there",
-        "give" to "Giving what changed here",
+        "compare" to "Comparing books",
+        "take" to "Taking their entries",
+        "give" to "Sharing our entries",
         "mirror" to "Copying the computer's pages",
-        "agree" to "Recording what the two agree on",
-        "index" to "Bringing the indexes up to date",
-        "check" to "Checking what changed since the comparison",
-        "render" to "Rendering what was taken",
-        "merge" to "Merging the other caracole's index pages",
+        "agree" to "Noting where the books agree",
+        "index" to "Updating the indexes",
+        "check" to "Checking for changes since the compare",
+        "render" to "Making pages of what was taken",
+        "merge" to "Merging the other scribe's index pages",
     )
 
     /** A sync's or a take's command (its first step's `caracole peer` subcommand), as the page names its kind. */
@@ -135,12 +135,12 @@ object Status {
     const val INDEX_MERGE_KIND = "index-merge"
 
     /** How each says it is done (status.py's _PEER_DONE). */
-    internal val PEER_DONE = mapOf("sync" to "Synced", "peer-push" to "Taken", "peer-pull" to "Taken",
+    internal val PEER_DONE = mapOf("sync" to "Shared", "peer-push" to "Taken", "peer-pull" to "Taken",
                                    INDEX_MERGE_KIND to "Merged")
-    private const val WAITING = "waiting for another caracole"  // get.py's song stage while the lock is held
+    private const val WAITING = "waiting for the book"  // get.py's song stage while the lock is held
 
     /** get.py's SHEET_FROM's words, a running sheet stage's line by its site. */
-    internal val SHEET_LINES = listOf("from LaCuerda", "from Ultimate Guitar").associateWith { "Fetching $it" }
+    internal val SHEET_LINES = listOf("from LaCuerda", "from UG").associateWith { "Fetching $it" }
 
     /** How `caracole lacuerda --artist` and `--search` (and `harptabs --artist`, `youtube --search`) end, by what
      * the site answered, and the line's tone. */
@@ -197,7 +197,7 @@ object Status {
 
     internal fun line(job: Shape, song: SongFacts?, ahead: Int, songbookPage: String?, todo: String?): Line {
         when (job.state) {
-            Job.QUEUED -> return Line("queued", if (ahead > 0) "Queued behind ${plural(ahead, "request")}…" else "Queued…")
+            Job.QUEUED -> return Line("queued", if (ahead > 0) "Queued · ${plural(ahead, "request")} ahead…" else "Queued…")
             Job.RUNNING -> {
                 if (job.stages.isNotEmpty()) return Line("running", stageLine(job.stages, new = song == null))
                 val step = job.steps.firstOrNull { it.state == Job.RUNNING } ?: job.steps.firstOrNull { it.state == Job.WAITING }
@@ -209,8 +209,8 @@ object Status {
         if (job.state == Job.INTERRUPTED) return Line("waiting", "Interrupted", details = details)
         if (job.state == Job.FAILED) {
             if (job.fetching && song != null && song.sheet == null) {
-                if (song.review) return Line("review", "Needs review", reviewLink(song, todo), details)
-                if (song.notFound) return Line("missing", "Not found", todoLink(todo), details)
+                if (song.review) return Line("review", "Needs your pick", reviewLink(song, todo), details)
+                if (song.notFound) return Line("missing", "Not on the sites", todoLink(todo), details)
             }
             return Line("failed", stageFailure(job.stages) ?: failure(job.steps), details = details)
         }
@@ -218,12 +218,12 @@ object Status {
         job.peer?.let { return peerDone(job, it, details) }
         if (key.startsWith(JobCommands.REMOVING)) return Line("removed", "Removed")
         if (key.startsWith(JobCommands.EXPORTING)) {
-            return Line("ready", "Your version now", song?.sheet?.let { "Open sheet" to it })
+            return Line("ready", "Your version", song?.sheet?.let { "Open" to it })
         }
         if (key.startsWith(JobCommands.READING)) {
             val page = harmonicaPage(job.steps)
-            val said = if (job.steps.any { "--clear" in it.args }) "read as caracole guesses" else "read as you set it"
-            return Line("ready", "Its harmonica tab $said", page?.let { "Open the tab" to it })
+            val said = if (job.steps.any { "--clear" in it.args }) "read as we guess" else "read as you set it"
+            return Line("ready", "Tab $said", page?.let { "Open tab" to it })
         }
         songbookOf(key)?.let { book ->
             if (book.action == "delete") return Line("removed", DONE.getValue(book.action))
@@ -233,17 +233,17 @@ object Status {
         if (JobCommands.INDEX_READS.any(key::startsWith)) return artistRead(job.steps, details)
         if (key.startsWith(JobCommands.YOUTUBE_SHEET)) {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
-            if (made && song?.sheet != null) return Line("ready", READY, "Open sheet" to song.sheet)
+            if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)
         }
-        if (song?.sheet != null) return Line("ready", READY, "Open sheet" to song.sheet)
-        if (song != null && song.ignored) return Line("added", "Ignored in overrides.toml")
-        if (song != null && song.review) return Line("review", "Needs review", reviewLink(song, todo))
+        if (song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
+        if (song != null && song.ignored) return Line("added", "Ignored · overrides.toml")
+        if (song != null && song.review) return Line("review", "Needs your pick", reviewLink(song, todo))
         if (!job.fetching && song != null && song.lacuerda) {
-            return Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
+            return Line("added", "Added · your LaCuerda pick comes tonight")
         }
-        if (!job.fetching || song == null) return Line("added", "Added: the nightly run looks for it")
-        if (song.checkedNow) return Line("missing", "Not found", todoLink(todo))
+        if (!job.fetching || song == null) return Line("added", "Added · fetched tonight")
+        if (song.checkedNow) return Line("missing", "Not on the sites", todoLink(todo))
         return Line("waiting", "Not fetched yet", details = details)
     }
 
@@ -286,16 +286,16 @@ object Status {
         stageFailure(job.stages)?.let { return Line("waiting", it, details = details) }
         val left = job.units.count { it.outcome == "left" }
         if (left > 0) {
-            return Line("waiting", "${PEER_DONE.getValue(kind)}: ${plural(left, "change")} left as " +
+            return Line("waiting", "${PEER_DONE.getValue(kind)} · ${plural(left, "change")} left as " +
                                    (if (left == 1) "it was" else "they were"), details = details)
         }
         return Line("ready", PEER_DONE.getValue(kind))
     }
 
     private fun reviewLink(song: SongFacts, todo: String?): Pair<String, String>? =
-        song.picker?.let { "Pick the match" to it } ?: todoLink(todo)
+        song.picker?.let { "Pick" to it } ?: todoLink(todo)
 
-    private fun todoLink(todo: String?): Pair<String, String>? = todo?.let { "see the to-do page" to it }
+    private fun todoLink(todo: String?): Pair<String, String>? = todo?.let { "To-do page" to it }
 
     /** A running staged job's line: its running stage's, else the next one's (status.py's _stage_line); [new], a song
      * the library doesn't have yet, which the song stage adds. */
@@ -303,8 +303,8 @@ object Status {
         val stage = stages.firstOrNull { it.state == Job.RUNNING } ?: stages.firstOrNull { it.state == Job.WAITING }
             ?: return "Running…"
         val running = stage.state == Job.RUNNING
-        if (running && stage.detail.startsWith(WAITING)) return "Waiting for another caracole…"
-        if (stage.name == "song" && new) return "Adding to the library…"
+        if (running && stage.detail.startsWith(WAITING)) return "Waiting for the book…"
+        if (stage.name == "song" && new) return "Adding to the book…"
         if (running && stage.name == "sheet" && stage.detail in SHEET_LINES) return "${SHEET_LINES.getValue(stage.detail)}…"
         if (running && stage.name == "songbooks" && stage.detail.isNotEmpty()) return "Remaking songbook ${stage.detail}…"
         return "${lines[stage.name] ?: stage.label}…"
@@ -322,7 +322,7 @@ object Status {
     /** status.py's _failure: the failed command's last `error:` line's first sentence, else "<label> failed."; with
      * no command failed, that it stopped. */
     internal fun failure(steps: List<Part>): String {
-        val failed = steps.firstOrNull { it.state == Job.FAILED } ?: return "It stopped before it was done."
+        val failed = steps.firstOrNull { it.state == Job.FAILED } ?: return "Stopped before the end."
         val said = failed.output.asReversed().firstNotNullOfOrNull(::errorOf)?.let(PyText::strip)
         if (said.isNullOrEmpty()) return "${failed.label} failed."
         return short(firstSentence(said))

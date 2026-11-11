@@ -70,33 +70,33 @@ internal class Working(
         /** The kind of job whose worker shows its own notification. */
         private const val INDEX = "index"
 
-        /** Whether [job] is a lookup (JobCommands.isLookup's commands: a song's, Get it and Fetch now; its versions
+        /** Whether [job] is a lookup (JobCommands.isLookup's commands: a song's, Fetch and Fetch again; its versions
          * kept; a site's index read, an artist's page or LaCuerda's own search). */
         fun isLookup(job: Job): Boolean = job.spec.commands.any { JobCommands.isLookup(it.args) }
 
         /**
          * The line of [jobs] (a queue's snapshot): the job that runs, else the first to run, of those the service
-         * keeps going (every kind but an index import), a sync named as syncing with its computer, a lookup by its
-         * song (or the page it reads) and the line the library page shows for it ("Estopa - Tu calorro: Looking up
+         * keeps going (every kind but an index import), a sync named as sharing logs with its computer, a lookup by its
+         * song (or the page it reads) and the line the library page shows for it ("Estopa - Tu calorro · Looking up
          * the lyrics…", JobViews.line with [facts], what the library knows of its song), and how many more wait
          * after it; null when none waits or runs.
          */
         fun lineOf(jobs: List<Job>, facts: (Job) -> SongFacts? = { null }): String? {
             val kept = jobs.filter { it.active && it.spec.kind != INDEX }.sortedBy { it.id }
             val job = kept.firstOrNull { it.state == Job.RUNNING } ?: kept.firstOrNull() ?: return null
-            if (job.state != Job.RUNNING) return "${what(job)}: waiting its turn"
+            if (job.state != Job.RUNNING) return "Waiting · ${what(job)}"
             val doing = when {
-                isLookup(job) -> "${job.display}: ${JobViews.line(job, facts = facts(job)).text}"
-                job.spec.kind == "sync" -> "Syncing with ${job.display.removePrefix("Sync with ")}…"
+                isLookup(job) -> "${job.display} · ${JobViews.line(job, facts = facts(job)).text}"
+                job.spec.kind == "sync" -> "Sharing logs with ${job.display.removePrefix("Share with ")}…"
                 job.spec.kind == "add" -> "Adding ${job.display}…"
                 job.spec.kind == "remove" -> "Removing ${job.display}…"
                 else -> "${job.display}…"
             }
             val more = kept.size - 1
-            return if (more > 0) "$doing ($more more waiting)" else doing
+            return if (more > 0) "$doing · $more waiting" else doing
         }
 
-        /** A job named as a request: "Sync with Daniel's library", "Add Estopa - Tu calorro", a lookup by its title
+        /** A job named as a request: "Share with Daniel's library", "Add Estopa - Tu calorro", a lookup by its title
          * ("Fetch Estopa - Tu calorro", "Search LaCuerda for “corazón”"). */
         private fun what(job: Job): String = when {
             isLookup(job) -> job.spec.title

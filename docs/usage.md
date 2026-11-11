@@ -576,16 +576,16 @@ at once, sheet first, and says where the sheet is the moment it is kept:
     $ caracole get "Radiohead - Creep"
     Song: added to wanted.txt, line 16.
     Match: matched to radiohead/creep.
-    Sheet: tab 4169 from Ultimate Guitar: /home/you/Tabs/Radiohead/Creep/sheet.txt, readable after 2.1 s.
+    Sheet: tab 4169 from UG: /home/you/Tabs/Radiohead/Creep/sheet.txt, readable after 2.1 s.
     PDF: made.
     PDF: /home/you/Tabs/Radiohead/Creep/sheet.pdf
     Lyrics: found.
     Ultimate Guitar: sheet 4170 · tab 4172 · kept beside it: tab 4169, tab 4171.
     Sheet: a better one replaced it, in /home/you/Tabs/Radiohead/Creep/sheet.txt.
-    LaCuerda: skipped: not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month.
+    LaCuerda: skipped: not for LaCuerda: not Spanish, a full sheet already, or asked this month.
     gtptabs.com: Guitar Pro file downloaded.
     Pages: _todo.md and index.html rewritten.
-    Done in 9.4 s: 8 requests (Ultimate Guitar 5, LRCLIB 1, gtptabs.com 2).
+    Done in 9.4 s: 8 asks (Ultimate Guitar 5, LRCLIB 1, gtptabs.com 2).
 
 In order:
 
@@ -629,9 +629,9 @@ In order:
    songs and settings did not change is left as it is: "up to date"), then
    `_todo.md` and `index.html` once more, so the library page's Songbooks tab
    has the songbook's files as they are now. A songbook that does not list the
-   song is left alone. On `caracole serve`, once the lookup is over (Fetch now,
-   Fetch it now, a set list's Get it), the Songbooks tab is drawn again: the
-   song shows there with its sheet, and no Get it. A songbooks.toml that cannot
+   song is left alone. On `caracole serve`, once the lookup is over (Fetch on a line or the
+   request form, a set list's Fetch), the Songbooks tab is drawn again: the
+   song shows there with its sheet, and no Fetch. A songbooks.toml that cannot
    be read is said on that line and stops nothing: the lookup still exits 0.
 
 It keeps the interactive pace ([Two paces](#configure)): a quarter of a second
@@ -670,13 +670,13 @@ Options:
   `caracole add`.
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
 - `--no-songbooks` leaves the songbooks that list the song as they are (by
-  default the lookup makes them again). The page's Get the missing songs now
+  default the lookup makes them again). The page's Fetch the N missing songs
   uses it for each song and makes the songbook once, after them all; such a
   lookup's Try again runs alone, without it, and makes them again itself.
 
 A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
-Ultimate Guitar sheet: pick its UG song with `--ug`, with Get it on the page
+Ultimate Guitar sheet: pick its UG song with `--ug`, with Fetch on the page
 `caracole serve` serves, or with `caracole review`.
 
 ### caracole versions
@@ -795,7 +795,7 @@ say), nothing is removed and it exits 1.
   bought, in Music/, is never touched: the song lets go of it. overrides.toml
   keeps its entries for the song, which apply again if you ask for it again.
   So does songbooks.toml: a [songbook](#songbooks) with the song lists it as
-  missing, "not in the library", until you take it out (`caracole songbook
+  missing, "not in the logbook", until you take it out (`caracole songbook
   remove`, or × on `caracole serve`) or ask for the song again; its files
   keep the song's sheet until the next render makes them again.
 - **It stays out.** caracole remembers the song as removed, so neither the
@@ -1404,10 +1404,10 @@ and cache.
   list may take one per spelling, "the" or "y" kept or not), and none when the
   page is in the cache (30 days). Its last line starts with what LaCuerda
   answered, which caracole serve's request line shows: `Read: LaCuerda's page
-  of Joaquín Sabina lists 241 songs, in the index now.`, `Not found: LaCuerda
-  has no artist page for NAME.`, or `Not read: …` for a cooldown, a block, a
-  spent budget or an error (`Not read: LaCuerda failed (…); nothing changed:
-  try again later.`), all of which exit 0, nothing changed. It can't go with
+  of Joaquín Sabina lists 241 songs.`, `Not found: LaCuerda
+  has no page for NAME.`, or `Not read: …` for a cooldown, a block, a
+  spent budget or an error (`Not read: LaCuerda failed (…). Try again
+  later.`), all of which exit 0, nothing changed. It can't go with
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
   runs it, and so does Ask LaCuerda for a name its listings
   haven't reached yet, once LaCuerda's search for the query can't go by hand
@@ -1513,8 +1513,7 @@ and cache.
   the sitemap lists it). It asks at the lookup pace, as `caracole get` does,
   within a lookup's budgets: one request, and none when caracole read the page
   within 30 days. Its last line starts as `caracole lacuerda --artist`'s does:
-  `Read: harptabs.com's page of billy joel lists 30 of their 98 tabs, in the
-  index now.`, `Not found: harptabs.com's sitemap lists no artist named NAME.`
+  `Read: harptabs' page of billy joel lists 30 of their 98 tabs.`, `Not found: harptabs lists no artist named NAME.`
   (no request), or `Not read: …` for the site turned off, its index still
   empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
   nothing changed. It can't go with `--index` (exit 2). An artist's Read their
@@ -1757,9 +1756,8 @@ and cache.
   where the viewer opens), that is all. On any other key, mode, capo, chord
   played instead or shape chosen, it first asks **Make this your version of
   Amazing Grace?**, with the version in words ("D Dorian, capo 2") and "Its
-  PDF, its viewer and your songbooks will start there.": **Download and make
-  it mine** downloads it and queues the same command with `--mine` (caracole
-  serve writes no overrides.toml itself), **Just download** downloads it, and
+  PDF, sheet and songbooks start there.": **Make mine** downloads it and queues the same command with `--mine` (caracole
+  serve writes no overrides.toml itself), **Download only** downloads it, and
   Cancel (or Escape, or ×) does neither. The text size, the scroll speed,
   the chord names, the necks, the pinyin, the strum and the instrument are
   how you read the song, not where it is played: they ask nothing.
@@ -2357,8 +2355,8 @@ the library folder's name: "Tabs"), which the browser tab's title says too
 ("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
 the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
-tab](#the-sites-tab)) and, served, **Requests**, the last (see Requests, under
-[caracole serve](#caracole-serve)), Songbooks and Requests counting what they
+tab](#the-sites-tab)) and, served, **Journal**, the last (see Journal, under
+[caracole serve](#caracole-serve)), Songbooks and the Journal counting what they
 hold (songbooks; requests that wait or run), the address remembering which
 (`#tab=songbooks`, `#tab=sites`, `#tab=requests`), and at the end the number of songs
 wanted or ignored when there are any. On a phone the tabs fit beside the mark,
@@ -2400,13 +2398,13 @@ something, one word: Wanted, Needs review when caracole isn't sure of the match,
 or Ignored (a found song, nearly every one, says nothing); its key, in a small
 box ("Am"; a screen reader hears "Key A minor (from the tab)", see [The song's
 key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
-**Fetch now**, a download icon in the accent, which looks the song up then and
-not before (Pick the match for one that needs review first, and Removing…
+**Fetch**, a download icon in the accent, which looks the song up then and
+not before (Pick for one that needs review first, and Removing…
 while caracole removes it); and a chevron, which unfolds the song in place,
 turned while it is open. The title opens it too. A song you have has no
 button to fetch it again on its line: **Fetch again** is in its card. From
 720 px the line is one row of columns, the title and its buttons first, then
-the artist (sorted by title or by when added), the status, Fetch now, the key
+the artist (sorted by title or by when added), the status, Fetch, the key
 and the chevron, so that the keys and the chevrons line up. Where each file
 came from, each site's own icon says beside the file under the chevron too
 (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
@@ -2414,14 +2412,14 @@ came from, each site's own icon says beside the file under the chevron too
 
 Its chevron opens the song in place, as a card over the list, which the
 chevron closes again. At its top, its key in words and where it came from ("Key
-A minor (from the tab)", "Key C major (estimated from the chords)", "(from the
+A minor (from the tab)", "Key C major (guessed from the chords)", "(from the
 audio)"), its transposition, its lyrics' state and when it was added. Then what
 needs you: a review's candidates (below); where it stands on the YouTube route,
 when caracole takes the audio of songs with no human sheet from YouTube ("No
 human sheet yet: caracole takes the audio from YouTube next", "Audio from
 YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
-it; and, served, Look in the index.
+it; and, served, Look in index.
 
 Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
 version, the source it came from with that source's mark, its formats at the end), in the order of the
@@ -2460,7 +2458,7 @@ written the page; a version UG no longer has says so. The versions caracole
 hasn't kept are counted, not listed (`10 more on Ultimate Guitar, not kept`).
 On the page `caracole serve` serves, each version but the one has **Use this
 one**, which makes it the sheet, as `caracole versions --choose` does (a
-`[pin]`); while a `[pin]` chooses the sheet, **Back to caracole's pick**, as
+`[pin]`); while a `[pin]` chooses the sheet, **Back to our pick**, as
 `--clear` does; and the versions not kept have **Fetch them**, which keeps them
 beside the sheet as `caracole versions --keep-more` does, within a lookup's
 budget (**Fetch 6 more** when more are left than one lookup may keep: press it
@@ -2471,7 +2469,7 @@ Hotel California'`. **LaCuerda**'s: the sheets caracole met there, the most of
 the lyrics first, each with its page (↗), In use on the one that is the sheet
 and, served, Use this one on the others, which looks the song up keeping that
 sheet, as Use LaCuerda's sheet does; while your choice on Ultimate Guitar is in
-use, it says so, with Back to caracole's pick, as a `[pin]` outranks a LaCuerda
+use, it says so, with Back to our pick, as a `[pin]` outranks a LaCuerda
 pick. The **auto sheet** beside a human one: its viewer, its PDF, text and
 ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
 file, Open where the page shows it, and Download. A harmonica tab with its page
@@ -2494,7 +2492,7 @@ leave caracole (↗): its MuseScore pages, each a possible match, as on the
 to-do page, and for a song without a sheet, its search and buy links. At its
 foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
 songbook…** (see Songbooks, below), for a song the page had when it was loaded
-(one that Get it or a request brought since has it once the page is loaded
+(one that Fetch or a request brought since has it once the page is loaded
 again); and at the far end a **⋯** that opens info.json, a quiet download, and,
 served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
 drawn again (a request over) keeps its card open, its drawer closed.
@@ -2593,12 +2591,12 @@ says so, and Enter waits for a search without one. The page puts each word of a 
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
 it, and the names after `--` when one starts with "-" (the artist -M-), so that
 caracole takes none for an option. `caracole serve` serves the same page, where typing searches what the
-sites have too, under the same artist headers, with Get it, and a form to
+sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
 On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
 at least 44 pixels each way, for a thumb, and so are each line's buttons, its
-Fetch now and its chevron (its title, beside them, is as tall): a phone shows
+Fetch and its chevron (its title, beside them, is as tall): a phone shows
 about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
@@ -2614,7 +2612,7 @@ toolbar beside the search has no button for it. It puts a box at the start of
 each song's line: tick songs in the order they go in the songbook (each box
 shows its place, and a screen reader says it: "Pick Creep by Radiohead, 2nd").
 A tap anywhere on a line ticks it, or unticks it: while you select, each line's
-Fetch now and chevron are put away, a request's line still says how it goes but
+Fetch and chevron are put away, a request's line still says how it goes but
 without its links (Details), and a tap on its title or its buttons opens nothing,
 so a tick never opens a file by mistake. Search, filter and sort between ticks; the bar
 at the bottom counts them, `3 selected`. Give the songbook a name and tap Make
@@ -2645,7 +2643,7 @@ each song a line, as dense as the library's with a mouse, with its place, its
 title (which opens its sheet), its artist and where the songbook plays it, its
 chip: "G Dorian" for a song with a setting of its own there, its own
 version's key ("A Minor") for one without, or why it has no sheet ("No
-sheet yet", "Not in the library"). A capo is named only when the song is
+sheet yet", "Not in the logbook"). A capo is named only when the song is
 played with one ("E Minor, capo 2"), never as "capo 0". A song caracole
 keeps a Guitar Pro file for has a small guitar after its title, so a set list tells
 you which songs you can play along to as tabs too: drawn solid, a Guitar Pro or
@@ -2690,13 +2688,13 @@ and the last nightly run, when it started and ended and the requests it sent
   how far it has got (LaCuerda's letters, harptabs.com's artist pages,
   gametabs.net's game pages, UG's sitemaps while a build has some left).
   LRCLIB and YouTube have no index: they are asked song by song.
-- **In your library**: what caracole keeps from the site for your songs, in its
+- **In your logbook**: what caracole keeps from the site for your songs, in its
   own unit (sheets, lyrics, Guitar Pro files, MuseScore's links, harmonica tabs,
   tabs, auto sheets from YouTube's audio), and what share of your songs that is.
 - **Last run**: the requests the last nightly run sent the site, out of its
   budget (YouTube: yt-dlp runs). A command run by hand, or a lookup, isn't counted.
 - **Status**: **OK**, **Indexing** (its index isn't read whole yet),
-  **Cooling down** (after a block: until when and why), **Errors** (nothing has
+  **Waiting out** (after a block: until when and why), **Errors** (nothing has
   worked since its last error) or **Off** (`enabled = false` in caracole.toml,
   or YouTube without auto-chords). The to-do page's provider health table follows
   the same rule.
@@ -2744,7 +2742,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   underlined under the pointer or the keyboard's focus; on a phone it is a
   thumb's target. A kept version's page and a songbook's songs have it too.
 
-- **An auto sheet's video**: under "Auto-generated, unverified", an auto sheet
+- **An auto sheet's video**: under "We heard these chords in the recording. Unchecked.", an auto sheet
   made from a YouTube video's audio shows YouTube's icon (its "YT" badge until
   caracole has fetched the icon), the video's title, a link to the video, and
   its channel under it, muted. The link opens YouTube in the same tab, from the
@@ -2864,7 +2862,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   draw bends above, the blow bends below), the tonic in rust, the key's
   notes dark, the rest faint, and the harp's notes outside the key ("Outside B
   minor: C."); then a card per chord, the holes that play it lit ("draw 4–6",
-  "draw 4–6 · as Em, the minor stand-in") or "no chord here". It follows the
+  "draw 4–6 · as Em, minor substitute") or "no chord here". It follows the
   song as it sounds: a harmonica takes no capo, and a transposition moves
   every harp. It starts on the harp the song's harmonica tab plays on (with the
   record, or as its words say), else on the first harp for the song's key.
@@ -2899,7 +2897,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
-  library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
+  library's links don't carry it. **Reset all** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
   there is no rail and no button for it, but the neck (narrowed with the
   keyboard's focus in the rail, the focus goes to the bar).
@@ -2946,7 +2944,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   substitute)"), or "not on this harp"; and the song's harmonica tabs from
   harptabs.com, a link each to its page (see [The harmonica tab
   page](#the-harmonica-tab-page)) with its text beside it, and the key its
-  harptabs.com page named, `key C (harptabs.com)`: the song's key on some tabs,
+  harptabs.com page named, `key C (harptabs)`: the song's key on some tabs,
   the harp's on others, so never a harp. A chord's card and the strip draw the harp's ten holes, those it
   plays lit. The **Flute**
   (concert pitch) and the **Recorder** (soprano, sounding an octave above the
@@ -2968,8 +2966,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   does every step to another song in a songbook (a
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
-  **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
-  the instrument shown, and **Download and make it mine** keeps it, so the song
+  **Reset all** leaves it as it is. **Export PDF** makes the PDF on
+  the instrument shown, and **Make mine** keeps it, so the song
   opens there (`caracole render --version`'s `inst=`); a songbook may play a
   song on its own (`caracole songbook set --instrument`).
 - **The versions** of a song Ultimate Guitar has several of: under the key
@@ -2985,8 +2983,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   note. It sits where the settings do (at the foot on a phone, a rail beside
   the song from 900 px wide, in their place). A kept version opens from it;
   one gone from UG is listed and opens nothing. Served by `caracole serve`,
-  **Keep it** on a version not kept, **Make this the one** on a kept
-  version's page, and **Back to caracole's pick** while a `[pin]` of yours
+  **Keep** on a version not kept, **Make this the one** on a kept
+  version's page, and **Back to our pick** while a `[pin]` of yours
   chooses the sheet (the one `caracole versions --clear` takes out),
   open caracole serve's page that does it. Opened from a file, each shows the
   `caracole versions` command that does it, with Copy, and a version not kept
@@ -3035,7 +3033,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes and swaps (its key on whichever sheet the song has now), whenever its
   address names no other (an address with a
   `t=`, `mode=`, `capo=`, `alt=` or `at=` is that version instead); the address
-  then always names its `t=`, and **Reset everything** goes back to it. What
+  then always names its `t=`, and **Reset all** goes back to it. What
   the browser kept for the page before the song had that version is left
   out. **Capo**, on every
   song, moves the capo a fret at a time, from none to
@@ -3058,7 +3056,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is. The
   song's own mode has a thicker edge among the others, and the line over them
-  says what the mode played sounds like ("minor, with a brighter sixth").
+  says what the mode played sounds like ("minor, brighter 6th").
 - **Chord names**, one of three: Chords, + Numerals (each chord's name and its
   numeral) or Numerals (the numeral in its place). A numeral says
   what the chord is in the key, as a Roman numeral counted up the key's scale
@@ -3157,7 +3155,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - Every chord's shape in a strip above the song (the guitar in the bar, or
   All chord shapes in the settings; kept for the page, as the text size is): the
   shapes alone, large enough to read at a glance; tap one for its card,
-  with the fingers. Reset everything, alone at the foot of the settings, puts the
+  with the fingers. Reset all, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
   the viewer starts them, shows the rail of necks again, hides the pinyin and
   shows the Chinese in Simplified characters.
@@ -3222,7 +3220,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   drawn and played "in the browser" (see
   [Guitar Pro files in the browser](#caracole-serve)); from the folder, it is
   a "download", the file itself.
-- **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
+- **Auto-scroll**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
   browser allows it. While it is on, a pill steers it, just above the bar's
@@ -3332,7 +3330,7 @@ the library page link it, the tab's text beside it.
   Served by `caracole serve`, the Read as line's last words ("guessed (0.86)",
   "as you set it") open the server's page of the readings caracole weighs for
   the tab, best first, each with its Q and a button that reads it so, harptabs.com's
-  own among them (**As harptabs.com writes it**), and **Back to caracole's
+  own among them (**As harptabs writes it**), and **Back to caracole's
   guess** when you set one (a tab read by harptabs.com's key, or shown as
   written, has a "Change how it's read" link at its foot instead). From a file
   there is no link: `caracole harmonica` does the same from a terminal.
@@ -3360,7 +3358,7 @@ the library page link it, the tab's text beside it.
 - **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
   with none), with the rail hidden, the pinyin, the Chinese characters and the
   instrument as they came (served, where the browser keeps nothing, the
-  address carries them both ways), and **The tab as text**, at the foot, opens
+  address carries them both ways), and **Tab as text**, at the foot, opens
   `harmonica-1.txt`.
 - **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
   and shown: its harp is the page's, both ways (a harp tapped on the circle is
@@ -3413,7 +3411,7 @@ YouTube, a ♪ for a sheet the
 audio model wrote (auto-chords) from audio you bought, YouTube's for one it
 wrote from the audio caracole took from YouTube, and a ↓ for a file you filed
 from `_inbox/`.
-A site's mark is named for screen readers ("from Ultimate Guitar").
+A site's mark is named for screen readers ("from UG").
 
 A site's icon is its favicon. The nightly run's icons step asks each site for
 it once, from the first night the library has something from that site (a
@@ -3472,7 +3470,7 @@ offline Ultimate Guitar index, LaCuerda's and harptabs.com's (see below):
     On gametabs.net (offline index)
       nothing matches
 
-- **In your library**: every song, whatever its status, with its key when it
+- **In your logbook**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
   is tagged with where the sheet came from, as `index.html` marks its files with the
   site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), `[YouTube]`
@@ -3748,7 +3746,7 @@ Ultimate Guitar's index reads as a title ("creep"):
     On LaCuerda (offline index)
       nothing matches
 
-      LaCuerda's index is still being read: 2,957 artists so far, with #, A, B read
+      LaCuerda's index is being read: 2,957 artists so far, with #, A, B read
       whole; the nightly run reads the rest.
 
       LaCuerda hasn't listed E yet: caracole lacuerda --artist "estopa" reads the
@@ -3826,7 +3824,7 @@ more there are:
 
     $ caracole search --key Am
     In your library, in A minor
-      [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
+      [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
 
     The offline Ultimate Guitar and LaCuerda indexes have no keys: search them without --key.
 
@@ -3909,7 +3907,7 @@ the library, sent as they are: they carry no badge.
   progression", "blues"; words of fewer than five letters, "pop" or "the road",
   are words, as "minor" alone is, and "creep" the song) finds your songs
   that play it too, the first among the results, and the results' head says how
-  many play it ("Your songs with I–V–vi–IV, the pop progression: 12"), with
+  many play it ("Songs with I–V–vi–IV, the pop progression: 12"), with
   Show them, the list of those alone (`#prog=`, above). The results come under the
   same artist headers as the list's, each header counting the songs
   of theirs you have and, for an artist the query names, the songs Ultimate
@@ -3938,7 +3936,7 @@ the library, sent as they are: they carry no badge.
   otherwise queues `caracole lacuerda --artist estopa` (a request for
   each spelling of the name tried, usually one), then lists their songs in a
   group of their own, first, or says what LaCuerda answered: `Not found:
-  LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
+  LaCuerda has no page for estopa.`, or, for a cooldown, a block, a
   spent hour's budget or an error, `Not read: …`, with a link to the request's
   output. The name is chosen as `caracole search` chooses it: the artist the
   query names on Ultimate Guitar (never one whose name puts another word between
@@ -3976,7 +3974,7 @@ the library, sent as they are: they carry no badge.
   with its mark (`Harmonica 98` in an artist's header: the tabs their page says
   they have; `harmonica tab ×4` on a line): a song's harmonica tabs by an artist
   whose page caracole has read, the most viewed first under its "⋯", each a
-  Get it that keeps that tab, and the line's own Get it, on a song the other
+  Fetch that keeps that tab, and the line's own Fetch, on a song the other
   sites don't have, keeps the most viewed (a lookup with `--harptabs`, recorded
   under `[harptabs]`). An artist's group ends with "+ 1 more by billy joel on
   harptabs.com" for the rest of the songs the index holds of theirs, or, when
@@ -3988,7 +3986,7 @@ the library, sent as they are: they carry no badge.
   **gametabs.net**'s tracks of games share them too, the game as their artist
   ("Hollow Knight"), with its mark (`game tab ×2` on a line) and their
   instruments' badges: a track's tabs the most viewed first under its "⋯", each
-  a Get it that keeps that tab, and the line's own Get it, on a song the other
+  a Fetch that keeps that tab, and the line's own Fetch, on a song the other
   sites don't have, keeps the most viewed (a lookup with `--gametabs`,
   recorded under `[gametabs]`; none while gametabs.net is turned off).
   **Instruments.** A row for one instrument says which, in an outlined badge
@@ -4005,7 +4003,7 @@ the library, sent as they are: they carry no badge.
   your own typing stops a search: two people searching at the same moment (on
   two phones, or the library page and the lookup page) each wait their turn
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
-  line under the box says "Searching the sites…" until the first answer comes.
+  line under the box says "Searching sites" until the first answer comes.
   Then it is a row of marks, one a place searched, each with how many songs it
   found there: your songs first (the results' own, by caracole's "¿"), then
   Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore, harptabs.com and
@@ -4022,24 +4020,24 @@ the library, sent as they are: they carry no badge.
   caracole (MuseScore), a dashed edge where its index is empty yet, and "off" on
   a dashed edge where it is turned off in caracole.toml. Each mark's tooltip
   says it in words, then why, in one line ("0 on LaCuerda: index in part, up to
-  C", then "LaCuerda's index is still being read: 2,957 artists so far, with #,
+  C", then "LaCuerda's index is being read: 2,957 artists so far, with #,
   A–C read whole; the nightly run reads the rest."); a screen reader hears each
   mark that way ("7 on Ultimate Guitar"), and, as an answer comes, the counts
   that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5 on gametabs.net").
   A mark is no button. While the next query's answer comes the row dims, and
   what follows an answer (an artist's songs listed by "+ N more", an error) is
   said in words after the marks. Nothing under the results says it again: only
-  Ask LaCuerda, and "Why can't caracole find it?", when they apply.
+  Ask LaCuerda, and "Why isn't it found?", when they apply.
 
   When a query finds nothing on the sites, the list ends with a line of its
   own, under a quiet band, "Not on the sites": the query in its quotes, and
   **Request** where a song's Open is, which opens the request form below,
   filled in from the query (the form shows only then: one Request); the marks
   under the box say where caracole looked, every site at 0, and a screen reader
-  hears "Nothing on the sites". Its
+  hears "Not on the sites". Its
   chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
   listings don't reach the name's letter (LaCuerda's search first, as under
-  results), and "Why can't caracole find it?", folded: Ultimate Guitar's
+  results), and "Why isn't it found?", folded: Ultimate Guitar's
   sitemaps name some artists only by a number (Joaquín Sabina, Maná, 宋冬野),
   so caracole can't see their tabs, with the `[artist_url]` lines to paste
   into overrides.toml for the query as that artist's name, and, for a title,
@@ -4047,13 +4045,13 @@ the library, sent as they are: they carry no badge.
   names, or to a song's title (as [caracole search](#caracole-search) chooses
   them), each comes first as an artist's band of its own, "Stephen Foster · 7
   songs on UG · you have 1", a song suggested a line in its artist's band, as
-  the search's lines are (its title, its sites' marks, and Get it, which looks
-  it up as a result's Get it does; your own line, its buttons opening what it
+  the search's lines are (its title, its sites' marks, and Fetch, which looks
+  it up as a result's Fetch does; your own line, its buttons opening what it
   holds, for a song you have), your songs of theirs under it as an artist's are,
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
   index holds, or the offer to read their page), with no request; what a
-  screen reader hears under the box names the first: "Nothing on the sites ·
+  screen reader hears under the box names the first: "Not on the sites ·
   did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
   Foster?". Enter
   still only moves to the first line. Searching asks no site anything: it reads the indexes
@@ -4067,7 +4065,7 @@ the library, sent as they are: they carry no badge.
   pages caracole has read; LaCuerda's search finds the rest. Once a query has
   settled, the box unchanged for 1.5 s, the page sends it by itself, one request
   at a lookup's pace (`caracole lacuerda --search`, a request of its own in the
-  Requests tab), when the query has a word of 4 letters or more, LaCuerda's
+  Journal), when the query has a word of 4 letters or more, LaCuerda's
   index has no song that matches it well (letters inside a word never do:
   "maná" is no "Mañana Clara"), nor the artist it names with their page read
   (all their songs are there already), nor has your library (a song of yours
@@ -4100,7 +4098,7 @@ the library, sent as they are: they carry no badge.
   **Enter never asks for a song**, however clear the best result (LaCuerda's
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
-  on to its name and its button; Get it, or a click or a key on the name,
+  on to its name and its button; Fetch, or a click or a key on the name,
   does. Escape, or Back to your songs (over results; a search that found
   nothing on the sites has none), goes back to
   the list with your search and buttons as they were (Escape again clears the
@@ -4109,8 +4107,8 @@ the library, sent as they are: they carry no badge.
   below); ↓ goes from the box to the first result's button. The address keeps
   it (`#q=wonderwall&all=1`).
 
-  **Get it**, the download icon at a line's end (named "Get Oasis - Wonderwall
-  from Ultimate Guitar" to a screen reader and as a tooltip; **Get it again**
+  **Fetch**, the download icon at a line's end (named "Fetch Oasis - Wonderwall
+  from UG" to a screen reader and as a tooltip; **Fetch again**
   for a song of yours the page has no line of, **Add again** for one you
   removed), looks the song up at once, and nothing before it is pressed: as Ultimate Guitar's song
   when the line has one, as `caracole get --ug …` does, recording the pick in
@@ -4122,14 +4120,14 @@ the library, sent as they are: they carry no badge.
   its names, as `caracole get` does. Its chevron has what each site has: Ultimate
   Guitar's versions ("Chords 2 of 13", each with an "on UG" link to look at it
   there first), each looked up as `--tab …` (`[pin]`); LaCuerda's page and,
-  beside Ultimate Guitar's song, Get it with this sheet, which keeps
+  beside Ultimate Guitar's song, Fetch with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
+  line of its own ("Sending…", "Fetching from UG… · 2 of 7
   done"), with the lookup's steps as chips under it, as on a song's line
   (below), and once the sheet is kept the line is the song's own line, yours,
-  its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
-  "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
+  its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Fetch does**: a click on
+  "Wonderwall", or Enter or Space on it, looks the song up just as Fetch would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
   song of yours' title opens its card; and on the file, with no caracole serve,
@@ -4146,18 +4144,18 @@ the library, sent as they are: they carry no badge.
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
   (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), is your own
-  line; one new to the library since the page loaded says In your library and
-  Get it again, and is looked up as your song: no second song, and no line
+  line; one new to the library since the page loaded says In your logbook and
+  Fetch again, and is looked up as your song: no second song, and no line
   added to wanted.txt. In the results, on this page and the lookup page, a song
   you have a sheet for stands out: its name in the text's colour on a faint wash
   of the accent colour with an edge to it, where every other line, a site's or
   one of yours still wanted, has a muted name on a plain one (its pill, In your
   library, is left to a screen reader). A song your library hasn't, from Ultimate Guitar,
-  LaCuerda or gtptabs.com, also has **Add for tonight's run** under its chevron: it
-  goes into wanted.txt under the site's names, as Request does with Fetch it
-  now unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the
-  pick recorded: its request says Added: tonight's run gets the sheet you
-  picked on LaCuerda, as its line's chevron does, with a link to that sheet's
+  LaCuerda or gtptabs.com, also has **Add for tonight** under its chevron: it
+  goes into wanted.txt under the site's names, as Request does with Fetch
+  unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the
+  pick recorded: its request says Added · your LaCuerda pick comes tonight,
+  as its line's chevron does, with a link to that sheet's
   page, and it waits for no Ultimate Guitar review of other artists' songs of
   its title), and the nightly run looks it up (not a song under one of UG's
   `misc-…` names, which are no one's: request it by name as you know it).
@@ -4173,7 +4171,7 @@ the library, sent as they are: they carry no badge.
 
   `/lookup`, the lookup page, still answers, though no page's header links to
   it any more: the same search of your library
-  and the Ultimate Guitar and LaCuerda indexes, whose Get it (or a song's name,
+  and the Ultimate Guitar and LaCuerda indexes, whose Fetch (or a song's name,
   which does the same) reads the sheet on the page as it arrives, stage by
   stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
@@ -4182,28 +4180,28 @@ the library, sent as they are: they carry no badge.
   stands out, and sends LaCuerda's search as the library page's Enter does. A query spelled close to
   artists' names or songs' titles shows "Did you mean" first, a row each: an artist's, whose Their
   songs lists that artist's songs, as their row's Songs does; a song's, as the search's rows are
-  (Get it, or your own row); what a screen reader hears under the box names the first. Under its box, the same row
+  (Fetch, or your own row); what a screen reader hears under the box names the first. Under its box, the same row
   of marks as the library page's says what each site found, and goes while an artist's songs are
   listed in place of the results. A query that finds nothing
   shows the same band and line as the library page, its row's
-  Look up where a song's Get it is (the form under the results, filled in as
+  Look up where a song's Fetch is (the form under the results, filled in as
   each answer is drawn, as the library page's request form is, until you type
   into a field; it shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
-  Ultimate Guitar's Get it again, with a version of theirs to pick under "⋯",
+  Ultimate Guitar's Fetch again, with a version of theirs to pick under "⋯",
   and LaCuerda's, which keeps that LaCuerda sheet.
 - **Fetch again, and Use LaCuerda's sheet.** On the library page the index's
   rows of a song of yours are folded into your song's own line, so its chevron looks
   it up again, sending what the lookup page sends: **Fetch again**, on a song
-  with its sheet (a wanted song has Fetch now), looks it up anew, one `caracole
+  with its sheet (a wanted song has Fetch), looks it up anew, one `caracole
   get` (`POST /lookup` with the song); **Use LaCuerda's sheet**, when LaCuerda has
   one of it, looks it up keeping that sheet, as `caracole get --lacuerda` does:
   the sheet you picked on LaCuerda (`[lacuerda]`), else the best LaCuerda sheet
   caracole met for the song and didn't keep, else the one the bar's search finds
   on LaCuerda (its LaCuerda row, with chords), and none once the sheet kept is
-  LaCuerda's. The song's line then says how it goes, as for Get it. An ignored
+  LaCuerda's. The song's line then says how it goes, as for Fetch. An ignored
   song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" (where they found nothing on the sites, the line's Request opens it) takes an artist, a title and, optionally, the album and the length,
@@ -4224,22 +4222,21 @@ the library, sent as they are: they carry no badge.
   Vikingos veganos", press Request on the line that says it isn't on the sites,
   paste `https://www.youtube.com/watch?v=lzN7Thn3FV4` (as your browser shows
   it: its playlist and tracking go), and Request. The request then makes the
-  song's sheet from the video in place of a lookup, Fetch it now or not:
+  song's sheet from the video in place of a lookup, Fetch or not:
   `caracole youtube --sheet --progress` (see A sheet from a video, now, under
   [Audio from YouTube](#audio-from-youtube)), queued as any request is. A song you have
   with no human sheet, not ignored and with no purchase linked has the same
   under its line's chevron, **From a YouTube video**: the address, and
   Make the sheet, which replaces any audio it had from YouTube. The line then
-  says how it goes ("Getting the audio…", "Fetching the lyrics from LRCLIB…",
-  "Working out the chords…", "Rendering the sheet…"), with its steps as chips:
+  says how it goes ("Getting the audio…", "Fetching lyrics…",
+  "Working out the chords…", "Making the PDF…"), with its steps as chips:
   Song, Audio YouTube, Lyrics, Chords, PDF. Ready, its title and its Open open
-  `sheet (auto).html`, and the Requests tab says what the sheet holds ("Chords
+  `sheet (auto).html`, and the Journal says what the sheet holds ("Chords
   over the lyrics.", "Chords, then the lyrics.", "Chords only, no lyrics."), or
   why the lyrics wait ("No lyrics yet (LRCLIB unavailable); tonight's run tries
   again."): the nightly run asks LRCLIB again, and auto-chords makes the sheet
   again with them. A block, a cooldown, a spent budget or a network error ends
-  it **Not made yet**, the step that stopped it red, the reason in the Requests
-  tab ("YouTube is paused after a block, until …"), with Try again; a video
+  it **Not made yet**, the step that stopped it red, the reason in the Journal ("YouTube turned us back; waiting until …"), with Try again; a video
   YouTube won't give ("can't download this video; try another") or audio
   auto-chords can't read, **Failed**. A song with a human sheet ("… already has
   a sheet."), ignored or with bought audio is refused before anything is written
@@ -4254,14 +4251,13 @@ the library, sent as they are: they carry no badge.
   either names whole) asks YouTube once for its first video, by itself, once the
   query has settled (the box unchanged for 1.5 s; Enter sends it at once): one
   yt-dlp run of `ytsearch1:` for the video's title, channel and length, never a
-  download (`caracole youtube --search`, a request of its own in the Requests
-  tab), then, with no wait, its thumbnail from YouTube's image host
+  download (`caracole youtube --search`, a request of its own in the Journal), then, with no wait, its thumbnail from YouTube's image host
   (`i.ytimg.com/vi/…/hqdefault.jpg`, provider `ytimg`: one request, never twice
   for a video, kept in caracole's cache once its bytes are a JPEG, and served by
   caracole serve; a block there pauses thumbnails alone, and rows come without
   them meanwhile). A line under the results says "Looking on YouTube…", then
   the video shows as a row: its thumbnail, its title (a link to it on
-  YouTube), its channel and length, and **Make the sheet**, which opens the
+  YouTube), its channel and length, and **Make sheet**, which opens the
   request form filled in with what you searched, read with the video
   ("Nick Cani - Vikingos veganos"; "silvana estrada que problema" when the
   video is Silvana Estrada's own channel's or an index knows her: the artist as
@@ -4296,15 +4292,15 @@ the library, sent as they are: they carry no badge.
   the panel says why. Enter goes to the panel. The request form's YouTube field
   takes the same links. On the file on disk, the line to run instead:
   `caracole youtube --song 'Artist - Title' --url URL --sheet`.
-- **Fetch it now.** Ticked, as it is by default, the request is looked up at
+- **Fetch.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
-  lyrics and the rest. Each wanted song's line has Fetch now for its button,
+  lyrics and the rest. Each wanted song's line has Fetch for its button,
   which does the same, except on a song that needs review, which has no UG song
   to fetch until you say which it is (`caracole review`, or a `[match]`, `[pin]`
-  or `[reject]` entry in overrides.toml): its line has Pick the match instead
-  (below), and Get it on an
+  or `[reject]` entry in overrides.toml): its line has Pick instead
+  (below), and Fetch on an
   Ultimate Guitar song of the page's search picks one too.
-- **Pick the match.** On a song that needs review, Pick the match opens its
+- **Pick.** On a song that needs review, Pick opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
   --pick ARTIST/SONG`, which writes what answering that number in `caracole
@@ -4313,13 +4309,13 @@ the library, sent as they are: they carry no badge.
   and rewrites the pages; or, for None of these, `--none` with the
   candidates you saw, which go under `[reject]`. As a request does, the
   pick leaves you where you are: the picker gives way to the song's line,
-  which says "Writing the answer to overrides.toml…", then how the rest goes
-  (below). With Fetch it now ticked,
+  which says "Noting your answer in overrides.toml…", then how the rest goes
+  (below). With Fetch ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
   `caracole render --song`, for that song alone, at the nightly pace; None of
   these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
-  review with those, and its line offers them to pick from, with no Fetch now
+  review with those, and its line offers them to pick from, with no Fetch
   until one is picked. The candidates must still be the ones the page showed
   (the nightly run may have matched the song again: reload the page then),
   and a song whose own request waits or runs gets its pick once that ends:
@@ -4327,13 +4323,13 @@ the library, sent as they are: they carry no badge.
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
-  goes on through the candidates' UG links to Fetch it now and Pick. The picker
-  is under the line's chevron, and the line's Pick the match opens it there, the
+  goes on through the candidates' UG links to Fetch and Pick. The picker
+  is under the line's chevron, and the line's Pick opens it there, the
   focus on the first candidate.
-- **Look in the index.** A wanted song the offline index didn't match (and
+- **Look in index.** A wanted song the offline index didn't match (and
   whose sheet you didn't pick on LaCuerda: its line's chevron says Tonight's run
   gets the sheet you picked on LaCuerda instead) has a
-  Look in the index link under its line's chevron: its
+  Look in index link under its line's chevron: its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
@@ -4349,7 +4345,7 @@ the library, sent as they are: they carry no badge.
   question, which changes nothing, and Undo stops it there: the line says
   "Not removed", and Remove is back. Then the page queues `caracole remove
   --yes "ARTIST - TITLE"`, and the line says how it goes: "Removing…",
-  "Queued…", "Removing from caracole…", then "Removed", the song's line keeping
+  "Queued…", "Removing from the book…", then "Removed", the song's line keeping
   only its name, its size and its request line where it was, so that nothing
   on the screen moves, until you load the page again. From
   then on the song counts nowhere: the numbers at the top, the buttons'
@@ -4363,25 +4359,25 @@ the library, sent as they are: they carry no badge.
   under the search box, as any song new to the library does. Without JavaScript,
   Remove opens a page that says what goes and what stays; Remove it queues
   the removal and goes back to the library as you left it (its search,
-  filters and sort), the song's line in view, and Keep it goes back there
+  filters and sort), the song's line in view, and Keep goes back there
   too.
 - **How it goes, on the page.** A request leaves you where you are. The
   song's line, on a line of its own under it, or for a song new to the
   library a line of its own under the search box ("Just requested"), says
   how its request goes: "Queued…"
-  (or "Queued behind 2 requests…"), then what runs: for a request without
-  Fetch it now, "Adding to the library…"; for one looked up now, its stage
-  ("Finding the song…", "Looking it up…", "Fetching from Ultimate Guitar…",
+  (or "Queued · 2 requests ahead…"), then what runs: for a request without
+  Fetch, "Adding to the book…"; for one looked up now, its stage
+  ("Finding the song…", "Matching…", "Fetching from UG…",
   or "Fetching from LaCuerda…" while the sheet comes from LaCuerda, the one
-  you picked there or LaCuerda's when Ultimate Guitar has none, "Rendering the
-  sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from LaCuerda…",
-  "Fetching from gtptabs.com…", "Writing the library page…"), or "Waiting for
-  another caracole…" while a nightly run holds the lock until its next pause;
+  you picked there or LaCuerda's when Ultimate Guitar has none, "Making the
+  PDF…", "Fetching lyrics…", "Fetching from LaCuerda…",
+  "Fetching from gtptabs…", "Writing the logbook page…"), or "Waiting for
+  the book…" while a nightly run holds the lock until its next pause;
   then how it ended (a lookup that stopped says why, in its stage's words).
-  While a song is looked up (Fetch now, Fetch again, a search result's Get it,
-  Get the missing songs, the Songbooks tab's Add a song, Try again), the line
-  counts the steps over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"),
-  and under it each step is a chip, as in the Requests tab: Song, Match UG
+  While a song is looked up (Fetch, Fetch again, a search result's Fetch,
+  Fetch the missing songs, the Songbooks tab's Add a song, Try again), the line
+  counts the steps over ("Fetching lyrics… · 4 of 7 done"),
+  and under it each step is a chip, as in the Journal: Song, Match UG
   (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
   it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
   other, and once done the site the sheet came from), PDF, Lyrics, Extras and
@@ -4396,29 +4392,28 @@ the library, sent as they are: they carry no badge.
   change) keeps its one line. How it ended:
   - **Ready**: the steps fold away and nothing takes their place; the line is
     the song's, found, and its title or its Open opens the sheet, its files
-    under its chevron (a screen reader still hears Ready, and the focus Fetch now
+    under its chevron (a screen reader still hears Ready, and the focus Fetch
     gave the request line goes to that Open);
-  - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
+  - **Not on the sites · To-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
     index has no such song (and its artist's UG page isn't known);
-  - **Needs review · Pick the match**, when caracole isn't sure which UG
+  - **Needs your pick · Pick**, when caracole isn't sure which UG
     song it is and has candidates for it: the link opens the line's picker
     (from the corner's list of requests, the picker's own page); without
-    candidates, **Needs review · see the to-do page**;
+    candidates, **Needs your pick · To-do page**;
   - **Not fetched yet · Details**, when a cooldown, a block, a spent budget
     or an error stopped the fetch before it looked the song up: an error is
     never a miss, and the song waits for the next run (Details says if it
     doesn't);
-  - **Added: the nightly run looks for it**, for a request without Fetch it
-    now; **Added: tonight's run gets the sheet you picked on LaCuerda** for
+  - **Added · fetched tonight**, for a request without Fetch
+    ticked; **Added · your LaCuerda pick comes tonight** for
     one with a LaCuerda pick still to ask for;
   - for a read of a LaCuerda artist's page (Read their page, Read LaCuerda's
     page for a name), what LaCuerda answered, in the command's words up to its
-    first ";": **Read: LaCuerda's page of Caifanes lists 88 songs, in the index
-    now.**, **Not found: LaCuerda has no artist page for caifanes.**, or **Not
-    read: LaCuerda failed.**, **Not read: LaCuerda is cooling down after a
-    block until …**, **Not read: this hour's 60 lookup requests to LaCuerda are
-    spent.**, each with **Details**;
+    first ";" or "(": **Read: LaCuerda's page of Caifanes lists 88 songs.**,
+    **Not found: LaCuerda has no page for caifanes.**, or **Not read: LaCuerda
+    failed.**, **Not read: waiting out LaCuerda until ….**, **Not read: no more
+    asks of LaCuerda this hour.**, each with **Details**;
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
@@ -4436,19 +4431,18 @@ the library, sent as they are: they carry no badge.
   width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
   to a line per song, with no steps (the songs' lines have them), and closes;
   a request that ended Ready says just **Ready**, its song's name opening the
-  sheet. Its one Details link opens the Requests
-  tab. A songbook's change and a removal stay out of it: the songbook, in
+  sheet. Its one link, Journal, opens the Journal. A songbook's change and a removal stay out of it: the songbook, in
   the Songbooks tab, or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
-  it changes, to the last one, and Fetch now hands the keyboard focus to that
+  it changes, to the last one, and Fetch hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
-- **Requests**, the library page's last tab (`#tab=requests`; there is no
+- **Journal**, the library page's last tab (`#tab=requests`; there is no
   page of its own), shows what runs now, then what ended, as `/requests.json`
   gives it, asked again every 1.5 seconds while one waits or runs and every 10
   seconds otherwise, only while the tab shows; its tab counts the requests that
   wait or run:
   - **Now**: the request that runs, as a card with its song, how long ago it
-    started ("started 12 s ago"), its line ("Rendering the sheet…") and its
+    started ("started 12 s ago"), its line ("Making the PDF…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
     Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
     LaCuerda once it asks a site, then where the sheet came from), PDF,
@@ -4457,17 +4451,17 @@ the library, sent as they are: they carry no badge.
     harmonica tab) and Songbooks,
     the same chips the library page draws under a song's line, leaving out a
     step it
-    doesn't use (Songbooks when Get the missing songs makes the songbook
+    doesn't use (Songbooks when Fetch the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet, but never the Sheet a cooldown, a block or a spent
     budget stopped, drawn failed); for a request of other commands, its commands.
-    Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
+    Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
     one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
     page on another device, the lookup and versions pages) say so, the
-    song's line getting its Fetch now back. Cancelling a request leaves its wanted.txt line:
+    song's line getting its Fetch back. Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
     A songbook's Add a song for a song you haven't got queues two requests,
@@ -4480,44 +4474,44 @@ the library, sent as they are: they carry no badge.
     - **Ready** · **Open**, its sheet; a reason says what waits for tonight's
       run, in the site's own answer ("LRCLIB answered 503: the lyrics wait
       for tonight's run.");
-    - **Needs review** · **Pick the match**, the picker's own page,
+    - **Needs your pick** · **Pick**, the picker's own page,
       `/review?song=ID` (without candidates to pick, **Open in the library**,
       the song's line);
-    - **Not found**: "Ultimate Guitar has no chords for it" once caracole
+    - **Not on the sites**: "UG has no chords for it" once caracole
       asked Ultimate Guitar for it (its song page, or its artist's page), and
-      "Not in the offline Ultimate Guitar index under this name" for a song
+      "Not in UG's index under this name" for a song
       the index didn't match and whose artist's UG page isn't known, which
       nobody asked; then, when the local indexes have it elsewhere, what: a
       sheet LaCuerda's index holds, or a page gtptabs.com's index lists for a
-      song with no Guitar Pro file, and **Get it from there**, the lookup a
-      search's Get it runs (with that LaCuerda sheet picked), which the
+      song with no Guitar Pro file, and **Fetch from there**, the lookup a
+      search's Fetch runs (with that LaCuerda sheet picked), which the
       tab then shows. A site a new lookup would skip again isn't offered: one cooling
       down after a block, one the lookup skipped for a block or a spent
       budget, LaCuerda once asked about the song this month and gtptabs.com
       once looked up for it this month. With nothing elsewhere, a song the
-      index didn't match has **See what caracole search finds** (the
-      picker's page, Look in the index, above), also beside Get it from
-      there, and any other **Request by name**, the library page's request
+      index didn't match has **Search the index** (the
+      picker's page, Look in index, above), also beside Fetch from
+      there, and any other **Ask by name**, the library page's request
       form filled in with the song (`/#q=Artist - Title`);
     - **Not fetched yet**, with why (a cooldown, a block, a spent budget or
       an error, in the stage's words), and **Failed**, with its error in one
       sentence: **Try again** queues the same commands again
       (`POST /jobs/again`), with no question asked, a songbook's Delete
-      among them (a lookup of Get the missing songs, alone now, makes the
+      among them (a lookup of Fetch the missing songs, alone now, makes the
       songbooks its song is in again itself); a failed removal's Try again asks what goes first, as of
       now (Remove's own question, `POST /remove`);
     - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
-      artist page's **Read**, **Not found** or **Not read** (Try again), each
+      artist page's **Read**, **Not on the sites** or **Not read** (Try again), each
       in a word and a sentence;
-    - Make this my version's **Your version now** · **Open sheet** (Export
-      PDF's Download and make it mine): never its song's request, whose line
+    - Make this my version's **Your version** · **Open** (Export
+      PDF's Make mine): never its song's request, whose line
       on the library page stays its own;
     - **Interrupted**: caracole serve stopped (a restart, a crash, Ctrl-C)
       while the request ran, or before it ran: what it did by then, its
       song's line says; **Try again** queues it again (a removal asks what
       goes first). Its Output keeps what its command printed until then, the
-      step it was in marked Interrupted.
+      step it was in marked Cut short.
 
   The tab keeps the last 100 requests of the last 30 days, and a restart
   keeps them: caracole serve writes them to `requests.jsonl` in the state
@@ -4538,12 +4532,12 @@ the library, sent as they are: they carry no badge.
   why one was skipped. A song's Details link on the library page opens that
   request's output in the tab (`#tab=requests&job=N`), the page staying where
   it is; each refresh draws again only the requests that changed, each where
-  it was, its Output as you left it. Cancel, Try again and Get it from there
+  it was, its Output as you left it. Cancel, Try again and Fetch from there
   post from the tab, which stays where it is, and the song's line follows the
   request they queue. The song's line on the library page still says it the
-  short way (Not found · see the to-do page, above). A request that ended in a
-  review (`caracole add` found only candidates) says Needs review, with
-  **Pick the match**, the picker's own page; with Fetch it now ticked, its
+  short way (Not on the sites · To-do page, above). A request that ended in a
+  review (`caracole add` found only candidates) says Needs your pick, with
+  **Pick**, the picker's own page; with Fetch ticked, its
   lookup has no UG song to fetch until then: it is not a failure, and in its
   output the lookup's sheet stage Waits for a pick. `/api/jobs` and
   `/api/jobs/N` give each request as JSON: its steps (a lookup's stages),
@@ -4552,7 +4546,7 @@ the library, sent as they are: they carry no badge.
   bar and programs such as curl; a browser fetching one for another site's
   page gets 403.
 - **Without JavaScript**, the forms still post: a request, or a pick, sends you
-  to the library page's Requests tab (`/#tab=requests&job=N`), which shows it
+  to the library page's Journal (`/#tab=requests&job=N`), which shows it
   once JavaScript runs; a lookup, to the lookup page, which follows it.
 - **A sheet's PDF.** The sheet viewer's Export PDF is a link to
   `/export.pdf?sheet=<the viewer's path in the library>&<its address after
@@ -4564,16 +4558,16 @@ the library, sent as they are: they carry no badge.
   no lock. A PDF that can't be made (chordpro failing, a CJK font needed and
   not set) is refused with the reason (500). A Chinese sheet's PDF is in the
   characters the viewer shows: Simplified, or Traditional with `trad=1` in its
-  address, named so (`… (A Major, capo 0, Traditional).pdf`). With `&mine=1` (Download and
-  make it mine) it also queues `caracole render --song … --version …
+  address, named so (`… (A Major, capo 0, Traditional).pdf`). With `&mine=1` (Make
+  mine) it also queues `caracole render --song … --version …
   --mine`, which makes that version your version, as a request of its own
-  ("Your version now"). The auto sheet's viewer kept beside a human sheet and
+  ("Your version"). The auto sheet's viewer kept beside a human sheet and
   a kept version's page get none (409), as above.
 - **How a harmonica tab is read.** A harmonica tab's page links
   `/harmonica?page=<its path in the library>` (its Read as line's source, or
   "Change how it's read" at its foot): a page of the server's own with the
   readings caracole weighs for the tab, best first, each with its Q and a
-  button (`POST /harmonica/pin`), and Back to caracole's guess (`POST
+  button (`POST /harmonica/pin`), and Back to our guess (`POST
   /harmonica/clear`) when you set one. Each queues `caracole harmonica SONG
   --tab=… --as=…` (or `--clear`), which writes `[harmonica]` under caracole's
   lock and makes the song's pages again: the change of the song's own, never
@@ -4582,7 +4576,7 @@ the library, sent as they are: they carry no badge.
   overrides.toml says now. A page that is no harmonica tab caracole wrote is
   refused (404), a reading that is none (400), the tab read so already or no
   pin to take out (409).
-- **A sheet's versions.** The sheet viewer's Make this the one and Keep it
+- **A sheet's versions.** The sheet viewer's Make this the one and Keep
   open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
   runs in a sandbox, with no way to send a form), and `do=clear` is Back to
   caracole's pick:
@@ -4594,18 +4588,18 @@ the library, sent as they are: they carry no badge.
   as `caracole get --tab` does with the tab's own page: it becomes `sheet.txt`,
   the page the title opens, its PDF and its songbooks', kept under `[pin]`.
   Asked from that version's own page, which goes once it is the one, the page
-  still says how it went, and Back to the sheet opens `sheet.html`.
-  **Keep it** queues `caracole versions SONG --keep TAB`: one tab page, at the
+  still says how it went, and Back to sheet opens `sheet.html`.
+  **Keep** queues `caracole versions SONG --keep TAB`: one tab page, at the
   lookup pace, kept beside the sheet with a viewer of its own. A runner-up
   caracole keeps by itself is kept already there (sent anyway: 409), and
   stays only while caracole's ranking keeps it among the runners-up; `caracole
-  versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Back to caracole's pick**, on a song with a
+  versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Back to our pick**, on a song with a
   `[pin]` that chooses its sheet (a tab pin stays, as `--clear` leaves it),
   queues `caracole versions SONG --clear`. Each is the song's
   request, as a lookup is: its card says how it goes, stage by stage, the same
   one asked twice is queued once, and Make this the one takes the place of the
-  song's lookup still waiting. Keep it never looks the song up, so a lookup
-  asked for meanwhile (Fetch now, the lookup page's) still runs: after it, in
+  song's lookup still waiting. Keep never looks the song up, so a lookup
+  asked for meanwhile (Fetch, the lookup page's) still runs: after it, in
   its job while it waits, as a job of its own once it runs. The page then says how it goes (it reloads
   itself while it waits or runs) and, once done, what it came to, read from the
   song and overrides.toml, not from how the command exited: the version is the
@@ -4619,7 +4613,7 @@ the library, sent as they are: they carry no badge.
   The library page's song sends the same three by the song's id (`song`, in
   place of `sheet`), and one more: **Fetch them**, `POST /versions/keep-more`,
   queues `caracole versions SONG --keep-more`, the Ultimate Guitar versions
-  not kept yet, as many as one lookup may, a request of the song's as Keep it
+  not kept yet, as many as one lookup may, a request of the song's as Keep
   is (refused, 409, for a song with none left to keep, or an ignored one).
   Each shows on the song's line as any request does, not on a page of its own.
 - **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
@@ -4629,27 +4623,27 @@ the library, sent as they are: they carry no badge.
     the grip move it, and the move is sent a moment after the last key, so
     ↑ ↑ ↑ is one `caracole songbook move`;
   - its **chip** ("A Minor", "A Minor, piano") opens its key, mode, capo and
-    instrument there: **Play it here** runs `caracole songbook set NAME SONG
+    instrument there: **Play here** runs `caracole songbook set NAME SONG
     --key K --mode M --capo N`, the capo always sent with the key and the mode,
     so a sheet that takes the song's place later still sounds in that key, and
     `--instrument I` once you choose another instrument; on one with no capo
     (the piano, the harmonica, the winds) the capo menu is off and the key is
     the key the song sounds in, which the key menu takes as you choose it;
     **Its own version** runs `--clear`;
-  - **×** takes it out; **Get it**, on a song with no sheet yet, looks it up
+  - **×** takes it out; **Fetch**, on a song with no sheet yet, looks it up
     now (one `caracole get`), then makes the songbook again with its sheet;
-  - **Get the 2 missing songs now** looks up each song of yours there without
+  - **Fetch the 2 missing songs** looks up each song of yours there without
     a sheet, one `caracole get` after the other in the songbook's order, then
-    runs `caracole songbook render NAME`: its line says "Queued behind 2
-    requests…" while they run, then "Making the songbook…" and "Made · Open
-    songbook". A song "not in the library", or one overrides.toml ignores,
+    runs `caracole songbook render NAME`: its line says "Queued · 2 requests
+    ahead…" while they run, then "Making the songbook…" and "Made · Open
+    songbook". A song "not in the logbook", or one overrides.toml ignores,
     isn't looked up. With less room in the queue than songs, it gets the first
     ones, and the button offers the rest once they are done;
   - **Add a song** searches your songs and the offline indexes as you type
     (as the library's bar does: no site is asked), each result with **Add**
     (**In it** for a song the songbook has): a song of yours is put at the
     songbook's end at once (`caracole songbook add`); one you don't have goes
-    into wanted.txt, is looked up now as Get it does (`caracole get`), then
+    into wanted.txt, is looked up now as Fetch does (`caracole get`), then
     added. Nothing is queued unless both fit in the queue (a lookup that joins
     one already queued needs no room of its own);
   - **Rename or delete** renames the songbook (its new name over the set list
@@ -4659,12 +4653,12 @@ the library, sent as they are: they carry no badge.
   The songbook's status line, under its name, says how its change goes
   ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
   out", "Deleted"; once done, Made and Added link the songbook's phone page,
-  Open songbook, as their lines in the Requests tab do), and a lookup's line goes under
+  Open songbook, as their lines in the Journal do), and a lookup's line goes under
   its song in the set list (and on the song's own line in the library); the
   lookups stay out of the list of requests in the corner. While a rename or a
   deletion runs, the songbook's controls wait. Once a change is over the set
   list is drawn again as songbooks.toml has it (and so it is once any song's
-  lookup or removal is over, wherever you asked for it: a song Fetch now got
+  lookup or removal is over, wherever you asked for it: a song Fetch got
   shows there with its sheet), each line where it was: a song
   taken out says "Taken out", and a deleted songbook "Deleted", where it was
   until your next click or key, so that nothing on the screen moves seconds
@@ -4680,10 +4674,10 @@ the library, sent as they are: they carry no badge.
   keeps your ticks. A make that fails once it runs (songbooks.toml can't be
   written, say) leaves the songbook on the tab as it would have been, its line
   saying it couldn't be made and its status line why, with nothing in it to
-  change ("Not made: + New songbook can make it again."), and gives the Select
+  change ("Not made. + New songbook makes it again."), and gives the Select
   bar back its ticks, the name and why: + New songbook, then Make songbook, makes
   it again. Made again with those ticks under another name, the new
-  songbook takes its line; its Forget it takes it off the tab.
+  songbook takes its line; its Forget takes it off the tab.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -4692,9 +4686,9 @@ keeps the budgets and cooldowns. A lookup keeps the interactive pace (about a
 second between two requests to a site, six for the song, sixty an hour), and
 a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
-request, and Fetch it now on a song whose request only adds it fetches it too.
+request, and Fetch on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song, and the Requests tab keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
+loses no song, and the Journal keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the
 command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
@@ -4872,12 +4866,12 @@ tailnet, never the internet.
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
   refused too; reload the page. The one exception, your choice: Export PDF's
-  Download and make it mine is a plain link (`/export.pdf?…&mine=1`), with no
+  Make mine is a plain link (`/export.pdf?…&mine=1`), with no
   token, so a page on another site could change a song's saved version with a
   link of its own. Nothing is lost: Reset, or another version made yours,
   undoes it. `/jobs.json` and `/requests.json`, which the page's script reads,
   are refused the same way, and need the same token in an
-  `X-Caracole-Form-Token` header: a song's line, or the Requests tab, then says
+  `X-Caracole-Form-Token` header: a song's line, or the Journal, then says
   the server has restarted.
   Only the served page may ask the server anything from its script (its
   Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
@@ -5093,7 +5087,7 @@ other files and the other songbooks are still made.
 and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
 `[ignore]` and `[reject]` for you, `caracole youtube --song … --url` or
 `--none` writes `[youtube]`, `caracole get --lacuerda` and `caracole add
---lacuerda` (Get it and Add for tonight's run on a LaCuerda song) write
+--lacuerda` (Fetch and Add for tonight on a LaCuerda song) write
 `[lacuerda]`, `caracole render --version … --mine` (Make this my version)
 writes `[version]`, and `caracole harmonica --as` (or caracole serve's page of
 a harmonica tab's readings) writes `[harmonica]`; you write the rest by hand.
@@ -5299,7 +5293,7 @@ tab_ids = [1601668]
   song's candidates, and keeps its tab whoever the page names as its artist, as
   the song's next `harmonica-N.txt`, beside any it has: never in place of one. A
   tab you name is asked for at once; one gone from the site (404) is asked for
-  again after 30 days. Get it on a harptabs.com row of caracole serve's search,
+  again after 30 days. Fetch on a harptabs.com row of caracole serve's search,
   and `caracole get --harptabs`, write it.
 - **`[azlyrics]`** names a song's lyrics page on AZLyrics, written by hand, for a song
   its artist's name doesn't lead to: asked alone, whoever it credits, while the song has no lyrics.
@@ -5309,7 +5303,7 @@ tab_ids = [1601668]
   of the song's candidates, and keeps its tab whatever game or composer the page
   names, as the song's next `gametab-N.txt`, beside any it has: never in place of
   one. A tab you name is asked for at once; one gone from the site (404) is
-  asked for again after 30 days. Get it on a gametabs.net row of caracole
+  asked for again after 30 days. Fetch on a gametabs.net row of caracole
   serve's search, and `caracole get --gametabs`, write it.
 - **`[harmonica]`** says how each of a song's harmonica tabs is read, by its
   file's name (`harmonica-1.txt`): a notation (`"signs"`, harptabs.com's own;
@@ -5850,9 +5844,9 @@ it would come from:
     The two never synced: a unit on one side alone is that side's, and one both hold, differently, a conflict.
     3 differences, 1 conflict:
       Songs:
-        take there's  Estopa - Tu Calorro  (only there)
-        CONFLICT      Oasis - Wonderwall  (on both sides, different, and never synced)
-        keep here's   Radiohead - Creep  (only here)
+        theirs comes here  Estopa - Tu Calorro  (only in theirs)
+        CONFLICT           Oasis - Wonderwall  (in both books, different, never shared)
+        ours goes there    Radiohead - Creep  (only in our book)
 
 It changes nothing on either side, takes no lock and asks no site. `--json` prints the comparison as data.
 
@@ -5868,7 +5862,7 @@ What caracole makes from a song (PDFs, viewers, the pages) isn't compared: the s
 again. Nor are cooldowns, the HTTP cache or the site indexes (`caracole index export` and `merge` move those).
 
 Once two caracoles have synced, each remembers what the two agreed on, so a difference says where it changed: a unit
-changed on one side alone comes from that side ("changed there since the last sync"), and a unit changed on both, to
+changed on one side alone comes from that side ("changed there since the last share"), and a unit changed on both, to
 different things, is a conflict for you to settle. Before then, a unit on one side alone is that side's, and one on
 both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
 removed it, to remove.
@@ -5889,7 +5883,7 @@ days is the same on both; one kept before holds them until caracole keeps it aga
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what
 comes from there. With **`--here`**, this side's own `caracole serve` address as the other reaches it, it then asks
-the other to take what goes there: a request queued in its Requests tab ("Sync with …"). Without it, it prints the
+the other to take what goes there: a request queued in its Journal ("Share with …"). Without it, it prints the
 `caracole peer pull` line to run there.
 
 **`caracole peer pull`** takes the units named (as `diff --json` names them: `song/<key>`, `songbook/<name>`…)
@@ -5910,7 +5904,7 @@ new-id` gives one of them an id of its own (and forgets what it agreed on with e
 
 The other caracole's `GET /api/peer/state` gives its form token with its units, for the request a sync posts there:
 anyone who can reach caracole serve can read it from a page already, and another site's page can read neither. The
-library page's Sync tab does all of this from a browser ([The Sync tab](#the-sync-tab)).
+library page's Share tab does all of this from a browser ([The Share tab](#the-share-tab)).
 
 ### The phone pushes its changes (POST /peer/push)
 
@@ -5931,7 +5925,7 @@ the phone has taken what it takes, it pushes what the computer takes, in three r
    document as `GET /api/peer/unit` gives one (null for a unit the phone hasn't got: a song it removed). caracole
    serve checks that each document is what its digest says and that every file its songs keep was sent or is kept
    here already, then queues `caracole peer take --progress` of the push, "Changes from <its library>" in the
-   Requests tab, and answers `{"job": …}`, the request as `/jobs.json` gives it, which the phone follows at
+   Journal, and answers `{"job": …}`, the request as `/jobs.json` gives it, which the phone follows at
    `GET /api/jobs/<id>`. A second push from the same caracole while its first waits or runs is refused (409) and
    stays open, to send again once the first is taken.
 
@@ -5941,7 +5935,7 @@ the nightly run as a lookup does: it reads the push again (**check**), backs the
 here since the comparison"), one whose document isn't what was compared, or a song whose file isn't as sent, then
 renders the songs taken, makes the songbooks and writes the pages (**render**), and keeps what the two now agree on,
 stamped with the time the phone compared at (**agree**). It says each unit it took or left (`--progress`: as JSON
-lines, which the Requests tab reads), exits 0 unless caracole hits a bug, and deletes the push's folder.
+lines, which the Journal reads), exits 0 unless caracole hits a bug, and deletes the push's folder.
 
 At most two pushes are here at once, open or sent and not taken yet, and a push's files come to 2 GiB at most. A
 push left for an hour is deleted, when caracole serve starts, as a push is opened, sent or sent a file, and as a take
@@ -5974,7 +5968,7 @@ it now: compare again, and choose again.
 
 Each unit taken here is checked against both sides' digests as compared, so one that changed on either side since is
 left as it is. Then the sync keeps what the two agree on, stamped by the other side's clock, and the other side's
-address and name, which caracole serve's Sync tab lists, and brings the indexes up to date (see [Syncing parts, and
+address and name, which caracole serve's Share tab lists, and brings the indexes up to date (see [Syncing parts, and
 the indexes](#syncing-parts-and-the-indexes)). A unit left doesn't fail the sync (exit 0): it says why.
 **`--progress`** prints its stages, compare, take, give, agree and index, each unit taken, given or left, and at the
 end a report of what it did, as JSON lines for caracole serve.
@@ -6039,7 +6033,7 @@ are `peer sync`'s; with `--progress` it ends with a report of what it did, for c
 take nothing. It exits 2 for a file refused, 1 for a unit left or indexes not merged, else 0.
 
 A `caracole peer sync` compares with the answers an import remembered, as `peer diff` lists them ("kept here, as you
-chose when a file of the other's was imported"), and so does caracole serve's Sync tab: a unit kept here at an import
+chose when a file of the other's was imported"), and so does caracole serve's Share tab: a unit kept here at an import
 is given there, with no question asked.
 
 ### Syncing parts, and the indexes
@@ -6060,15 +6054,15 @@ synced and agreed on (its stage **index**): each site goes the way of the later 
   most). The other side must be a caracole serve of this version or later.
 - Neither newer, or the indexes not among the parts: nothing is asked ("no index is newer on either side").
 
-With `--progress` the sync ends with a report of what it did, for caracole serve's Sync tab: the other caracole, when,
+With `--progress` the sync ends with a report of what it did, for caracole serve's Share tab: the other caracole, when,
 the parts, and each index taken or given with the tabs it tracked before and after (the rows of its first table:
 UG's sitemap index, LaCuerda's listings, …) and when it was read. An index stage that fails says why; the sync exits
 1, the units taken and given all the same.
 
-### The Sync tab
+### The Share tab
 
-The library page caracole serve serves has a **Sync** tab, the last, after Requests (on a wide screen Library and
-Songbooks sit on the left, Sites, Requests and Sync on the right). It holds three panels:
+The library page caracole serve serves has a **Share** tab, the last, after the Journal (on a wide screen Library and
+Songbooks sit on the left, Sites, Journal and Share on the right). It holds three panels:
 
 - **Sync with a server**: the other caracole serve's address (`http://192.168.1.20:8737`; the one it synced with last
   is there already, and the others it synced with are offered as you type), **Test**, which asks it what it holds and
@@ -6092,7 +6086,7 @@ Each opens the same sheet the phone's sync button opens, so a sync goes the same
    an override; a songbook's set list). Under **Which version to keep**, a button for each side: **This computer** and
    the server's name. Tick **Same for the other N**, then a side, to keep it for every conflict left. There is no
    Skip: **Cancel** (or Escape) ends the sync with nothing taken, given or sent, and forgets the sides you chose.
-3. **What it did.** The sheet follows the sync (a request like any, in the Requests tab too), then says "Synced with:
+3. **What it did.** The sheet follows the sync (a request like any, in the Journal too), then says "Synced with:
    Studio" and when, the two sides as icons, and a line for each kind of change, an arrow the way it went: songs taken,
    songs given (and why: "added on this computer"), the conflicts (whose version was kept, and how it differs), the
    songbooks (each with what changed in it) and the indexes (the tabs each site's index tracks, before and after; a
@@ -6118,7 +6112,7 @@ without Sync, is dropped at once, so that the next can be sent right after.
 The same sheet opens at an address: `#sheet=sync`, `#sheet=export` or `#sheet=import` after the library page's
 (the phone's Settings use these).
 
-The sync is a request like any, in the Requests tab too, where a sync that left something or failed offers
+The sync is a request like any, in the Journal too, where a sync that left something or failed offers
 **Compare again**, never Try again, as its choices were made on a comparison that is past. caracole serve writes
 nothing for it but the request: `caracole peer sync` keeps what the two agree on, and the other side's address and
 name, which `GET /api/sync` lists.
@@ -6147,7 +6141,7 @@ is `phone` and a comparison's other side, the computer, is of `kind` `computer`)
   queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
   `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
 
-The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+The phone's Share logs on Wi-Fi is the same sync, unattended: the three parts, every change made on one side
 alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
@@ -6217,7 +6211,7 @@ search answer the computer has already kept as it is, and no progress record mov
 database, as before any merge: a sync that brings pages the computer lacks makes one (a few seconds for a large
 library, holding caracole's lock), and the newest three copies are kept, whatever made them, so three such syncs
 in a day leave merges' copies where the nightly ones were (each a whole copy all the same). **`--progress`** reports its one stage, merge, as a JSON
-line, which the Requests tab reads ("Index pages from another caracole": Merged, and what each site took), ending
+line, which the Journal reads ("Index pages from another scribe": Merged, and what each site took), ending
 `failed` however the command stops short of a merge (caracole's lock or its database not to be had too), and waits
 for the nightly run as a lookup does, which lets it go first at its next pause. **`--delete`** deletes FILE once it
 is merged; refused, only a file caracole serve staged (`state_dir/peer/index-<16 hex>.sqlite`, which can never be

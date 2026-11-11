@@ -101,8 +101,8 @@ object SongbookSection {
     private fun unread(why: String?, shared: Map<String, JsonElement>): JsonObject {
         val out = linkedMapOf<String, JsonElement>(
             "books" to JsonArray(emptyList()),
-            "error" to JsonPrimitive("songbooks.toml can't be read: $why. Fix it, and the songbooks are back; " +
-                                         "until then each keeps its files."),
+            "error" to JsonPrimitive("songbooks.toml can't be read: $why. Fix it and the songbooks return; " +
+                                         "each keeps its files meanwhile."),
         )
         out.putAll(shared)
         return JsonObject(out)

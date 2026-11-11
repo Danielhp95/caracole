@@ -41,7 +41,7 @@ import java.time.format.DateTimeFormatter
  */
 object VersionsCommands {
     const val PROVIDER = "ug"
-    private const val NAME = "Ultimate Guitar"
+    private const val NAME = "UG"
     private const val PROGRESS = "caracole-progress: "
     private val WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC)
 
@@ -50,14 +50,14 @@ object VersionsCommands {
 
     /** KEPT_WORDS: what [UgFetch.keepVersion] came to, in words. */
     val KEPT_WORDS: Map<String, String> = linkedMapOf(
-        "same" to "its text is the very text of {page}, which shows it",
-        "held" to "its text is the very text of another file kept in the song's folder, so it isn't kept again",
+        "same" to "same text as {page}, which shows it",
+        "held" to "same text as another file in the song's folder; not kept twice",
         "sheet" to "it is the sheet already",
-        "gone" to "Ultimate Guitar no longer has it",
-        "unreadable" to "its page can't be read now; it waits",
-        "closed" to "Ultimate Guitar moved its page where robots.txt keeps caracole out; nothing kept",
-        "no text" to "its page has no sheet caracole can keep",
-        "unknown" to "it isn't one of the song's chords versions caracole may use",
+        "gone" to "gone from UG",
+        "unreadable" to "couldn't read its page; it waits",
+        "closed" to "UG moved its page behind robots.txt; nothing kept",
+        "no text" to "its page has no sheet we can keep",
+        "unknown" to "not one of the song's chords versions we may use",
     )
 
     /** `keep`: tab [tab] of [song] kept beside its sheet in [library]; its last line. */
@@ -68,10 +68,10 @@ object VersionsCommands {
         val v = listed(c, config, song, tab)
         if (tab in overrides.block) throw KeepRefused("Tab $tab is under [block] in overrides.toml: caracole never uses it.")
         begun(c, song)
-        if (v.chosen) return said(c, "skipped", "Tab $tab is the sheet of ${song.display} already.")
+        if (v.chosen) return said(c, "skipped", "Tab $tab is ${song.display}'s sheet already.")
         if (v.kept && v.page != SHEET_PAGE) {
             SheetVersions.noteKeptByYou(db, song.id, v.tabId)
-            return said(c, "done", "Tab $tab is kept beside the sheet of ${song.display} already; it stays kept now.")
+            return said(c, "done", "Tab $tab is kept beside ${song.display}'s sheet already. It stays.")
         }
         val asked = c.asking.ask(PROVIDER) { client ->
             UgFetch.keepVersion(FetchContext(db, client, overrides, config.rank, library, c.now), song, tab)
@@ -100,8 +100,8 @@ object VersionsCommands {
         begun(c, song)
         val todo = SheetVersions.mayKeep(db, song.id, SheetVersions.inLibrary(db, song.id, config.rank), overrides.block)
         if (todo.isEmpty()) {
-            return said(c, "skipped", "Nothing more to keep of ${song.display}: every Ultimate Guitar version caracole " +
-                "may keep is kept already, or can't be.")
+            return said(c, "skipped", "Nothing more to keep of ${song.display}: every UG version we may keep is " +
+                "kept, or can't be.")
         }
         var kept = 0  // kept: a file, or a kept one's text
         var files = false  // a file written
@@ -161,7 +161,7 @@ object VersionsCommands {
     private fun begun(c: CommandContext, song: SongRow) {
         event(c, JsonObject(linkedMapOf("song" to JsonObject(linkedMapOf(
             "id" to JsonPrimitive(song.id), "display" to JsonPrimitive(song.display))))))
-        stage(c, "song", "done", "in the library")
+        stage(c, "song", "done", "in the book")
         stage(c, "version", "running")
     }
 
@@ -190,24 +190,24 @@ object VersionsCommands {
 
     /** `_cooling`'s words: Ultimate Guitar may not be asked now, its cooldown after a block. */
     private fun cooling(until: Instant?): String =
-        "$NAME is cooling down after a block, until ${shown(until)}; nothing kept."
+        "Waiting out $NAME until ${shown(until)}. Nothing kept."
 
     /** `_stopped`: what stopped a keep, which the asking recorded (a block cooling Ultimate Guitar down, an error
      * counted): the version stage's state, why in words, and whether to ask again later (not after a block). */
     private fun stopped(config: PhoneConfig, asked: Asked<*>): Triple<String, String, Boolean> = when (asked) {
-        is Asked.Blocked -> Triple("skipped", "$NAME blocked caracole (${asked.error.message}): no more requests to it " +
+        is Asked.Blocked -> Triple("skipped", "$NAME turned us back (${asked.error.message}). No more asks " +
             "until ${shown(asked.state.cooldownUntil)}", false)
         is Asked.Failed -> Triple("failed", "$NAME failed (${asked.error.message})", true)
         is Asked.Off -> Triple("skipped", asked.why, true)
         else -> {
             val p = config.provider(PROVIDER)
-            Triple("skipped", "The lookup requests to $NAME are spent (${p.lookupRequests} a lookup, " +
+            Triple("skipped", "No more asks of $NAME (${p.lookupRequests} a fetch, " +
                 "${p.lookupPerHour} an hour)", true)
         }
     }
 
     private fun nothingKept(why: String, again: Boolean): String =
-        "$why; nothing kept." + if (again) " Ask again later." else ""
+        "$why. Nothing kept." + if (again) " Ask again later." else ""
 
     /** `_came_to`: what [UgFetch.keepVersion] came to for one version, in a sentence; a version it can't keep (`no
      * text`, `held`) noted so, which `--keep-more` never reads again. */
@@ -215,7 +215,7 @@ object VersionsCommands {
         if (outcome == "no text" || outcome == "held") SheetVersions.noteUnkeepable(c.db, song.id, tab)
         if (outcome == "kept") {
             val txt = File(library.folderOf(song), SheetVersions.versionNames(tab).first)
-            return "Kept tab $tab beside the sheet of ${song.display}: ${txt.path}"
+            return "Kept tab $tab beside ${song.display}'s sheet: ${txt.path}"
         }
         val page = if (outcome == "same") SheetVersions.samePages(c.db, song.id)[tab] ?: "another kept version"
                    else "another kept version"

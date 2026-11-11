@@ -37,8 +37,8 @@ def test_a_change_after_a_kept_answer_says_so_in_the_usual_words():
     kept = {"song/b": ("bh", "bt", "mine")}
     [gone] = sync.compare({}, {"song/b": U("song/b", "bt")}, {}, kept=kept)
     [changed] = sync.compare({"song/b": U("song/b", "bh")}, {"song/b": U("song/b", "bt2")}, None, kept=kept)
-    assert (gone.proposal, gone.why) == (sync.MINE, "gone here since the last sync")
-    assert (changed.proposal, changed.why) == (sync.THEIRS, "changed there since the last sync")
+    assert (gone.proposal, gone.why) == (sync.MINE, "gone here since the last share")
+    assert (changed.proposal, changed.why) == (sync.THEIRS, "changed there since the last share")
 
 
 def test_a_kept_unit_the_two_hold_alike_is_no_difference():
@@ -82,7 +82,7 @@ def test_a_kept_unit_both_sides_lack_now_is_agreed_lacking_so_one_made_again_is_
     base, kept = sync.base_of(conn, PEER), sync.kept_of(conn, PEER)
     [d] = sync.compare({"song/x": U("song/x", "new")}, {}, sync.merged_base(base, None),
                        kept=sync.merged_kept(base, kept, None, {}))
-    assert (d.proposal, d.why) == (sync.MINE, "new here since the last sync")
+    assert (d.proposal, d.why) == (sync.MINE, "new here since the last share")
 
 
 def test_a_base_with_no_kept_answer_is_written_as_before(conn):

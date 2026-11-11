@@ -164,15 +164,15 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
     private fun formJob(form: Map<String, String>): Int? {
         val text = PyText.strip(form["job"] ?: "")
         if (text.isEmpty() || text.any { it !in '0'..'9' } || text.length > 12) {
-            throw Refused(400, "Not a request", "Which request? The form names none.")
+            throw Refused(400, "Not a request", "Which entry? The form names none.")
         }
         return text.toLong().takeIf { it <= Int.MAX_VALUE }?.toInt()
     }
 
-    private fun gone() = Refused(404, "No such request", "caracole serve no longer remembers that request: ask for " +
-                                                         "it again from the library.")
+    private fun gone() = Refused(404, "No such request", "caracole serve no longer remembers that entry. Ask again " +
+                                                         "from the logbook.")
 
-    private fun notOver() = Refused(409, "Not over yet", "That request is still queued or running.")
+    private fun notOver() = Refused(409, "Not over yet", "Still queued or running.")
 
     /** How many jobs wait or run before a queued one (jobs_routes._ahead). */
     private fun ahead(jobs: List<Job>, job: Job): Int = jobs.count { it.active && it.id < job.id }
@@ -185,7 +185,6 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
 
         /** Why a request of the phone's own read back from the history can't be tried again (the phone's words:
          * caracole serve's requests are all commands, which it always can). */
-        const val NOT_REPEATABLE = "The phone ran that request itself, and there's nothing of it left to run again: " +
-            "ask for it again from the library."
+        const val NOT_REPEATABLE = "The phone ran that itself: nothing left to run again. Ask again from the logbook."
     }
 }

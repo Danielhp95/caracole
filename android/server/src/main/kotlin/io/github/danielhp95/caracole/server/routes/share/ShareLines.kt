@@ -23,7 +23,7 @@ internal class SongLine(val key: String) {
     var harptabs: JsonObject? = null
     var gametabs: JsonObject? = null
 
-    /** The first site's row of it, whose names a Get it of a song new to the library takes (indexLine's `first`). */
+    /** The first site's row of it, whose names a Fetch of a song new to the library takes (indexLine's `first`). */
     private val first: JsonObject? get() = ug ?: lacuerda ?: gtptabs ?: harptabs ?: gametabs
 
     /** Your song's id, else null. */
@@ -37,25 +37,25 @@ internal class SongLine(val key: String) {
     /** Whether caracole found your song a sheet (rows.js `held`): its Open is what the owner likely wants. */
     val held: Boolean get() = mine?.text("status") == "found"
 
-    /** What each site has of it, as the line's facts say it, the site named: "Ultimate Guitar: chords ×12 · tabs ×3". */
+    /** What each site has of it, as the line's facts say it, the site named: "UG: chords ×12 · tabs ×3". */
     fun facts(): List<String> = buildList {
         ug?.let { u ->
             val counts = (u["counts"] as? JsonObject).orEmpty().map { (kind, n) ->
                 "${TIMES[kind] ?: kind} ×${(n as? JsonPrimitive)?.longOrNull ?: 0}"
             }
-            add("Ultimate Guitar" + if (counts.isEmpty()) "" else ": " + counts.joinToString(" · "))
+            add("UG" + if (counts.isEmpty()) "" else ": " + counts.joinToString(" · "))
         }
         lacuerda?.let { lc ->
             val versions = (lc["versions"] as? JsonPrimitive)?.longOrNull?.takeIf { it > 0 } ?: 1
-            add("LaCuerda ×$versions" + if (chords()) "" else ", no chords")
+            add("LaCuerda ×$versions" + if (chords()) "" else " no chords")
         }
-        gtptabs?.let { add("gtptabs.com: " + many(uploads(it), "Guitar Pro file")) }
-        harptabs?.let { add("harptabs.com: " + many(uploads(it), "harmonica tab")) }
-        gametabs?.let { add("gametabs.net: " + many(uploads(it), "tab")) }
+        gtptabs?.let { add("gtptabs: " + many(uploads(it), "Guitar Pro file")) }
+        harptabs?.let { add("harptabs: " + many(uploads(it), "harmonica tab")) }
+        gametabs?.let { add("gametabs: " + many(uploads(it), "tab")) }
     }
 
     /**
-     * The fields of its Get it, POST /lookup's as the library page's line posts them (indexLine's `chosen`): your song
+     * The fields of its Fetch, POST /lookup's as the library page's line posts them (indexLine's `chosen`): your song
      * by its id, else the first site's names; then Ultimate Guitar's song, else LaCuerda's sheet, else harptabs.com's
      * tab, else gametabs.net's.
      */

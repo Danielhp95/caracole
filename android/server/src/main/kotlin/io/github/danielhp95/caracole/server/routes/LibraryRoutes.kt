@@ -66,7 +66,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
     private fun request(form: Map<String, String>): Response {
         val named = SongForm.named(database, form)
         if (PyText.strip(named["youtube"].orEmpty()).isNotEmpty()) {
-            throw Refused(409, "Not on the phone yet", "A sheet from a YouTube video isn't on the phone yet.")
+            throw Refused(409, "Not on the phone yet", "A sheet from a YouTube video: not on the phone yet.")
         }
         val lacuerda = LookupForms.lacuerdaField(named)
         val song = SongForm.song(named, picks = false)
@@ -91,7 +91,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
     private fun add(song: NamedSong, found: SongRow?, title: String, display: String, lacuerda: String? = null): Job {
         val key = found?.key ?: song.key
         return queue.submitOrRefuse(JobSpec(
-            title = title, key = key, kind = "add", stages = listOf(ADD to "Adding to the library"),
+            title = title, key = key, kind = "add", stages = listOf(ADD to "Adding to the book"),
             display = display, songId = found?.id,
             run = { context ->
                 context.stage(ADD, "running")
@@ -109,8 +109,8 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
                 }
                 context.song(added.id, added.display)
                 val said = listOfNotNull(
-                    if (new) null else "In your library as ${added.display}.",
-                    lacuerda?.let { "The sheet you picked on LaCuerda ($it) is recorded under [lacuerda]." },
+                    if (new) null else "In your book as ${added.display}.",
+                    lacuerda?.let { "Your LaCuerda pick ($it) is noted under [lacuerda]." },
                 )
                 context.stage(ADD, "done", said.joinToString(" "))
             },
@@ -123,8 +123,8 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         try {
             OverrideWriters.addLacuerda(db, song.display, url)
         } catch (e: OverridesError) {
-            throw IllegalStateException("caracole can't add this song: its LaCuerda pick can't be recorded in " +
-                                        "overrides.toml: ${e.message}")
+            throw IllegalStateException("Can't add this song: couldn't note its LaCuerda pick in overrides.toml: " +
+                                        e.message)
         }
         if (song.lacuerdaCheckedAt != null) {
             Versions.updateSong(db, song.id, mapOf("lacuerda_checked_at" to null), Answers.now())
@@ -138,7 +138,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         val back = back(form["back"].orEmpty())
         val (song, question) = database.read { db ->
             val song = Songs.byId(db, id)
-                ?: throw Refused(404, "No such song", "That song isn't in the library: removed already, maybe.")
+                ?: throw Refused(404, "No such song", "That song isn't in the logbook. Removed already?")
             song to if (confirmed) null else RemovalQuestion.data(db, song)
         }
         if (question != null) {
@@ -147,8 +147,8 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
                 .also { it.data = question }
         }
         if (form["key"] != song.key) {
-            throw Refused(409, "Not that song", "The library changed since this page was made, so nothing was removed: " +
-                                                "reload the library and try again.")
+            throw Refused(409, "Not that song", "The logbook changed since this page was made: nothing removed. " +
+                                                "Reload and try again.")
         }
         val job = queue.submitOrRefuse(removal(song)).first
         return Answers.queued(JobViews.view(job, queue), libraryAt(back, song.id))
@@ -156,11 +156,11 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
 
     private fun removal(song: SongRow) = JobSpec(
         title = "Remove ${song.display}", key = REMOVING + song.key, kind = "remove",
-        stages = listOf(REMOVE to "Removing from caracole"), display = song.display, songId = song.id,
+        stages = listOf(REMOVE to "Removing from the book"), display = song.display, songId = song.id,
         run = { context ->
             context.stage(REMOVE, "running")
             val gone = database.write { db -> store.remove(db, song.key, Answers.now()) }
-            context.stage(REMOVE, "done", if (gone == null) "It was gone already." else "")
+            context.stage(REMOVE, "done", if (gone == null) "Gone already." else "")
         },
     )
 
@@ -171,8 +171,8 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         const val REMOVE = "remove"
 
         /** A full queue's words: nothing was added (app.py's QUEUE_FULL, for a request that wrote nothing yet). */
-        const val FULL = "The queue is full, so nothing was added: ask for the song again once the queue empties."
-        const val NO_SUCH_SONG = "That song isn't in the library."
+        const val FULL = "The queue is full; nothing added. Ask again once it empties."
+        const val NO_SUCH_SONG = "That song isn't in the logbook."
 
         private val FETCH = setOf("1", "on", "yes")
 

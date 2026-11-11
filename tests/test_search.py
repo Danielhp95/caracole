@@ -1061,7 +1061,7 @@ def test_cli_search_by_key_alone_lists_your_songs_in_that_key(tmp_path):
     result = run(tmp_path, "search", "--key", "Am")
     assert result.exit_code == 0, result.output
     assert "In your library, in A minor" in result.output
-    assert "Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)" in result.output
+    assert "Soda Stereo - De Música Ligera · found · Key A minor (guessed from the chords)" in result.output
     assert "Creep" not in result.output and "Queen" not in result.output
     # The offline index knows no keys: it isn't searched.
     assert "On Ultimate Guitar" not in result.output and "without --key" in result.output
@@ -1755,7 +1755,7 @@ def test_cli_offers_to_read_the_page_of_an_artist_under_a_letter_lacuerda_hasnt_
     kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in "ab"})
     conn.commit()
     partial = " ".join(lc_part(run(tmp_path, "search", "estopa").output).split())
-    assert "still being read: 1 artist so far, with A, B read whole;" in partial
+    assert "being read: 1 artist so far, with A, B read whole;" in partial
     assert offer + " (a request for each spelling of the name tried, usually one)." in partial
     by_artist = " ".join(lc_part(run(tmp_path, "search", "--artist", "estopa").output).split())
     assert "No artist named estopa in LaCuerda's index" in by_artist and offer in by_artist
@@ -1860,7 +1860,7 @@ def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
     conn.commit()
     partial = lc_part(run(tmp_path, "search", "estopa").output)
     assert "Estopa · LaCuerda" in partial
-    assert "LaCuerda's index is still being read: 3 artists so far, with A, B read whole;" in " ".join(partial.split())
+    assert "LaCuerda's index is being read: 3 artists so far, with A, B read whole;" in " ".join(partial.split())
 
 
 # --- removed songs ------------------------------------------------------------------------------

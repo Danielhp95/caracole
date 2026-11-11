@@ -437,7 +437,7 @@
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
   const pace = () => (state.speed * SPEED.px * state.fs) / FS.start;
-  const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
+  const LABELS = { counting: "Start", running: "Pause", paused: "Resume" };
   const showScroll = (said) => {
     pill.hidden = scroll.state === "off";
     if (scroll.state === "off") delete doc.dataset.pill;
@@ -489,7 +489,7 @@
           scroll.at = window.scrollY;
         }
         if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
-          pauseScroll("Paused at the end of the tab");
+          pauseScroll("Paused · end of tab");
           return;
         }
       }
@@ -514,7 +514,7 @@
       scroll.timer = setTimeout(tick, left % 1000 || 1000);
     };
     tick();
-    showScroll("Scrolling in " + COUNTDOWN / 1000 + " seconds");
+    showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
     holdScreen();
   };
   function pauseScroll(said) {

@@ -1236,9 +1236,9 @@ def test_without_auto_chords_the_buy_list_stays_and_says_why_youtube_isnt_used(c
     section = section_of(text, "Buy list (1)")
     assert "bandcamp.com" in section and "Chordify" in section
     assert ("caracole takes a song's audio from YouTube only when it can work out the chords from it, and here "
-            "it can't: this caracole was built without auto-chords (missing: torch)") in section
+            "it can't: built without auto-chords (missing: torch)") in section
     assert NO_SHEET not in text.split("## Buy list", 1)[1].split("\n", 1)[0]
-    assert "| youtube | off: this caracole was built without auto-chords" in text
+    assert "| youtube | off: built without auto-chords" in text
 
 
 def test_youtube_turned_off_keeps_the_buy_list_as_it_was(conn, cfg, tmp_path, monkeypatch):

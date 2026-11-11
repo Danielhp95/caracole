@@ -76,7 +76,7 @@ class SyncSettingsTest {
         }
         val texts = texts(layout, "text")
         assertTrue("Export" in texts && "Import a file" in texts, "$texts")
-        assertTrue("Sync on Wi-Fi by itself" in texts)
+        assertTrue("Share logs on Wi-Fi" in texts)
         for (gone in listOf("sync_now", "sync_with_computer", "import_label", "import_computer", "never_imported",
                             "last_sync", "never_synced")) {
             assertNull(strings[gone], "the string $gone is gone")

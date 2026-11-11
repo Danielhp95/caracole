@@ -24,7 +24,7 @@ internal data class ShareView(
 /**
  * The page of a song shared to the app (ShareRoutes' `GET /share`), in the message page's frame, style and policy (no
  * script, its style by its hash, forms to the server alone): what caracole read, the best match and its sites, and
- * the owner's choices, each a plain form or link: Get it (POST /lookup, the library page's own, with the form token),
+ * the owner's choices, each a plain form or link: Fetch (POST /lookup, the library page's own, with the form token),
  * Open (a song of yours), Edit (the names typed, `GET /share` again) and Cancel (`/share/cancel`, which the app takes
  * as leaving the share).
  */
@@ -43,12 +43,12 @@ internal object SharePage {
         if (v.sent.isNotEmpty() || v.read is ShareLinks.Read.Named) append(sent(v))
         val best = v.best
         if (best != null) {
-            append("<h2 class=\"sub\">The best match</h2>\n<ul class=\"readings\">\n")
+            append("<h2 class=\"sub\">Best match</h2>\n<ul class=\"readings\">\n")
             append(line(best, csrf, primary = true))
             append("</ul>\n")
         }
         if (v.others.isNotEmpty()) {
-            append("<h2 class=\"sub\">${if (best == null) "No sure match: maybe one of these" else "Or one of these"}</h2>\n")
+            append("<h2 class=\"sub\">${if (best == null) "No sure match. Maybe one of these" else "Or one of these"}</h2>\n")
             append("<ul class=\"readings\">\n")
             for (other in v.others) append(line(other, csrf, primary = false))
             append("</ul>\n")
@@ -65,7 +65,7 @@ internal object SharePage {
         val asked = v.read
         val link = v.link?.let { "<code>${esc(it)}</code>" }.orEmpty()
         val text = when {
-            v.names != null && v.typed -> "caracole searched for <strong>${esc(dashed(v.names))}</strong>."
+            v.names != null && v.typed -> "We searched for <strong>${esc(dashed(v.names))}</strong>."
             asked is ShareLinks.Read.Named && v.names != null ->
                 "Read from ${esc(asked.service.source)}: <strong>${esc(dashed(v.names))}</strong>."
             asked is ShareLinks.Read.Named -> "Read from ${esc(asked.service.source)}: <strong>“${esc(v.said.orEmpty())}”" +
@@ -74,15 +74,15 @@ internal object SharePage {
                 "the artist and the title."
             asked is ShareLinks.Read.NotRead -> "$sender shared a link alone ($link), and caracole couldn't read it: " +
                 "${esc(asked.why)}. Type the artist and the title, or share it again later."
-            v.names != null -> "caracole read <strong>${esc(dashed(v.names))}</strong>."
-            v.said != null && v.typed -> "caracole searched for <strong>“${esc(v.said)}”</strong>, but can't tell " +
-                "who its artist is: type both names."
-            v.said != null -> "caracole read <strong>“${esc(v.said)}”</strong>, but can't tell who its artist is: " +
-                "edit the names if they're wrong."
-            v.link != null -> "$sender shared a link alone, which names no song: <code>${esc(v.link)}</code>. caracole " +
-                "doesn't ask ${esc(v.app ?: "the app")} what it is: type the artist and the title."
-            v.typed -> "Type the artist and the title."
-            else -> "Nothing that was shared names a song: type the artist and the title."
+            v.names != null -> "We read <strong>${esc(dashed(v.names))}</strong>."
+            v.said != null && v.typed -> "We searched for <strong>“${esc(v.said)}”</strong> but can't tell the " +
+                "artist. Type both names."
+            v.said != null -> "We read <strong>“${esc(v.said)}”</strong> but can't tell the artist. Edit the names " +
+                "if wrong."
+            v.link != null -> "$sender shared a bare link, no song named: <code>${esc(v.link)}</code>. We don't " +
+                "ask ${esc(v.app ?: "the app")}. Type the artist and title."
+            v.typed -> "Type the artist and title."
+            else -> "Nothing shared names a song. Type the artist and title."
         }
         return "<p class=\"lede\">$text</p>\n"
     }
@@ -99,17 +99,17 @@ internal object SharePage {
         append("</ul>\n</details>\n")
     }
 
-    /** One song: its names, what each site has of it, yours or not, its Get it and, for yours, its Open. */
+    /** One song: its names, what each site has of it, yours or not, its Fetch and, for yours, its Open. */
     private fun line(l: SongLine, csrf: String, primary: Boolean): String = buildString {
         append("<li class=\"reading${if (primary) " now" else ""}\">")
         append("<span class=\"said\">${esc(l.display)}</span>")
         val facts = l.facts()
         if (facts.isNotEmpty()) append(" <span class=\"choice-why\">${esc(facts.joinToString(" · "))}</span>")
-        if (l.songId != null) append(" <span class=\"says ${if (l.held) "ready" else "waiting"}\">In your library</span>")
+        if (l.songId != null) append(" <span class=\"says ${if (l.held) "ready" else "waiting"}\">In your logbook</span>")
         append(" <div class=\"confirm\">")
         val open = l.open()
-        // Your song with a sheet opens first; any other's Get it is the line's main button.
-        append(getIt(l.pick(), if (l.songId != null) "Get it again" else "Get it", primary && !(open != null && l.held),
+        // Your song with a sheet opens first; any other's Fetch is the line's main button.
+        append(getIt(l.pick(), if (l.songId != null) "Fetch again" else "Fetch", primary && !(open != null && l.held),
                      l.display, csrf))
         if (open != null) {
             append(" <a class=\"btn${if (primary && l.held) " primary" else ""}\" href=\"${esc(open)}\" " +
@@ -118,23 +118,23 @@ internal object SharePage {
         append("</div></li>\n")
     }
 
-    /** No line is the song read: Get it by its names, which the lookup matches on the sites. */
+    /** No line is the song read: Fetch by its names, which the lookup matches on the sites. */
     private fun byName(names: Pair<String, String>, csrf: String, found: Boolean): String {
-        val said = if (found) "None of them? Get it looks up" else "The phone's indexes have no such song. Get it looks up"
-        return "<p class=\"message\">$said <strong>${esc(dashed(names))}</strong> on the sites all the same, at a " +
-            "lookup's pace.</p>\n<div class=\"confirm\">" +
-            getIt(listOf("artist" to names.first, "title" to names.second), "Get it", !found, dashed(names), csrf) +
+        val said = if (found) "None of them? Fetch looks up" else "Not in the phone's indexes. Fetch looks up"
+        return "<p class=\"message\">$said <strong>${esc(dashed(names))}</strong> on the sites anyway.</p>\n" +
+            "<div class=\"confirm\">" +
+            getIt(listOf("artist" to names.first, "title" to names.second), "Fetch", !found, dashed(names), csrf) +
             "</div>\n"
     }
 
-    /** Get it: POST /lookup, the library page's, its fields hidden, the form token first. */
+    /** Fetch: POST /lookup, the library page's, its fields hidden, the form token first. */
     private fun getIt(fields: List<Pair<String, String>>, label: String, primary: Boolean, display: String,
                       csrf: String): String = buildString {
         append("<form class=\"pick-form\" method=\"post\" action=\"/lookup\">")
         append("<input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">")
         for ((name, value) in fields) append("<input type=\"hidden\" name=\"${esc(name)}\" value=\"${esc(value)}\">")
         append("<button class=\"btn${if (primary) " primary" else ""}\" type=\"submit\" " +
-                   "aria-label=\"${esc(if (label == "Get it again") "Get $display again" else "Get $display")}\">")
+                   "aria-label=\"${esc(if (label == "Fetch again") "Fetch $display again" else "Fetch $display")}\">")
         append("${esc(label)}</button></form>")
     }
 

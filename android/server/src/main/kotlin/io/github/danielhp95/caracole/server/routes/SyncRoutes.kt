@@ -221,13 +221,13 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
             engine.forget(made)
             throw Refused(409, "Compare again", SyncEngine.STALE)
         }
-        val shown = "Sync with ${Py.slice(Py.strip(kept.peer.name).ifEmpty { kept.address }, null, 120)}"
+        val shown = "Share with ${Py.slice(Py.strip(kept.peer.name).ifEmpty { kept.address }, null, 120)}"
         val (job, new) = queue.submitOrRefuse(syncJob(shown, kept.address) { stage ->
             engine.apply(kept, choices, prefer, parts ?: Scope.PARTS, Conflicts.ASK, stage)
         })
         if (!new) {
-            throw Refused(409, "Syncing already", "A sync with ${kept.address} is on its way already (request " +
-                                                  "${job.id}): compare again once it is over.")
+            throw Refused(409, "Sharing already", "Already sharing with ${kept.address} (request ${job.id}). " +
+                                                  "Compare again once it's done.")
         }
         engine.forget(made)
         return Answers.queued(JobViews.view(job, queue), "/#tab=sync")
@@ -244,7 +244,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         val known = database.read { db -> SyncJson.peers(db) }.mapNotNull { it as? JsonObject }
             .firstOrNull { (it["address"] as? JsonPrimitive)?.contentOrNull == address }
         val named = (known?.get("name") as? JsonPrimitive)?.contentOrNull?.let(Py::strip).orEmpty()
-        val shown = "Sync with ${Py.slice(named.ifEmpty { address }, null, 120)}"
+        val shown = "Share with ${Py.slice(named.ifEmpty { address }, null, 120)}"
         val (job, new) = queue.submitOrRefuse(syncJob(shown, address) { stage ->
             val c = try {
                 engine.compare(address)
@@ -292,7 +292,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     private fun <T> asking(ask: () -> T): T = try {
         ask()
     } catch (e: SameCaracole) {
-        throw Refused(409, "The same caracole", e.message ?: "")
+        throw Refused(409, "The same scribe", e.message ?: "")
     } catch (e: SyncError.BadAddress) {
         throw Refused(400, "Not an address", e.message ?: "")
     } catch (e: PeerError) {
@@ -305,9 +305,8 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
      * copy of the phone's. */
     private fun notThisOne(address: String, me: String, state: PeerState) {
         if (me == state.server) {
-            throw Refused(409, "The same caracole", "The caracole at $address is this one (the same id, $me): its " +
-                                                    "database is a copy of this one's. Give one of them another: " +
-                                                    "caracole peer new-id.")
+            throw Refused(409, "The same scribe", "The scribe at $address is this one (same id, $me): its database is " +
+                                                  "a copy of ours. Give one a new id: caracole peer new-id.")
         }
     }
 
@@ -324,7 +323,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
             val unit = if (tab < 0) "" else line.substring(tab + 1)
             if (side == null || unit !in ids) {
                 throw Refused(400, "Not a choice", "${PyStr.repr(Py.slice(line, null, 200))} isn't a choice of this " +
-                                                   "comparison's: here, there or skip, a tab, then one of its units.")
+                                                   "compare: here, there or skip, a tab, then a unit.")
             }
             if ((found[unit] ?: side) != side) {
                 throw Refused(400, "Not a choice", "${Py.slice(unit, null, 200)} is chosen two ways.")
@@ -346,8 +345,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         const val DEVICE = "phone"
 
         /** sync_routes.GONE: a comparison no longer kept. */
-        const val GONE = "That comparison is more than 10 minutes old, or caracole serve has restarted since: " +
-            "compare the two again."
+        const val GONE = "That comparison is over 10 minutes old, or caracole serve restarted. Compare again."
 
         /** sync_routes.NOT_A_PART: `parts` that isn't the parts' names (caracole peer sync --parts' words). */
         const val NOT_A_PART = "parts are library, songbooks or indexes, by commas."

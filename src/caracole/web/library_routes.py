@@ -121,8 +121,8 @@ def request(app: WebApp, form: dict[str, str]) -> Response:
                           lacuerda=lacuerda)
     job, _ = app.submit(f"{'Fetch' if fetch else 'Add'} {display}", line.identity, steps, fetching=fetch,
                         note=note, display=display,
-                        full=f"{note} The queue is full, so nothing else was queued: the nightly run looks for "
-                             "the song, or request it again once the queue empties.")
+                        full=f"{note} The queue is full: nothing else queued. Tonight's run looks for it, or "
+                             "request again once the queue empties.")
     return app.queued(job)
 
 
@@ -136,9 +136,9 @@ def fetch(app: WebApp, form: dict[str, str]) -> Response:
         song = get_song(conn, asked)
     not_ignored(song, overrides)
     if review_first(song, overrides):
-        raise Refused(409, "Review it first",
-                      f"caracole isn't sure which Ultimate Guitar song {song.display} is, so it can't "
-                      "fetch it yet: run caracole review, or settle it in overrides.toml, then fetch it.")
+        raise Refused(409, "Pick its match first",
+                      f"Not sure which UG song {song.display} is, so we can't fetch it yet. Run caracole "
+                      "review or settle it in overrides.toml, then fetch.")
     job, _ = app.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title), fetching=True,
                         display=song.display)
     return app.queued(job)
@@ -154,12 +154,12 @@ def named_form(app: WebApp, form: dict[str, str]) -> dict[str, str]:
     if not text or form.get("artist", "").strip() or form.get("title", "").strip():
         return form
     if len(text) > TEXT_LIMIT:
-        raise Refused(400, "Too long", f"The text is too long: {TEXT_LIMIT} characters at most.")
+        raise Refused(400, "Too long", f"Too long: {TEXT_LIMIT} characters at most.")
     with app.db() as conn:
         named = read_names(conn, text)
     if named is None or not all(named):
-        raise Refused(400, "Not a song", f"“{text}” doesn't say who the artist is: write it as “Artist - Title”, or "
-                                         "give the artist and the title.")
+        raise Refused(400, "Not a song", f"“{text}” names no artist. Write “Artist - Title”, or fill in "
+                                         "both.")
     return {**form, "artist": named[0], "title": named[1]}
 
 
@@ -182,17 +182,17 @@ def wanted_line(app: WebApp, form: dict[str, str]) -> tuple[WantedLine, str]:
         except ValueError as e:
             raise Refused(400, "Not a length", f"The length is a {e}.") from e
         if duration_ms is None:
-            raise Refused(400, "Not a length", (f"The length {values['duration']!r} isn't a duration: "
-                                                "write m:ss, h:mm:ss or whole seconds."))
+            raise Refused(400, "Not a length", (f"The length {values['duration']!r} isn't a duration. "
+                                                "Write m:ss, h:mm:ss or seconds."))
     path = app.cfg.wanted_file
     with app._wanted:
         try:
             listed = find_wanted(path, artist, title) is not None
             line = append_wanted(path, artist, title, album, duration_ms)
         except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-            raise Refused(400, "Not added", f"caracole can't add this song: {e}") from e
+            raise Refused(400, "Not added", f"Can't add this song: {e}") from e
         except OSError as e:
-            raise Refused(500, "Not added", f"wanted.txt can't be written: {e.strerror or e}") from e
+            raise Refused(500, "Not added", f"Couldn't write wanted.txt: {e.strerror or e}") from e
     return line, f"{'Already in' if listed else 'Added to'} wanted.txt, line {line.line_no}."
 
 
@@ -205,11 +205,11 @@ def harptabs_field(form: dict[str, str]) -> str | None:
     if not value:
         return None
     if len(value) > PICK_LIMITS["harptabs"]:
-        raise Refused(400, "Too long", f"The harptabs is too long: {PICK_LIMITS['harptabs']} characters at most.")
+        raise Refused(400, "Too long", f"The harptabs pick is too long: {PICK_LIMITS['harptabs']} characters at most.")
     try:
         return harptabs_pick_from_url(value).url
     except OverridesError as e:
-        raise Refused(400, "Not a pick", f"That isn't a harptabs.com tab: {e}") from e
+        raise Refused(400, "Not a pick", f"Not a harptabs tab: {e}") from e
 
 
 def gametabs_field(form: dict[str, str]) -> str | None:
@@ -221,11 +221,11 @@ def gametabs_field(form: dict[str, str]) -> str | None:
     if not value:
         return None
     if len(value) > PICK_LIMITS["gametabs"]:
-        raise Refused(400, "Too long", f"The gametabs is too long: {PICK_LIMITS['gametabs']} characters at most.")
+        raise Refused(400, "Too long", f"The gametabs pick is too long: {PICK_LIMITS['gametabs']} characters at most.")
     try:
         return gametabs_pick_from_url(value).url
     except OverridesError as e:
-        raise Refused(400, "Not a pick", f"That isn't a gametabs.net tab: {e}") from e
+        raise Refused(400, "Not a pick", f"Not a gametabs tab: {e}") from e
 
 
 def lacuerda_field(form: dict[str, str]) -> str | None:
@@ -237,11 +237,11 @@ def lacuerda_field(form: dict[str, str]) -> str | None:
     if not value:
         return None
     if len(value) > PICK_LIMITS["lacuerda"]:
-        raise Refused(400, "Too long", f"The lacuerda is too long: {PICK_LIMITS['lacuerda']} characters at most.")
+        raise Refused(400, "Too long", f"The lacuerda pick is too long: {PICK_LIMITS['lacuerda']} characters at most.")
     try:
         return lacuerda_pick_from_url(value).url
     except OverridesError as e:
-        raise Refused(400, "Not a pick", f"That isn't a LaCuerda song: {e}") from e
+        raise Refused(400, "Not a pick", f"Not a LaCuerda song: {e}") from e
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

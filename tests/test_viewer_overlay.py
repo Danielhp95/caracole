@@ -142,7 +142,7 @@ def test_the_harmonica_tab_starts_on_the_first_harp_for_the_song_as_it_sounds(tm
     assert sorted(now["ordinals"]) == ["3rd", "4th", "5th"]
     assert (now["name"], now["position"], now["tag"]) == ("A harp", "3rd position, dorian", None)
     assert now["plays"] == "Plays Bm, A and E."
-    assert now["hint"] == "Tap a harp. Shaded: the ones that play the song's chords."
+    assert now["hint"] == "Tap a harp. Shaded: harps that play the song's chords."
     assert now["card"] == "Bm on an A harp3rd position, dorian"
     assert now["chips"] == [["Scale", "true"], ["Minor pentatonic", "false"], ["Blues", "false"]]
     assert now["outside"] == "Outside B minor: G#."
@@ -165,7 +165,7 @@ def test_a_harp_tapped_on_the_circle_is_the_one_the_key_and_the_chords_are_on(tm
     assert d["chosen"] == ["D harp, 4th position, aeolian"] and (d["name"], d["position"]) == ("D harp", "4th position, aeolian")
     assert d["plays"] == "Plays A, D and Em; E as Em."
     assert d["card"] == "Bm on a D harp4th position, aeolian"
-    assert d["outside"] == "Every note it blows or draws is in B minor."
+    assert d["outside"] == "Every note it plays is in B minor."
     # The key on the D harp: B the tonic, the rest of B minor dark; its bends outward, B minor's or a faint dot
     assert d["blow"] == [[n, "in"] for n in "D F# A D F# A D F# A D".split()]
     assert d["draw"] == [["E", "in"], ["A", "in"], ["C#", "in"], ["E", "in"], ["G", "in"], ["B", "tonic"],
@@ -173,9 +173,9 @@ def test_a_harp_tapped_on_the_circle_is_the_one_the_key_and_the_chords_are_on(tm
     assert ["G", "bent-in"] in d["bends"] and ["B", "bent-tonic"] in d["bends"] and ["G#", "bent-out"] in d["bends"]
     assert d["legend"] == "B, the tonicin the scalebent"
     chords = {c["name"]: c for c in d["chords"]}
-    assert chords["E"]["run"] == "draw 4–6 · as Em, the minor stand-in" and chords["E"]["shape"] == "D shape"
+    assert chords["E"]["run"] == "draw 4–6 · as Em, minor substitute" and chords["E"]["shape"] == "D shape"
     assert [n for n, role in chords["E"]["draw"] if role == "run"] == ["E", "G", "B"]  # Em's holes, draw 4 to 6
-    assert chords["Bm"]["run"] == "no chord here: its notes, one hole at a time"
+    assert chords["Bm"]["run"] == "no chord here: play its notes one hole at a time"
     assert {n for n, role in chords["Bm"]["blow"] + chords["Bm"]["draw"] if role == "tone"} == {"D", "F#", "B"}
     assert chords["A"]["run"] == "draw 2–4" and chords["F#7"]["run"].startswith("no chord here")
     # The pentatonic: B D E F# A, its notes on the harp alone dark

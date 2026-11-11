@@ -87,7 +87,7 @@ object Songbooks {
                                 "${PyStr.repr(Py.slice(text, 0, MAX_NAME))}…")
         }
         if (text.startsWith(".")) {
-            throw SongbookError("A songbook's name can't start with a dot (its folder would be hidden): ${PyStr.repr(text)}")
+            throw SongbookError("A songbook's name can't start with a dot (its folder would hide): ${PyStr.repr(text)}")
         }
         if (Py.codePoints(SafeName.safeName(text)).none(PyUnicode::isAlnum)) {
             throw SongbookError("A songbook's name needs a letter or a digit: ${PyStr.repr(text)}")
@@ -114,12 +114,12 @@ object Songbooks {
         for ((i, other) in names.withIndex()) {
             if (i == skip) continue
             if (nameKey(other) == key) {
-                throw SongbookError("A songbook named \"$other\" is there already: pick another name, or add songs " +
-                                    "to it with caracole songbook add")
+                throw SongbookError("A songbook named \"$other\" is there already. Pick another name, or add songs " +
+                                    "to it with caracole songbook add.")
             }
             if (folderKey(other) == folder) {
-                throw SongbookError("\"$name\" would share the folder $FOLDER/${SafeName.safeName(name)} with the " +
-                                    "songbook \"$other\": pick another name")
+                throw SongbookError("\"$name\" would share the folder $FOLDER/${SafeName.safeName(name)} with " +
+                                    "\"$other\". Pick another name.")
             }
         }
     }

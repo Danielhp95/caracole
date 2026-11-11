@@ -1752,13 +1752,13 @@ def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
 
     state = index_state(conn)
     if state.empty:
-        return "empty", "index is empty: the nightly run reads its listings of every artist"
+        return "empty", "index is empty: tonight's run reads its listings of every artist"
     if state.complete:
         return None
     letters = letters_text(state.letters)
     whole = f", with {letters} read whole" if letters else ""
-    return "partial", (f"index is still being read: {state.artists:,} artist{'' if state.artists == 1 else 's'} so "
-                       f"far{whole}; the nightly run reads the rest")
+    return "partial", (f"index is being read: {state.artists:,} artist{'' if state.artists == 1 else 's'} so "
+                       f"far{whole}; tonight's run reads the rest")
 
 
 def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[ArtistHit] = (),

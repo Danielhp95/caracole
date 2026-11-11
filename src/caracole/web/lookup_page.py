@@ -275,24 +275,24 @@ function show(data, text) {
   say(rowKit.countsSaid(data, data.library.length) +
       (meant && first ? " · did you mean " + rowKit.meantName(first) + "?" : ""), true);
   if (meant) results.append(meant);
-  if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
+  if (data.library.length) results.append(...group("In your logbook", data.library.map(librarySong)));
   // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
   // first when it alone has the artist the query names ("andres calamaro": lacuerda_leads).
   const lcGroup = lcArtists.length || lc.length ?
     group("On LaCuerda", [...lcArtists.map(siteArtistRow), ...lc.map(lcSong)]) : [];
   if (data.lacuerda_leads === true) results.append(...lcGroup);
   // The artists the query names: first when one leads ("oasis"), after the songs when a song does ("wonderwall").
-  const named = artists.length ? group("Artists on Ultimate Guitar", artists.map(artistRow)) : [];
+  const named = artists.length ? group("Artists on UG", artists.map(artistRow)) : [];
   if (data.lead === "artist") results.append(...named);
-  if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
+  if (data.index.length) results.append(...group("On UG", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
   if (data.lacuerda_leads !== true) results.append(...lcGroup);
   // harptabs.com's: its artists, then its songs (a song's harmonica tabs by an artist whose page caracole read; a tab
   // by its title alone, a possible match, to open), with its mark and the Harmonica badge.
-  if (htArtists.length || ht.length) results.append(...group("On harptabs.com", [...htArtists.map(siteArtistRow),
+  if (htArtists.length || ht.length) results.append(...group("On harptabs", [...htArtists.map(siteArtistRow),
                                                                                 ...ht.map(htSong)]));
   // gametabs.net's: its tracks of games, the game the artist, with its mark and their instruments' badges.
-  if (gt.length) results.append(...group("On gametabs.net", gt.map(htSong)));
+  if (gt.length) results.append(...group("On gametabs", gt.map(htSong)));
   // What the search says beside its results, as the library page says it (ROWS_SCRIPT's): nothing found, a band,
   // "Not on the sites", over one row: the query, and Look up (the form by name) where a row's Get it is; under its
   // "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page may say, and why it may not
@@ -451,7 +451,7 @@ function showArtist(data, focus) {
   results.append(head);
   say(data.artist + ": " + many(data.total, "song") + ".");  // one line: nothing below it moves
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
-  const [heading, list] = group("On Ultimate Guitar, the most tabbed first", data.songs.map(ugSong));
+  const [heading, list] = group("On UG, most tabbed first", data.songs.map(ugSong));
   results.append(heading, list);
   let listed = data.songs.length;
   if (listed < data.total) {
@@ -487,8 +487,8 @@ const opener = rowKit.opener;
 function librarySong(s) {
   const files = Array.isArray(s.links) ? s.links : [];
   const opens = opener(files);
-  const again = () => button(s.files.sheet ? "Fetch again" : "Get it now", "small", () => lookUp({song: s.id}, s.display),
-                             s.files.sheet ? "Fetch " + s.display + " again" : "Get " + s.display + " now");
+  const again = () => button(s.files.sheet ? "Fetch again" : "Fetch", "small", () => lookUp({song: s.id}, s.display),
+                             s.files.sheet ? "Fetch " + s.display + " again" : "Fetch " + s.display);
   const reading = (label, aria) => button(label, "small" + (opens ? "" : " primary"), () => read(s.display, s.files), aria);
   let action;
   if (opens) action = {label: opens.label, href: opens.href};
@@ -550,7 +550,7 @@ function openSiteArtist(a, focus) {
   if (inflight) inflight.abort();
   inflight = new AbortController();
   const harp = a.source === "harptabs";
-  say("Listing the songs of " + a.artist + (harp ? " on harptabs.com…" : " on LaCuerda…"));
+  say("Listing the songs of " + a.artist + (harp ? " on harptabs…" : " on LaCuerda…"));
   getSiteArtist(harp ? {harptabs: a.path} : {slug: a.slug}, inflight.signal)
     .then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
 }
@@ -579,7 +579,7 @@ function readThenShow(who, go, offer) {
 
 function showSiteArtist(data, focus) {
   const harp = data.source === "harptabs";
-  const site = harp ? "harptabs.com" : "LaCuerda";
+  const site = harp ? "harptabs" : "LaCuerda";
   results.replaceChildren();
   root.classList.remove("missed");
   artistOpen = harp ? "harptabs:" + data.path : "lacuerda:" + data.slug;
@@ -590,7 +590,7 @@ function showSiteArtist(data, focus) {
   head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
   results.append(head);
   say(data.artist + ": " + (data.read ? many(harp ? data.songs.length : data.total, "song") + " on " +
-    site + "." : "caracole hasn't read their page on " + site + " yet."));
+    site + "." : "Their page on " + site + " isn't read yet."));
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
   results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null,
     (go, offer) => readThenShow(harp ? {harptabs: data.path} : {slug: data.slug}, go, offer)));
@@ -726,9 +726,9 @@ function progress(job) {
     said(job.active ? "Here it is" + (job.seconds_to_sheet !== null ? ", in " + job.seconds_to_sheet.toFixed(1) + " s" : "")
          + (running ? "; still getting: " + running.label.toLowerCase() : "") : "Done.");
   } else if (job.active) {
-    said(job.state === "queued" ? "Waiting for the request before it…" : (running ? doing(running) : "Working…"));
+    said(job.state === "queued" ? "Waiting for the one before…" : (running ? doing(running) : "Working…"));
   } else if (job.state === "cancelled") {  // in the Requests tab, before it ran
-    said("Cancelled before it ran: look it up again to get it.");
+    said("Cancelled before it ran. Look it up again to get it.");
   } else {
     const failed = job.steps.filter(s => s.detail && s.state !== "done").map(s => s.label + ": " + s.detail);
     said("No sheet this time. " + failed.join(" "));
@@ -748,7 +748,7 @@ function links(files) {
     a.href = href(files[name]);
     box.append(a);
   }
-  const jobs = el("a", "btn small", "Requests");
+  const jobs = el("a", "btn small", "Journal");
   jobs.href = "/#tab=requests";
   box.append(jobs);
 }
@@ -768,7 +768,7 @@ function sheet(path) {
 }
 
 function read(display, files) {
-  openReader(display, "From your library.");
+  openReader(display, "From your logbook.");
   links(files);
   sheet(files.sheet);
 }
@@ -850,7 +850,7 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None, *, library_na
     ``library_name``, the library the server shows (library_name.py), in its header and its tab's title."""
     token = escape(csrf, quote=True)
     title = library_name.title("Look up") if library_name is not None else "Look up · caracole"
-    links = LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'
+    links = LIBRARY + '<a class="navlink" href="/#tab=requests">Journal</a>'
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'

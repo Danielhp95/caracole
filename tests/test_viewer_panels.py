@@ -322,8 +322,8 @@ def test_the_mode_line_says_what_it_sounds_like(tmp_path):
         major = b.js(MODES)
         mode(b, "Dorian")
         dorian = b.js(MODES)
-    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright and settled", True]
-    assert [dorian["what"], dorian["level"]] == ["minor, with a brighter sixth", True]
+    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright, settled", True]
+    assert [dorian["what"], dorian["level"]] == ["minor, brighter 6th", True]
 
 
 # The chord names' segments: the words shown, the words a screen reader hears, pressed, offered (not disabled).
@@ -394,7 +394,7 @@ def test_the_names_hint_shows_only_without_a_key(tmp_path):
         b.click("#more")
         unknown = [b.js(hint), b.js(NAMES)]
     assert keyed is None
-    assert unknown[0] == "caracole can't tell this song's key, so it can't number its chords."
+    assert unknown[0] == "No key found, so no numerals."
     assert [offered for *_, offered in unknown[1]] == [True, False, False]  # the chords alone, the others greyed
 
 
@@ -428,7 +428,7 @@ def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
     assert guitar["tag"] == "SELECT" and [n for n, _ in guitar["options"]] == names and guitar["named"] == "Instrument"
     assert guitar["value"] == "guitar" and guitar["title"] == "Standard tuning, E A D G B E." and guitar["hash"] == ""
     assert set(guitar["strings"]) == {6}
-    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, the G string high."
+    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, high G."
     assert uke["hash"] == "#inst=ukulele" and uke["kept"] == "ukulele" and set(uke["strings"]) == {4}  # as the chips did
 
 
@@ -511,7 +511,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
         b.click("#more")
         served_rows = b.js(PLACES)
     assert folded["rows"] == [
-        ["harmony-open", "Harmony", "progressions, scale", None, None],
+        ["harmony-open", "Harmony", "progressions, scales", None, None],
         ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
         ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
         ["export-fold", "Export PDF", "D Dorian, capo 2", None, None]]  # the version in words
@@ -520,7 +520,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
     assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
     assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
     assert [row[:3] for row in served_rows["rows"]] == [
-        ["harmony-open", "Harmony", "progressions, scale"], ["", "Guitar Pro tab", "in the browser"],
+        ["harmony-open", "Harmony", "progressions, scales"], ["", "Guitar Pro tab", "in the browser"],
         ["export", "Export PDF", "D Major"]]
     assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
     assert served_rows["rows"][2][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
@@ -692,7 +692,7 @@ def test_while_the_song_scrolls_by_itself_a_card_docks_on_the_bar_under_the_pill
     assert docked["name"] == "C" and paused == "Resume" and not docked["inert"]
     assert card["bottom"] == docked["bar"]["top"] and pill["bottom"] <= card["top"]  # on the bar, the pill above
     # Counting down again with the card open, nothing moves under the thumb: the bar stays under the card.
-    assert again == "Start now"
+    assert again == "Start"
     assert [resumed[k] for k in ("card", "pill", "bar")] == [docked[k] for k in ("card", "pill", "bar")]
     assert closed["card"] is None and closed["bar"] is None and closed["pill"] == alone["pill"]
 
@@ -785,7 +785,7 @@ def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_e
         targets = b.js(small_targets(".foot *"))
     assert seen["open"] and not seen["panel"] and seen["focus"] == "harmony-title"
     assert seen["box"]["bottom"] == bar["top"] and seen["box"]["left"] == 0 and seen["box"]["right"] == 390
-    assert seen["key"] == "Read in the key of C (from the sheet)."
+    assert seen["key"] == "In the key of C (from the sheet)."
     assert seen["neck"]  # the key's neck, on a phone, is here
     verse, chorus, bridge = seen["rows"]  # the riff has no chord to read
     assert verse == {"section": "Verse", "numerals": ["I", "V", "vi", "IV"], "repeats": "×4",
@@ -887,7 +887,7 @@ def test_the_panel_names_a_progression_a_section_plays_within_it_and_a_cycle_tha
     assert verse["numerals"] == ["iv", "♭III", "♭VII", "i", "♭VI", "♭II", "♭III", "♭VII", "i", "♭VI"]
     assert verse["about"] == "contains the pop progression ×2"
     assert verse["named"] == [["Songs with the pop progression", "../../index.html#prog=I%20V%20vi%20IV"]]
-    assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, one variation"
+    assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, 1 variation"
     assert chorus["about"] == "the Andalusian cadence · ends on a half cadence (on V)" and chorus["named"] == []
     assert heads == ["Verse · contains the pop progression ×2", "Chorus · the Andalusian cadence"]
 
@@ -1157,8 +1157,8 @@ def test_a_changed_version_asks_before_downloading(tmp_path):
         other = b.js(ASKED)
     link = EXPORTS + "&capo=2"
     assert asked == {"title": "Make this your version of In E?", "version": "D Major, capo 2",  # D shapes, sounding E
-                     "what": "Its PDF, its viewer and your songbooks will start there.",
-                     "answers": [["Download and make it mine", link + "&mine=1", True], ["Just download", link, False],
+                     "what": "Its PDF, sheet and songbooks start there.",
+                     "answers": [["Make mine", link + "&mine=1", True], ["Download only", link, False],
                                  ["Cancel", None, False]],
                      "modal": True, "focus": True}
     assert went == [[link, True]]  # the press itself went nowhere

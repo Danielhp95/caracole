@@ -136,16 +136,16 @@ class SongbooksTest {
                                                  NOW) }
         assertEquals(listOf("songbook/late night"), done.taken)
         assertEquals(listOf(
-            "songbook/.x" to "A songbook's name can't start with a dot (its folder would be hidden): '.x'",
-            "songbook/camp-fire" to "\"Camp-Fire\" would share the folder _songbooks/Camp-Fire with the songbook " +
-                "\"Camp/Fire\": pick another name"), done.left.sortedBy { it.first })
+            "songbook/.x" to "A songbook's name can't start with a dot (its folder would hide): '.x'",
+            "songbook/camp-fire" to "\"Camp-Fire\" would share the folder _songbooks/Camp-Fire with " +
+                "\"Camp/Fire\". Pick another name."), done.left.sortedBy { it.first })
         assertEquals(listOf("Camp/Fire", "Late night"), database.read { db -> Songbooks.all(db).map { it.name } })
     }
 
     @Test fun aPutChecksTheNameFirstAsPutSongbookDoesAndATakeTheSettingFirstAsApplyUnitsDoes() {
         val badEntry = Json.parseToJsonElement("""[["A - B", {"tempo": 90}]]""") as JsonArray
         val e = assertFailsWith<SongbookError> { write { db -> SongbookStore.put(db, ".x", badEntry) } }
-        assertEquals("A songbook's name can't start with a dot (its folder would be hidden): '.x'", e.message)
+        assertEquals("A songbook's name can't start with a dot (its folder would hide): '.x'", e.message)
         assertFailsWith<IllegalArgumentException> { write { db -> SongbookStore.put(db, "Campfire", badEntry) } }
 
         val docs = mapOf("songbook/.x" to obj("""{"name": ".x", "songs": [["A - B", {"capo": 99}]]}"""))

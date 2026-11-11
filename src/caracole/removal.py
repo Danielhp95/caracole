@@ -196,13 +196,13 @@ def brief(plan: RemovalPlan) -> str:
     took from YouTube; what stays in its folder; never Music/. ``describe`` says it whole."""
     goes = []
     if plan.delete:
-        goes.append(f"caracole's {plural(len(plan.delete), 'file')} for it")
+        goes.append(f"our {plural(len(plan.delete), 'file')} for it")
     goes.append("its record")
     if plan.wanted_lines:
         n = len(plan.wanted_lines)
         goes.append("its wanted.txt line" if n == 1 else f"its {n} wanted.txt lines")
     if plan.youtube_audio:
-        goes.append("its audio from YouTube")
+        goes.append("its YouTube audio")
     said = "Deletes " + (", ".join(goes[:-1]) + " and " + goes[-1] if len(goes) > 1 else goes[0])
     left = len(plan.keep) + len(plan.elsewhere)
     if plan.folder_problem:
@@ -211,7 +211,7 @@ def brief(plan: RemovalPlan) -> str:
         said += f"; leaves {plural(left, 'other file')}"
     said += "; never touches Music/."
     if plan.wanted_problem:  # caracole remove stops before anything goes: a line left would bring it back
-        return f"wanted.txt can't be read ({plan.wanted_problem}), so nothing goes until it can. {said}"
+        return f"wanted.txt can't be read ({plan.wanted_problem}): nothing goes until it can. {said}"
     return said
 
 

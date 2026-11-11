@@ -1243,17 +1243,17 @@ def test_every_unit_kind_compare_case_and_take_rule_is_in_the_vectors(corpus):
     proposals = {d["proposal"] for r in corpus.records("compare") for d in r["out"]}
     assert proposals == {"mine", "theirs", "conflict"}
     whys = {d["why"].split(" since")[0].split(" ")[0] for r in corpus.records("compare") for d in r["out"]}
-    assert {"only", "on", "changed", "new", "gone"} <= whys
+    assert {"only", "in", "both", "changed", "new", "gone"} <= whys
     # the design's three-way table, row by row (docs/superpowers/specs/2026-10-31-phone-server-sync-design.md)
     rows = {(r["case"], tuple((d["proposal"], d["why"]) for d in r["out"])) for r in corpus.records("compare")}
-    for row in [("changed here alone: mine", (("mine", "changed here since the last sync"),)),
-                ("changed there alone: theirs", (("theirs", "changed there since the last sync"),)),
-                ("both changed, differently: a conflict", (("conflict", "changed on both sides since the last sync"),)),
-                ("new here since", (("mine", "new here since the last sync"),)),
-                ("new there since", (("theirs", "new there since the last sync"),)),
-                ("gone here since", (("mine", "gone here since the last sync"),)),
-                ("gone there since", (("theirs", "gone there since the last sync"),)),
-                ("gone here, changed there: a conflict", (("conflict", "changed on both sides since the last sync"),)),
+    for row in [("changed here alone: mine", (("mine", "changed here since the last share"),)),
+                ("changed there alone: theirs", (("theirs", "changed there since the last share"),)),
+                ("both changed, differently: a conflict", (("conflict", "both books changed it since the last share"),)),
+                ("new here since", (("mine", "new here since the last share"),)),
+                ("new there since", (("theirs", "new there since the last share"),)),
+                ("gone here since", (("mine", "gone here since the last share"),)),
+                ("gone there since", (("theirs", "gone there since the last share"),)),
+                ("gone here, changed there: a conflict", (("conflict", "both books changed it since the last share"),)),
                 ("same on both, as agreed: nothing", ()), ("both changed, the same way: nothing", ()),
                 ("gone on both: nothing", ())]:
         assert row in rows, row

@@ -57,7 +57,7 @@ internal object VersionsPage {
     /** versions_routes.MAX_TAB: digits (UG's tab ids are seven or eight). */
     const val MAX_TAB = 12
 
-    private val NO_SHEET get() = Refused(404, "Not found", "There's no such sheet in the library.")
+    private val NO_SHEET get() = Refused(404, "Not found", "No such sheet in the book.")
 
     /** songs.SHEET_OUTPUTS' viewers: render.HUMAN_OUTPUTS[2] and AUTO_OUTPUTS[2]. */
     private val VIEWERS = setOf(RenderNames.HUMAN_OUTPUTS[2], RenderNames.AUTO_OUTPUTS[2])
@@ -69,7 +69,7 @@ internal object VersionsPage {
     /** _a_tab: Refused (400) when [doing] names a version and [tab] names no UG tab. */
     fun aTab(tab: String, doing: String) {
         if (doing !in TABLESS && !Choices.digits(tab, MAX_TAB)) {
-            throw Refused(400, "Not a version", "Which version? The address names no Ultimate Guitar tab.")
+            throw Refused(400, "Not a version", "Which version? The address names no UG tab.")
         }
     }
 
@@ -122,7 +122,7 @@ internal object VersionsPage {
         val sheetPins = SheetVersions.sheetPins(db, song.id, songPins)
         val toKeep = SheetVersions.mayKeep(db, song.id, versions, overrides.block)
         val version = if (doing in TABLESS) null else versions.firstOrNull { it.tabId == tab }
-            ?: throw Refused(404, "No such version", "Ultimate Guitar lists no such chords version of ${song.display}.")
+            ?: throw Refused(404, "No such version", "UG lists no such chords version of ${song.display}.")
         return VersionsAsked(song, sheet, folder, version, versions, theOne, sheetPins, songPins, overrides.block, back,
                              toKeep)
     }
@@ -145,22 +145,21 @@ internal object VersionsPage {
     fun cant(doing: String, asked: VersionsAsked): String? {
         val v = asked.version
         if (doing == "clear") {
-            return if (asked.pinned) null else "caracole picks the sheet of ${asked.song.display} already: no " +
-                "version of yours is pinned in overrides.toml."
+            return if (asked.pinned) null else "We pick ${asked.song.display}'s sheet already: none of yours is pinned."
         }
         if (doing == "keep-more") {
-            return if (asked.toKeep.isNotEmpty()) null else "Nothing is left to keep of ${asked.song.display}: every " +
-                "Ultimate Guitar version caracole may keep is kept already, or can't be."
+            return if (asked.toKeep.isNotEmpty()) null else "Nothing left to keep of ${asked.song.display}: every UG " +
+                "version we may keep is kept, or can't be."
         }
         checkNotNull(v)
-        if (v.gone) return "Ultimate Guitar no longer has this version: it stays listed until the next fetch drops it."
+        if (v.gone) return "Gone from UG. Listed until the next fetch drops it."
         if (tabNumber(v)?.let { it in asked.blocked } == true && !v.chosen) {
-            return "This version is under [block] in overrides.toml: caracole never uses it. Take it out of [block] first."
+            return "Under [block] in overrides.toml: we never use it. Take it out of [block] first."
         }
-        if (doing == "choose" && v.chosen) return "This version is the one already: the song's title opens it."
+        if (doing == "choose" && v.chosen) return "Already the one: the song's title opens it."
         if (doing == "keep" && v.kept) {
-            return if (v.chosen) "This version is the one already: the song's title opens it."
-            else "This version is kept already, beside the song's sheet."
+            return if (v.chosen) "Already the one: the song's title opens it."
+            else "Kept already, beside the sheet."
         }
         return null
     }
@@ -188,9 +187,9 @@ internal object VersionsPage {
 
     /** A post's job's title. */
     fun title(doing: String, song: SongRow): String = when (doing) {
-        "choose" -> "Make a version the one: ${song.display}"
+        "choose" -> "Choose a version: ${song.display}"
         "keep" -> "Keep a version of ${song.display}"
-        "clear" -> "Back to caracole's pick: ${song.display}"
+        "clear" -> "Back to our pick: ${song.display}"
         else -> "Fetch the other versions of ${song.display}"
     }
 
@@ -205,20 +204,20 @@ internal object VersionsPage {
         return said.joinToString(" · ")
     }
 
-    private val LABELS = mapOf("choose" to "Make this the one", "keep" to "Keep it", "clear" to "Back to caracole's pick")
+    private val LABELS = mapOf("choose" to "Make this the one", "keep" to "Keep", "clear" to "Back to our pick")
     private val TELLS = mapOf(
-        "choose" to "It becomes the song's sheet: the title opens it, and its PDF and its songbooks use it. caracole " +
-            "looks the song up with this tab (<code>caracole versions --choose</code>, as <code>caracole get " +
-            "--tab</code> does) and keeps your choice in overrides.toml (<code>[pin]</code>).",
-        "keep" to "caracole fetches its page from Ultimate Guitar now (one request, at the lookup pace) and keeps it " +
-            "beside the song's sheet, with a viewer of its own; the song's sheet stays as it is.",
-        "clear" to "caracole takes the song's <code>[pin]</code> out of overrides.toml and looks the song up again: the " +
-            "title then opens the version it ranks first.",
+        "choose" to "It becomes the song's sheet: the title opens it, its PDF and songbooks use it. We fetch the song " +
+            "with this tab (<code>caracole versions --choose</code>) and note your choice in overrides.toml " +
+            "(<code>[pin]</code>).",
+        "keep" to "We fetch its page from UG (one ask) and keep it beside the song's sheet, with its own viewer. The " +
+            "sheet stays as it is.",
+        "clear" to "We take the song's <code>[pin]</code> out of overrides.toml and fetch it again: the title then " +
+            "opens the version we rank first.",
     )
     private val RUNNING = mapOf("choose" to "Making it the one…", "keep" to "Fetching the version…",
-                                "clear" to "Going back to caracole's pick…")
+                                "clear" to "Going back to our pick…")
     private val TITLES = mapOf("choose" to "Make this the one", "keep" to "Keep a version",
-                               "clear" to "Back to caracole's pick")
+                               "clear" to "Back to our pick")
 
     /** _body: the page of [doing] for what [asked] names, [job] the request it follows, if any (once it is done,
      * what it came to is read from [db] again), its form carrying [csrf], the library named as [name]. */
@@ -248,9 +247,9 @@ internal object VersionsPage {
         var links = opens
         val page = v?.page
         if (page != null && v.kept && !v.chosen && opens.isEmpty()) {
-            links += "<a class=\"btn\" href=\"/${asked.folder}/${quote(page)}\">Open it</a>\n"
+            links += "<a class=\"btn\" href=\"/${asked.folder}/${quote(page)}\">Open</a>\n"
         }
-        links += "<a class=\"btn\" href=\"/${esc(quote(asked.back))}\">Back to the sheet</a>"
+        links += "<a class=\"btn\" href=\"/${esc(quote(asked.back))}\">Back to sheet</a>"
         return Choices.page(200, "${TITLES.getValue(doing)} · ${song.display}",
                             "$lede$form$says<div class=\"confirm\">\n$links\n</div>", name, Choices.refresh(job))
     }
@@ -267,11 +266,11 @@ internal object VersionsPage {
                     "<a href=\"/$details\">Output</a></p>\n" to ""
             }
             Job.CANCELLED -> return "<p class=\"says cancelled\">Cancelled before it ran.</p>\n" to ""
-            Job.INTERRUPTED -> return "<p class=\"says waiting\">Interrupted: caracole serve stopped before it was " +
-                "over. <a href=\"/$details\">Output</a></p>\n" to ""
+            Job.INTERRUPTED -> return "<p class=\"says waiting\">Interrupted: the server stopped mid-way. " +
+                "<a href=\"/$details\">Output</a></p>\n" to ""
         }
         if (job.state != Job.DONE) {
-            val state = if (job.state == Job.QUEUED) "Queued: it runs after the requests before it." else RUNNING.getValue(doing)
+            val state = if (job.state == Job.QUEUED) "Queued · runs after those ahead." else RUNNING.getValue(doing)
             return "<p class=\"says ${job.state}\">${esc(state)}</p>\n" to ""
         }
         val output = "<a href=\"/$details\">output</a>"
@@ -280,11 +279,11 @@ internal object VersionsPage {
             val page = SheetVersions.versionNames(v.tabId).third
             if (!Choices.written(db, asked.song.id, page)) {
                 val why = stageDetail(job, "version")
-                return "<p class=\"says failed\">Done, but it wasn't kept${if (why.isNotEmpty()) ": " + esc(why) else ""}. " +
-                    "See the request's <a href=\"/$details\">output</a>.</p>\n" to ""
+                return "<p class=\"says failed\">Done, not kept${if (why.isNotEmpty()) ": " + esc(why) else ""}. " +
+                    "See the <a href=\"/$details\">output</a>.</p>\n" to ""
             }
-            return "<p class=\"says done\">Done: it is kept beside the sheet.</p>\n" to
-                "<a class=\"btn primary\" href=\"/${asked.folder}/${quote(page)}\">Open it</a>\n"
+            return "<p class=\"says done\">Done · kept beside the sheet.</p>\n" to
+                "<a class=\"btn primary\" href=\"/${asked.folder}/${quote(page)}\">Open</a>\n"
         }
         // caracole get exits 0 on a block, a spent budget or the hour's cap, the sheet as it was: what the job did is
         // the song's state, read again, never the command's exit.
@@ -293,22 +292,22 @@ internal object VersionsPage {
             if (!v.chosen) {
                 val why = stageDetail(job, "sheet")
                 val words = if (tabNumber(v)?.let { it in asked.pins } == true) {
-                    "Done, and your choice is recorded under [pin] in overrides.toml, but it isn't the song's sheet " +
-                        "yet: the nightly run, or a later lookup, makes it the one"
+                    "Done. Your choice is noted under [pin], but isn't the sheet yet: tonight's run or a later " +
+                        "fetch makes it the one"
                 } else {
-                    "Done, but it isn't the one"
+                    "Done, but not the one"
                 }
                 return "<p class=\"says waiting\">${esc(words)}${if (why.isNotEmpty()) ": " + esc(why) else "."} See the " +
-                    "request's $output.</p>\n" to ""
+                    "$output.</p>\n" to ""
             }
-            "Done: it is the one now."
+            "Done · the one now."
         } else if (asked.pinned) {
-            return "<p class=\"says failed\">Done, but the [pin] is still there: see the request's $output.</p>\n" to ""
+            return "<p class=\"says failed\">Done, but the [pin] remains. See the $output.</p>\n" to ""
         } else {
-            "Done: caracole picks the sheet again."
+            "Done · we pick the sheet again."
         }
         return "<p class=\"says done\">$said</p>\n" to
-            "<a class=\"btn primary\" href=\"/${asked.folder}/${quote(SheetVersions.SHEET_PAGE)}\">Open the sheet</a>\n"
+            "<a class=\"btn primary\" href=\"/${asked.folder}/${quote(SheetVersions.SHEET_PAGE)}\">Open sheet</a>\n"
     }
 
     /** _stage_detail: what the job's stage [stage] said when it ended, when it ended skipped or failed ("" else). */

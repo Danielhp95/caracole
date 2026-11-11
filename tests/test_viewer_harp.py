@@ -452,9 +452,9 @@ def test_the_key_cards_scales_scale_pentatonic_and_blues():
 def test_the_line_under_the_holes_names_the_harps_notes_outside_the_key():
     names = spelling(BM)
     said = {name: named(harp.outside("aeolian", (HARP_KEYS.index(name) - 11) % 12), 11, names) for name in "DAG"}
-    assert said == {"D": "Every note it blows or draws is in B minor.", "A": "Outside B minor: G#.",
+    assert said == {"D": "Every note it plays is in B minor.", "A": "Outside B minor: G#.",
                     "G": "Outside B minor: C."}
-    assert named(harp.outside("ionian", 0), 7, spelling(Key(7, "ionian"))) == "Every note it blows or draws is in G major."
+    assert named(harp.outside("ionian", 0), 7, spelling(Key(7, "ionian"))) == "Every note it plays is in G major."
     assert named(harp.outside("dorian", 5), 2, spelling(Key(2, "dorian"))) == "Outside D dorian: F#."  # a G harp
 
 
@@ -478,7 +478,7 @@ def test_the_page_names_the_key_card_on_every_transposition_as_harp_py_plays_it(
                     head = f"Outside {names[tonic]} {words}: "
                     assert text.startswith(head) and set(text[len(head):-1].split(", ")) == out, text
                 else:
-                    assert text == f"Every note it blows or draws is in {names[tonic]} {words}."
+                    assert text == f"Every note it plays is in {names[tonic]} {words}."
 
 
 def test_the_tables_hold_the_overlays_for_every_mode():

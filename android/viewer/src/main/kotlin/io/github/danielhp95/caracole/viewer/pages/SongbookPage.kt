@@ -64,7 +64,7 @@ object SongbookPage {
         val count = "${songs.size} song${if (songs.size == 1) "" else "s"}"
         val files = SheetPage.pdfLine(listOfNotNull(
             pdf?.takeIf { it.isNotEmpty() }?.let { Triple(it, "PDF", pdfTraditional) },
-            cho?.takeIf { it.isNotEmpty() }?.let { Triple(it, "ChordPro, for a songbook app", null) },
+            cho?.takeIf { it.isNotEmpty() }?.let { Triple(it, "ChordPro file", null) },
         ))
         val body = StringBuilder()
             .append("<div class=\"page\">\n<header class=\"head book-head\">\n")
@@ -98,7 +98,7 @@ object SongbookPage {
                 "${PyText.escape(song.title)}</span>" + (if (line.isNotEmpty()) "<span class=\"a\">$line</span>" else "")
             if (song.cho == null) {
                 val why = PyText.escape(song.missing?.takeIf { it.isNotEmpty() } ?: "no sheet yet")
-                "<li class=\"missing\"><span class=\"row\">$names<span class=\"why\">Missing: $why</span></span></li>"
+                "<li class=\"missing\"><span class=\"row\">$names<span class=\"why\">Missing · $why</span></span></li>"
             } else {
                 "<li><a class=\"row\" href=\"#song-$n\" data-id=\"${PyText.escape(song.id)}\">$names</a></li>"
             }
@@ -126,7 +126,7 @@ object SongbookPage {
             "<p class=\"facts\" id=\"facts-$n\">${SheetPage.facts(read.key, read.origin, read.sheet.capo ?: 0)}</p>\n" +
             "</header>\n" +
             SheetPage.songHtml(read.sheet, "-$n", song.title) +
-            pager("Songs, after the sheet", prev, next, names)  // at the end of a long sheet, no scrolling back up
+            pager("Songs, end of sheet", prev, next, names)  // at the end of a long sheet, no scrolling back up
         return Triple(html, data, keyAndCapo(read.key, opensIn(song), read.sheet.capo))
     }
 

@@ -1,7 +1,7 @@
 {
  "count": "__N__",
  "panel": "<section class=\"view reqs\" id=\"requests\" role=\"tabpanel\" aria-labelledby=\"tab-requests\" hidden></section>\n",
- "tab": "<button type=\"button\" class=\"tab\" role=\"tab\" id=\"tab-requests\" aria-controls=\"requests\" aria-selected=\"false\" tabindex=\"-1\">Requests <span class=\"n\">__N__</span></button>",
+ "tab": "<button type=\"button\" class=\"tab\" role=\"tab\" id=\"tab-requests\" aria-controls=\"requests\" aria-selected=\"false\" tabindex=\"-1\">Journal <span class=\"n\">__N__</span></button>",
  "zones": {
   "Africa/Abidjan": [
    [

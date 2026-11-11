@@ -56,7 +56,7 @@
    "voice": "ukulele",
    "sounds": 0,
    "offset": 0,
-   "about": "G C E A, the G string high.",
+   "about": "G C E A, high G.",
    "tab": ""
   },
   {
@@ -75,7 +75,7 @@
    "voice": "ukulele",
    "sounds": 0,
    "offset": 0,
-   "about": "G C E A, the G string low.",
+   "about": "G C E A, low G.",
    "tab": "Ukulele"
   },
   {
@@ -94,7 +94,7 @@
    "voice": "ukulele",
    "sounds": 0,
    "offset": 5,
-   "about": "D G B E, as a guitar's top four strings: a ukulele's shapes, named a fourth lower.",
+   "about": "D G B E, a guitar's top 4 strings: ukulele shapes, named a 4th lower.",
    "tab": "Baritone"
   },
   {
@@ -108,7 +108,7 @@
    "voice": "piano",
    "sounds": 0,
    "offset": 0,
-   "about": "The chords as they sound, any capo folded in: root position and two inversions, with a bass for the left hand.",
+   "about": "Chords as they sound, capo folded in: root position, 2 inversions, a left-hand bass.",
    "tab": ""
   },
   {
@@ -122,7 +122,7 @@
    "voice": "reed",
    "sounds": 0,
    "offset": 0,
-   "about": "A 10-hole diatonic harp, Richter tuned: the harps for the song in their positions, and each chord's holes on the one chosen.",
+   "about": "10-hole diatonic, Richter tuned: the harps for the song in their positions, each chord's holes on the one chosen.",
    "tab": ""
   },
   {
@@ -136,7 +136,7 @@
    "voice": "flute",
    "sounds": 0,
    "offset": 0,
-   "about": "The concert flute, as the song sounds: the key's scale and each chord's notes, with their fingerings.",
+   "about": "Concert flute, as the song sounds: the key's scale and each chord's notes, fingered.",
    "tab": ""
   },
   {
@@ -150,7 +150,7 @@
    "voice": "recorder",
    "sounds": 12,
    "offset": 0,
-   "about": "The soprano recorder, baroque or German fingering: it sounds an octave above the notes it reads.",
+   "about": "Soprano recorder, baroque or German fingering. Sounds an octave above the notes it reads.",
    "tab": ""
   }
  ],

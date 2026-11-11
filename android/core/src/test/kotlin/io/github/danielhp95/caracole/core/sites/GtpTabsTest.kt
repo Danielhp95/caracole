@@ -188,13 +188,13 @@ class GtpTabsTest {
     @Test fun aBlockSkipsTheStageAndMarksNothing() =
         stage(mapOf(elton to FakeTransport.answer(403, "Forbidden"))) { db, end, _ ->
             assertEquals("skipped", end.state)
-            assertTrue(end.detail.startsWith("gtptabs.com blocked caracole (gtptabs: 403: $elton: HTTP 403)"), end.detail)
+            assertTrue(end.detail.startsWith("gtptabs.com turned us back (gtptabs: 403: $elton: HTTP 403)"), end.detail)
             assertNull(db.kvGet("gtptabs:checked:1"))
         }
 
     @Test fun aServerErrorFailsTheStageNeverAMiss() =
         stage(mapOf(elton to FakeTransport.answer(500, "oops"))) { db, end, _ ->
-            assertEquals(StageEnd("failed", "gtptabs.com failed (gtptabs: 500: $elton: HTTP 500); the nightly run tries again"),
+            assertEquals(StageEnd("failed", "gtptabs.com failed (gtptabs: 500: $elton: HTTP 500); tried again tonight"),
                          end)
             assertNull(db.kvGet("gtptabs:checked:1"))
         }

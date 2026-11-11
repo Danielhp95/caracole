@@ -102,7 +102,7 @@ class SyncsTest {
         val mixed = outcome("""{"taken": ["song/estopa/tu calorro"], "given": [], "left": [
             ["song/eagles/hotel california", "${SyncEngine.UNSETTLED}"],
             ["songbook/campfire", "${SyncEngine.UNSETTLED}"],
-            ["song/estopa/como camaron", "changed here since the comparison"]], "agreed": 3, "indexed": []}""")
+            ["song/estopa/como camaron", "changed here since compared"]], "agreed": 3, "indexed": []}""")
         assertEquals(2 to false, Syncs.conflictsLeft(mixed), "a songbook among them: not all songs")
         val songs = outcome("""{"taken": [], "given": [], "left": [
             ["song/a/b", "${SyncEngine.UNSETTLED}"], ["song/c/d", "${SyncEngine.UNSETTLED}"]], "agreed": 0}""")
@@ -117,7 +117,7 @@ class SyncsTest {
     fun `the probe of a Wi-Fi sync with nothing answering does nothing and says nothing`() = runBlocking {
         val asked = { error("the phone's caracole was asked") }
         // What an earlier sync left: kept as it was, in the settings and on the screen, by each probe that finds none.
-        val earlier = Outcome(1_000L, true, "Up to date: 1 taken")
+        val earlier = Outcome(1_000L, true, "Up to date · 1 taken")
         val shown = SyncState.Ended(earlier)
         for (server in listOf(nothingAt(), "", answering("<html><body>Sign in to the café's Wi-Fi</body></html>"))) {
             // Nothing answering there; no address; something else answering there, a Wi-Fi login page.
@@ -152,7 +152,7 @@ class SyncsTest {
                                  "left": [], "agreed": 9, "indexed": []}"""), queued) }) { n, songs -> notified.add(n to songs) }!!
         assertEquals(listOf("http://192.168.1.20:8737"), queued, "the address as the sync reads it")
         assertTrue(done.ok)
-        assertEquals("Up to date: 1 taken, 2 given", done.text)
+        assertEquals("Up to date · 1 taken, 2 given", done.text)
         assertEquals(emptyList(), notified)
         assertEquals(1, cleared, "an earlier sync's notification of its conflicts taken back")
         assertEquals(done, clean.lastOutcome)

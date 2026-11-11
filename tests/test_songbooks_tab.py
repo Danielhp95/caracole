@@ -126,7 +126,7 @@ class Fake:
 
         stage("song", "running")
         sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
-        stage("song", "done", "in the library")
+        stage("song", "done", "in the book")
         stage("sheet", "running")
         time.sleep(0.2)
         song = find_song(conn, override_key(f"{args[-2]} - {args[-1]}"))
@@ -281,7 +281,7 @@ def test_the_songbooks_tab_lists_each_songbook_with_its_counts(serve, cfg, libra
         assert page.js("document.querySelector('#tab-songbooks').getAttribute('aria-selected')") == "true"
         assert page.js(f"{SHOWN}('#songbooks')") and not page.js(f"{SHOWN}('#list')")
         books = page.js(BOOKS)
-        day = r"changed \d{4}-\d{2}-\d{2}"
+        day = r"made \d{2}/\d{2}/\d{2}"
         assert [b[0] for b in books] == ["Campfire", "Road trip"]
         assert re.fullmatch(r"3 songs · 1 without a sheet · " + day, books[0][1]), books
         assert re.fullmatch(r"1 song · " + day, books[1][1]), books
@@ -321,8 +321,8 @@ def test_opening_a_songbook_shows_its_set_list_with_each_songs_setting(serve, cf
         # Creep plays where the songbook says; De Música Ligera as its own version: its chip says so to a reader.
         said = page.js("Array.from(document.querySelectorAll('#songbooks .set-line .plays'))"
                        ".map((c) => c.getAttribute('aria-label'))")
-        assert said == ["Creep plays in G Dorian here: change it",
-                        "De Música Ligera plays in A Minor, its own version: change it"], said
+        assert said == ["Creep plays in G Dorian here: change",
+                        "De Música Ligera plays in A Minor, its own version: change"], said
         assert page.js("document.querySelector('#songbooks .set-line .set-title').getAttribute('href')") == \
             "Radiohead/Creep/sheet.html"  # its title opens its sheet
         assert "book=Campfire" in page.js("location.hash")
@@ -552,7 +552,7 @@ def test_a_new_songs_pending_line_shows_its_lookup_while_that_waits(serve, cfg, 
             page.click(f"#songbooks .add-results .line:nth-child({page.js(found) + 1}) .line-action button")
             # the lookup's own line as it runs, held ("Queued…" until the queue takes it up), never the songbook
             # change's "Queued behind 1 request…"
-            assert page.wait(f"{line} === 'Adding to the library…'", timeout=10), page.js(line)
+            assert page.wait(f"{line} === 'Adding to the book…'", timeout=10), page.js(line)
     finally:
         hold.set()
 
@@ -705,9 +705,9 @@ def test_a_songs_guitar_pro_mark_opens_its_page_served(serve, cfg, guitars, tmp_
         page.open(url + CAMPFIRE)
         assert page.js(MARKS) == [
             ["Creep", "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp", "set-gp",
-             "Guitar Pro tab: Radiohead - Creep.gp, open it in the browser", None, "", "", "solid"],
+             "Guitar Pro tab Radiohead - Creep.gp: open", None, "", "", "solid"],
             ["Hysteria"], WITHOUT]
-        assert page.js("document.querySelector('#songbooks .set-gp').title") == "Guitar Pro tab: open it in the browser"
+        assert page.js("document.querySelector('#songbooks .set-gp').title") == "Open the Guitar Pro tab"
         assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
         # Next to its title, on its line, before what else the line holds; a key's reach (Tab) like any link.
         beside = page.js("""Array.from(document.querySelectorAll('#songbooks .set-gp')).map((a) => {
@@ -741,11 +741,11 @@ def test_a_kept_guitar_pro_files_mark_downloads_it_where_no_page_shows_it(serve,
     with opened(tmp_path) as page:
         page.open(address + CAMPFIRE)
         assert page.js(MARKS) == [
-            ["Creep", "Radiohead/Creep/guitar-1.gp", "set-gp", "Guitar Pro tab: Radiohead - Creep.gp, download it",
+            ["Creep", "Radiohead/Creep/guitar-1.gp", "set-gp", "Guitar Pro tab Radiohead - Creep.gp: download",
              "Radiohead - Creep.gp", "", "", "solid"],
             ["Hysteria"], WITHOUT]
         assert page.js("document.querySelector('#songbooks .set-gp').title") == \
-            "Guitar Pro tab: download Radiohead - Creep.gp"
+            "Download Radiohead - Creep.gp"
         if where != "file":  # the file itself, as the library's line links it
             assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
 
@@ -858,11 +858,11 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         assert page.js(TITLES) == ["Hysteria", "Creep"]
         books = page.js(BOOKS)
         assert [b[0] for b in books] == ["Campfire", "Road trip", "Brand new"], books
-        assert books[2][1] == "2 songs · couldn't be made", books
+        assert books[2][1] == "2 songs · not made", books
         # Nothing on it to change but by making it again, from the Select bar (+ New songbook), which has the picks
         # and says why.
         assert page.js("document.querySelector('#songbooks .book .book-files .hint').textContent") == (
-            "Not made: + New songbook can make it again.")
+            "Not made. + New songbook makes it again.")
         assert page.js("document.querySelectorAll('#songbooks .book .set-line button:not([disabled]), "
                        "#songbooks .book .book-more button:not([disabled])').length") == 0
         assert page.js(f"!{SHOWN}('#songbooks .book .add-song')")
@@ -878,7 +878,7 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         assert page.wait(f"{STATUS} === 'Made·Open songbook'", timeout=20), page.js(STATUS)
         assert page.js(TITLES) == ["Hysteria", "Creep"] and page.js(f"{SHOWN}('#songbooks .book .add-song')")
         assert page.js("document.querySelectorAll('#songbooks .book .set-line .grip:not([disabled])').length") == 2
-        assert re.fullmatch(r"2 songs · 1 without a sheet · changed \S+", page.js(BOOKS)[2][1]), page.js(BOOKS)
+        assert re.fullmatch(r"2 songs · 1 without a sheet · made \S+", page.js(BOOKS)[2][1]), page.js(BOOKS)
     assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip", "Brand new"]
 
 
@@ -912,7 +912,7 @@ def test_a_songbook_that_couldnt_be_made_goes_once_made_under_another_name_or_fo
         assert [b[0] for b in page.js(BOOKS)] == ["Campfire", "Road trip", "Beach nights"], page.js(BOOKS)
         make("Other", "De Música Ligera")
         assert page.wait(f"{STATUS}.includes(\"songbooks.toml can't be written\")", timeout=20), page.js(STATUS)
-        assert page.js(BOOKS)[3] == ["Other", "1 song · couldn't be made"], page.js(BOOKS)
+        assert page.js(BOOKS)[3] == ["Other", "1 song · not made"], page.js(BOOKS)
         page.click("#songbooks .book .book-forget")
         open_now = "((document.querySelector('#songbooks .book h2') || {}).textContent || '')"
         assert page.wait(f"{open_now} !== 'Other'", timeout=5)
@@ -1006,7 +1006,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
       (li.querySelector('.plays, .badge.missing') || {}).textContent || ''])"""
     with opened(tmp_path, *size) as page:
         page.open(url + CAMPFIRE)
-        assert page.js(f"document.querySelector({json.dumps(get)}).textContent") == "Get the 2 missing songs now"
+        assert page.js(f"document.querySelector({json.dumps(get)}).textContent") == "Fetch the 2 missing songs"
         assert page.js(SHIFTS)
         page.click(get)
         assert page.wait(f"{STATUS}.startsWith('Made')", timeout=30), (page.js(STATUS), page.js(lines))
@@ -1014,7 +1014,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         shown = page.js(lines)
         assert [s[0] for s in shown] == ["Creep", "Hysteria", "De Música Ligera", "Debaser", "Uprising"]
         assert shown[1][1].startswith("Ready") and shown[4][1].startswith("Ready"), shown
-        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the library", shown
+        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the logbook", shown
         # Nothing left to get: its button goes (its room kept until your next click, so nothing moves).
         assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
                        f"{json.dumps(get)}))")

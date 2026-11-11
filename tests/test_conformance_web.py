@@ -613,15 +613,14 @@ def ended(job: _Job, name: str, state: str = "failed") -> _Job:
     return job
 
 
-UG_BLOCKED = ("Ultimate Guitar blocked caracole (ug: 403: https://www.ultimate-guitar.com/: blocked): no more "
-              "requests to it until 2026-11-04 11:30 UTC. Nothing was marked not found.")
-UG_COOLING = "Ultimate Guitar is cooling down after a block, until 2026-11-04 11:30 UTC"
-UG_SPENT = "the lookup's 6 requests to Ultimate Guitar are spent; the nightly run does the rest"
-HOUR_SPENT = "this hour's 60 lookup requests to LRCLIB are spent; the nightly run does the rest"
-LRCLIB_503 = ("LRCLIB failed (lrclib: 503: https://lrclib.net/api/get: Service Unavailable); the nightly run tries "
-              "again")
-LRCLIB_DOWN = "LRCLIB failed (lrclib: network error: timed out); the nightly run tries again"
-LACUERDA_BLOCKED = "LaCuerda blocked caracole (lacuerda: 429: https://acordes.lacuerda.net/: slow down)"
+UG_BLOCKED = ("Ultimate Guitar turned us back (ug: 403: https://www.ultimate-guitar.com/: blocked). No more asks "
+              "until 2026-11-04 11:30 UTC. Nothing marked not on the sites.")
+UG_COOLING = "Waiting out Ultimate Guitar until 2026-11-04 11:30 UTC"
+UG_SPENT = "this fetch's 6 asks of Ultimate Guitar are spent; tonight's run does the rest"
+HOUR_SPENT = "no more asks of LRCLIB this hour (60 spent); tonight's run does the rest"
+LRCLIB_503 = "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get: Service Unavailable); tried again tonight"
+LRCLIB_DOWN = "LRCLIB failed (lrclib: network error: timed out); tried again tonight"
+LACUERDA_BLOCKED = "LaCuerda turned us back (lacuerda: 429: https://acordes.lacuerda.net/: slow down)"
 DONE_ALL = {"song": ("done", ""), "match": ("done", "accepted"), "sheet": ("done", "kept tab 85053"),
             "pdf": ("skipped", NO_PDF), "lyrics": ("done", "timed"), "ug": ("done", "2 more versions"),
             "lacuerda": ("skipped", "not Spanish"), "gtptabs": ("done", "no file there"),
@@ -649,7 +648,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("its song stage, a song of the library", in_state(look, "running", {"song": ("running", "")}),
         facts=_status.SongFacts())
     add("waiting for another caracole", in_state(look, "running", {"song": (
-        "running", "waiting for another caracole (pid 4242), which lets a lookup go first at its next pause")}),
+        "running", "waiting for the book (pid 4242); a fetch goes first at its next pause")}),
         facts=_status.SongFacts())
     add("its match stage", in_state(look, "running", {"song": ("done", ""), "match": ("running", "")}),
         facts=_status.SongFacts())
@@ -698,8 +697,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         add(f"done, not fetched yet: UG {note}", in_state(look, "done", _with(
             nothing, sheet=("skipped", detail)), running={"sheet": SHEET_FROM["ug"]}), facts=_status.SongFacts())
     add("done, not fetched yet: UG failed", in_state(look, "done", _with(nothing, sheet=(
-        "failed", "Ultimate Guitar failed (ug: 500: https://tabs.ultimate-guitar.com/tab/85053: oops); the nightly "
-                  "run tries again")), running={"sheet": SHEET_FROM["ug"]}), facts=_status.SongFacts())
+        "failed", "Ultimate Guitar failed (ug: 500: https://tabs.ultimate-guitar.com/tab/85053: oops); tried again "
+                  "tonight")), running={"sheet": SHEET_FROM["ug"]}), facts=_status.SongFacts())
     add("done, not fetched yet, no stage said why", in_state(look, "done", _with(nothing, sheet=("skipped", ""))),
         facts=_status.SongFacts())
     add("done, needs review, its picker", in_state(look, "done", _with(nothing, match=("done", "review"))),
@@ -754,20 +753,20 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     reads = [
         (queued_job("Read the page of Soda Stereo on LaCuerda", _jobs.LACUERDA_ARTIST + "soda_stereo",
                     _jobs.lacuerda_artist_steps("soda_stereo", "Soda Stereo")),
-         ["Read: LaCuerda's page of Soda Stereo lists 42 songs, in the index now (1 request).",
-          "Not found: LaCuerda has no artist page for Soda Stereo.",
-          "Not read: LaCuerda blocked caracole (lacuerda: 403: x); no more requests to it until 2026-11-04 11:30 UTC.",
+         ["Read: LaCuerda's page of Soda Stereo lists 42 songs.",
+          "Not found: LaCuerda has no page for Soda Stereo.",
+          "Not read: LaCuerda turned us back (lacuerda: 403: x); no asks until 2026-11-04 11:30 UTC.",
           "Done, somehow"]),
         (queued_job("Search LaCuerda for “de musica ligera”", _jobs.LACUERDA_SEARCH + "de-ligera-musica",
                     _jobs.lacuerda_search_steps("de musica ligera", auto=True)),
-         ["Searched: LaCuerda's search for “de musica ligera” found 3 songs (1 request).",
-          "Found already: your library has “de musica ligera”; no request.",
+         ["Searched: LaCuerda has 3 songs for “de musica ligera”, in the index.",
+          "Found already: “de musica ligera” is in your book or LaCuerda's index. No ask sent.",
           "Nothing found: LaCuerda has no song for “de musica ligera”.",
-          "Not searched: this hour's 20 searches of LaCuerda the page sends by itself are spent; ask again later."]),
+          "Not searched: this hour's 20 automatic searches are spent. Ask LaCuerda asks anyway."]),
         (queued_job("Read the page of Bob Dylan on harptabs.com", _jobs.HARPTABS_ARTIST + "/artist/bob-dylan",
                     _jobs.harptabs_artist_steps("/artist/bob-dylan", "Bob Dylan")),
-         ["Read: harptabs.com's page of Bob Dylan lists 30 tabs (1 request).",
-          "Not read: harptabs.com failed (harptabs: 500: x); nothing changed: try again later."]),
+         ["Read: harptabs' page of Bob Dylan lists 30 tabs.",
+          "Not read: harptabs failed (harptabs: 500: x). Try again later."]),
     ]
     for job, endings in reads:
         kind = phone_kind(job)
@@ -865,7 +864,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         "song": ("done", ""), "audio": ("done", ""), "lyrics": ("done", ""),
         "chords": ("done", "chords over the timed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
-        "song": ("done", ""), "audio": ("skipped", "YouTube is cooling down after a block, until 2026-11-04 11:30 UTC")}),
+        "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
@@ -1014,14 +1013,13 @@ def reason_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | 
     for name, (site, provider) in SITE_NAMES.items():
         facts = _status.SongFacts() if name == "sheet" else _status.SongFacts(sheet=SHEET, sheet_from="UG")
         for said, detail in (
-                ("failed", f"{site} failed ({provider}: 503: https://{provider}.example/: busy); the nightly run tries "
-                           "again"),
-                ("failed", f"{site} failed ({provider}: network error: timed out); the nightly run tries again"),
-                ("skipped", f"{site} blocked caracole ({provider}: 429: https://{provider}.example/: slow down): no "
-                            "more requests to it until 2026-11-04 11:30 UTC. Nothing was marked not found."),
-                ("skipped", f"{site} blocked caracole ({provider}: 403: x)"),
-                ("skipped", f"{site} is cooling down after a block, until 2026-11-04 11:30 UTC"),
-                ("skipped", f"the lookup's 6 requests to {site} are spent; the nightly run does the rest")):
+                ("failed", f"{site} failed ({provider}: 503: https://{provider}.example/: busy); tried again tonight"),
+                ("failed", f"{site} failed ({provider}: network error: timed out); tried again tonight"),
+                ("skipped", f"{site} turned us back ({provider}: 429: https://{provider}.example/: slow down). No "
+                            "more asks until 2026-11-04 11:30 UTC. Nothing marked not on the sites."),
+                ("skipped", f"{site} turned us back ({provider}: 403: x)"),
+                ("skipped", f"Waiting out {site} until 2026-11-04 11:30 UTC"),
+                ("skipped", f"this fetch's 6 asks of {site} are spent; tonight's run does the rest")):
             stages = _with(DONE_ALL, **{name: (said, detail)})
             if name == "sheet":
                 stages = _with(stages, pdf=("skipped", ""), ug=("skipped", ""))
@@ -1085,11 +1083,12 @@ def test_outcome_jsonl_is_what_the_requests_tab_says_of_each_job():
     assert tables["fn"] == "tables"
     words = {r["out"]["outcome"]["word"] for r in records if r["out"]["outcome"]}
     reasons = {r["out"]["outcome"]["reason"] for r in records if r["out"]["outcome"]}
-    for name, (what, verb) in _outcome._WHAT.items():  # each site's wait and error said
-        assert {f"{what} {verb} for tonight's run.", f"{what} {verb} until 2026-11-04 11:30 UTC."} <= {
-            reason.partition(": ")[2] for reason in reasons}, name
-    assert {"Ready", "Not found", "Not fetched yet", "Needs review", "Failed", "Cancelled", "Interrupted",
-            "Removed", "Synced", "Taken", "Merged"} <= words
+    for name, (what, verb) in _outcome._WHAT.items():  # each site's wait and error said, its second sentence
+        waits = f"{what[:1].upper()}{what[1:]} {verb}"
+        assert {f"{waits} until tonight.", f"{waits} until 2026-11-04 11:30 UTC."} <= {
+            reason.partition(". ")[2] for reason in reasons}, name
+    assert {"Ready", "Not found", "Not fetched yet", "Needs your pick", "Failed", "Cancelled", "Interrupted",
+            "Removed", "Shared", "Taken", "Merged"} <= words
     assert any(r["out"]["outcome"] and r["out"]["outcome"]["also"] for r in records)
     check(WEB / "outcome.jsonl", jsonl([tables, *records], corpus="web/outcome", made_by=MADE_BY))
 

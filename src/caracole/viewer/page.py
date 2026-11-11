@@ -161,7 +161,7 @@ CREDIT_URL = "https://github.com/tombatossals/chords-db"
 # Where a key came from (``keys.SongKey.source``), in words for the page: keys.SOURCES, copied, since
 # importing keys.py would bring db.py, songs.py and the rest into BUILD_FILES (test_viewer.py checks
 # that the two agree).
-_SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
+_SOURCES = {"tab": "from the tab", "chords": "guessed from the chords", "audio": "from the audio"}
 # Those whose key is the key of the chords as the sheet writes them, the shapes played (keys.py): estimated from
 # them, or heard in the chords an auto sheet writes. Never one that may name the sound, as a tab's own word may.
 _OF_THE_SHAPES = frozenset({"chords", "audio"})
@@ -462,12 +462,12 @@ def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
     if (found := named_key(sheet.key, capo, played)) is not None:
         return shapes_key(found, capo, played), "from the sheet"
     found = estimate_key(played)
-    return found, "estimated from the chords" if found else None
+    return found, "guessed from the chords" if found else None
 
 
 def _origin(source: str | None) -> str:
     if source is None:
-        return "from info.json"
+        return "from the song's entry"
     words = " ".join(str(source).split())[:40]
     return _SOURCES.get(words.lower(), f"from {words}")
 
@@ -645,7 +645,7 @@ def _facts(key: Key | None, origin: str | None, capo: int) -> str:
     if key is None:
         return f"Capo <b>{capo}</b>" if capo else ""
     if not capo:
-        return f"Key <b>{escape(key_name(key))}</b>" + (f' <span class="from">{source}</span>' if source else "")
+        return f"Key <b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")
     return (
         f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
         + (f' · <span class="from">key {source}</span>' if source else "")
@@ -723,7 +723,7 @@ def _song_html(sheet: Sheet, suffix: str = "", named: str = "", *, credit: bool 
     )
 
 
-_NOTICE = '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
+_NOTICE = '<p class="notice">We heard these chords in the recording. Unchecked.</p>\n'
 # Under it, the YouTube video the recording came from (the data's ``video``), drawn by the script: YouTube's mark,
 # the video's title a plain link to it, which a sandbox, a file and the app follow in the same tab as the page's other
 # links (a new window is a popup, which the sandbox refuses: ``viewer_csp``), and its channel.
@@ -737,8 +737,8 @@ def _footer(links: str) -> str:
         '<footer class="foot">\n'
         + links
         + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n'
-        + f'<details class="licence"><summary>The chords-db licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
-        + "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n"
+        + f'<details class="licence"><summary>chords-db licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
+        + "<p>Private page: the lyrics and chords are other people's work.</p>\n"
         + "</footer>\n"
     )
 
@@ -868,7 +868,7 @@ def _words(text: str) -> list[str]:
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
 # one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
 # opens something here, ↗ leaves the page): Harmony, the song's Guitar Pro files (``_GUITAR_ROW``) and Export PDF
-# (``_EXPORT_ROW``, a sheet's alone); and after another, Reset everything, quiet.
+# (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
@@ -883,7 +883,7 @@ _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
 _HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
-                'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scale'
+                'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scales'
                 + _GO + '</span></button></div>\n')
 # Export PDF of this version, in words at its right: served, a link to the PDF itself, caracole serve's download
 # (viewer.js); from a file, a row that unfolds the command that makes it, with Copy.
@@ -899,9 +899,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="bar-in">
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="keys" role="group" aria-label="Transpose">
-<button type="button" class="step" id="t-down" aria-label="Transpose down a semitone">−</button>
+<button type="button" class="step" id="t-down" aria-label="Down a semitone">−</button>
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
-<button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
+<button type="button" class="step" id="t-up" aria-label="Up a semitone">+</button>
 </span>
 <button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
 <button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.67 12.95A3.2 3.2 0 1 1 3.05 9.33A1.42 1.42 0 0 0 4.07 8.64A2.4 2.4 0 1 1 7.36 11.93A1.42 1.42 0 0 0 6.67 12.95ZM6.77 9.23A1.07 1.07 0 1 0 5.26 10.74A1.07 1.07 0 1 0 6.77 9.23Z"/><path d="M8.03 9.23L12.68 4.58L12.87 4.76L15.7 2.82L13.18 0.3L11.24 3.13L11.42 3.32L6.77 7.97Z"/></svg></button>
@@ -913,11 +913,11 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
 </span>
 </span>
-<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
-<button type="button" class="tool" id="more" aria-label="More settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
+<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
+<button type="button" class="tool" id="more" aria-label="Settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
 </div>
 </div>
-<div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>
+<div class="pill" id="pill" role="group" aria-label="Auto-scroll" hidden>
 <button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
 <button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>
 <output id="pill-speed">6</output>
@@ -931,11 +931,11 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="pair">
 <div class="num" id="t-row"><div class="num-top"><span id="t-lab">Transpose</span>
-<button type="button" class="undo" id="reset-t" hidden aria-label="Reset the transposition">""" + _UNDO + """Reset</button></div>
+<button type="button" class="undo" id="reset-t" hidden aria-label="Reset transpose">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="t-lab"><button type="button" id="down" aria-label="Down a semitone">−</button>
 <output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
 <div class="num" id="capo-row"><div class="num-top"><span id="capo-lab">Capo</span>
-<button type="button" class="undo" id="reset-capo" hidden aria-label="Reset the capo">""" + _UNDO + """Reset</button></div>
+<button type="button" class="undo" id="reset-capo" hidden aria-label="Reset capo">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="capo-lab"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
 <output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span></div>
 </div>
@@ -952,14 +952,14 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div id="hanzi-row" hidden><div class="seg" id="hanzi" role="group" aria-label="Chinese characters"><button type="button" id="hanzi-s" aria-pressed="true" aria-controls="sheet"><span>Simplified <span class="zh" lang="zh-Hans">简体</span></span></button>
 <button type="button" id="hanzi-t" aria-pressed="false" aria-controls="sheet"><span>Traditional <span class="zh" lang="zh-Hant">繁體</span></span></button></div></div>
 <div id="pinyin-row" hidden><button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" aria-describedby="pinyin-hint">Pinyin</button>
-<p class="hint" id="pinyin-hint">Each Chinese character's reading, over it.</p></div>
+<p class="hint" id="pinyin-hint">Each character's reading, above it.</p></div>
 <div class="duo" id="inst-line"><span class="inst-pick" id="inst-row" hidden><select id="insts" aria-label="Instrument"></select></span>
-<span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum" aria-describedby="strum-hint"></span>
-<span class="vh" id="strum-hint">Tap a chord, or its shape on its card, to hear it strummed.</span></span></div>
+<span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum volume" aria-describedby="strum-hint"></span>
+<span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
 <div class="places ruled" id="places">
 """ + _HARMONY_ROW + """</div>
-<div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset everything</button></div>
+<div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
@@ -969,7 +969,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="diagram" id="diagram"></div>
 <button type="button" class="round" id="next" aria-label="Next shape">›</button></div>
 <p class="hint center" id="shape-note"></p>
-<h3 class="sub" id="alts-title">Chord alternatives</h3>
+<h3 class="sub" id="alts-title">Alternatives</h3>
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 <div class="info"><p class="tones" id="card-tones"></p><p class="solo" id="card-scale"></p></div>
@@ -982,9 +982,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="row" id="tempo-row" hidden><span class="lab">Tempo</span>
 <span class="stepper"><button type="button" id="bpm-down" aria-label="Slower">−</button>
 <output id="bpm">80</output><button type="button" id="bpm-up" aria-label="Faster">+</button></span>
-<span class="hint-inline">bpm, a chord a bar</span></div>
+<span class="hint-inline">bpm · 1 chord a bar</span></div>
 <ol class="progs" id="progs"></ol>
-<p class="hint" id="progs-none" hidden>No chords here caracole can read.</p>
+<p class="hint" id="progs-none" hidden>No chords we can read.</p>
 </section>
 <div class="tip" id="tip" role="tooltip" hidden>
 <div class="tip-head"><span class="tip-chord" id="tip-chord"></span><span class="tip-nm" id="tip-nm"></span><span class="tip-role" id="tip-role"></span></div>
@@ -994,7 +994,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <p class="tip-off" id="tip-off" hidden></p>
 <div class="tip-switch" id="tip-switch"><span class="tip-dots" id="tip-dots" aria-hidden="true"><span></span><span></span></span><button type="button" class="tip-btn tip-view" id="tip-view"></button>
 <button type="button" class="tip-btn tip-hear" id="tip-hear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Hear it</button></div></div>
-<noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
+<noscript><p class="noscript">Turn on JavaScript to transpose, change mode and see chord shapes.</p></noscript>
 """
 
 # A sheet viewer's versions (its data's ``versions``), hidden until the script fills them in: under the key
@@ -1002,10 +1002,10 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 # that says which this is ("Ver 3 of 13 · 4.86★ (408) · the one") opens the list of every version UG has, a
 # dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where it takes the
 # settings' place). An end ‹ or › has no address. The songbook has neither: its songs have no versions.
-_VERSIONS = """<nav class="versions" id="versions" hidden aria-label="Versions of this sheet">
-<a class="vstep" id="ver-prev" aria-label="The version kept before this one">‹</a>
+_VERSIONS = """<nav class="versions" id="versions" hidden aria-label="Versions">
+<a class="vstep" id="ver-prev" aria-label="Previous version">‹</a>
 <button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg></button>
-<a class="vstep" id="ver-next" aria-label="The version kept after this one">›</a>
+<a class="vstep" id="ver-next" aria-label="Next version">›</a>
 </nav>
 """
 
@@ -1020,7 +1020,7 @@ _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidde
 # A sheet viewer's Guitar Pro files, in its settings, for a song that has some: the script fills in a row for each
 # (viewer.js: caracole serve's Guitar Pro page, served; the file itself, from a file).
 _GUITAR_ROW = '<div id="guitar-row" hidden><div id="guitar-links"></div></div>\n'
-_PLACES_END = '</div>\n<div class="panel-end ruled">'  # where the places to go end, before Reset everything
+_PLACES_END = '</div>\n<div class="panel-end ruled">'  # where the places to go end, before Reset all
 
 
 def _with_guitar(controls: str, guitar: bool) -> str:
@@ -1030,16 +1030,16 @@ def _with_guitar(controls: str, guitar: bool) -> str:
 
 # Export PDF's question, served, pressed on a version other than the song's own (viewer.js fills it in and opens it): a
 # modal dialog, its focus kept inside, Escape, × and Cancel closing it, that asks whether to make this version the
-# song's own ("Make this your version of <title>?", the version in words, what that does), with Download and make it
-# mine (the download's link with mine=1), Just download (the link) and Cancel. Its content in a box of its own, so
+# song's own ("Make this your version of <title>?", the version in words, what that does), with Make mine (the
+# download's link with mine=1), Download only (the link) and Cancel. Its content in a box of its own, so
 # that a tap on the dialog itself is a tap beside it, on the backdrop.
 _EXPORT_ASK = """<dialog class="ask" id="export-ask" aria-labelledby="ask-title" aria-describedby="ask-version ask-what">
 <div class="ask-in"><header class="ui-head"><h2 id="ask-title" tabindex="-1"></h2>
 <button type="button" class="x" id="ask-x" aria-label="Close">×</button></header>
 <p class="ask-v" id="ask-version"></p>
-<p class="hint" id="ask-what">Its PDF, its viewer and your songbooks will start there.</p>
-<div class="ask-acts"><a class="btn primary" id="ask-mine">Download and make it mine</a>
-<a class="btn" id="ask-just">Just download</a>
+<p class="hint" id="ask-what">Its PDF, sheet and songbooks start there.</p>
+<div class="ask-acts"><a class="btn primary" id="ask-mine">Make mine</a>
+<a class="btn" id="ask-just">Download only</a>
 <button type="button" class="btn" id="ask-cancel">Cancel</button></div></div>
 </dialog>
 """

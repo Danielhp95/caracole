@@ -89,19 +89,19 @@ class LaCuerdaSheetsTest {
     @Test fun aSongNotForLaCuerdaIsSkippedWithNothingAsked() = world { db, lib ->
         val client = client()
         val end = LaCuerdaStage.run(ctx(db, lib, song(db, lib, "Oasis", "Wonderwall"), FakeAsking(mapOf("lacuerda" to client))))
-        assertEquals(StageEnd("skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"), end)
+        assertEquals(StageEnd("skipped", "not for LaCuerda: not Spanish, a full sheet already, or asked this month"), end)
         assertEquals(0, client.requestsMade)
     }
 
     @Test fun aBlockAnErrorAndASpentBudgetAreSaidAsGetPySaysThem() = world { db, lib ->
         val s = song(db, lib)
         val blocked = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(mapOf("GET $soda" to (403 to "no")))))))
-        assertEquals(StageEnd("skipped", "LaCuerda blocked caracole (lacuerda: 403: $soda: HTTP 403): no more requests to it " +
-                                  "until later. Nothing was marked not found."), blocked)
+        assertEquals(StageEnd("skipped", "LaCuerda turned us back (lacuerda: 403: $soda: HTTP 403). No more asks " +
+                                  "until later. Nothing marked not on the sites."), blocked)
         val failed = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(mapOf("GET $soda" to (500 to "x")))))))
-        assertEquals(StageEnd("failed", "LaCuerda failed (lacuerda: 500: $soda: HTTP 500); the nightly run tries again"), failed)
+        assertEquals(StageEnd("failed", "LaCuerda failed (lacuerda: 500: $soda: HTTP 500); tried again tonight"), failed)
         val spent = LaCuerdaStage.run(ctx(db, lib, s, FakeAsking(mapOf("lacuerda" to client(budget = 0)))))
-        assertEquals(StageEnd("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"), spent)
+        assertEquals(StageEnd("skipped", "this fetch's 6 asks of LaCuerda are spent; tonight's run does the rest"), spent)
         assertEquals(null, Songs.byId(db, s.id)!!.lacuerdaCheckedAt)  // an error is never a miss
     }
 
@@ -111,12 +111,12 @@ class LaCuerdaSheetsTest {
             override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> = asked
             override val requests: Map<String, Int> = emptyMap()
         }))
-        assertEquals(StageEnd("skipped", "LaCuerda is cooling down after a block, until 2026-11-04 14:00 UTC"),
+        assertEquals(StageEnd("skipped", "Waiting out LaCuerda until 2026-11-04 14:00 UTC"),
                      said(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
-        assertEquals(StageEnd("skipped", "this hour's 60 lookup requests to LaCuerda are spent; the nightly run does the rest"),
+        assertEquals(StageEnd("skipped", "no more asks of LaCuerda this hour (60 spent); tonight's run does the rest"),
                      said(Asked.Spent(hour = true, keptForSheets = false)))
-        assertEquals(StageEnd("skipped", "this hour's lookups have spent half of their 60 requests to LaCuerda, and the " +
-                                  "other half is kept for sheets; the nightly run does the rest"),
+        assertEquals(StageEnd("skipped", "half this hour's 60 asks of LaCuerda are spent; the rest " +
+                                  "is kept for sheets; tonight's run does the rest"),
                      said(Asked.Spent(hour = false, keptForSheets = true)))
         assertEquals(StageEnd("skipped", "LaCuerda failed earlier in this lookup; the nightly run tries again"),
                      said(Asked.Off("LaCuerda failed earlier in this lookup; the nightly run tries again")))
@@ -127,20 +127,20 @@ class LaCuerdaSheetsTest {
         val pick = Overrides(lacuerda = mapOf(s.key to LaCuerdaPick("soda_stereo", "de_musica_ligera")))
         val asking = FakeAsking(mapOf("lacuerda" to client()))
         kept(db, lib, s, "lacuerda", "soda_stereo/de_musica_ligera-3")
-        assertEquals(StageEnd("done", "the LaCuerda sheet you picked is the sheet already"),
+        assertEquals(StageEnd("done", "your LaCuerda pick is the sheet already"),
                      LaCuerdaPickStage.run(ctx(db, lib, s, asking, pick)))
 
         val pinned = song(db, lib, "Soda Stereo", "Persiana Americana")
         kept(db, lib, pinned, "ug", "85053")
         val both = Overrides(lacuerda = mapOf(pinned.key to LaCuerdaPick("soda_stereo", "persiana_americana")),
                              pin = mapOf(pinned.key to listOf(85053L)))
-        assertEquals(StageEnd("skipped", "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"),
+        assertEquals(StageEnd("skipped", "your pinned UG tab is kept over your LaCuerda pick"),
                      LaCuerdaPickStage.run(ctx(db, lib, pinned, asking, both)))
 
         val asked = song(db, lib, "Soda Stereo", "Cuando Pase el Temblor")
         Versions.updateSong(db, asked.id, mapOf("lacuerda_checked_at" to "2026-10-30T00:00:00Z"), stamp)
         val waits = Overrides(lacuerda = mapOf(asked.key to LaCuerdaPick("soda_stereo", "cuando_pase_el_temblor", 2)))
-        assertEquals(StageEnd("skipped", "your pick on LaCuerda waits: it was asked for this month"),
+        assertEquals(StageEnd("skipped", "your LaCuerda pick waits: asked this month already"),
                      LaCuerdaStage.run(ctx(db, lib, Songs.byId(db, asked.id)!!, asking, waits)))
         assertEquals(0, (asking.requests["lacuerda"] ?: 0))
     }

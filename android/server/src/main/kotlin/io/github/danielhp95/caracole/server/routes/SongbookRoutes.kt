@@ -103,7 +103,7 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
                 throw Refused(409, "Taken", e.message.orEmpty())
             }
             val songs = songs(form)
-            return job("Make the songbook \"$asked\" (${plural(songs.size, "song")})", "Making the songbook", "make",
+            return job("Make songbook \"$asked\" (${plural(songs.size, "song")})", "Making the songbook", "make",
                        asked, *songs.toTypedArray())
         }
         val book = book(books, asked)
@@ -119,7 +119,7 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
                 if (song.isEmpty()) throw Refused(400, "Not a song", "Which song? The form names none.")
                 val entry = book.texts.firstOrNull { Songbooks.sameEntry(it, song) }
                     ?: throw Refused(404, "Not in the songbook",
-                                     "\"$song\" isn't in the songbook \"$name\": reload the library to see what it holds.")
+                                     "\"$song\" isn't in \"$name\". Reload the page to see what it holds.")
                 if (action == "remove") return job("Take $entry out of \"$name\"", "Taking the song out", "remove", name, entry)
                 if (action == "set") return settingJob(name, entry, form)
                 val position = PyInt.parse(form["position"].orEmpty()) ?: BigInteger.ZERO
@@ -142,7 +142,7 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
                 }
                 return job("Rename \"$name\" to \"$new\"", "Renaming the songbook", "rename", name, new)
             }
-            else -> return job("Delete the songbook \"$name\"", "Deleting the songbook", "delete", name)
+            else -> return job("Delete songbook \"$name\"", "Deleting the songbook", "delete", name)
         }
     }
 
@@ -189,13 +189,13 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
             val id = if (asciiDigits(one)) BigInteger(one) else null
             songs = songs.filter { id != null && BigInteger.valueOf(it.id) == id }
             if (songs.isEmpty()) {
-                throw Refused(409, "Nothing to get", "That song of \"${book.name}\" has a sheet already, isn't in the " +
-                                                     "library, or is ignored in overrides.toml: reload the library.")
+                throw Refused(409, "Nothing to get", "That song of \"${book.name}\" has a sheet, isn't in the book, or " +
+                                                     "is ignored. Reload the page.")
             }
         }
         if (songs.isEmpty()) {
-            throw Refused(409, "Nothing to get", "Every song of \"${book.name}\" that the library has has a sheet " +
-                                                 "already, or is ignored in overrides.toml: reload the library.")
+            throw Refused(409, "Nothing to get", "Every song of \"${book.name}\" in the book has a sheet or is " +
+                                                 "ignored. Reload the page.")
         }
         return book.name to songs
     }
@@ -251,23 +251,23 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
     /** songbooks._book: the songbook of that name, in any case; Refused when there is none. */
     private fun book(books: List<Songbook>, name: String): Songbook =
         Songbooks.find(books, name) ?: throw Refused(404, "No such songbook", "No songbook named \"$name\"" +
-            if (books.isNotEmpty()) ": there are ${books.joinToString(", ") { "\"${it.name}\"" }}." else ": reload the library.")
+            if (books.isNotEmpty()) ": there are ${books.joinToString(", ") { "\"${it.name}\"" }}." else ": reload the page.")
 
     /** songbooks._songs: the songs of the form's `songs` (ids, comma-separated, in order), each as the library names
      * it ("Artist - Title"), once each; Refused for a list that can't be read, or a song the library hasn't got. */
     private fun songs(form: Map<String, String>): List<String> {
         val text = Py.strip(form["songs"].orEmpty())
-        if (text.isEmpty()) throw Refused(400, "No songs", "Pick a song or more for the songbook first.")
+        if (text.isEmpty()) throw Refused(400, "No songs", "Pick a song or more first.")
         val ids = LinkedHashSet<BigInteger>()
         for (part in text.split(",")) {
             ids += PyInt.parse(part)
-                ?: throw Refused(400, "Not songs", "Which songs? The form's list can't be read: reload the library.")
+                ?: throw Refused(400, "Not songs", "Which songs? The form's list can't be read. Reload the page.")
         }
         return parts.database.read { db ->
             ids.map { id ->
                 val song = id.takeIf { it.bitLength() < 64 }?.let { Songs.byId(db, it.toLong()) }
-                    ?: throw Refused(404, "No such song", "A song you picked isn't in the library any more: reload " +
-                                                          "the library and pick again.")
+                    ?: throw Refused(404, "No such song", "A song you picked left the logbook. Reload the page and " +
+                                                          "pick again.")
                 song.display
             }
         }
@@ -339,7 +339,7 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
      * newer lookup makes the songbook again after it. */
     private fun renderJob(name: String, after: Int): JobSpec {
         val command = listOf("songbook", "render", "--", name)
-        return spec("Make \"$name\" again, with the songs it got", KEY + command.joinToString(SEP) + SEP + after,
+        return spec("Remake \"$name\" with the songs fetched", KEY + command.joinToString(SEP) + SEP + after,
                     Command("Making the songbook", command))
     }
 
@@ -362,7 +362,7 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
         throw e
     } catch (e: Exception) {
         if (!RequestsRoutes.unreadable(e)) throw e
-        throw Refused(503, "The database can't be read", "The database can't be read: ${e.message}")
+        throw Refused(503, "Can't read the database", "Can't read the database: ${e.message}")
     }
 
     companion object {

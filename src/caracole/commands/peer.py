@@ -71,20 +71,20 @@ import typer
 from caracole.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow, write_pages
 
 # How a difference's proposal reads, in the list.
-WORDS = {"mine": "keep here's", "theirs": "take there's", "conflict": "CONFLICT"}
+WORDS = {"mine": "ours goes there", "theirs": "theirs comes here", "conflict": "CONFLICT"}
 FILE_WORDS = {"mine": "keep here's", "theirs": "take the file's", "conflict": "CONFLICT"}
-KINDS = {"song": "Songs", "removed": "Removals", "songbook": "Songbooks", "alias": "Artists' aliases",
+KINDS = {"song": "Songs", "removed": "Removed", "songbook": "Songbooks", "alias": "Artists' aliases",
          "artist_url": "Artists' UG pages", "block": "Blocked tabs"}
 PREFER = {"here": "mine", "there": "theirs"}
 SIDES = ("here", "there", "skip")  # what --choose says of a unit
 DONE = {"taken": "Took", "given": "Gave", "left": "Left"}
-STALE = "The two changed since that comparison: compare them again, and choose again."
-UNSETTLED = "a conflict: choose a side for it"
-SKIPPED = "skipped, as chosen"
+STALE = "Both books changed since that comparison. Compare again, then choose again."
+UNSETTLED = "both books changed it: choose one"
+SKIPPED = "skipped, as you chose"
 NOT_A_PART = "parts are library, songbooks or indexes, by commas."
 # ``caracole peer import --progress``'s stages, which caracole serve's jobs name (§3.5 of the sync redesign's plan).
-PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what changed there"),
-                      ("render", "Rendering what was taken"), ("agree", "What the two agree on"),
+PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what they wrote"),
+                      ("render", "Rendering what was taken"), ("agree", "Noting where the books agree"),
                       ("index", "Merging the indexes"))
 
 
@@ -188,7 +188,7 @@ def register(app: typer.Typer) -> None:
                 fail(STALE)
         unknown = sorted(set(choices) - {d.id for d in every})
         if unknown:
-            said.stage("compare", "failed", f"--choose names {unknown[0]}, which isn't a difference now")
+            said.stage("compare", "failed", f"--choose names {unknown[0]}, no longer a difference")
             fail(f"--choose names {', '.join(unknown[:3])}, which the two don't hold differently now: compare "
                  "them again.", 2)
         # The differences of the parts asked for alone are taken, given or said (the hash is of every one).
@@ -236,7 +236,7 @@ def register(app: typer.Typer) -> None:
         else:
             ids = [d.id for d in give]
             if here is None:
-                said.stage("give", "skipped", "this side's address unknown there")
+                said.stage("give", "skipped", "they don't know our address")
                 typer.echo(f"There takes {len(ids)}: give --here (this caracole serve's address, as the other reaches "
                            f"it) or --push, or run there: caracole peer pull ADDRESS-OF-THIS-ONE "
                            + " ".join(f"--unit={i}" for i in ids))
@@ -248,12 +248,12 @@ def register(app: typer.Typer) -> None:
                     except sync.PeerError as e:
                         said.stage("give", "failed", str(e))
                         fail(f"There couldn't be asked to take its {len(ids)}: {e}")
-                said.stage("give", "done", f"asked there to take {len(ids)}")
+                said.stage("give", "done", f"asked them to take {len(ids)}")
                 typer.echo(f"Asked {address} to take {len(ids)} from {here}"
-                           + (f": its request {job}, in its Requests tab." if job else "."))
+                           + (f": its Journal entry {job}." if job else "."))
         said.stage("agree", "running")
         agreed = _agree(cfg, address)
-        said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the two agree on")
+        said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on")
         indexed, failed = _sync_indexes(cfg, address, state, wanted_parts, said)
         said.report({"with": {"name": state.name, "kind": "server", "address": address},
                      "at": utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "parts": list(wanted_parts),
@@ -501,8 +501,8 @@ def _compare(cfg, address: str, parts: tuple[str, ...] | None = None) -> _Compar
         except sync.PeerError as e:
             fail(str(e))
         if me is not None and me == state.server:
-            fail(f"The caracole at {address} is this one (the same id, {me}): its database is a copy of this "
-                 "one's. Give one of them another: caracole peer new-id.")
+            fail(f"The scribe at {address} is this one (same id, {me}): its database is a copy of ours. Give one a "
+                 "new id: caracole peer new-id.")
         mine = sync.library_state(conn, overrides, books)
         here_base = sync.base_of(conn, state.server) if state.server else None
         base = sync.merged_base(here_base, state.base)
@@ -537,14 +537,14 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
             with sync.Peer(address, transport=transport_for_peer()) as peer:
                 state = peer.state(me)
                 if state.server == me:
-                    fail(f"The caracole at {address} is this one: nothing to take. caracole peer new-id gives one "
-                         "of them another id.")
+                    fail(f"The scribe at {address} is this one: nothing to take. caracole peer new-id gives one a new "
+                         "id.")
                 wanted = [(u, compared[u] if compared is not None and u in compared
                            else state.units[u].digest if u in state.units else None) for u in unit_ids]
                 now = utcnow()
                 made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
                 if isinstance(made, backup.Skipped):
-                    fail(f"Nothing taken: no backup of the database first, {made.reason}.")
+                    fail(f"Nothing taken: no backup first ({made.reason}).")
                 done = sync.apply_units(conn, cfg, peer, wanted, now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                         expected_here=expected_here, on_unit=on_unit)
                 overrides = load_ovr(cfg)
@@ -564,7 +564,7 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
         except sync.PeerError as e:
             fail(str(e))
         except backup.BackupError as e:
-            fail(f"Nothing taken: the database couldn't be backed up first: {e}")
+            fail(f"Nothing taken: couldn't back up the database first: {e}")
     return done
 
 
@@ -585,7 +585,7 @@ def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[s
                 try:
                     books = load_songbooks(songbooks_file(cfg.library_dir))
                 except SongbookError as e:
-                    fail(f"Nothing given: this library's songbooks.toml can't be read: {e}")
+                    fail(f"Nothing given: our songbooks.toml can't be read: {e}")
                 pushed = peer_push.push_units(
                     pusher, conn, cfg, overrides, books, {d.id: d.theirs.digest if d.theirs else None for d in give},
                     own=me, at=state.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), name=cfg.library_name,
@@ -595,7 +595,7 @@ def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[s
                 return [], left
             job = peer_push.wait_for(pusher, pushed.job, sleep=_sleep)
     except sync.PeerError as e:
-        fail(f"There couldn't be given its {len(give)}: {e}")
+        fail(f"Couldn't give them {len(give)}: {e}")
     said = {unit_id: (outcome, why) for unit_id, outcome, why in job.get("units") or ()}
     given = []
     for unit_id in pushed.given:
@@ -603,7 +603,7 @@ def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[s
         if outcome == "taken":
             given.append(unit_id)
         else:
-            left.append((unit_id, why or (f"its request {pushed.job} there {job['state']}" if job["state"] != "done"
+            left.append((unit_id, why or (f"their Journal entry {pushed.job}: {job['state']}" if job["state"] != "done"
                                           else "not taken there")))
     return given, left
 
@@ -789,16 +789,16 @@ def _take(cfg, folder, said: _Said) -> None:
     shown = push.name.strip() or "another caracole"
     with exclusive(cfg, "peer take", interactive=True), closing(open_db(cfg)) as conn:
         if push.sender == sync.make_id(conn):
-            raise peer_push.PushError("That push comes from this caracole itself (the same id): its database is a "
-                                      "copy of this one's. Give one of them another: caracole peer new-id.")
+            raise peer_push.PushError("That push comes from this same scribe (same id): its database is a "
+                                      "copy of ours. Give one a new id: caracole peer new-id.")
         said.stage("check", "done", f"{_count(len(push.take))} from {shown}")
         now = utcnow()
         try:
             made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
-            nothing = (f"Nothing taken: no backup of the database first, {made.reason}."
+            nothing = (f"Nothing taken: no backup first ({made.reason})."
                        if isinstance(made, backup.Skipped) else None)
         except backup.BackupError as e:
-            nothing = f"Nothing taken: the database couldn't be backed up first: {e}"
+            nothing = f"Nothing taken: couldn't back up the database first: {e}"
         if nothing is not None:
             said.stage("take", "failed", nothing)
             for taken in push.take:
@@ -827,7 +827,7 @@ def _take(cfg, folder, said: _Said) -> None:
         else:
             agreed = sync.record_agreement(conn, push.sender, sync.library_state(conn, overrides, books),
                                            push.units, push.at)
-            said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the two agree on")
+            said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on")
     typer.echo(f"From {shown}: " + _pulled(done, units=False))
     if done.respelled:
         typer.echo("Respelled as it writes their artist: " + ", ".join(done.respelled))
@@ -917,7 +917,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             fail(STALE)
         unknown = sorted(set(choices) - {d.id for d in found.found})
         if unknown:
-            said.stage("check", "failed", f"--choose names {unknown[0]}, which isn't a difference now")
+            said.stage("check", "failed", f"--choose names {unknown[0]}, no longer a difference")
             fail(f"--choose names {', '.join(unknown[:3])}, which this library and the file don't hold differently "
                  "now: compare them again.", 2)
         scoped = peer_file.in_parts(found, parts)
@@ -970,10 +970,10 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
         if take:
             try:
                 made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
-                nothing = (f"Nothing taken: no backup of the database first, {made.reason}."
+                nothing = (f"Nothing taken: no backup first ({made.reason})."
                            if isinstance(made, backup.Skipped) else None)
             except backup.BackupError as e:
-                nothing = f"Nothing taken: the database couldn't be backed up first: {e}"
+                nothing = f"Nothing taken: couldn't back up the database first: {e}"
             if nothing is not None:
                 said.stage("take", "failed", nothing)
                 for d in take:
@@ -1011,7 +1011,7 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
             else:
                 mine = sync.library_state(conn, load_ovr(cfg), books)
                 agreed = peer_file.record_import(conn, file, mine, kept_here)
-                said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the two agree on"
+                said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on"
                                             + (f", {len(kept_here)} kept here" if kept_here else ""))
         indexes = _merge_indexes(cfg, conn, file, source, said, parts, now)
     said.report({"with": {"name": file.name, "kind": "file", "address": None}, "at": stamps.stamp(now),
@@ -1129,5 +1129,5 @@ def _report(address: str, state, synced_before: bool, here: int, found: list) ->
         if unit_kind != kind:
             kind = unit_kind
             lines.append(f"  {KINDS.get(kind, kind)}:")
-        lines.append(f"    {WORDS[d.proposal]:<13} {d.label}  ({d.why})")
+        lines.append(f"    {WORDS[d.proposal]:<17} {d.label}  ({d.why})")
     return "\n".join(lines)

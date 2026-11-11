@@ -148,7 +148,7 @@ def test_without_auto_chords_it_downloads_nothing_and_fails(tmp_path, ntfy, fake
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch", "beat_this"])
     result = invoke(write_config(tmp_path, fake))
     assert result.exit_code == 1
-    assert "this caracole was built without auto-chords (missing: torch, beat_this)" in result.output
+    assert "built without auto-chords (missing: torch, beat_this)" in result.output
     assert "packages.autochords" in result.output
     assert fake.argvs() == []
     monkeypatch.setattr(yf, "autochords_missing", lambda: [])
@@ -569,7 +569,7 @@ def test_sheet_without_auto_chords_asks_nothing_and_exits_1(tmp_path, fake, conn
     result = invoke(write_config(tmp_path, fake), "--song", "Nick Cani - Vikingos veganos", "--url",
                     f"https://youtu.be/{VIKINGOS}", "--sheet")
     assert result.exit_code == 1
-    assert "caracole makes no sheet from YouTube here: this caracole was built without auto-chords" in result.output
+    assert "caracole makes no sheet from YouTube here: built without auto-chords" in result.output
     assert fake.argvs() == [] and not (tmp_path / "lib" / "wanted.txt").exists()
 
 
@@ -620,7 +620,7 @@ def test_search_keeps_youtubes_first_video_and_its_thumbnail_for_the_page(tmp_pa
     config = write_config(tmp_path, fake)
     result = invoke(config, "--search", SEARCHED)
     assert result.exit_code == 0, result.output
-    assert result.output.splitlines()[-1] == (f"Searched: YouTube's first video for “{SEARCHED}” is Somos vikingos "
+    assert result.output.splitlines()[-1] == (f"Searched: YouTube's first video for “{SEARCHED}”: Somos vikingos "
                                               f"veganos - Hyperfanes (kintanedu), https://www.youtube.com/watch?v={VIKINGOS}.")
     # One yt-dlp run: the first result's metadata alone, the query after "--", nothing retried, nothing downloaded.
     [argv] = fake.argvs()
@@ -664,12 +664,12 @@ def test_a_block_cools_youtube_down_alerts_once_and_keeps_nothing(tmp_path, fake
     fake.search(SEARCHED, stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
     result = invoke(write_config(tmp_path, fake, ntfy=True), "--search", SEARCHED)
     assert result.exit_code == 0, result.output
-    assert result.output.splitlines()[-1].startswith("Not searched: YouTube blocked caracole")
+    assert result.output.splitlines()[-1].startswith("Not searched: YouTube turned us back")
     assert is_cooling(conn, "youtube", _common.utcnow())
     assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
     assert image_host.asked == [] and kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos") is None
     again = invoke(write_config(tmp_path, fake, ntfy=True), "--search", SEARCHED)
-    assert "paused after a block" in again.output and len(fake.argvs()) == 1  # nothing retried
+    assert "turned us back" in again.output and len(fake.argvs()) == 1  # nothing retried
 
 
 @pytest.mark.slow
@@ -680,7 +680,7 @@ def test_an_error_is_no_miss_and_isnt_sent_again_within_the_hour(tmp_path, fake,
     assert result.exit_code == 0 and result.output.startswith("Not searched: yt-dlp failed")
     assert kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos") is None
     again = invoke(config, "--search", SEARCHED)
-    assert "failed less than an hour ago" in again.output and len(fake.argvs()) == 1
+    assert "failed within the hour" in again.output and len(fake.argvs()) == 1
 
 
 @pytest.mark.slow
@@ -696,7 +696,7 @@ def test_a_search_that_finds_nothing_is_kept_as_none(tmp_path, fake, conn, image
 def test_search_where_no_sheet_can_be_made_asks_nothing(tmp_path, fake, conn, image_host, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     result = invoke(write_config(tmp_path, fake), "--search", SEARCHED)
-    assert result.exit_code == 0 and result.output.startswith("Not searched: no sheet from YouTube here")
+    assert result.exit_code == 0 and result.output.startswith("Not searched: no YouTube sheets here")
     assert fake.argvs() == []
 
 
@@ -766,7 +766,7 @@ def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp
     config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [3.75, 7.5]"), encoding="utf-8")
     result = invoke(config, "--video", PASTED_LINK, "--progress")
     assert result.exit_code == 0, result.output
-    assert result.output.splitlines()[-1] == (f"Searched: YouTube's video {VIKINGOS} is Somos vikingos veganos - "
+    assert result.output.splitlines()[-1] == (f"Searched: YouTube video {VIKINGOS}: Somos vikingos veganos - "
                                               "Hyperfanes (kintanedu).")
     [argv] = fake.argvs()
     assert argv[-2:] == ["--", f"https://www.youtube.com/watch?v={VIKINGOS}"]  # its plain address: no tracking
@@ -781,7 +781,7 @@ def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp
                                                          ("thumbnail", "running"), ("thumbnail", "done")]
     for asked_again in (f"https://youtu.be/{VIKINGOS}?si=abc", VIKINGOS):  # a link, or the id, as a job passes it
         again = invoke(config, "--video", asked_again)
-        assert again.exit_code == 0 and again.output.startswith("Searched: YouTube's video")
+        assert again.exit_code == 0 and again.output.startswith("Searched: YouTube video")
     assert len(fake.argvs()) == 1 and len(image_host.asked) == 1  # known this month: nothing asked
 
 
@@ -799,7 +799,7 @@ def test_a_video_youtube_wont_give_is_kept_as_none(tmp_path, fake, conn, image_h
 def test_a_block_reading_a_video_cools_youtube_down_and_alerts_once(tmp_path, fake, conn, image_host, ntfy):
     vikingos_video(fake, stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
     result = invoke(write_config(tmp_path, fake, ntfy=True), "--video", PASTED_LINK)
-    assert result.exit_code == 0 and "YouTube blocked caracole" in result.output
+    assert result.exit_code == 0 and "YouTube turned us back" in result.output
     assert is_cooling(conn, "youtube", _common.utcnow())
     assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
     assert kv_get_json(conn, f"youtube-search:video:{VIKINGOS}") is None

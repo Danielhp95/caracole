@@ -59,11 +59,11 @@
   const totals = sites.totals || {};
   pill(head, [{ b: number(totals.sites) }, " sites"]);
   pill(head, [{ b: short(totals.indexed) }, " songs indexed"]);
-  pill(head, [{ b: number(totals.kept) }, " things kept from them"]);
+  pill(head, [{ b: number(totals.kept) }, " kept from them"]);
   const run = sites.run;
   if (run && run.started) {
-    pill(head, run.finished ? ["Last run ", { b: run.started + " – " + run.finished }, ", ", { b: number(run.requests) },
-      " requests"] : ["Last run from ", { b: run.started }, ", ", { b: number(run.requests) }, " requests so far"]);
+    pill(head, run.finished ? ["Last run ", { b: run.started + " – " + run.finished }, " · ", { b: number(run.requests) },
+      " requests"] : ["Running since ", { b: run.started }, " · ", { b: number(run.requests) }, " requests so far"]);
   } else {
     pill(head, ["No run yet"]);
   }
@@ -71,7 +71,7 @@
   const ledger = el("div", "ledger");
   const columns = el("div", "site-row head");
   columns.setAttribute("aria-hidden", "true");
-  for (const name of ["Site", "Indexed", "In your library", "Last run", "Status", ""]) columns.append(el("span", "", name));
+  for (const name of ["Site", "Indexed", "In your logbook", "Last run", "Status", ""]) columns.append(el("span", "", name));
   ledger.append(columns);
 
   const indexedCell = (s, cls) => {
@@ -141,11 +141,11 @@
     const more = el("div", "site-more");
     more.id = "site-more-" + s.key;
     more.setAttribute("role", "region");
-    more.setAttribute("aria-label", String(s.name) + ": more");
+    more.setAttribute("aria-label", String(s.name) + ": details");
     more.hidden = true;
     // On a phone the line keeps the site and its status alone: its figures are here.
     const figures = el("dl", "more-figures");
-    for (const [name, cell] of [["Indexed", indexedCell(s, "")], ["In your library", keptCell(s, "")],
+    for (const [name, cell] of [["Indexed", indexedCell(s, "")], ["In your logbook", keptCell(s, "")],
       ["Last run", nightCell(s, "")]]) {
       const row = el("div");
       const dd = el("dd");
@@ -182,7 +182,7 @@
     }
     if (s.kept && s.kept.detail) {
       const kept = el("div");
-      kept.append(el("h3", "", "In your library"), el("p", "", s.kept.detail));
+      kept.append(el("h3", "", "In your logbook"), el("p", "", s.kept.detail));
       facts.append(kept);
     }
     if (status.detail) {

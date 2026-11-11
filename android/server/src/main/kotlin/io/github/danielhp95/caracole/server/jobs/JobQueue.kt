@@ -26,8 +26,8 @@ import java.time.Instant
  * queued under ([key]: a song's identity key, or a prefix of JobCommands' and what follows it), what it is about
  * ([kind]: add, remove, sync, index, song, versions, lacuerda-search…), its stages (name, label) as the page shows
  * them, the song it is about when that is known before it runs ([songId]: a removal's), and what it runs, on the
- * queue's one worker. [doneLine]: what its line says once it is done, in place of its kind's words ("Added: the
- * nightly run looks for it"; a job of the phone's own read back from the history keeps the one it ended with).
+ * queue's one worker. [doneLine]: what its line says once it is done, in place of its kind's words ("Added ·
+ * fetched tonight"; a job of the phone's own read back from the history keeps the one it ended with).
  *
  * A job of caracole serve's is its [commands]: Python's command lines as data, spelled exactly as web/jobs.py spells
  * them (JobCommands' builders), each run by the queue's runner of its first word ([Commands]), one after another; their
@@ -447,7 +447,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     /** The songs a job that waits or runs will fetch (their keys). */
     fun fetchingKeys(): Set<String> = synchronized(lock) { jobs.filter { it.active && it.fetching }.map { it.key }.toSet() }
 
-    /** How many jobs wait or run before [job], queued as it waits ("Queued behind 2 requests…"). */
+    /** How many jobs wait or run before [job], queued as it waits ("Queued · 2 requests ahead…"). */
     fun ahead(job: Job): Int = synchronized(lock) { jobs.count { it.active && it.id < job.id } }
 
     /**
@@ -837,6 +837,6 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         const val LIMIT = 20  // jobs waiting or running
         const val KEEP = 100  // jobs over remembered, as the history keeps them
         const val MAX_LINES = 400  // a command's output kept: its last lines
-        const val QUEUE_FULL = "The queue is full: try again once it empties."  // app.py's
+        const val QUEUE_FULL = "The queue is full. Try again once it empties."  // app.py's
     }
 }

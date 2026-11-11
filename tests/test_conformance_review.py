@@ -718,7 +718,7 @@ def test_the_cases_meet_what_they_name(made):
                  "--seen without --none", "--seen that isn't a UG song"):
         assert commands[case]["code"] == 2, case
     lines = _by(made, "POST /review, run")
-    assert lines["a pick"]["line"]["text"] == "Added: the nightly run looks for it"
+    assert lines["a pick"]["line"]["text"] == "Added · fetched tonight"
     assert lines["none of these, another left"]["line"]["tone"] == "review"
     for case, said in _by(made, "POST /review, fetching").items():
         assert [r["command"] for r in said["running"]] == ["review", "get"], case

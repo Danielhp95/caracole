@@ -511,8 +511,8 @@ def _quality_words(chord: Chord, numeral_: Numeral) -> str:
     sign, tokens = numeral_.quality, _tokens(numeral_.extension)
     if sign in ("ø", "°") and tokens[:1] == ["7"]:
         tokens = tokens[1:]
-        triad = ("half-diminished (ø7: a diminished chord with a minor 7th)" if sign == "ø"
-                 else "diminished seventh (°7)")
+        triad = ("half-diminished (ø7: diminished with a minor 7th)" if sign == "ø"
+                 else "diminished 7th (°7)")
     elif sign == "°":
         triad = "diminished (°)"
     elif sign == "+":
@@ -537,7 +537,7 @@ def _chord_name(chord: Chord, key: Key, next_chord: Chord | None) -> str:
 @functools.lru_cache(maxsize=8192)
 def explain(chord: Chord, key: Key, next_chord: Chord | None = None) -> str:
     """The numeral's one line, naming the key it is read in: "vi: the 6th chord of C major, minor
-    (lower case)", "♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed
+    (lower case)", "♭VII: on the lowered 7th degree of C major, major (upper case); borrowed
     from C minor", "V/V: the V of V in C major, major (upper case); leads to G"."""
     found = numeral(chord, key, next_chord)
     reading = _read(chord, key, next_chord)
@@ -551,9 +551,9 @@ def explain(chord: Chord, key: Key, next_chord: Chord | None = None) -> str:
     elif reading.kind == "in":
         where = f"the {ordinal} chord of {words}"
     elif accidental:
-        where = f"built on the {'lowered' if accidental == '♭' else 'raised'} {ordinal} degree of {words}"
+        where = f"on the {'lowered' if accidental == '♭' else 'raised'} {ordinal} degree of {words}"
     else:
-        where = f"built on the {ordinal} degree of {words}"
+        where = f"on the {ordinal} degree of {words}"
     line = f"{found.text}: {where}"
     if quality := _quality_words(chord, found):
         line += ", " + quality
@@ -564,7 +564,7 @@ def explain(chord: Chord, key: Key, next_chord: Chord | None = None) -> str:
             line += f"; {bass} in the bass, its {_ordinal(_number(_tone_names(chord)[interval]))}"
         else:
             line += (f"; {bass} in the bass, the {_degree_words(found.bass)} above its root, "
-                     "not a note of the chord")
+                     "outside the chord")
     target = None if reading.target is None else _target(reading.target, key)[1]
     if reading.kind in ("secondary", "leading"):
         goes = next_chord is not None and next_chord.root == reading.target
@@ -1156,7 +1156,7 @@ def _fold(held: Sequence[str]) -> tuple[tuple[str, ...], int, int, tuple[int, ..
     whole; else the shortest one played whole twice or more, and more often than not, where each other pass
     plays it with one chord changed, or one added or left out, or, in a cycle of four chords or more, a chord
     changed and one added or left out as well (``_varies``: Wonderwall's verse, Em7 G Dsus4 A7sus4 with one pass
-    on Cadd9 Dsus4 A7sus4, is i7–♭III–♭VIIsus4–IV7sus4 ×8, one variation); the section may end on the cycle's
+    on Cadd9 Dsus4 A7sus4, is i7–♭III–♭VIIsus4–IV7sus4 ×8, 1 variation); the section may end on the cycle's
     first chords, home, which is no pass. Else the whole section, once."""
     n = len(held)
     period = _period(held)

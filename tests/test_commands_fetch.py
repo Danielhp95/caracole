@@ -316,8 +316,8 @@ def test_a_song_whose_sheet_goes_where_another_songs_is_says_so_and_waits(tmp_pa
         accepted(conn, f"{LIVE} {take}", key, tab_id, added_at=added_at)
         url = f"{TAB}soda-stereo/{key}-chords-{tab_id}"
         ug.pages[url] = tab_page(tab_id, f"{LIVE} {take}", url)
-    said = (f"Soda Stereo - {LIVE} dos's sheet.txt isn't kept: its folder is Soda Stereo - {LIVE} uno's too (their "
-            "names make one folder), whose sheet.txt is there. Nothing is written over it, and the song waits")
+    said = (f"Soda Stereo - {LIVE} dos's sheet.txt isn't kept: Soda Stereo - {LIVE} uno shares its folder (their "
+            "names make one), and its sheet.txt is there. Nothing written over it. The song waits")
 
     result = run(tmp_path)
 

@@ -43,8 +43,8 @@ internal class Folders(libraryDir: File) {
                 Files.createDirectory(next)
                 undoSteps += { Files.delete(next) }
             } else if (!held.isDirectory) {
-                throw UnitError("${parts.take(i + 1).joinToString("/")}/ is a symbolic link or no folder, which " +
-                                "caracole doesn't follow")
+                throw UnitError("${parts.take(i + 1).joinToString("/")}/ is a symbolic link or no folder: we " +
+                                "don't follow it")
             }
             at = next
         }
@@ -64,7 +64,7 @@ internal class Folders(libraryDir: File) {
         val top = folder(emptyList()) ?: return
         if (old == new) return
         val held = LibraryFiles.entry(top.resolve(old)) ?: return
-        if (!held.isDirectory) throw UnitError("$old/ is a symbolic link or no folder, which caracole doesn't follow")
+        if (!held.isDirectory) throw UnitError("$old/ is a symbolic link or no folder: we don't follow it")
         val there = LibraryFiles.entry(top.resolve(new))
         if (there == null || LibraryFiles.same(top.resolve(old), top.resolve(new))) {
             val temporary = top.resolve(temporary(new))
@@ -77,7 +77,7 @@ internal class Folders(libraryDir: File) {
         val names = Files.newDirectoryStream(src).use { s -> s.map { it.fileName.toString() } }.sortedWith(Canonical.KEY_ORDER)
         for (name in names) {
             if (LibraryFiles.entry(dst.resolve(name)) != null) {
-                throw UnitError("$new/$name is there already, so $old/ can't be moved into it")
+                throw UnitError("$new/$name is there already, so $old/ can't move into it")
             }
             rename(src.resolve(name), dst.resolve(name))
         }
@@ -126,7 +126,7 @@ internal class Folders(libraryDir: File) {
     /** A regular file renamed out of the way, deleted once the take is done; anything else there refused. */
     private fun aside(dir: Path, name: String) {
         val held = LibraryFiles.entry(dir.resolve(name)) ?: return
-        if (!held.isRegularFile) throw UnitError("$name there is no regular file, which caracole doesn't replace")
+        if (!held.isRegularFile) throw UnitError("$name there isn't a regular file: we don't replace it")
         val aside = dir.resolve(temporary(name))
         rename(dir.resolve(name), aside)
         doneSteps += { unlink(aside) }

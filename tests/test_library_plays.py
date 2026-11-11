@@ -76,11 +76,11 @@ def test_a_line_has_a_button_for_each_thing_it_holds_to_play_from_none_first(con
                                               "Eagles - Hotel California.mxl"]
     # Named for what it opens, where its versions came from, and how many the card lists.
     assert [p["said"] for p in shown] == [
-        "Open the chord sheet of Hotel California, from Ultimate Guitar, LaCuerda and the audio (auto-chords), "
+        "Open the chord sheet of Hotel California, from UG, LaCuerda and the audio (auto-chords), "
         "6 versions",
-        "Download the Guitar Pro file of Hotel California, from gtptabs.com and your inbox, 2 files",
+        "Download the Guitar Pro file of Hotel California, from gtptabs and your inbox, 2 files",
         "Open the guitar tab of Hotel California",
-        "Open the harmonica tab of Hotel California, from harptabs.com",
+        "Open the harmonica tab of Hotel California, from harptabs",
         "Download the score of Hotel California, from your inbox"]
     assert all(p["title"] == p["said"] for p in shown)  # the pointer's tooltip says it too
     # Its instrument's glyph; the sites' marks at its foot, two at most, the one in use first; its count when more
@@ -115,12 +115,12 @@ def test_served_the_guitar_pro_button_opens_its_page_and_a_harmonica_tab_its_own
     harmonica_song(conn, cfg)
     guitar = plays(conn, cfg, tmp_path, "Hotel California", controls=SERVED)[1]
     assert guitar["href"].startswith("guitar?file=") and guitar["download"] is None
-    assert guitar["said"] == "Open the Guitar Pro tab of Hotel California, from gtptabs.com and your inbox, 2 files"
+    assert guitar["said"] == "Open the Guitar Pro tab of Hotel California, from gtptabs and your inbox, 2 files"
     shown = plays(conn, cfg, tmp_path, "Take It Easy")
     assert [(p["kind"], p["href"], p["marks"]) for p in shown] == [
         ("sheet", "Eagles/Take%20It%20Easy/sheet.html", ["ug"]),
         ("harmonica", "Eagles/Take%20It%20Easy/harmonica-1.html", ["harptabs"])]
-    assert shown[1]["said"] == "Open the harmonica tab of Take It Easy, from harptabs.com"
+    assert shown[1]["said"] == "Open the harmonica tab of Take It Easy, from harptabs"
 
 
 def test_an_auto_sheet_is_a_button_in_its_colour_and_ukulele_chords_the_ukuleles(conn, cfg, tmp_path):
@@ -138,7 +138,7 @@ def test_an_auto_sheet_is_a_button_in_its_colour_and_ukulele_chords_the_ukuleles
     update_song(conn, uke.id, status="found")
     [ukulele] = plays(conn, cfg, tmp_path, "Over the Rainbow")
     assert ukulele["glyph"] == "glyph glyph-ukulele" and ukulele["inst"] == "sheet ukulele"
-    assert ukulele["said"] == "Open the ukulele chords of Over the Rainbow, from Ultimate Guitar"
+    assert ukulele["said"] == "Open the ukulele chords of Over the Rainbow, from UG"
 
 
 def test_game_music_tabs_are_a_button_and_a_song_with_nothing_has_none(conn, cfg, tmp_path):
@@ -157,7 +157,7 @@ def test_game_music_tabs_are_a_button_and_a_song_with_nothing_has_none(conn, cfg
     shown = attribute_of(run(conn, cfg, tmp_path, script), "data-plays")
     [game] = shown["game"]
     assert (game["kind"], game["inst"], game["marks"], game["n"]) == ("gametab", "guitar", ["gametabs"], "2")
-    assert game["said"] == "Open the game music tab of Resting Grounds, from gametabs.net, 2 tabs"
+    assert game["said"] == "Open the game music tab of Resting Grounds, from gametabs, 2 tabs"
     assert shown["none"]
 
 
@@ -201,8 +201,8 @@ def test_fetch_now_is_the_download_glyph_on_the_same_row(conn, cfg, tmp_path):
       have: lineOf("Hotel California").querySelector(".line-action").childElementCount });
     """
     shown = attribute_of(run(conn, cfg, tmp_path, script, controls=WebControls(csrf="tok")), "data-fetch")
-    assert shown == {"text": "", "said": "Fetch Creep by Radiohead now", "type": "submit",
-                     "title": "Fetch now: ask Ultimate Guitar for this song now, politely",
+    assert shown == {"text": "", "said": "Fetch Creep by Radiohead", "type": "submit",
+                     "title": "Fetch: ask UG for this song",
                      "glyph": "glyph glyph-download", "action": "/fetch", "have": 0}
 
 

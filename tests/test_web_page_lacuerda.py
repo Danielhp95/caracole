@@ -167,7 +167,7 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
     mark = browser.js("(() => { const c = document.querySelector('#bar-counts li[data-state=partial]'); "
                       "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
-    assert mark[:2] == ["lacuerda", "1 on LaCuerda: index in part, E, J only"] and "still being read" in mark[2]
+    assert mark[:2] == ["lacuerda", "1 on LaCuerda · index in part, E, J only"] and "being read" in mark[2]
     assert "E, J read whole" in mark[2]
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
@@ -206,7 +206,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     assert browser.wait(f"{answer_to('bunbury')} && !!document.querySelector('{ask}')")
     offer = browser.js(f"document.querySelector('{ask}').title")
     assert offer.startswith("LaCuerda's list doesn't reach B yet") and "“bunbury”" in offer
-    assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda for “bunbury” (1 request)"
+    assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda: “bunbury” · 1 request"
     assert queue.snapshot() == []  # the search asked nothing: reading the page is the button's
     browser.click(ask)
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
@@ -224,7 +224,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     browser.click(ask)
     assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
-    assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See what it answered" in said
+    assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See it in the Journal" in said
     assert browser.js(f"document.querySelector('{ask}').disabled")
 
 
@@ -265,7 +265,7 @@ def test_the_lookup_page_lists_lacuerda_after_ultimate_guitar(cfg, live, browser
     browser.open(base + "lookup?q=estopa")
     assert browser.wait("[...document.querySelectorAll('#results .group')].length >= 2")
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups.index("On LaCuerda") > groups.index("Artists on Ultimate Guitar"), groups
+    assert groups.index("On LaCuerda") > groups.index("Artists on UG"), groups
     browser.click("#results .hit[data-slug='estopa'] .row-action button")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 2")
     browser.js(f"{LC_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Tu Calorro')"
@@ -299,7 +299,7 @@ def test_enter_on_the_lookup_page_opens_the_artist_lacuerda_alone_has_by_that_na
     browser.open(base + "lookup?q=andres%20calamaro")
     assert browser.wait(f"{LC_ROWS}.length === 1")  # the lookup page's artist row
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
-    assert groups == ["On LaCuerda", "On Ultimate Guitar"], groups
+    assert groups == ["On LaCuerda", "On UG"], groups
     browser.js("document.getElementById('q').focus()")
     browser.press("Enter")
     assert browser.wait("!!document.querySelector('#results .artist-head h2')")
@@ -363,6 +363,6 @@ def test_a_song_picked_on_lacuerda_says_on_its_card_that_tonights_run_gets_that_
     browser.open(path.as_uri())
     assert browser.wait("!!document.querySelector('.lacuerda-pick')")
     assert browser.js("document.querySelector('.lacuerda-pick').textContent").startswith(
-        "Tonight's run gets the sheet you picked on LaCuerda")
+        "Tonight's run fetches ")
     assert browser.js("document.querySelector('.lacuerda-pick a').href") == LC + "andres_calamaro/flaca"
     assert not browser.js("!!document.querySelector('.pick-hint')")  # not "Not in the offline Ultimate Guitar index"

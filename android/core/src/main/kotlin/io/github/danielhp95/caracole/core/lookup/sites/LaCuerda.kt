@@ -40,11 +40,11 @@ internal object LaCuerdaStages {
     const val KEPT = "sheet kept from LaCuerda"
     const val MISSING = "not on LaCuerda"
     const val KEPT_WHAT_IT_HAD = "kept what it had"
-    const val PICK_KEPT = "the LaCuerda sheet you picked is the sheet already"
-    const val NOT_FOR_LACUERDA = "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"
-    const val PIN_KEPT = "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
-    const val PICK_ASKED = "your pick on LaCuerda waits: it was asked for this month"
-    const val PICK_WAITS = "your pick on LaCuerda waits for the nightly run"
+    const val PICK_KEPT = "your LaCuerda pick is the sheet already"
+    const val NOT_FOR_LACUERDA = "not for LaCuerda: not Spanish, a full sheet already, or asked this month"
+    const val PIN_KEPT = "your pinned UG tab is kept over your LaCuerda pick"
+    const val PICK_ASKED = "your LaCuerda pick waits: asked this month already"
+    const val PICK_WAITS = "your LaCuerda pick comes tonight"
 
     /** `lacuerda()`'s `ask` through the stage's asking, and its end in get.py's words. */
     fun ask(ctx: StageContext): StageEnd {

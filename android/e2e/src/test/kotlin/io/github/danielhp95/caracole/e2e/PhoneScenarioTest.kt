@@ -238,7 +238,7 @@ class PhoneScenarioTest {
         assertFalse(scenario.c1.key in cards || scenario.r.key in cards, "a removed song's card is gone")
         val c1 = phone.mirror.manifest()!!.entries.single { it.unit == scenario.c1.unit && it.path.endsWith("/sheet.html") }
         val sheet = phone.get("/" + quotePath(c1.path))
-        assertTrue("removed on the phone" in sheet.text, sheet.text.take(1000))
+        assertTrue("Removed from the phone" in sheet.text, sheet.text.take(1000))
 
         assertEquals(0, Requests.count, "the phone on its own sends nothing")
         buildJsonObject {
@@ -1297,7 +1297,7 @@ class PhoneScenarioTest {
         const val SKIPPED = "skipped"
 
         /** status.py's line for a song added, no site asked (phase 2's add). */
-        const val ADDED = "Added: the nightly run looks for it"
+        const val ADDED = "Added · fetched tonight"
 
         /** status.py's line for a lookup over that found no sheet and checked nothing (phase 2's, every site refused). */
         const val NOT_FETCHED = "Not fetched yet"

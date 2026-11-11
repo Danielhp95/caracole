@@ -74,27 +74,24 @@ class Instrument:
 
 GUITAR = Instrument("guitar", "Guitar", "strings", TUNING, about="Standard tuning, E A D G B E.")
 UKULELE = Instrument("ukulele", "Ukulele", "strings", (67, 60, 64, 69), shapes="ukulele:", easy="ukulele",
-                     voice="ukulele", about="G C E A, the G string high.")  # G4 C4 E4 A4: re-entrant
+                     voice="ukulele", about="G C E A, high G.")  # G4 C4 E4 A4: re-entrant
 UKULELE_LOW_G = Instrument("ukulele-low-g", "Ukulele, low G", "strings", (55, 60, 64, 69), shapes="ukulele:",
-                           easy="ukulele", voice="ukulele", about="G C E A, the G string low.",
+                           easy="ukulele", voice="ukulele", about="G C E A, low G.",
                            tab="Ukulele")  # G3 C4 E4 A4
 BARITONE = Instrument("baritone", "Baritone ukulele", "strings", (50, 55, 59, 64), shapes="ukulele:",
                       easy="baritone", voice="ukulele", offset=5, tab="Baritone",
-                      about="D G B E, as a guitar's top four strings: a ukulele's shapes, named a fourth lower.")
+                      about="D G B E, a guitar's top 4 strings: ukulele shapes, named a 4th lower.")
 PIANO = Instrument("piano", "Piano", "keys", capo=False, shapes="piano:", voice="piano",
-                   about="The chords as they sound, any capo folded in: root position and two inversions, "
-                         "with a bass for the left hand.")
+                   about="Chords as they sound, capo folded in: root position, 2 inversions, a left-hand bass.")
 
 # Drawn by viewer/winds.js, from harp.py's and winds.py's tables (page.py): none takes a capo.
 HARMONICA = Instrument("harmonica", "Harmonica", "harmonica", capo=False, voice="reed",
-                       about="A 10-hole diatonic harp, Richter tuned: the harps for the song in their positions, "
-                             "and each chord's holes on the one chosen.")
+                       about="10-hole diatonic, Richter tuned: the harps for the song in their positions, "
+                             "each chord's holes on the one chosen.")
 FLUTE = Instrument("flute", "Flute", "wind", capo=False, voice="flute",
-                   about="The concert flute, as the song sounds: the key's scale and each chord's notes, "
-                         "with their fingerings.")
+                   about="Concert flute, as the song sounds: the key's scale and each chord's notes, fingered.")
 RECORDER = Instrument("recorder", "Recorder", "wind", capo=False, voice="recorder", sounds=12,
-                      about="The soprano recorder, baroque or German fingering: it sounds an octave above the notes "
-                            "it reads.")
+                      about="Soprano recorder, baroque or German fingering. Sounds an octave above the notes it reads.")
 
 INSTRUMENTS: tuple[Instrument, ...] = (GUITAR, UKULELE, UKULELE_LOW_G, BARITONE, PIANO, HARMONICA, FLUTE, RECORDER)
 _BY_ID = {i.id: i for i in INSTRUMENTS}
@@ -271,8 +268,8 @@ def entries(fingerings: set[str]) -> list[dict[str, Any]]:
     """The instruments as the page's data lists them (``instruments``), in the menu's order: each one's fields (the
     module's docstring), a fretted one's ``tuning``, and, for a ukulele, ``near``: each guitar key of the page's
     (``fingerings``) whose chords it shows as another quality, with that quality (``ukulele_quality``), where its
-    shapes are filed ("ukulele:" and it) and what the card's note names ("No shape for this chord here: C is the
-    closest")."""
+    shapes are filed ("ukulele:" and it) and what the card's note names ("No shape for this chord. Closest:
+    C.")."""
     out = []
     for inst in INSTRUMENTS:
         entry: dict[str, Any] = {"id": inst.id, "name": inst.name, "kind": inst.kind, "capo": inst.capo,

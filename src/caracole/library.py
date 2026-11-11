@@ -236,8 +236,8 @@ class SharedFolder(Exception):
     file stays as it is, and the ``song`` waits for the folder."""
 
     def __init__(self, song: Song, other: Song, name: str):
-        super().__init__(f"{song.display}'s {name} isn't kept: its folder is {other.display}'s too (their names "
-                         f"make one folder), whose {name} is there")
+        super().__init__(f"{song.display}'s {name} isn't kept: {other.display} shares its folder (their names "
+                         f"make one), and its {name} is there")
         self.song, self.other, self.name = song, other, name
 
 

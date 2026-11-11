@@ -335,7 +335,7 @@ def test_the_rails_own_hide_button_at_its_top_hides_it_and_the_bars_button_bring
         b.press("Enter")  # the focus is on the bar's button now: Enter brings the rail back
         back = [b.js(RAIL), toggles(b)]
     assert 0 <= top[0] <= 8 and top[2] <= 345 and top[3] >= 44 * 1.15 - 1 and top[4] >= 44 * 1.15 - 1
-    assert top[5] == "Hide chord necks"
+    assert top[5] == "Hide necks"
     assert hidden[0]["rail"] is None and hidden[1]["pressed"] == "false" and hidden[1]["focus"] == "necks-toggle"
     assert back[0]["rail"]["width"] == 345 and back[1]["pressed"] == "true"
 
@@ -837,7 +837,7 @@ def test_the_rails_first_neck_is_the_keys_scale_with_its_tonic_marked(tmp_path):
         chords = b.js(RAIL)["chords"]
     assert scale["first"] and scale["name"] == "C scale"
     assert scale["switch"] == [["Scale", "true"], ["Major pentatonic", "false"]]
-    assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale: the tonic, C, marked"
+    assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale, tonic C marked"
     assert box["name"] == "C major pentatonic" and box["dots"] == scale_dots(0, MAJOR_BOX)
     assert box["switch"] == [["Scale", "false"], ["Major pentatonic", "true"]] and focus == "Major pentatonic"
     assert [c["name"] for c in chords] == ["C", "G", "Am", "F"]  # the chords' necks after it

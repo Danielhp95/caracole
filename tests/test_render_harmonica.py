@@ -86,7 +86,7 @@ def test_a_kept_tab_gets_its_page_beside_it_recorded_and_linked_from_the_songs_v
     assert facts(page) == "Harmonica tab · D harp with the record (4th position, aeolian)"
     assert '<a class="back" href="sheet.html" data-sheet>‹ Chord sheet</a>' in page.read_text("utf-8")
     assert f'<a href="{TAB_URL}">harptabs.com</a>' in page.read_text("utf-8")
-    assert data_of(page, "harp-data")["why"] == {"2": "with the record", "0": "harptabs.com's key"}
+    assert data_of(page, "harp-data")["why"] == {"2": "with the record", "0": "harptabs' key"}
     assert data_of(folder / "sheet.html", "song")["harmonicaTabs"] == [
         {"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html", "key": "C"}]
 
@@ -114,7 +114,7 @@ def test_a_song_with_a_tab_and_no_sheet_gets_its_page_and_goes_back_to_the_libra
     song = song_with_a_tab(conn, cfg, sheet=False)
     render(conn, cfg)
     page = song_dir(cfg.library_dir, song) / "harmonica-1.html"
-    assert facts(page) == "Harmonica tab · C harp, as harptabs.com's key says"
+    assert facts(page) == "Harmonica tab · C harp, as harptabs' key says"
     assert '<a class="back" href="../../index.html">‹ Library</a>' in page.read_text("utf-8")
     assert not (song_dir(cfg.library_dir, song) / "sheet.html").exists()
 

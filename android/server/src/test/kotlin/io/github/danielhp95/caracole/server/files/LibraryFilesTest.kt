@@ -150,9 +150,9 @@ class LibraryFilesTest {
             tombstone(test.database, key)
             val gone = test.get("/Soda Stereo/De Música Ligera/sheet.html")
             assertEquals(410, gone.status)
-            assertTrue("<p class=\"message\">This song was removed on the phone.</p>" in gone.text, gone.text)
+            assertTrue("<p class=\"message\">Removed from the phone&#x27;s book.</p>" in gone.text, gone.text)
             assertTrue("<h1>Removed on the phone</h1>" in gone.text)
-            assertEquals("This song was removed on the phone.",
+            assertEquals("Removed from the phone's book.",
                          test.script("/Soda Stereo/De Música Ligera/sheet.html").json.jsonObject["error"]!!.jsonPrimitive.content)
             assertEquals(200, test.get("/index.html").status, "a file of no unit is served whatever the gate")
         }
@@ -167,7 +167,7 @@ class LibraryFilesTest {
             keep(test, id, "Soda Stereo/De Música Ligera/sheet.txt", "[C]Ella durmió")
             val page = test.get("/Soda Stereo/De Música Ligera/sheet.html")
             assertEquals(409, page.status)
-            assertTrue("<p class=\"message\">This song changed on the phone since the computer made its page.</p>" in page.text,
+            assertTrue("<p class=\"message\">Changed on the phone since the computer wrote this page.</p>" in page.text,
                        page.text)
             assertTrue("<a class=\"btn\" href=\"/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.txt\">" in page.text, page.text)
             assertEquals("[C]Ella durmió", test.get("/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.txt").text)
@@ -398,7 +398,7 @@ class LibraryFilesTest {
             val changed = test.get(address("$folder/sheet.html"))
             assertEquals(409, changed.status)
             assertTrue("<h1>Changed on the phone</h1>" in changed.text, changed.text)
-            assertTrue("since the computer made its page" in changed.text, changed.text)
+            assertTrue("since the computer wrote this page" in changed.text, changed.text)
             // No page of the computer's at all: the phone's of a moved unit is never served either.
             mirror(into = mirror)
             val stale = test.get(address("$folder/sheet.html"))

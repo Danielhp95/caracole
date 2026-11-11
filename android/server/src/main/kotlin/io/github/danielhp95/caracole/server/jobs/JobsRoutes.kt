@@ -107,17 +107,16 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
     private fun cancel(form: Map<String, String>): Response {
         val text = PyText.strip(form["job"] ?: "")
         if (!digits(text) || text.length > 12) {
-            throw Refused(400, "Not a request", "Which request? The form names none.")
+            throw Refused(400, "Not a request", "Which entry? The form names none.")
         }
         val job = try {
             idOf(text)?.let(queue::cancel)
         } catch (e: JobStarted) {
             if (e.state == Job.RUNNING) {
-                throw Refused(409, "Running already", "That request has started, and caracole never stops a command " +
-                                                      "halfway: it runs to its end.")
+                throw Refused(409, "Running already", "Already running. We never stop a command halfway.")
             }
-            throw Refused(409, "Over already", "That request is over: there's nothing left to cancel.")
-        } ?: throw Refused(404, "No such request", "That request isn't queued any more.")
+            throw Refused(409, "Over already", "Already over: nothing to cancel.")
+        } ?: throw Refused(404, "No such request", "No longer queued.")
         return Response(303, Body.Empty, mutableListOf("Location" to "/${JobViews.REQUESTS}"),
                         JsonObject(mapOf("cancelled" to JsonPrimitive(job.id))))
     }

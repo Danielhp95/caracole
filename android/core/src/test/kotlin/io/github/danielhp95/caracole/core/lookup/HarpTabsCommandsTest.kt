@@ -74,22 +74,22 @@ class HarpTabsCommandsTest {
 
     @Test fun anIndexEmptySaysSoAndAsksNothing() = db { db ->
         val (said, site) = run(db, "Billy Joel")
-        assertEquals("Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole harptabs " +
-                         "--index now.", said)
+        assertEquals("Not read: harptabs' index is empty; tonight's run reads its sitemap (or caracole harptabs " +
+                         "--index).", said)
         assertEquals(emptyList(), site.said)
     }
 
     @Test fun aNameTheSitemapListsNoPageOfIsNotFoundAndAsksNothing() = db { db ->
         index(db)
         val (said, site) = run(db, "Nobody Known")
-        assertEquals("Not found: harptabs.com's sitemap lists no artist named Nobody Known.", said)
+        assertEquals("Not found: harptabs lists no artist named Nobody Known.", said)
         assertEquals(emptyList(), site.said)
     }
 
     @Test fun aPageGoneIsStoredAsGoneNotedAndAGoodRun() = db { db ->
         index(db)
         val (said, site) = run(db, "The Beatles", mapOf("GET $beatles" to FakeTransport.answer(404)))
-        assertEquals("Not found: harptabs.com no longer has the page of The Beatles.", said)
+        assertEquals("Not found: harptabs no longer has The Beatles's page.", said)
         assertEquals(listOf("GET $beatles"), site.said)
         assertEquals("", db.one("SELECT name FROM harptabs_artists WHERE path = 'artist/50/the-beatles'") { it.text(0) })
         assertEquals("2026-11-03T12:00:00Z", db.kvGet("${Reads.READ}harptabs:artist/50/the-beatles"))
@@ -99,13 +99,13 @@ class HarpTabsCommandsTest {
     @Test fun aBlockCoolsTheSiteDownAndChangesNothing() = db { db ->
         index(db)
         val (said, _) = run(db, "The Beatles", mapOf("GET $beatles" to FakeTransport.answer(403, "Forbidden")))
-        assertEquals("Not read: harptabs.com blocked caracole (harptabs: 403: $beatles: HTTP 403); no more requests to " +
-                         "it until 2026-11-04 14:00 UTC.", said)
+        assertEquals("Not read: harptabs turned us back (harptabs: 403: $beatles: HTTP 403); no asks " +
+                         "until 2026-11-04 14:00 UTC.", said)
         assertNotNull(Health.state(db, "harptabs").cooldownUntil)
         assertNull(db.one("SELECT 1 FROM harptabs_artists") { true })
         val (again, site) = run(db, "The Beatles")
-        assertEquals("Not read: harptabs.com is cooling down after a block until 2026-11-04 14:00 UTC; caracole won't " +
-                         "ask it before then.", again)
+        assertEquals("Not read: waiting out harptabs until " +
+                         "2026-11-04 14:00 UTC.", again)
         assertEquals(emptyList(), site.said)
     }
 
@@ -113,7 +113,7 @@ class HarpTabsCommandsTest {
         index(db)
         db.kvSet(PhoneConfig.SETTINGS_KV, """{"providers": {"harptabs": {"enabled": false}}}""")
         val (said, site) = run(db, "Billy Joel")
-        assertEquals("Not read: harptabs.com is off ([providers.harptabs] enabled = false); nothing was asked.", said)
+        assertEquals("Not read: harptabs is off (caracole.toml). Nothing asked.", said)
         assertEquals(emptyList(), site.said)
     }
 }

@@ -809,7 +809,7 @@ def test_the_vectors_show_what_each_case_says(made):
         "a conflict kept here is remembered, and the file's kept answer read with its sides swapped",
         "the same conflict taken from the file", "a conflict left unanswered is left, and nothing of it remembered"))
     # the file keeps a base for this side (none of its units agreed): a sync after one, each side changed
-    assert [d for d in kept["differences"]] == [[CREEP, "conflict", "changed on both sides since the last sync"],
+    assert [d for d in kept["differences"]] == [[CREEP, "conflict", "both books changed it since the last share"],
                                                 [KARMA, "theirs", sync.KEPT_THERE]]
     assert kept["taken"] == [KARMA] and list(kept["kept_after"]) == [CREEP]
     assert taken["taken"] == [CREEP, KARMA] and taken["kept_after"] == {}

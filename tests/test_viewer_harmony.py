@@ -255,20 +255,20 @@ def test_explain_says_the_degree_the_quality_and_the_key_it_is_read_in():
     assert explain(ch("Am"), C) == "vi: the 6th chord of C major, minor (lower case)"
     assert explain(ch("Am"), A_MINOR) == "i: the 1st chord of A minor, minor (lower case)"
     assert explain(ch("Bb"), C) == (
-        "♭VII: built on the lowered 7th degree of C major, major (upper case); borrowed from C minor")
+        "♭VII: on the lowered 7th degree of C major, major (upper case); borrowed from C minor")
     assert explain(ch("D"), C, ch("G")) == "V/V: the V of V in C major, major (upper case); leads to G"
     assert explain(ch("E"), C, ch("F")) == (
         "V/vi: the V of vi in C major, major (upper case); points to Am")
     assert explain(ch("G7"), C) == "V7: the 5th chord of C major, major (upper case) with a 7th (7)"
-    assert explain(ch("F#"), C) == "♯IV: built on the raised 4th degree of C major, major (upper case); outside C major"
+    assert explain(ch("F#"), C) == "♯IV: on the raised 4th degree of C major, major (upper case); outside C major"
 
 
 def test_explain_says_what_the_bass_is():
     assert explain(ch("C/E"), C) == "I/3: the 1st chord of C major, major (upper case); E in the bass, its 3rd"
     assert explain(ch("C/D"), C) == (
         "I/2: the 1st chord of C major, major (upper case); D in the bass, the 2nd above its root, "
-        "not a note of the chord")
-    assert explain(ch("G/F"), C).endswith("; F in the bass, the lowered 7th above its root, not a note of the chord")
+        "outside the chord")
+    assert explain(ch("G/F"), C).endswith("; F in the bass, the lowered 7th above its root, outside the chord")
     assert explain(ch("G7/F"), C).endswith("; F in the bass, its 7th")
     assert explain(ch("Am/C"), C).endswith("; C in the bass, its 3rd")
     assert explain(ch("Cadd9/D"), C).endswith("; D in the bass, its 9th")

@@ -120,7 +120,7 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     assert tiles[1]["download"] == "Eagles - Hotel California.gp5" and tiles[0]["download"] is None
     assert tiles[5]["download"] == "Eagles - Hotel California.mxl"
     assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "a text tab", "Tab 1",
-                                          "synced to the recording", "Score 1 (MusicXML)"]
+                                          "timed", "Score 1 (MusicXML)"]
     assert [d["text"] for d in tiles[1]["downloads"]] == [".gp5"] and [d["text"] for d in tiles[2]["downloads"]] == [
         "Text"]
     assert not any("primary" in t["cls"].split() for t in tiles)  # none first
@@ -149,7 +149,7 @@ def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, 
     """
     chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
     assert chip == {"tag": "a", "href": url, "target": "_blank", "rel": "noopener noreferrer",
-                    "said": "Lyrics: Megalobiz, its page there", "name": "Megalobiz"}
+                    "said": "Lyrics: its page on Megalobiz", "name": "Megalobiz"}
 
 
 def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):
@@ -167,7 +167,7 @@ def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, t
     note("chip", { href: chip.getAttribute("href"), said: chip.getAttribute("aria-label") });
     """
     chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
-    assert chip == {"href": url, "said": "Lyrics: AZLyrics, its page there"}
+    assert chip == {"href": url, "said": "Lyrics: its page on AZLyrics"}
 
 
 def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
@@ -206,13 +206,13 @@ def test_chips_count_versions_per_source(conn, cfg, tmp_path):
     tiles = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'), "data-card")["tiles"]
     chips = {t["name"]: (t["lead"], [(c["tag"], c["source"], c["n"], c["said"]) for c in t["chips"]]) for t in tiles}
     assert chips["Chord sheet"] == ("Versions", [
-        ("button", "ug", "13", "Ultimate Guitar: 13 versions"), ("button", "lacuerda", "2", "LaCuerda: 2 versions"),
+        ("button", "ug", "13", "UG: 13 versions"), ("button", "lacuerda", "2", "LaCuerda: 2 versions"),
         ("button", "auto", "1", "the audio (auto-chords): 1 version")])  # an auto sheet beside the human one
-    assert chips["Guitar Pro"] == ("Files", [("button", "gtptabs", "1", "gtptabs.com: 1 file"),
+    assert chips["Guitar Pro"] == ("Files", [("button", "gtptabs", "1", "gtptabs: 1 file"),
                                              ("button", "inbox", "1", "your inbox: 1 file")])
     # One source with one version, nothing to choose: From it, no chevron, no drawer.
     assert chips["Lyrics"] == ("From", [("span", "lrclib", None, "LRCLIB")])
-    assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs.com")])
+    assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs")])
     assert chips["Score"] == ("From", [("span", "inbox", None, "your inbox")])
     # More than one version: a small stack.
     assert [("stack" in t["cls"].split()) for t in tiles] == [True, True, False, False, False, False]
@@ -240,7 +240,7 @@ def test_a_chip_opens_its_drawer_and_another_chip_closes_it(conn, cfg, tmp_path)
     chips = attribute_of(run(conn, cfg, tmp_path, CHIPS), "data-chips")
     first, second = chips["first"], chips["second"]
     assert first["ug"] == "true" and first["controls"] == first["drawer"]["id"] and not first["drawer"]["hidden"]
-    assert first["drawer"]["what"] == "Ultimate Guitar · chord sheets"
+    assert first["drawer"]["what"] == "UG · chord sheets"
     assert second["ug"] == "false" and second["lc"] == "true" and second["drawer"]["what"] == "LaCuerda · chord sheets"
     assert chips["closed"] is True and chips["lc"] == "false" and chips["drawers"] == 1
 
@@ -251,18 +251,18 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
     hotel(conn, cfg)
     drawer = attribute_of(run(conn, cfg, tmp_path, 'chipOf("Hotel California", "ug").click();\n'
                                                    'note("drawer", noteDrawer("Hotel California"));'), "data-drawer")
-    assert drawer["said"] == "13 versions on the site · 3 kept in your library"
+    assert drawer["said"] == "13 on UG · 3 in your logbook"
     rows = drawer["rows"]
     assert [(r["ver"], r["stars"]) for r in rows] == [
         ("Ver 3", "4.86★ · 408 votes"), ("Ver 4", "4.75★ · 850 votes"), ("Ver 5", "4.70★ · 800 votes")], rows
-    assert [r["note"] for r in rows] == ["Every line of the lyrics · caracole's pick", "80% of the lyrics",
+    assert [r["note"] for r in rows] == ["All the lyrics · our pick", "80% of the lyrics",
                                          "50% of the lyrics"]
     assert [r["acts"] for r in rows] == [["In use", "Open"], ["Open"], ["Open"]]  # the file chooses nothing
     assert [r["open"] for r in rows] == [HOTEL + "sheet.html", HOTEL + "version-46191.html",
                                          HOTEL + "version-46192.txt"]
     assert "cur" in rows[0]["cls"].split()
     # The rest are counted, not listed; from the file, the command that fetches them.
-    assert drawer["rest"] == "10 more on Ultimate Guitar, not kept" and drawer["restButtons"] == []
+    assert drawer["rest"] == "10 more on UG, not kept" and drawer["restButtons"] == []
     assert drawer["command"] == "caracole versions --keep-more 'Eagles - Hotel California'"
     words, params = parsed(drawer["command"])
     assert words == ("versions",) and params["keep_more"] is True and list(params["song"]) == ["Eagles - Hotel California"]
@@ -273,7 +273,7 @@ def test_the_lacuerda_and_auto_drawers_list_theirs(conn, cfg, tmp_path):
     script = ('chipOf("Hotel California", "lacuerda").click();\nconst lc = noteDrawer("Hotel California");\n'
               'chipOf("Hotel California", "auto").click();\nnote("drawers", [lc, noteDrawer("Hotel California")]);')
     lc, auto = attribute_of(run(conn, cfg, tmp_path, script), "data-drawers")
-    assert lc["said"] == "2 versions caracole met"
+    assert lc["said"] == "2 versions seen"
     assert [(r["ver"], r["note"], r["acts"], r["open"]) for r in lc["rows"]] == [
         ("Version 1", "90% of the lyrics", ["Its page ↗"], LACUERDA[0]),
         ("Version 2", "60% of the lyrics", ["Its page ↗"], LACUERDA[1])]  # the sheet is UG's: In use on none
@@ -349,7 +349,7 @@ def test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links(conn, cfg, tm
     assert card["tiles"] == [] and "tiles" not in card["parts"]
     # Look in the index; which sites had it; links
     assert card["parts"] == ["facts", "actions", "card-sites", "find-elsewhere", "foot"], card["parts"]
-    assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles now"
+    assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles"
 
 
 def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
@@ -363,7 +363,7 @@ def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
     dom = run(conn, cfg, tmp_path, script)
     assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "card-sites", "find-elsewhere", "foot"]
     elsewhere = attribute_of(dom, "data-elsewhere")
-    assert elsewhere.startswith("Find it elsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
+    assert elsewhere.startswith("ElsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
 
 
 def test_a_text_tab_alone_is_a_guitar_tab_tile(conn, cfg, tmp_path):
@@ -432,9 +432,9 @@ def test_remove_says_remove_and_is_red_and_last(conn, cfg, tmp_path):
     remove = attribute_of(run(conn, cfg, tmp_path, REMOVE, controls=SERVED), "data-remove")
     assert remove["foot"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "info.json", "Remove"]
     assert remove["last"].split()[0] == "foot-more" and remove["menu"].split()[0] == "remove"  # last, behind ⋯
-    assert remove["closed"] == {"open": False, "shown": False, "said": "More for Hotel California"}
+    assert remove["closed"] == {"open": False, "shown": False, "said": "More: Hotel California"}
     assert remove["opened"] is True  # ⋯ opens info.json and Remove
-    assert remove["said"] == "Remove Hotel California by Eagles from caracole"
+    assert remove["said"] == "Remove Hotel California by Eagles from your logbook"
     # Red from the start, its words and edge, yet outlined: never filled, never the main thing to do.
     assert remove["color"] == remove["failed"] and remove["background"] == "rgba(0, 0, 0, 0)"
     assert remove["border"] != remove["color"]
@@ -471,9 +471,9 @@ def test_progressions_are_search_chips_that_filter(conn, cfg, tmp_path):
     progression_library(conn, cfg)
     progs = attribute_of(run(conn, cfg, tmp_path, PROGS), "data-progs")
     assert (progs["before"]["label"], progs["before"]["em"]) == ("Progressions", None)  # no line of words about it
-    assert progs["before"]["hint"] == "Find your songs that play one"  # the label says it as a tooltip
+    assert progs["before"]["hint"] == "Find songs that play one"  # the label says it as a tooltip
     assert progs["before"]["chips"][0][0] == "vi–IV–I–V" and progs["before"]["chips"][0][2] is True
-    assert progs["before"]["chips"][0][1].startswith("Your songs with I–V–vi–IV")
+    assert progs["before"]["chips"][0][1].startswith("Songs with I–V–vi–IV")
     assert "prog=I+V+vi+IV" in progs["hash"] and progs["titles"] == ["In A Minor", "Synthetic Song"]
 
 
@@ -788,9 +788,9 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
     browser.open(base)
     item = drawer_of(browser, song, "ug")
     rest = f"document.querySelector('{item} .drawer-rest')"
-    assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on Ultimate Guitar, not kept"
+    assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on UG, not kept"
     assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
-        "Fetch 6 more versions of Hotel California from Ultimate Guitar")
+        "Fetch 6 more versions of Hotel California from UG")
     other = drawer_of(browser, few, "ug")
     assert browser.js(f"[...document.querySelectorAll('{other} .drawer-rest button')].map((b) => b.textContent)") == [
         "Fetch them"]
@@ -812,9 +812,9 @@ def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, v
     browser.click(item + ' .tile-sheet button.vchip[data-source="ug"]')
     assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
     assert browser.js(f"document.querySelector('{item} .drawer-said').textContent") == (
-        "13 versions on the site · 5 kept in your library")
+        "13 on UG · 5 in your logbook")
     assert browser.js(f"document.querySelector('{item} .drawer-rest .rest-said').textContent") == (
-        "8 more on Ultimate Guitar, not kept")
+        "8 more on UG, not kept")
     assert browser.js(f"document.querySelectorAll('{item} .vrow').length") == 5
 
 
@@ -829,7 +829,7 @@ def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, bro
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
     item = drawer_of(browser, song, "ug")
-    press(browser, item, "Back to caracole's pick", ".drawer-head")
+    press(browser, item, "Back to our pick", ".drawer-head")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
 
 
@@ -854,6 +854,6 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     buttons = f"[...document.querySelectorAll('{item} .drawer button')].map((b) => b.textContent)"
     assert "Use this one" not in browser.js(buttons)
     assert browser.js(f"document.querySelector('{item} .drawer .pin-note').textContent") == (
-        "Your choice on Ultimate Guitar is in use: Back to caracole's pick first.")
-    press(browser, item, "Back to caracole's pick")
+        "Your UG choice is in use. Back to our pick first.")
+    press(browser, item, "Back to our pick")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})

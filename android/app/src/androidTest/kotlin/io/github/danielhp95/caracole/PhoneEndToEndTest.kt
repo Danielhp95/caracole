@@ -53,7 +53,7 @@ import kotlin.concurrent.thread
  *
  * In this order, each in the WebView the app shows:
  * - the app's server is at http://127.0.0.1:8738/, the launch's cookie is the WebView's for that origin, and a request
- *   without it is refused ("Not this app's caracole.");
+ *   without it is refused ("Not this app's scribe.");
  * - another loopback port is never loaded: a link there goes to the browser, a fetch and an image of it are answered
  *   in the app, and that port's server hears nothing;
  * - a sync from the bar's sync button and its sheet (its comparison, Sync, each conflict keeping the computer's),
@@ -121,7 +121,7 @@ class PhoneEndToEndTest {
             assertEquals(200, page.first)
             val refused = get(library, null)
             assertEquals(403, refused.first)
-            assertEquals("Not this app's caracole.\n", refused.second)
+            assertEquals("Not this app's scribe.\n", refused.second)
             record("cookie", JSONObject().put("webview", cookie.isNotEmpty()).put("without", refused.first))
 
             // Another loopback port: never loaded in the WebView.
@@ -198,7 +198,7 @@ class PhoneEndToEndTest {
             val theirs = js("document.body.textContent") as String
             record("sandboxed read", theirs.take(300))
             assertTrue("the sandbox's read is refused as another site's (Sec-Fetch-Site): $theirs",
-                       "another site" in theirs && !theirs.startsWith("Not this app's"))
+                       "Another site" in theirs && !theirs.startsWith("Not this app's"))
 
             // A query typed into the box: /api/search's rows, a song of the computer's index the library hasn't got.
             reload(main, library)
@@ -240,7 +240,7 @@ class PhoneEndToEndTest {
                 js("(() => { const f = document.getElementById('found'); " +
                    "return f.dataset.query === ${JSONObject.quote(QUERY)} && !f.hasAttribute('aria-busy'); })()") == true
             }
-            val getIt = "button[aria-label^=\"Get \"][aria-label*=\"$TITLE_WORD\" i]"
+            val getIt = "button[aria-label^=\"Fetch \"][aria-label*=\"$TITLE_WORD\" i]"
             waitUntil("the index's row and its Get it") { js("document.querySelector(${JSONObject.quote(getIt)}) !== null") == true }
             val row = js("""(() => { const b = document.querySelector(${JSONObject.quote(getIt)});
                 const line = b.closest('[data-hit]') || b.parentElement;
@@ -294,7 +294,7 @@ class PhoneEndToEndTest {
             // A song removed with its line's Remove: its card gone once the page is loaded again.
             val gone = cards(main).let { all -> (0 until all.length()).map { all.getJSONObject(it) } }
                 .first { it.optString("title") == REMOVED.second && it.optString("artist") == REMOVED.first }
-            val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from caracole")}]"
+            val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from your logbook")}]"
             assertTrue("its Remove", js("document.querySelector(${JSONObject.quote(remove)}) !== null") == true)
             val beforeRemoval = Caracole.started()!!.queue.snapshot().map { it.id }.toSet()
             js("document.querySelector(${JSONObject.quote(remove)}).click()")

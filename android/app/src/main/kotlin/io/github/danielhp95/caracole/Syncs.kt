@@ -145,7 +145,7 @@ object Syncs {
     }
 
     /**
-     * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date: 1 taken, 2 given",
+     * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date · 1 taken, 2 given",
      * or, with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (never "Up to date" then).
      */
     internal fun said(outcome: JsonObject?): String {
@@ -154,7 +154,7 @@ object Syncs {
         return when {
             left > 0 -> "$what$TO_CHOOSE"
             what.isEmpty() -> UP_TO_DATE
-            else -> "$UP_TO_DATE: $what"
+            else -> "$UP_TO_DATE · $what"
         }
     }
 

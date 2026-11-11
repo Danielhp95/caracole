@@ -189,7 +189,7 @@ def test_test_says_no_indexes_and_refuses_as_compare_does(computers, monkeypatch
     assert said["said"] == f"{there.cfg.library_name} answered: 1 song, 0 songbooks, no indexes"
 
     status, said = script(here.app, "/sync/test", {"address": "ftp://desk"})
-    assert status == 400 and "isn't the address of a caracole serve" in said["error"]
+    assert status == 400 and "isn't a caracole serve address" in said["error"]
     db.kv_set(here.conn, sync.ID_KEY, sync.own_id(there.conn))  # a copy of the other's database
     status, said = script(here.app, "/sync/test", {"address": THERE})
     assert status == 409 and "is this one" in said["error"] and "caracole peer new-id" in said["error"]
@@ -198,7 +198,7 @@ def test_test_says_no_indexes_and_refuses_as_compare_does(computers, monkeypatch
         raise httpx.ConnectError("refused")
     monkeypatch.setattr(sync_routes, "transport", lambda: httpx.MockTransport(refused))
     status, said = script(here.app, "/sync/test", {"address": "192.168.1.20:8737"})
-    assert status == 502 and said["error"].startswith("Nothing answered at http://192.168.1.20:8737")
+    assert status == 502 and said["error"].startswith("No answer at http://192.168.1.20:8737")
 
 
 def test_tested_words_say_one_song_and_one_songbook_and_the_day_in_the_servers_zone(in_utc):
@@ -236,10 +236,10 @@ def test_a_comparison_lists_each_difference_with_its_kind_proposal_and_both_dige
                              "name": there.cfg.library_name, "kind": "server", "made": None}
     mine, theirs = here.units(), there.units()
     assert [(d["label"], d["kind"], d["proposal"], d["why"]) for d in found["differences"]] == [
-        ("Estopa - Tu Calorro", "song", "theirs", "only there"),
-        ("Muse - Hysteria", "song", "mine", "only here"),
-        ("Oasis - Wonderwall", "song", "conflict", "on both sides, different, and never synced"),
-        ("Radiohead - Creep", "song", "conflict", "on both sides, different, and never synced")]
+        ("Estopa - Tu Calorro", "song", "theirs", "only in theirs"),
+        ("Muse - Hysteria", "song", "mine", "only in our book"),
+        ("Oasis - Wonderwall", "song", "conflict", "in both books, different, never shared"),
+        ("Radiohead - Creep", "song", "conflict", "in both books, different, never shared")]
     creep = by_label(found)["Radiohead - Creep"]
     assert creep["id"] == unit["Radiohead - Creep"]
     assert (creep["here"], creep["there"]) == (mine[creep["id"]].digest, theirs[creep["id"]].digest)
@@ -251,7 +251,7 @@ def test_a_comparison_lists_each_difference_with_its_kind_proposal_and_both_dige
 def test_a_comparison_refuses_an_address_nothing_answering_and_this_very_caracole(computers, monkeypatch):
     here, there, _ = computers
     status, said = script(here.app, "/sync/compare", {"address": "ftp://desk"})
-    assert status == 400 and "isn't the address of a caracole serve" in said["error"]
+    assert status == 400 and "isn't a caracole serve address" in said["error"]
 
     db.kv_set(here.conn, sync.ID_KEY, sync.own_id(there.conn))  # a copy of the other's database
     status, said = script(here.app, "/sync/compare", {"address": THERE})
@@ -261,7 +261,7 @@ def test_a_comparison_refuses_an_address_nothing_answering_and_this_very_caracol
         raise httpx.ConnectError("refused")
     monkeypatch.setattr(sync_routes, "transport", lambda: httpx.MockTransport(refused))
     status, said = script(here.app, "/sync/compare", {"address": "192.168.1.20:8737"})
-    assert status == 502 and said["error"].startswith("Nothing answered at http://192.168.1.20:8737")
+    assert status == 502 and said["error"].startswith("No answer at http://192.168.1.20:8737")
 
 
 def test_a_comparison_names_each_songs_artist_and_title_and_each_sides_change_and_part(computers):
@@ -421,9 +421,9 @@ def test_sync_refuses_an_unchosen_conflict_a_comparison_past_and_choices_it_cant
     found = compared(here)
     creep = by_label(found)["Radiohead - Creep"]["id"]
     for fields, status, words in [
-        ({"comparison": "0123456789abcdef", "prefer": "", "choices": ""}, 409, "compare the two again"),
+        ({"comparison": "0123456789abcdef", "prefer": "", "choices": ""}, 409, "Compare again"),
         ({"comparison": found["comparison"], "prefer": "", "choices": f"here\t{creep}"}, 409,
-         "Choose a side for every conflict first: 1 has none."),
+         "Choose a book for every conflict: 1 has none."),
         ({"comparison": found["comparison"], "prefer": "", "choices": "maybe\tsong/x"}, 400, "isn't a choice"),
         ({"comparison": found["comparison"], "prefer": "", "choices": "here\tsong/not/compared"}, 400,
          "isn't a choice"),
@@ -463,7 +463,7 @@ def test_two_computers_sync_through_the_tabs_routes_and_end_with_no_differences(
                                                        "choices": choices})
     assert status == 200, answer
     queued = answer["job"]
-    assert queued["kind"] == "sync" and queued["display"] == f"Sync with {there.cfg.library_name}"
+    assert queued["kind"] == "sync" and queued["display"] == f"Share with {there.cfg.library_name}"
     assert queued["details"] == "#tab=sync" and queued["songId"] is None and queued["outcome"] is None
     assert [s["name"] for s in queued["steps"]] == [name for name, _ in PEER_SYNC_STAGES]
     (job,) = here.app.queue.snapshot()
@@ -476,7 +476,7 @@ def test_two_computers_sync_through_the_tabs_routes_and_end_with_no_differences(
     again = compared(here)
     status, said = script(here.app, "/sync/apply", {"comparison": again["comparison"], "prefer": "here",
                                                      "choices": ""})
-    assert status == 409 and "on its way already" in said["error"]
+    assert status == 409 and "Already sharing with" in said["error"]
 
     asked.clear()
     here.app.queue.run_pending()
@@ -485,7 +485,7 @@ def test_two_computers_sync_through_the_tabs_routes_and_end_with_no_differences(
     assert ("POST", "/peer/pull") not in asked  # given by a push: there needn't reach here
     status, polled = script(here.app, f"/jobs.json?jobs={job.id}")
     (seen,) = polled["jobs"]
-    assert seen["line"] == {"tone": "ready", "text": "Synced", "link": None, "details": None}
+    assert seen["line"] == {"tone": "ready", "text": "Shared", "link": None, "details": None}
     assert [(s["name"], s["state"]) for s in seen["steps"]] == [("compare", "done"), ("take", "done"),
                                                                  ("give", "done"), ("agree", "done"),
                                                                  ("index", "skipped")]
@@ -537,7 +537,7 @@ def test_a_conflict_of_a_part_asked_for_still_needs_a_side(computers):
     for parts in ("library", "songbooks"):  # Creep, a conflict, comes along with the songbook that lists it
         status, said = script(here.app, "/sync/apply", {"comparison": found["comparison"], "prefer": "",
                                                          "choices": "", "parts": parts})
-        assert status == 409 and said["error"].startswith("Choose a side for every conflict first"), parts
+        assert status == 409 and said["error"].startswith("Choose a book for every conflict"), parts
     status, answer = script(here.app, "/sync/apply", {"comparison": found["comparison"], "prefer": "",
                                                        "choices": f"here\t{CREEP}", "parts": "songbooks"})
     assert status == 200, answer
@@ -556,7 +556,7 @@ def test_a_comparison_kept_without_its_differences_still_needs_a_side_for_every_
     made = list(sync_routes._kept[here.app])[-1]
     status, said = script(here.app, "/sync/apply", {"comparison": made, "prefer": "", "choices": "",
                                                      "parts": "indexes"})
-    assert status == 409 and said["error"] == "Choose a side for every conflict first: 2 have none.", said
+    assert status == 409 and said["error"] == "Choose a book for every conflict: 2 have none.", said
 
 
 def test_a_units_two_documents_are_refused_for_a_comparison_of_a_file(computers):
@@ -604,12 +604,12 @@ def test_a_sync_that_leaves_a_unit_says_how_many_and_why_and_its_next_step_is_a_
     (job,) = here.app.queue.snapshot()
     _, polled = script(here.app, f"/jobs.json?jobs={job.id}")
     (seen,) = polled["jobs"]
-    assert seen["line"] == {"tone": "waiting", "text": "Synced: 1 change left as it was", "link": None,
+    assert seen["line"] == {"tone": "waiting", "text": "Shared · 1 change left as it was", "link": None,
                             "details": f"#tab=requests&job={job.id}"}
-    assert seen["outcome"]["left"] == [[ids["Radiohead - Creep"], "skipped, as chosen"]]
+    assert seen["outcome"]["left"] == [[ids["Radiohead - Creep"], "skipped, as you chose"]]
     said = outcome(job, job_line(job, None))
-    assert (said.tone, said.word, said.reason) == ("waiting", "Synced", "Took 2 changes here and gave 1 change "
-                                                                        "there. 1 change left as it was.")
+    assert (said.tone, said.word, said.reason) == ("waiting", "Shared", "2 changes taken, 1 change given. "
+                                                                        "1 change left as it was.")
     assert said.action.label == "Compare again" and said.action.href == "/#tab=sync"
     assert [(c.name, c.state) for c in steps(job)] == [("Compare", "done"), ("Take", "done"), ("Give", "done"),
                                                        ("Agree", "done")]
@@ -761,7 +761,7 @@ def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = 
         made = jobs.index_merge_job(Path("/state/peer/index-0123456789abcdef.sqlite"))
         title, key, (label, args) = made["title"], made["song_key"], made["steps"][0]
     elif kind == "sync":
-        title = f"Sync with {name}"
+        title = f"Share with {name}"
         args = ("peer", "sync", "--push", "--yes", "--progress", "--compared=" + "0" * 64, "--", address)
         key, names, label = sync_routes.SYNCING + address, PEER_SYNC_STAGES, title
     elif kind == "import":  # a sync with a file (sync_file_routes.py), of kind "sync" as the page names it
@@ -790,7 +790,7 @@ def peer_job(kind: str, state: str, stages: dict[str, tuple[str, str]] | None = 
 def test_a_syncs_view_while_it_runs_is_its_running_stage_and_once_over_what_it_did():
     running = peer_job("sync", "running", {"compare": ("done", "4 differences"), "take": ("running", "2 changes")})
     seen = view(running, [running], None, None)
-    assert seen["line"]["text"] == "Taking what changed there…" and seen["outcome"] is None
+    assert seen["line"]["text"] == "Taking their entries…" and seen["outcome"] is None
     assert seen["steps"][1] == {"name": "take", "label": "Take", "state": "running", "detail": "2 changes"}
     # A crash in its take: the line is the error, never what the stage said while it ran.
     crashed = peer_job("sync", "failed", {"compare": ("done", "4 differences"), "take": ("running", "2 changes")},
@@ -800,10 +800,9 @@ def test_a_syncs_view_while_it_runs_is_its_running_stage_and_once_over_what_it_d
         "The caracole at http://192.168.1.20:8737 answered 500.")
     stale = peer_job("sync", "failed", {"compare": ("failed", sync_routes.STALE)},
                      output=["error: " + sync_routes.STALE])
-    assert view(stale, [stale], None, None)["line"]["text"] == "The two changed since that comparison: compare " \
-                                                                "them again, and choose again."
+    assert view(stale, [stale], None, None)["line"]["text"] == "Both books changed since that comparison."
     taken = peer_job("peer-push", "done", {"check": ("done", "3 changes from Phone"), "take": ("done", "took 3"),
-                                           "render": ("done", ""), "agree": ("done", "12 units the two agree on")},
+                                           "render": ("done", ""), "agree": ("done", "12 units the books agree on")},
                      units=[("song/a/b", "taken", ""), ("song/c/d", "taken", ""), ("songbook/e", "taken", "")])
     seen = view(taken, [taken], None, None)
     assert (seen["kind"], seen["line"]["text"]) == ("peer-push", "Taken")
@@ -827,7 +826,7 @@ def test_another_caracoles_index_pages_are_a_job_of_no_song_with_one_stage():
     assert made.steps[0].args == ("index", "merge", "--delete", "--progress", "--", str(path))
     running = peer_job("index-merge", "running", {"merge": ("running", "")})
     seen = view(running, [running], None, None)
-    assert seen["kind"] == "index-merge" and seen["line"]["text"] == "Merging the other caracole's index pages…"
+    assert seen["kind"] == "index-merge" and seen["line"]["text"] == "Merging the other scribe's index pages…"
     assert seen["steps"] == [{"name": "merge", "label": "Merge", "state": "running", "detail": ""}]
     done = peer_job("index-merge", "done", {"merge": ("done", "merged 12 pages: ug, lacuerda")})
     assert view(done, [done], None, None)["line"]["text"] == "Merged"
