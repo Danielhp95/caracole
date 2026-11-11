@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.ug.SheetVersion
 import io.github.danielhp95.caracole.core.ug.SheetVersions
@@ -200,7 +201,7 @@ internal object VersionsPage {
         val first = (if (v.number != null && v.number != 0) "Ver ${v.number}" else "Tab ${v.tabId}") +
             (if (total != null && total != 0) " of $total" else "")
         val said = mutableListOf(first)
-        v.rating?.let { rating -> said += "${Choices.g(rating)}★" + (v.votes?.let { " (${Looked.grouped(it.toLong())})" } ?: "") }
+        v.rating?.let { rating -> said += "${PyFormat.general(rating)}★" + (v.votes?.let { " (${Looked.grouped(it.toLong())})" } ?: "") }
         return said.joinToString(" · ")
     }
 

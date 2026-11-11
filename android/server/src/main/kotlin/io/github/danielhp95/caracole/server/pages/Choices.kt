@@ -15,9 +15,6 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import java.io.File
 import java.io.IOException
-import java.math.BigDecimal
-import java.math.MathContext
-import java.math.RoundingMode
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
@@ -133,22 +130,4 @@ internal object Choices {
      * (versions_routes' and harmonica_routes' `last`). */
     fun lastLine(job: Job): String =
         job.steps.firstNotNullOfOrNull { step -> step.output.lastOrNull { PyText.strip(it).isNotEmpty() } } ?: ""
-
-    /** `format(x, "g")`: six significant digits, correctly rounded, trailing zeros dropped; an exponent below -4
-     * or from 6 on written as `1e+06`. */
-    fun g(x: Double): String {
-        if (x.isNaN()) return "nan"
-        if (x.isInfinite()) return if (x > 0) "inf" else "-inf"
-        if (x == 0.0) return if (1.0 / x < 0) "-0" else "0"
-        val rounded = BigDecimal(x).round(MathContext(6, RoundingMode.HALF_EVEN))
-        val exponent = rounded.precision() - rounded.scale() - 1
-        return if (exponent < -4 || exponent >= 6) {
-            val digits = rounded.unscaledValue().abs().toString().trimEnd('0').ifEmpty { "0" }
-            val mantissa = if (digits.length > 1) "${digits[0]}.${digits.substring(1)}" else digits
-            val sign = if (rounded.signum() < 0) "-" else ""
-            "$sign${mantissa}e${if (exponent < 0) "-" else "+"}${Math.abs(exponent).toString().padStart(2, '0')}"
-        } else {
-            rounded.stripTrailingZeros().toPlainString()
-        }
-    }
 }
