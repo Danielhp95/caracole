@@ -2056,11 +2056,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 ##### An uncertain match reviewed on the phone
 
 - server's `ReviewRoutes` is review_routes.py:
-  - `GET /review?song=ID`, the picker's page (the Requests tab's Pick the match, a song not found's Look in the
+  - `GET /review?song=ID`, the picker's page (the Journal's Pick, a song not found's Search the
     index), pages.picker_form's markup in the message page's frame and policy (`MessagePage.html`: no script);
   - `POST /review`, its answer and the card's picker's: `caracole review --song=… --pick=…` (or `--none --seen=…`)
     queued under the song's key, never joined (`join` false), refused while the song's own request waits or runs;
-  - a pick with Fetch it now is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
+  - a pick with Fetch ticked is looked up after it by `caracole get` (the lookup Fetch now queues), in place of
     caracole serve's `caracole fetch --song` and `render --song`, which the phone hasn't: its line, while the review
     runs, the lookup's first stage's, as status.py says it of a job with a lookup ("Finding the song…");
   - the page's form token is Assembly's (`ReviewRoutes(parts, csrf)`, no default), so its Pick posts as the card's.
@@ -2136,7 +2136,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - the names through `SongNames.readNames` (a link's service's, "Read from Spotify's page: …"), searched as
     `/api/search` searches (`SearchRoutes.answer`);
   - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
-  - Get it the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
+  - Fetch the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
     and policy (`MessagePage.html`: no script).
 - ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
 
@@ -2548,7 +2548,7 @@ picks one).
   by default.
 - The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
   counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
-- Nothing is sent to a tab site before Get it.
+- Nothing is sent to a tab site before Fetch.
 
 #### Either pace
 

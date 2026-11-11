@@ -279,7 +279,7 @@ page and a sheet, larger and smaller, and checks the size label and that the cho
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
 never loads another loopback port, and a first start's database is made whole. SyncSheetTest opens the sheet with
 the bar's sync button and syncs a song changed on both sides, the computer's version kept, then finds nothing that
-differs; and opens it from the notification of a Sync on Wi-Fi that left such a conflict. ExportImportTest exports
+differs; and opens it from the notification of a Share logs on Wi-Fi that left such a conflict. ExportImportTest exports
 from Settings to the share sheet, and imports a file through the picker. They change the computer's library (one
 song's own version), so give them a computer of their own, such as `nix develop -c python -m tests.helpers.e2e_library
 serve DIR PORT --address 127.0.0.1`:
@@ -555,7 +555,7 @@ caracole files each one as the computer files what you drop into `_inbox/`:
 - **For the song its name is of**: "Oasis - Wonderwall.gp5", "Oasis - Wonderwall (ver 2).gp5", or "wonderwall.gp5"
   when one song of your library has that title. It is kept as the song's `guitar-1.gp5` (or the next number free) or
   `score-1.pdf`, never over a file the song keeps, and goes to the computer as the song's at the next sync.
-- **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed as guitar-1.gp5 of …".
+- **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed · guitar-1.gp5 of …".
   One the library lost (deleted on another device) is put back where it was.
 - **A file no song fits waits**, up to 30 days, and is tried again after each sync and each lookup: share a Guitar
   Pro file first and look its song up after, and it is filed then. One that couldn't be filed (its song's folder is

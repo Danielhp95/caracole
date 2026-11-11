@@ -6136,7 +6136,7 @@ is `phone` and a comparison's other side, the computer, is of `kind` `computer`)
   queues `caracole peer sync --parts=…`; a conflict outside the parts needs no side, and a part it doesn't know, or
   `parts` sent naming none, is refused (400, "parts are library, songbooks or indexes, by commas.").
 
-The phone's Sync on Wi-Fi by itself is the same sync, unattended: the three parts, every change made on one side
+The phone's Share logs on Wi-Fi is the same sync, unattended: the three parts, every change made on one side
 alone taken or given, and every conflict left as it is on both sides, for you to choose later.
 
 ### Each caracole's own politeness, and the computer's settings on the phone
