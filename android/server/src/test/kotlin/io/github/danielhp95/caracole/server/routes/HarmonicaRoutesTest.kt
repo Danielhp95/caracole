@@ -154,7 +154,7 @@ class HarmonicaRoutesTest {
         assertEquals(303, cleared.status, cleared.text)
         done(cleared.header("Location")!!.substringAfterLast("=").toInt())
         assertFalse("harmonica-1.txt" in pinned(), "${pinned()}")
-        assertTrue("Done: caracole guesses how it is read again." in navigate(cleared.header("Location")!!).text)
+        assertTrue("Done · we guess its reading again." in navigate(cleared.header("Location")!!).text)
         assertEquals(409, post("/harmonica/clear", "page" to PAGE).status, "nothing pinned to take out")
     }
 
