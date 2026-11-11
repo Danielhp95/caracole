@@ -97,7 +97,7 @@ def test_served_the_read_as_lines_source_opens_the_readings_and_one_is_pinned(cf
     assert runner.calls == [["harmonica", "--tab=harmonica-1.txt", "--as=letters", "--", "Cowboy Bebop",
                              "Spokey Dokey"]]
     browser.js("window.before = true")
-    browser.js("[...document.querySelectorAll('a')].find((a) => a.textContent === 'Back to the tab').click()")
+    browser.js("[...document.querySelectorAll('a')].find((a) => a.textContent === 'Back to tab').click()")
     assert browser.wait("!window.before && document.documentElement.dataset.ready === '1'")
     assert browser.js("document.getElementById('reading-src').textContent") == "as you set it"
 
