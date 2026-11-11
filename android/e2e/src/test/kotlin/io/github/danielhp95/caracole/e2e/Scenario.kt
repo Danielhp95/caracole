@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.e2e
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -71,13 +72,15 @@ class Lookups(json: JsonObject) {
 }
 
 /** A song of the fake sites' scenario: its names and identity key, its tab pages (and where a page redirects that
- * robots.txt closes, [closed]), its artist's page, and, for a song of UG's index, what a search types for it and the
- * row it finds ([search]: `ug`, the names and their key). */
+ * robots.txt closes, [closed]), its artist's page, its harmonica tab's page on harptabs.com ([harp], or null), and,
+ * for a song of UG's index, what a search types for it and the row it finds ([search]: `ug`, the names and their
+ * key). */
 class LookupSong(json: JsonObject) {
     val song: Song = Song(json.text("artist"), json.text("title"), json.text("key"))
     val tabs: List<String> = json["tabs"]!!.jsonArray.map { it.jsonPrimitive.content }
     val closed: List<String> = json["closed"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
     val artistPage: String = json.text("artist_page")
+    val harp: String? = (json["harp"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     val search: JsonObject? = json["search"]?.jsonObject
 
     /** The song as the search's row names it, and its key: what Get it adds. */

@@ -17,7 +17,7 @@ and what the next step needs of it). The steps, as the plan numbers them:
    the computer's 20 songs on the phone, with their digests, the goal's changes in ``phone_overrides``, each mirrored
    sheet served, and an indexed song found that the library hasn't got; here, every table of the index export holding
    on the phone what it holds in the file, and every file the computer keeps (each sheet's ``sheet.txt`` and
-   ``sheet.json``, the Guitar Pro file) and its lyrics on the phone byte for byte.
+   ``sheet.json``, the Guitar Pro file, the harmonica tab) and its lyrics on the phone byte for byte.
 3. Computer off: serve stopped.
 4. Phone, phase 2: songs searched, added (Get it, Request with Fetch now and without) and removed (R and C1), and not
    one request sent: the computer's port refuses. The song Get it added is the one search.py finds for the query,
@@ -34,7 +34,11 @@ and what the next step needs of it). The steps, as the plan numbers them:
    lookup within lookup_requests, every lookup within lookup_per_hour; no URL robots.txt closes asked, nor a redirect
    to one followed (an error, never a miss); every URL asked one the scenario answers (``known``); no request but to
    the fake server, which counted every one the phone sent, each with the user agent the computer gave it; a 403
-   cools Ultimate Guitar down on the phone, the song never not found.
+   cools Ultimate Guitar down on the phone, the song never not found. Among them the pages phase's (milestone 5's
+   check): Get it on a song whose charts sing Chinese words (its other version kept beside its sheet) and on one with
+   a harmonica tab on harptabs.com, whose pages the phone makes itself (the sheets' viewers and .cho, the kept
+   version's page, the tab's page, info.json), each recorded and served as it wrote it, the Chinese sheet's with each
+   character's reading; and /api/search's progression finds that song by what it plays.
 9. Computer: the first of those songs looked up there too, against the same sites (``Computer.against``): it asks
    the very URLs the phone's Get it asked, in the same order; and its caracole.toml changed (``change_settings``).
 10. Computer: serve again. Phone, phase 6: the next sync lists the phone's lookups as its own and the song looked up
@@ -44,7 +48,16 @@ and what the next step needs of it). The steps, as the plan numbers them:
    computer's config); nothing of either side's politeness crosses (the owner's choice: Ultimate Guitar cools on the
    phone alone, and the computer's events and the kv records of its pace, health and lookups are as they were); and
    the index pages the phone read (its artist page of the bare tab) reach the computer's index, merged by the job its
-   ``POST /peer/index`` queued.
+   ``POST /peer/index`` queued; and the pages the phone made of the songs it gave are still its own.
+11. The pages phase's end: the computer, which took those songs, copied, and Python's build of the phone's pages of
+   them run on the copy (tests/helpers/phone_render.py, ``Computer.phone_pages``): the phone wrote the same pages,
+   each byte for byte, info.json too, and recorded them as Python does (each page's SHA-256, size and unit, the
+   song's unit and script, and what its sheet plays: kv ``render:files:``, ``render:<id>:phone`` and
+   ``render:progressions:``).
+
+Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
+sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
+page; and the phone's reference pages are made on a copy of the computer, which stays as it was.
 
 The module also checks ``python -m tests.helpers.e2e_library serve DIR PORT``, which the device tests run.
 
@@ -82,6 +95,7 @@ from helpers.e2e_library import (
     REPO,
     SONGS,
     Computer,
+    Pages,
     build,
     free_port,
     stop,
@@ -271,14 +285,21 @@ def test_the_chinese_sheet_carries_its_readings_and_a_harmonica_tab_its_page(ser
 
 
 def test_the_phones_reference_pages_are_made_on_a_copy_of_the_computer(served, tmp_path):
-    pytest.importorskip("helpers.phone_render", reason="waiting on phone-render: tests/helpers/phone_render.py")
     from caracole.normalize import identity_key
 
     computer = served[0]
     library = computer.cfg().library_dir
     before = {p: p.read_bytes() for p in library.rglob("*") if p.is_file()}
     units = computer.units()
-    pages = computer.phone_pages([identity_key(*CHINESE), identity_key(*HARMONICA)], tmp_path / "reference")
+    keys = [identity_key(*CHINESE), identity_key(*HARMONICA)]
+    made = computer.phone_pages(keys, tmp_path / "reference")
+    pages = made.pages
+    assert set(made.records) == set(keys)
+    for key in keys:  # what the phone records of a song it rendered: each page at the song unit's digest now
+        record = made.records[key]
+        assert {entry["unit"] for entry in record["files"].values()} == {record["phone"]["unit"]}
+        assert record["phone"]["unit"] == units[f"song/{key}"][1] and record["progressions"]
+    assert made.records[keys[0]]["phone"]["script"] and "script" not in made.records[keys[1]]["phone"]
     chinese, tabbed = (f"{a}/{t}" for a, t in (CHINESE, HARMONICA))
     assert {f"{chinese}/sheet.html", f"{chinese}/sheet.cho", f"{chinese}/info.json"} <= set(pages)
     assert {f"{tabbed}/sheet.html", f"{tabbed}/harmonica-1.html", f"{tabbed}/info.json"} <= set(pages)
@@ -396,6 +417,82 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     assert computer.politeness() == politeness  # nothing of the phone's politeness crossed, nor changed the computer's
     synced_after_the_lookups(five, six, merges, lookups, computer, dir)
 
+    # 11. The pages the phone made of its lookups, held to Python's for the same inputs.
+    pages_as_python_makes_them(five, computer, dir, tmp_path / "reference")
+
+
+def phone_made(dir: Path, keys: list[str]) -> Pages:
+    """The pages the phone made of the songs of identity keys ``keys`` and what it recorded of them, read from
+    DIR/phone/ as ``Computer.phone_pages`` reads the reference's: each page its kv ``render:files:<id>`` names and each
+    song's info.json, by its path in the library (the song's folder, where its kept files are), and its records."""
+    from caracole.progressions import KV as PROGRESSIONS
+    from caracole.render import FILES_KEY
+    from helpers.phone_render import phone_key
+
+    home = dir / "phone"
+    conn = sqlite3.connect(home / "caracole.sqlite")
+    try:
+        def kv(key: str):
+            row = conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+            return None if row is None else json.loads(row[0])
+
+        pages, records, folders = {}, {}, {}
+        for key in keys:
+            (song_id,) = conn.execute("SELECT id FROM songs WHERE key = ?", (key,)).fetchone()
+            (kept,) = conn.execute("SELECT path FROM files WHERE song_id = ? AND name = 'sheet.txt'",
+                                   (song_id,)).fetchone()
+            folder = Path(kept).parent
+            folders[key] = folder.as_posix()
+            files = kv(f"{FILES_KEY}{song_id}") or {}
+            for name in [*sorted(files), "info.json"]:
+                pages[(folder / name).as_posix()] = (home / "library" / folder / name).read_bytes()
+            records[key] = {"files": files, "phone": kv(phone_key(song_id)),
+                            "progressions": kv(f"{PROGRESSIONS}{song_id}")}
+    finally:
+        conn.close()
+    return Pages(pages, records, folders)
+
+
+def first_difference(mine: bytes, theirs: bytes) -> str:
+    """Where two pages part, in words: the offset and a little of each from there."""
+    at = next((i for i, (a, b) in enumerate(zip(mine, theirs)) if a != b), min(len(mine), len(theirs)))
+    return (f"{len(mine)} and {len(theirs)} bytes, parting at {at}: the phone's {mine[max(0, at - 80):at + 160]!r}, "
+            f"Python's {theirs[max(0, at - 80):at + 160]!r}")
+
+
+def pages_as_python_makes_them(five: dict, computer: Computer, dir: Path, into: Path) -> None:
+    """Step 11: the pages the phone made of the pages phase's songs (phase 5's ``pages``), and the records it kept of
+    them, as tests/helpers/phone_render.py makes them on a copy of the computer once it took those songs: the same
+    pages, each byte for byte (info.json too), recorded alike, the song's unit and script alike (never the build, the
+    app's own), and what its sheet plays alike."""
+    made = five["pages"]
+    keys = [song["key"] for song in made.values()]
+    theirs = computer.phone_pages(keys, into)
+    mine = phone_made(dir, keys)
+    assert sorted(mine.pages) == sorted(theirs.pages)  # every page the phone made, and none Python wouldn't make
+    for path, page in mine.pages.items():
+        assert page == theirs.pages[path], f"{path}: {first_difference(page, theirs.pages[path])}"
+    for key in keys:
+        phone, python = mine.records[key], theirs.records[key]
+        assert phone["files"] == python["files"], key
+        assert {k: phone["phone"].get(k) for k in ("unit", "script")} == \
+            {k: python["phone"].get(k) for k in ("unit", "script")}, key
+        assert phone["progressions"] == python["progressions"], key
+    # The pages the phase was for: the Chinese sheet's with its readings and its kept version's, the tab's page.
+    chinese, tabbed = (made[role] for role in ("chinese", "harmonica"))
+    assert {"sheet.html", "sheet.cho"} | {n for n in chinese["files"] if n.startswith("version-")} <= \
+        set(mine.records[chinese["key"]]["files"]) and any(n.startswith("version-") for n in chinese["files"])
+    assert {"sheet.html", "sheet.cho", "harmonica-1.html"} <= set(mine.records[tabbed["key"]]["files"])
+    assert mine.folders == theirs.folders
+    sheet = mine.pages[f"{mine.folders[chinese['key']]}/sheet.html"]
+    readings = json.loads(re.search(rb'<script type="application/json" id="song">(.*?)</script>', sheet,
+                                    re.DOTALL).group(1))["pinyin"]
+    assert any(r for line in readings for r in (line or [])), "the Chinese sheet's readings"
+    assert mine.records[chinese["key"]]["phone"].get("script")  # its sheet's words Chinese, for the cards' names
+    assert five["progression"]["record"] == mine.records[chinese["key"]]["progressions"]
+    print("the pages phase:", json.dumps({path: hashlib.sha256(page).hexdigest() for path, page in mine.pages.items()},
+                                         ensure_ascii=False, indent=1))
+
 
 def merged(computer: Computer, timeout: float = 300) -> dict[int, str]:
     """The index merges the computer's caracole serve queued for the phone's pushes (``POST /peer/index``), once each
@@ -431,7 +528,9 @@ def looked_up(five: dict, asked: list[dict], lookups: dict, computer: Computer) 
     closed = lookups["songs"]["closed"]
     assert {r["status"] for r in mine if r["url"] in closed["tabs"]} == {301}
     assert not [r for r in asked if r["url"] in closed["closed"]]  # the redirect robots.txt closes, never followed
-    assert len(five["added"]) == 5
+    assert len(five["added"]) == len(lookups["songs"]) == 7  # each of the scenario's songs looked up once
+    harmonica = lookups["songs"]["harmonica"]["harp"]
+    assert [r["status"] for r in mine if r["url"] == harmonica] == [200]  # the tab's page, read once on harptabs.com
     # The computer, its cache as empty of these pages as the phone's was, asks the very URLs the phone's Get it did.
     assert [r["url"] for r in theirs] == five["urls"]["get it"]
 

@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.Pages.pinch
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.core.http.RoutedTransport
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
@@ -34,8 +33,10 @@ import java.security.MessageDigest
 /**
  * Milestone 5's pages in the app, on a device or an emulator:
  *
- *     android/scripts/device-test.sh io.github.danielhp95.caracole.PagesOnDeviceTest=DIR
- *     android/scripts/device-test.sh --sites lookups io.github.danielhp95.caracole.PagesOnDeviceTest
+ *     android/scripts/device-test.sh --sites lookups io.github.danielhp95.caracole.PagesOnDeviceTest=DIR
+ *
+ * (`=DIR` a computer of its own for [theComputersPagesPlayOnThePhone], `-e server`; `--sites lookups` the fake sites
+ * for [aSongLookedUpOnThePhonePlaysAsOnTheComputer], `-e sites`; each test is skipped without its own.)
  *
  * Each page is opened in the app's WebView, at its address on the phone's own server, and used as a hand would:
  *
@@ -49,8 +50,11 @@ import java.security.MessageDigest
  * [theComputersPagesPlayOnThePhone] does it on the pages the copy took from the scenario's computer (`-e server`:
  * tests/helpers/e2e_library.py's 茉莉花, whose made-up words are Chinese, and Oh! Susanna's harmonica tab); without a
  * server it is skipped. [aSongLookedUpOnThePhonePlaysAsOnTheComputer] does it on the pages the phone made itself of
- * the songs it looked up against the fake sites (`-e sites`), each served as the phone wrote it while its record
- * says so (its bytes' SHA-256, at its song unit's digest now).
+ * the songs it looked up against the fake sites (`-e sites`: tests/helpers/fake_sites.py's `chinese` and
+ * `harmonica`, Get it on each one's search row, the scenario's index imported first), each served as the phone wrote
+ * it while its record says so (its bytes' SHA-256, at its song unit's digest now): the Chinese sheet's, and its kept
+ * version's beside it, and the harmonica tab's. tests/test_android_e2e.py holds the same pages, on the JVM, to
+ * Python's build of them byte for byte.
  */
 @RunWith(AndroidJUnit4::class)
 class PagesOnDeviceTest {
@@ -89,16 +93,14 @@ class PagesOnDeviceTest {
 
     @Test
     fun aSongLookedUpOnThePhonePlaysAsOnTheComputer() {
-        assumeTrue("waiting on lookups-e2e: no fake sites server (-e sites, device-test.sh --sites lookups)",
-                   sites != null)
+        assumeTrue("needs -e sites http://10.0.2.2:<port> (device-test.sh --sites lookups)", sites != null)
         val phone = Caracole.phone(context)
-        assumeTrue("waiting on phone-render and written-pages: the phone makes no page of its own yet",
-                   phone.render.seam !== SongPages.NONE)
         val document = JSONObject(String(fromSites("/scenario.json"), Charsets.UTF_8))
         val songs = document.getJSONObject("songs")
-        assumeTrue("waiting on lookups-e2e: its scenario has no Chinese song and harmonica tab to look up",
-                   songs.has(CHINESE) && songs.has(HARMONICA))
         Caracole.sitesForTests = RoutedTransport(sites!!)
+        // A computer's address, so that a first launch opens the library screen, never Settings in front of it: one
+        // nothing answers at (port 9, discard), as this test syncs with none.
+        if (Settings(context).server.isBlank()) Settings(context).server = "http://10.0.2.2:9"
         ActivityScenario.launch(MainActivity::class.java).use { main ->
             val index = File(context.cacheDir, "fake-sites-index.sqlite")
             index.writeBytes(fromSites("/index.sqlite"))
@@ -111,6 +113,12 @@ class PagesOnDeviceTest {
                 val job = getIt(search)
                 assertEquals(job.asJson().toString(), Job.DONE, job.state)
                 pages[role] = ownPage(search.getString("key"), name)
+            }
+            // The Chinese song's other version, kept beside its sheet, has its page too, as the phone wrote it.
+            val tabs = songs.getJSONObject(CHINESE).getJSONArray("tabs")
+            for (n in 1 until tabs.length()) {
+                ownPage(songs.getJSONObject(CHINESE).getJSONObject("search").getString("key"),
+                        "version-${tabs.getString(n).substringAfterLast('-')}.html")
             }
             waitFor(main, Pages.address(""))
             chineseSheet(main, Pages.address(pages.getValue(CHINESE)), "phone")
@@ -126,10 +134,7 @@ class PagesOnDeviceTest {
         Pages.shot("$from-chinese", hold)
 
         // A chord tapped: its card, and its shape strummed.
-        evaluate(main, "delete document.documentElement.dataset.heard")
-        tap(main, """#sheet .c[data-c="0"]""")
-        waitUntil("the chord heard") { evaluate(main, "document.documentElement.dataset.heard || null") != null }
-        record("$from: heard", evaluate(main, "document.documentElement.dataset.heard") as String)
+        record("$from: heard", heard(main, """#sheet .c[data-c="0"]""", "the chord heard"))
         evaluate(main, "(document.querySelector('#card [data-close]') || {click() {}}).click()")
 
         // Pinyin on: each character with its reading, each chord over its syllable and its reading.
@@ -179,10 +184,7 @@ class PagesOnDeviceTest {
         assertTrue("wider than the screen: $drawn", drawn.getInt("wider") <= 0)
         assertEquals("the harp it starts on", "C harp", drawn.getString("harp"))
 
-        evaluate(main, "delete document.documentElement.dataset.heard")
-        tap(main, """#sheet .h[data-i="0"]""")
-        waitUntil("the hole heard") { evaluate(main, "document.documentElement.dataset.heard || null") != null }
-        assertEquals("hole 4 blown on a C harp: C5", "523.25", evaluate(main, "document.documentElement.dataset.heard"))
+        assertEquals("hole 4 blown on a C harp: C5", "523.25", heard(main, """#sheet .h[data-i="0"]""", "the hole heard"))
     }
 
     /** Every chord over its syllable (and its reading), above its line, clear of the next: PinchTest's check. */
@@ -281,8 +283,15 @@ class PagesOnDeviceTest {
     private fun open(main: ActivityScenario<MainActivity>, address: String) {
         // The page before marked, so that its own document, which the WebView's url names the new address over
         // until the new one loads, is never taken for the new page's.
+        val sameDocument = url(main).substringBefore('#') == address.substringBefore('#')
         evaluate(main, "window.before = true")
-        main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(address) }
+        if (sameDocument) {
+            // Another fragment of the page shown is no new document: its hash set, then the page loaded again.
+            evaluate(main, "location.hash = ${JSONObject.quote(address.substringAfter('#', ""))}; " +
+                           "setTimeout(() => location.reload(), 0)")
+        } else {
+            main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(address) }
+        }
         waitFor(main, address.substringBefore('#'))
         waitUntil("the page's script") {
             evaluate(main, "!window.before && document.documentElement.dataset.ready === '1'") == true
@@ -295,8 +304,32 @@ class PagesOnDeviceTest {
         return zoom
     }
 
-    /** A real tap on the element [selector] names (scrolled to the middle first), as a finger's: `input tap`. */
-    private fun tap(main: ActivityScenario<MainActivity>, selector: String) {
+    /** What strum.js sounded for a real tap on [selector] (`<html data-heard>`, the frequencies it strummed); failing
+     * that, [what] said with what the page shows where the finger went. */
+    private fun heard(main: ActivityScenario<MainActivity>, selector: String, what: String): String {
+        evaluate(main, "delete document.documentElement.dataset.heard")
+        val at = tap(main, selector)
+        try {
+            waitUntil(what) { evaluate(main, "document.documentElement.dataset.heard || null") != null }
+        } catch (e: AssertionError) {
+            throw AssertionError("$what: ${evaluate(main, seen(at))}", e)
+        }
+        return evaluate(main, "document.documentElement.dataset.heard") as String
+    }
+
+    /** What the page shows at [at] (CSS pixels), and what strum.js may need: for a tap that sounded nothing. */
+    private fun seen(at: JSONObject): String = """(() => {
+        const e = document.elementFromPoint(${at.getDouble("x")}, ${at.getDouble("y")});
+        return JSON.stringify({at: ${at}, hit: e ? (e.tagName + '.' + e.className + ': ' + (e.textContent || '').slice(0, 60)) : null,
+          active: navigator.userActivation ? [navigator.userActivation.hasBeenActive, navigator.userActivation.isActive] : null,
+          sound: typeof window.caracoleSound, audio: typeof (window.AudioContext || window.webkitAudioContext),
+          card: !!document.querySelector('#card:not([hidden])'), visible: document.visibilityState,
+          ready: document.documentElement.dataset.ready, scroll: [scrollX, scrollY], size: [innerWidth, innerHeight]});
+      })()"""
+
+    /** A real tap on the element [selector] names (scrolled to the middle first), as a finger's: `input tap`; where it
+     * went on the page, in CSS pixels. */
+    private fun tap(main: ActivityScenario<MainActivity>, selector: String): JSONObject {
         val where = """(() => { const e = document.querySelector(${JSONObject.quote(selector)}); if (!e) return null;
             const r = e.getBoundingClientRect();
             return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2}); })()"""
@@ -316,6 +349,7 @@ class PagesOnDeviceTest {
         val x = origin[0] + at.getDouble("x") * scale
         val y = origin[1] + at.getDouble("y") * scale
         instrumentation.uiAutomation.executeShellCommand("input tap ${x.toInt()} ${y.toInt()}").close()
+        return at
     }
 
     private fun record(name: String, value: Any) {

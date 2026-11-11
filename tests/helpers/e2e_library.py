@@ -30,8 +30,10 @@ device's pinches try with Pinyin on. One song keeps a harmonica tab as harptabs.
 
 ``Computer.phone_pages(keys, into)`` is the phone's reference for its songs' pages (milestone 5's check): render.py's
 page path with no PDF (tests/helpers/phone_render.py) run on a copy of the computer in ``into``, so that the pages
-the phone made of its own lookups are compared, byte for byte, with what Python writes for the same inputs once the
-computer has taken them.
+the phone made of its own lookups, and the records it kept of them (``Pages``), are compared, byte for byte, with
+what Python writes for the same inputs once the computer has taken them. The fake sites' Chinese song sings the
+Chinese song's words (``chinese_words``), and their harmonica tab is this one's (``harmonica_tab``), so that the
+device's checks of a page hold of the computer's and of the phone's alike.
 
 ``scenario.json`` tells the Kotlin phases (android/e2e's PhoneScenarioTest) which songs the scenario does what with:
 ``songs`` (the 20: artist, title, identity key), ``changed`` (the keys of each overrides.toml table the goal's changes
@@ -73,6 +75,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -212,8 +215,14 @@ def words(title: str, section: str, n: int, version: int = 1) -> str:
     Simplified characters, most of which Traditional writes otherwise (这 這, 为 為, 测试 測試, 编 編, 词 詞), so that
     the viewer's Chinese characters change the words shown, each with its reading."""
     if title == CHINESE[1]:
-        return f"这是为测试编的歌词，{CHINESE_PARTS[section]}第{CHINESE_NUMBERS[n]}行"
+        return chinese_words(section, n)
     return f"Words of {section.lower()} for the test, line {n + 1}, take {version}"
+
+
+def chinese_words(section: str, n: int) -> str:
+    """The made-up Chinese words of line ``n`` of a chart's ``section`` (``words``'s for the Chinese song; the fake
+    sites' Chinese song sings them too, tests/helpers/fake_sites.py's ``chinese``)."""
+    return f"这是为测试编的歌词，{CHINESE_PARTS[section]}第{CHINESE_NUMBERS[n]}行"
 
 
 def harmonica_tab(title: str) -> str:
@@ -406,21 +415,23 @@ class Computer:
                     states[int(job["id"])] = str(job.get("state"))
         return states
 
-    def phone_pages(self, keys: Collection[str], into: Path) -> dict[str, bytes]:
+    def phone_pages(self, keys: Collection[str], into: Path) -> Pages:
         """The pages the phone writes of the songs of identity keys ``keys``, as Python writes them for the same
         inputs: render.py's page path with no PDF (tests/helpers/phone_render.py's ``phone_render``, the phone's
         reference) over a copy of this computer made in ``into`` (``into/computer/``: its database copied whole, its
         library and overrides.toml, a caracole.toml naming the copy's folders), this computer untouched. Each file
         the pass recorded of those songs (kv ``render:files:<id>``: a viewer, a kept version's, a harmonica tab's
-        page, the sheet's .cho) and each one's info.json, its bytes by its path in the library."""
+        page, the sheet's .cho) and each one's info.json, its bytes by its path in the library; and the records the
+        pass kept of each song (``Pages.records``)."""
         import shutil
         import sqlite3
 
         from caracole import db
         from caracole.library import song_dir
+        from caracole.progressions import KV as PROGRESSIONS
         from caracole.render import FILES_KEY
         from caracole.songs import find_song
-        from helpers.phone_render import phone_render
+        from helpers.phone_render import phone_key, phone_render
 
         copy = Computer(into)
         if copy.root.exists():
@@ -448,14 +459,17 @@ class Computer:
             done = phone_render(conn, mine, song_ids=[song.id for song in songs])
             if done.failed:
                 raise RuntimeError(f"the phone's reference failed on {done.failed}")
-            pages = {}
+            pages, records, folders = {}, {}, {}
             for song in songs:
                 folder = song_dir(mine.library_dir, song)
-                names = sorted(db.kv_get_json(conn, f"{FILES_KEY}{song.id}", default={}) or {}) + ["info.json"]
-                for name in names:
+                folders[song.key] = folder.relative_to(mine.library_dir).as_posix()
+                files = db.kv_get_json(conn, f"{FILES_KEY}{song.id}", default={}) or {}
+                for name in [*sorted(files), "info.json"]:
                     pages[(folder / name).relative_to(mine.library_dir).as_posix()] = (folder / name).read_bytes()
+                records[song.key] = {"files": files, "phone": db.kv_get_json(conn, phone_key(song.id)),
+                                     "progressions": db.kv_get_json(conn, f"{PROGRESSIONS}{song.id}")}
             conn.commit()
-            return pages
+            return Pages(pages, records, folders)
         finally:
             conn.close()
 
@@ -473,6 +487,20 @@ class Computer:
             entries = song_entries(load_overrides(cfg.overrides_file), override_key(display))
             put_song_entries(cfg.overrides_file, display, {**entries, "transpose": semitones})
             self.caracole("render", "--song", display)
+
+
+@dataclass(frozen=True)
+class Pages:
+    """The pages a pass of the phone's renders made of some songs (``Computer.phone_pages``, and the phone's own the end
+    to end reads): ``pages``, each page recorded and each song's info.json, its bytes by its path in the library; and
+    ``records``, by each song's identity key, what the pass recorded of it: kv ``render:files:<id>`` (``files``: each
+    page's SHA-256, size and the song unit's digest it was made at), kv ``render:<id>:phone`` (``phone``: that digest,
+    the build that made it, its sheet's script) and kv ``render:progressions:<id>`` (``progressions``); and
+    ``folders``, each song's folder in the library."""
+
+    pages: dict[str, bytes]
+    records: dict[str, dict]
+    folders: dict[str, str]
 
 
 def wait_until_answering(url: str, server: subprocess.Popen, log: Path, timeout: float) -> None:
@@ -600,6 +628,7 @@ def build(dir: Path) -> Computer:
             f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{urls}</urlset>\n", encoding="utf-8")
         build_index(conn, None, NOW, from_dir=sitemaps)
+        fake_sites.store_harptabs(conn, NOW, LOOKUPS)  # the fake sites' harmonica tab, and its artist's page
         # gtptabs.com's sitemapGoogle1.xml of these pages, stored as site_index.refresh stores a sitemap it read (its
         # rows and its record, which index_transfer's merge compares), and its index read whole.
         site_index._store(conn, gtptabs_fetch.SITE, "1", [parse_page_url(u) for u in GTPTABS],

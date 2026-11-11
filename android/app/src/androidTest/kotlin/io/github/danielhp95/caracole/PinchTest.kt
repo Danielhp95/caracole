@@ -202,8 +202,15 @@ class PinchTest {
     private fun open(main: ActivityScenario<MainActivity>, address: String) {
         // The page before marked, so that its own document, which the WebView's url names the new address over
         // until the new one loads, is never taken for the new page's.
+        val sameDocument = url(main).substringBefore('#') == address.substringBefore('#')
         evaluate(main, "window.before = true")
-        main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(address) }
+        if (sameDocument) {
+            // Another fragment of the page shown is no new document: its hash set, then the page loaded again.
+            evaluate(main, "location.hash = ${JSONObject.quote(address.substringAfter('#', ""))}; " +
+                           "setTimeout(() => location.reload(), 0)")
+        } else {
+            main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(address) }
+        }
         waitFor(main, address.substringBefore('#'))
         waitUntil("the viewer's script") {
             evaluate(main, "!window.before && document.documentElement.dataset.ready === '1'") == true
