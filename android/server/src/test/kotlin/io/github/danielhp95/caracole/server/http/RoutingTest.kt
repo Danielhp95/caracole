@@ -191,16 +191,17 @@ class RoutingTest {
         try {
             TestApp(tmp.root, modules = { db ->
                 val parts = TestParts.of(db, tmp.root, scope)
-                listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts), VersionsRoutes(parts),
-                       HarmonicaRoutes(parts), ReviewRoutes(parts), ExportRoutes(parts), GuitarRoutes(parts))
+                listOf(LookupRoutes(parts), RequestsRoutes(parts), SongbookRoutes(parts),
+                       VersionsRoutes(parts, TestApp.CSRF), HarmonicaRoutes(parts, TestApp.CSRF), ReviewRoutes(parts),
+                       ExportRoutes(parts), GuitarRoutes(parts))
             }).use { test ->
                 val stubbed = Stubs().routes.map { it.path }.toSet()
-                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), Export PDF ExportRoutes'
-                // (ExportRoutesTest), the rest neutral still.
-                for (path in listOf("/review", "/versions/choose", "/versions/keep",
-                                    "/versions/clear", "/songbook/make", "/songbook/add", "/songbook/add-song",
+                // The library page's lookups are LookupRoutes' own now (LookupRoutesTest), a sheet's versions and a
+                // harmonica tab's readings VersionsRoutes' and HarmonicaRoutes' (VersionsRoutesTest,
+                // HarmonicaRoutesTest), Export PDF ExportRoutes' (ExportRoutesTest), the rest neutral still.
+                for (path in listOf("/review", "/songbook/make", "/songbook/add", "/songbook/add-song",
                                     "/songbook/get", "/songbook/remove", "/songbook/move", "/songbook/set",
-                                    "/songbook/rename", "/songbook/delete", "/harmonica/pin", "/harmonica/clear")) {
+                                    "/songbook/rename", "/songbook/delete")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val refused = test.postScript(path, listOf("song" to "1"))
                     assertEquals(409, refused.status, path)
@@ -213,7 +214,7 @@ class RoutingTest {
                     assertTrue(path !in stubbed, "$path is its module's now")
                 }
                 assertTrue(stubbed.none { it.startsWith("/assets/alphatab") || it == "/guitar" }, stubbed.toString())
-                for (path in listOf("/review", "/versions", "/harmonica")) {
+                for (path in listOf("/review")) {
                     assertTrue(path !in stubbed, "$path is its module's now")
                     val page = test.get("$path?song=1")
                     assertEquals(409, page.status, path)

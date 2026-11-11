@@ -111,8 +111,9 @@ again, and the next sync brings them to the phone.
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
 `http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
-caracole's own page, built from the same files caracole serve builds it from, with your songs' cards taken from the
-copy. Sheets, PDFs and songbooks are the copy's files.
+caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
+the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
+holds the song as the computer did, else the pages the phone makes itself.
 
 **Only the app can use that server.** At each launch the app makes a random secret and sets it as a cookie
 (`caracole-launch`) in its WebView. The server refuses any request without it ("Not this app's caracole."), so
@@ -413,7 +414,20 @@ On the emulator: `android/scripts/device-test.sh --area render`.
 
 ## Songbooks, versions and printing
 
-Not built yet.
+**A sheet's versions.** A sheet the phone made lists its other Ultimate Guitar versions under its key line, as on the
+computer. **Make this the one**, **Keep it** and **Back to caracole's pick** open a page of the phone's own that says
+what the version is and what the song's sheet is now, with the one button that does it. Its request then shows on
+that page until it is over (the page reloads every ten seconds), and in the Requests tab: Make this the one looks the
+song up with that tab and keeps your choice in overrides; Keep it reads the version's page from Ultimate Guitar, at a
+lookup's pace, and keeps it beside the sheet; Back to caracole's pick takes your choice out and looks the song up
+again. A page the computer made and the phone copied names no version of the phone's: choose there on the computer.
+
+**A harmonica tab's readings.** A harmonica tab's page links its Read as line (or, at its foot, **Change how it's
+read**) to the readings caracole weighs, best first, each with its Q and a button that pins it (harptabs.com's own
+notation among them), and Back to caracole's guess for a tab you pinned. The tab's page is made again with your
+reading.
+
+Songbooks and printing: not built yet.
 
 ### Export PDF
 

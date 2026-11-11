@@ -41,17 +41,20 @@ import java.nio.file.attribute.BasicFileAttributes
  * the one the computer listed with the page is CHANGED (Units.digestOf: the unit's digest as peer_sync gives it,
  * none for a unit the phone hasn't got); anything else is served. */
 class PhoneGate(val database: Database) : UnitGate {
-    override fun check(unit: String, digest: String?): Gate = database.read { db ->
-        if (unit.startsWith(SONG) && Songs.isRemoved(db, unit.removePrefix(SONG))) {
-            Gate.REMOVED
-        } else {
-            val now = Units.digestOf(db, unit)
-            if (now != null && now != digest) Gate.CHANGED else Gate.SERVE
-        }
-    }
+    override fun check(unit: String, digest: String?): Gate = database.read { db -> check(db, unit, digest) }
 
-    private companion object {
-        const val SONG = "song/"
+    companion object {
+        private const val SONG = "song/"
+
+        /** The gate's answer read through [db], a caller's read already in hand (the library page's cards, which
+         * link a page of the mirror's only where the gate serves it). */
+        fun check(db: Db, unit: String, digest: String?): Gate =
+            if (unit.startsWith(SONG) && Songs.isRemoved(db, unit.removePrefix(SONG))) {
+                Gate.REMOVED
+            } else {
+                val now = Units.digestOf(db, unit)
+                if (now != null && now != digest) Gate.CHANGED else Gate.SERVE
+            }
     }
 }
 

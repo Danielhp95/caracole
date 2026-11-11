@@ -61,12 +61,12 @@ so ``LibraryHit.song`` is the song's key). A record whose ``fn`` is a compositio
 fixture, args: ["GET", path], kw: {}, out: {status, json}}``, each answered by a real ``WebApp`` over the fixture
 replayed into its state folder, with an empty library folder, ``searches_lacuerda=False`` and
 ``searches_youtube=False``: each fixture's queries and artists, over ug the texts and addresses of ``API_TEXTS`` and
-``API_RAW`` (how the route reads a query), and on every fixture ``API_ARTIST``'s. The phone answers ``progression``
-and ``youtube`` as null (and ``lacuerda_search``, as ``searches_lacuerda=False`` does: its gate is
-vectors/web/api_search_gate.jsonl's, tests/test_conformance_lookup_routes.py), and a progression can add rows to
-``library``, so the generator patches, for its ``WebApp`` alone, ``progressions.read_progression`` to answer None: the
-answers recorded are those the phone computes, ``lacuerda_unlisted`` among them. The rest of an answer is caracole
-serve's own. What a song's card says of the files of its folder is masked: in every object with a
+``API_RAW`` (how the route reads a query), and on every fixture ``API_ARTIST``'s. The phone answers ``youtube`` as
+null (and ``lacuerda_search``, as ``searches_lacuerda=False`` does: its gate is vectors/web/api_search_gate.jsonl's,
+tests/test_conformance_lookup_routes.py); its ``progression`` is caracole serve's, of the songs' progressions' records
+(a fixture holds none: a progression typed or named plays in none of its songs, and adds no ``library`` row;
+vectors/web/cards_full.jsonl's records are of a library that holds some). An answer is caracole serve's own,
+``lacuerda_unlisted`` among it. What a song's card says of the files of its folder is masked: in every object with a
 ``links`` member (a ``library`` row, a site row's song of yours), ``links``, ``files``, ``source``, ``key`` and
 ``instruments`` are ``"*"``.
 
@@ -861,15 +861,6 @@ def _app(state: Path):
                   searches_lacuerda=False, searches_youtube=False)
 
 
-@contextmanager
-def _as_the_phone() -> Iterator[None]:
-    """What the phone answers null in its place: no progression read."""
-    from unittest import mock
-
-    with mock.patch("caracole.progressions.read_progression", lambda text: None):
-        yield
-
-
 # What /api/search folds before it searches, over the ug fixture: the query's words joined by one space (Python's
 # whitespace: Unicode's spaces, NEL, U+001C-U+001F, U+2028; never a zero-width space), cut at 200 code points (an
 # emoji is one), and too short to search by fewer than three letters or digits (two for Chinese) as str.isalnum
@@ -894,30 +885,29 @@ def api_records(corpus: Corpus) -> list[dict]:
     from caracole.web.app import Request
 
     out = []
-    with _as_the_phone():
-        for name in FIXTURES:
-            app = _app(corpus.state(name))
-            paths = [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in queries(name)]
-            if name == "ug":
-                paths += [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in API_TEXTS] + API_RAW
-            with corpus.conn(name) as conn:
-                keys = _artist_keys(conn)[:30]
-                slugs = _column(conn, "SELECT DISTINCT artist_slug FROM lacuerda_index ORDER BY artist_slug", 20)
-                harps = _column(conn, "SELECT path FROM harptabs_index WHERE kind = 'artist' ORDER BY path", 20)
-            paths += [f"/api/artist?key={quote(k)}&offset=0" for k in keys]
-            paths += [f"/api/artist?key={quote(k)}&offset=1" for k in keys[:3]]
-            paths += ["/api/artist?key=bob-dylan&offset=50", "/api/artist?key=", "/api/artist?key=radiohead&offset=x",
-                      "/api/artist?key=nobody-at-all&offset=0", "/api/artist"]
-            paths += [f"/api/artist?lacuerda={quote(s)}" for s in slugs]
-            paths += [f"/api/artist?lacuerda_name={quote(n)}" for n in ("Estopa", "Los Enanitos Verdes", "宋冬野",
-                                                                         "Nobody", "")]
-            paths += ["/api/artist?lacuerda=nobody", "/api/artist?lacuerda=NOT%20A%20SLUG"]
-            paths += [f"/api/artist?harptabs={quote(p)}" for p in harps]
-            paths += ["/api/artist?harptabs=artist/9/nobody", "/api/artist?harptabs=not-a-path", *API_ARTIST]
-            for path in paths:
-                response = app.handle(Request("GET", path, {"host": "localhost"}))
-                out.append({"fn": "caracole.web.app.WebApp.handle", "fixture": name, "args": ["GET", path], "kw": {},
-                            "out": {"status": response.status, "json": masked(json.loads(response.body))}})
+    for name in FIXTURES:
+        app = _app(corpus.state(name))
+        paths = [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in queries(name)]
+        if name == "ug":
+            paths += [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in API_TEXTS] + API_RAW
+        with corpus.conn(name) as conn:
+            keys = _artist_keys(conn)[:30]
+            slugs = _column(conn, "SELECT DISTINCT artist_slug FROM lacuerda_index ORDER BY artist_slug", 20)
+            harps = _column(conn, "SELECT path FROM harptabs_index WHERE kind = 'artist' ORDER BY path", 20)
+        paths += [f"/api/artist?key={quote(k)}&offset=0" for k in keys]
+        paths += [f"/api/artist?key={quote(k)}&offset=1" for k in keys[:3]]
+        paths += ["/api/artist?key=bob-dylan&offset=50", "/api/artist?key=", "/api/artist?key=radiohead&offset=x",
+                  "/api/artist?key=nobody-at-all&offset=0", "/api/artist"]
+        paths += [f"/api/artist?lacuerda={quote(s)}" for s in slugs]
+        paths += [f"/api/artist?lacuerda_name={quote(n)}" for n in ("Estopa", "Los Enanitos Verdes", "宋冬野",
+                                                                     "Nobody", "")]
+        paths += ["/api/artist?lacuerda=nobody", "/api/artist?lacuerda=NOT%20A%20SLUG"]
+        paths += [f"/api/artist?harptabs={quote(p)}" for p in harps]
+        paths += ["/api/artist?harptabs=artist/9/nobody", "/api/artist?harptabs=not-a-path", *API_ARTIST]
+        for path in paths:
+            response = app.handle(Request("GET", path, {"host": "localhost"}))
+            out.append({"fn": "caracole.web.app.WebApp.handle", "fixture": name, "args": ["GET", path], "kw": {},
+                        "out": {"status": response.status, "json": masked(json.loads(response.body))}})
     return out
 
 

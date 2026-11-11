@@ -132,15 +132,17 @@ class EndToEndTest {
             // the computer's pages alone, no song, so it says the library has no such sheet (404). The Guitar Pro page
             // is the phone's own too (GuitarRoutes): a file only the copy of the computer's pages holds, as this test's
             // sync of the copy alone leaves it, is the file itself (303 to the file's own address), which the app hands
-            // to another app; the page itself (200) is GuitarPageTest's. The phone answers each other with its stub:
-            // the message page, 409, "… isn't on the phone yet." (Stubs).
+            // to another app; the page itself (200) is GuitarPageTest's. A version's page is the phone's own as well
+            // (VersionsRoutes), of a viewer the phone made: a copy's names no sheet of its (404; VersionsPageTest's
+            // viewer is the phone's). The phone answers each other with its stub: the message page, 409, "… isn't on
+            // the phone yet." (Stubs).
             val serverLinks = sandbox.getJSONArray("serverLinks")
             val answered = JSONObject()
             for (i in 0 until serverLinks.length()) {
                 val href = serverLinks.getString(i)
                 val (status, text, location) = stubbed(origin + href)
                 answered.put(href, status)
-                if (href.startsWith("/export.pdf?")) {
+                if (href.startsWith("/export.pdf?") || href.startsWith("/versions?")) {
                     assertEquals("$href on the phone: $text", 404, status)
                     assertTrue("$href: $text", "no such sheet in the library" in text)
                     continue

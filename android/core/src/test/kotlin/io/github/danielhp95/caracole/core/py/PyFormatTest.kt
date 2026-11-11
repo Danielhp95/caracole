@@ -23,6 +23,16 @@ class PyFormatTest {
         misses.assertNone()
     }
 
+    @Test fun gIsSixSignificantDigitsWithAnExponentOutsideMinusFourToSix() {
+        // Each Python's own `format(x, "g")`, computed by CPython 3.14.
+        val said = listOf(4.8 to "4.8", 4.835 to "4.835", 0.0 to "0", -0.0 to "-0", 1e6 to "1e+06",
+                          999999.5 to "1e+06", 123456.7 to "123457", 1e-5 to "1e-05", 0.0001 to "0.0001",
+                          0.00012345678 to "0.000123457", 5.0 to "5", 3.14159265 to "3.14159", 2.5e-7 to "2.5e-07",
+                          1e16 to "1e+16", -4.75 to "-4.75", 4.999995 to "5", 4.9999949 to "4.99999",
+                          Double.POSITIVE_INFINITY to "inf", Double.NaN to "nan")
+        for ((x, g) in said) assertEquals(g, PyFormat.general(x), "format($x, 'g')")
+    }
+
     @Test fun aTieRoundsToTheEvenDigitOnItsExactBinaryValue() {
         assertEquals("0.12", PyFormat.fixed(0.125, 2))
         assertEquals("0.38", PyFormat.fixed(0.375, 2))
