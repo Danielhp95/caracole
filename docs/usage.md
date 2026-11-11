@@ -4144,7 +4144,7 @@ the library, sent as they are: they carry no badge.
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
   (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), is your own
-  line; one new to the library since the page loaded says In your library and
+  line; one new to the library since the page loaded says In your logbook and
   Fetch again, and is looked up as your song: no second song, and no line
   added to wanted.txt. In the results, on this page and the lookup page, a song
   you have a sheet for stands out: its name in the text's colour on a faint wash

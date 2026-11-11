@@ -347,8 +347,8 @@ socket: `android/scripts/device-test.sh --area lookup_routes LookupOfflineTest N
 ## Picking an uncertain match
 
 A song caracole isn't sure of (several Ultimate Guitar songs could be it) is settled on the phone as in caracole
-serve: **Pick the match** on its card, on its line in the Journal, or a not-found song's **Look in index**
-(what the offline index finds for its artist and title) lists the candidates, each with why the matcher thought of it,
+serve: **Pick the match** on its card, **Pick** on its line in the Journal, or a not-found song's **Look in index**
+(**Search the index** in the Journal: what the offline index finds for its artist and title) lists the candidates, each with why the matcher thought of it,
 its score, its tabs and its Ultimate Guitar page. A pick goes into the phone's overrides under `[match]` (and
 `[alias]` when the artist is spelled otherwise there), **None of these** under `[reject]`, and the song's match is
 decided again at once, with its artist's other songs after an alias. **Fetch** (ticked) then looks the song up,
