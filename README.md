@@ -65,7 +65,8 @@ computer off.
   harmonica tabs and songbooks, with no network.
 - **Search and fetch from the phone:** the computer's site indexes come with a sync, so the
   phone's search finds songs on the sites offline; Get it looks a song up from the phone,
-  at the same gentle pace, and the phone builds its pages itself.
+  at the same gentle pace, and the phone builds its pages itself. Where caracole isn't sure
+  which song it found, you pick the match on the phone.
 - **Sync with your computer:** the bar's sync button compares the two libraries and each takes
   what the other changed: songs, songbooks and site indexes. Where both changed a song, you
   pick which to keep. It can sync by itself on Wi-Fi every 6 hours, or carry a library over
