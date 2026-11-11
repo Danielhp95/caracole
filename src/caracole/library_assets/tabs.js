@@ -1,6 +1,7 @@
-// The page's tabs: body.html's tablist in the masthead, Library, Songbooks and, served, Requests, the last. Each is a
-// button of the tablist whose id is "tab-NAME" and whose aria-controls names its panel; the first, the library, is the
-// page as it opens. A tab put in body.html (before Requests) is one more here, with no change to this script.
+// The page's tabs: body.html's tablist in the masthead, Library, Songbooks, Sites and, served, Requests, then on
+// caracole serve's page Sync, the last (the phone's page has none: its sync is a sheet, sync.js). Each is a button of
+// the tablist whose id is "tab-NAME" and whose aria-controls names its panel; the first, the library, is the page as
+// it opens. A tab put in body.html is one more here, with no change to this script.
 // The address says which shows: #tab=NAME, none for the first, beside the library's own words. A tab clicked, or
 // reached with the tablist's own keys (← → Home End, the focus roving with them), shows its panel and hides the
 // others; so does a link to this page whose address names a tab (#tab=requests&job=4: a request line's Details, the

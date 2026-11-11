@@ -1,0 +1,108 @@
+{"corpus":"inbox/names","header":true,"made_by":"tests/test_conformance_inbox.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["Soda Stereo - De Musica Ligera.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",null]}
+{"args":["guitar-1.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-1",null]}
+{"args":["Soda Stereo - De Musica Ligera.ptb"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",null]}
+{"args":["Soda Stereo - De Musica Ligera (ver 2 by Pelusteriano).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",2]}
+{"args":["Soda Stereo - De Musica Ligera.gpx"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",null]}
+{"args":["Soda Stereo - De Musica Ligera (1).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",null]}
+{"args":["Oasis - Wonderwall.pdf"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"args":["score-1.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-1",null]}
+{"args":["download (3).pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"download",null]}
+{"args":["Soda Stereo - Persiana Americana.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","Persiana Americana",null]}
+{"args":["宋冬野 - 斑马斑马.gp"],"fn":"caracole.inbox.parse_download_name","out":["宋冬野","斑马斑马",null]}
+{"args":["Song Dongye (宋冬野) - 斑马 斑马 Banma Banma Zebra Zebra (ver 1 by someone).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Song Dongye (宋冬野)","斑马 斑马 Banma Banma Zebra Zebra",1]}
+{"args":["creep.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"creep",null]}
+{"args":["creep.gpx"],"fn":"caracole.inbox.parse_download_name","out":[null,"creep",null]}
+{"args":["Somebody Else - Unknown Song.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Somebody Else","Unknown Song",null]}
+{"args":["notes.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"notes",null]}
+{"args":["Oasis - Wonderwall.mscz"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"args":["score-1.mscz"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-1",null]}
+{"args":["Oasis - Wonderwall.mid"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"args":["Oasis - Wonderwall (1).mid"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"args":["Wonderwall.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"Wonderwall",null]}
+{"args":["Wonderwall.mid"],"fn":"caracole.inbox.parse_download_name","out":[null,"Wonderwall",null]}
+{"args":["score.musicxml"],"fn":"caracole.inbox.parse_download_name","out":[null,"score",null]}
+{"args":["export.mxl"],"fn":"caracole.inbox.parse_download_name","out":[null,"export",null]}
+{"args":["Soda Stereo - De Musica Ligera (ver 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Soda Stereo","De Musica Ligera",2]}
+{"args":["Metallica - One.gpx"],"fn":"caracole.inbox.parse_download_name","out":["Metallica","One",null]}
+{"args":["Artist - Title (solo).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",null]}
+{"args":["random.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"random",null]}
+{"args":["Jay Chou (周杰倫) - 晴天 (ver 1).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Jay Chou (周杰倫)","晴天",1]}
+{"args":["米津玄師 - Lemon (レモン) (ver 3).gp5"],"fn":"caracole.inbox.parse_download_name","out":["米津玄師","Lemon (レモン)",3]}
+{"args":["宋冬野 - 斑马斑马 (ver 2 by 小明).gp5"],"fn":"caracole.inbox.parse_download_name","out":["宋冬野","斑马斑马",2]}
+{"args":["宋冬野 - 斑马斑马 (Banma Banma) (ver 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":["宋冬野","斑马斑马",2]}
+{"args":[" two.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"two",null]}
+{"args":["copy.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"copy",null]}
+{"args":["score-3.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-3",null]}
+{"args":["guitar-1.ptb"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-1",null]}
+{"args":["guitar-2.gpx"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-2",null]}
+{"args":["guitar-3.ptb"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-3",null]}
+{"args":["guitar-2.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-2",null]}
+{"args":["guitar-3.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-3",null]}
+{"args":["guitar-1.gp"],"fn":"caracole.inbox.parse_download_name","out":[null,"guitar-1",null]}
+{"args":["sheet.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"sheet",null]}
+{"args":["score-2.pdf"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-2",null]}
+{"args":["score-1.musicxml"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-1",null]}
+{"args":["score-1.mxl"],"fn":"caracole.inbox.parse_download_name","out":[null,"score-1",null]}
+{"args":["Artist - Title (VER.3).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",3]}
+{"args":["Artist - Title (Ver. 12 by someone) (live).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",12]}
+{"args":["Artist - Title(ver 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",2]}
+{"args":["Artist - Title ( ver 2 ).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",2]}
+{"args":["Artist - Title (ver ٣).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",3]}
+{"args":["Artist - Title (version 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",null]}
+{"args":["Artist - Title (ver 2)(ver 3).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",2]}
+{"args":["Artist - Title (ver 99999999999999999999).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",99999999999999999999]}
+{"args":["Artist - Title (ver 007).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",7]}
+{"args":["A - B - C.gp5"],"fn":"caracole.inbox.parse_download_name","out":["A","B - C",null]}
+{"args":[" - Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"- Title",null]}
+{"args":["Artist - .gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Artist -",null]}
+{"args":["Artist -Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Artist -Title",null]}
+{"args":["Artist – Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Artist – Title",null]}
+{"args":["Artist  -  Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",null]}
+{"args":["Artist - Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Artist - Title",null]}
+{"args":["Artist\t-\tTitle.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Artist\t-\tTitle",null]}
+{"args":["Title (feat. Someone).gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"Title",null]}
+{"args":["(intro).gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"",null]}
+{"args":["(ver 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"",2]}
+{"args":["a.b.c.gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"a.b.c",null]}
+{"args":[".gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,".gp5",null]}
+{"args":["...gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"...gp5",null]}
+{"args":["noext"],"fn":"caracole.inbox.parse_download_name","out":[null,"noext",null]}
+{"args":["trailing."],"fn":"caracole.inbox.parse_download_name","out":[null,"trailing",null]}
+{"args":["x/y/Artist - Title.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title",null]}
+{"args":["Artist - Title.tar.gz"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title.tar",null]}
+{"args":["   .gp5"],"fn":"caracole.inbox.parse_download_name","out":[null,"",null]}
+{"args":["Ünïcödé - Fïlé.GP5"],"fn":"caracole.inbox.parse_download_name","out":["Ünïcödé","Fïlé",null]}
+{"args":["Кино - Группа крови.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Кино","Группа крови",null]}
+{"args":["Кино (Kino) - Группа крови (Gruppa Krovi) (ver 2).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Кино","Группа крови",2]}
+{"args":["Artist - Title [live].gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title [live]",null]}
+{"args":["Artist - Title ((nested)).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title)",null]}
+{"args":["Artist - Title (unclosed.gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title (unclosed",null]}
+{"args":["Artist - Title ).gp5"],"fn":"caracole.inbox.parse_download_name","out":["Artist","Title )",null]}
+{"args":["😀 - Song (😀).gp5"],"fn":"caracole.inbox.parse_download_name","out":["😀","Song",null]}
+{"args":["봄날 (Spring Day) - BTS (방탄소년단).mxl"],"fn":"caracole.inbox.parse_download_name","out":["봄날","BTS (방탄소년단)",null]}
+{"args":["米津玄師 - Lemon (レモン).musicxml"],"fn":"caracole.inbox.parse_download_name","out":["米津玄師","Lemon (レモン)",null]}
+{"args":["Oasis - Wonderwall (1).pdf"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"args":["Oasis - Wonderwall (2) (ver 4).mscz"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",4]}
+{"args":["Oasis - Wonderwall.MID"],"fn":"caracole.inbox.parse_download_name","out":["Oasis","Wonderwall",null]}
+{"fn":"caracole.music.Names","kw":{"a":["Soda Stereo","De Musica Ligera"],"b":["Soda Stereo","De Música Ligera"]},"out":{"artist_score":100.0,"artists":["soda stereo"],"score":100.0,"title_score":100.0,"titles":["de-musica-ligera"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Soda-Stereo","De Musica Ligera"],"b":["Soda Stereo","De Música Ligera"]},"out":{"artist_score":100.0,"artists":["soda stereo"],"score":100.0,"title_score":100.0,"titles":["de-musica-ligera"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Stereo Soda","De Musica Ligera"],"b":["Soda Stereo","De Música Ligera"]},"out":{"artist_score":100.0,"artists":["stereo soda"],"score":100.0,"title_score":100.0,"titles":["de-musica-ligera"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Soda Stereo y amigos","De Musica Ligera"],"b":["Soda Stereo","De Música Ligera"]},"out":{"artist_score":100.0,"artists":["soda stereo y amigos"],"score":100.0,"title_score":100.0,"titles":["de-musica-ligera"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasis","Wonderwal"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":100.0,"artists":["oasis"],"score":94.73684210526316,"title_score":94.73684210526316,"titles":["wonderwal"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasys","Wonderwall"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":80.0,"artists":["oasys"],"score":80.0,"title_score":100.0,"titles":["wonderwall"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasis","Wondrwl"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":100.0,"artists":["oasis"],"score":82.35294117647058,"title_score":82.35294117647058,"titles":["wondrwl"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasis","Wonder"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":100.0,"artists":["oasis"],"score":75.0,"title_score":75.0,"titles":["wonder"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasis","Champagne Supernova"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":100.0,"artists":["oasis"],"score":27.586206896551722,"title_score":27.586206896551722,"titles":["champagne-supernova"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Radiohead","Creep (Acoustic)"],"b":["Radiohead","Creep"]},"out":{"artist_score":100.0,"artists":["radiohead"],"score":100.0,"title_score":100.0,"titles":["creep"]}}
+{"fn":"caracole.music.Names","kw":{"a":["","creep"],"b":["Radiohead","Creep"]},"out":{"artist_score":0.0,"artists":[],"score":0.0,"title_score":100.0,"titles":["creep"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Song Dongye (宋冬野)","斑马 斑马 Banma Banma Zebra Zebra"],"b":["宋冬野","斑马，斑马"]},"out":{"artist_score":100.0,"artists":["song dongye 宋冬野","song dongye song dong ye","song dongye","宋冬野","song dong ye"],"score":100.0,"title_score":100.0,"titles":["斑马斑马-banma-banma-zebra-zebra","ban-ma-ban-ma-banma-banma-zebra-zebra","斑马斑马","ban-ma-ban-ma","banma-banma-zebra-zebra","banma-banma","zebra-zebra"]}}
+{"fn":"caracole.music.Names","kw":{"a":["宋冬野","斑马斑马"],"b":["宋冬野","斑马，斑马"]},"out":{"artist_score":100.0,"artists":["宋冬野","song dong ye"],"score":100.0,"title_score":100.0,"titles":["斑马斑马","ban-ma-ban-ma"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Song Dongye","Banma Banma"],"b":["宋冬野","斑马，斑马"]},"out":{"artist_score":95.65217391304348,"artists":["song dongye"],"score":91.66666666666666,"title_score":91.66666666666666,"titles":["banma-banma"]}}
+{"fn":"caracole.music.Names","kw":{"a":["宋冬野","董小姐"],"b":["宋冬野","斑马，斑马"]},"out":{"artist_score":100.0,"artists":["宋冬野","song dong ye"],"score":30.76923076923077,"title_score":30.76923076923077,"titles":["董小姐","dong-xiao-jie"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Jay Chou (周杰倫)","晴天"],"b":["周杰伦","晴天"]},"out":{"artist_score":100.0,"artists":["jay chou 周杰倫","jay chou zhou jie lun","jay chou 周杰伦","jay chou","周杰倫","周杰伦","zhou jie lun"],"score":100.0,"title_score":100.0,"titles":["晴天","qing-tian"]}}
+{"fn":"caracole.music.Names","kw":{"a":["米津玄師","Lemon (レモン)"],"b":["米津玄師","Lemon"]},"out":{"artist_score":100.0,"artists":["米津玄師","mi jin xuan shi","米津玄师"],"score":100.0,"title_score":100.0,"titles":["lemon-レモン","lemon","レモン"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Кино","Группа крови"],"b":["Кино (Kino)","Группа крови (Gruppa Krovi)"]},"out":{"artist_score":100.0,"artists":["кино"],"score":100.0,"title_score":100.0,"titles":["группа-крови"]}}
+{"fn":"caracole.music.Names","kw":{"a":["Joaquín Rodrigo","Concierto de Aranjuez"],"b":["Joaquin Rodrigo","Concierto de Aranjuez (Adagio)"]},"out":{"artist_score":100.0,"artists":["joaquin rodrigo"],"score":85.71428571428572,"title_score":85.71428571428572,"titles":["concierto-de-aranjuez"]}}
+{"fn":"caracole.music.Names","kw":{"a":["!!!","???"],"b":["Oasis","Wonderwall"]},"out":{"artist_score":0.0,"artists":[],"score":0.0,"title_score":0.0,"titles":[]}}
+{"fn":"caracole.music.Names","kw":{"a":["Oasis",""],"b":["Oasis",""]},"out":{"artist_score":100.0,"artists":["oasis"],"score":0.0,"title_score":0.0,"titles":[]}}

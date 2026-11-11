@@ -31,8 +31,9 @@ class LibraryAssetsTest {
         assertEquals(names("TEMPLATES"), assets.templateNames)
         assertEquals("drawn.js", assets.scriptNames.last(), "drawn.js comes last")
         assertTrue(assets.styleNames.indexOf("sync.css") == assets.styleNames.indexOf("sites.css") + 1)
-        assertTrue(assets.scriptNames.indexOf("sync.js") == assets.scriptNames.indexOf("sites.js") + 1)
-        assertEquals(listOf("sync-tab.html", "sync-panel.html"), assets.templateNames.takeLast(2))
+        assertTrue(assets.scriptNames.indexOf("sync-words.js") == assets.scriptNames.indexOf("sites.js") + 1)
+        assertTrue(assets.scriptNames.indexOf("sync.js") == assets.scriptNames.indexOf("sync-words.js") + 1)
+        assertEquals(listOf("sync-tab.html", "sync-panel.html", "sync-sheet.html"), assets.templateNames.takeLast(3))
     }
 
     @Test

@@ -500,8 +500,72 @@ as they came.
 
 ## Sharing files to caracole
 
-Not built yet.
+A Guitar Pro file (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`, or a Power Tab `.ptb`) or a score (`.mscz`, `.mxl`,
+`.musicxml`, `.pdf`, `.mid`, `.midi`) you have on the phone, in a file manager, your browser's downloads or a chat:
+**Share** it and pick **caracole**. Share several at once if you like.
+
+caracole files each one as the computer files what you drop into `_inbox/`:
+
+- **For the song its name is of**: "Oasis - Wonderwall.gp5", "Oasis - Wonderwall (ver 2).gp5", or "wonderwall.gp5"
+  when one song of your library has that title. It is kept as the song's `guitar-1.gp5` (or the next number free) or
+  `score-1.pdf`, never over a file the song keeps, and goes to the computer as the song's at the next sync.
+- **A file caracole keeps already** (the same bytes, under any name) is nothing new: "Filed as guitar-1.gp5 of …".
+  One the library lost (deleted on another device) is put back where it was.
+- **A file no song fits waits**, up to 30 days, and is tried again after each sync and each lookup: share a Guitar
+  Pro file first and look its song up after, and it is filed then. One that couldn't be filed (its song's folder is
+  another song's too, the phone is full) waits too, tried again after the next sync, or a day later.
+- **The bytes of a file caracole keeps whose copy you changed since** are not filed: "Not filed: … whose place holds
+  other bytes now, and nothing is replaced". caracole replaces nothing of yours; the file is put back once that place
+  is free.
+- A score is placed by its name alone on the phone: a MusicXML file named "score.musicxml" waits, where the computer
+  would read the title and composer inside it.
+
+A toast says how each went, as its line on the Requests tab does: "Filed as guitar-1.gp5 of Oasis - Wonderwall",
+"Waiting for a song that fits: Somebody - Unknown Song.gp5", or "Not filed: …" (a file of another kind, say: caracole keeps
+Guitar Pro files and scores alone). A file shared with no extension takes the one its bytes or its type tell.
+
+caracole is offered for files: never to open a PDF (Android's Open with), and never for a text (a music app's song,
+above, is another share). A share of several kinds of file at once (a PDF with a photo, say) offers caracole too, as
+Android offers it every app that takes any of them: a file caracole keeps nothing of is answered "Not filed". caracole
+reads a file only from the app that shares it, never a `file:` address another app names.
 
 ## Alerts and backups
 
-Not built yet.
+**Alerts** are notifications on their own channel, Alerts (Android's settings for the app list it beside "Work in the
+background"; the app asks for the right to notify once, as the library screen opens):
+
+- **a site that blocked a lookup**: "caracole: LRCLIB blocked", with when its cooldown ends. One a cooldown: a lookup
+  that meets the same cooldown again says nothing more, and the lookups after it ask that site nothing until the
+  cooldown is over. On the computer a lookup sends no alert (the nightly run does); the phone has no nightly run to
+  tell, so its lookups do.
+- **a request that failed while the app was in the background** (no screen of the app's open): its name and the line
+  the Requests tab shows for it. One that fails while you are in the app says so there alone.
+
+Tapping one opens the library.
+
+**Backups** are in Settings, Backups…: each backup is a copy of the phone's library, its songs, their versions, the
+songbooks, the picks and overrides made on the phone, and the files it keeps (sheets, tabs, Guitar Pro files), each file
+once however many backups hold it. The indexes aren't backed up: they come again from the computer.
+
+- **Back up now** makes one by hand. One is also made every day while the phone is idle and its battery isn't low, and
+  one before each sync takes anything from the computer. Three of each kind are kept, the oldest going as a new one is
+  made; none is made without twice the room it needs (the Requests tab then says "Not backed up: there isn't room for
+  it on the phone").
+- **Export…** saves one as a single `.zip` (`caracole-by-hand-2026-11-10T081400Z.zip`: the copy, a SQLite database,
+  and `blobs/<sha256>`, each file it keeps) wherever you pick, on the phone or in a cloud app's folder. It is a copy
+  kept outside the phone: the phone can't restore from an exported file yet, only from the backups it lists.
+- **Restore…** (asked first) puts the library back as that backup has it: the songs, versions, songbooks and files
+  changed or added since are gone from the phone. What the phone has learnt of the sites since stays as it is now: each
+  site's cooldown, the pace, which searches it asked and which songs it checked, the computer's settings, and what it
+  agreed with the computer at the last sync. So the next sync gives the restored library to the computer as the
+  phone's own change: whatever the restore changed of what the two agreed on at the last sync is given to the
+  computer, and a song that sync agreed on that the backup doesn't hold is given as removed, so the computer removes
+  it too (one the computer changed since is a conflict, yours to choose). The phone's pages are made again after it;
+  until then its pages of what the restore changed aren't served.
+- A backup that doesn't hold every file it names (one made before a sync by an older app, which kept the tables
+  alone, or one made while a file was no longer its bytes) says how many in the list ("2 of its files not kept"). It
+  restores only while the phone's files still hold those bytes, and can't be exported; otherwise its Restore says why
+  and changes nothing.
+
+A backup, its daily one and a restore are requests like a lookup, one at a time on the Requests tab ("Backed up
+(by-hand)", "Restored the library of 2026-11-10 09:14"), never run beside a lookup.
