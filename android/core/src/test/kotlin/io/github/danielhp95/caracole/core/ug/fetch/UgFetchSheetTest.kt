@@ -113,8 +113,8 @@ class UgFetchSheetTest {
             "marked not on the sites.")), stages(blocked, UgStage))
         // The record's client had 2 requests left, fewer than a lookup's 6: the hour's were spent, as get.py says.
         val spent = said(record("a spent budget raises"))
-        assertEquals(listOf(StageEnd("skipped", "this hour's 60 lookup requests to Ultimate Guitar are spent; the " +
-            "nightly run does the rest")), stages(spent, UgStage, asking = ::envelope))
+        assertEquals(listOf(StageEnd("skipped", "no more asks of Ultimate Guitar this hour (60 spent); " +
+            "tonight's run does the rest")), stages(spent, UgStage, asking = ::envelope))
     }
 
     @Test fun aSheetThatWouldGoWhereAnotherSongKeepsOneFailsTheStageInReportsWords() {

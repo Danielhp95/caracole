@@ -139,7 +139,7 @@ class HarmonicaRoutesTest {
         database.read { db -> assertTrue(WrittenPages.current(db, spokey().id, "harmonica-1.html")) }
         val after = navigate(location)
         assertTrue("Done · read as b blow · d draw · * bend · - joins, as you set it." in after.text, after.text)
-        assertTrue("Back to caracole&#x27;s guess" in after.text)
+        assertTrue("Back to our guess" in after.text)
         assertEquals(409, post("/harmonica/pin", "page" to PAGE, "as" to "letters").status, "read so already")
 
         val table = post("/harmonica/pin", "page" to "Cowboy Bebop/Spokey Dokey/harmonica-2.html",

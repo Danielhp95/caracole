@@ -105,7 +105,7 @@ class LibraryRoutesTest {
                 "The length 'four minutes' isn't a duration. Write m:ss, h:mm:ss or seconds.",
             listOf("artist" to "Simon - Garfunkel", "title" to "T") to
                 "Can't add this song: an artist name can't hold ' - ': 'Simon - Garfunkel'",
-            listOf("q" to "x".repeat(501)) to "The text is too long: 500 characters at most.",
+            listOf("q" to "x".repeat(501)) to "Too long: 500 characters at most.",
         )
         for ((fields, said) in cases) {
             for (path in listOf("/request", "/lookup")) {

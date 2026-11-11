@@ -74,8 +74,8 @@ class LyricsStagesTest {
         LyricsWorld(tmp.newFolder()).use { w ->
             val song = w.song("Soda Stereo", "De Música Ligera", 213_000L)
             val (failed, _) = stage(w, LrclibStage::run, song, "lrclib", mapOf(soda to answer(500, "oops")))
-            assertEquals(StageEnd("failed", "LRCLIB failed (lrclib: 500: ${soda.removePrefix("GET ")}: HTTP 500); the nightly " +
-                                      "run tries again"), failed)
+            assertEquals(StageEnd("failed", "LRCLIB failed (lrclib: 500: ${soda.removePrefix("GET ")}: HTTP 500); tried again " +
+                                      "tonight"), failed)
             assertEquals("pending", w.db { io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!! }.lyricsStatus)
             // Remembered for Megalobiz and AZLyrics before the stage says it failed: they ask about it after LRCLIB.
             assertEquals(Stamps.of(w.now), w.db { it.kvGet("${Lrclib.FAILED}${song.id}") })

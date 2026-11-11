@@ -379,9 +379,9 @@ class LookupRunnersTest {
             assertEquals(listOf("GET $ug"), site.said)
             val until = database.read { Health.state(it, "ug").cooldownUntil }
             assertNotNull(until)
-            val words = "Ultimate Guitar blocked caracole (ug: 403: $ug: HTTP 403): no more requests to it until " +
+            val words = "UG turned us back (ug: 403: $ug: HTTP 403). No more asks until " +
                 java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(java.time.ZoneOffset.UTC)
-                    .format(until) + "; nothing kept."
+                    .format(until) + ". Nothing kept."
             // No page made after a block, as versions_cmd.py makes none: the queue's end skips the stages left.
             assertEquals(listOf("song" to "done", "version" to "skipped", "pdf" to "skipped", "pages" to "skipped"),
                          job.stages.map { it.name to it.state })

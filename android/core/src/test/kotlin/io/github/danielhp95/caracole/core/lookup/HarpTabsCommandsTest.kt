@@ -104,8 +104,8 @@ class HarpTabsCommandsTest {
         assertNotNull(Health.state(db, "harptabs").cooldownUntil)
         assertNull(db.one("SELECT 1 FROM harptabs_artists") { true })
         val (again, site) = run(db, "The Beatles")
-        assertEquals("Not read: harptabs.com is cooling down after a block until 2026-11-04 14:00 UTC; caracole won't " +
-                         "ask it before then.", again)
+        assertEquals("Not read: waiting out harptabs until " +
+                         "2026-11-04 14:00 UTC.", again)
         assertEquals(emptyList(), site.said)
     }
 

@@ -30,7 +30,7 @@ class M6SkeletonTest {
         assertEquals("Remake the pages" to "The phone's pages", render.title to render.display)
         assertEquals("File a.gp5", PhoneKinds.fill(PhoneKinds.INBOX.title, "name" to "a.gp5"))
         assertEquals("The book of 2026-11-04", PhoneKinds.fill(PhoneKinds.RESTORE.display, "date" to "2026-11-04"))
-        assertEquals("Making the pages again: 2 of 5", PhoneKinds.fill(render.running, "done" to 2, "total" to 5))
+        assertEquals("Remaking pages · 2 of 5", PhoneKinds.fill(render.running, "done" to 2, "total" to 5))
         assertEquals("Pages remade · 3 songs", PhoneKinds.fill(render.done, "n" to 3))
         assertEquals("Waiting for its song: a.gp5", PhoneKinds.fill(PhoneKinds.INBOX.otherwise!!, "name" to "a.gp5"))
         assertEquals("Backed up (daily)", PhoneKinds.fill(PhoneKinds.BACKUP.done, "label" to "daily"))

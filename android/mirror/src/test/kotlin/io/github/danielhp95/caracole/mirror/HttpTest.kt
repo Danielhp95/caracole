@@ -123,7 +123,7 @@ class HttpTest {
             val e = assertFailsWith<SyncError.NoAnswer> {
                 http.get(server.address, server.address.resolve("/slow"), readTimeoutMs = 200) { }
             }
-            assertTrue("took too long" in e.message!!, e.message)
+            assertTrue("timed out" in e.message!!, e.message)
         } finally {
             release.countDown()
         }

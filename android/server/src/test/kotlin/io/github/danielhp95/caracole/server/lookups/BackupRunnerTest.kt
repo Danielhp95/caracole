@@ -130,7 +130,7 @@ class BackupRunnerTest {
                             "The book of 2026-11-03 12:00"), listOf(spec.title, spec.key, spec.kind, spec.display))
         val job = run(phone, spec)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
-        assertEquals(Line("ready", "Restored the library of 2026-11-03 12:00"), JobViews.line(job))
+        assertEquals(Line("ready", "Restored the book of 2026-11-03 12:00"), JobViews.line(job))
         phone.parts.database.read { db ->
             assertEquals("Creep", Songs.byId(db, creep.id)!!.title)
             assertTrue(Health.isCooling(db, "ug", now), "the cooldown met since is kept")
