@@ -1312,6 +1312,7 @@ def _take_song(conn, cfg, source: UnitSource, key: str, doc: Mapping[str, Any], 
     from caracole.wanted import sync_wanted
 
     names = _names_of(doc, key)
+    _check_storable(doc)
     here = find_song(conn, key)
     folder_here = cfg.library_dir.joinpath(*song_folder(here.artist, here.title)) if here is not None else None
 
@@ -1402,6 +1403,46 @@ def _take_song(conn, cfg, source: UnitSource, key: str, doc: Mapping[str, Any], 
     return song.id
 
 
+def _storable(value: Any) -> bool:
+    """Whether SQLite stores ``value`` as caracole reads it back: none, a text, a number SQLite holds."""
+    if isinstance(value, bool) or value is None or isinstance(value, (str, float)):
+        return True
+    return isinstance(value, int) and -(2 ** 63) <= value < 2 ** 63
+
+
+def _json_text(value: Any) -> bool:
+    """Whether ``value`` is a text holding JSON, as caracole writes a record it reads back with ``json.loads``."""
+    if not isinstance(value, str):
+        return False
+    try:
+        json.loads(value)
+    except (ValueError, RecursionError):
+        return False
+    return True
+
+
+def _check_storable(doc: Mapping[str, Any]) -> None:
+    """TypeError, saying what, for a song's document holding what this library can't store as caracole reads it
+    (one whose digest checks out may still: a damaged file, another's caracole): a record's or a version's value
+    SQLite can't hold, a version's raw record or a record of its kept versions (``CARRIED_KV``) that isn't JSON.
+    So the unit is left, whole, and the library page never meets it."""
+    for c in SONG_COLUMNS:
+        if not _storable(doc["song"].get(c)):
+            raise TypeError(f"its record's {c} that can't be stored")
+    for version in doc["versions"]:
+        for c in VERSION_COLUMNS:
+            if not _storable(version.get(c)):
+                raise TypeError(f"a version's {c} that can't be stored")
+        if version.get("raw") is not None and not _json_text(version["raw"]):
+            raise TypeError("a version's raw record that isn't JSON")
+        for f in version["files"]:
+            if not _storable(f["kept_rank"]):
+                raise TypeError("a kept file's rank that can't be stored")
+    for value in doc.get("kv", {}).values():
+        if not _json_text(value):
+            raise TypeError("a record of its kept versions that isn't JSON")
+
+
 def _fetched(source: UnitSource, key: str, name: str, sha256: str) -> bytes:
     """A kept file of the song from ``source``, checked against ``sha256``."""
     data = source.file(key, name, sha256)
@@ -1482,9 +1523,10 @@ def _wanted_line(cfg, names: Mapping[str, Any], key: str) -> Callable[[], None] 
     """The song's line in wanted.txt as the peer's names say it (its lines taken out, one appended); what puts the
     file back as it was, or None when its line said so already. The file goes back byte for byte (none, if the take
     made it) while it reads as the take wrote it; else, written to since (``caracole serve`` appends without the
-    lock), what was written since stays and the song's first line comes back at the end."""
+    lock), what was written since stays and the song's first line comes back at the end. A line that can't be written
+    (a name or a duration wanted.txt can't hold) leaves the unit, and the file as it was (UnitError)."""
     from caracole.library import read_regular, write_atomic
-    from caracole.wanted import append_wanted, find_wanted, remove_wanted
+    from caracole.wanted import _checked_line, append_wanted, find_wanted, remove_wanted
 
     path = cfg.wanted_file
     artist, title, album, duration = names["artist"], names["title"], names["album"], names["duration_ms"]
@@ -1495,6 +1537,10 @@ def _wanted_line(cfg, names: Mapping[str, Any], key: str) -> Callable[[], None] 
         before: bytes | None = read_regular(path)
     except FileNotFoundError:
         before = None
+    try:
+        _checked_line(artist, title, album, duration)  # before its line here is taken out
+    except ValueError as e:
+        raise UnitError(f"its line can't be written in wanted.txt: {e}") from e
     if line is not None:
         remove_wanted(path, key)
     append_wanted(path, artist, title, album, duration)
