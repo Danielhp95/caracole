@@ -151,10 +151,26 @@
   // there is no storage.
   const overlay = window.caracoleOverlay || null;
   const NECKS = overlay ? overlay.NECKS : "caracole-viewer-necks";
-  try {
-    if (localStorage.getItem(NECKS) === "hidden") state.necks = false;
-  } catch (err) { /* no storage: shown, unless the address says otherwise */ }
-  if (hash.get("necks") === "0") state.necks = false;
+  // Each such choice: the one a link names (followed, typed), else the browser's where it keeps one, else the
+  // address's. A page come back to (a reload, Back or Forward, a tab restored, a songbook's next song) has an address
+  // written before: there the browser's wins over it, and the address counts only where it keeps none (a server's
+  // sandbox, a choice never made in this browser).
+  const returning = (() => {
+    try {
+      const entry = performance.getEntriesByType("navigation")[0];
+      return Boolean(entry) && (entry.type === "reload" || entry.type === "back_forward");
+    } catch (err) {
+      return false;
+    }
+  })();
+  const choiceOf = (name, named) => {
+    let kept = null;
+    try {
+      kept = localStorage.getItem(name);
+    } catch (err) { /* no storage: the address says */ }
+    return named !== null && (!returning || kept === null) ? named : kept;
+  };
+  if (choiceOf(NECKS, hash.get("necks") === "0" ? "hidden" : null) === "hidden") state.necks = false;
   const keepNecks = () => {
     try {
       localStorage.setItem(NECKS, state.necks ? "shown" : "hidden");
@@ -163,10 +179,7 @@
   // So is pinyin over the Chinese (the settings' Pinyin): the reader's, kept once for every page, and in the
   // address while it is on (py=1, as it starts off).
   const PINYIN = "caracole-viewer-pinyin";
-  try {
-    if (localStorage.getItem(PINYIN) === "shown") state.py = true;
-  } catch (err) { /* no storage: off, unless the address says otherwise */ }
-  if (hash.get("py") === "1") state.py = true;
+  if (choiceOf(PINYIN, hash.get("py") === "1" ? "shown" : null) === "shown") state.py = true;
   const keepPinyin = () => {
     try {
       localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
@@ -175,10 +188,7 @@
   // So are the characters the Chinese is shown in (the settings' Chinese characters): kept once for every page, and
   // in the address while they are Traditional (trad=1, as they start Simplified).
   const HANZI = "caracole-viewer-hanzi";
-  try {
-    if (localStorage.getItem(HANZI) === "traditional") state.trad = true;
-  } catch (err) { /* no storage: Simplified, unless the address says otherwise */ }
-  if (hash.get("trad") === "1") state.trad = true;
+  if (choiceOf(HANZI, hash.get("trad") === "1" ? "traditional" : null) === "traditional") state.trad = true;
   const keepHanzi = () => {
     try {
       localStorage.setItem(HANZI, state.trad ? "traditional" : "simplified");
@@ -196,11 +206,9 @@
   // The viewer draws strings and keys itself; any other kind once a script registers it (instruments.js).
   const drawn = (i) => Boolean(i) && (i.kind === "strings" || i.kind === "keys" || Boolean(kit && kit.registered(i.id)));
   const startInst = drawn(instOf(start.get("inst"))) ? start.get("inst") : null;
-  try {
-    const mine = localStorage.getItem(INSTRUMENT);
-    if (drawn(instOf(mine))) state.inst = mine;
-  } catch (err) { /* no storage: the guitar, unless the address says otherwise */ }
-  if (drawn(instOf(hash.get("inst")))) state.inst = hash.get("inst");
+  const instChosen = choiceOf(INSTRUMENT, drawn(instOf(hash.get("inst"))) ? hash.get("inst") : null);
+  if (drawn(instOf(instChosen))) state.inst = instChosen;
+  else if (drawn(instOf(hash.get("inst")))) state.inst = hash.get("inst");  // kept: one this page doesn't draw
   if (startInst && data.start && !["t", "mode", "capo", "alt", "at"].some((name) => hash.has(name))) state.inst = startInst;
   const keepInst = () => {
     try {
@@ -788,6 +796,7 @@
     $("inst-row").hidden = offered.length < 2;
     const menu = $("insts"), ids = offered.map((i) => i.id).join(" ");
     if (menu.dataset.ids !== ids) {
+      menu.autocomplete = "off";  // never the browser's restored choice on Back: the one kept for every page
       menu.textContent = "";
       for (const i of offered) {
         const option = menu.appendChild(document.createElement("option"));

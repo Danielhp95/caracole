@@ -66,15 +66,29 @@
   if (hash.has("notes")) state.notes = hash.get("notes") === "1";
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
+  // A choice kept for every page, read as the sheet viewer reads it (viewer.js choiceOf): the one a link names, else
+  // the browser's; on a page come back to (a reload, Back, a tab restored), the browser's over an address written before.
+  const returning = (() => {
+    try {
+      const entry = performance.getEntriesByType("navigation")[0];
+      return Boolean(entry) && (entry.type === "reload" || entry.type === "back_forward");
+    } catch (err) {
+      return false;
+    }
+  })();
+  const choiceOf = (name, named) => {
+    let kept = null;
+    try {
+      kept = localStorage.getItem(name);
+    } catch (err) { /* no storage: the address says */ }
+    return named !== null && (!returning || kept === null) ? named : kept;
+  };
   // The song's names (its title, its artist's, the page's title) in the characters the sheet viewer shows the Chinese
   // in, Simplified at first: its choice, kept for every page (localStorage), else trad=1 in the address; this page has
   // no row of its own. harptab_page.py's song-names block converts each by its text as written (data-zh).
   try {
     const names = JSON.parse($("song-names") ? $("song-names").textContent : "null");
-    let trad = hash.get("trad") === "1";
-    try {
-      if (localStorage.getItem("caracole-viewer-hanzi") === "traditional") trad = true;
-    } catch (err) { /* no storage: the address says */ }
+    const trad = choiceOf("caracole-viewer-hanzi", hash.get("trad") === "1" ? "traditional" : null) === "traditional";
     const table = names && typeof names === "object" ? names[trad ? "traditional" : "simplified"] : null;
     for (const el of document.querySelectorAll("[data-zh]")) {
       const written = el.getAttribute("data-zh");
@@ -83,10 +97,8 @@
     }
   } catch (err) { /* none: as written */ }
   const kit = window.caracoleOverlay || null;
-  try {
-    if (kit && localStorage.getItem(kit.NECKS) === "hidden") state.necks = false;
-  } catch (err) { /* no storage: shown, unless the address says otherwise */ }
-  if (hash.get("necks") === "0") state.necks = false;
+  const necksNamed = hash.get("necks") === "0" ? "hidden" : null;
+  if ((kit ? choiceOf(kit.NECKS, necksNamed) : necksNamed) === "hidden") state.necks = false;
   const keepNecks = () => {
     try {
       if (kit) localStorage.setItem(kit.NECKS, state.necks ? "shown" : "hidden");

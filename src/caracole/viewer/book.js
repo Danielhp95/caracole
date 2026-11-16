@@ -57,10 +57,18 @@
   try {
     names = JSON.parse(namesEl ? namesEl.textContent : "null");
   } catch (err) { /* none: as written */ }
-  let trad = new URLSearchParams(location.hash.slice(1)).get("trad") === "1";
+  // As the viewer reads it (viewer.js choiceOf): the one a link names, else the browser's; on a page come back to (a
+  // reload, a songbook's next song, Back), the browser's over an address written before.
+  let returning = false, hanziKept = null;
   try {
-    if (localStorage.getItem("caracole-viewer-hanzi") === "traditional") trad = true;
+    const entry = performance.getEntriesByType("navigation")[0];
+    returning = Boolean(entry) && (entry.type === "reload" || entry.type === "back_forward");
+  } catch (err) { /* read as a link followed */ }
+  try {
+    hanziKept = localStorage.getItem("caracole-viewer-hanzi");
   } catch (err) { /* no storage: the address says */ }
+  const tradNamed = new URLSearchParams(location.hash.slice(1)).get("trad") === "1";
+  const trad = tradNamed && (!returning || hanziKept === null) ? true : hanziKept === "traditional";
   const named = (text) => {
     const table = names && typeof names === "object" ? names[trad ? "traditional" : "simplified"] : null;
     return table && typeof table === "object" && Object.prototype.hasOwnProperty.call(table, text)

@@ -2891,7 +2891,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   brings it back (pressed while it shows), and so does the **Chord necks**
   switch in the settings: the three always agree. The choice is the
   screen's, not a song's: the browser keeps it once for every sheet and
-  songbook, and the address keeps `necks=0` too, for a page served by
+  songbook (a page you come back to, by a reload, Back or a tab restored, opens
+  on the browser's choice whatever its old address says; so do the pinyin, the
+  Chinese characters and the instrument), and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: ‹ and › to another
   version keep it, so do a harmonica tab's link in the Harmonica row and its
   page's ‹ Chord sheet, and in a songbook so does every step to another song (the
