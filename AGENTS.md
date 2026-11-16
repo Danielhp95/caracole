@@ -2557,7 +2557,8 @@ picks one).
   and TIDAL's 2), within `lookup_per_hour` with every lookup's (run `lookup:share:…`), at `lookup_delay`.
 - Each is switchable (`config.SWITCHABLE`, `enabled = false`, which the phone takes from the computer at a sync), on
   by default.
-- The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
+- The cache's answer is read first, with no request (a short link's hop, which the HTTP cache never keeps, kept beside it once
+  the link was read, `ShareAsk.hops`); a block cools the service down and alerts once, an error is
   counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
 - Nothing is sent to a tab site before Fetch.
 
