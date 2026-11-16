@@ -17,6 +17,7 @@ import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncSettings
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
@@ -28,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
@@ -153,6 +155,18 @@ class AssemblyTest {
             assertTrue(left.none { it.exists() }, "a killed sync's index files are gone")
             assertTrue(others.all { it.exists() }, "nothing else is touched")
         }
+    }
+
+    /** A take checks a song's `[version]` and `[harmonica]` entries with the viewer's own checks, as
+     * overrides.put_song_entries reads them back: the engine is given Versions.keyVersion and HarpTabs.checkSpec. */
+    @Test fun theSyncEngineTakesWithTheViewersChecksOfAnOverridesEntry() = phone<Unit> { phone ->
+        val checks = phone.sync.engine.checks
+        assertSame(OVERRIDE_CHECKS, checks)
+        val version = assertFailsWith<IllegalArgumentException> { checks.keyVersion!!("key=H") }
+        assertEquals("key must be a key as a sheet names it, such as \"G\", \"F#m\" or \"Bb dorian\", got 'H'",
+                     version.message)
+        val reading = assertFailsWith<IllegalArgumentException> { checks.checkSpec!!(JsonPrimitive("nonesuch")) }
+        assertEquals("expected signs, brackets, letters, signs after, barrett or legend, got 'nonesuch'", reading.message)
     }
 
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->

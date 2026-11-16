@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.sync.internal.take.Backups
 import io.github.danielhp95.caracole.core.sync.internal.take.Folders
@@ -246,6 +247,53 @@ class TakeTest {
         val taken = phone.write { db -> Take.applyUnits(db, phone.store, good, goodWanted, emptyMap(), NOW) }
         assertEquals(emptyList(), taken.left)
         phone.write { db -> assertEquals(mapOf(key to 2), Overrides.read(db).transpose) }
+    }
+
+    /** The viewer's checks as the engine is given them (Assembly's Versions.keyVersion and HarpTabs.checkSpec), each
+     * refusing in its words: a `[version]` kept by a key no sheet names, a `[harmonica]` reading of no notation. */
+    private val viewersChecks = OverrideChecks(
+        keyVersion = { text ->
+            if (text == "key=H") {
+                throw IllegalArgumentException("key must be a key as a sheet names it, such as \"G\", \"F#m\" or " +
+                                                   "\"Bb dorian\", got 'H'")
+            }
+            text
+        },
+        checkSpec = { spec ->
+            if (spec.jsonPrimitive.content == "nonesuch") {
+                throw IllegalArgumentException("expected signs, brackets, letters, signs after, barrett or legend, " +
+                                                   "got 'nonesuch'")
+            }
+        })
+
+    @Test fun aSongsVersionOrHarmonicaEntryTheViewersChecksRefuseLeavesTheUnitInPythonsWords() {
+        val phone = phone()
+        phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
+        val key = Normalize.identityKey("Muse", "Hysteria")
+        for ((overrides, why) in listOf(
+            """{"version": "key=H"}""" to
+                "[version] 'Muse - Hysteria': key must be a key as a sheet names it, such as \"G\", \"F#m\" or " +
+                "\"Bb dorian\", got 'H'",
+            """{"harmonica": {"harmonica-1.txt": "nonesuch"}}""" to
+                "[harmonica] 'Muse - Hysteria' 'harmonica-1.txt': expected signs, brackets, letters, signs after, " +
+                "barrett or legend, got 'nonesuch'",
+        )) {
+            val (source, wanted) = documents("song/$key" to hysteria(overrides = overrides))
+            val done = phone.write { db ->
+                Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW, viewersChecks)
+            }
+            assertEquals(listOf("song/$key" to why), done.left, overrides)
+            phone.write { db ->
+                assertNull(Songs.byKey(db, key), "nothing of the song is written")
+                assertEquals(Overrides(), Overrides.read(db, viewersChecks.keyVersion, viewersChecks.checkSpec))
+            }
+        }
+        // Entries the checks take are taken.
+        val (good, goodWanted) = documents("song/$key" to hysteria(
+            overrides = """{"version": "key=G&capo=0", "harmonica": {"harmonica-1.txt": "legend"}}"""))
+        val taken = phone.write { db -> Take.applyUnits(db, phone.store, good, goodWanted, emptyMap(), NOW, viewersChecks) }
+        assertEquals(emptyList(), taken.left)
+        phone.write { db -> assertEquals(mapOf(key to "key=G&capo=0"), Overrides.read(db).version) }
     }
 
     @Test fun aSongsTextCellThatTheReadersCantReadAsJsonLeavesTheUnit() {

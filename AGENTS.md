@@ -1727,6 +1727,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
   is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
   `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **A song's overrides entries taken** are read back inside its unit's savepoint, as `put_song_entries` reads them, an
+  entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
+  reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
+  `OVERRIDE_CHECKS`, `Versions.keyVersion` and `HarpTabs.checkSpec`).
 - **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
   peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
   `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
