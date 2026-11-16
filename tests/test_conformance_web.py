@@ -931,12 +931,12 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
     left = took + [("song/radiohead/creep", "left", "skipped, as chosen")]
     jobs = []
     for kind, done in (("sync", {"compare": ("done", "4 differences"), "take": ("done", "took 1"),
-                                 "give": ("done", "gave 1"), "agree": ("done", "12 units the two agree on")}),
+                                 "give": ("done", "gave 1"), "agree": ("done", "12 units the books agree on")}),
                        ("peer-push", {"check": ("done", "1 change"), "take": ("done", "took 1"),
-                                      "render": ("skipped", ""), "agree": ("done", "12 units the two agree on")}),
+                                      "render": ("skipped", ""), "agree": ("done", "12 units the books agree on")}),
                        ("index-merge", {"merge": ("done", "merged 12 pages: ug, lacuerda")}),
                        ("import", {"check": ("done", "2 differences with Desk's file"), "take": ("done", "took 1"),
-                                   "render": ("done", ""), "agree": ("done", "12 units the two agree on, 1 kept here"),
+                                   "render": ("done", ""), "agree": ("done", "12 units the books agree on, 1 kept here"),
                                    "index": ("done", "1 index merged")})):
         first = next(iter(done))
         jobs += [
@@ -954,7 +954,7 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
         ]
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
-        "compare": ("done", ""), "agree": ("done", " ١٢ units the two agree on\n")}, units=took),
+        "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),
         None, 0, None, None))
     return jobs
 

@@ -71,8 +71,9 @@ if TYPE_CHECKING:
 
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 SYNC_TAB = "#tab=sync"  # a sync's details: the library page's Sync tab, which follows it
-# ``caracole peer sync``'s and ``take``'s agree stage, done (commands/peer.py: "3 units the books agree on")
-_AGREED = re.compile(r"^(\d+) units? the books agree on$")
+# ``caracole peer sync``'s, ``take``'s and ``import``'s agree stage, done (commands/peer.py: "3 units the books agree on",
+# an import's with ", 1 kept here" for the answers "keep mine" it remembered)
+_AGREED = re.compile(r"^(\d+) units? the books agree on(?:, \d+ kept here)?$")
 
 
 ROUTES = (
