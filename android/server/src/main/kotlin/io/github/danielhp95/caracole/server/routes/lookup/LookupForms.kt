@@ -105,6 +105,18 @@ internal object LookupForms {
     /** songs.get_song under app.no_such_song: Refused (404) for an id no song has. */
     fun song(db: Db, id: Long): SongRow = Songs.byId(db, id) ?: throw Refused(404, "No such song", NO_SUCH_SONG)
 
+    /** app.NOT_THAT_SONG: [sameSong]'s refusal. */
+    const val NOT_THAT_SONG = "The logbook changed since this page was made: that song was removed and another has " +
+        "its place. Nothing done. Reload and try again."
+
+    /** app.same_song: Refused (409) when the form names its song by an `identity` key other than [song]'s, the page
+     * that sent it having known another song by that id (songs.id is given again once the newest song is removed); a
+     * form with no `identity` is the song its id names. */
+    fun sameSong(song: SongRow, form: Map<String, String>) {
+        val identity = Py.strip(form["identity"].orEmpty())
+        if (identity.isNotEmpty() && identity != song.key) throw Refused(409, "Not that song", NOT_THAT_SONG)
+    }
+
     /** app.not_ignored: Refused (409) for a song ignored, in the database or in the overrides. */
     fun notIgnored(song: SongRow, overrides: Overrides) {
         if (song.status == "ignored" || song.key in overrides.ignore) {
@@ -220,7 +232,9 @@ internal object LookupForms {
      * and title, by its identity key. Null for a song new to the library.
      */
     fun librarySong(db: Db, form: Map<String, String>, ug: Pair<String, String>?): SongRow? {
-        if (Py.strip(form["song"].orEmpty()).isNotEmpty()) return song(db, songId(form.getValue("song")))
+        if (Py.strip(form["song"].orEmpty()).isNotEmpty()) {
+            return song(db, songId(form.getValue("song"))).also { sameSong(it, form) }
+        }
         val artist = Py.strip(form["artist"].orEmpty())
         val title = Py.strip(form["title"].orEmpty())
         if (ug != null) Mine(Songs.list(db), SongForms()).songFor(ug.first, ug.second, artist, title)?.let { return it }
@@ -275,6 +289,7 @@ internal object LookupForms {
     fun fetch(database: Database, form: Map<String, String>): LookupAsk {
         val asked = songId(form["song"].orEmpty())
         val (song, overrides) = database.read { db -> overrides(db).let { song(db, asked) to it } }
+        sameSong(song, form)
         notIgnored(song, overrides)
         if (reviewFirst(song, overrides)) {
             throw Refused(409, "Pick its match first",

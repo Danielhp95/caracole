@@ -769,7 +769,7 @@ def test_use_this_one_posts_choose_with_the_tab(conn, cfg, versions_served, brow
                       "'.vbtns button, .vbtns .inuse')].map((b) => b.textContent))") == [
         ["In use"], ["Use this one"], ["Use this one"]]
     press(browser, item, "Use this one")
-    assert posts.next(0) == ("/versions/choose", {"csrf": "tok", "song": str(song.id), "tab": "46191"})
+    assert posts.next(0) == ("/versions/choose", {"csrf": "tok", "song": str(song.id), "identity": song.key, "tab": "46191"})
     # Its request shows on the song's line, as a lookup's does.
     assert browser.wait(f"!!document.querySelector('{item} .progress')?.textContent")
 
@@ -795,7 +795,7 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
     assert browser.js(f"[...document.querySelectorAll('{other} .drawer-rest button')].map((b) => b.textContent)") == [
         "Fetch them"]
     press(browser, item, "Fetch 6 more")
-    assert posts.next(0) == ("/versions/keep-more", {"csrf": "tok", "song": str(song.id)})
+    assert posts.next(0) == ("/versions/keep-more", {"csrf": "tok", "song": str(song.id), "identity": song.key})
 
 
 def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, versions_served, browser):
@@ -830,7 +830,7 @@ def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, bro
     browser.open(base)
     item = drawer_of(browser, song, "ug")
     press(browser, item, "Back to our pick", ".drawer-head")
-    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
+    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
 
 
 def test_lacuerda_use_this_one_posts_the_lookup_with_its_page(conn, cfg, versions_served, browser):
@@ -839,7 +839,7 @@ def test_lacuerda_use_this_one_posts_the_lookup_with_its_page(conn, cfg, version
     browser.open(base)
     item = drawer_of(browser, song, "lacuerda")
     press(browser, item, "Use this one")
-    assert posts.next(0) == ("/lookup", {"csrf": "tok", "song": str(song.id), "lacuerda": LACUERDA[0]})
+    assert posts.next(0) == ("/lookup", {"csrf": "tok", "song": str(song.id), "identity": song.key, "lacuerda": LACUERDA[0]})
 
 
 def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served, browser):
@@ -856,4 +856,4 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     assert browser.js(f"document.querySelector('{item} .drawer .pin-note').textContent") == (
         "Your UG choice is in use. Back to our pick first.")
     press(browser, item, "Back to our pick")
-    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
+    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})

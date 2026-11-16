@@ -242,8 +242,10 @@ def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callab
     with closing(connect()) as conn:
         songs = songs_to_get(songbook_entries(conn, library_dir, overrides, book), overrides)
     one = form.get("song", "").strip()
-    if one:  # a set list's Get it: that song alone
-        songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)]
+    identity = form.get("identity", "").strip()
+    if one:  # a set list's Get it: that song alone (by its identity too, when the form names it: web/app.same_song)
+        songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)
+                 and (not identity or s.key == identity)]
         if not songs:
             raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet, isn\'t in the book, or '
                                                  "is ignored. Reload the page.")

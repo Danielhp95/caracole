@@ -227,7 +227,8 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
     browser.type(PASTED)
     browser.click(line(song) + ' form.youtube-sheet button[type="submit"]')
     path, fields = posted.next(0)
-    assert (path, fields) == ("/youtube", {"csrf": "tok", "song": str(song.id), "youtube": PASTED})
+    assert (path, fields) == ("/youtube", {"csrf": "tok", "song": str(song.id), "identity": song.key,
+                                       "youtube": PASTED})
     # The line says how it goes, the stages as steps, the form gone while it runs.
     progress = json.dumps(line(song) + " .progress")
     assert browser.wait(f"(document.querySelector({progress}) || {{}}).textContent === "

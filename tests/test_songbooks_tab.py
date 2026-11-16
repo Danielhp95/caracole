@@ -1059,5 +1059,6 @@ def test_a_set_lists_get_it_looks_that_song_up(serve, cfg, library, tmp_path):
         page.click(f"{hysteria} .set-get")
         assert page.wait(f"document.querySelector('{hysteria} .plays') !== null", timeout=30)
         assert page.js(f"document.querySelector('{hysteria} .progress').textContent").startswith("Ready")
-        assert posted == [("/songbook/get", {"name": "Campfire", "song": str(library["Hysteria"].id)})]
+        assert posted == [("/songbook/get", {"name": "Campfire", "song": str(library["Hysteria"].id),
+                                             "identity": library["Hysteria"].key})]
         assert [c[0] for c in runner.calls] == ["get", "songbook"]

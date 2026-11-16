@@ -152,7 +152,7 @@ def test_each_outcome_says_its_word_its_reason_and_its_next_step():
     assert nyc["says"] == {"tone": "missing", "text": "Not on the sites"}
     assert nyc["reason"] == "UG has no chords for it. gtptabs lists a page for it."
     assert nyc["actions"] == [{"label": "Fetch from there", "primary": True, "post": "/lookup",
-                               "fields": {"song": "15"}}]
+                               "fields": {"song": "15", "identity": "horse the band - new york city"}}]
     assert nyc["when"]["text"] == "14:02" and nyc["when"]["stamp"].endswith("Z")
     assert pizza["actions"] == [{"label": "Ask by name", "primary": False,
                                  "href": "/#q=Horse+The+Band+-+Crippled+By+Pizza"}]
@@ -432,7 +432,7 @@ def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_
     get_it, search = item["actions"]
     assert search == {"label": "Search the index", "primary": False, "href": f"/review?song={camaron.id}"}
     assert get_it == {"label": "Fetch from there", "primary": True, "post": "/lookup",
-                      "fields": {"song": str(camaron.id),
+                      "fields": {"song": str(camaron.id), "identity": camaron.key,
                                  "lacuerda": "https://acordes.lacuerda.net/estopa/como_camaron.shtml"}}
     # The form is the lookup a search's Get it runs; the tab posts it as the page's script, and follows its job.
     response = post(app, "/lookup", get_it["fields"], accept="application/json")

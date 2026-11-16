@@ -99,7 +99,7 @@ class ReviewRoutes(val parts: PhoneParts, private val csrf: String,
         val pick = Py.strip(form["pick"].orEmpty())
         val (song, overrides, offered) = parts.database.read { db ->
             val overrides = LookupForms.overrides(db)
-            val song = LookupForms.song(db, asked)
+            val song = LookupForms.song(db, asked).also { LookupForms.sameSong(it, form) }
             Triple(song, overrides, offer(db, song, overrides, search = true))
         }
         LookupForms.notIgnored(song, overrides)

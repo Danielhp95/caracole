@@ -49,6 +49,7 @@ from caracole.web.app import (
     not_ignored,
     query,
     redirect,
+    same_song,
     song_id,
     wants_json,
 )
@@ -98,6 +99,7 @@ def sheet_from_youtube(app: WebApp, form: dict[str, str]) -> Response:
         asked = song_id(form["song"])
         with no_such_song(), app.db() as conn:
             song = get_song(conn, asked)
+            same_song(song, form)
             youtube_is_for(conn, song, overrides)
         display, key = song.display, song.key
     else:

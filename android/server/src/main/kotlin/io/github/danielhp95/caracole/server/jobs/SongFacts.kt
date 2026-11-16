@@ -48,13 +48,22 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
     class Ended internal constructor() {
         private val kept = HashMap<Int, Pair<Long?, SongFacts?>>()
 
-        /** [SongFacts.songOf], from what was kept for a job over, else worked out (and kept, the job over). */
+        /** [SongFacts.songOf], from what was kept for a job over while its id is still its song's ([stillIts]: songs.id
+         * is given again once the newest song is removed), else worked out (and kept, the job over). */
         fun songOf(db: Db, job: Job, cards: SongCards, now: Instant): Pair<Long?, SongFacts?> {
             val over = !job.active
-            if (over) synchronized(kept) { kept[job.id] }?.let { return it }
+            if (over) synchronized(kept) { kept[job.id] }?.let { if (stillIts(db, job, it.first)) return it }
             val answer = SongFacts.songOf(db, job, cards, now)
-            if (over) return synchronized(kept) { kept.getOrPut(job.id) { answer } }
+            if (over) synchronized(kept) { kept[job.id] = answer }
             return answer
+        }
+
+        /** jobs_routes._still_its: the id a job over's answer names is none, the song of the job's key, or, for a
+         * removal, no song's at all (the one it removed). */
+        private fun stillIts(db: Db, job: Job, id: Long?): Boolean {
+            if (id == null) return true
+            val song = Songs.byId(db, id) ?: return job.key.startsWith(JobCommands.REMOVING)
+            return song.key == JobCommands.songKeyOf(job.key)
         }
 
         /** Let go of the jobs the queue no longer remembers ([jobs], its whole snapshot). */

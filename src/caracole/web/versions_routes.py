@@ -51,7 +51,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from caracole.web import pages
-from caracole.web.app import Response, Route, WebApp, html_response, not_ignored
+from caracole.web.app import Response, Route, WebApp, html_response, not_ignored, same_song
 from caracole.web.jobs import INTERRUPTED, Job, version_steps
 from caracole.web.pages import Refused
 from caracole.web.status import details_href
@@ -127,7 +127,7 @@ def versions_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
     the library page's requests go)."""
     by_song = bool(form.get("song", "").strip())
     if by_song:
-        asked = _asked_song(app, form["song"], form.get("tab", ""), do)
+        asked = _asked_song(app, form, do)
     else:
         asked = _asked(app, form.get("sheet", ""), form.get("tab", ""), do)
     why = _cant(do, asked)
@@ -184,19 +184,21 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
         return _of(conn, app, overrides, song, tab, do, sheet, "/".join(quote(p) for p in parts[:-1]), back)
 
 
-def _asked_song(app: WebApp, song_text: str, tab: str, do: str) -> _Asked:
-    """The song a post names by its id (the library page's card), and its version ``tab`` (not for ``clear`` and
-    ``keep-more``); raises Refused."""
+def _asked_song(app: WebApp, form: dict[str, str], do: str) -> _Asked:
+    """The song a post names by its id (``song``, the library page's card, with its ``identity``: web/app.py
+    ``same_song``), and its version ``tab`` (not for ``clear`` and ``keep-more``); raises Refused."""
     from caracole.library import song_folder
     from caracole.sheet_versions import SHEET_PAGE
     from caracole.songs import get_song
     from caracole.web.app import no_such_song, song_id
 
+    tab = form.get("tab", "")
     _a_tab(tab, do)
-    asked = song_id(song_text)
+    asked = song_id(form["song"])
     overrides = app.overrides()
     with no_such_song(), app.db() as conn:
         song = get_song(conn, asked)
+    same_song(song, form)
     folder = song_folder(song.artist, song.title)
     sheet = "/".join((*folder, SHEET_PAGE))
     with app.db() as conn:

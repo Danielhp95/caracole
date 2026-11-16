@@ -756,7 +756,8 @@
   const getOne = (li, e) => {
     const go = li.querySelector(".set-get");
     if (go) go.disabled = true;
-    change("/songbook/get", fields(bookName, { song: e.id }), li, null).then((view) => {
+    // by its id and its identity key, so that an id another song has since the page was made gets nothing
+    change("/songbook/get", fields(bookName, { song: e.id, identity: e.key || "" }), li, null).then((view) => {
       if (!view && go) go.disabled = false;
     });
   };
@@ -1084,7 +1085,8 @@
       if (typed.length) {  // yours, as the library's own search reads them
         for (const s of songs) {
           if (s.status === "removed" || !typed.every((w) => String(s.search || "").indexOf(w) >= 0)) continue;
-          push({ id: s.id, key: String(s.identity || ""), title: s.title, artist: s.artist, sources: [s.source] });
+          push({ id: s.id, key: String(s.identity || ""), identity: String(s.identity || ""), title: s.title,
+                 artist: s.artist, sources: [s.source] });
           if (hits.length >= 5) break;
         }
       }
@@ -1159,7 +1161,8 @@
       showLine(lineIn(spot), { line: { tone: "queued", text: "Sending…" } });  // its height, from the tap
       list.appendChild(spot);
       renumber();
-      const pick = hit.id !== null && hit.id !== undefined ? { song: hit.id }
+      // a song of yours by its id, with its identity key where the page has it (web/app.py ``same_song``)
+      const pick = hit.id !== null && hit.id !== undefined ? { song: hit.id, identity: hit.identity }
         : Object.assign({ artist: hit.artist, title: hit.title }, hit.pick || {});
       change("/songbook/add-song", fields(bookName, pick), row, (lookup) => placed.set(Number(lookup.id), spot))
         .then((view) => {

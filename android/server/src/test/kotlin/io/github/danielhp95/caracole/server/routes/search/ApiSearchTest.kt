@@ -94,8 +94,8 @@ class ApiSearchTest {
         )
 
         /** search_routes._rows' row of your song: its own members, where its sheet can be read, then its card's. */
-        val LIBRARY_ROW = listOf("id", "display", "artist", "title", "status", "review", "score", "via", "files", "links",
-                                 "source", "key", "instruments")
+        val LIBRARY_ROW = listOf("id", "display", "artist", "title", "status", "review", "score", "via", "identity", "files",
+                                 "links", "source", "key", "instruments")
 
         /** _hit_json's members, then _rows'. */
         val INDEX_ROW = listOf("artist", "title", "ug", "counts", "score", "url", "labels", "via", "no_ones", "tabs",

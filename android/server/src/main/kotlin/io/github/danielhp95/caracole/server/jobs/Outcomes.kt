@@ -216,7 +216,10 @@ object Outcomes {
         val tone = line.tone
         val text = line.text
         if (job.key.startsWith(JobCommands.REMOVING) && (tone == "failed" || job.state == Job.INTERRUPTED)) {
-            again = job.job.songId?.let { Action("Try again", post = "/remove", fields = listOf("song" to it.toString())) }
+            again = job.job.songId?.let {
+                Action("Try again", post = "/remove",
+                       fields = listOf("song" to it.toString(), "identity" to JobCommands.songKeyOf(job.key)))
+            }
         }
         val peer = job.peer
         if (peer != null && job.state != Job.CANCELLED) return peerOutcome(job, peer, line)
@@ -292,7 +295,8 @@ object Outcomes {
         val where = facts?.elsewhere
         if (where != null && songId != null && where.first in ELSEWHERE) {
             val (source, url) = where
-            val fields = listOf("song" to songId.toString()) + if (source == "lacuerda") listOf("lacuerda" to url) else emptyList()
+            val fields = listOf("song" to songId.toString(), "identity" to JobCommands.songKeyOf(job.key)) +
+                if (source == "lacuerda") listOf("lacuerda" to url) else emptyList()
             return Outcome("missing", "Not on the sites", joined(head, ELSEWHERE.getValue(source)),
                            Action("Fetch from there", post = "/lookup", fields = fields), search)
         }

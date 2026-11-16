@@ -73,7 +73,7 @@ from urllib.parse import urlencode
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.icons import tag
 from caracole.logs import plural
-from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage
+from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
 from caracole.web.status import READY, Line, SongFacts, peer_kind
 
 if TYPE_CHECKING:
@@ -297,12 +297,14 @@ def _state(states: list[str]) -> str | None:
 
 def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: int | None = None) -> Outcome:
     """The request's outcome, read from its ``line`` (status.py's ``job_line``), its stages and ``facts``;
-    ``song_id``: its song's, for the actions that name it."""
+    ``song_id``: its song's, for the actions that name it, which post its identity key beside it (web/app.py
+    ``same_song``: a page shown before its id was another song's does nothing to that one)."""
     again = Action("Try again", post="/jobs/again", fields=(("job", str(job.id)),))
     tone, text = line.tone, line.text
     if job.song_key.startswith(REMOVING) and (tone == "failed" or job.state == INTERRUPTED):
         # what goes is asked again, as of now: never removed unasked
-        again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),))
+        again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),
+                                                             ("identity", song_key_of(job.song_key))))
                  if job.song_id is not None else None)
     peer = peer_kind(job)
     if peer is not None and job.state != "cancelled":
@@ -380,7 +382,8 @@ def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcom
     where = facts.elsewhere if facts is not None else None
     if where is not None and song_id is not None and where[0] in _ELSEWHERE:
         source, url = where
-        fields = (("song", str(song_id)), *((("lacuerda", url),) if source == "lacuerda" else ()))
+        fields = (("song", str(song_id)), ("identity", song_key_of(job.song_key)),
+                  *((("lacuerda", url),) if source == "lacuerda" else ()))
         return Outcome("missing", "Not on the sites", _joined(head, _ELSEWHERE[source]),
                        Action("Fetch from there", post="/lookup", fields=fields), search)
     return Outcome("missing", "Not on the sites", _sentence(head),

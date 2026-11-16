@@ -27,7 +27,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from caracole.web.app import FRAMES, Response, Route, WebApp, html_response, no_such_song, not_ignored, song_id
+from caracole.web.app import FRAMES, Response, Route, WebApp, html_response, no_such_song, not_ignored, same_song, song_id
 from caracole.web.jobs import INDEX_READS, REMOVING, add_steps, lookup_steps
 from caracole.web.jobs_routes import views
 from caracole.web.pages import Refused
@@ -134,6 +134,7 @@ def fetch(app: WebApp, form: dict[str, str]) -> Response:
     overrides = app.overrides()
     with no_such_song(), app.db() as conn:
         song = get_song(conn, asked)
+    same_song(song, form)
     not_ignored(song, overrides)
     if review_first(song, overrides):
         raise Refused(409, "Pick its match first",
