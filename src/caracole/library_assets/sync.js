@@ -727,7 +727,7 @@
     const key = rest.join("/");
     const songCard = kind === "song" ? byIdentity.get(key) : null;
     if (songCard) return String(songCard.title) + " – " + String(songCard.artist);
-    if (d && d.label) return String(d.label).replace(/^the songbook /, "");
+    if (d && d.label) return kind === "songbook" ? String(d.label).replace(/^(the )?songbook /, "") : String(d.label);
     if (kind === "songbook") return key;
     if (kind === "song" || kind === "removed") {
       const cut = key.indexOf("/");

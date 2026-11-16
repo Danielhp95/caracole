@@ -81,9 +81,9 @@ DIFFERENCES = [
     song("song/radiohead/creep", "Radiohead", "Creep", "theirs", (None, "changed"), listed=["songbook/campfire"]),
     difference("songbook/campfire", "songbook Campfire", "theirs", "changed there since the last sync",
                (None, "changed")),
-    difference("songbook/wedding set", "the songbook Wedding set", "theirs", "new there since the last sync",
+    difference("songbook/wedding set", "songbook Wedding set", "theirs", "new there since the last sync",
                (None, "new")),
-    difference("alias/soda-stereo", "the alias of soda-stereo", "mine", "changed here since the last sync",
+    difference("alias/soda-stereo", "alias of soda-stereo", "mine", "changed here since the last sync",
                ("changed", None)),
 ]
 INDEXES = [{"site": "ug", "title": "Ultimate Guitar", "here": "2026-10-30T03:00:00Z", "there": "2026-11-03T03:00:00Z",
@@ -427,6 +427,20 @@ def test_on_a_phone_the_tabs_stay_one_row_unsplit(served, sync, width):
     assert len({top for *_, top in tabs}) == 1, tabs
     assert all(0 <= b[1] - a[2] <= 8 for a, b in zip(tabs, tabs[1:])), tabs  # one row, none pushed aside
     assert noted(dom, "data-wide") <= width
+
+
+def test_the_fake_labels_its_units_as_the_real_state_does(conn):
+    import types
+
+    from caracole.overrides import Overrides
+    from caracole.peer_sync import library_state
+
+    overrides = Overrides(alias={"soda-stereo": ["soda_stereo"]})
+    books = [types.SimpleNamespace(name=n, songs=[]) for n in ("Campfire", "Wedding set")]
+    real = {u.id: u.label for u in library_state(conn, overrides, books).values()}
+    for d in DIFFERENCES:
+        if not d["id"].startswith("song/"):
+            assert d["label"] == real[d["id"]], d["id"]
 
 
 def test_the_phones_page_has_the_sheet_and_no_sync_tab(conn, cfg):
@@ -871,7 +885,7 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
         assert [s["rows"] for s in summary] == [
             [["Let It Be – The Beatles"], ["Mononoke – Pomme"], ["Creep – Radiohead"]],
             [["Barbara Allen – Traditional", "added on this computer"],
-             ["the alias of soda-stereo", "changed on this computer"]],
+             ["alias of soda-stereo", "changed on this computer"]],
             [["Hotel California – Eagles", "this computer's version kept: its own key, A minor, capo 2, its sheet, "
                                            "UG · tab 1234567"],
              ["Wonderwall – Oasis", "Studio's version kept: its lyrics, found"]],
@@ -891,6 +905,20 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
         assert page.js("document.getElementById('sync-file-note').hidden") is True
         page.click("#sync-go")
         assert page.wait(f"!{SHEET}.open")
+
+
+@in_chromium
+def test_a_songbook_left_as_it_was_is_named_by_its_name(served, tmp_path):
+    units = [(u, "left", "it changed here since the comparison") if u == "songbook/wedding set" else (u, said, why)
+             for u, said, why in TAKEN_GIVEN]
+    over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 5, left 1"),
+                              "give": ("done", "gave 3"), "agree": ("done", "311 units the books agree on")},
+                     units, REPORT)
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        left = next(s for s in page.js(SUMMARY) if s["kind"] == "left")
+        assert left["rows"][0][0] == "Wedding set", left["rows"]
 
 
 @in_chromium
