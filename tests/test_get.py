@@ -494,6 +494,22 @@ def test_a_megalobiz_error_in_a_lookup_leaves_lrclibs_lyrics_and_no_miss(cfg, co
     assert "502" in get_state(conn, "megalobiz").last_error
 
 
+def test_a_lookup_that_skips_megalobiz_for_its_cooldown_leaves_no_lyrics_missing(cfg, conn, sites):
+    # LRCLIB misses the song, Megalobiz is cooling down and is never asked, AZLyrics misses too: Megalobiz answered
+    # no miss, so the song waits for its lyrics (pending), never missing.
+    record_block(conn, "megalobiz", NOW, "megalobiz: 429")
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert sites.megalobiz_asked() == []
+    assert any("azlyrics.com" in u for u in sites.requests)  # AZLyrics is still asked
+    assert get_song(conn, result.song_id).lyrics_status == "pending"
+
+
+def test_a_lookup_whose_megalobiz_answers_a_miss_leaves_the_lyrics_missing(cfg, conn, sites):
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert len(sites.megalobiz_asked()) == 1
+    assert get_song(conn, result.song_id).lyrics_status == "missing"
+
+
 def test_a_lookup_waiting_for_the_lock_says_where_it_is_let_in(cfg, conn, sites):
     # Shown on the lookup page while it waits: behind auto-chords it is let in between two songs, not in a pause.
     import fcntl

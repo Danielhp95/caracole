@@ -638,9 +638,18 @@ class _Lookup:
         return "made" if stats.rendered else "up to date"
 
     def lyrics(self) -> tuple[str, str] | str:
+        from caracole.songs import get_song, update_song
+
         out = self._lrclib()
-        out = self._then(out, self._megalobiz())
-        return self._then(out, self._azlyrics())
+        megalobiz = self._megalobiz()
+        out = self._then(out, megalobiz)
+        out = self._then(out, self._azlyrics())
+        # Megalobiz skipped before it was asked (its cooldown) answered no miss: a song LRCLIB missed is put back to
+        # pending, as an error or a cut turn puts it (megalobiz_fetch.py), unless AZLyrics then found its lyrics.
+        if isinstance(megalobiz, tuple) and get_song(self.conn, self.song.id).lyrics_status == "missing":
+            update_song(self.conn, self.song.id, lyrics_status="pending", lyrics_at=None)
+            self.song = get_song(self.conn, self.song.id)
+        return out
 
     def _lrclib(self) -> tuple[str, str] | str:
         from caracole.lyrics import fetch_pending_lyrics

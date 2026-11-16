@@ -1934,7 +1934,9 @@ way, then the next auto-chords run puts each chord over its word.
   stays missing when Megalobiz has none either, and Megalobiz is asked again after 30 days.
 - **An error is never a miss.** A song LRCLIB missed and Megalobiz failed on goes back to pending,
   and the next run asks both again (LRCLIB from its cache, sending nothing). A 429 is a block, as
-  anywhere: Megalobiz cools down, one ntfy alert goes out.
+  anywhere: Megalobiz cools down, one ntfy alert goes out (for the first block in a row alone). A
+  lookup that can't ask Megalobiz, cooling down, puts a song LRCLIB missed back to pending too, unless
+  AZLyrics then finds its lyrics.
 - Its **fair use**, which caracole keeps: your songs alone (never a mirror), within its 1,000
   requests a day from one address (caracole stops at 900 a day, see [Two paces](#configure)), every
   answer cached, and a link back to each song's page there wherever its

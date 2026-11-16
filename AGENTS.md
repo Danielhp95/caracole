@@ -77,7 +77,8 @@ Below the table, a section for each step whose modules have more to say.
 - megalobiz_fetch.py: the step.
   - The songs LRCLIB left, missing, failed on or plain only: `songs_to_ask`.
   - A miss: kv `megalobiz:checked:`, asked again after 30 days.
-  - An error puts a song LRCLIB missed back to pending.
+  - An error puts a song LRCLIB missed back to pending, and so does a lookup that skips it for its cooldown, unless
+    AZLyrics then finds the lyrics (get.py `lyrics`, LookupRun.kt `lyrics`).
   - The link back its fair use asks: info.json's `lyrics_from` and the card's Lyrics tile, `library.lyrics_from`.
 - Also in `caracole lyrics`, a lookup and a sheet from a YouTube video.
 

@@ -173,6 +173,39 @@ class LookupTest {
         assertEquals(mapOf("lrclib" to 1), result.requests)
     }
 
+    @Test fun megalobizSkippedBeforeItWasAskedLeavesNoLyricsMissingUnlessAzLyricsFoundThem() {
+        // LRCLIB misses; Megalobiz is cooling down, so never asked; AZLyrics misses: Megalobiz answered no miss, so the
+        // song waits (pending), as get.py's `lyrics` leaves it.
+        val missed = SiteStage { ctx ->
+            Versions.updateSong(ctx.db, ctx.song.id, mapOf("lyrics_status" to "missing", "lyrics_at" to Stamps.of(now)))
+            StageEnd("done", "LRCLIB has none")
+        }
+        val cooling = SiteStage { ctx -> LookupWords.end(ctx.config, "megalobiz", ctx.asking.ask("megalobiz") { StageEnd("done", "asked") }) }
+        fun lyricsAfter(megalobiz: SiteStage, azlyrics: SiteStage): String? {
+            var status: String? = null
+            TestDb.fresh(tmp.newFolder()).use { db ->
+                database = db
+                store = LibraryStore(tmp.newFolder())
+                cache = tmp.newFolder()
+                db.writeBlocking {
+                    Health.recordBlock(it, "megalobiz", now, "megalobiz: 429")
+                    val result = lookup(stages(lrclib = missed, megalobiz = megalobiz, azlyrics = azlyrics)).run(it)
+                    status = Songs.byId(it, result.songId!!)!!.lyricsStatus
+                }
+            }
+            return status
+        }
+        val azMisses = SiteStage { StageEnd("done", "AZLyrics has none") }
+        val azFinds = SiteStage { ctx ->
+            Versions.updateSong(ctx.db, ctx.song.id, mapOf("lyrics_status" to "found"))
+            StageEnd("done", "lyrics from AZLyrics")
+        }
+        assertEquals("pending", lyricsAfter(cooling, azMisses))
+        assertEquals("found", lyricsAfter(cooling, azFinds))
+        assertEquals("missing", lyricsAfter(SiteStage { StageEnd("done", "Megalobiz has no timed ones") }, azMisses))
+        assertEquals("missing", lyricsAfter(SiteStage { LookupWords.NOTHING_TO_ASK }, azMisses))
+    }
+
     @Test fun aStagesExceptionIsABugTheOtherStagesGoOn() = phone { db ->
         val result = lookup(stages(lrclib = SiteStage { throw IllegalStateException("no such column") })).run(db)
         assertEquals("failed" to "a bug in caracole: IllegalStateException: no such column",

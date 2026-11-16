@@ -369,11 +369,21 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     }
 
     /** LRCLIB, then Megalobiz for the timed lyrics LRCLIB left the song without, then AZLyrics for a song still
-     * without any. */
+     * without any. Megalobiz skipped before it was asked (its cooldown) answered no miss: a song LRCLIB missed is put
+     * back to pending, as an error or a cut turn puts it (Megalobiz.megalobizLyrics), unless AZLyrics then found its
+     * lyrics (get.py's `lyrics`). */
     private fun lyrics(): StageEnd {
         var out = site(lookup.stages.lrclib)
-        out = then(out, site(lookup.stages.megalobiz, nothing = true))
-        return then(out, site(lookup.stages.azlyrics, nothing = true))
+        val megalobiz = site(lookup.stages.megalobiz, nothing = true)
+        out = then(out, megalobiz)
+        out = then(out, site(lookup.stages.azlyrics, nothing = true))
+        if (megalobiz != LookupWords.NOTHING_TO_ASK && megalobiz.state != "done" &&
+            Songs.byId(db, song.id)?.lyricsStatus == "missing") {
+            Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "pending", "lyrics_at" to null),
+                                Stamps.of(now))
+            found = Songs.byId(db, song.id) ?: found
+        }
+        return out
     }
 
     private fun then(out: StageEnd, then: StageEnd): StageEnd {
