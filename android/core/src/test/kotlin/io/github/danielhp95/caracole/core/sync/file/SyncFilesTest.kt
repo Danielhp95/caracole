@@ -76,6 +76,22 @@ class SyncFilesTest {
         return assertFailsWith<FileError> { SyncFiles.checkWhole(SyncFiles.read(file)) }.message!!
     }
 
+    /** peer_file's index export whose META is a view, not its table: no file of caracole's (python-sync's finding 20). */
+    @Test fun anIndexExportWhoseMetaIsAViewIsNoFileOfCaracoles() {
+        val file = File(tmp.newFolder(), "indexes.sqlite")
+        val c = androidx.sqlite.driver.bundled.BundledSQLiteDriver().open(file.path)
+        try {
+            for (sql in listOf("CREATE TABLE meta_rows (key TEXT, value TEXT)",
+                               "INSERT INTO meta_rows VALUES ('format', '${io.github.danielhp95.caracole.core.index.IndexTransfer.FORMAT}')",
+                               "CREATE VIEW ${io.github.danielhp95.caracole.core.index.IndexTransfer.META} AS SELECT key, value FROM meta_rows")) {
+                c.prepare(sql).use { it.step() }
+            }
+        } finally {
+            c.close()
+        }
+        assertEquals(FileError.NOT_A_FILE, assertFailsWith<FileError> { SyncFiles.read(file) }.message)
+    }
+
     @Test fun everyRecordOfFileJsonlReplays() {
         Misses(SyncReplay.FILE).also(SyncReplay::file).assertNone()
     }
