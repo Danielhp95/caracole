@@ -1100,8 +1100,8 @@ def put_artist_url(path: Path, artist: str, name: str, page: str | None) -> None
             return
         t = _table_of(doc, "artist_url")
         keys = [k for k in t if slug_key(k) == wanted]
-        if value is not None and keys and _artist_url_value(t[keys[-1]]) == value:
-            return
+        if value is not None and keys == [name] and _artist_url_value(t[name]) == value:
+            return  # as it is, under that name: the file left as written
         for k in keys:
             del t[k]
         if value is not None:

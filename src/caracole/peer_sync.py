@@ -1163,6 +1163,9 @@ def _apply(conn, cfg, source: UnitSource, unit_id: str, doc: Mapping[str, Any] |
             conn.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
                          (rest, str(doc["artist"]), str(doc["title"]),
                           json.dumps(doc.get("source_ids") or {}, ensure_ascii=False), str(doc["removed_at"])))
+        elif find_song(conn, rest) is None:  # a tombstone here under other names: theirs, its unit's names alone
+            conn.execute("UPDATE removed SET artist = ?, title = ? WHERE key = ?",
+                         (str(doc["artist"]), str(doc["title"]), rest))
     elif kind == "songbook":
         songs = None
         if doc is not None:

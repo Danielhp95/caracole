@@ -651,3 +651,32 @@ def test_the_state_document_names_the_newest_read_of_each_sites_index(conn):
     kv_set(conn, "ug:index:refreshed_at", "2026-10-30T03:30:00Z")
     doc = sync.state_document("abc", "0.1.0", "Tabs", {}, indexes=index_transfer.newest(conn))
     assert doc["indexes"] == {"ug": "2026-10-30T03:30:00Z"}
+
+
+def test_a_tombstone_both_sides_hold_under_other_spellings_is_taken_as_theirs_and_agreed(tmp_path):
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    here.tombstone("Oasis", "Wonderwall")
+    there.tombstone("OASIS", "Wonderwall")
+    unit = "removed/oasis/wonderwall"
+    assert [(d.id, d.proposal) for d in sync.compare(here.units(), there.units(), None)] == [(unit, sync.CONFLICT)]
+    done = here.take(there, [unit])  # the owner chose theirs
+    assert done.taken == [unit] and done.left == []
+    assert here.digests()[unit] == there.digests()[unit]
+    sync.record_agreement(here.conn, "0123456789abcdef", here.units(), there.units(), "2026-11-15T00:00:00Z")
+    base = {u: d for u, (d, _) in (sync.base_of(here.conn, "0123456789abcdef") or {}).items()}
+    assert sync.compare(here.units(), there.units(), base) == []
+
+
+def test_an_artists_ug_page_both_sides_hold_under_other_spellings_is_taken_as_theirs(tmp_path):
+    from caracole.overrides import add_artist_url
+
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    page = "https://www.ultimate-guitar.com/artist/soda_stereo_12345"
+    add_artist_url(here.cfg.overrides_file, "soda stereo", page)
+    add_artist_url(there.cfg.overrides_file, "Soda Stereo", page)
+    (unit,) = [u for u in here.units() if u.startswith("artist_url/")]
+    assert here.digests()[unit] != there.digests()[unit]
+    done = here.take(there, [unit])
+    assert done.taken == [unit] and done.left == []
+    assert load_overrides(here.cfg.overrides_file).artist_url_names == {unit.partition("/")[2]: "Soda Stereo"}
+    assert here.digests()[unit] == there.digests()[unit]
