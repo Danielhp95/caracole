@@ -257,6 +257,33 @@ class BackupsTest {
         assertEquals(emptyList(), filesNotHoldingTheirRows(phone))
     }
 
+    /** The files kept since the backup are no rows once its tables came back: the restore run again deletes them all
+     * the same, as the first would have. */
+    @Test fun aRestoreRunAgainAfterItsFilesFailedDeletesTheFilesKeptSinceTheBackup() {
+        val phone = phone()
+        val made = make(phone, at(1))
+        val creep = phone.read { db -> Songs.byKey(db, "radiohead/creep")!! }
+        val sheet = phone.read { db -> Kept.keptFiles(db, creep.id).first { it.name == "sheet.txt" } }
+        phone.write { db ->
+            Kept.keepFile(db, phone.store, creep, sheet.versionId, "sheet.txt", "[G]since".toByteArray(), 0, "2026-11-05T08:00:00Z")
+            Kept.keepFile(db, phone.store, creep, sheet.versionId, "notes.txt", "added since".toByteArray(), 1, "2026-11-05T08:00:00Z")
+        }
+        val notes = File(File(phone.library, sheet.path).parentFile, "notes.txt")
+        assertTrue(notes.isFile)
+        val folder = notes.parentFile
+        assumeTrue("a folder this process can't write to (not root)", folder.setWritable(false) && !folder.canWrite())
+        try {
+            assertFailsWith<PartlyRestored> { Backups.restore(phone.database, phone.store, made) }
+        } finally {
+            folder.setWritable(true)
+        }
+        assertTrue(notes.isFile, "the first restore stopped before it")
+        assertTrue(Backups.restore(phone.database, phone.store, made).removed >= 1)
+        assertTrue(!notes.exists(), "a file kept since the backup, which no row names, is gone")
+        assertEquals(emptyList(), filesNotHoldingTheirRows(phone))
+        assertTrue(!File(backups(phone), "restoring.json").exists(), "nothing is left owed")
+    }
+
     @Test fun aBlobThatCantBeWrittenMakesNoBackup() {
         val phone = phone()
         backups(phone).mkdirs()

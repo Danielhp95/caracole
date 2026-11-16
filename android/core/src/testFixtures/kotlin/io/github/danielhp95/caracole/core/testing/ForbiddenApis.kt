@@ -71,6 +71,9 @@ object ForbiddenApis {
              "a reference to the JDK's Unicode: PyUnicode's, Py's"),
         Rule(Regex("""[(,]\s*ignoreCase\s*=\s*true\b"""), "the JDK's case folding: compare PyUnicode.casefold's"),
         Rule(Regex("""\b(?:CharCategory|Collator|BreakIterator)\b|\bandroid\.icu\b"""), "the JDK's or ICU's Unicode"),
+        // Not text, but the same trap: :core is built for the JVM, and on Android androidx.sqlite.SQLiteException is
+        // a typealias of android.database.SQLException, so a catch or an `is` of it never matches on the device.
+        Rule(Regex("""\bSQLiteException\b"""), "a class the device hasn't got: Throwable.isSqliteError"),
     )
     private val CHARACTER = Regex("""\bCharacter\s*(?:\.|::)\s*([A-Za-z_][A-Za-z0-9_]*)""")
 

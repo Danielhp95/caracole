@@ -58,10 +58,14 @@ object IndexTransfer {
      * first change. Called inside Database.write, in no transaction or savepoint of the caller's: else an
      * IllegalStateException, nothing written (a [TransferError] is the file's alone). UG's full-text indexes are made
      * one segment each once its sitemaps' rows changed by [optimizeAfter] rows or more, the triggers' included
-     * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never.
+     * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never. With [notAfter] (a time as
+     * Stamps.parse gives one), a record or page the file says it read after it is never newer than the database's,
+     * so that a file dated in the future can't take a site's rows for good (the phone's sync passes its clock; Python's
+     * merge has no such bound, and the replays none).
      */
     fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
-              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, backup: (() -> Unit)? = null): Merged {
+              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null,
+              backup: (() -> Unit)? = null): Merged {
         // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
         check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
@@ -77,7 +81,7 @@ object IndexTransfer {
             val meta = meta(db, export)
             val names = mergedSites(export, meta, sites)
             Merge.checkColumns(db, export, names)
-            val plans = names.map { Merge.plan(db, it, now) }
+            val plans = names.map { Merge.plan(db, it, now, notAfter) }
             if (plans.none { it.changes }) {
                 return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false)
             }

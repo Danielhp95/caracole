@@ -44,7 +44,7 @@ internal object Merge {
     fun completeKey(provider: String) = "$provider:index:complete_at"
 
     /** _Plan: what a merge takes of a site. */
-    class Plan(val site: String) {
+    class Plan(val site: String, val notAfter: Long? = null) {
         class Action(val noun: String, val count: Int, val run: (Db) -> Unit)
 
         val actions = ArrayList<Action>()
@@ -92,18 +92,26 @@ internal object Merge {
         }
     }
 
-    /** _newer: whether a time the file recorded is later than the database's; a time missing is earlier than any. */
-    private fun newer(theirs: Long?, mine: Long?): Boolean = theirs != null && (mine == null || theirs > mine)
+    /** _newer: whether a time the file recorded is later than the database's; a time missing is earlier than any.
+     * On the phone, a time after the plan's [Plan.notAfter] (the merge's clock) is never newer: a file dated in the
+     * future would otherwise replace a site's rows with its own for good, the phone reading no sitemap itself. */
+    private fun Plan.newer(theirs: Long?, mine: Long?): Boolean =
+        theirs != null && (notAfter == null || theirs <= notAfter) && (mine == null || theirs > mine)
 
-    private fun newer(theirs: String?, mine: String?): Boolean = newer(Stamps.parse(theirs), Stamps.parse(mine))
+    private fun Plan.newer(theirs: String?, mine: String?): Boolean = newer(Stamps.parse(theirs), Stamps.parse(mine))
 
-    private fun newer(theirs: JsonElement?, mine: JsonElement?): Boolean =
+    private fun Plan.newer(theirs: JsonElement?, mine: JsonElement?): Boolean =
         newer(Stamps.parse(theirs), Stamps.parse(mine))
+
+    /** The SQL condition that a file's `t.read_at` is no later than [Plan.notAfter] (always, with none), and its
+     * argument: stored times are ISO 8601 UTC to the second, compared as text as the merge compares them. */
+    private fun Plan.readNoLater(): Pair<String, Array<Any?>> =
+        if (notAfter == null) "" to emptyArray() else " AND t.read_at <= ?" to arrayOf(Stamps.stamp(notAfter))
 
     private fun seen(entry: JsonElement?, stamp: String): JsonElement? = (entry as? JsonObject)?.get(stamp)
 
     /** _newer_records: the sitemaps (pages) of a record of them the file read later, or the database never read. */
-    private fun newerRecords(db: Db, key: String, stamp: String): List<String> {
+    private fun Plan.newerRecords(db: Db, key: String, stamp: String): List<String> {
         val mine = records(db, "main", key)
         val theirs = records(db, THEIRS, key)
         return theirs.entries.filter { (name, entry) ->
@@ -113,8 +121,8 @@ internal object Merge {
 
     // --- deciding --------------------------------------------------------------------------------------------------
 
-    fun plan(db: Db, name: String, now: String): Plan {
-        val plan = Plan(name)
+    fun plan(db: Db, name: String, now: String, notAfter: Long? = null): Plan {
+        val plan = Plan(name, notAfter)
         when (name) {
             "ug" -> planUg(db, plan, now)
             "lacuerda" -> planLacuerda(db, plan)
@@ -129,7 +137,7 @@ internal object Merge {
     /** _later: a time that moves on, never back: the file's, when later. */
     private fun later(db: Db, plan: Plan, key: String) {
         val theirs = kv(db, THEIRS, key)
-        if (newer(theirs, kv(db, "main", key))) plan.kv[key] = theirs
+        if (plan.newer(theirs, kv(db, "main", key))) plan.kv[key] = theirs
     }
 
     /** _keys_again: rows of the file's keyed by another normalizer than the database's: made again whole after. */
@@ -140,7 +148,7 @@ internal object Merge {
     /** _sitemaps: a site_index.py site's sitemaps the file read later, and its `complete_at`. */
     private fun sitemaps(db: Db, plan: Plan, provider: String, table: String) {
         val key = sitemapsKey(provider)
-        val names = newerRecords(db, key, "checked_at")
+        val names = plan.newerRecords(db, key, "checked_at")
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
             replace(c, table, "sitemap")
@@ -151,9 +159,10 @@ internal object Merge {
 
     /** _pages: the pages (path, read_at) the file read later, with their tabs (by [column]). */
     private fun pages(db: Db, plan: Plan, noun: String, pages: String, tabs: String, column: String) {
+        val (noLater, args) = plan.readNoLater()
         val names = db.query(
             "SELECT t.path FROM $THEIRS.$pages t LEFT JOIN main.$pages m ON m.path = t.path " +
-                "WHERE m.path IS NULL OR t.read_at > m.read_at ORDER BY t.path",
+                "WHERE (m.path IS NULL OR t.read_at > m.read_at)$noLater ORDER BY t.path", *args,
         ) { it.text(0)!! }
         plan.take(noun, names.size) { c ->
             taken(c, names)
@@ -178,7 +187,7 @@ internal object Merge {
     }
 
     private fun planLacuerda(db: Db, plan: Plan) {
-        val listings = newerRecords(db, LC_PAGES, "checked_at")
+        val listings = plan.newerRecords(db, LC_PAGES, "checked_at")
         plan.take("listing page", listings.size) { c ->
             taken(c, listings)
             replace(c, "lacuerda_index", "page")
@@ -206,7 +215,7 @@ internal object Merge {
     }
 
     private fun planUg(db: Db, plan: Plan, now: String) {
-        val names = newerRecords(db, UG_SITEMAPS, "indexed_at")
+        val names = plan.newerRecords(db, UG_SITEMAPS, "indexed_at")
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
             // The tabs the database never had, kept for the songs they may be for (none on a new phone).
@@ -233,17 +242,18 @@ internal object Merge {
             takeRecords(c, UG_SITEMAPS, names)
             if (songs.isNotEmpty()) NewTabs.markDirty(c, songs, now)
         }
+        val (noLater, args) = plan.readNoLater()
         val newerTabs = "FROM $THEIRS.ug_artist_tabs t LEFT JOIN main.ug_artist_tabs m ON m.page = t.page AND " +
-            "m.tab_id = t.tab_id WHERE m.page IS NULL OR t.read_at > m.read_at"
-        val tabs = db.one("SELECT COUNT(*) $newerTabs") { it.long(0)!! }!!.toInt()
+            "m.tab_id = t.tab_id WHERE (m.page IS NULL OR t.read_at > m.read_at)$noLater"
+        val tabs = db.one("SELECT COUNT(*) $newerTabs", *args) { it.long(0)!! }!!.toInt()
         plan.take("tab of its artist pages", tabs) { c ->
-            val pages = c.query("SELECT DISTINCT t.page $newerTabs") { it.text(0)!! }
+            val pages = c.query("SELECT DISTINCT t.page $newerTabs", *args) { it.text(0)!! }
             val cols = columns(c, "main", "ug_artist_tabs")
             c.execute(
                 "INSERT INTO main.ug_artist_tabs (${cols.joinToString(", ")}) SELECT ${cols.joinToString(", ")} FROM " +
-                    "$THEIRS.ug_artist_tabs WHERE true ON CONFLICT (page, tab_id) DO UPDATE SET " +
+                    "$THEIRS.ug_artist_tabs t WHERE true$noLater ON CONFLICT (page, tab_id) DO UPDATE SET " +
                     cols.drop(2).joinToString(", ") { "$it = excluded.$it" } +
-                    " WHERE excluded.read_at > ug_artist_tabs.read_at",
+                    " WHERE excluded.read_at > ug_artist_tabs.read_at", *args,
             )
             ArtistTabs.refile(c, pages)
         }
@@ -254,7 +264,7 @@ internal object Merge {
         val mineSeen = seen("main")
         val theirsSeen = seen(THEIRS)
         val listed = kv(db, THEIRS, UG_LISTED)
-        if (listed != null && theirsSeen != null && (mineSeen == null || theirsSeen > mineSeen) &&
+        if (listed != null && plan.newer(theirsSeen, mineSeen) &&
             listed != kv(db, "main", UG_LISTED)
         ) {
             plan.kv[UG_LISTED] = listed

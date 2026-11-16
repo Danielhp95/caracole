@@ -249,6 +249,55 @@ class ImportTest {
         assertTrue(Instant.parse(MADE) < Instant.parse("2026-11-04T08:00:00Z"))
     }
 
+    @Test fun aTakeTheDatabaseStopsSaysTheUnitsItTookBefore() {
+        val there = Caracole().apply {
+            add("Muse", "Hysteria")
+            database.writeBlocking { db ->
+                io.github.danielhp95.caracole.core.library.SongbookStore.put(db, "Campfire", JsonArray(emptyList()))
+            }
+        }
+        val file = there.export()
+        val here = Caracole()
+        // The database's own failure at the songbook, taken after the song (SQLite's "no such table", no refusal).
+        here.database.writeBlocking { db ->
+            db.execute("CREATE TRIGGER broken AFTER INSERT ON phone_songbooks BEGIN SELECT * FROM nowhere; END")
+        }
+        val failed = assertFailsWith<SyncFailed> { here.apply(here.engine.compareFile(file)) }
+        assertTrue("no such table" in failed.message!!, failed.message)
+        assertEquals(listOf("song/muse/hysteria"), failed.outcome!!.taken, "the song it took stays taken, and says so")
+        assertTrue(here.state().keys.any { it == "song/muse/hysteria" })
+    }
+
+    /** gtptabs.com's one sitemap read at [checkedAt], with [rows] rows of it. */
+    private fun Caracole.gtptabs(checkedAt: String, rows: Int) = database.writeBlocking { db ->
+        db.kvSet("gtptabs:sitemaps", """{"sitemap-1.xml": {"checked_at": "$checkedAt"}}""")
+        for (n in 1..rows) {
+            db.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) " +
+                           "VALUES (?, 'muse', 'muse', ?, ?, 'sitemap-1.xml')", "tabs/muse/song-$n", "song-$n", "song-$n")
+        }
+    }
+
+    private fun Caracole.gtptabsRows(): Long =
+        database.read { db -> db.one("SELECT COUNT(*) FROM gtptabs_index") { it.long(0)!! }!! }
+
+    @Test fun aFilesIndexDatedInTheFutureTakesNoRowsAndALaterHonestOneStillDoes() {
+        val here = Caracole().apply { gtptabs("2026-11-01T03:00:00Z", rows = 3) }
+        here.engine.clock = { Instant.parse("2026-11-04T10:00:00Z") }
+        // Anyone's file: gtptabs.com's sitemap "read" in 2999, no row of it.
+        val future = Caracole().apply { add("Muse", "Hysteria"); gtptabs("2999-01-01T00:00:00Z", rows = 0) }
+            .export(Scope.PARTS)
+        here.apply(here.engine.compareFile(future))
+        assertEquals(3, here.gtptabsRows(), "the phone's rows of that sitemap stay")
+        assertEquals("""{"sitemap-1.xml": {"checked_at": "2026-11-01T03:00:00Z"}}""",
+                     here.database.read { it.kvGet("gtptabs:sitemaps") })
+        // The owner's computer, its index read since: taken, a day's lead of its clock allowed.
+        here.engine.clock = { Instant.parse("2026-12-01T10:00:00Z") }
+        val honest = Caracole().apply { add("Muse", "Hysteria"); gtptabs("2026-12-02T03:00:00Z", rows = 5) }
+            .export(Scope.PARTS, made = "2026-12-01T09:00:00Z")
+        here.apply(here.engine.compareFile(honest))
+        assertEquals(5, here.gtptabsRows())
+    }
+
     private companion object {
         const val MADE = "2026-11-03T21:10:00Z"
     }

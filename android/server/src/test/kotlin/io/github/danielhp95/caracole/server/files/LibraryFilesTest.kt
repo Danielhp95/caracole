@@ -124,6 +124,20 @@ class LibraryFilesTest {
                                   "Cross-Origin-Resource-Policy" to "same-origin",
                                   "Cross-Origin-Opener-Policy" to "same-origin", "Cache-Control" to "no-store")
 
+    /** The folder a unit's pages are in, which a file's layer keeps each page of the unit to. */
+    @Test fun aUnitsFolderIsItsSongsOrItsSongbooksHere() {
+        TestApp(tmp.root).use { test ->
+            song(test.database, "Soda Stereo", "De Música Ligera", key)
+            test.database.writeBlocking { db -> SongbookStore.put(db, "Camp Fire", JsonArray(emptyList())) }
+            assertEquals(listOf("Soda Stereo", "De Música Ligera"), PhoneGate.folderOf(test.database, "song/$key"))
+            assertEquals(listOf("_songbooks", SafeName.safeName("Camp Fire")),
+                         PhoneGate.folderOf(test.database, "songbook/${SongbookStore.nameKey("Camp Fire")}"))
+            for (unit in listOf("song/nobody|here", "songbook/none", "alias/soda", "song")) {
+                assertNull(PhoneGate.folderOf(test.database, unit), unit)
+            }
+        }
+    }
+
     @Test fun aMirroredPageIsServedWithTheManifestsHeadersExactly() {
         val mirror = mirror(Triple("Soda Stereo/De Música Ligera/sheet.html", "<!doctype html>sheet", "song/$key"),
                             Triple("Soda Stereo/De Música Ligera/sheet.pdf", "%PDF-1.7", null))

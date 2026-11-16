@@ -137,6 +137,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
 
+    /** The latest time an index merged here may say it was read at (IndexTransfer.merge's `notAfter`): the clock and
+     * a day more, for another device's clock ahead of the phone's. */
+    private fun notAfter(): Long = Stamps.micros(clock().plus(java.time.Duration.ofDays(1)))
+
     /** The zone a refusal says a day in (an older file's "on 03/11/26"): the phone's; a test's own. */
     internal var zone: ZoneId = ZoneId.systemDefault()
 
@@ -450,7 +454,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
-                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()))
+                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter())
                 val newest = IndexTransfer.newest(db)
                 taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
             }
@@ -554,14 +558,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 database.write { db ->
                     Take.backupBeforeSync(db, stateDir, now, store)
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
-                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { _, _ ->
+                    // Each unit taken is the phone's as it is done (a savepoint of its own): recorded then, so that
+                    // a take the database stops says what it took before.
+                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { id, what ->
+                        if (what == "taken") done.taken.add(id)
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                     }
                 }
             }
         }
-        done.taken.addAll(applied.taken)
         done.left.addAll(applied.left)
         stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
         return applied
@@ -692,7 +698,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
-                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
+                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter())
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
@@ -757,6 +763,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         client.indexes()
     } catch (e: PeerError) {
         null
+    }
+
+    /**
+     * The index files a sync works with in `stateDir/cache/` (a computer's index, a file's indexes copied out, the
+     * phone's reads for a push, each deleted in its sync's `finally`), every one an earlier process left, killed in
+     * its middle, deleted, with SQLite's journals beside them: called as the phone starts, while no sync runs. Each
+     * is the size of a site's index (hundreds of MB), and nothing else looks for one.
+     */
+    fun sweep() {
+        File(stateDir, "cache").listFiles()?.forEach { if (it.isFile && LEFT.matches(it.name)) it.delete() }
     }
 
     /** `stateDir/cache/`, made when missing; a PeerError in the phone's words when it can't be. */
@@ -880,6 +896,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** kv: the stamps of the computer's indexes the phone merged last, by its id: {site: stamp}. */
         const val INDEX_KEY = "sync:index:"
+
+        /** The names of a sync's index files in `stateDir/cache/` ([sweep]), and their SQLite journals. */
+        private val LEFT = Regex("(index|import-indexes|reads)-[0-9a-f]{16}\\.sqlite(-wal|-shm|-journal)?")
 
         /** The index stage's words with no index newer there and no page read here. */
         const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"

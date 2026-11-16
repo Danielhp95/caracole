@@ -3,7 +3,10 @@ package io.github.danielhp95.caracole.core.library.internal
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.OverridesError
+import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.RemovedRow
+import io.github.danielhp95.caracole.core.library.internal.overrides.Addresses
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import kotlinx.serialization.json.JsonElement
@@ -25,6 +28,7 @@ internal object Rekey {
         return db.savepoint("rekey_songs") {
             val changed = rekey(db, now)
             rekeyRemoved(db)
+            rekeyOverrides(db)
             db.kvSet(SongKv.KEY_VERSION, Normalize.KEY_VERSION.toString())
             changed
         }
@@ -76,6 +80,44 @@ internal object Rekey {
             for (old in oldKeys) db.execute("DELETE FROM removed WHERE key = ?", old)
             Upsert.writeRemoved(db, RemovedRow(key, latest.artist, latest.title, SongKv.idsText(ids), latest.removedAt))
         }
+    }
+
+    /**
+     * The phone's overrides entries (phone_overrides) keyed again from the names they are written under, as Python's
+     * load keys overrides.toml's at every read: a song's tables by `override_key` ("Artist - Title"), `alias` and
+     * `artist_url` by `slug_key` of the artist's name; `block`, by a tab id, keeps its key. An entry whose name names
+     * no song keeps its key. Two entries of a table that now share a key are one, the later (by row) kept, as a
+     * load keeps the last.
+     */
+    private fun rekeyOverrides(db: Db) {
+        val rows = db.query("SELECT rowid, tbl, key, written FROM phone_overrides ORDER BY rowid") {
+            Triple(it.long(0)!!, it.text(1)!! to it.text(2)!!, it.text(3)!!)
+        }
+        // Each row's key by today's rules (its own where its name names none), then one row a (table, key): the last.
+        val target = rows.associate { (rowid, at, written) ->
+            val (table, key) = at
+            rowid to (when (table) {
+                in OverridesStore.SONG_TABLES, "ignore" -> try {
+                    Addresses.overrideKey(written)
+                } catch (_: OverridesError) {
+                    null
+                }
+                "alias", "artist_url" -> Normalize.slugKey(written)
+                else -> null
+            } ?: key)
+        }
+        val moving = rows.filter { (rowid, at, _) -> target.getValue(rowid) != at.second }
+        if (moving.isEmpty()) return
+        val last = rows.groupBy { (rowid, at, _) -> at.first to target.getValue(rowid) }.mapValues { it.value.last().first }
+        for ((rowid, at, _) in rows) {
+            if (last.getValue(at.first to target.getValue(rowid)) != rowid) {
+                db.execute("DELETE FROM phone_overrides WHERE rowid = ?", rowid)
+            }
+        }
+        // Keys are unique, and one row's new key can be another's old one: park them all first.
+        val kept = moving.filter { (rowid, at, _) -> last.getValue(at.first to target.getValue(rowid)) == rowid }
+        for ((rowid, _, _) in kept) db.execute("UPDATE phone_overrides SET key = ? WHERE rowid = ?", "#rekey:$rowid", rowid)
+        for ((rowid, _, _) in kept) db.execute("UPDATE phone_overrides SET key = ? WHERE rowid = ?", target.getValue(rowid), rowid)
     }
 
     /** songs._merge: [other] folded into [keep] and deleted; versions [keep] hasn't seen move over unpicked, kept

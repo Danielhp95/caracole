@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.ug.SheetVersions
+import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Gate
@@ -55,6 +56,22 @@ class PhoneGate(val database: Database) : UnitGate {
                 val now = Units.digestOf(db, unit)
                 if (now != null && now != digest) Gate.CHANGED else Gate.SERVE
             }
+
+        /** The folder of the library the pages of [unit] are in, as the computer's list names them
+         * (offline_routes._Units): a song's `Artist/Title` of its names here, a songbook's `_songbooks/<folder>`;
+         * null for a unit the phone holds no song or songbook of, or of another kind. Mirror.takeLayer's `folderOf`. */
+        fun folderOf(database: Database, unit: String): List<String>? = database.read { db ->
+            val kind = unit.substringBefore('/')
+            val key = unit.substringAfter('/', "")
+            when (kind) {
+                "song" -> Songs.byKey(db, key)?.let { SafeName.songFolder(it.artist, it.title).toList() }
+                "songbook" -> SongbookStore.all(db).firstOrNull { SongbookStore.nameKey(it.name) == key }
+                    ?.let { listOf(SONGBOOKS, SafeName.safeName(it.name)) }
+                else -> null
+            }
+        }
+
+        private const val SONGBOOKS = "_songbooks"
     }
 }
 

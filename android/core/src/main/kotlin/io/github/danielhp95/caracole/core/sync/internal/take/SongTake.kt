@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -69,6 +70,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
             }
         }
         val record = need(doc, "song") as? JsonObject ?: throw UnitError("its record can't be read")
+        checkJsonCells(record)
         val lyrics = LyricsFiles.of((record["lyrics_json"] as? JsonPrimitive)?.takeIf { it.isString }?.content)
         val before = here?.let { song ->
             db.query("SELECT name FROM files WHERE song_id = ?", song.id) { it.text(0)!! }.toSet()
@@ -124,6 +126,8 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                 }
                 val entries = need(doc, "overrides") as? JsonObject ?: throw UnitError("its overrides can't be read")
                 OverridesStore.putSongEntries(db, key, "${names.artist} - ${names.title}", entries)
+                // put_song_entries' read back: an entry the reader refuses leaves the unit, nothing written.
+                Overrides.checkSong(db, key)
                 Taken(song.id, respelled)
             }
         } catch (e: Throwable) {
@@ -166,7 +170,33 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         for ((name, value) in carried) {
             val prefix = name.substringBefore('|')
             val more = name.substringAfter('|', "")
-            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", text(value))
+            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", json(text(value), "a record of its kept versions that isn't JSON"))
+        }
+    }
+
+    /** A text cell the phone's readers read as JSON (a carried record, a version's raw record, the match's
+     * candidates), as json.loads reads it; else UnitError in peer_sync._check_storable's words ([what] "that isn't
+     * JSON"), so that no unit stores what the library page can't read. */
+    private fun json(text: String, what: String): String {
+        try {
+            PyJson.loads(text)
+        } catch (e: Exception) {
+            throw notJson(what)
+        }
+        return text
+    }
+
+    private fun notJson(what: String) = UnitError("its entry can't be read (TypeError: $what)")
+
+    /** The document's text cells read as JSON, checked before anything is written ([json]): the record's match
+     * candidates, and each version's raw record, a JSON object or none (versions._row's "{}"). */
+    private fun checkJsonCells(record: JsonObject) {
+        (record["match_candidates"] as? JsonPrimitive)?.takeIf { it.isString }
+            ?.let { json(it.content, "its match candidates that aren't JSON") }
+        for (version in versions()) {
+            val raw = (version["raw"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (raw.isNullOrEmpty()) continue
+            if (PyJson.loads(json(raw, RAW)) !is JsonObject) throw notJson(RAW)
         }
     }
 
@@ -286,6 +316,9 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
 
         /** peer_sync.CARRIED_KV: the per-song kv a song unit carries, keyed `<prefix>|<rest>` in its document. */
         val CARRIED_KV = listOf("sheet_versions:yours:", "sheet_versions:unkeepable:", "sheet_versions:same:")
+
+        /** peer_sync._check_storable's words for a version's raw record it can't store. */
+        private const val RAW = "a version's raw record that isn't JSON"
 
         private fun string(e: JsonElement?): String? = (e as? JsonPrimitive)?.takeIf { it.isString }?.content
 

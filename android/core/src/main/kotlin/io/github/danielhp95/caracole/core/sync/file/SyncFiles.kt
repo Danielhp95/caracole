@@ -567,6 +567,12 @@ object SyncFiles {
         try {
             val connection = BundledSQLiteDriver().open(file.path, SQLITE_OPEN_READONLY)
             try {
+                // Its META a table, as an export writes it: a view (anyone's file) is no file of caracole's.
+                val table = connection.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").use { st ->
+                    st.bindText(1, IndexTransfer.META)
+                    st.step()
+                }
+                if (!table) throw FileError(FileError.NOT_A_FILE)
                 connection.prepare("SELECT key, value FROM ${IndexTransfer.META}").use { st ->
                     while (st.step()) meta[st.getText(0)] = if (st.isNull(1)) null else st.getText(1)
                 }

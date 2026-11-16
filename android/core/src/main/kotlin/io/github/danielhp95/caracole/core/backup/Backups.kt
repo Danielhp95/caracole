@@ -5,12 +5,15 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.JsonText
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.LibraryFiles
 import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
 import io.github.danielhp95.caracole.core.library.internal.writes.Place
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
@@ -207,19 +210,53 @@ object Backups {
     fun restore(database: Database, lib: LibraryStore, file: File,
                 keep: (Db) -> JsonObject = OwnRecords::document,
                 putBack: (Db, JsonObject) -> Unit = OwnRecords::putBack): Restored = database.writeBlocking { db ->
-        val before = keptRows(db)
+        // The kept files of before, and those of a restore before this one that its files never caught up with (a
+        // PartlyRestored's, [RESTORING] beside the backups): its tables came back, so they are no rows here any more.
+        val owed = File(file.parentFile, RESTORING)
+        val pending = pending(owed)
+        val before = (keptRows(db) + pending).distinct().sortedBy { it.first }
         val blobs = File(file.parentFile, BLOBS)
-        BackupTables.restore(db, file) { copy ->
-            refuseUnlessWhole(lib, blobs, BackupTables.keptInCopy(db), before)
-            val own = keep(db)
-            copy()
-            putBack(db, own)
-        }
+        writeOwed(owed, before)
         try {
+            BackupTables.restore(db, file) { copy ->
+                refuseUnlessWhole(lib, blobs, BackupTables.keptInCopy(db), before)
+                val own = keep(db)
+                copy()
+                putBack(db, own)
+            }
+        } catch (e: Throwable) {
+            if (pending.isEmpty()) owed.delete() else writeOwed(owed, pending)  // nothing changed: as it was
+            throw e
+        }
+        val done = try {
             putFiles(db, lib, blobs, before)
         } catch (e: IOException) {
             throw PartlyRestored(e)
         }
+        owed.delete()
+        done
+    }
+
+    /** Beside the backups: the kept files (path, SHA-256) before a restore whose files are not made its rows' yet,
+     * `[path, sha]` each, which a restore run again deletes as the first would have. Never a backup's own name. */
+    internal const val RESTORING = "restoring.json"
+
+    private fun pending(owed: File): List<Pair<String, String>> = try {
+        if (!owed.isFile) emptyList()
+        else (PyJson.loads(owed.readText()) as? JsonArray).orEmpty().mapNotNull { row ->
+            val pair = row as? JsonArray ?: return@mapNotNull null
+            val rel = (pair.getOrNull(0) as? JsonPrimitive)?.takeIf { it.isString }?.content
+            val sha = (pair.getOrNull(1) as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (rel != null && sha != null) rel to sha else null
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /** [rows] written whole over [owed]: a temporary file, synced, then renamed. */
+    private fun writeOwed(owed: File, rows: List<Pair<String, String>>) {
+        val text = PyJson.dumps(JsonArray(rows.map { (rel, sha) -> JsonArray(listOf(JsonPrimitive(rel), JsonPrimitive(sha))) }))
+        Place.writeAtomic(owed.toPath(), text.toByteArray(Charsets.UTF_8))
     }
 
     /** "1 of its files", "3 of its files". */
