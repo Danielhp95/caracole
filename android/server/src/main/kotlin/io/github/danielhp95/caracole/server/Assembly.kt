@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -243,12 +244,25 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     }
 
     /** After each job: the search's answers forgotten (a lookup, a sync or an import may have changed what it
-     * finds), a job that failed told ([Alerts.failed]: the app decides whether its owner was looking), and the files
+     * finds), a job that failed told ([Alerts.failed]: the app decides whether its owner was looking), the pages of
+     * its song owed and the render job queued when it moved the song and made no page of it ([PhoneRender.moved]: a
+     * review's answer, a LaCuerda pick noted; a full queue leaves them owed, for the next start), and the files
      * shared to the app that wait for a song tried again ([InboxRetry]). */
     private fun afterJob(job: Job) {
         search.invalidate()
         if (job.state == Job.FAILED) {
             deps.alerts.failed(job.display, JobViews.line(job).text)
+        }
+        if (job.state == Job.DONE && job.spec.kind != PhoneKinds.RENDER.kind && deps.database.read { db ->
+                // its song: the one it named, else the song of its key (a review's, keyed by its song alone)
+                val song = job.songId ?: Songs.byKey(db, job.key)?.id
+                song != null && render.moved(db, song)
+            }) {
+            deps.database.writeBlocking { db -> render.owe(db) }
+            try {
+                renderAgain()
+            } catch (_: QueueFull) {
+            }
         }
         inbox.afterJob(job)
     }
