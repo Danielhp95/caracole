@@ -113,8 +113,9 @@ generator twice in subprocesses, with `PYTHONHASHSEED=1` and `=2`, and asserts t
 ## Size and speed
 
 Each generator runs in under 3 s, or it is marked `slow`. Vectors stay within `tests/conformance/budget.json`
-(milestones 4–6, below: each area's budget, 71 MB in total since the owner raised the viewer's to 12 MB on
-2026-11-04), which `tests/test_corpus_budget.py` enforces.
+(milestones 4–6, below: each area's budget, 72 MB in total since the owner raised the viewer's to 12 MB on
+2026-11-04 and web's to 10 MB on 2026-11-16, for the logo every page inlines), which `tests/test_corpus_budget.py`
+enforces.
 
 ## The Kotlin reader
 

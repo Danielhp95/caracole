@@ -19,12 +19,11 @@ one: it is the library's own page, wherever it is opened.
 
 Not "the state folder isn't the service's": a library run by hand at home has its own, and is the owner's too.
 
-The standard library alone, and page_icon.py's mark.
+The standard library alone, and page_icon.py's logo.
 """
 
 from __future__ import annotations
 
-import base64
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -32,7 +31,7 @@ from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from caracole.page_icon import ACCENT, LINK, SVG
+from caracole import page_icon
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -43,9 +42,8 @@ TEMPORARY = ("/tmp", "/var/tmp", "/dev/shm")
 TEMPORARY_VARIABLES = ("TMPDIR", "TEMP", "TMP")
 BADGE_TITLE = "Scratch"  # the badge's tooltip
 SCRATCH_COLOUR = "#7a4c00"  # base.css's --wanted, light: the badge's colour, and its icon's
-_SCRATCH_ICON = SVG.replace(ACCENT, SCRATCH_COLOUR)
-SCRATCH_LINK = ('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,'
-                + base64.b64encode(_SCRATCH_ICON.encode("utf-8")).decode("ascii") + '">\n')
+# The tab's icon of a library with a badge: the logo in white and gold on the badge's colour.
+SCRATCH_LINK = page_icon.link(page_icon.icon(SCRATCH_COLOUR, "#fff", "#f2b35a"))
 
 
 @dataclass(frozen=True)
@@ -67,8 +65,8 @@ class LibraryName:
         return f'<{tag} class="libname"><span class="name">{escape(self.name, quote=True)}</span>{badge}</{tag}>'
 
     def icon(self) -> str:
-        """The page's icon, for its head: caracole's, or, with a badge, the same "¿" in the badge's colour."""
-        return SCRATCH_LINK if self.badge else LINK
+        """The page's icon, for its head: caracole's, or, with a badge, the same logo on the badge's colour."""
+        return SCRATCH_LINK if self.badge else page_icon.LINK
 
 
 def scratch_badge(cfg: Config, *, label: str | None = None, config_path: Path | None = None,

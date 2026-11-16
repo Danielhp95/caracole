@@ -158,7 +158,7 @@ header of their own, and harptabs.com's harmonica tabs after them (``titleLine``
 each one's ``source``). A row for one instrument says which (``instrumentBadges``:
 Ukulele for UG's Ukulele Chords, Harmonica for harptabs.com's, Score for MuseScore's;
 a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under the box, in the
-bar kept at the top, what each site found: your songs' count by the page's "¿", then each site's mark and its
+bar kept at the top, what each site found: your songs' count by the page's logo, then each site's mark and its
 count, 0 quieter, its index's state in a colour and a glyph (amber and a pie in part, red and a ban blocked, a
 dashed edge empty or turned off), each one's detail its tooltip; the counts in words are the line's live region,
 a screen reader's while the marks show. A query that found nothing on the sites ends the list with a line of its own under a quiet band (rows.js

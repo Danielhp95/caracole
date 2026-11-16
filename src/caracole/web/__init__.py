@@ -18,7 +18,7 @@ A small server from the standard library (``http.server``), in these parts:
 - history.py: the requests kept across a restart, ``state_dir/requests.jsonl``,
   the queue's own file: a line a request each time it changes, read back when
   the server starts, what waited or ran then interrupted.
-- top.py: the header every page caracole serve writes itself opens with, one line: the "¿" and the name, the
+- top.py: the header every page caracole serve writes itself opens with, one line: the logo and the name, the
   library's name and the server's badge for a library that isn't the usual one (library_name.py), the page's
   title, its links.
 - status.py: the one line a request shows on its song's card, read from its

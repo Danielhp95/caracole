@@ -1,3 +1,5 @@
+<img src="docs/logo/caracole_icon-256.png" alt="caracole's logo" width="128" align="right">
+
 # caracole
 
 **Your own songbook, built while you sleep.**

@@ -1,5 +1,5 @@
 """The header of the pages caracole serve writes itself (pages.py's, lookup_page.py's, guitar_page.py's): one line,
-the "¿" and the name, which lead home, the library's name and its server's badge (library_name.py), the page's title
+the logo and the name, which lead home, the library's name and its server's badge (library_name.py), the page's title
 after them and its links at the end; ``sub``, a muted line under it for what the page is of (a song's artist). The
 library page's bar (library_page.py) is the same line with its tabs. On a phone the mark alone leads home, and the
 badge alone stays of the library's name (base.css's ``.top``, ``.libname``).

@@ -1,4 +1,4 @@
-"""page_icon.py: the mark in the tab of every page caracole writes and serves, an inverted question mark."""
+"""page_icon.py: caracole's logo in the tab of every page caracole writes and serves, and in their bars."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def test_the_icon_is_an_svg_of_shapes_alone_never_a_glyph():
     from caracole import page_icon
 
     svg = ET.fromstring(page_icon.SVG)
-    assert svg.tag == f"{SVG_NS}svg" and svg.get("viewBox") == "0 0 32 32"
+    assert svg.tag == f"{SVG_NS}svg" and svg.get("viewBox") == f"0 0 {page_icon.SIDE} {page_icon.SIDE}"
     tags = {e.tag.removeprefix(SVG_NS) for e in svg.iter()}
     assert "path" in tags and not tags & {"text", "tspan", "textPath", "image", "use", "foreignObject", "style",
                                           "script"}
@@ -75,9 +75,10 @@ def test_the_icon_is_an_svg_of_shapes_alone_never_a_glyph():
     assert svg_of(LINK.fullmatch(page_icon.LINK.strip()).group(1)) == page_icon.SVG.encode("utf-8")
 
 
-def test_the_mark_for_a_bar_is_the_icons_question_mark_alone_in_the_colour_of_its_text():
-    # The icon without its square: the same dot and hook, so the two never drift apart, drawn in currentColor so the
-    # page's accent (and its dark one) colours it, and hidden from a screen reader: the wordmark beside it says it.
+def test_the_mark_for_a_bar_is_the_icons_drawing_alone_its_black_in_the_colour_of_its_text():
+    # The icon without its square: the same two paths, so the two never drift apart, its black in currentColor so the
+    # page's text colour (and its dark one) draws it, its copper the logo's, and hidden from a screen reader: the
+    # wordmark beside it says it.
     from caracole import page_icon
 
     def shapes(svg):  # the shapes and where they are, whatever their colours and namespace
@@ -85,10 +86,10 @@ def test_the_mark_for_a_bar_is_the_icons_question_mark_alone_in_the_colour_of_it
         return [shape for shape in named if shape[0] != "rect"]
 
     mark, icon = ET.fromstring(page_icon.mark()), ET.fromstring(page_icon.SVG)
-    assert shapes(mark) == shapes(icon) and len(shapes(mark)) == 2  # a dot and a hooked stroke
+    assert shapes(mark) == shapes(icon) and len(shapes(mark)) == 2  # its black and its copper
     assert mark.get("aria-hidden") == "true" and mark.get("focusable") == "false" and mark.get("class") == "mark"
-    colours = {e.get("fill") for e in mark if e.get("fill") != "none"} | {e.get("stroke") for e in mark if e.get("stroke")}
-    assert colours == {"currentColor"}
+    assert [e.get("fill") for e in mark] == ["currentColor", page_icon.COPPER]
+    assert [e.get("fill") for e in icon] == [page_icon.CREAM, page_icon.BLACK, page_icon.COPPER]
     assert "style" not in page_icon.mark() and "href" not in page_icon.mark()  # a policy needs nothing for it
 
 

@@ -3628,7 +3628,7 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         assert max(abs(t - field) for t, _, _ in row) < 8, (field, row)
         assert min(h for _, h, _ in row) >= 44, row
         assert phone_page.js("document.querySelector('.searchbar').scrollWidth <= innerWidth")
-        # The tabs and Requests share the first line without touching, the wordmark is its "¿" alone, and the placeholder
+        # The tabs and Requests share the first line without touching, the wordmark is its logo alone, and the placeholder
         # is short enough to read in the field that is left beside two buttons.
         assert phone_page.js("document.getElementById('q').placeholder") == "Search 3 songs"
         tabs = phone_page.js("document.getElementById('tab-songbooks').getBoundingClientRect().right")
@@ -3650,7 +3650,7 @@ ONE_BAR = """
     title: document.querySelector("h1").getBoundingClientRect().width, placeholder: q.placeholder,
     mark: (() => { const m = document.querySelector(".masthead .app svg.mark"); const w = document.querySelector(".masthead .app");
       return m ? [Math.round(m.getBoundingClientRect().height), Math.round(m.getBoundingClientRect().right) <= Math.round(w.getBoundingClientRect().right),
-        getComputedStyle(m.querySelector("path")).stroke === getComputedStyle(w).color] : null; })(),
+        getComputedStyle(m.querySelector("path")).fill === getComputedStyle(document.body).color] : null; })(),
     hint: [document.getElementById("bar-status").textContent, here("bar-status")], count: here("count"),
     stats: Array.from(document.querySelectorAll("#summary .stat")).map((s) => s.textContent),
   }));
@@ -3680,7 +3680,7 @@ def test_the_top_is_one_bar_then_the_search_with_its_tools(conn, cfg, tmp_path):
         assert abs(bar["word"] - bar["tabs"]) < 16 and (bar["links"] is None or abs(bar["word"] - bar["links"]) < 16), bar
         assert abs(bar["filter"] - bar["field"]) < 8 and bar["list"] < 215, bar  # the tools are the search's row
         assert bar["title"] <= 1, bar  # the h1 is there for a screen reader alone
-        assert bar["mark"] and 14 <= bar["mark"][0] <= 28 and bar["mark"][1] and bar["mark"][2], bar  # the icon's "¿", in the wordmark's colour
+        assert bar["mark"] and 14 <= bar["mark"][0] <= 28 and bar["mark"][1] and bar["mark"][2], bar  # the logo, its black the text's
         assert bar["hint"] == ["", 0] and bar["count"] == 0, bar  # nothing to say at rest
         assert bar["stats"] == ["1 wanted"], bar
         assert attribute_of(dom, "data-narrowed") == [True, "1/3 songs"]  # said once the list is narrowed
