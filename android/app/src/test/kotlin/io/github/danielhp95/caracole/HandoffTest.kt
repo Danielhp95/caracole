@@ -69,4 +69,14 @@ class HandoffTest {
         val long = "a".repeat(150) + "/" + "b".repeat(150) + "/guitar-1.gp5"
         assertEquals("guitar-1.gp5", Handoff.fileName(long))
     }
+
+    @Test
+    fun `the browser opens only for a link the owner tapped, never for a page's own navigation or a download`() {
+        // A page's script (a `.caracole` file's page, say) navigating the top frame elsewhere has no gesture, and a
+        // download listener tells none: neither sends the phone's browser anywhere.
+        assertTrue(Handoff.opensBrowser(gesture = true, download = false))
+        assertFalse(Handoff.opensBrowser(gesture = false, download = false))
+        assertFalse(Handoff.opensBrowser(gesture = true, download = true))
+        assertFalse(Handoff.opensBrowser(gesture = false, download = true))
+    }
 }

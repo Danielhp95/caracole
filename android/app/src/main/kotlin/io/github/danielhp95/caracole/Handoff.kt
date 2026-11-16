@@ -74,6 +74,13 @@ object Handoff {
         }
     }
 
+    /**
+     * Whether a link to the web leaves for the phone's browser: only one the owner tapped ([gesture], the
+     * navigation's `WebResourceRequest.hasGesture`), never a page's own navigation (a script's, a `.caracole` file's
+     * page's) nor a download, whose listener tells no gesture.
+     */
+    fun opensBrowser(gesture: Boolean, download: Boolean): Boolean = gesture && !download
+
     /** Opens [url], an address on the web, in the phone's browser. */
     fun openBrowser(activity: Activity, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)

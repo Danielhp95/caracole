@@ -118,6 +118,36 @@ internal object Pages {
         instrumentation.waitForIdleSync()
     }
 
+    /**
+     * A link to [url] tapped as a finger taps it: a link laid over the whole page by script, then one touch down and
+     * up at the WebView's middle, so its navigation carries a gesture (`WebResourceRequest.hasGesture`), as a link the
+     * owner taps does and a script's own navigation doesn't.
+     */
+    fun tapLink(scenario: ActivityScenario<MainActivity>, url: String) {
+        evaluate(scenario, """(() => { const a = document.createElement('a'); a.href = ${JSONObject.quote(url)};
+            a.textContent = 'tap';
+            a.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:block;background:transparent';
+            document.body.appendChild(a); return true; })()""")
+        val origin = IntArray(2)
+        var width = 0
+        var height = 0
+        scenario.onActivity {
+            val web = it.findViewById<WebView>(R.id.web)
+            web.getLocationOnScreen(origin)
+            width = web.width
+            height = web.height
+        }
+        val x = origin[0] + width / 2f
+        val y = origin[1] + height / 2f
+        val down = SystemClock.uptimeMillis()
+        for ((action, at) in listOf(MotionEvent.ACTION_DOWN to down, MotionEvent.ACTION_UP to down + 50)) {
+            val event = MotionEvent.obtain(down, at, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+            check(instrumentation.uiAutomation.injectInputEvent(event, true)) { "the tap wasn't taken" }
+            event.recycle()
+        }
+        instrumentation.waitForIdleSync()
+    }
+
     /** With `-e shots <ms>` ([hold] > 0), says the screen is ready for the host's screenshot, and holds it. */
     fun shot(name: String, hold: Long) {
         if (hold <= 0) return

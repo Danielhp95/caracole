@@ -363,9 +363,10 @@ class MainActivity : Activity() {
 
     /**
      * Where a link the page follows goes ([Links.route]; with [download], one the WebView's download listener heard);
-     * true when the WebView doesn't load it. The viewer's Export PDF prints the viewer shown ([Printer]).
+     * true when the WebView doesn't load it. The viewer's Export PDF prints the viewer shown ([Printer]). An address
+     * on the web opens the browser only on the owner's tap ([gesture], [Handoff.opensBrowser]), else it goes nowhere.
      */
-    private fun follow(url: String, download: Boolean = false): Boolean {
+    private fun follow(url: String, download: Boolean = false, gesture: Boolean = false): Boolean {
         val links = links ?: return true
         if (!download && SharedLink.isCancel(url, origin)) {
             leaveShare()
@@ -374,7 +375,11 @@ class MainActivity : Activity() {
         return when (val route = links.route(url, download)) {
             Route.Page -> false
             is Route.File -> { handOff(route.path); true }
-            is Route.Browser -> { Handoff.openBrowser(this, route.url); true }
+            is Route.Browser -> {
+                if (Handoff.opensBrowser(gesture, download)) Handoff.openBrowser(this, route.url)
+                else Log.i(TAG, "a navigation to the web with no tap: not opened")
+                true
+            }
             is Route.Print -> { Printer.print(this, web, route.url); true }
             Route.Ignored -> true
         }
@@ -446,7 +451,7 @@ class MainActivity : Activity() {
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-            if (request.isForMainFrame) follow(request.url.toString()) else false
+            if (request.isForMainFrame) follow(request.url.toString(), gesture = request.hasGesture()) else false
 
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) = backCallback()
 
