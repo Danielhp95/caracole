@@ -41,7 +41,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * it names: what caracole read, the best match, its sites. Get it posts the library page's own lookup, which lands on
  * the Requests tab and queues `caracole get` with the index's song; Cancel takes the screen back to the library page
  * and behind the app that shared; a link alone of Spotify's is read from its track page, asked once (a fake site's
- * answer: tests/fixtures/spotify/track.html), and one Spotify won't answer (every site refused) says so in one line
+ * answer: tests/fixtures/spotify/track.html) by the page itself, as is one a link of caracole's own page leads to (the
+ * WebView's `Sec-Fetch-Site` none and same-origin: ShareRoutes.asks), and one Spotify won't answer (every site refused) says so in one line
  * and offers Edit, whose names are searched again.
  *
  * The library screen is reached through the lifecycle monitor, never ActivityScenario, which loses track of a
@@ -138,9 +139,9 @@ class ShareLinkTest {
     @Test fun aSongSharedFromAMusicAppShowsItsBestMatchAndGetItLooksItUp() {
         share("Eagles - Hotel California https://link.example/s/30x", subject = "Hotel California")
         shownAt("the share's page", "/share?")
-        assertEquals("caracole read Eagles – Hotel California.", text(".lede"))
+        assertEquals("We read Eagles – Hotel California.", text(".lede"))
         val best = text(".reading.now")
-        assertTrue(best, "Eagles - Hotel California" in best && "Ultimate Guitar" in best)
+        assertTrue(best, "Eagles - Hotel California" in best && "UG: chords" in best)
 
         val queue = Caracole.phone(context).queue
         val before = queue.snapshot().map { it.id }.toSet()
@@ -176,8 +177,33 @@ class ShareLinkTest {
         share("$track?si=0f3c1c4d5e6f4a7b")
         shownAt("the share's page", "/share?")
         assertEquals("Read from Spotify's page: Queen – Bohemian Rhapsody.", text(".lede"))
+        // Asked by itself: the share's loadUrl comes with Sec-Fetch-Site none, so no Read the link is offered.
+        assertEquals(false, evaluate("document.querySelector('form[method=post][action=\"/share\"]') !== null"))
         assertEquals(1, asked.get())
         assertEquals(true, evaluate("document.querySelector('form[action=\"/lookup\"] input[name=title][value=\"Bohemian Rhapsody\"]') !== null"))
+    }
+
+    /** The share page asks a link's service by itself only for a page the WebView says no other site sent
+     * (`Sec-Fetch-Site` none or same-origin: ShareRoutes.asks): the share intent's loadUrl is one
+     * ([aSpotifyLinkAloneIsReadFromItsPageAskedOnce]), and so is a link of caracole's own page, tapped. */
+    @Test fun aLinkToTheSharePageTappedOnCaracolesPageAsksTheServiceByItself() {
+        val track = "https://open.spotify.com/track/7tFiyTwD0nx5a1eklYtX2J"
+        val asked = AtomicInteger()
+        Caracole.sitesForTests = Transport { request ->
+            asked.incrementAndGet()
+            if (request.url != track) throw TransportError("refused", request.url)
+            HttpAnswer(200, listOf("content-type" to "text/html"), Corpus.fixture("spotify/track.html"))
+        }
+        // A link on the library page, as a page of caracole's own would carry one.
+        evaluate("""(() => { const a = document.createElement('a'); a.id = 'to-share';
+            a.href = '/share?text=' + encodeURIComponent(${JSONObject.quote(track)});
+            a.textContent = 'the share page'; a.style.cssText = 'position:fixed;top:40%;left:10px;z-index:99999;' +
+            'padding:24px;background:#fff'; document.body.appendChild(a); return true; })()""")
+        evaluate("document.getElementById('to-share').click(); true")
+        shownAt("the share's page", "/share?")
+        assertEquals("Read from Spotify's page: Queen – Bohemian Rhapsody.", text(".lede"))
+        assertEquals(false, evaluate("document.querySelector('form[method=post][action=\"/share\"]') !== null"))
+        assertEquals(1, asked.get())
     }
 
     @Test fun aLinkAloneSaysSoAndEditSearchesTheNamesTyped() {
@@ -188,7 +214,7 @@ class ShareLinkTest {
         evaluate("(() => { const f = document.querySelector('form[action=\"/share\"]'); " +
             "f.artist.value = 'Eagles'; f.title.value = 'Hotel California'; f.submit(); return true; })()")
         shownAt("the names searched", "artist=Eagles")
-        assertEquals("caracole searched for Eagles – Hotel California.", text(".lede"))
+        assertEquals("We searched for Eagles – Hotel California.", text(".lede"))
         assertTrue(text(".reading.now").contains("Hotel California"))
     }
 

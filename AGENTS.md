@@ -2164,7 +2164,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - its rows on one line a song (`SongLine`, as mergeSites), the best (`best`, else the names' identity);
   - Fetch the library page's `POST /lookup`, Open, Edit (`GET /share?artist=&title=`), in the message page's frame
     and policy (`MessagePage.html`: no script).
-- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device.
+  - A `GET /share` asks a link's service by itself only when the browser says no other site sent it there
+    (`ShareRoutes.asks`: `Sec-Fetch-Site` `none`, the app's own loadUrl of a share, or `same-origin`, a link of
+    caracole's pages), the owner's choice of 2026-11-15; else (cross-site, same-site, or no header) the cache's answer
+    alone, or Read the link, a form that posts the share again to `POST /share` with the form token, which asks once.
+    So no other site's page makes the phone ask a service or write (the one write with no token stays `mine=1`).
+- ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device (the WebView's loadUrl of a share and a
+  link of caracole's page both ask by themselves).
 
 ##### Files shared to the app
 
@@ -2576,6 +2582,8 @@ picks one).
 - The cache's answer is read first, with no request (a short link's hop, which the HTTP cache never keeps, kept beside it once
   the link was read, `ShareAsk.hops`); a block cools the service down and alerts once, an error is
   counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
+- The share's page asks by itself only when the app or caracole's own page opened it (`Sec-Fetch-Site` none or
+  same-origin); any other page's link gets its Read the link, posted with the form token (ShareRoutes.asks).
 - Nothing is sent to a tab site before Fetch.
 
 #### Either pace

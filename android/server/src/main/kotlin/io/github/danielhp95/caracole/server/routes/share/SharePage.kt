@@ -13,18 +13,22 @@ import io.github.danielhp95.caracole.server.http.Response
  * ([said]), the names read from it ([names], read_names'; null when they can't be), the link alone ([link]) when it
  * names none, whether the names were typed ([typed], Edit's), what the link's service said of it ([read], asked once:
  * ShareLinks; null for a link of no service caracole asks, or none), the best match ([best]) and the others
- * ([others]), a note on what the phone could search ([note]), and the Edit form's fields ([artist], [title]).
+ * ([others]), a note on what the phone could search ([note]), and the Edit form's fields ([artist], [title]); the
+ * service of a link the page didn't ask by itself and the cache doesn't answer ([unread]: another site sent the page),
+ * and the share's own fields ([fields]), which Read the link posts again.
  */
 internal data class ShareView(
     val app: String?, val sent: List<Pair<String, String>>, val said: String?, val names: Pair<String, String>?,
     val link: String?, val typed: Boolean, val best: SongLine?, val others: List<SongLine>, val note: String?,
     val artist: String, val title: String, val read: ShareLinks.Read? = null,
+    val unread: ShareLinks.Service? = null, val fields: List<Pair<String, String>> = emptyList(),
 )
 
 /**
  * The page of a song shared to the app (ShareRoutes' `GET /share`), in the message page's frame, style and policy (no
  * script, its style by its hash, forms to the server alone): what caracole read, the best match and its sites, and
- * the owner's choices, each a plain form or link: Fetch (POST /lookup, the library page's own, with the form token),
+ * the owner's choices, each a plain form or link: Read the link (POST /share, with the form token: a link the page
+ * didn't ask its service of by itself), Fetch (POST /lookup, the library page's own, with the form token),
  * Open (a song of yours), Edit (the names typed, `GET /share` again) and Cancel (`/share/cancel`, which the app takes
  * as leaving the share).
  */
@@ -40,6 +44,7 @@ internal object SharePage {
 
     private fun body(v: ShareView, csrf: String): String = buildString {
         append(read(v))
+        v.unread?.let { append(readTheLink(v, it, csrf)) }
         if (v.sent.isNotEmpty() || v.read is ShareLinks.Read.Named) append(sent(v))
         val best = v.best
         if (best != null) {
@@ -74,6 +79,8 @@ internal object SharePage {
                 "the artist and the title."
             asked is ShareLinks.Read.NotRead -> "$sender shared a link alone ($link), and caracole couldn't read it: " +
                 "${esc(asked.why)}. Type the artist and the title, or share it again later."
+            v.unread != null -> "$sender shared a link alone ($link). We can read the song it names from " +
+                "${esc(v.unread.source)}: one request to ${esc(v.unread.name)}."
             v.names != null -> "We read <strong>${esc(dashed(v.names))}</strong>."
             v.said != null && v.typed -> "We searched for <strong>“${esc(v.said)}”</strong> but can't tell the " +
                 "artist. Type both names."
@@ -85,6 +92,15 @@ internal object SharePage {
             else -> "Nothing shared names a song. Type the artist and title."
         }
         return "<p class=\"lede\">$text</p>\n"
+    }
+
+    /** Read the link: the share posted again with the form token (POST /share), which asks the link's service once. */
+    private fun readTheLink(v: ShareView, service: ShareLinks.Service, csrf: String): String = buildString {
+        append("<div class=\"confirm\"><form class=\"pick-form\" method=\"post\" action=\"/share\">")
+        append("<input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">")
+        for ((name, value) in v.fields) append("<input type=\"hidden\" name=\"${esc(name)}\" value=\"${esc(value)}\">")
+        append("<button class=\"btn primary\" type=\"submit\" aria-label=\"Read the link: ask ${esc(service.name)} " +
+                   "once\">Read the link</button></form></div>\n")
     }
 
     /** What the app sent, folded: each extra as it came, and what the link's service said of it. */

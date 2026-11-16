@@ -365,7 +365,9 @@ through `CorpusOnDeviceTest`, under Android's runtime (AGENTS.md, "android/", ha
   a harmonica tab's readings chosen; Export PDF by Android's printing, and Make this my version; an uncertain match
   reviewed; the Guitar Pro page with alphaTab in the app; files shared to the app filed as `_inbox/` files them;
   alerts on Android's notifications; backups, daily and by hand, exported and restored. And, by the owner's later
-  choice (2026-11-10), a song shared from a music app, read from its text or by asking its service once.
+  choice (2026-11-10), a song shared from a music app, read from its text or by asking its service once: by the
+  share's page itself only when the app or caracole's own page opened it (`Sec-Fetch-Site` none or same-origin, the
+  owner's choice of 2026-11-15), else by its Read the link, a form posted with the form token.
 - **The sync redesign**: the library page's sync sheet on both sides (the computer's Sync tab, the phone's bar), its
   three parts (library, songbooks, indexes), a card for each conflict, a summary of what it did; a `.caracole` file
   exported and imported on either side; Sync on Wi-Fi by itself, which leaves each conflict for a notification; sync

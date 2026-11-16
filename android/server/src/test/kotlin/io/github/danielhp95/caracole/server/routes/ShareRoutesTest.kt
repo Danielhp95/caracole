@@ -186,6 +186,55 @@ class ShareRoutesTest {
         assertEquals(1, asked.get())
     }
 
+    /** A GET of [target] whose `Sec-Fetch-Site` is [site] (null: none sent, as an older browser or another client). */
+    private fun Phone.getFrom(site: String?, target: String): Response = app.handle(TestApp.request(
+        "GET", target, if (site == null) emptyMap() else mapOf("sec-fetch-site" to site), ByteArray(0), TestApp.SECRET))
+
+    @Test fun `a page another site sent, or one whose browser doesn't say, asks no service and offers Read the link`() {
+        val phone = phone(sites = mapOf("GET $spotifyTrack" to spotifyPage))
+        val target = share("text" to "$spotifyTrack?si=0f3c1c4d5e6f4a7b", "from" to "com.spotify.music")
+        for (site in listOf("cross-site", "same-site", null)) {
+            val html = unescape(page(phone.getFrom(site, target)))
+            assertTrue("Spotify shared a link alone (<code>$spotifyTrack?si=0f3c1c4d5e6f4a7b</code>). We can read the " +
+                           "song it names from Spotify's page: one request to Spotify." in html, "$site: ${shown(html)}")
+            assertEquals(listOf(listOf("csrf" to TestApp.CSRF, "text" to "$spotifyTrack?si=0f3c1c4d5e6f4a7b",
+                                       "from" to "com.spotify.music")), forms(html, "/share").take(1), "Read the link, $site: first, before Edit")
+            assertTrue(">Read the link</button>" in html, site)
+            assertEquals(0, asked.get(), "$site: nothing asked")
+            assertEquals(0L, phone.parts.database.read { db -> db.one("SELECT COUNT(*) FROM events") { it.long(0) } },
+                         "$site: nothing written")
+        }
+        // Read the link without the form token is refused, asking nothing.
+        val refused = phone.post("/share", listOf("csrf" to "another", "text" to spotifyTrack))
+        assertEquals(403, refused.status, refused.text)
+        assertEquals(0, asked.get())
+        // With it, the service is asked once and the page reads its names.
+        val read = unescape(page(phone.post("/share", forms(unescape(page(phone.getFrom(null, target))), "/share").first())))
+        assertTrue("Read from Spotify's page: <strong>Queen – Bohemian Rhapsody</strong>." in read, shown(read))
+        assertFalse(">Read the link</button>" in read)
+        assertEquals(1, asked.get(), "one request: the track's page")
+        // From then on the cache answers, with no request, whoever sent the page.
+        val again = unescape(page(phone.getFrom("cross-site", target)))
+        assertTrue("Read from Spotify's page: <strong>Queen – Bohemian Rhapsody</strong>." in again, shown(again))
+        assertEquals(1, asked.get())
+    }
+
+    @Test fun `the app's own share page and a link of caracole's pages ask the service by themselves`() {
+        val apple = "https://itunes.apple.com/lookup?id=1440833334&country=us"
+        val phone = phone(sites = mapOf("GET $spotifyTrack" to spotifyPage,
+                                        "GET $apple" to HttpAnswer(200, emptyList(), Corpus.fixture("itunes/lookup-song.json"))))
+        for ((site, text, said) in listOf(
+            Triple("none", spotifyTrack, "Read from Spotify's page: <strong>Queen – Bohemian Rhapsody</strong>."),
+            Triple("same-origin", "https://music.apple.com/us/album/love-me-do/1440833098?i=1440833334",
+                   "Read from Apple Music's catalogue: <strong>The Beatles – Love Me Do</strong>."),
+        )) {
+            val html = unescape(page(phone.getFrom(site, share("text" to text))))
+            assertTrue(said in html, "$site: ${shown(html)}")
+            assertFalse(">Read the link</button>" in html, site)
+        }
+        assertEquals(2, asked.get(), "each asked once")
+    }
+
     @Test fun `an album's link names no song, said with no request`() {
         val phone = phone()
         val html = page(phone.get(share("text" to "https://open.spotify.com/album/1GbtB4zTqAsyfZEsm1RZfx?si=1")))
