@@ -1927,3 +1927,40 @@ def test_a_sheets_artist_searches_for_them_on_the_library_page_and_back_returns_
     assert phone.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
     assert phone.js("location.hash") == "#t=2"
     assert phone.js("document.getElementById('key-now').textContent").startswith("A")  # still two semitones up
+
+
+def test_a_title_that_names_a_key_is_searched_on_the_sites(cfg, conn, tmp_path):
+    # "Canon in D major": a key with other words beside it is a title's words too (library.js ``keyed``), so the
+    # sites are searched as you type; a key alone ("d major") still filters your songs alone.
+    add_song(conn, "Band", "Song")
+    conn.commit()
+    heard = []
+    queue = JobQueue(lambda args, emit: 0)
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
+    real = app.handle
+
+    def handle(request):
+        heard.append(request.target)
+        return real(request)
+
+    app.handle = handle
+    server = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    queue.start()
+    try:
+        with Browser(tmp_path / "chrome", width=1280, height=900) as page:
+            page.open(f"http://127.0.0.1:{server.server_address[1]}/")
+            page.js("document.getElementById('q').focus()")
+            page.type("d major")
+            time.sleep(1)
+            alone = [t for t in heard if t.startswith("/api/search")]
+            assert page.js("document.getElementById('bar-status').textContent") == "No local or remote matches"
+            page.type(" canon")
+            assert page.wait("!document.getElementById('results').hidden")
+            assert page.wait("document.getElementById('found').dataset.query === 'd major canon'")
+    finally:
+        queue.stop()
+        server.shutdown()
+        server.server_close()
+    assert alone == []
+    assert [t for t in heard if t.startswith("/api/search")]

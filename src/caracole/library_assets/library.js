@@ -145,8 +145,12 @@
     });
     return { keys, either, words: terms(rest) };
   };
-  // Whether a key is typed ("a minor", not "am"): it filters your songs alone, as the sites' indexes know no keys.
-  const keyed = (text) => parseQuery(text).keys.length > 0;
+  // Whether a key alone is typed ("a minor", not "am"): it filters your songs alone, as the sites' indexes know no
+  // keys. With other words beside it ("canon in d major") it is a title's words too, and the sites are searched.
+  const keyed = (text) => {
+    const query = parseQuery(text);
+    return query.keys.length > 0 && !query.words.length && !query.either.length;
+  };
   const normal = (text) => String(text).trim().replace(/\s+/g, " ");
   // Whether the sites can be searched for what is typed: words, and no key. Served, they are searched as you type
   // once there is enough to search: three letters or digits, two with a Chinese character, as /api/search looks
@@ -1524,7 +1528,7 @@
     // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
     document.body.classList.toggle("searching-all", searchingAll);
-    drawBar(matching.length === 0, query.keys.length > 0);
+    drawBar(matching.length === 0, keyed(state.q));
     let answerInList = false;  // the file's line that searches the sites, in the list's empty state
     if (searchingAll) {
       drawResults(query, false);
@@ -1611,11 +1615,11 @@
         : "None of your songs play " + progNumerals(state.prog) + "."));
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
-      if (!query.keys.length && server) {  // the offline indexes have no keys
+      if (!keyed(state.q) && server) {  // the offline indexes have no keys
         // Back from the sites' results with Escape: the way to them again.
         if (youtubeVideo(state.q)) list.appendChild(button("Add video as song", "primary", () => enterAll()));
         else if (typedEnough(state.q)) list.appendChild(button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll()));
-      } else if (!query.keys.length) {
+      } else if (!keyed(state.q)) {
         list.appendChild(youtubeVideo(state.q) ? fileVideoAnswer(state.q.trim()) : fileAnswer(state.q.trim()));
         answerInList = true;
       }

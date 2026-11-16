@@ -2587,7 +2587,8 @@ search` line to run where caracole runs, with Copy, and leaves your songs as
 they are; Escape takes it away. When nothing in the library matches, the page
 shows that line at once. A key typed as a key ("a minor", "F# major") filters
 your songs alone: the sites' indexes know no keys, so the line under the box
-says so, and Enter waits for a search without one. The page puts each word of a line to run in single quotes
+says so, and Enter waits for a search without one. Beside other words ("Canon in D major") the key is a
+title's words too, and the sites are searched for the whole text. The page puts each word of a line to run in single quotes
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
 it, and the names after `--` when one starts with "-" (the artist -M-), so that
 caracole takes none for an option. `caracole serve` serves the same page, where typing searches what the
