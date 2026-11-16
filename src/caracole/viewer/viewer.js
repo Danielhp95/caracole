@@ -2725,17 +2725,21 @@
     if (mine) $("scroll").focus({ preventScroll: true });
   };
 
+  // The song moves only in sight: the overlay's sheet over the whole screen goes back to half, the song above it.
+  const halfSheet = () => {
+    if (sheetAt !== "full") return;
+    sheetAt = "half";
+    drawNecks();
+  };
   $("scroll").addEventListener("click", () => {
     closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
-    if (sheetAt === "full") {
-      sheetAt = "half";
-      drawNecks();
-    }
+    halfSheet();
     showSizes(false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
   go.addEventListener("click", () => {
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();

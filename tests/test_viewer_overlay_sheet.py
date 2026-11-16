@@ -400,3 +400,48 @@ def test_the_window_widened_past_1200_px_with_the_sheet_open_gives_its_place_to_
     assert wide[0]["role"] is None and wide[0]["named"] == "Chord necks" and wide[0]["hide"]
     assert wide[1]["pane"] == "harmonica" and wide[0]["focus"] == "Harmonica"
     assert not back["open"] and back["expanded"] == "false" and back["button"]  # it never opens by itself
+
+
+def _long_harmonica_tab(tmp_path) -> str:
+    """A harmonica tab's page long enough to scroll, beside a sheet."""
+    from pathlib import Path
+
+    from caracole.viewer.harptab_page import build_harmonica_viewer
+
+    tab = (Path(__file__).parent / "fixtures" / "harptabs" / "tabs" / "124_heart-of-gold.txt").read_text("utf-8")
+    tab += "\n" + "\n".join(tab.splitlines()[:8] * 12)
+    folder = tmp_path / "Artist" / "Title"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "harmonica-1.txt").write_text(tab, encoding="utf-8")
+    (folder / "harmonica-1.html").write_text(build_harmonica_viewer(
+        tab, title="Title", artist="Artist", tab_file="harmonica-1.txt", page_key="G", cho=LONG, back="sheet.html"),
+        encoding="utf-8")
+    return (folder / "harmonica-1.html").as_uri()
+
+
+@pytest.mark.parametrize("kind", ["sheet", "harmonica"])
+def test_the_pills_play_takes_the_whole_screen_sheet_back_to_half_as_the_bars_does(tmp_path, kind):
+    """Paused under the sheet over the whole screen, the pill's ▶ (riding over the sheet's foot) starts the song moving
+    again: the sheet goes back to half, the song moving above it, as the bar's ▶ leaves it; never out of sight."""
+    import time
+
+    pill = "document.getElementById('pill').dataset.state"
+    page = open_viewer(tmp_path, written(tmp_path, LONG)) if kind == "sheet" \
+        else opened(tmp_path, _long_harmonica_tab(tmp_path))
+    with page as b:
+        touch(b, "#scroll")
+        assert b.wait(pill + " === 'counting'")
+        touch(b, "#go")  # at once
+        assert b.wait(pill + " === 'running'")
+        tap_at(b, 195, 300)  # a finger on the page: paused, the bar back
+        assert b.wait(pill + " === 'paused'")
+        open_sheet(b)
+        touch(b, "#necks .ov-grip")  # the whole screen
+        assert b.wait(FULL)
+        touch(b, "#go")  # the pill's ▶
+        assert b.wait(pill + " === 'counting'")
+        assert b.wait(HALF)
+        touch(b, "#go")  # at once
+        assert b.wait(pill + " === 'running'", timeout=5)
+        time.sleep(0.3)
+        assert sheet(b)["at"] == "half"

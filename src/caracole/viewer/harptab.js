@@ -532,16 +532,20 @@
     letScreenSleep();
     if (mine) $("scroll").focus({ preventScroll: true });
   };
+  // The tab moves only in sight: the sheet over the whole screen goes back to half, the tab moving above it.
+  const halfSheet = () => {
+    if (sheetAt !== "full") return;
+    sheetAt = "half";
+    drawRail();
+  };
   $("scroll").addEventListener("click", () => {
     showSizes(false);
-    if (sheetAt === "full") {  // the sheet stays, at half the screen, the tab moving above it
-      sheetAt = "half";
-      drawRail();
-    }
+    halfSheet();
     countdown();
     go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();
