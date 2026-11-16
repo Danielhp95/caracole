@@ -242,13 +242,27 @@
   };
   const titleOf = (text) => String(text).charAt(0).toUpperCase() + String(text).slice(1);
   const editSerial = { n: 0 };
+  // The songbook locked while a change of it waits or runs: each control it disables is marked (``sbLocked``), and
+  // unlocked, only those come back, so one off for its own reason (a capo on the piano, a pending line's) stays off.
   const lockBook = (on) => {
     if (!book || book.classList.contains("sb-busy") === on) return;
     book.classList.toggle("sb-busy", on);
     for (const control of book.querySelectorAll("button, input, select")) {
-      if (!control.closest(".add-song") && !control.classList.contains("book-back")
-          && !control.classList.contains("book-forget")) control.disabled = on;
+      if (control.closest(".add-song") || control.classList.contains("book-back")
+          || control.classList.contains("book-forget")) continue;
+      if (on && !control.disabled) {
+        control.disabled = true;
+        control.dataset.sbLocked = "1";
+      } else if (!on && control.dataset.sbLocked) {
+        control.disabled = false;
+        delete control.dataset.sbLocked;
+      }
     }
+  };
+  // A control the page would enable again: while the songbook is locked, it waits for the lock to end.
+  const enable = (control) => {
+    if (book && book.contains(control) && book.classList.contains("sb-busy")) control.dataset.sbLocked = "1";
+    else control.disabled = false;
   };
   const lineOf = (ev) => ev.currentTarget.closest(".set-line");  // a line drawn again keeps its element
   // A song's Guitar Pro mark, after its title (the data's ``guitar``): a set list is a playlist too. A Guitar Pro or
@@ -879,7 +893,7 @@
     }
     for (const control of form.querySelectorAll("button")) control.disabled = true;
     change(action, body).then((view) => {
-      for (const control of form.querySelectorAll("button")) control.disabled = false;
+      for (const control of form.querySelectorAll("button")) enable(control);
       if (!view && renamed !== null && renaming.delete(renamed) && bookName === renamed) showTitle(renamed);  // refused
       if (view && /\/delete$/.test(action)) lockBook(true);
     });

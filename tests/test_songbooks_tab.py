@@ -1061,3 +1061,29 @@ def test_a_set_lists_get_it_looks_that_song_up(serve, cfg, library, tmp_path):
         assert page.js(f"document.querySelector('{hysteria} .progress').textContent").startswith("Ready")
         assert posted == [("/songbook/get", {"name": "Campfire", "song": str(library["Hysteria"].id)})]
         assert [c[0] for c in runner.calls] == ["get", "songbook"]
+
+
+def test_a_change_over_gives_back_only_the_controls_its_lock_took(serve, cfg, library, tmp_path):
+    # Creep on the piano: its capo menu is off for its own reason, and stays off once a rename's lock is over; the
+    # Rename button stays off while the rename waits or runs (songbooks.js lockBook).
+    set_song_setting(songbooks_file(cfg.library_dir), "Campfire", "Radiohead - Creep",
+                     Setting("A", "dorian", None, "piano"))
+    url, _ = serve(Fake(cfg))
+    creep = '#songbooks .set-line[data-entry="Radiohead - Creep"]'
+    capo_off = f"document.querySelector('{creep} .set-edit').elements.capo.disabled"
+    form = '#songbooks form[action="/songbook/rename"]'
+    with opened(tmp_path) as page:
+        page.open(url + CAMPFIRE)
+        page.click(f"{creep} .plays")
+        assert page.js(capo_off) is True
+        page.click("#songbooks details.book-more > summary")
+        page.js(f"document.querySelector('{form} input[name=\"new\"]').value = 'Beach nights'")
+        page.click(f"{form} button")
+        assert page.wait("document.querySelector('#songbooks .book').classList.contains('sb-busy')")
+        time.sleep(0.2)  # its POST answered: the rename waits or runs, the songbook locked
+        locked = page.js(f"[document.querySelector('#songbooks .book').classList.contains('sb-busy'), "
+                         f"document.querySelector('{form} button').disabled]")
+        assert page.wait(f"{STATUS} === 'Renamed'", timeout=20), page.js(STATUS)
+        after = page.js(capo_off)
+    assert locked == [True, True]
+    assert after is True
