@@ -23,6 +23,7 @@ import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.UnitGate
+import io.github.danielhp95.caracole.server.files.PhoneGate
 import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.DocumentAnswer
@@ -437,13 +438,14 @@ class SyncFileRoutes(
          * as the phone serves it), the layers then cut to what [gate] still serves. Nothing for a file of no id (an
          * index export) or no pages.
          */
-        fun pagesFromFile(mirror: Mirror, libraryDir: File, gate: UnitGate): (SyncFile, List<String>) -> Unit = { file, taken ->
+        fun pagesFromFile(mirror: Mirror, libraryDir: File, gate: PhoneGate): (SyncFile, List<String>) -> Unit = { file, taken ->
             val id = file.id
             if (id != null) {
                 FileSource(file, null, libraryDir).use { source ->
                     val listed = source.pages()
                     if (listed != null) {
-                        mirror.takeLayer(id, listed.toString().toByteArray(Charsets.UTF_8), taken.toSet(), gate) { sha ->
+                        mirror.takeLayer(id, listed.toString().toByteArray(Charsets.UTF_8), taken.toSet(), gate,
+                                         folderOf = { unit -> PhoneGate.folderOf(gate.database, unit) }) { sha ->
                             try {
                                 source.page(sha)
                             } catch (e: PeerError) {

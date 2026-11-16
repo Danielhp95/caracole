@@ -1753,10 +1753,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     layer's start page is never served, and the computer's mirror sync (`cleanUp`) never touches a layer.
   - A file is anyone's to make, so a layer serves no header the file gave (`LayerPolicy`): a kind caracole serves alone
     (a page, a PDF, text, JSON, a download; any other is never kept), caracole serve's Content-Type for it, the
-    phone's `nosniff` and Referrer-Policy, and a page only in a sandbox (the file's policy where its `sandbox` holds
-    `allow-scripts` and `allow-downloads` alone, as viewer_csp's; else `LayerPolicy.NOTHING`, one that runs and loads
-    nothing): never `allow-same-origin`, which would give a file's page the phone server's origin, its form token and
-    every write. An export carries the layer's headers on, never the file's.
+    phone's `nosniff` and Referrer-Policy, and a page only in a sandbox (where the file's `sandbox` holds
+    `allow-scripts` and `allow-downloads` alone, as viewer_csp's, a viewer's policy the phone writes, keeping of the
+    file's only its scripts' and stylesheets' hashes, nothing loaded or connected to; else `LayerPolicy.NOTHING`, one
+    that runs and loads nothing): never `allow-same-origin`, which would give a file's page the phone server's origin,
+    its form token and every write. A unit's page is kept only right in its folder here (`PhoneGate.folderOf`: a
+    song's `Artist/Title`, a songbook's `_songbooks/<folder>`). An export carries the layer's headers on, never the
+    file's.
   - The phone's page makes every card of its songs itself (server/page's PhonePageData, library_page.song_cards'
     port, vectors/web/cards_full.jsonl), linking the pages of a song's folder `pageFor` serves, a layer's too, and
     saying what no sync carries (exports, a PDF's move, the sites' misses, a purchase) as the computer's card does

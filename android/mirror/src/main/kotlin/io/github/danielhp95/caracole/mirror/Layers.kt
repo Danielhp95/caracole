@@ -19,9 +19,10 @@ import java.security.MessageDigest
  *
  * A file is anyone's to make, so a layer's list says how the phone serves each page, never the file's
  * ([LayerPolicy]): a kind caracole serves alone (a page, a PDF, text, JSON, a download), each with the phone's
- * headers, and a page only in a sandbox, an origin of its own that can't read the phone's server: the file's policy
- * where it sandboxes the page as caracole serve's viewers are (scripts and downloads alone), else one that runs and
- * loads nothing.
+ * headers, and a page only in a sandbox, an origin of its own that can't read the phone's server: where the file
+ * sandboxes the page as caracole serve's viewers are (scripts and downloads alone), a viewer's policy the phone writes,
+ * its inline scripts and stylesheets by their hashes and nothing loaded; else one that runs and loads nothing. And a
+ * page of a unit is kept only in that unit's own folder ([Mirror.takeLayer]'s `folderOf`).
  */
 class Layer(val id: String, val dir: File) {
     val blobs = File(dir, "blobs")
@@ -90,7 +91,7 @@ internal fun readLayers(root: File): List<Layer> =
  * aren't the ones listed, fails it ([LayerError]) with the layer as it was.
  */
 internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<String>, taken: Long,
-                        blob: (String) -> InputStream?) {
+                        folderOf: ((String) -> List<String>?)?, blob: (String) -> InputStream?) {
     require(Layer.ID.matches(id)) { "a layer's id is 16 lowercase hex, not “${id.take(40)}”" }
     val given = try {
         Manifest.parse(manifest)
@@ -101,6 +102,7 @@ internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<
     val before = layer.manifest()
     val start = LayerPolicy.start(given.byPath.getValue(given.start))
     val took = given.entries.filter { it.path != given.start && it.unit != null && it.unit in units }
+        .filter { folderOf == null || inFolder(it.path, folderOf(it.unit!!)) }
         .mapNotNull(LayerPolicy::served)
     val paths = took.mapTo(HashSet()) { it.path }.apply { add(given.start) }
     val kept = before?.entries.orEmpty().filter { it.unit != null && it.unit !in units && it.path !in paths }
@@ -130,6 +132,13 @@ internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<
     }
     val named = entries.mapTo(HashSet()) { it.sha256 }
     layer.blobs.listFiles()?.forEach { if (it.name !in named) it.delete() }
+}
+
+/** Whether [path] is a file right in [folder] (a song's `Artist/Title`, a songbook's `_songbooks/<folder>`), as the
+ * computer's list names a unit's pages (offline_routes._Units.of: three parts); never for no folder. */
+private fun inFolder(path: String, folder: List<String>?): Boolean {
+    val parts = path.split('/')
+    return folder != null && folder.size == 2 && parts.size == 3 && parts.subList(0, 2) == folder
 }
 
 /**
@@ -165,7 +174,7 @@ internal fun pruneLayers(root: File, gate: UnitGate) {
  * How the phone serves a page a file held (a layer's, [writeLayer]), whatever the file's list says of it: its
  * Content-Type one of caracole serve's for its kind ([TYPES]: a page, a PDF, text, JSON or a download; any other
  * kind is never served, nor kept), and the phone's own headers: no type sniffed, no referrer to another site, and a
- * policy. A page's is the file's only where it sandboxes the page as caracole serve's viewers are
+ * policy. A page's is a viewer's ([page]) only where the file sandboxes the page as caracole serve's viewers are
  * (viewer.viewer_csp's `sandbox allow-scripts allow-downloads`, no other token: never `allow-same-origin`, which would
  * give it the phone server's origin, its form token and every write), else [NOTHING], a sandbox that runs and loads
  * nothing (viewer_csp's own for a page whose policy it can't read); any other kind's frames nothing.
@@ -202,16 +211,33 @@ object LayerPolicy {
     /** A file's start page, kept for its cards alone and never served: a page, with [NOTHING] for its policy. */
     fun start(entry: Entry): Entry = entry.copy(type = TYPES.getValue(PAGE), headers = headers(NOTHING))
 
-    /** The policy a file's page is served with: [given]'s directives, when its first `sandbox` directive (the one a
-     * browser keeps) holds no token but [SANDBOX]'s and it is one policy (no comma), framed by none (its own
-     * `frame-ancestors` replaced by [FRAMES]); else [NOTHING]. */
+    /**
+     * The policy a file's page is served with, when its first `sandbox` directive (the one a browser keeps) holds no
+     * token but [SANDBOX]'s and it is one policy (no comma): a policy the phone writes, viewer_csp's shape, keeping of
+     * [given] only that sandbox and the hashes of its first `script-src` and `style-src` (by which a viewer's inline
+     * scripts and stylesheets run), everything else loading nothing (`default-src 'none'`: no connection, no frame,
+     * no font, no worker), images `data:` alone, no form, no base, framed by none; else [NOTHING]. Read again, it is
+     * itself.
+     */
     fun page(given: String?): String {
         if (given == null || ',' in given) return NOTHING
         val directives = given.split(';').map { it.trim(' ', '\t') }.filter { it.isNotEmpty() }
         val sandbox = directives.firstOrNull { name(it) == "sandbox" } ?: return NOTHING
-        if (sandbox.split(SPACES).drop(1).any { it.lowercase() !in SANDBOX }) return NOTHING
-        return (directives.filter { name(it) != "frame-ancestors" } + FRAMES).joinToString("; ")
+        val tokens = sandbox.split(SPACES).drop(1)
+        // A sandbox of no token runs nothing: NOTHING, which is also how a page kept so reads again.
+        if (tokens.isEmpty() || tokens.any { it.lowercase() !in SANDBOX }) return NOTHING
+        fun hashes(directive: String): String {
+            val sources = directives.firstOrNull { name(it) == directive }?.split(SPACES)?.drop(1).orEmpty()
+                .filter { HASH.matches(it) }.distinct()
+            return if (sources.isEmpty()) "'none'" else sources.joinToString(" ")
+        }
+        return (listOf("sandbox", *tokens.map { it.lowercase() }.toTypedArray()).joinToString(" ") +
+            "; default-src 'none'; script-src ${hashes("script-src")}; style-src ${hashes("style-src")}; " +
+            "img-src data:; base-uri 'none'; form-action 'none'; $FRAMES")
     }
+
+    /** A hash source, by which an inline script or stylesheet runs (inline.sha256_source's, and SHA-384's or -512's). */
+    private val HASH = Regex("'sha(256|384|512)-[A-Za-z0-9+/_=-]+'")
 
     private fun name(directive: String) = directive.split(SPACES).first().lowercase()
 

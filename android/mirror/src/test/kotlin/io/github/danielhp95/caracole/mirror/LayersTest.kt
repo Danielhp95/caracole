@@ -246,7 +246,7 @@ class LayersTest {
         val again = Mirror(mirror.dir)  // the layer's own list, read back
         fun served(path: String): Entry = assertIs<Looked.Page>(again.pageFor(path, gate), path).entry
         val sandboxed = "sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-abc'; " +
-            "frame-ancestors 'none'"
+            "style-src 'none'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
         val phones = mapOf("Content-Security-Policy" to sandboxed, "Referrer-Policy" to "same-origin",
                            "X-Content-Type-Options" to "nosniff")
         assertEquals(phones, served(sheetPath).headers, "a viewer's sandbox kept, framed by none, the rest the phone's")
@@ -267,6 +267,55 @@ class LayersTest {
         val start = assertNotNull(again.layers().single().manifest()).byPath.getValue("index.html")
         assertEquals(LayerPolicy.NOTHING, start.headers["Content-Security-Policy"], "the start page, never served, as none")
         assertEquals(html, start.type)
+    }
+
+    /** The sources a policy gives a fetch directive: its own, else `default-src`'s. */
+    private fun sources(policy: String, directive: String): List<String>? {
+        val directives = policy.split(';').map { it.trim().split(Regex("[ \\t]+")) }.filter { it.first().isNotEmpty() }
+        val own = directives.firstOrNull { it.first().lowercase() == directive }
+        return (own ?: directives.firstOrNull { it.first().lowercase() == "default-src" })?.drop(1)
+    }
+
+    @Test
+    fun `a file's page loads nothing and connects nowhere whatever its policy says`() {
+        val files = "sandbox allow-scripts allow-downloads; default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+            "connect-src * ws: wss:; script-src 'sha256-abc' 'unsafe-inline' https://x.example; " +
+            "style-src 'sha256-def' *; img-src *; form-action *; base-uri *"
+        val served = LayerPolicy.page(files)
+        for (directive in listOf("connect-src", "font-src", "media-src", "frame-src", "worker-src", "object-src",
+                                 "manifest-src", "child-src", "prefetch-src")) {
+            assertEquals(listOf("'none'"), sources(served, directive), "$directive in $served")
+        }
+        assertEquals(listOf("'sha256-abc'"), sources(served, "script-src"), "its scripts by their hashes alone")
+        assertEquals(listOf("'sha256-def'"), sources(served, "style-src"))
+        assertEquals(listOf("data:"), sources(served, "img-src"))
+        assertEquals(listOf("'none'"), sources(served, "form-action"))
+        assertEquals(listOf("'none'"), sources(served, "base-uri"))
+        assertEquals("sandbox allow-scripts allow-downloads; default-src 'none'; script-src 'sha256-abc'; " +
+                         "style-src 'sha256-def'; img-src data:; base-uri 'none'; form-action 'none'; " +
+                         "frame-ancestors 'none'", served)
+        assertEquals(served, LayerPolicy.page(served), "the phone's policy, read again, is itself")
+        assertEquals("sandbox allow-scripts; default-src 'none'; script-src 'none'; style-src 'none'; img-src data:; " +
+                         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                     LayerPolicy.page("sandbox allow-scripts; script-src *"), "no hash, no script")
+    }
+
+    @Test
+    fun `a file's page of a unit is kept only in that unit's own folder`() {
+        val planted = "Oasis/Wonderwall/sheet.html"
+        val pages = filePages(mapOf("index.html" to filesLibrary, sheetPath to filesSheet, planted to othersSheet,
+                                    "Estopa/sheet.html" to othersSheet, "Estopa/Tu calorro/x/sheet.html" to othersSheet),
+                              mapOf(sheetPath to (song to inFile), planted to (song to inFile),
+                                    "Estopa/sheet.html" to (song to inFile),
+                                    "Estopa/Tu calorro/x/sheet.html" to (song to inFile)))
+        mirror.takeLayer(layerId, pages.manifest, setOf(song), folderOf = { unit ->
+            if (unit == song) listOf("Estopa", "Tu calorro") else null
+        }, blob = pages::blob)
+        val gate = holding(song to inFile)
+        assertContentEquals(filesSheet, assertIs<Looked.Page>(mirror.pageFor(sheetPath, gate)).file.readBytes())
+        for (path in listOf(planted, "Estopa/sheet.html", "Estopa/Tu calorro/x/sheet.html")) {
+            assertEquals(Looked.Missing, mirror.pageFor(path, gate), "$path: no page of the song's is kept there")
+        }
     }
 
     @Test

@@ -85,15 +85,17 @@ class Mirror(val dir: File) {
      * it was. Each page is kept as the phone serves it ([LayerPolicy]: a kind caracole serves alone, a page in a
      * sandbox), never with the headers the file gave. With a [gate], the layers are then cut to the pages it still
      * serves ([pruneLayers]: a page of a unit the phone changed or removed since goes, a layer left with no page
-     * goes). One at a time, as a sync of the computer's is ([syncLock]).
+     * goes). With [folderOf] (a unit's folder in the library, its two parts, or null for one it has none of), a page
+     * of a unit is kept only right in that folder, so that a file never puts a page of its song at another song's
+     * path. One at a time, as a sync of the computer's is ([syncLock]).
      */
     fun takeLayer(id: String, manifest: ByteArray, units: Set<String>, gate: UnitGate? = null,
-                  blob: (String) -> InputStream?) {
+                  folderOf: ((String) -> List<String>?)? = null, blob: (String) -> InputStream?) {
         syncLock.lock()
         try {
             val taken = (readLayers(layersDir).maxOfOrNull { it.taken } ?: 0L) + 1
             try {
-                writeLayer(layersDir, id, manifest, units, taken, blob)
+                writeLayer(layersDir, id, manifest, units, taken, folderOf, blob)
                 gate?.let { pruneLayers(layersDir, it) }
             } finally {
                 layersRead = null
