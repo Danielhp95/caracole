@@ -143,6 +143,18 @@ class AssemblyTest {
         assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind }, "nothing it can't read is queued")
     }
 
+    @Test fun theIndexFilesASyncKilledInItsMiddleLeftAreSweptAsThePhoneStarts() {
+        val cache = File(tmp.root, "state/cache").apply { mkdirs() }
+        val left = listOf("index-0123456789abcdef.sqlite", "import-indexes-0123456789abcdef.sqlite",
+                          "reads-0123456789abcdef.sqlite", "index-0123456789abcdef.sqlite-wal")
+            .map { File(cache, it).apply { writeBytes(ByteArray(16)) } }
+        val others = listOf("notes.sqlite", "index-mine.sqlite").map { File(cache, it).apply { writeBytes(ByteArray(1)) } }
+        phone {
+            assertTrue(left.none { it.exists() }, "a killed sync's index files are gone")
+            assertTrue(others.all { it.exists() }, "nothing else is touched")
+        }
+    }
+
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
         // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
         // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code; both have

@@ -163,7 +163,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         },
         // An import's pages kept as a layer of the mirror, the layers then cut to what the phone still serves.
         pagesFromFile = deps.mirror?.let { SyncFileRoutes.pagesFromFile(it, deps.libraryDir, PhoneGate(deps.database)) },
-    )
+    ).also { it.sweep() }  // the index files a sync killed in its middle left
 
     /** The Sync tab's routes, which the app's unattended sync (`alone`) and Settings' Test (`tested`) ask too. */
     val sync: SyncRoutes = SyncRoutes(engine, queue, deps.settings, deps.database, afterSync = ::afterSync)

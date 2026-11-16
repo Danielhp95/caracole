@@ -763,6 +763,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         null
     }
 
+    /**
+     * The index files a sync works with in `stateDir/cache/` (a computer's index, a file's indexes copied out, the
+     * phone's reads for a push, each deleted in its sync's `finally`), every one an earlier process left, killed in
+     * its middle, deleted, with SQLite's journals beside them: called as the phone starts, while no sync runs. Each
+     * is the size of a site's index (hundreds of MB), and nothing else looks for one.
+     */
+    fun sweep() {
+        File(stateDir, "cache").listFiles()?.forEach { if (it.isFile && LEFT.matches(it.name)) it.delete() }
+    }
+
     /** `stateDir/cache/`, made when missing; a PeerError in the phone's words when it can't be. */
     private fun cache(): File {
         val cache = File(stateDir, "cache")
@@ -884,6 +894,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** kv: the stamps of the computer's indexes the phone merged last, by its id: {site: stamp}. */
         const val INDEX_KEY = "sync:index:"
+
+        /** The names of a sync's index files in `stateDir/cache/` ([sweep]), and their SQLite journals. */
+        private val LEFT = Regex("(index|import-indexes|reads)-[0-9a-f]{16}\\.sqlite(-wal|-shm|-journal)?")
 
         /** The index stage's words with no index newer there and no page read here. */
         const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"
