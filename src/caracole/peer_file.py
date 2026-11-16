@@ -534,7 +534,7 @@ def read_file(path: Path, *, name: str | None = None) -> SyncFile:
         raise FileError(NOT_A_FILE)
     try:
         z = zipfile.ZipFile(path)
-    except (zipfile.BadZipFile, OSError, EOFError, ValueError):
+    except (zipfile.BadZipFile, OSError, EOFError, ValueError, NotImplementedError):  # a version past zipfile's
         raise _unreadable("it is cut short, or no whole zip") from None
     with z:
         infos = z.infolist()
@@ -627,6 +627,11 @@ def _index_file(path: Path, name: str) -> SyncFile:
     try:
         file = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
         try:
+            file.execute("PRAGMA trusted_schema = OFF")
+            # Its META a table, as an export makes it: a view's SELECT is the file maker's, run as it is read.
+            kind = file.execute("SELECT type FROM sqlite_master WHERE name = ?", (index_transfer.META,)).fetchone()
+            if kind is None or kind[0] != "table":
+                raise FileError(NOT_A_FILE)
             meta = dict(file.execute(f"SELECT key, value FROM {index_transfer.META}").fetchall())
         finally:
             file.close()
@@ -719,7 +724,7 @@ def check_whole(file: SyncFile) -> None:
     assert file.state is not None
     try:
         z = zipfile.ZipFile(file.path)
-    except (zipfile.BadZipFile, OSError, EOFError, ValueError):
+    except (zipfile.BadZipFile, OSError, EOFError, ValueError, NotImplementedError):
         raise _unreadable("it is cut short, or no whole zip") from None
     with z:
         names = set(z.namelist())
@@ -826,7 +831,7 @@ class FileSource:
         if self._zip is None:
             try:
                 self._zip = zipfile.ZipFile(self.sync_file.path)
-            except (zipfile.BadZipFile, OSError) as e:
+            except (zipfile.BadZipFile, OSError, EOFError, ValueError, NotImplementedError) as e:
                 raise sync.PeerError(UNREADABLE.format(why=str(e))) from None
         return self._zip
 

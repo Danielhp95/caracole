@@ -653,3 +653,34 @@ def test_a_unit_agreed_after_the_file_was_made_is_never_taken_from_it(desk, stud
     sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, "2026-11-04T08:00:00Z")  # after it was made
     with pytest.raises(peer_file.FileError, match="Nothing in this file is newer"):
         compared_with(desk, theirs)
+
+
+def test_a_zip_that_asks_for_a_newer_unzip_is_refused_as_unreadable(tmp_path):
+    import struct
+
+    path = tmp_path / "x.caracole"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(peer_file.MANIFEST, "{}")
+    data = bytearray(path.read_bytes())
+    struct.pack_into("<H", data, data.index(b"PK\x01\x02") + 6, 99)  # its "version needed to extract"
+    path.write_bytes(bytes(data))
+    with pytest.raises(peer_file.FileError, match="it is cut short, or no whole zip"):
+        peer_file.read_file(path)
+
+
+def test_an_index_export_whose_meta_is_a_view_is_refused_before_it_is_read(tmp_path):
+    import sqlite3
+
+    from caracole import db as database
+    from caracole import index_transfer
+
+    path = tmp_path / "evil.sqlite"
+    made = sqlite3.connect(path)
+    made.execute("CREATE TABLE ran (n INTEGER)")
+    made.execute(f"CREATE VIEW {index_transfer.META} AS SELECT 'format' AS key, '{index_transfer.FORMAT}' AS value "
+                 f"UNION ALL SELECT 'schema', '{database.SCHEMA_VERSION}' UNION ALL SELECT 'sites', '[\"ug\"]'")
+    made.commit()
+    made.close()
+    with pytest.raises(peer_file.FileError) as refused:
+        peer_file.read_file(path)
+    assert str(refused.value) == peer_file.NOT_A_FILE

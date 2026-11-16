@@ -238,6 +238,31 @@ def test_a_unit_an_import_left_is_taken_from_the_same_file_next_time(libraries, 
     assert "oasis/wonderwall" in studio.songs()
 
 
+def test_a_files_indexes_with_no_kv_table_are_not_merged_and_said_so(libraries, tmp_path):
+    import sqlite3
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    odd = tmp_path / "odd.sqlite"
+    with zipfile.ZipFile(f) as z:
+        odd.write_bytes(z.read(peer_file.INDEXES))
+    made = sqlite3.connect(odd)
+    made.execute("DROP TABLE kv")
+    made.commit()
+    made.close()
+    g = tmp_path / "j.caracole"
+    with zipfile.ZipFile(f) as z, zipfile.ZipFile(g, "w") as out:
+        for info in z.infolist():
+            out.writestr(info, odd.read_bytes() if info.filename == peer_file.INDEXES else z.read(info))
+    result = run(studio, "peer", "import", "--yes", "--progress", str(g))
+    assert result.exit_code == 1 and not isinstance(result.exception, sqlite3.Error), result.output
+    index = [e for e in events(result.output) if e.get("stage") == "index"]
+    assert index[-1]["state"] == "failed" and "kv has the columns (none)" in index[-1]["detail"]
+    assert '"event":"report"' in result.output
+    assert "radiohead/creep" in studio.songs()
+
+
 def test_a_librarys_own_export_is_refused_and_changes_nothing(libraries, tmp_path):
     desk, _, _ = libraries
     desk_with_a_songbook(desk)

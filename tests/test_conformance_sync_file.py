@@ -370,6 +370,15 @@ def _declaring(data: bytes, sizes: dict[str, int]) -> bytes:
     return bytes(data)
 
 
+def _needing(data: bytes, version: int) -> bytes:
+    """``data``'s first member's "version needed to extract", in its central directory, ``version``."""
+    import struct
+
+    out = bytearray(data)
+    struct.pack_into("<H", out, out.index(b"PK\x01\x02") + 6, version)
+    return bytes(out)
+
+
 def blob_named(n: int) -> str:
     return f"files/{hashlib.sha256(str(n).encode()).hexdigest()}"
 
@@ -403,6 +412,7 @@ def _refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
         # How the zip itself is read, as zipfile reads it: a reader of its own on the phone, whose Android ZipFile
         # refuses at open a name with a ".." or a name twice.
         ("an encrypted member", _flagged(_zip(small), 1, set_bits=0x1)),
+        ("a member that asks for a newer unzip", _needing(_zip(small), 99)),
         ("a member compressed as caracole doesn't", _zip(small, methods={"bases.json": zipfile.ZIP_BZIP2})),
         ("a member's name in cp437", _flagged(_zip([*small, ("é", b"x")]), 4, clear_bits=0x800)),
         ("a member its local header names otherwise", _renamed_locally(_zip(small), 1, b"state.jsoX")),
