@@ -442,6 +442,59 @@ class _Noon(datetime):
         return noon if tz is None else noon.astimezone(tz)
 
 
+def test_a_request_answered_with_a_redirect_counts_in_the_hour_the_day_and_the_pace(cfg, conn, pauses, monkeypatch):
+    # gametabs.net answers a tab page with a redirect to its login, which robots.txt closes: the request reached the
+    # site, so each lookup's counts it, and the next lookup's first request waits the gap after it.
+    import httpx
+
+    from caracole.http import RobotsClosed
+
+    sent: list[str] = []
+
+    def answer(request):
+        sent.append(str(request.url))
+        return httpx.Response(302, headers={"Location": "/login?next=%2Fhollow-knight%2Fmain-theme-108"})
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(answer))
+    monkeypatch.setattr(_common.random, "uniform", lambda low, high: high)
+    page = "https://gametabs.net/hollow-knight/main-theme-108"
+    for _ in range(3):
+        client = make_client(cfg, conn, "gametabs", _common.lookup_run_id(_common.utcnow()), interactive=True)
+        try:
+            with pytest.raises(RobotsClosed):
+                client.get(page, accept=(200, 404))
+        finally:
+            client.close()
+    assert len(sent) == 3
+    assert _common.lookup_requests_used(conn, "gametabs") == 3
+    assert _common.requests_today(conn, "gametabs") == 3
+    assert _common._last_request(conn, "gametabs") is not None
+    assert len(pauses) == 2  # the second and the third lookup each waited the gap after the one before
+
+
+def test_a_followed_redirect_is_two_requests_counted(cfg, conn, monkeypatch):
+    import httpx
+
+    old = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"
+
+    def answer(request):
+        if str(request.url) == old:
+            return httpx.Response(301, headers={"Location": old + "-v2"})
+        return httpx.Response(200, text="<html>a page</html>")
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(answer))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    client = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        client._sleep = lambda seconds: None
+        client.get(old)
+        assert client.requests_made == 2
+    finally:
+        client.close()
+    assert _common.lookup_requests_used(conn, "ug") == 2
+    assert _common.requests_today(conn, "ug") == 2
+
+
 def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, site, monkeypatch):
     # Megalobiz allows an address 1,000 requests a day: caracole sends 900 at most, every run's and lookup's together.
     monkeypatch.setattr(_common, "datetime", _Noon)

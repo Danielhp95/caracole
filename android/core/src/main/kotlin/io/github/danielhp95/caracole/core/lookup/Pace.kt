@@ -23,15 +23,15 @@ import java.time.Instant
  *   longest.
  *
  * There is no lock, no ticket and no handoff on the phone: one job worker is its one writer. A request counts when its
- * decision is one of [SENT]. tests/conformance/vectors/pace/ holds it to Python's (tests/test_conformance_health.py).
+ * decision is one of [SENT], a redirect among them (a request that reached the site). tests/conformance/vectors/pace/ holds it to Python's (tests/test_conformance_health.py).
  */
 object Pace {
     const val LOOKUP_RUN = "lookup:"
     const val LAST_SENT = "http:last_request:"
-    val SENT: Set<String> = linkedSetOf("ok", "not_modified", "blocked", "error")
+    val SENT: Set<String> = linkedSetOf("ok", "not_modified", "redirect", "blocked", "error")
 
     private val sent: Array<String> = SENT.toTypedArray()
-    private const val IN_SENT = "decision IN (?, ?, ?, ?)"
+    private val IN_SENT = "decision IN (${SENT.joinToString(", ") { "?" }})"
 
     /** lookup_run_id: `lookup:` and the time to the second, so its requests count in the hour's. */
     fun lookupRunId(now: Instant): String = LOOKUP_RUN + Strptime.format(now)

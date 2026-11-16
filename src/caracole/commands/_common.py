@@ -595,7 +595,8 @@ def _locked_client() -> type[PoliteClient]:
     return _LockedClient
 
 
-_SENT = ("ok", "not_modified", "blocked", "error")  # events that were requests
+# Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
+_SENT = ("ok", "not_modified", "redirect", "blocked", "error")
 _LAST_SENT = "http:last_request:"  # + provider: when any caracole last sent it a request, in seconds
 
 
