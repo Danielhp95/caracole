@@ -1163,3 +1163,30 @@ cardOf("Creep").querySelector("form.remove button").click();
     assert len(polls) >= 2 and all(abs(b - a - 1500) < 50 for a, b in zip(polls, polls[1:])), polls
     assert polls[0] - removals[1][0] < 1600, (removals, polls)
     assert "Removed" in attribute(dom, "data-seen")
+
+
+def test_a_song_asked_for_on_the_page_then_removed_there_is_drawn_as_gone(serve, cfg, conn, tmp_path):
+    # A song new to the page (its line under "Just requested", library.js's ``arrived``) removed from that line is
+    # drawn as one the page was loaded with is: nothing left to open, fetch or pick, and counted no more.
+    add_song(conn, "Band", "Song")
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    line = "document.querySelector('#requested article')"
+    stats = "Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent)"
+    with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
+        page.open(url)
+        before = page.js(stats)
+        page.js("""(() => { const form = document.querySelector("form.request-form");
+          form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
+          form.requestSubmit(); })()""")
+        assert page.wait(f"({line}.querySelector('.progress') || {{}}).textContent === 'Ready'", timeout=20)
+        page.click("#requested article .line-more")
+        page.js("document.querySelector('#requested article .foot-more').open = true")
+        page.click("#requested article form.remove button")
+        assert page.wait(f"({line}.querySelector('.progress') || {{}}).textContent === 'Removed'", timeout=20)
+        left = page.js(f"{line}.querySelectorAll('a, button, form').length")
+        gone = page.js(f"{line}.classList.contains('gone')")
+        after = page.js(stats)
+    assert find_song(conn, override_key("Muse - Uprising")) is None
+    assert left == 0 and gone
+    assert after == before

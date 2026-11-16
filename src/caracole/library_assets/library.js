@@ -3350,7 +3350,10 @@
   };
   const removed = (id) => {
     const i = byIndex.get(id);
-    if (i === undefined) return;
+    if (i === undefined) {
+      if (arrived.has(id)) removedArrival(id);
+      return;
+    }
     songs[i] = Object.assign({}, songs[i], { status: "removed" });
     // Drawn again where it is, as tall as it was, its line where it was: nothing on the screen moves, seconds
     // after the tap.
@@ -3372,6 +3375,22 @@
       return kept;
     };
     lines.set(i, gone(lines.get(i)));
+    summarize();
+    tallyChips();
+    tell();
+  };
+  // A song new to the page since it loaded (``arrived``: its line under the bar, or a result's row), removed: drawn
+  // as gone where it shows, as a song the page was loaded with is, and counted no more.
+  const removedArrival = (id) => {
+    const s = Object.assign({}, arrived.get(id), { status: "removed" });
+    arrived.set(id, s);
+    const drawn = new Map();  // a line shown for two jobs (its lookup's and its removal's) is drawn again once
+    for (const [job, node] of Array.from(spots)) {
+      const view = views.get(job);
+      if (!view || songOf(view) !== id) continue;
+      if (!drawn.has(node)) drawn.set(node, refill(node, goneItem(s)));
+      spots.set(job, drawn.get(node));
+    }
     summarize();
     tallyChips();
     tell();
@@ -3552,7 +3571,8 @@
           continue;
         }
         const [artist, ...title] = String((view && view.display) || "").split(" - ");
-        const card = song !== null && arrived.has(song) ? lineFor(arrived.get(song))
+        const card = song !== null && arrived.has(song)
+          ? (arrived.get(song).status === "removed" ? goneItem : lineFor)(arrived.get(song))
           : title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
         if (view) showRequest(card, view);
         requestedList.prepend(card);
