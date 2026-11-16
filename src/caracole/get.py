@@ -891,16 +891,16 @@ class _Lookup:
         from caracole.ug.fetch import note_looked_up
 
         self._report("song", "running")
-        try:
-            self.overrides = load_overrides(self.cfg.overrides_file)
-        except OverridesError as e:
-            return self._refuse(f"Can't read overrides.toml: {e}")
 
         def waiting(holder: str) -> None:
             self.progress.stage("song", "running", f"waiting for the book ({holder}); a fetch goes first "
                                                    "at its next pause")
 
         with exclusive(self.cfg, f"get {self.request.display}", interactive=True, on_wait=waiting):
+            try:  # once the lock is held: what another caracole wrote while this one waited is read
+                self.overrides = load_overrides(self.cfg.overrides_file)
+            except OverridesError as e:
+                return self._refuse(f"Can't read overrides.toml: {e}")
             with closing(db.connect(self.cfg.db_path)) as conn:
                 self.conn = conn
                 ensure_current_keys(conn)

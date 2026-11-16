@@ -460,15 +460,15 @@ class _Sheet:
         from caracole.songs import ensure_current_keys
 
         self._report("song", "running")
-        try:
-            self.overrides = load_overrides(self.cfg.overrides_file)
-        except OverridesError as e:
-            return self._refuse(f"Can't read overrides.toml: {e}")
 
         def waiting(holder: str) -> None:
             self.progress.stage("song", "running", f"waiting for the book ({holder})")
 
         with exclusive(self.cfg, f"youtube --sheet {self.request.display}", on_wait=waiting):
+            try:  # once the lock is held: what another caracole wrote while this one waited is read
+                self.overrides = load_overrides(self.cfg.overrides_file)
+            except OverridesError as e:
+                return self._refuse(f"Can't read overrides.toml: {e}")
             with closing(db.connect(self.cfg.db_path)) as conn:
                 self.conn = conn
                 ensure_current_keys(conn)
