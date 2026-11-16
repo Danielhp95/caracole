@@ -5711,7 +5711,10 @@ better kept.
 
 The nightly run's last step copies the database whole into `backups/` in the
 state folder, as `caracole-2026-10-30T034512Z.sqlite` (the time in UTC), and
-keeps the last three: about 430 MB each for a library with every index. Each
+keeps the last three: about 430 MB each for a library with every index. The
+copies a merge or a sync makes first (`…-before-merge.sqlite`,
+`…-before-sync.sqlite`) keep their own three, so that a few syncs in an
+afternoon never push out the nights'. Each
 copy is the database as it stood at one moment, whatever another caracole
 writes meanwhile (SQLite's `VACUUM INTO`), checked by SQLite before it takes the
 place of the oldest, and readable by caracole's user alone. With no room for a

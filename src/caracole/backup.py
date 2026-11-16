@@ -7,7 +7,9 @@ pages, gametabs.net's game pages), and the database holds them alone. A copy is
 with SQLite's ``VACUUM INTO`` on the connection given: one read transaction, so the copy is the database as it
 stood when it began, whatever another connection commits meanwhile (WAL), and compacted. It is written under a
 name of its own (``.part``), checked (``PRAGMA quick_check``), made 0600, and only then renamed; then the copies
-beyond the newest ``KEEP`` go, so a copy cut short or failing its check never costs a good one. When the disk
+of its label beyond the newest ``KEEP`` go (the nightly run's, unlabelled, a merge's and a sync's each keep their
+own three, so a few syncs in an afternoon never push out the nights'), and a copy cut short or failing its check
+never costs a good one. When the disk
 lacks room for it (``needed``: the database's pages in use, and ``HEADROOM``), no copy is made and nothing is
 deleted: ``Skipped`` says why, and the log warns. The folder is 0700: the database is caracole's alone, never
 the synced library's. Its callers hold caracole's lock (``_common.exclusive``), so one copy is made at a time.
@@ -52,7 +54,7 @@ class Backup:
 
 @dataclass(frozen=True)
 class Made:
-    """A copy made: it, the older copies deleted to keep ``kept``, and how long it took."""
+    """A copy made: it, the older copies of its label deleted to keep ``kept`` of it, and how long it took."""
 
     backup: Backup
     deleted: tuple[Path, ...]
@@ -134,7 +136,8 @@ def make(conn: sqlite3.Connection, state_dir: Path, now: datetime, *, label: str
         part.unlink(missing_ok=True)
     copy = Backup(target, now.astimezone(UTC).replace(microsecond=0), label, target.stat().st_size)
     deleted = _rotate(state_dir, keep, copy)
-    made = Made(copy, deleted, min(keep, len(backups(state_dir))), time.monotonic() - started)
+    made = Made(copy, deleted, min(keep, sum(b.label == label for b in backups(state_dir))),
+                time.monotonic() - started)
     log.info("Backed up the database to %s (%s) in %.1f s; %d kept%s.", target, size_text(copy.size), made.seconds,
              made.kept, f", {len(deleted)} older deleted" if deleted else "")
     return made
@@ -151,8 +154,9 @@ def _check(path: Path) -> str | None:
 
 
 def _rotate(state_dir: Path, keep: int, made: Backup) -> tuple[Path, ...]:
-    """Delete the copies beyond the newest ``keep``, never the one just made; the paths deleted, oldest first."""
-    every = backups(state_dir)
+    """Delete the copies of ``made``'s label beyond the newest ``keep``, never the one just made; the paths
+    deleted, oldest first."""
+    every = [b for b in backups(state_dir) if b.label == made.label]
     old = [b for b in every if b.path != made.path][: max(0, len(every) - max(keep, 1))]
     for b in old:
         b.path.unlink(missing_ok=True)

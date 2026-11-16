@@ -58,12 +58,27 @@ def test_the_newest_three_are_kept_and_the_older_ones_deleted(conn, tmp_path):
 
     made = backup.make(conn, tmp_path / "state", NOW)
 
-    assert made.deleted == (oldest, older)
+    assert made.deleted == (oldest,)  # the newest three of its label: the merge's copy is of another
     assert [b.path.name for b in backup.backups(tmp_path / "state")] == [
-        merge.name, last.name, "caracole-2026-10-29T034512Z.sqlite"]
+        older.name, merge.name, last.name, "caracole-2026-10-29T034512Z.sqlite"]
     assert theirs.exists() and other.exists()  # not caracole's copies: never touched
     assert not stale.exists()  # what a copy cut short left
     assert made.kept == 3
+
+
+def test_copies_of_one_label_never_push_out_another_labels(conn, tmp_path):
+    """Three syncs in an afternoon, each backed up first, leave the nightly copies as they were."""
+    from datetime import timedelta
+
+    state = tmp_path / "state"
+    for n in range(3):  # three nights' copies
+        backup.make(conn, state, NOW + timedelta(days=n))
+    for n in range(4):  # four takes the next afternoon
+        made = backup.make(conn, state, NOW + timedelta(days=3, minutes=10 * n), label="before-sync")
+
+    labels = [b.label for b in backup.backups(state)]
+    assert labels.count(None) == 3 and labels.count("before-sync") == 3
+    assert made.kept == 3 and len(made.deleted) == 1 and made.deleted[0].name.endswith("-before-sync.sqlite")
 
 
 def test_keep_says_how_many(conn, tmp_path):

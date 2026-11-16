@@ -353,7 +353,8 @@ Below the table, a section for each step whose modules have more to say.
 
 - backup.py: a whole copy of the database, `VACUUM INTO` on the run's connection, into `state_dir/backups/`.
   - Checked by `PRAGMA quick_check` before it takes an old one's place.
-  - The newest `KEEP` (3) kept; none made and none deleted without room (`needed`, `Skipped`).
+  - The newest `KEEP` (3) of each label kept (the nights', a merge's, a sync's); none made and none deleted without
+    room (`needed`, `Skipped`).
   - The one step that waits for a run no step of which failed, and a copy failing its check fails the run.
   - `caracole backup` (commands/backup.py) makes one by hand, and `index merge` one before it changes anything.
 
