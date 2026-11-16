@@ -367,6 +367,7 @@ class _Lookup:
         p = self.cfg.provider(provider)
         left = p.lookup_per_hour - math.ceil(p.lookup_per_hour * SHEETS_SHARE) - lookup_requests_used(self.conn, provider)
         if left <= 0 and self._usable(provider) is None:
+            self._owed(provider)  # cut short as a spent budget cuts it: owed a fetch at night
             return "skipped", f"{self._kept_for_sheets(provider)}; tonight's run does the rest"
 
         def within(client) -> tuple[str, str] | str:
@@ -891,16 +892,16 @@ class _Lookup:
         from caracole.ug.fetch import note_looked_up
 
         self._report("song", "running")
-        try:
-            self.overrides = load_overrides(self.cfg.overrides_file)
-        except OverridesError as e:
-            return self._refuse(f"Can't read overrides.toml: {e}")
 
         def waiting(holder: str) -> None:
             self.progress.stage("song", "running", f"waiting for the book ({holder}); a fetch goes first "
                                                    "at its next pause")
 
         with exclusive(self.cfg, f"get {self.request.display}", interactive=True, on_wait=waiting):
+            try:  # once the lock is held: what another caracole wrote while this one waited is read
+                self.overrides = load_overrides(self.cfg.overrides_file)
+            except OverridesError as e:
+                return self._refuse(f"Can't read overrides.toml: {e}")
             with closing(db.connect(self.cfg.db_path)) as conn:
                 self.conn = conn
                 ensure_current_keys(conn)

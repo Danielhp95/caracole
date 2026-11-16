@@ -2557,13 +2557,20 @@ picks one).
   and TIDAL's 2), within `lookup_per_hour` with every lookup's (run `lookup:share:…`), at `lookup_delay`.
 - Each is switchable (`config.SWITCHABLE`, `enabled = false`, which the phone takes from the computer at a sync), on
   by default.
-- The cache's answer is read first, with no request; a block cools the service down and alerts once, an error is
+- The cache's answer is read first, with no request (a short link's hop, which the HTTP cache never keeps, kept beside it once
+  the link was read, `ShareAsk.hops`); a block cools the service down and alerts once, an error is
   counted, and the page says either in one line, Edit open: never "this link names no song" for an error.
 - Nothing is sent to a tab site before Fetch.
 
 #### Either pace
 
 - One request at a time per provider (a synchronous client, and the lock below), redirect hops included.
+- A request answered with a redirect is a request sent, followed or not: `_common._SENT` and `Pace.SENT` count its
+  `redirect` event in the hour's, the day's and `http:last_request:`.
+- A connection that fails before any byte is sent (`httpx.ConnectError`: no address, no route) is tried again only
+  by bulk work, within `_common.CONNECT_PATIENCE` (60 s) a client (`PoliteClient(connect_patience=)`): a run that
+  starts as the laptop wakes, before its Wi-Fi has an address. A retry is the same request; nothing that may have
+  reached the site is ever tried again.
 - `PoliteClient` paces its own requests, and `_common._pause_after_last_request` its first after the last one any
   caracole sent (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk work's client
   paces its next one once its process let a lookup go first (`_LockedClient._after_a_lookup`).
@@ -2815,8 +2822,8 @@ picks one).
 - A song's lyrics are missing only once every site asked answered a miss:
   - LRCLIB's miss;
   - then Megalobiz's (a search with no result that fits, or a record gone, 404), which asks again after 30 days; an
-    error there puts a song LRCLIB missed back to pending, and a song LRCLIB failed on is never missing whatever
-    Megalobiz answers (`test_megalobiz_fetch.py::test_an_error_on_a_song_lrclib_missed_puts_it_back_to_pending`);
+    error, a block or a spent budget there (`provider_pass.each_song`'s `on_cut`) puts a song LRCLIB missed back to
+    pending, and a song LRCLIB failed on is never missing whatever Megalobiz answers (`test_megalobiz_fetch.py::test_an_error_on_a_song_lrclib_missed_puts_it_back_to_pending`);
   - AZLyrics the same way, after Megalobiz, its miss a 404 or a page that doesn't list the song
     (`test_azlyrics_fetch.py::test_an_error_on_a_song_the_others_missed_puts_it_back_to_pending`).
 - On gtptabs.com only an artist page that answered without a candidate is a miss, asked about again after 30 days.
@@ -3035,6 +3042,10 @@ picks one).
     try with the pick the turn asked for:
     `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced`);
   - gtptabs_fetch.py checks a song still has no file before its turn;
+  - every pass through provider_pass.py (LRCLIB, Megalobiz, AZLyrics, gtptabs.com, harptabs.com, gametabs.net,
+    YouTube) reads each song again just before its turn (`as_now`), passing over one removed or no longer due
+    (`test_megalobiz_fetch.py::test_a_song_a_sync_removed_in_the_passs_pause_is_passed_over`,
+    `test_youtube_fetch.py::test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone`);
   - and `autochords_pending` and `render_all` read each song after and overrides.toml again;
   - what comes after reads overrides.toml again too (`_common.overrides_since`): the run's next steps,
     `StepContext.read_overrides_again`; the songbooks and pages of `caracole render` and `autochords`; the pages of

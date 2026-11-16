@@ -186,6 +186,8 @@ def read_once_more[T](
 # --- the polite client --------------------------------------------------------
 
 _CACHED_STATUSES = (200, 404)
+# The waits before each new try of a connection that failed before any byte was sent, while a client's patience lasts.
+_CONNECT_WAITS = (2.0, 4.0, 8.0, 16.0, 30.0)
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "location")
 # Markers of a real challenge page. Normal UG pages also load Cloudflare's
 # "/cdn-cgi/challenge-platform/" bot-management script, so that string alone
@@ -441,6 +443,14 @@ class PoliteClient:
       the retry of is the 503's error, at once. A 503 is never cached.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
       healthy answer resets the count: an accepted 5xx is returned but doesn't.
+    - A connection that fails before any byte of the request is sent (``httpx.ConnectError``:
+      no address for the host, no route, refused) is tried again after a wait (``_CONNECT_WAITS``,
+      spent through ``_wait``, then the usual pause), while the client's ``connect_patience`` (in
+      seconds, none by default) lasts: a laptop that has just woken has no network for a few seconds.
+      The patience is the client's for its whole life, so a network that stays down costs it once.
+      Nothing else is tried again: a request that may have reached the site (an error reading its
+      answer, a timeout) is the request's error at once. A retry is the same request: no event, and
+      no more of the budget.
     """
 
     def __init__(
@@ -458,6 +468,7 @@ class PoliteClient:
         timeout: float = 30.0,
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        connect_patience: float = 0.0,
     ):
         import httpx
 
@@ -476,6 +487,9 @@ class PoliteClient:
         self._blocked: ProviderBlocked | None = None
         self._unavailable = False
         self._budget_reported = False
+        self._connect_patience = connect_patience
+        self._connect_waited = 0.0
+        self._connect_tries = 0
         self._http = httpx.Client(
             transport=transport,
             headers={"User-Agent": user_agent},
@@ -642,13 +656,22 @@ class PoliteClient:
         self._pause(str(request.url))
         self.requests_made += 1
         self._last_request = self._clock()
-        sent = perf_counter()
-        try:
-            resp = self._http.send(request)
-        except httpx.HTTPError as e:
-            self._log_request(request.method, str(request.url), type(e).__name__, seconds=perf_counter() - sent)
-            self._fail(url, None, f"{type(e).__name__}: {e}")
-            raise AssertionError("unreachable")  # pragma: no cover
+        while True:
+            sent = perf_counter()
+            try:
+                resp = self._http.send(request)
+                break
+            except httpx.HTTPError as e:
+                self._log_request(request.method, str(request.url), type(e).__name__, seconds=perf_counter() - sent)
+                wait = self._connect_wait() if isinstance(e, httpx.ConnectError) else None
+                if wait is None:
+                    self._fail(url, None, f"{type(e).__name__}: {e}")
+                    raise AssertionError("unreachable")  # pragma: no cover
+                said = f"{type(e).__name__}: {e}"
+            log.info("%s couldn't be reached (%s); trying again in %.0f s", provider_name(self.provider), said, wait)
+            self._wait(wait)
+            self._pause(str(request.url))
+            self._last_request = self._clock()
         self._log_request(request.method, str(request.url), _status_line(resp.status_code),
                           seconds=perf_counter() - sent)
 
@@ -660,6 +683,17 @@ class PoliteClient:
             self._event(url, status, "blocked", reason)
             raise self._blocked
         return resp
+
+    def _connect_wait(self) -> float | None:
+        """How long to wait before trying again a connection that failed before any byte was sent: the next of
+        ``_CONNECT_WAITS``, no longer than what is left of the client's patience; None once it is spent."""
+        left = self._connect_patience - self._connect_waited
+        if left <= 0:
+            return None
+        wait = min(_CONNECT_WAITS[min(self._connect_tries, len(_CONNECT_WAITS) - 1)], left)
+        self._connect_tries += 1
+        self._connect_waited += wait
+        return wait
 
     def _pause(self, url: str) -> None:
         if self._last_request is None:

@@ -183,7 +183,7 @@ object AzLyrics {
             }
         }
         val songs = songsToAsk(db, now, picks, recheckAfter, only).asSequence()
-        val asked = Passes.eachSong(songs, stats, "AZLyrics", onError = backToPending) { song ->
+        val asked = Passes.eachSong(songs, stats, "AZLyrics", onError = backToPending, onCut = backToPending) { song ->
             val page = picks[OverrideUrls.overrideKey(song.display)]
             val cache = page != null || db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
             fetchAzLyrics(client, song.artists[0], song.title, page, cache)

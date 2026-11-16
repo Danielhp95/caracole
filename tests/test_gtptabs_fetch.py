@@ -533,3 +533,32 @@ def test_a_song_given_a_file_while_the_pass_ran_gets_no_other(conn, tmp_path, mo
     stats = run(FakeGtpTabs(files={26: gp_file(b"v3.00"), 12: gp_file()}), conn, tmp_path)
     assert stats.tried == 1
     assert [f.name for f in kept_files(conn, others[0].id)] == ["guitar-1.gp5"]  # and no second file
+
+
+def test_a_sitemap_cached_cut_short_is_asked_for_once_more_past_the_cache_when_the_site_answers_304(conn, tmp_path):
+    # One bad night the sitemap's body stops early, under the file's own validators, and is cached as any 200: the
+    # next night's conditional request is answered 304, and the cut-short copy is asked for once more, unconditionally,
+    # rather than read again (and failed) every night until the site changes its file.
+    from datetime import UTC, datetime
+
+    add_song(conn, "Blur", "Beetlebum")
+    site = FakeGtpTabs()
+    child = f"{BASE}/sitemapGoogle1.xml"
+    status, whole, headers = site.pages[child]
+    site.pages[child] = (status, whole[: whole.index("</urlset>") - 200], headers)
+
+    def night(n: int):
+        now = datetime(2026, 10, 19, 3, 30, tzinfo=UTC) + timedelta(days=n)
+        client = site.client(tmp_path / "cache", now=now)
+        site.requests.clear()
+        try:
+            return gtptabs_files(conn, client, tmp_path / "library", now)
+        finally:
+            client.close()
+
+    assert night(0).sitemap_errors == 1
+    site.pages[child] = (status, whole, headers)
+    stats = night(1)
+    assert stats.sitemap_errors == 0
+    assert site.requests.count(child) == 2  # the 304, then the file whole
+    assert kv_get(conn, "gtptabs:index:complete_at") is not None

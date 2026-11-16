@@ -255,13 +255,14 @@ def test_an_answer_that_isnt_json_is_an_error_and_asked_once_more_from_the_cache
     assert site.endpoints() == ["search", "search", "lrc"]  # the cached notice asked for once more
 
 
-def test_a_429_is_a_block_and_marks_nothing(conn, tmp_path):
+def test_a_429_is_a_block_that_marks_no_miss_and_puts_the_song_lrclib_missed_back_to_pending(conn, tmp_path):
+    # Megalobiz answered no miss: the song is missing only once every site asked answered one, as after an error.
     site = FakeMegalobiz([None], failing={"search": 429})
     song = eagles(conn)
     with pytest.raises(ProviderBlocked):
         run(site, conn, tmp_path)
     stored = get_song(conn, song.id)
-    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", EARLIER)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
     assert kv_get(conn, f"{CHECKED}{song.id}") is None
 
 
@@ -274,12 +275,13 @@ def test_three_errors_in_a_row_end_the_pass_and_name_the_songs_left(conn, tmp_pa
     assert (stats.tried, stats.errors, len(site.requests), len(stats.failures)) == (3, 3, 3, 5)
 
 
-def test_a_spent_budget_ends_the_pass_and_marks_nothing(conn, tmp_path):
+def test_a_spent_budget_ends_the_pass_marks_no_miss_and_puts_the_song_it_cut_back_to_pending(conn, tmp_path):
     site = FakeMegalobiz([None])
     song = eagles(conn)
     assert run(site, conn, tmp_path, budget=1) == MegalobizStats(budget_exhausted=True)
     stored = get_song(conn, song.id)
-    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", EARLIER)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
+    assert kv_get(conn, f"{CHECKED}{song.id}") is None
 
 
 def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):
@@ -298,3 +300,70 @@ def test_the_record_is_stored_as_json_with_its_page(conn, tmp_path):
     run(site, conn, tmp_path)
     stored = json.loads(get_song(conn, song.id).lyrics_json)
     assert (stored["provider"], stored["url"]) == ("megalobiz", "https://megalobiz.com/lrc/24519/hotel-california")
+
+
+# --- a lookup or a sync let go first in the pass's pauses -----------------------------------------------------------
+
+
+def test_a_song_a_lookup_found_lyrics_for_in_the_passs_pause_is_asked_nothing_more(conn, tmp_path):
+    # In the pause after the pass's first request the nightly run hands the lock to `caracole get Radiohead - Creep`,
+    # whose Megalobiz misses and whose AZLyrics has the lyrics: the pass, reading the song again before its turn, asks
+    # Megalobiz nothing more about it, and the lyrics the lookup found stay.
+    from caracole.config import ProviderPolicy
+    from caracole.http import PoliteClient
+
+    first = add_song(conn, "Eagles", "Hotel California", added_at="2026-11-02T00:00:00Z")
+    second = add_song(conn, "Radiohead", "Creep", added_at="2026-11-01T00:00:00Z")
+    for song in (first, second):
+        update_song(conn, song.id, lyrics_status="missing", lyrics_at=EARLIER)
+    site = FakeMegalobiz()
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        title = request.url.params.get("title")
+        asked.append(title)
+        if title == "Hotel California" and asked.count(title) == 1:
+            kv_set(conn, f"{CHECKED}{second.id}", NOW.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            found = Lyrics(plain="when you were here before", synced=None, instrumental=False, duration=None,
+                           lrclib_id=None, raw={}, provider="azlyrics",
+                           url="https://www.azlyrics.com/lyrics/radiohead/creep.html")
+            update_song(conn, second.id, lyrics_status="found", lyrics_json=found.to_json())
+        return site.handler(request)
+
+    client = PoliteClient("megalobiz", ProviderPolicy(budget=60, delay=(0, 0)), tmp_path / "cache", user_agent="t",
+                          transport=httpx.MockTransport(handler), sleep=lambda s: None)
+    megalobiz_lyrics(conn, client, tmp_path / "lib", NOW)
+    assert "Creep" not in asked
+    after = get_song(conn, second.id)
+    assert after.lyrics_status == "found" and "when you were here before" in after.lyrics_json
+
+
+def test_a_song_a_sync_removed_in_the_passs_pause_is_passed_over(conn, cfg, tmp_path):
+    # `caracole peer take` is let go first as a lookup is, and takes the phone's removal of Creep: the pass writes no
+    # lyrics into its folder again and goes on.
+    from caracole.config import ProviderPolicy
+    from caracole.http import PoliteClient
+    from caracole.removal import plan_removal, remove_song
+
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Eagles - Hotel California\nRadiohead - Creep\n", encoding="utf-8")
+    first = add_song(conn, "Eagles", "Hotel California", added_at="2026-11-02T00:00:00Z", duration_ms=391000,
+                     source_id="eagles/hotel-california")
+    second = add_song(conn, "Radiohead", "Creep", added_at="2026-11-01T00:00:00Z", duration_ms=239000,
+                      source_id="radiohead/creep")
+    for song in (first, second):
+        update_song(conn, song.id, lyrics_status="missing", lyrics_at=EARLIER)
+    site = FakeMegalobiz([record(lrc_id=7, title="Creep", artist="Radiohead", duration=239.0)])
+    taken: list[bool] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("title") == "Hotel California" and not taken:
+            taken.append(True)
+            remove_song(conn, cfg, plan_removal(conn, cfg, get_song(conn, second.id)))
+        return site.handler(request)
+
+    client = PoliteClient("megalobiz", ProviderPolicy(budget=60, delay=(0, 0)), tmp_path / "cache", user_agent="t",
+                          transport=httpx.MockTransport(handler), sleep=lambda s: None)
+    megalobiz_lyrics(conn, client, cfg.library_dir, NOW)
+    assert taken
+    assert not (cfg.library_dir / "Radiohead" / "Creep").exists()

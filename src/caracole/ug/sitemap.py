@@ -122,6 +122,19 @@ def iter_locs(data: bytes) -> Iterator[str]:
         yield loc
 
 
+_CLOSED = re.compile(rb"</(?:[\w.-]+:)?(?:urlset|sitemapindex)\s*>")  # a sitemap's last tag, read whole
+_TAIL = 4096  # the bytes at a sitemap's end its last tag is looked for in: past it, comments and spaces alone
+
+
+def is_whole(data: bytes) -> bool:
+    """Whether a sitemap or a sitemap index (gzipped or not) ends with its closing ``</urlset>`` or
+    ``</sitemapindex>``: a body cut short lists fewer pages than the site has. A gzip body that won't
+    decompress raises as ``gzip.decompress`` does."""
+    if data[:2] == _GZIP_MAGIC:
+        data = gzip.decompress(data)
+    return _CLOSED.search(data[-_TAIL:]) is not None
+
+
 def parse_sitemap_index(data: bytes) -> list[str]:
     """The child sitemap URLs of a sitemap index, in document order."""
     return list(iter_locs(data))

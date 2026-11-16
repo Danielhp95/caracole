@@ -38,7 +38,7 @@ from caracole.db import kv_delete, kv_set
 from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import Song, list_songs, update_song
 
 log = logging.getLogger(__name__)
@@ -487,17 +487,20 @@ FAILED = "lyrics:failed:"
 def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
     """Songs never looked up, newest first, then misses older than ``recheck_after``: re-checks,
     whose cached answer is the old miss itself."""
-    cutoff = stamps.utc(now) - recheck_after
     pending: list[Song] = []
     due: list[Song] = []
     for song in list_songs(conn):
-        if song.status == "ignored":
-            continue
-        if song.lyrics_status == "pending":
-            pending.append(song)
-        elif song.lyrics_status == "missing" and stamps.before(song.lyrics_at, cutoff):
-            due.append(song)
+        if _due(song, now, recheck_after):
+            (pending if song.lyrics_status == "pending" else due).append(song)
     return pending + due
+
+
+def _due(song: Song, now: datetime, recheck_after: timedelta) -> bool:
+    """Whether ``_songs_to_look_up`` lists the song."""
+    if song.status == "ignored":
+        return False
+    return song.lyrics_status == "pending" or (
+        song.lyrics_status == "missing" and stamps.before(song.lyrics_at, stamps.utc(now) - recheck_after))
 
 
 def fetch_pending_lyrics(
@@ -539,7 +542,8 @@ def fetch_pending_lyrics(
         return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,
                             duration_s=duration, cache=song.lyrics_status != "missing")
 
-    songs = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
+    listed = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
+    songs = as_now(conn, listed, lambda song: _due(song, now, recheck_missing_after))
     for song, result in each_song(songs, stats, turn, site="LRCLIB"):
         _record(conn, library_dir, song, result, stamp)
         kv_delete(conn, f"{FAILED}{song.id}")

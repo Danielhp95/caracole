@@ -411,6 +411,33 @@ def test_a_picked_version_replaces_only_the_pins_of_its_kind(cfg, conn, sites):
     assert sorted(load_overrides(cfg.overrides_file).pin["radiohead/creep"]) == [103, 401]  # chords for chords
 
 
+def test_a_lookup_reads_overrides_once_it_holds_the_lock_so_a_pin_written_while_it_waited_stays(cfg, conn, sites,
+                                                                                                  monkeypatch):
+    # While the lookup waits for caracole's lock, the caracole holding it pins the song's text tab: the lookup, which
+    # picks a chords sheet, replaces only the pins of its kind in overrides.toml as it is once the lock is held.
+    from contextlib import contextmanager
+
+    from caracole.overrides import add_pin
+
+    serve_creep(sites, conn)
+    upsert_rows(conn, [(401, "radiohead", "creep", "tabs", "radiohead/creep-tabs-401")], "1", NOW)
+    real = _common.exclusive
+    waited: list[str] = []
+
+    @contextmanager
+    def exclusive(cfg_, what, **kwargs):
+        if not waited:
+            waited.append(what)
+            add_pin(cfg.overrides_file, "Radiohead - Creep", [f"{TAB}radiohead/creep-tabs-401"])
+        with real(cfg_, what, **kwargs):
+            yield
+
+    monkeypatch.setattr(_common, "exclusive", exclusive)
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=f"{TAB}radiohead/creep-chords-103")
+    assert waited == ["get Radiohead - Creep"]
+    assert sorted(load_overrides(cfg.overrides_file).pin["radiohead/creep"]) == [103, 401]
+
+
 def test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_written(cfg, conn, sites):
     # A Guitar Pro file's page, or a bass tab's, as its address says: its pin would pin nothing, so the lookup says
     # so before it adds or records anything.
@@ -954,6 +981,25 @@ def test_a_clean_song_whose_lookup_ug_cut_short_is_owed_a_fetch_by_the_nightly_r
     result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
     assert progress.states()["sheet"] in ("skipped", "failed")
+    assert get_song(conn, creep.id).ug_dirty is True
+
+
+def test_a_clean_song_whose_ug_stage_the_sheets_share_skips_is_owed_a_fetch_by_the_nightly_run(cfg, conn, sites):
+    # Half the hour's requests to UG are spent: what follows the sheet is left for tonight's run, which is then owed
+    # the song's fetch, as any other cut owes it.
+    from caracole.songs import update_song
+
+    from conftest import add_song
+
+    serve_creep(sites, conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                match_song_key="creep", ug_dirty=False, ug_checked_at="2026-10-01T00:00:00Z")
+    lookups_spent(conn, "ug", 30)  # of 60 an hour: none left for what follows the sheet
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["ug"] == "skipped" and "kept for sheets" in result.details["ug"]
     assert get_song(conn, creep.id).ug_dirty is True
 
 

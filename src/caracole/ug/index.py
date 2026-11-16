@@ -50,7 +50,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
-from caracole.http import ROBOTS_DISALLOW, Client, ProviderError, robots_disallows
+from caracole.http import ROBOTS_DISALLOW, Client, ProviderError, read_once_more, robots_disallows
 from caracole.songs import update_song
 from caracole.ug.lookup import song_tabs
 from caracole.ug.page import TAB_BASE_URL, page_url
@@ -59,6 +59,7 @@ from caracole.ug.sitemap import (
     UNRECOGNIZED,
     IndexRow,
     classify_tab_url,
+    is_whole,
     iter_locs,
     sitemap_label,
     sitemap_name,
@@ -387,6 +388,8 @@ def _locs(data: bytes, where: str, status: int | None) -> list[str]:
         raise ProviderError("ug", where, status, f"unreadable sitemap: {e}") from e
     if not locs:
         raise ProviderError("ug", where, status, "not a sitemap (no <loc> entries)")
+    if not is_whole(data):  # fewer tabs than the file lists: never stored as the sitemap
+        raise ProviderError("ug", where, status, "a sitemap cut short (no closing </urlset> or </sitemapindex>)")
     return locs
 
 
@@ -443,7 +446,8 @@ def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], tabs: TabC
 def _tab_sitemap_urls(conn: sqlite3.Connection, client: Client) -> list[str]:
     """The tab sitemaps the sitemap index lists, which are kept as the last listing seen."""
     resp = client.get(SITEMAP_INDEX_URL, cache=False, conditional=True)
-    urls = tab_sitemaps(_locs(resp.content, SITEMAP_INDEX_URL, resp.status))
+    urls = tab_sitemaps(read_once_more(client, resp, SITEMAP_INDEX_URL,
+                                       lambda r: _locs(r.content, SITEMAP_INDEX_URL, r.status), ProviderError))
     if not urls:
         raise ProviderError("ug", SITEMAP_INDEX_URL, resp.status, "the sitemap index lists no tab sitemaps")
     kv_set_json(conn, LISTED_KEY, [sitemap_name(u) for u in urls])
@@ -478,8 +482,10 @@ def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], n
             unchanged += 1
             _tell(progress, SitemapRead(position, len(urls), name, sitemap_label(name), unchanged=True))
             continue
-        rows, tabs = _rows(resp.content, url, resp.status)
-        added, marked = _store(conn, name, rows, tabs, validators, now)
+        # A copy the cache holds cut short (a 304 hands it back) is asked for once more, past the cache.
+        (rows, tabs), resp = read_once_more(client, resp, url, lambda r: (_rows(r.content, url, r.status), r),
+                                            ProviderError)
+        added, marked = _store(conn, name, rows, tabs, _validators(resp.headers), now)
         new += added
         songs |= marked
         parsed.append(name)

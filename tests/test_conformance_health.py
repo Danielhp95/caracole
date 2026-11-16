@@ -369,7 +369,7 @@ def lookups(n: int, *, provider: str = "ug", at_: str = NOW, decision: str = "ok
 COUNT_EVENTS = (
     lookups(2) + lookups(1, at_=HOUR_AGO) + lookups(1, at_=later(HOUR_AGO, seconds=-1))
     + lookups(1, decision="not_modified") + lookups(1, decision="blocked") + lookups(1, decision="error")
-    + lookups(1, decision="cached") + lookups(1, decision="robots")
+    + lookups(1, decision="cached") + lookups(1, decision="robots") + lookups(1, decision="redirect")
     + lookups(2, run="lookup:lacuerda-search:2026-11-03T11:30:00Z", provider="lacuerda")
     + lookups(1, run="lookup:2026-11-03T11:00:00Z", provider="lacuerda")
     + lookups(3, run="2026-11-03T03:30:00Z", at_="2026-11-03T03:31:00Z")
@@ -417,7 +417,7 @@ def test_counts_jsonl(conn):
                         "kw": {"events": COUNT_EVENTS, "provider": provider, "now": now},
                         "out": _common.requests_today(conn, provider, at(now))})
     by_case = {r["case"]: r["out"] for r in records}
-    assert by_case["ug within the hour"] == 7 and by_case["lacuerda's searches"] == 2
+    assert by_case["ug within the hour"] == 8 and by_case["lacuerda's searches"] == 2
     check(VECTORS / "pace" / "counts.jsonl", jsonl(records, corpus="pace/counts", made_by=MADE_BY))
 
 
@@ -474,6 +474,7 @@ LAST_EVENTS = (
     + lookups(1, provider="lrclib", at_="2026-11-03T11:30:00")  # the greater text, which no stamp reads
     + lookups(1, provider="lacuerda", at_="2026-11-03T5:6:7Z")  # strptime's single digits
     + lookups(1, provider="gametabs", at_="2026-11-03T11:59:59Z", decision="robots")
+    + lookups(1, provider="harptabs", at_="2026-11-03T11:59:57Z", decision="redirect")
 )
 
 FLOAT_TEXTS = [
@@ -489,7 +490,8 @@ def test_last_request_jsonl(conn):
     cases: list[tuple[str, str | None, str]] = [(f"kv {text!r}", text, "ug") for text in FLOAT_TEXTS]
     cases += [("no kv: ug's last sent request", None, "ug"), ("no kv: a time that is no stamp", None, "lrclib"),
               ("no kv: single digits", None, "lacuerda"), ("no kv: nothing sent", None, "gametabs"),
-              ("no kv: no event", None, "gtptabs"), ("a kv that isn't a float: the events", "soon", "lrclib")]
+              ("no kv: no event", None, "gtptabs"),
+              ("no kv: a redirect is a request sent", None, "harptabs"), ("a kv that isn't a float: the events", "soon", "lrclib")]
     for case, kv, provider in cases:
         fresh(conn, LAST_EVENTS, {f"http:last_request:{provider}": kv} if kv is not None else None)
         value = _common._last_request(conn, provider)

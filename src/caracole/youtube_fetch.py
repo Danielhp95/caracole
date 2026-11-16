@@ -52,7 +52,7 @@ from caracole.health import get_state, is_cooling
 from caracole.http import ProviderBlocked, ProviderError
 from caracole.lyrics import expected_seconds
 from caracole.overrides import Overrides
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, update_song
 from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, search_query
 
@@ -312,7 +312,11 @@ def youtube_pass(
         if on_song is not None:
             on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
 
-    due = songs if songs is not None else songs_for_youtube(conn, overrides, now)
+    if songs is not None:
+        due = as_now(conn, songs)
+    else:  # each song still due, asked again before its turn: a lookup let go first may have kept it a sheet
+        due = as_now(conn, songs_for_youtube(conn, overrides, now),
+                     lambda song: song.id in {s.id for s in songs_for_youtube(conn, overrides, now)})
     for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now),
                                    site="YouTube", level=logging.WARNING, on_error=failed):
         stats.downloaded += outcome == DOWNLOADED_NOW

@@ -77,7 +77,7 @@ from caracole.inbox import HARMONICA_KIND, harmonica_number
 from caracole.library import keep_file, write_info
 from caracole.normalize import compact, name_forms
 from caracole.overrides import HarpTabsPick, Overrides
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.site_index import Site
 from caracole.songs import Song, get_song, list_songs
 from caracole.versions import upsert_version
@@ -163,8 +163,10 @@ def harptabs_tabs(
         log.warning("harptabs.com's sitemap: %s", e)
     index = _Index(conn)
     run = _Pass(conn, client, Path(library_dir), now)
-    # Each song is checked just before its turn: a lookup let in during a pause may have given it a tab.
-    songs = (s for s in wanting if (_pick(overrides, s) or index.candidates(s)) and _wants(conn, s, overrides))
+    # Each song is read again and checked just before its turn: a lookup let in during a pause may have given it a
+    # tab, or a sync removed it.
+    songs = (s for s in as_now(conn, wanting)
+             if (_pick(overrides, s) or index.candidates(s)) and _wants(conn, s, overrides))
     for _, outcome in each_song(songs, stats, lambda song: _look_up(run, song, index, _pick(overrides, song)),
                                 site="harptabs.com", level=logging.WARNING):
         stats.kept += outcome == KEPT

@@ -79,7 +79,7 @@ from caracole.inbox import GUITAR_FILE_KINDS, guitar_number
 from caracole.library import keep_file, write_info
 from caracole.normalize import compact, slug_key
 from caracole.overrides import Overrides
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.site_index import Site
 from caracole.songs import Song, get_song, list_songs
 from caracole.versions import upsert_version
@@ -172,8 +172,9 @@ def gtptabs_files(
         log.warning("gtptabs.com's sitemaps: %s", e)
     index = _Index(conn)
     run = _Pass(conn, client, Path(library_dir), now)
-    # Each song is checked just before its turn: a lookup let in during a pause may have given it a file.
-    songs = (s for s in _songs_to_try(index, wanting) if s.id not in songs_with_a_guitar_file(conn))
+    # Each song is read again and checked just before its turn: a lookup let in during a pause may have given it a
+    # file, or a sync removed it.
+    songs = (s for s in as_now(conn, _songs_to_try(index, wanting)) if s.id not in songs_with_a_guitar_file(conn))
     for _, outcome in each_song(songs, stats, lambda song: _look_up(run, song, index), site="gtptabs.com",
                                 level=logging.WARNING, stop_on=(PagesNotFiles,)):
         stats.kept += outcome == KEPT

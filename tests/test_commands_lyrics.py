@@ -246,7 +246,7 @@ def test_lyrics_with_megalobiz_turned_off_asks_it_nothing(tmp_path, sites):
     assert song(tmp_path, song_id).lyrics_status == "missing"
 
 
-def test_a_megalobiz_block_cools_it_down_and_leaves_lrclibs_answer(tmp_path, sites):
+def test_a_megalobiz_block_cools_it_down_and_puts_the_song_lrclib_missed_back_to_pending(tmp_path, sites):
     sites.megalobiz.failing["search"] = 429
     (song_id,) = seed(tmp_path, ("Eagles", "Hotel California"))
     result = run(tmp_path, "lyrics", ntfy=True)
@@ -257,7 +257,7 @@ def test_a_megalobiz_block_cools_it_down_and_leaves_lrclibs_answer(tmp_path, sit
         assert is_cooling(conn, "megalobiz", _common.utcnow())
     finally:
         conn.close()
-    assert song(tmp_path, song_id).lyrics_status == "missing"
+    assert song(tmp_path, song_id).lyrics_status == "pending"  # Megalobiz answered no miss
     assert len(sites.ntfy.posts) == 1
 
 
@@ -1150,7 +1150,7 @@ def test_lyrics_with_azlyrics_turned_off_asks_it_nothing(tmp_path, sites):
     assert "AZLyrics" not in result.stdout and sites.azlyrics.requests == []
 
 
-def test_an_azlyrics_block_cools_it_down_and_leaves_the_song_as_it_was(tmp_path, sites):
+def test_an_azlyrics_block_cools_it_down_and_puts_the_song_back_to_pending(tmp_path, sites):
     from helpers.azlyrics_site import ARTIST
 
     sites.azlyrics.failing[ARTIST] = "block"
@@ -1163,7 +1163,7 @@ def test_an_azlyrics_block_cools_it_down_and_leaves_the_song_as_it_was(tmp_path,
         assert is_cooling(conn, "azlyrics", _common.utcnow())
     finally:
         conn.close()
-    assert song(tmp_path, song_id).lyrics_status == "missing"
+    assert song(tmp_path, song_id).lyrics_status == "pending"  # AZLyrics answered no miss
 
 
 def test_lyrics_found_go_on_the_auto_sheet_and_its_page_at_once(tmp_path, sites, monkeypatch):

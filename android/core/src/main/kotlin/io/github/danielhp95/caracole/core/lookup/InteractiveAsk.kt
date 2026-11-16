@@ -104,7 +104,7 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
      * leaves [LookupWords.SHEETS_SHARE] of the hour's lookup requests to the site for sheets (`left`: the hour's
      * `lookup_per_hour`, less its share rounded up, less the requests every lookup of the hour sent it), so that an
      * evening of songs looked up on the spot keeps getting them: none left and the site askable, [Asked.Spent] kept
-     * for sheets with nothing sent; else the client's budget held to what it sent and `left`, when that is less.
+     * for sheets with nothing sent, the song owed its Ultimate Guitar fetch as any cut owes it; else the client's budget held to what it sent and `left`, when that is less.
      */
     val afterTheSheet: Asking = AfterTheSheet()
 
@@ -112,7 +112,10 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
     inner class AfterTheSheet internal constructor() : Asking {
         override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
             val left = left(provider)
-            if (left <= 0 && usable(provider) == null) return Asked.Spent(hour = false, keptForSheets = true)
+            if (left <= 0 && usable(provider) == null) {
+                owed(provider)  // cut short as a spent budget cuts it: owed a fetch at night
+                return Asked.Spent(hour = false, keptForSheets = true)
+            }
             return this@InteractiveAsk.ask(provider, policy) { client ->
                 if (client.requestsMade + left < client.policy.budget) {  // no stage after it asks this site for a sheet
                     client.policy = client.policy.copy(budget = (client.requestsMade + left).toLong())

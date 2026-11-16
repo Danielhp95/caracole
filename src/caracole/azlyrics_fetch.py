@@ -38,7 +38,7 @@ from caracole.http import Client, read_once_more
 from caracole.library import song_dir, write_info
 from caracole.lyrics import FAILED, Lyrics, write_lyrics
 from caracole.overrides import override_key
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import Song, get_song, list_songs, update_song
 
 log = logging.getLogger(__name__)
@@ -68,19 +68,19 @@ def songs_to_ask(conn: sqlite3.Connection, now: datetime, *, picks: Mapping[str,
                  recheck_after: timedelta = RECHECK_AFTER, only: Collection[int] | None = None) -> list[Song]:
     """The songs with no lyrics that AZLyrics hasn't answered a miss about since ``recheck_after``, or that ``picks``
     (``Overrides.azlyrics``) names a page for, newest first."""
-    cutoff = stamps.utc(now) - recheck_after
-    asked = []
-    for song in list_songs(conn):
-        if song.status == "ignored" or (only is not None and song.id not in only):
-            continue
-        if override_key(song.display) in (picks or {}):
-            if song.lyrics_status in ("pending", "missing"):
-                asked.append(song)
-            continue
-        checked = kv_get(conn, f"{CHECKED}{song.id}")
-        if _wants(conn, song) and (checked is None or stamps.before(checked, cutoff)):
-            asked.append(song)
-    return asked
+    return [song for song in list_songs(conn)
+            if _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only)]
+
+
+def _due(conn: sqlite3.Connection, song: Song, now: datetime, *, picks: Mapping[str, str] | None,
+         recheck_after: timedelta, only: Collection[int] | None) -> bool:
+    """Whether ``songs_to_ask`` lists the song."""
+    if song.status == "ignored" or (only is not None and song.id not in only):
+        return False
+    if override_key(song.display) in (picks or {}):
+        return song.lyrics_status in ("pending", "missing")
+    checked = kv_get(conn, f"{CHECKED}{song.id}")
+    return _wants(conn, song) and (checked is None or stamps.before(checked, stamps.utc(now) - recheck_after))
 
 
 def fetch_azlyrics(client: Client, *, artist: str, title: str, page: str | None = None,
@@ -132,8 +132,10 @@ def azlyrics_lyrics(
         if song.lyrics_status == "missing":  # a song is missing only once every site asked answered a miss
             update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
 
-    songs = songs_to_ask(conn, now, picks=picks, recheck_after=recheck_after, only=only)
-    for song, lyrics in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending):
+    songs = as_now(conn, songs_to_ask(conn, now, picks=picks, recheck_after=recheck_after, only=only),
+                   lambda song: _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only))
+    for song, lyrics in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending,
+                                  on_cut=back_to_pending):
         if lyrics is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
             stats.missing += 1

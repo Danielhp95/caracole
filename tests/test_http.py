@@ -482,6 +482,60 @@ def test_network_error_is_provider_error(tmp_path):
         client.get("https://x.test/1")
 
 
+def down_for(n: int, then=ok(b"page"), error=httpx.ConnectError):
+    """A network with no route for the first ``n`` requests (a laptop just woken: Wi-Fi has no address yet)."""
+    left = [n]
+
+    def handler(request):
+        if left[0] > 0:
+            left[0] -= 1
+            raise error("[Errno -3] Temporary failure in name resolution", request=request)
+        return then(request)
+
+    return handler
+
+
+def test_a_connection_that_fails_before_any_byte_is_sent_is_tried_again_within_the_clients_patience(tmp_path):
+    sleeps, events = [], []
+    client, rec = make_client(tmp_path, down_for(3), sleeps=sleeps, events=events, connect_patience=60.0,
+                              delay=(0.0, 0.0))
+    assert client.get("https://x.test/1").content == b"page"
+    assert len(rec.requests) == 4
+    assert client.requests_made == 1  # none of the three reached the site: one request, as the budget counts it
+    assert [e.decision for e in events] == ["ok"]  # nothing failed
+    assert sleeps == [2.0, 4.0, 8.0]
+
+
+def test_the_patience_is_spent_once_a_client_and_then_the_error_is_the_requests(tmp_path):
+    sleeps, events = [], []
+    client, rec = make_client(tmp_path, down_for(100), sleeps=sleeps, events=events, connect_patience=60.0,
+                              delay=(0.0, 0.0))
+    with pytest.raises(ProviderError, match="ConnectError"):
+        client.get("https://x.test/1")
+    assert sum(sleeps) <= 60
+    tries = len(rec.requests)
+    assert tries > 1
+    with pytest.raises(ProviderError):  # the patience spent: the next request fails at once
+        client.get("https://x.test/2")
+    assert len(rec.requests) == tries + 1
+    assert [e.decision for e in events] == ["error", "error"]
+
+
+@pytest.mark.parametrize("error", [httpx.ReadError, httpx.RemoteProtocolError, httpx.ReadTimeout])
+def test_a_request_that_may_have_reached_the_site_is_never_tried_again(tmp_path, error):
+    client, rec = make_client(tmp_path, down_for(1, error=error), connect_patience=60.0)
+    with pytest.raises(ProviderError):
+        client.get("https://x.test/1")
+    assert len(rec.requests) == 1
+
+
+def test_a_client_with_no_patience_fails_at_once(tmp_path):
+    client, rec = make_client(tmp_path, down_for(1))
+    with pytest.raises(ProviderError):
+        client.get("https://x.test/1")
+    assert len(rec.requests) == 1
+
+
 def test_404_is_cached_when_accepted(tmp_path):
     client, rec = make_client(tmp_path, ok(b"gone", status=404))
     assert client.get("https://x.test/1", accept=(200, 404)).status == 404

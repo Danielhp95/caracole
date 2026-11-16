@@ -4,7 +4,9 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.CachedAnswers
+import io.github.danielhp95.caracole.core.http.HttpCache
 import io.github.danielhp95.caracole.core.http.ProviderError
+import io.github.danielhp95.caracole.core.http.Response
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.Clients
@@ -23,8 +25,10 @@ import java.time.Instant
  * - **Off**: a service turned off (`[providers.spotify] enabled = false` in the computer's caracole.toml, which the
  *   phone took at a sync) is asked nothing, its cache read neither ([off]).
  * - **The cache first** ([cached]): every answer it accepted is kept forever (`<cacheDir>/http/<provider>/`), so a
- *   link shared again, or the page loaded again, sends nothing and writes nothing; a cached answer that won't parse
- *   is asked for once more, past the cache.
+ *   link shared again, or the page loaded again, sends nothing and writes nothing; a short link's hop, a redirect,
+ *   which the HTTP cache never keeps, is kept beside it once the link was read whole ([hops]: the address it went
+ *   to, by the link's SHA-256). A cached answer that won't parse is asked for once more, past the cache, and only
+ *   it: what this ask had from the network is used again, so a short link's retry never sends its hop twice.
  * - **Else one ask** ([ask]), inside the caller's write: the lookup's envelope ([InteractiveAsk], run `lookup:share:`
  *   and the time, so its requests count in the hour's `lookup_per_hour` with every lookup's) with a client at the
  *   lookup pace (`lookup_delay`, and the pause after this side's last request to it), its budget the least of
@@ -52,7 +56,9 @@ object ShareAsk {
     fun cached(linked: Linked, cacheDir: File): Read? {
         val answers = CachedAnswers(linked.service.provider, cacheDir)
         return try {
-            ShareLinks.answer(linked) { url, accept -> answers.cached(url, accept) ?: throw NotCached() }
+            ShareLinks.answer(linked) { url, accept ->
+                hop(linked, cacheDir, url) ?: answers.cached(url, accept) ?: throw NotCached()
+            }
         } catch (e: NotCached) {
             null
         } catch (e: ShareParseError) {
@@ -61,6 +67,37 @@ object ShareAsk {
     }
 
     private class NotCached : Exception()
+
+    /** Where a short link's hop is kept: `<cacheDir>/http/<provider>/short/<the link's SHA-256>.txt`, the address it
+     * went to; null for any other link. */
+    fun hops(linked: Linked, cacheDir: File): File? {
+        if (linked !is ShareLinks.Short) return null
+        val root = File(File(cacheDir, "http"), linked.service.provider)
+        return File(File(root, "short"), HttpCache(root).key(linked.link) + ".txt")
+    }
+
+    /** The kept hop of [linked], when [url] is the short link itself: a redirect to where it went, as its service
+     * answered it once; else null. */
+    private fun hop(linked: Linked, cacheDir: File, url: String): Response? {
+        if (linked !is ShareLinks.Short || url != linked.link) return null
+        val to = try {
+            hops(linked, cacheDir)?.takeIf { it.isFile }?.readText(Charsets.UTF_8)?.takeIf { it.isNotEmpty() }
+        } catch (_: java.io.IOException) {
+            null
+        } ?: return null
+        return Response(url, 307, ByteArray(0), mapOf("location" to to), fromCache = true)
+    }
+
+    /** Keep [linked]'s hop, read whole: [resp], the redirect its service answered. */
+    private fun keepHop(linked: Linked, cacheDir: File, resp: Response) {
+        val file = hops(linked, cacheDir) ?: return
+        val to = resp.headers["location"] ?: return
+        if (resp.status !in 301..308) return
+        file.parentFile.mkdirs()
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        tmp.writeText(to, Charsets.UTF_8)
+        if (!tmp.renameTo(file)) tmp.delete()
+    }
 
     /** [linked]'s service asked once, inside a write on [db] (autocommit: each event and record commits as it
      * happens), through [clients] at [cfg]'s settings; a block alerts [alerts] once. */
@@ -73,15 +110,25 @@ object ShareAsk {
             val pace = Pace.lookupPolicy(cfg, db, provider, clients.pacing.clock())
             val policy = pace.copy(budget = minOf(pace.budget, linked.requests.toLong()))
             val asked = ask.ask(provider, policy) { client ->
+                val fresh = HashMap<String, Response>()  // what the network answered this ask, by URL
                 var fromCache = false
-                try {
+                val read = try {
                     ShareLinks.answer(linked) { url, accept ->
-                        client.get(url, accept = accept).also { if (it.fromCache) fromCache = true }
+                        val kept = hop(linked, clients.cacheDir, url)
+                        if (kept != null) {
+                            fresh[url] = kept
+                            return@answer kept
+                        }
+                        client.get(url, accept = accept).also { if (it.fromCache) fromCache = true else fresh[url] = it }
                     }
                 } catch (e: ShareParseError) {
                     if (!fromCache) throw e
-                    ShareLinks.answer(linked) { url, accept -> client.get(url, cache = false, accept = accept) }
+                    ShareLinks.answer(linked) { url, accept ->
+                        fresh[url] ?: client.get(url, cache = false, accept = accept).also { fresh[url] = it }
+                    }
                 }
+                fresh[linked.link]?.let { keepHop(linked, clients.cacheDir, it) }
+                read
             }
             ask.recordAnswers()
             val hour = Pace.lookupRequestsUsed(db, provider, clients.pacing.clock()) >= cfg.provider(provider).lookupPerHour
