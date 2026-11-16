@@ -1,0 +1,52 @@
+"""A songbook's songs in the viewer (book.js): each song's own settings, the player's instrument and the arrows.
+
+book.js shows one song of songbook.html at a time and keeps each song's settings apart; the screen's choices (the
+instrument among them) are the player's, kept from song to song. These tests open a songbook from a file (the
+browser keeps its settings) and in caracole serve's sandbox (only the address does), in Chromium.
+"""
+
+from __future__ import annotations
+
+import time
+from contextlib import nullcontext
+
+import pytest
+
+from caracole.viewer.book import BookSong, build_songbook, songbook_csp
+
+from helpers.browser import CHROMIUM_MARKS, Browser
+from helpers.viewer_pages import key, viewer as open_viewer
+from test_viewer_instruments_page import IN_E, SETTINGS, SONG, THREE, choose
+from test_viewer_necks import reload, served, to_song
+from test_viewer_panels import SONG as PROG_SONG
+
+pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
+
+DESKTOP = {"width": 1280, "height": 800, "mobile": False}
+READY = "document.documentElement.dataset.ready === '1'"
+SAID = "[location.hash.split('=')[0], document.getElementById('shift').textContent]"
+
+
+def _songbook(tmp_path, songs) -> str:
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    return path.as_uri()
+
+
+@pytest.mark.parametrize("panel", ["settings", "harmony"])
+def test_the_arrows_stay_in_the_song_while_a_panel_is_open(tmp_path, panel):
+    """With the settings or the Harmony panel open, ← and → stay with it (a progression playing there goes on), as
+    with a card or the overlay's sheet open."""
+    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
+                                BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")])
+    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
+        b.click("#more")
+        if panel == "harmony":
+            b.click("#harmony-open")
+            assert b.wait("!document.getElementById('harmony').hidden")
+        b.js("window.before = true")
+        key(b, "ArrowRight", 39)
+        time.sleep(0.5)
+        seen = b.js("[location.hash.split('=')[0], window.before === true]")
+    assert seen == ["#song-1", True], seen
