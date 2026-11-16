@@ -1036,9 +1036,13 @@ const caracoleRows = (icons, does) => {
       entered = query;
       return null;
     };
-    // The results left (Escape) before the answer an Enter waits for: that Enter is taken back.
+    // The results left (Escape, Back to your songs): an Enter waiting for the answer is taken back, and the settle's
+    // timer sends nothing, as nothing of the sites is on the screen; back in them, the next answer arms it again.
     const leave = () => {
       entered = null;
+      clearTimeout(timer);
+      timer = 0;
+      pending = null;
     };
     // Ask LaCuerda's button pressed (``go``), where it stands for this line's too: the search of ``query`` now, by
     // hand, when its newest gate lets one go and none is on its way (its line put under the results, ``go``

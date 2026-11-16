@@ -592,3 +592,18 @@ def test_enter_on_the_lookup_page_opens_the_leading_artist_whose_songs_stay_once
     browser.click("#results .artist-head button")  # All results: asked again, with what LaCuerda's search put in
     assert browser.wait(f"{LOOKUP_TITLES}.includes('Eagles')")  # their row on LaCuerda now, beside Ultimate Guitar's
     assert browser.js("!!document.querySelector('#results .artist-hit')")
+
+
+def test_escape_before_the_settle_sends_no_lacuerda_search_with_nothing_of_the_sites_on_the_screen(cfg, live, browser,
+                                                                                                  heard):
+    # The answer says "auto" and arms the 1.5 s settle; Escape, back to your songs, before it: the timer sends nothing
+    # (rows.js lacuerdaSearcher's leave), as the query's results are no longer on the screen.
+    base, queue, _ = live
+    lacuerda(cfg)
+    browser.open(base)
+    type_into(browser, "q", "corazon de tiza")
+    hidden = "document.getElementById('results').hidden"
+    assert keys_once(browser, ANSWERED, ["Escape"], hidden) == [True]
+    time.sleep(2.5)  # past the settle
+    assert browser.js(hidden)
+    assert searches(heard) == [], jobs(queue)
