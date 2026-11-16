@@ -202,6 +202,42 @@ def test_a_second_import_of_the_same_file_is_refused_as_no_newer(libraries, tmp_
     assert db.kv_get(studio.conn, sync.BASE_KEY + desk.id()) == before
 
 
+def test_after_the_songbooks_alone_the_rest_of_the_same_file_is_still_taken(libraries, tmp_path, in_utc):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)  # Creep (in songbook Campfire) and Wonderwall
+    f = exported(desk, tmp_path / "d.caracole")
+    out = run(studio, "peer", "import", "--yes", "--parts", "songbooks", str(f))
+    assert out.exit_code == 0, out.output
+    assert studio.songs() == {"radiohead/creep"}  # the songbook's song came along, Wonderwall was not asked for
+    again = run(studio, "peer", "import", "--yes", "--parts", "library", str(f))
+    assert again.exit_code == 0, again.output
+    assert "oasis/wonderwall" in studio.songs()
+    third = run(studio, "peer", "import", "--yes", str(f))  # and now nothing in it is left to take
+    assert third.exit_code == 2 and "Nothing in this file is newer than your sync with Desk" in third.output
+
+
+def test_a_unit_an_import_left_is_taken_from_the_same_file_next_time(libraries, tmp_path, in_utc, monkeypatch):
+    from caracole import overrides
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    f = exported(desk, tmp_path / "d.caracole")
+    real = overrides.put_song_entries
+
+    def failing(path, display, entries):  # overrides.toml can't be written for Wonderwall, this once
+        if "Wonderwall" in display:
+            raise overrides.OverridesError("overrides.toml is busy")
+        return real(path, display, entries)
+
+    monkeypatch.setattr(overrides, "put_song_entries", failing)
+    out = run(studio, "peer", "import", "--yes", str(f))
+    assert out.exit_code == 1 and "Left song/oasis/wonderwall" in out.output
+    monkeypatch.setattr(overrides, "put_song_entries", real)
+    again = run(studio, "peer", "import", "--yes", str(f))
+    assert again.exit_code == 0, again.output
+    assert "oasis/wonderwall" in studio.songs()
+
+
 def test_a_librarys_own_export_is_refused_and_changes_nothing(libraries, tmp_path):
     desk, _, _ = libraries
     desk_with_a_songbook(desk)

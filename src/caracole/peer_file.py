@@ -49,11 +49,14 @@ names or a page pages.json lists that the file lacks: ``UNREADABLE``), so a file
 whole.
 
 **Importing it** is a sync with the file (commands/peer.py's ``peer import``): ``check_importable`` refuses a
-library's own export (``OWN_EXPORT``) and a file no newer than this side's last sync with its caracole (``OLDER``:
-its ``made`` no later than the latest time of this side's base for its id, its kept answers included);
-``compare_file`` compares this library with the file's state, against the base merged with the one the file keeps
-for this side (``bases.json``) and the answers both remembered (``peer_sync.merged_kept``), within the parts the file
-holds (``peer_sync.in_scope``, so a part it lacks is never read as removed); ``FileSource`` is the take's
+library's own export (``OWN_EXPORT``); ``compare_file`` compares this library with the file's state, against the base
+merged with the one the file keeps for this side (``bases.json``) and the answers both remembered
+(``peer_sync.merged_kept``), within the parts the file holds (``peer_sync.in_scope``, so a part it lacks is never read
+as removed), leaving out each unit this side agreed on or answered with the file's caracole at or after the file's
+``made`` (the file is older than that agreement: ``newer_than``), and refuses a file with nothing left to take
+(``OLDER``: no difference this side would take, no index read more recently, and its ``made`` no later than the
+latest time of this side's base for its id, its kept answers included), so that an import of some of its parts, or
+one that left a unit, leaves the rest of the same file to take; ``FileSource`` is the take's
 ``peer_sync.UnitSource``, so a unit is taken from a file exactly as from a peer (a unit of a part the file holds that
 its state lacks the file's caracole hasn't got; a unit it names but holds no document of, or of a part it doesn't
 hold, a ``PeerError``, never a removal); and ``record_import`` keeps what the two now agree on, stamped ``made``,
@@ -648,25 +651,61 @@ def _index_file(path: Path, name: str) -> SyncFile:
 
 
 def check_importable(file: SyncFile, conn: sqlite3.Connection, *, own: str | None) -> None:
-    """FileError, in the owner's words, for a file this library takes nothing from: its own export (``own``, this
-    caracole's id), one no newer than this side's last sync with its caracole (its ``made`` no later than the
-    latest time this side's base for it records, a kept answer's included), and an index export of another
-    schema."""
+    """FileError, in the owner's words, for a file this library takes nothing from whatever it holds: its own export
+    (``own``, this caracole's id), and an index export of another schema. A file no newer than this side's last sync
+    with its caracole is ``compare_file``'s to refuse, once it knows nothing is left to take."""
     if file.index_only:
         if not file.holds:
             raise FileError(OTHER_FORMAT.format(format=f"{FORMAT}, schema {file.manifest.get('schema')}"))
         return
     if own is not None and file.id == own:
         raise FileError(OWN_EXPORT)
-    if file.id is None:
-        return
-    whens = [when for _, when in (sync.base_of(conn, file.id) or {}).values()]
-    whens += [when for _, _, when in sync.kept_of(conn, file.id).values()]
-    times = [t for t in map(stamps.parse, whens) if t is not None]
+
+
+def _agreed_times(conn: sqlite3.Connection, peer: str) -> dict[str, list]:
+    """Each unit's times in this side's records of ``peer``: its base's agreement and its kept answer, as read."""
+    times: dict[str, list] = {}
+    for unit_id, (_, when) in (sync.base_of(conn, peer) or {}).items():
+        times.setdefault(unit_id, []).append(stamps.parse(when))
+    for unit_id, (_, _, when) in sync.kept_of(conn, peer).items():
+        times.setdefault(unit_id, []).append(stamps.parse(when))
+    return {u: [t for t in ts if t is not None] for u, ts in times.items()}
+
+
+def newer_than(file: SyncFile, conn: sqlite3.Connection, found: Sequence[sync.Difference]
+               ) -> list[sync.Difference]:
+    """The differences of ``found`` the file may speak of: those of a unit this side agreed on, or answered, with the
+    file's caracole before the file was made (``made``), or never; then FileError ``OLDER`` when none of them is one
+    this side would take (``THEIRS``, ``CONFLICT``), the file reads no index more recently than this library, and
+    its ``made`` is no later than the latest of those records: an import of the same file again, all of it taken."""
     made = stamps.parse(file.made)
-    if times and made is not None and made <= max(times):
-        day = max(times).astimezone().strftime("%d/%m/%y")
-        raise FileError(OLDER.format(name=file.name or "its caracole", day=day))
+    if file.id is None or made is None:
+        return list(found)
+    times = _agreed_times(conn, file.id)
+    kept = [d for d in found if not any(made <= t for t in times.get(d.id, ()))]
+    latest = max((t for ts in times.values() for t in ts), default=None)
+    if latest is None or made > latest or any(d.proposal in (sync.THEIRS, sync.CONFLICT) for d in kept):
+        return kept
+    if "indexes" in file.holds and _indexes_newer(conn, file):
+        return kept
+    day = latest.astimezone().strftime("%d/%m/%y")
+    raise FileError(OLDER.format(name=file.name or "its caracole", day=day))
+
+
+def _indexes_newer(conn: sqlite3.Connection, file: SyncFile) -> bool:
+    """Whether the file reads a site's index more recently than this library (its state's ``indexes``), or one this
+    library has none of."""
+    from caracole import index_transfer
+
+    here, there = index_transfer.newest(conn), file.state.indexes if file.state is not None else {}
+    for site in index_transfer.SITES:
+        a, b = here.get(site), there.get(site)
+        if b is None or a == b:
+            continue
+        t, m = stamps.parse(b), stamps.parse(a) if a is not None else None
+        if a is None or (t is not None and (m is None or t > m)):
+            return True
+    return False
 
 
 def check_whole(file: SyncFile) -> None:
@@ -932,7 +971,8 @@ def compare_file(conn: sqlite3.Connection, overrides, books: Sequence, file: Syn
     """This library (``overrides``, ``books``: songbook.py's) and ``file`` compared, as a sync compares two sides:
     against this side's base for the file's caracole merged with the one the file keeps for this side, with the
     answers both remembered, within the parts the file holds (see the module's docstring). PeerError when the file's
-    documents can't be read. An index export: no difference."""
+    documents can't be read. Of the units this side agreed on with the file's caracole since the file was made, none
+    (``newer_than``, which refuses a file with nothing left to take). An index export: no difference."""
     from caracole.songbook import name_key
 
     mine = sync.library_state(conn, overrides, books)
@@ -953,7 +993,8 @@ def compare_file(conn: sqlite3.Connection, overrides, books: Sequence, file: Syn
             listed.setdefault(song, set()).update(by)
     listed_songs = {song: sorted(by) for song, by in sorted(listed.items())}
     holds = file.holds
-    return Compared(sync.in_scope(found, holds, listed=listed_songs, holds=holds), mine, base, kept, listed_songs)
+    scoped = newer_than(file, conn, sync.in_scope(found, holds, listed=listed_songs, holds=holds))
+    return Compared(scoped, mine, base, kept, listed_songs)
 
 
 def in_parts(compared: Compared, parts: Iterable[str]) -> list[sync.Difference]:

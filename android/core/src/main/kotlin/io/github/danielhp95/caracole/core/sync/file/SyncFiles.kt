@@ -5,6 +5,7 @@ import androidx.sqlite.driver.bundled.SQLITE_OPEN_READONLY
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
@@ -23,6 +24,7 @@ import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.UnitError
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.sync.internal.client.Documents
+import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -613,26 +615,56 @@ object SyncFiles {
     // --- refused, and read whole ----------------------------------------------------------------------------------
 
     /**
-     * peer_file.check_importable: a FileError, in the owner's words, for a file this library takes nothing from: its
-     * own export ([own], this caracole's id), one no newer than this side's last sync with its caracole (its `made`
-     * no later than the latest time this side's base for it records, a kept answer's included: said as that day in
-     * [zone], `dd/mm/yy`), and an index export of another schema.
+     * peer_file.check_importable: a FileError, in the owner's words, for a file this library takes nothing from
+     * whatever it holds: its own export ([own], this caracole's id), and an index export of another schema. A file no
+     * newer than this side's last sync with its caracole is [compareFile]'s to refuse ([newerThan]), once it knows
+     * nothing is left to take.
      */
-    fun checkImportable(file: SyncFile, db: Db, own: String?, zone: ZoneId) {
+    fun checkImportable(file: SyncFile, own: String?) {
         if (file.indexOnly) {
             if (file.holds.isEmpty()) throw FileError(FileError.otherFormat("$FORMAT, schema ${pyStr(file.manifest["schema"])}"))
             return
         }
         if (own != null && file.id == own) throw FileError(FileError.OWN_EXPORT)
-        val peer = file.id ?: return
-        val whens = (Compare.baseOf(db, peer) ?: emptyMap()).values.map { it.second } +
-            Compare.keptOf(db, peer).values.map { it.at }
-        val times = whens.mapNotNull(::parsed)
-        val made = file.made?.let(::parsed)
-        val latest = times.maxOrNull() ?: return
-        if (made != null && made <= latest) {
-            val day = OLDER_DAY.format(Stamps.instant(latest).atZone(zone))
-            throw FileError(FileError.older(file.name.ifEmpty { "its caracole" }, day))
+    }
+
+    /**
+     * peer_file.newer_than: the differences of [found] the file may speak of, those of a unit this side agreed on, or
+     * answered, with the file's caracole before the file was made (`made`), or never; then a FileError, OLDER (its
+     * day in [zone], `dd/mm/yy`), when none of them is one this side would take (theirs, conflict), the file reads no
+     * index more recently than this library, and its `made` is no later than the latest of those records: an import
+     * of the same file again, all of it taken. So an import of some of its parts, or one that left a unit, leaves
+     * the rest of the same file to take.
+     */
+    fun newerThan(db: Db, file: SyncFile, found: List<Difference>, zone: ZoneId): List<Difference> {
+        val peer = file.id ?: return found
+        val made = file.made?.let(::parsed) ?: return found
+        val times = LinkedHashMap<String, MutableList<Long>>()
+        for ((unitId, entry) in Compare.baseOf(db, peer) ?: emptyMap()) {
+            parsed(entry.second)?.let { times.getOrPut(unitId) { mutableListOf() }.add(it) }
+        }
+        for ((unitId, entry) in Compare.keptOf(db, peer)) {
+            parsed(entry.at)?.let { times.getOrPut(unitId) { mutableListOf() }.add(it) }
+        }
+        val kept = found.filter { d -> times[d.id].orEmpty().none { made <= it } }
+        val latest = times.values.flatten().maxOrNull()
+        if (latest == null || made > latest || kept.any { it.proposal == Compare.THEIRS || it.proposal == Compare.CONFLICT }) {
+            return kept
+        }
+        if ("indexes" in file.holds && indexesNewer(db, file)) return kept
+        val day = OLDER_DAY.format(Stamps.instant(latest).atZone(zone))
+        throw FileError(FileError.older(file.name.ifEmpty { "its caracole" }, day))
+    }
+
+    /** peer_file._indexes_newer: whether the file reads a site's index more recently than this library (its state's
+     * `indexes`), or one this library has none of. */
+    private fun indexesNewer(db: Db, file: SyncFile): Boolean {
+        val here = IndexTransfer.newest(db)
+        val there = file.state?.indexes ?: return false
+        return Sites.ALL.any { site ->
+            val a = here[site.name]
+            val b = there[site.name]
+            b != null && a != b && (a == null || IndexStamps.newer(b, a))
         }
     }
 
@@ -780,10 +812,11 @@ object SyncFiles {
      * peer_file.compare_file: this library and [file] compared, as a sync compares two sides: against this side's
      * base for the file's caracole merged with the one the file keeps for this side ([own], this caracole's id), with
      * the answers both remembered, within the parts the file holds (Scope.inScope with its `holds`, so a part it
-     * lacks is never read as removed). A PeerError when the file's documents can't be read ([source]'s). An index
-     * export: no difference.
+     * lacks is never read as removed); of the units this side agreed on with the file's caracole since the file was
+     * made, none ([newerThan], which refuses a file with nothing left to take, its day in [zone]). A PeerError when
+     * the file's documents can't be read ([source]'s). An index export: no difference.
      */
-    fun compareFile(db: Db, file: SyncFile, source: FileSource, own: String?): FileCompared {
+    fun compareFile(db: Db, file: SyncFile, source: FileSource, own: String?, zone: ZoneId): FileCompared {
         val mine = Units.libraryState(db)
         val state = file.state
         if (file.indexOnly || state == null) return FileCompared(emptyList(), mine, null, emptyMap(), emptyMap(), null)
@@ -797,8 +830,8 @@ object SyncFiles {
         val fileBooks = source.documents().filterKeys { it.startsWith("songbook/") }.mapValues { it.value["unit"] }
         val listed = Scope.listedOn(listOf(hereBooks, fileBooks), mine.keys + state.units.keys)
         val agreed = listOfNotNull(hereBase, fileBase).flatMap { b -> b.values.map { it.second } }
-        return FileCompared(Scope.inScope(found, file.holds, listed, file.holds), mine, base, kept, listed,
-                            agreed.maxWithOrNull(Py.CODE_POINT_ORDER))
+        return FileCompared(newerThan(db, file, Scope.inScope(found, file.holds, listed, file.holds), zone), mine,
+                            base, kept, listed, agreed.maxWithOrNull(Py.CODE_POINT_ORDER))
     }
 
     /** peer_file.in_parts: the differences of [compared] an import of [parts] is about (Scope.inScope). */

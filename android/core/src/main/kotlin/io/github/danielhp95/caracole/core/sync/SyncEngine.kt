@@ -294,9 +294,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * staged copy) compared, as a sync compares two sides (peer_file.compare_file): against this side's base for the
      * file's caracole merged with the one the file keeps for this side, with the answers both remembered, within the
      * parts the file holds (Scope.inScope with its `holds`: a part it lacks is never read as removed); kept by its id
-     * for 10 minutes. A [FileError] in the owner's words for a file refused (SyncFiles.read, checkImportable and
-     * checkWhole: another format, this library's own export, one older than the last sync with its caracole, one
-     * that can't be read whole), before anything is changed; an index export compares as no difference.
+     * for 10 minutes. A [FileError] in the owner's words for a file refused (SyncFiles.read, checkImportable,
+     * newerThan and checkWhole: another format, this library's own export, one with nothing left to take since the
+     * last sync with its caracole, one that can't be read whole), before anything is changed; an index export compares as no difference.
      */
     fun compareFile(file: File, name: String? = null): Comparison {
         val read = SyncFiles.read(file, name)
@@ -307,13 +307,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     private fun compareFile(sf: SyncFile): Comparison {
         val me = database.read { Compare.ownId(it) }
-        database.read { db -> SyncFiles.checkImportable(sf, db, me, zone) }
+        SyncFiles.checkImportable(sf, me)
         SyncFiles.checkWhole(sf)
         val state = sf.state ?: PeerState(Units.FORMAT, null, Documents.text(sf.manifest["caracole"]) ?: "?", sf.name,
                                           sf.made, emptyMap(), null, "")
         val compared = try {
             FileSource(sf, database, store.libraryDir).use { source ->
-                database.read { db -> SyncFiles.compareFile(db, sf, source, me) to source.documents() }
+                database.read { db -> SyncFiles.compareFile(db, sf, source, me, zone) to source.documents() }
             }
         } catch (e: PeerError) {
             throw FileError(e.message ?: "")

@@ -41,8 +41,8 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
 - ``caracole peer import SOURCE`` syncs this library with a file another caracole exported, as if that caracole
   were here (SOURCE a ``.caracole`` file, an index export, or the folder caracole serve staged one in,
   ``state_dir/peer/import-<id>``, deleted once it is over): its stages check (the file read whole, then refused, in
-  your words, when it is this library's own export or no newer than the last sync with its caracole:
-  ``peer_file.check_importable``), take (a backup first, then each unit the file gives, as a pull takes one),
+  your words, when it is this library's own export, ``peer_file.check_importable``, or holds nothing left to take
+  since the last sync with its caracole, ``peer_file.newer_than``), take (a backup first, then each unit the file gives, as a pull takes one),
   render, agree (what the two now agree on, stamped with the file's ``made``, and each answer "keep mine" to what
   the file would give remembered: a file takes nothing back; none for an import of the indexes alone) and index (its
   indexes merged, ``index_transfer.merge``), ``PEER_IMPORT_STAGES``. A staged folder is taken only once its file is

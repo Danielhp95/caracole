@@ -510,8 +510,11 @@ Below the table, a section for each step whose modules have more to say.
     document its state's digest, each kept file a song names and each page pages.json lists held): a file that can't
     be read whole is refused whole.
 - **Refusals**, in the owner's words and the phone's alike, the whys caracole's own (`NOT_A_FILE`, `OTHER_FORMAT`,
-  `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export and a file no newer than
-  this side's last sync with its caracole (its base's latest time, the kept answers' included).
+  `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export; `newer_than` (in
+  `compare_file`) leaves out each unit agreed on or answered with the file's caracole at or after its `made`, and
+  refuses a file with nothing left to take (no difference this side would take, no index read more recently) and no
+  newer than this side's last sync with its caracole (its base's latest time, the kept answers' included), so an
+  import of some parts, or one that left a unit, leaves the rest of the same file to take.
 - **An import is a sync with the file**:
   - `compare_file`: this side's base for the file's caracole merged with the one the file keeps for this side, and the
     answers both remembered (`peer_sync.merged_kept`), within the parts the file holds (`in_scope(holds=)`);

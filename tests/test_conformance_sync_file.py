@@ -43,7 +43,8 @@ with Creep's and Karma Police's own versions changed, and ``file_indexed``.
   ``{differences, scoped, taken, left, after, base_after, kept_after}``: ``compare_file``'s differences ``[id,
   proposal, why]`` (within the parts the file holds), those of the parts asked, the take's (``apply_units`` from a
   ``FileSource``, at ``TAKEN``) units taken and left ``[id, why]``, this side's digests after, and kv ``sync:base:<the
-  file's id>``'s text after ``record_import`` (null: none) and its kept answers.
+  file's id>``'s text after ``record_import`` (null: none) and its kept answers; or, under TZ=UTC, ``{"error": <the
+  words>}``, the file ``compare_file`` refused (nothing in it left to take).
 
 The answers are the same under any hash seed (``test_the_vectors_are_the_same_whatever_the_hash_seed``). Regenerate
 with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
@@ -659,6 +660,10 @@ IMPORTS: list[tuple[str, dict[str, Any]]] = [
     ("a song the file left out is left here, saying why", {"here": "empty", "id": FRESH, "file": "left"}),
     ("an index export holds no unit, and keeps no agreement",
      {"here": "plain", "id": FRESH, "file": "indexes", "member": "indexes.sqlite", "base": "plain"}),
+    ("the songbooks agreed on since the file was made are left out, and the rest of it taken",
+     {"here": "empty", "id": FRESH, "file": "full", "base": "file", "base_parts": ["songbooks"], "base_at": MADE}),
+    ("every unit agreed on since the file was made: nothing left to take, refused as no newer",
+     {"here": "plain", "id": FRESH, "file": "full", "base": "file", "base_at": MADE}),
 ]
 
 
@@ -671,6 +676,20 @@ def _as_chosen(found: list, choices: dict[str, str]) -> list:
 
 
 def import_records(corpus: FileCorpus) -> list[dict]:
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "UTC"
+    time.tzset()
+    try:
+        return _import_records(corpus)
+    finally:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
+
+
+def _import_records(corpus: FileCorpus) -> list[dict]:
     from caracole import db, peer_file
     from caracole import peer_sync as sync
 
@@ -681,18 +700,29 @@ def import_records(corpus: FileCorpus) -> list[dict]:
         lib = corpus.replayed("sync", here, tag=f"-import-{len(records)}")
         db.kv_set(lib.conn, sync.ID_KEY, given["id"])
         kv = {}
-        if given.get("base"):  # this side agreed with the exporter, at T0, on what it holds now
+        path = corpus.file_path(given["file"])
+        if given.get("base") == "file":  # this side agreed with the exporter, at base_at, on what the file holds
+            held = peer_file.read_file(path).state.units
+            units = {u: [x.digest, given["base_at"]] for u, x in sorted(held.items())
+                     if sync.part_of(u) in given.get("base_parts", PARTS)}
+            kv = {sync.BASE_KEY + EXPORTER: json.dumps({"format": sync.FORMAT, "units": units})}
+        elif given.get("base"):  # this side agreed with the exporter, at T0, on what it holds now
             units = {u: [x.digest, T0] for u, x in sorted(lib.units().items())}
             kv = {sync.BASE_KEY + EXPORTER: json.dumps({"format": sync.FORMAT, "units": units})}
         for key, value in kv.items():
             db.kv_set(lib.conn, key, value)
-        path = corpus.file_path(given["file"])
         if member is not None:
             path = corpus.workdir / "files" / f"{given['file']}-{member}"
             path.write_bytes(dict(_members(corpus.file_path(given["file"])))[member])
         f = peer_file.read_file(path, name=member)
         with peer_file.FileSource(f, lib.conn, lib.cfg.library_dir) as source:
-            compared = peer_file.compare_file(lib.conn, lib.overrides(), lib.books(), f, source)
+            try:
+                compared = peer_file.compare_file(lib.conn, lib.overrides(), lib.books(), f, source)
+            except peer_file.FileError as e:
+                records.append({"fn": "import", "case": case, "here": here, "id": given["id"], "kv": kv,
+                                "file": f"files/{given['file']}.caracole", "parts": parts, "choices": choices,
+                                "prefer": prefer, "out": {"error": str(e)}})
+                continue
             scoped = peer_file.in_parts(compared, parts)
             take, keep = sync.decide(_as_chosen(scoped, choices), {"here": "mine", "there": "theirs"}.get(prefer))
             done = sync.apply_units(lib.conn, lib.cfg, source, [(d.id, d.theirs.digest if d.theirs else None)
@@ -801,10 +831,13 @@ def test_the_vectors_show_what_each_case_says(made):
     assert importable == {
         "an index export of another schema": peer_file.OTHER_FORMAT.format(format=f"1, schema {db.SCHEMA_VERSION + 1}"),
         "this library's own export": peer_file.OWN_EXPORT, "never synced": None, "synced before it was made": None,
-        "synced as it was made": peer_file.OLDER.format(name="Desk", day="03/11/26"),
-        "a kept answer later than it": peer_file.OLDER.format(name="Desk", day="04/11/26"),
+        "synced as it was made": None, "a kept answer later than it": None,  # compare_file's to refuse, by unit
         "a base of another format is none": None}
     imports = {r["case"]: r["out"] for r in _records(made) if r["fn"] == "import"}
+    rest = imports["the songbooks agreed on since the file was made are left out, and the rest of it taken"]
+    assert "songbook/campfire" not in rest["scoped"] and CREEP in rest["taken"]
+    assert imports["every unit agreed on since the file was made: nothing left to take, refused as no newer"] == {
+        "error": peer_file.OLDER.format(name="Desk", day="03/11/26")}
     kept, taken, unanswered = (imports[case] for case in (
         "a conflict kept here is remembered, and the file's kept answer read with its sides swapped",
         "the same conflict taken from the file", "a conflict left unanswered is left, and nothing of it remembered"))
@@ -838,7 +871,7 @@ def test_the_vectors_show_what_each_case_says(made):
     assert index_only["differences"] == [] and json.loads(index_only["base_after"]) == json.loads(
         by["import", "an index export holds no unit, and keeps no agreement"]["kv"][sync.BASE_KEY + EXPORTER])
     for case, out in imports.items():
-        assert out["left"] == [], case
+        assert out.get("left", []) == [], case
 
 
 @pytest.mark.slow  # the files made twice, in two processes

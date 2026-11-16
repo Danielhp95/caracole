@@ -197,7 +197,7 @@ class SyncFilesTest {
         }
         assertEquals(SyncFiles.read(file).name, file.name, "named by its own name, else")
         val (database, _) = library(null)
-        database.read { db -> SyncFiles.checkImportable(read, db, "0123456789abcdef", ZoneOffset.UTC) }
+        SyncFiles.checkImportable(read, "0123456789abcdef")
     }
 
     @Test fun theFilesNameIsTheLibrarysNameAndTheDay() {

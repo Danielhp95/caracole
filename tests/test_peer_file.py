@@ -613,22 +613,43 @@ def test_its_bases_are_each_peers_units_and_kept_answers(desk, tmp_path):
     assert f.base_for("1122334455667788") == (None, {}) and f.base_for(None) == (None, {})
 
 
+def compared_with(lib: Library, file: peer_file.SyncFile) -> list[sync.Difference]:
+    with peer_file.FileSource(file, lib.conn, lib.cfg.library_dir) as source:
+        return peer_file.compare_file(lib.conn, lib.overrides(), lib.books(), file, source).found
+
+
 def test_own_export_and_one_no_newer_than_the_last_sync_are_refused(desk, studio, exported, tmp_path, in_utc):
     with pytest.raises(peer_file.FileError, match="this library's own export"):
         peer_file.check_importable(peer_file.read_file(exported.path), desk.conn, own=OWN_ID)
     theirs = peer_file.read_file(by_studio(studio, tmp_path / "studio.caracole"))
-    peer_file.check_importable(theirs, desk.conn, own=OWN_ID)  # never synced: newer than nothing
+    peer_file.check_importable(theirs, desk.conn, own=OWN_ID)
+    assert CREEP in {d.id for d in compared_with(desk, theirs)}  # never synced: newer than nothing
     agreed = {"song/x/y": sync.Unit("song/x/y", "X - Y", "1" * 64)}
     sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, "2026-11-02T08:00:00Z")
-    peer_file.check_importable(theirs, desk.conn, own=OWN_ID)  # synced before the file was made
-    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, MADE)  # the file's made, or later
+    assert CREEP in {d.id for d in compared_with(desk, theirs)}  # synced before the file was made
+    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, MADE)  # the file's made, or later: of another unit
+    assert CREEP in {d.id for d in compared_with(desk, theirs)}  # Creep, a conflict, still the file's to say
+    creep = {CREEP: desk.units()[CREEP]}
+    sync.record_agreement(desk.conn, OTHER_ID, creep, creep, MADE)  # agreed on Creep since: nothing left to take
     with pytest.raises(peer_file.FileError,
                        match=r"^Nothing in this file is newer than your sync with Studio on 03/11/26\.$"):
-        peer_file.check_importable(theirs, desk.conn, own=OWN_ID)
+        compared_with(desk, theirs)
 
 
-def test_a_kept_answer_later_than_the_file_makes_it_older_too(desk, studio, tmp_path, in_utc):
+def test_a_kept_answer_later_than_the_file_leaves_its_unit_out_and_makes_it_older_too(desk, studio, tmp_path,
+                                                                                    in_utc):
     theirs = peer_file.read_file(by_studio(studio, tmp_path / "studio.caracole"))
     sync.record_kept(desk.conn, OTHER_ID, {CREEP: ("h", "t")}, "2026-11-04T09:00:00Z")
     with pytest.raises(peer_file.FileError, match="your sync with Studio on 04/11/26"):
-        peer_file.check_importable(theirs, desk.conn, own=OWN_ID)
+        compared_with(desk, theirs)
+
+
+def test_a_unit_agreed_after_the_file_was_made_is_never_taken_from_it(desk, studio, tmp_path, in_utc):
+    """The file is older than that agreement: what it holds of the unit is what the two sides agreed on since."""
+    theirs = peer_file.read_file(by_studio(studio, tmp_path / "studio.caracole"))
+    agreed = {u: desk.units()[u] for u in (CREEP,)}
+    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, "2026-11-01T08:00:00Z")  # before: Creep theirs
+    assert {d.id: d.proposal for d in compared_with(desk, theirs)}[CREEP] == sync.THEIRS
+    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, "2026-11-04T08:00:00Z")  # after it was made
+    with pytest.raises(peer_file.FileError, match="Nothing in this file is newer"):
+        compared_with(desk, theirs)
