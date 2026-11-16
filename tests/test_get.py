@@ -984,6 +984,25 @@ def test_a_clean_song_whose_lookup_ug_cut_short_is_owed_a_fetch_by_the_nightly_r
     assert get_song(conn, creep.id).ug_dirty is True
 
 
+def test_a_clean_song_whose_ug_stage_the_sheets_share_skips_is_owed_a_fetch_by_the_nightly_run(cfg, conn, sites):
+    # Half the hour's requests to UG are spent: what follows the sheet is left for tonight's run, which is then owed
+    # the song's fetch, as any other cut owes it.
+    from caracole.songs import update_song
+
+    from conftest import add_song
+
+    serve_creep(sites, conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                match_song_key="creep", ug_dirty=False, ug_checked_at="2026-10-01T00:00:00Z")
+    lookups_spent(conn, "ug", 30)  # of 60 an hour: none left for what follows the sheet
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["ug"] == "skipped" and "kept for sheets" in result.details["ug"]
+    assert get_song(conn, creep.id).ug_dirty is True
+
+
 # --- a song a search found on an artist page ------------------------------------------------------
 
 

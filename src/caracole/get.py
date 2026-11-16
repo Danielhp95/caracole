@@ -367,6 +367,7 @@ class _Lookup:
         p = self.cfg.provider(provider)
         left = p.lookup_per_hour - math.ceil(p.lookup_per_hour * SHEETS_SHARE) - lookup_requests_used(self.conn, provider)
         if left <= 0 and self._usable(provider) is None:
+            self._owed(provider)  # cut short as a spent budget cuts it: owed a fetch at night
             return "skipped", f"{self._kept_for_sheets(provider)}; tonight's run does the rest"
 
         def within(client) -> tuple[str, str] | str:

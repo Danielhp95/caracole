@@ -53,6 +53,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'gametabs.net/tabs/actraiser/fillmore?ref=1'"}
+{"args":["get Radiohead - Creep"],"fn":"caracole.overrides.override_key","out":"get-radiohead/creep"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -318,6 +319,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'gametabs.net/tabs/actraiser/fillmore?ref=1'"}
+{"args":["get Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'get Radiohead - Creep'"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -583,6 +585,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["get Radiohead - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["harptabs"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["harptabs.com tab"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -848,6 +851,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["get Radiohead - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["harptabs"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["harptabs.com tab"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1113,6 +1117,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["get Radiohead - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["harptabs"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["harptabs.com tab"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1378,6 +1383,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["get Radiohead - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["harptabs"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["harptabs.com tab"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1643,6 +1649,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'gametabs.net/tabs/actraiser/fillmore?ref=1'"}
+{"args":["get Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'get Radiohead - Creep'"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -1908,6 +1915,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'gametabs.net/tabs/actraiser/fillmore?ref=1'"}
+{"args":["get Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'get Radiohead - Creep'"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -2173,6 +2181,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.overrides.gametabs_pick_from_url","out":{"game":"actraiser","path":"tabs/actraiser/fillmore","slug":"fillmore","url":"https://gametabs.net/tabs/actraiser/fillmore"}}
+{"args":["get Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'get Radiohead - Creep'"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -2438,6 +2447,7 @@
 {"args":["gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'gametabs.net tab'"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths.\""}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'gametabs.net/tabs/actraiser/fillmore?ref=1'"}
+{"args":["get Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'get Radiohead - Creep'"}
 {"args":["harptabs"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'harptabs'"}
 {"args":["harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'harptabs.com tab'"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows.\""}
@@ -2703,6 +2713,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["get Radiohead - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["harptabs"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["harptabs.com tab"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2968,6 +2979,7 @@
 {"args":["gametabs.net tab"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["gametabs.net's index as the nightly run reads its sitemaps: a game's page and its tabs, by their paths."],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["gametabs.net/tabs/actraiser/fillmore?ref=1"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["get Radiohead - Creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["harptabs"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["harptabs.com tab"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
