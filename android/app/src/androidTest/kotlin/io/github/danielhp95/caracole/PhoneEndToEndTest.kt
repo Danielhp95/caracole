@@ -49,7 +49,7 @@ import kotlin.concurrent.thread
  *
  *     adb shell pm clear io.github.danielhp95.caracole
  *     adb shell am instrument -w -e class io.github.danielhp95.caracole.PhoneEndToEndTest -e server http://10.0.2.2:PORT \
- *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
+ *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * In this order, each in the WebView the app shows:
  * - the app's server is at http://127.0.0.1:8738/, the launch's cookie is the WebView's for that origin, and a request

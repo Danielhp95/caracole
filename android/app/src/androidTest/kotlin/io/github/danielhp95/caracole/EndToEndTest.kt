@@ -37,7 +37,7 @@ import java.security.MessageDigest
  * The app against a real caracole serve, on a device or an emulator:
  *
  *     adb shell am instrument -w -e server http://10.0.2.2:8741 \
- *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
+ *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test (what the computer holds, in its words), opens the library page (the phone's own server's, at its

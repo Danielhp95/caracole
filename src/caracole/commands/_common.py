@@ -21,7 +21,9 @@ Bulk work that sends no request (auto-chords, a pass of PDFs) hands it over
 between two songs. The lookup touches its announcement while it waits, so one
 a killed lookup left soon stops counting. Only lookups take it in a handoff:
 another caracole waiting meanwhile takes it once the bulk work is done
-(``_take_outside_handoffs``).
+(``_take_outside_handoffs``). What the owner asked for just now (one song's add,
+removal, review, fetch or PDF, YouTube's search, what caracole serve queues) waits as
+a lookup does, so that a lookup queued behind it never waits behind the whole run.
 """
 
 from __future__ import annotations
@@ -220,6 +222,9 @@ def lookup_run_id(now: datetime) -> str:
 
 _held: dict[Path, tuple[int, int]] = {}  # lock file -> (its descriptor, how many hold it here)
 _handoffs = 0  # how many times this process handed the lock to a waiting lookup and took it back
+# Lock files this process took as a lookup: it hands them to no other (``hand_over``), since the bulk work that
+# handed one to it waits to take it back, and would take it first and keep it to its end.
+_as_lookup: set[Path] = set()
 
 
 def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False,
@@ -257,6 +262,8 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
         os.close(fd)
         raise
     _held[path] = (fd, 1)
+    if interactive:
+        _as_lookup.add(path)
     return path
 
 
@@ -400,7 +407,8 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     """Let a waiting lookup have caracole's lock now, and take it back once it is done; True when it did.
 
     Only bulk work calls it, during a pause between two requests, when it holds
-    the lock and ``conn`` is in no transaction (the lookup must be able to write).
+    the lock and ``conn`` is in no transaction (the lookup must be able to write);
+    a process that took the lock as a lookup hands it to no other.
     The lock is let go, each waiting lookup takes it in turn (each has
     ``HANDOFF_TAKE`` seconds to), and this process waits until it is free again.
     Its record (which caracole holds it) is written back. Meanwhile it holds the
@@ -411,7 +419,8 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     global _handoffs
     path = cfg.state_dir / LOCK_NAME
     held = _held.get(path)
-    if held is None or (conn is not None and conn.in_transaction) or not lookups_waiting(cfg):
+    if (held is None or path in _as_lookup or (conn is not None and conn.in_transaction)
+            or not lookups_waiting(cfg)):
         return False
     fd, _ = held
     try:
@@ -459,6 +468,7 @@ def _release(path: Path) -> None:
         _held[path] = (fd, depth - 1)
         return
     del _held[path]
+    _as_lookup.discard(path)
     os.close(fd)  # and with it the lock
 
 
@@ -488,8 +498,11 @@ def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool =
     ``fatal=False`` raises the OSError instead, for a caller that carries on
     without the state folder (``caracole add``).
 
-    ``interactive``: a lookup, which announces that it waits, so that bulk work
-    hands the lock over at its next pause, or between two songs (``hand_over``). ``on_wait`` hears
+    ``interactive``: a lookup, or anything else the owner asked for just now (one song's
+    add, removal, review, fetch, PDF or YouTube sheet, a YouTube search: what caracole serve
+    queues, so that a lookup queued after it never waits behind a whole nightly run either),
+    which announces that it waits, so that bulk work hands the lock over at its next pause, or
+    between two songs (``hand_over``); it never hands the lock on itself. ``on_wait`` hears
     whom it waits for, when it must.
     """
     path = _acquire(cfg, what, fatal=fatal, interactive=interactive, on_wait=on_wait)

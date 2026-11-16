@@ -2274,8 +2274,8 @@ helpers/corpus.py.
 
 ### Running the tests
 
-- **Fast loop**: `nix develop -c pytest -q -m "not slow"` (about 6 s) while you work, and the whole suite,
-  `nix develop -c pytest -q` (about 35 s), before a commit.
+- **Fast loop**: `nix develop -c pytest -q -m "not slow"` (about 45 s, 90 s while other suites share the machine)
+  while you work, and the whole suite, `nix develop -c pytest -q` (about 170 s, 275 s shared), before a commit.
 - Always through `nix develop`: its pytest has pytest-xdist, which spreads the suite over the cores; a pytest without
   it runs the whole suite in one process, for minutes.
 
@@ -2283,7 +2283,7 @@ helpers/corpus.py.
 nix develop        # Python 3.14 with the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
 caracole --help    # in either shell: the checkout's src/ (PYTHONPATH), no rebuild after an edit
 pytest -q                         # the whole suite, from the repo root, on up to 12 cores
-pytest -q -m "not slow"           # the quick loop, a few seconds
+pytest -q -m "not slow"           # the quick loop, under a minute
 pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
 pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
 nix develop .#autochords -c pytest -m autochords   # the model tests
@@ -2302,7 +2302,7 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`, the emulator's
   `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole` between them, and each class alone with
   `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
-  io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner`.
+  io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner`.
 
 - Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
   the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
@@ -3000,6 +3000,13 @@ picks one).
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
 - `caracole versions --keep`, `--keep-more` and `--clear` (which writes overrides.toml under it) wait so too, and
   `--choose` through get.
+- So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
+  serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
+  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
+  (`test_commands_lock.py::test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt`,
+  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`). A process holding
+  the lock as a lookup hands it to no other (`hand_over`), since the run waiting to take it back would take it first.
+  The phone has no lock and no nightly run, so its queue needs none of this.
 - Every changing `caracole songbook` command (make, add, remove, move, set, rename, delete, render:
   commands/songbook.py) waits the same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).

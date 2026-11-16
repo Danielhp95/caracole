@@ -3,6 +3,8 @@ sheet viewer it serves, in Chromium."""
 
 import http.client
 import json
+import socket
+import struct
 import sys
 import threading
 import time
@@ -199,6 +201,68 @@ def test_an_answer_streamed_from_a_file_is_sent_whole_in_chunks_and_the_file_clo
         server.shutdown()
         server.server_close()
 
+
+
+def raw(port, data):
+    """What the server answers ``data`` sent on a connection the client then ends its side of."""
+    s = socket.create_connection(("127.0.0.1", port), timeout=10)
+    try:
+        s.sendall(data)
+        s.shutdown(socket.SHUT_WR)
+        out = b""
+        while chunk := s.recv(65536):
+            out += chunk
+        return out
+    finally:
+        s.close()
+
+
+def test_a_body_shorter_than_its_length_is_refused_never_acted_on(served, cfg):
+    # The connection ends inside the title: "Creep (Acoustic Version)" must not be added as "Creep".
+    body = urlencode({"csrf": "tok", "artist": "Radiohead", "title": "Creep (Acoustic Version)"}).encode()
+    cut = body[:body.index(b"+%28")]
+    head = (f"POST /request HTTP/1.1\r\nHost: 127.0.0.1:{served.server_address[1]}\r\n"
+            "Content-Type: application/x-www-form-urlencoded\r\nSec-Fetch-Site: same-origin\r\n"
+            f"Content-Length: {len(body)}\r\n\r\n").encode()
+    answer = raw(served.server_address[1], head + cut)
+    assert answer.split(b"\r\n")[0].split(b" ")[1] == b"400", answer[:200]
+    assert not cfg.wanted_file.exists() or "Creep" not in cfg.wanted_file.read_text(encoding="utf-8")
+    assert served.app.queue.snapshot() == []
+
+
+def test_a_client_gone_mid_answer_is_a_line_in_the_log_never_a_traceback(cfg, monkeypatch, tmp_path, capsys, caplog):
+    from caracole.web import app as app_module
+    from caracole.web.app import Route, routes
+
+    caplog.set_level("INFO", logger="caracole.web.server")
+    (tmp_path / "big.bin").write_bytes(b"0" * (32 * 1024 * 1024))
+    opened = []
+
+    def streamed(app, asked):
+        opened.append(open(tmp_path / "big.bin", "rb"))
+        return Response(200, headers=[("Content-Type", "application/octet-stream")], stream=opened[-1])
+
+    table = dict(routes()) | {("GET", "/t/stream"): Route("GET", "/t/stream", streamed)}
+    monkeypatch.setattr(app_module, "routes", lambda: table)
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2048)  # a small window: the answer's write blocks
+        s.connect(("127.0.0.1", server.server_address[1]))
+        s.sendall(f"GET /t/stream HTTP/1.1\r\nHost: 127.0.0.1:{server.server_address[1]}\r\n\r\n".encode())
+        s.recv(1024)  # the answer has begun
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))  # gone, with a reset
+        s.close()
+        deadline = time.monotonic() + 10
+        while not (opened and opened[0].closed) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert opened and opened[0].closed
+        time.sleep(0.1)  # the handler's thread ends its request after the file is closed
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "Traceback" not in capsys.readouterr().err
+    assert any("went away" in record.getMessage() for record in caplog.records), caplog.text
 
 @pytest.mark.slow
 def test_sigterm_stops_caracole_serve_cleanly(tmp_path):

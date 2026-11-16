@@ -59,6 +59,9 @@ internal object SongForm {
             if (Py.len(value) > LIMITS.getValue(name)) {
                 throw Refused(400, "Too long", "The $name is too long: ${LIMITS.getValue(name)} characters at most.")
             }
+            if (Py.codePoints(value).any { PyUnicode.category(it) == "Cc" && !PyUnicode.isSpace(it) }) {
+                throw Refused(400, "Not a song", "The $name holds a control character: write it as letters.")
+            }
         }
         val artist = values.getValue("artist")
         val title = values.getValue("title")

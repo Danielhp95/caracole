@@ -8,7 +8,8 @@ fail else (``WebApp.refused_unread``: the host name, another site's write, the
 form token, the content type), so that no other site's page has the server read
 megabytes it then refuses. An answer too long
 to hold, a file (``Response.stream``), is written in chunks as it is read, then
-closed. The queue's worker starts with the server and stops with it, ending the
+closed; a client gone mid-answer is a line in the log. A body shorter than its
+Content-Length (a connection cut short) is refused, never acted on. The queue's worker starts with the server and stops with it, ending the
 command it was running: on Ctrl-C, and on SIGTERM, which is how systemd stops
 the unit. As it starts, the pushes another caracole left an hour ago are deleted
 (``peer_push.sweep``).
@@ -71,6 +72,10 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send(refused)
                     return
             body = self.rfile.read(size)
+            if len(body) < size:  # the client ended it early: never act on part of a form
+                self.close_connection = True
+                self._send(app.finish(Response(400, b"That body is shorter than it said it was.\n")))
+                return
         try:
             response = app.handle(Request(self.command, self.path, headers, body))
         except Exception:  # noqa: BLE001 (a bug: say so, keep serving)
@@ -92,6 +97,10 @@ class _Handler(BaseHTTPRequestHandler):
                     self.wfile.write(response.body)
                 else:
                     shutil.copyfileobj(stream, self.wfile, CHUNK)
+        except ConnectionError as e:  # the client went away mid-answer: theirs to ask again
+            self.close_connection = True
+            log.info("%s went away before %s %s was answered whole (%s).", self.address_string(), self.command,
+                     self.path, type(e).__name__)
         finally:
             if stream is not None:
                 stream.close()

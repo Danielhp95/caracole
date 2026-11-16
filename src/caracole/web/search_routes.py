@@ -873,7 +873,7 @@ def api_artist(app: WebApp, key: str, offset: str) -> Response:
     one at a time with the searches."""
     if not key:
         return json_response(400, {"error": "Which artist? The address names none."})
-    if not (offset.isascii() and offset.isdigit()):
+    if not (offset.isascii() and offset.isdigit()) or len(offset) > 9:  # one SQLite takes
         return json_response(400, {"error": "That offset isn't a number."})
     with app._searching:
         try:

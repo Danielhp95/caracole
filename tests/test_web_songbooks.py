@@ -736,6 +736,13 @@ def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songboo
     assert len(queue.snapshot()) == 3
 
 
+def test_a_number_past_what_is_read_as_one_is_a_refused_form_never_a_bug(app, setup, queue, gig):
+    many = "9" * 5000  # past Python's 4,300 digits: int() raises after isdigit() said yes
+    assert post(app, "/songbook/set", {"name": "Gig", "song": "Muse - Hysteria", "capo": many}).status == 400
+    assert post(app, "/songbook/get", {"name": "Gig", "song": many}).status == 409
+    assert queue.snapshot() == []
+
+
 def test_the_pages_script_gets_the_songbooks_job_and_each_lookup(app, setup, queue, gig):
     queue._limit = 10
     data = json.loads(post(app, "/songbook/get", {"name": "Gig"}, accept=JSON).body)

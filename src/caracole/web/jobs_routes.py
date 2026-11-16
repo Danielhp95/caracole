@@ -193,7 +193,7 @@ def api_jobs(app: WebApp) -> Response:
 
 
 def api_job(app: WebApp, number: str) -> Response:
-    job = app.queue.job(int(number)) if number.isascii() and number.isdigit() else None
+    job = app.queue.job(int(number)) if number.isascii() and number.isdigit() and len(number) <= 12 else None
     if job is None:
         return json_response(404, {"error": "no such request"})
     if job.song_key.startswith(INDEX_READS):  # no song's: its line says what the site answered
@@ -430,6 +430,6 @@ def _job_ids(values: list[str] | None) -> frozenset[int] | None:
     ids: set[int] = set()
     for part in values[0].split(","):
         part = part.strip()
-        if part.isascii() and part.isdigit() and len(ids) < MAX_ASKED:
+        if part.isascii() and part.isdigit() and len(part) <= 12 and len(ids) < MAX_ASKED:
             ids.add(int(part))
     return frozenset(ids)

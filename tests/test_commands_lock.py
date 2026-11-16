@@ -286,20 +286,20 @@ WRITERS = [
     Case(("index", "build", "--from", "{tmp}/sitemaps"), sitemap_files, indexed),
     Case(("index", "refresh"), an_index_to_refresh, requested),
     Case(("fetch",), a_song_to_fetch, requested),
-    Case(("fetch", "--song", "Soda Stereo - Persiana Americana"), a_song_to_fetch, requested),
+    Case(("fetch", "--song", "Soda Stereo - Persiana Americana"), a_song_to_fetch, requested, LOOKUP_WAITING),
     Case(("lyrics",), a_song_waiting_for_lyrics, requested),
     Case(("lacuerda",), a_spanish_song, requested),
     Case(("gtptabs",), a_song_without_a_guitar_pro_file, requested),
     Case(("musescore",), a_song_for_musescore, requested),
     Case(("render",), nothing, rendered),
     Case(("sync",), a_wanted_line, has_songs),
-    Case(("add", "Radiohead", "Creep"), nothing, has_songs),
-    Case(("add", "--lacuerda", f"{CALAMARO}flaca", "Andrés Calamaro", "Flaca"), nothing, picked_on_lacuerda),
+    Case(("add", "Radiohead", "Creep"), nothing, has_songs, LOOKUP_WAITING),
+    Case(("add", "--lacuerda", f"{CALAMARO}flaca", "Andrés Calamaro", "Flaca"), nothing, picked_on_lacuerda, LOOKUP_WAITING),
     Case(("lacuerda", "--artist", "estopa"), nothing, requested, LOOKUP_WAITING),
     Case(("match",), a_song_to_match, matched),
     Case(("search", "stone temple pilots creep", "--add", "1"), a_song_to_match,
          added_to_wanted_txt),
-    Case(("remove", "--yes", "Radiohead - Creep"), a_song_to_match, removed),
+    Case(("remove", "--yes", "Radiohead - Creep"), a_song_to_match, removed, LOOKUP_WAITING),
     Case(("backup",), nothing, backed_up),
     Case(("index", "merge", "{tmp}/indexes.sqlite"), an_export, merged),
 ]
@@ -441,3 +441,65 @@ def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):
     assert run.returncode == 0, err[-3000:]
     assert WAITING in err
     assert todo.is_file() and f"to-do page needs you: {todo}" in out  # the summary names it
+
+
+# --- what the owner asked for just now waits as a lookup does -----------------------------------
+
+
+class _Took(Exception):
+    """Raised where a command first takes caracole's lock, once the test has seen how."""
+
+
+VIDEO = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+# caracole serve queues these for the owner, one at a time: a lookup queued after one must not wait behind
+# the whole nightly run that one waits for, so each announces itself as a lookup does and is handed the lock
+# at the run's next pause ("A lookup never waits behind a whole nightly run").
+ASKED_NOW = [
+    ("add", "Radiohead", "Creep"),
+    ("add", "--lacuerda", f"{CALAMARO}flaca", "Andrés Calamaro", "Flaca"),
+    ("remove", "--yes", "Radiohead - Creep"),
+    ("review", "--song=Radiohead - Creep", "--none"),
+    ("fetch", "--song", "Radiohead - Creep"),
+    ("render", "--song", "Radiohead - Creep"),
+    ("render", "--song", "Radiohead - Creep", "--version", "key=G", "--mine"),
+    ("render", "--song", "Radiohead - Creep", "--version", "key=G"),
+    ("youtube", "--search=radiohead creep", "--progress"),
+    ("youtube", "--video=dQw4w9WgXcQ", "--progress"),
+    ("youtube", "--song", "Radiohead - Creep", "--url", VIDEO),
+    ("youtube", "--song", "Radiohead - Creep", "--none"),
+    ("youtube", "--song", "Radiohead - Creep", "--sheet", "--url", VIDEO, "--progress"),
+]
+# Bulk work: the nightly run's steps, or a pass over the whole library by hand, waits for the whole run.
+BULK = [("run",), ("fetch",), ("render",), ("youtube",), ("lyrics",), ("match",), ("sync",)]
+
+
+@pytest.mark.parametrize("args", [*ASKED_NOW, *BULK], ids=" ".join)
+def test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt(
+        tmp_path, config, sites, conn, monkeypatch, args):
+    a_song_to_match(tmp_path, sites, conn)
+    monkeypatch.setattr("caracole.youtube_fetch.route_problem", lambda cfg: None)  # as with auto-chords
+    took: list[tuple[str, bool]] = []
+
+    def acquire(cfg, what, *, fatal=True, interactive=False, on_wait=None):
+        took.append((what, interactive))
+        raise _Took
+
+    monkeypatch.setattr(_common, "_acquire", acquire)
+    result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
+    assert took, result.output
+    assert isinstance(result.exception, _Took), result.output
+    assert took[0][1] is (args in ASKED_NOW), took
+
+
+def test_a_command_holding_the_lock_as_a_lookup_hands_it_to_no_other(tmp_path, config, monkeypatch):
+    # Handed the lock by the nightly run, it would otherwise let go of it at a pause of its own, and the run,
+    # waiting to take it back, could take it first and keep it to its end.
+    from caracole.config import load_config
+
+    cfg = load_config(config, env={})
+    monkeypatch.setattr(_common, "lookups_waiting", lambda cfg: True)
+    with _common.exclusive(cfg, "fetch", interactive=True):
+        assert not _common.hand_over(cfg)
+    with _common.exclusive(cfg, "fetch"):
+        monkeypatch.setattr(_common, "HANDOFF_TAKE", 0.05)
+        assert _common.hand_over(cfg)  # bulk work does

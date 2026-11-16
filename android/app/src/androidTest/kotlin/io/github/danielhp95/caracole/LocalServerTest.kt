@@ -37,7 +37,7 @@ import kotlin.concurrent.thread
  * The app's own caracole, on a device or an emulator, with no computer:
  *
  *     adb shell am instrument -w -e class io.github.danielhp95.caracole.LocalServerTest \
- *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
+ *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * Its server listens on 127.0.0.1 and answers its library page at `/` to a request with the launch's cookie, and
  * refuses one without it (403, "Not this app's scribe."), so no other app on the phone can use it. The WebView

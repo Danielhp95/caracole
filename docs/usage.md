@@ -1893,9 +1893,14 @@ overrides.toml as the lookup left it too. The waiting lookup announces itself wi
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds. The run lets lookups alone go first: a
-command that isn't one (`caracole fetch`, `remove`, `add`, …) still waits for
+command that isn't one (`caracole fetch`, `render`, `sync`, …) still waits for
 the whole run, even when it started before the lookup came, and the run holds
 `caracole.lock.handoff` in the state folder while a lookup has the lock.
+What you ask for now waits as a lookup does and says the same, so that a lookup
+`caracole serve` queues after it never waits behind the whole run either: `add`,
+`remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its
+`--sheet` and `--none` too), `youtube --search` and `youtube --video`. Holding the
+lock as a lookup, such a command lets nothing else go first in its own pauses.
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on

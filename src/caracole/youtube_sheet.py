@@ -468,7 +468,7 @@ class _Sheet:
         def waiting(holder: str) -> None:
             self.progress.stage("song", "running", f"waiting for the book ({holder})")
 
-        with exclusive(self.cfg, f"youtube --sheet {self.request.display}", on_wait=waiting):
+        with exclusive(self.cfg, f"youtube --sheet {self.request.display}", interactive=True, on_wait=waiting):
             with closing(db.connect(self.cfg.db_path)) as conn:
                 self.conn = conn
                 ensure_current_keys(conn)

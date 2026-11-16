@@ -184,6 +184,7 @@ def live(able, sheet):
     yield base, posted
     server.shutdown()
     server.server_close()
+    sheet.hold.set()  # a sheet still held lets go first: the queue stops at once, not after its ten seconds
     queue.stop()
 
 

@@ -269,6 +269,11 @@ def test_a_song_listed_already_is_left_as_it_is(app, cfg, queue):
     ({"artist": "Radiohead", "title": "Creep", "duration": "0:00"}, "duration"),
     ({"artist": "R" * 201, "title": "Creep"}, "too long"),
     ({"artist": "Radiohead", "title": "Creep", "album": "A" * 301}, "too long"),
+    # no command can be started with a NUL in its arguments, and no other control character is a name's
+    ({"artist": "Radio\x00head", "title": "Creep"}, "control character"),
+    ({"artist": "Radiohead", "title": "Creep\x1b[2J"}, "control character"),
+    ({"artist": "Radiohead", "title": "Creep", "album": "Pablo\x00Honey"}, "control character"),
+    ({"q": "Radio\x00head - Creep"}, "control character"),
 ])
 def test_a_request_the_file_cant_hold_is_refused_and_nothing_is_written(app, cfg, queue, fields, message):
     response = post(app, "/request", fields)
@@ -1132,6 +1137,20 @@ def test_the_pickers_page_escapes_every_name(app, conn):
 def test_the_pickers_page_needs_a_song_of_the_library(app, conn, path, status):
     assert get(app, path).status == status
 
+
+
+PAST_INT_DIGITS = "9" * 5000  # past Python's 4,300 digits: int() raises after isdigit() said yes
+
+
+@pytest.mark.parametrize("path,status", [
+    (f"/api/jobs/{PAST_INT_DIGITS}", 404),
+    (f"/jobs.json?jobs={PAST_INT_DIGITS}", 200),
+    (f"/requests.json?open={PAST_INT_DIGITS}", 200),
+    (f"/api/artist?key=x&offset={PAST_INT_DIGITS}", 400),
+    (f"/api/artist?key=x&offset={BEYOND_SQLITE}", 400),  # an offset SQLite can't take either
+], ids=["job", "jobs", "open", "offset", "offset-past-sqlite"])
+def test_a_number_past_what_is_read_as_one_is_refused_never_a_bug(app, conn, path, status):
+    assert get_json(app, path).status == status
 
 def test_the_pickers_page_of_a_song_that_needs_no_review_says_so(app, conn):
     settled = add_song(conn, "Oasis", "Wonderwall")

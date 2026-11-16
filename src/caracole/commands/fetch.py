@@ -74,7 +74,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
 
     overrides = load_ovr(cfg)
     # Under caracole's lock from the start: a run this waited for may have been blocked meanwhile.
-    with exclusive(cfg, "fetch"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "fetch", interactive=display is not None), closing(open_db(cfg)) as conn:
         now = utcnow()
         asked = _one_song(conn, display, overrides) if display else None  # what's missing comes first
         if is_cooling(conn, PROVIDER, now):
