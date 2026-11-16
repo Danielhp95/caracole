@@ -112,3 +112,19 @@ def test_the_paper_has_margins_on_every_side(tmp_path, kind):
     margins = rules[-1]
     assert margins["left"] == margins["right"] and margins["top"] == margins["bottom"], margins
     assert all(value.endswith("mm") and float(value[:-2]) >= 10 for value in margins.values()), margins
+
+
+def test_a_printed_harmonica_tab_has_no_play_buttons(tmp_path):
+    """Each row's ▶ (harptab.css's ``.rp``) is the screen's alone: on paper, no column of play buttons, as the bar, the
+    pill, the rail and the foot are left off the printout too."""
+    url, fragment = _written(tmp_path, "harmonica")
+    with Browser(tmp_path / "profile", width=1280, height=900) as b:
+        b.open(url + fragment)
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        assert b.js("document.querySelectorAll('#sheet .rp').length") > 0
+        b.send("Emulation.setEmulatedMedia", media="print")
+        assert b.wait("matchMedia('print').matches")
+        printed = b.js("""[...document.querySelectorAll('#sheet .rp, #bar, #pill, #necks, .foot')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).visibility === 'visible')
+          .map((e) => e.id || e.className)""")
+    assert printed == [], printed

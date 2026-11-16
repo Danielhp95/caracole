@@ -62,7 +62,8 @@
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
     trad: false, inst: "guitar" };
-  const store = "caracole-viewer:" + location.pathname;
+  // Where its settings are kept: the page's name, or the one a songbook gives its song (book.js songStore).
+  const store = typeof data.store === "string" && data.store ? data.store : "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
   const sheetChords = Object.keys(written).map((i) => written[i]).join("|");
@@ -151,10 +152,26 @@
   // there is no storage.
   const overlay = window.caracoleOverlay || null;
   const NECKS = overlay ? overlay.NECKS : "caracole-viewer-necks";
-  try {
-    if (localStorage.getItem(NECKS) === "hidden") state.necks = false;
-  } catch (err) { /* no storage: shown, unless the address says otherwise */ }
-  if (hash.get("necks") === "0") state.necks = false;
+  // Each such choice: the one a link names (followed, typed), else the browser's where it keeps one, else the
+  // address's. A page come back to (a reload, Back or Forward, a tab restored, a songbook's next song) has an address
+  // written before: there the browser's wins over it, and the address counts only where it keeps none (a server's
+  // sandbox, a choice never made in this browser).
+  const returning = (() => {
+    try {
+      const entry = performance.getEntriesByType("navigation")[0];
+      return Boolean(entry) && (entry.type === "reload" || entry.type === "back_forward");
+    } catch (err) {
+      return false;
+    }
+  })();
+  const choiceOf = (name, named) => {
+    let kept = null;
+    try {
+      kept = localStorage.getItem(name);
+    } catch (err) { /* no storage: the address says */ }
+    return named !== null && (!returning || kept === null) ? named : kept;
+  };
+  if (choiceOf(NECKS, hash.get("necks") === "0" ? "hidden" : null) === "hidden") state.necks = false;
   const keepNecks = () => {
     try {
       localStorage.setItem(NECKS, state.necks ? "shown" : "hidden");
@@ -163,10 +180,7 @@
   // So is pinyin over the Chinese (the settings' Pinyin): the reader's, kept once for every page, and in the
   // address while it is on (py=1, as it starts off).
   const PINYIN = "caracole-viewer-pinyin";
-  try {
-    if (localStorage.getItem(PINYIN) === "shown") state.py = true;
-  } catch (err) { /* no storage: off, unless the address says otherwise */ }
-  if (hash.get("py") === "1") state.py = true;
+  if (choiceOf(PINYIN, hash.get("py") === "1" ? "shown" : null) === "shown") state.py = true;
   const keepPinyin = () => {
     try {
       localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
@@ -175,10 +189,7 @@
   // So are the characters the Chinese is shown in (the settings' Chinese characters): kept once for every page, and
   // in the address while they are Traditional (trad=1, as they start Simplified).
   const HANZI = "caracole-viewer-hanzi";
-  try {
-    if (localStorage.getItem(HANZI) === "traditional") state.trad = true;
-  } catch (err) { /* no storage: Simplified, unless the address says otherwise */ }
-  if (hash.get("trad") === "1") state.trad = true;
+  if (choiceOf(HANZI, hash.get("trad") === "1" ? "traditional" : null) === "traditional") state.trad = true;
   const keepHanzi = () => {
     try {
       localStorage.setItem(HANZI, state.trad ? "traditional" : "simplified");
@@ -196,11 +207,9 @@
   // The viewer draws strings and keys itself; any other kind once a script registers it (instruments.js).
   const drawn = (i) => Boolean(i) && (i.kind === "strings" || i.kind === "keys" || Boolean(kit && kit.registered(i.id)));
   const startInst = drawn(instOf(start.get("inst"))) ? start.get("inst") : null;
-  try {
-    const mine = localStorage.getItem(INSTRUMENT);
-    if (drawn(instOf(mine))) state.inst = mine;
-  } catch (err) { /* no storage: the guitar, unless the address says otherwise */ }
-  if (drawn(instOf(hash.get("inst")))) state.inst = hash.get("inst");
+  const instChosen = choiceOf(INSTRUMENT, drawn(instOf(hash.get("inst"))) ? hash.get("inst") : null);
+  if (drawn(instOf(instChosen))) state.inst = instChosen;
+  else if (drawn(instOf(hash.get("inst")))) state.inst = hash.get("inst");  // kept: one this page doesn't draw
   if (startInst && data.start && !["t", "mode", "capo", "alt", "at"].some((name) => hash.has(name))) state.inst = startInst;
   const keepInst = () => {
     try {
@@ -225,13 +234,19 @@
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
-      // With a version of its own, t always: an address naming none would start in that version again.
-      keep("t", state.t, Boolean(data.start) || state.t !== (Number(data.transpose) || 0));
-      keep("mode", state.mode, state.mode !== null);
-      keep("capo", state.capo, state.capo !== null);
+      // At the song's own version, where the page opens, nobody chose one here: the address names none, so that the
+      // page made again in another own version (Make mine elsewhere, a songbook's setting) opens in that one. Away
+      // from it, or on another instrument than the one it names, t always: an address naming none would start in the
+      // own version (and on its instrument) again.
+      const chosen = !data.start || musicOf(state) !== musicOf(startVersion())
+        || (startInst !== null && state.inst !== startInst);
+      keep("t", state.t, chosen && (Boolean(data.start) || state.t !== (Number(data.transpose) || 0)));
+      keep("mode", state.mode, chosen && state.mode !== null);
+      keep("capo", state.capo, chosen && state.capo !== null);
       keep("nm", state.nm, state.nm !== null);
-      keep("alt", swapsText(state.alt), swapsText(state.alt) !== "");
-      keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","), Object.keys(state.at).length > 0);
+      keep("alt", swapsText(state.alt), chosen && swapsText(state.alt) !== "");
+      keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","),
+        chosen && Object.keys(state.at).length > 0);
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
       keep("vol", state.vol, state.vol !== VOL);
@@ -261,6 +276,8 @@
     for (const v of $("export-row").querySelectorAll(".export-v")) v.textContent = words;
     const version = new URLSearchParams(location.hash.slice(1));
     if (!traditional) version.delete("trad");
+    // What an export is asked for is the page's to say, never the address's: Make mine alone adds mine=1.
+    for (const name of ["mine", "sheet"]) version.delete(name);
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
       for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
@@ -292,14 +309,16 @@
     return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
   };
   // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
-  // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves.
+  // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves: where Reset all
+  // goes back to (``ownVersion``).
   let madeMine = null;
-  const ownMusic = () => {
-    if (madeMine !== null) return madeMine;
+  function startVersion() {  // the one the page was written with
     const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
     adopt(start, mine);
-    return musicOf(mine);
-  };
+    return mine;
+  }
+  const ownVersion = () => (madeMine !== null ? JSON.parse(JSON.stringify(madeMine)) : startVersion());
+  const ownMusic = () => musicOf(ownVersion());
   // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
   // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start
   // there), just download it, or neither. A modal dialog, the song dimmed under it: its focus goes round within it, and
@@ -324,7 +343,8 @@
     });
     for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
     $("ask-mine").addEventListener("click", () => {
-      madeMine = musicOf(state);
+      madeMine = JSON.parse(JSON.stringify({ t: state.t, mode: state.mode, alt: state.alt, at: state.at,
+        capo: state.capo }));
       ask.close();
     });
     ask.addEventListener("keydown", (e) => {
@@ -777,6 +797,7 @@
     $("inst-row").hidden = offered.length < 2;
     const menu = $("insts"), ids = offered.map((i) => i.id).join(" ");
     if (menu.dataset.ids !== ids) {
+      menu.autocomplete = "off";  // never the browser's restored choice on Back: the one kept for every page
       menu.textContent = "";
       for (const i of offered) {
         const option = menu.appendChild(document.createElement("option"));
@@ -2179,7 +2200,8 @@
     const found = window.caracoleSound;
     return found && found.available !== false && typeof found.play === "function" ? found : null;
   };
-  let playing = null;  // {n: the section, at: the numeral sounding, handle}
+  let playing = null;  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}
+  const soundsNow = () => musicOf(state) + "|" + state.inst;
   const drawPlaying = () => {
     for (const li of $("progs").children) {
       const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
@@ -2189,8 +2211,8 @@
       li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
     }
   };
-  // ■, another ▶ or the panel closed: the progression stops; the panel closed (``all``), every sound strum.js
-  // still makes too, a chord tapped among them.
+  // ■, another ▶, the song played otherwise (drawHarmony) or the panel closed: the progression stops; the panel
+  // closed (``all``), every sound strum.js still makes too, a chord tapped among them.
   function stopPlaying(all) {
     const was = playing;
     playing = null;
@@ -2218,7 +2240,7 @@
     });
     const all = [];
     for (let r = 0; r < repeats; r++) all.push(...cycle);
-    const me = { n, at: -1, handle: null };
+    const me = { n, at: -1, handle: null, sounds: soundsNow() };
     playing = me;
     drawPlaying();
     me.handle = synth.play(all, { bpm: state.bpm,
@@ -2239,6 +2261,8 @@
   };
   const drawHarmony = () => {
     if (!key) return;
+    // Transposed, or another capo, mode, swap, shape or instrument: what it plays is no longer the page's chords.
+    if (playing && playing.sounds !== soundsNow()) stopPlaying();
     $("harmony-key").textContent = "In " + keyWords() + ".";
     const neckBox = $("harmony-neck");
     const inNeck = neckBox.contains(document.activeElement);
@@ -2583,7 +2607,7 @@
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
-    adopt(start);  // the song's own version, if it has one
+    Object.assign(state, ownVersion());  // the song's own version, if it has one (the one made yours here, else its)
     if (startInst) state.inst = startInst;  // and its instrument; else the instrument stays the player's
     keepNecks();  // the rail of necks back, on every sheet
     keepPinyin();  // and the pinyin off
@@ -2725,17 +2749,21 @@
     if (mine) $("scroll").focus({ preventScroll: true });
   };
 
+  // The song moves only in sight: the overlay's sheet over the whole screen goes back to half, the song above it.
+  const halfSheet = () => {
+    if (sheetAt !== "full") return;
+    sheetAt = "half";
+    drawNecks();
+  };
   $("scroll").addEventListener("click", () => {
     closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
-    if (sheetAt === "full") {
-      sheetAt = "half";
-      drawNecks();
-    }
+    halfSheet();
     showSizes(false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
   go.addEventListener("click", () => {
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();

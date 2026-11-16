@@ -4,8 +4,11 @@
   const doc = document.documentElement;
   const sections = Array.from(document.querySelectorAll("section.song"));
   const toc = document.getElementById("contents");
-  // The viewer keeps a page's settings under this name; each song's are kept here, and swapped in.
+  // The viewer keeps a page's settings under this name, and each song's under its own (its id after "#": songStore), so
+  // that two tabs of the songbook never write each other's. Before that, the one name held the song open last, each
+  // song's kept in the songbook's record (book.songs) and swapped in: what they still hold moves to the song's own name.
   const VIEWER = "caracole-viewer:" + location.pathname;
+  const songStore = (id) => VIEWER + "#" + id;
   const BOOK = "caracole-songbook:" + location.pathname;
   const book = (() => {
     try {
@@ -20,12 +23,15 @@
       localStorage.setItem(BOOK, JSON.stringify(book));
     } catch (err) { /* private mode, or a sandbox */ }
   };
-  // The settings the viewer saved for the song open last, into that song's own place.
+  // The settings the viewer saved under the one name, for the song open last: into that song's own place, once.
   const harvest = () => {
-    if (typeof book.at !== "string") return;
     try {
       const mine = localStorage.getItem(VIEWER);
-      if (mine !== null) book.songs[book.at] = mine;
+      if (mine === null) return;
+      if (typeof book.at === "string" && localStorage.getItem(songStore(book.at)) === null) {
+        localStorage.setItem(songStore(book.at), mine);
+      }
+      localStorage.removeItem(VIEWER);
     } catch (err) { /* no storage */ }
   };
 
@@ -45,8 +51,19 @@
   harvest();
   // The player's instrument: the one the song came with in its address (carried from the song before; none where the
   // browser keeps it), or the last one chosen here by hand; and the one the song's own version names, if any, which
-  // it opens on (viewer.js), its own alone.
-  let player = new URLSearchParams(hash).get("inst"), ownInst = null;
+  // it opens on (viewer.js), its own alone. On such a song the address's inst= is the song's own once the viewer has
+  // written it, so the player's goes on beside it (player=), for a reload there where the browser keeps nothing.
+  const given = new URLSearchParams(hash);
+  let player = given.has("player") ? given.get("player") : given.get("inst"), ownInst = null;
+  const notePlayer = () => {
+    if (ownInst === null || player === null) return;
+    try {
+      const to = new URLSearchParams(location.hash.slice(1));
+      if (to.get("player") === player) return;
+      to.set("player", player);
+      history.replaceState(null, "", "#" + to.toString());
+    } catch (err) { /* an address the page can't change */ }
+  };
 
   // The songs' names (their titles, their artists') in the characters the viewer shows the Chinese in, Simplified at
   // first: its Chinese characters, kept for every page (localStorage), else trad=1 in the address, which carryScreen
@@ -57,10 +74,18 @@
   try {
     names = JSON.parse(namesEl ? namesEl.textContent : "null");
   } catch (err) { /* none: as written */ }
-  let trad = new URLSearchParams(location.hash.slice(1)).get("trad") === "1";
+  // As the viewer reads it (viewer.js choiceOf): the one a link names, else the browser's; on a page come back to (a
+  // reload, a songbook's next song, Back), the browser's over an address written before.
+  let returning = false, hanziKept = null;
   try {
-    if (localStorage.getItem("caracole-viewer-hanzi") === "traditional") trad = true;
+    const entry = performance.getEntriesByType("navigation")[0];
+    returning = Boolean(entry) && (entry.type === "reload" || entry.type === "back_forward");
+  } catch (err) { /* read as a link followed */ }
+  try {
+    hanziKept = localStorage.getItem("caracole-viewer-hanzi");
   } catch (err) { /* no storage: the address says */ }
+  const tradNamed = new URLSearchParams(location.hash.slice(1)).get("trad") === "1";
+  const trad = tradNamed && (!returning || hanziKept === null) ? true : hanziKept === "traditional";
   const named = (text) => {
     const table = names && typeof names === "object" ? names[trad ? "traditional" : "simplified"] : null;
     return table && typeof table === "object" && Object.prototype.hasOwnProperty.call(table, text)
@@ -92,11 +117,15 @@
       if (easy && song.key) song.easy = JSON.parse(easy.textContent);
       const winds = document.getElementById("winds");  // the winds' fingerings and the harps' notes, every song's
       if (winds) song.winds = JSON.parse(winds.textContent);
+      song.store = songStore(current.dataset.id);  // the name its settings are kept under (viewer.js store)
       data.textContent = JSON.stringify(song);
       ownInst = new URLSearchParams(String(song.start || "")).get("inst");
     } catch (err) { /* the viewer says so */ }
+    notePlayer();
     document.addEventListener("change", (e) => {
-      if (e.target instanceof HTMLSelectElement && e.target.id === "insts") player = e.target.value;
+      if (!(e.target instanceof HTMLSelectElement && e.target.id === "insts")) return;
+      player = e.target.value;
+      notePlayer();
     });
     const title = current.querySelector("h2.title");
     const name = document.querySelector(".book-head h1");
@@ -115,11 +144,15 @@
       namesEl.textContent = JSON.stringify(names);
     }
     const returning = book.at === current.dataset.id;
-    try {
-      const mine = book.songs[current.dataset.id];
-      if (typeof mine === "string") localStorage.setItem(VIEWER, mine);
-      else localStorage.removeItem(VIEWER);
-    } catch (err) { /* no storage */ }
+    const before = book.songs[current.dataset.id];  // kept in the songbook's record before: to its own name, once
+    if (typeof before === "string") {
+      try {
+        if (localStorage.getItem(songStore(current.dataset.id)) === null) {
+          localStorage.setItem(songStore(current.dataset.id), before);
+        }
+      } catch (err) { /* no storage */ }
+    }
+    delete book.songs[current.dataset.id];
     book.at = current.dataset.id;
     if (!returning) book.y = 0;
     keep();
@@ -134,7 +167,6 @@
   }
 
   const save = () => {
-    harvest();
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };
@@ -147,7 +179,8 @@
     const at = String(from || "").indexOf("#");
     const was = new URLSearchParams(at >= 0 ? from.slice(at + 1) : "");
     const to = new URLSearchParams(location.hash.slice(1));
-    let changed = false;
+    let changed = to.has("player");  // the song's own address alone holds it (notePlayer)
+    to.delete("player");
     for (const name of SCREEN) {
       const kept = name === "inst" && ownInst !== null ? player : was.get(name);
       if (to.get(name) === kept) continue;
@@ -176,8 +209,8 @@
   const go = (to) => {
     if (to) location.hash = "song-" + to.dataset.n;
   };
-  // The settings, a card or the overlay's sheet open: the arrows and a swipe stay with them.
-  const busy = () => ["panel", "card"].some((id) => {
+  // The settings, the Harmony panel, a card or the overlay's sheet open: the arrows and a swipe stay with them.
+  const busy = () => ["panel", "harmony", "card"].some((id) => {
     const el = document.getElementById(id);
     return el && !el.hidden;
   }) || Boolean(document.querySelector("#necks[data-sheet]:not([hidden])"));

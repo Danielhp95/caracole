@@ -1119,7 +1119,8 @@ def test_export_downloads_the_own_version_at_once(tmp_path):
         press_export(b)  # the song's own version is its [version]: two up, where the page opens
         mine = [b.js("window.went"), b.js(ASKED)]
     assert plain == [[[EXPORTS + "&fs=20", False]], None]
-    assert mine == [[["/export.pdf?sheet=Artist%2FMine%2Fsheet.html&t=2", False]], None]
+    # its address names no version (nobody chose one there): /export.pdf reads none as the song's own
+    assert mine == [[["/export.pdf?sheet=Artist%2FMine%2Fsheet.html", False]], None]
 
 
 @in_chromium
@@ -1214,3 +1215,64 @@ def test_reading_settings_are_no_change(tmp_path):
         went = [b.js("window.went"), b.js(ASKED)]
     assert "fs=" in address and "nm=both" in address and "vol=0" in address and "necks=0" in address
     assert went[1] is None and went[0] == [[EXPORTS + "&" + address[1:], False]]
+
+
+@in_chromium
+@pytest.mark.parametrize("change", ["t-up", "capo-up"])
+def test_a_progression_playing_stops_once_the_song_is_played_otherwise(tmp_path, change):
+    """Transposed in the bar (or the capo moved) while a progression plays: it stops, ■ back to ▶, never going on in
+    chords the page no longer shows."""
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        b.js(FAKE_SOUND)
+        open_harmony(b)
+        b.js("document.querySelectorAll('#harmony .prog-play')[0].click()")
+        playing = b.js("document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')")
+        b.js("window.stopped = false")
+        b.js(f"document.getElementById('{change}').click()")
+        after = b.js("[window.stopped, document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')]")
+    assert playing == "Stop"
+    assert after == [True, "Play Verse"], after
+
+
+@in_chromium
+def test_mine_in_the_address_never_makes_an_export_mine(tmp_path):
+    """An address that holds ``mine=1`` (a link sent, a bookmark edited by hand) is no Make mine: on the song's own
+    version Export PDF downloads it alone, and on another, Download only does; Make mine alone asks for it."""
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site:
+        with viewer(tmp_path, site + SHEET_PATH + "#mine=1", **DESKTOP) as b:
+            press_export(b)  # the song's own version: the download at once, no question
+            own = [b.js("window.went"), b.js(ASKED)]
+        with viewer(tmp_path, site + SHEET_PATH + "#t=3&mine=1", **DESKTOP) as b:
+            press_export(b)
+            assert b.wait("document.getElementById('export-ask').open")
+            answers = b.js(ASKED)["answers"]
+    assert own == [[[EXPORTS, False]], None]
+    assert answers[:2] == [["Make mine", EXPORTS + "&t=3&mine=1", True], ["Download only", EXPORTS + "&t=3", False]]
+
+
+@in_chromium
+def test_reset_all_goes_back_to_the_version_just_made_yours(tmp_path):
+    """Served, a version made the song's own on the page (Export PDF, Make mine) is where Reset all goes back to, the
+    song's own version now, and Export PDF there downloads at once, asking nothing."""
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, \
+            viewer(tmp_path, site + SHEET_PATH, **DESKTOP) as b:
+        b.js(STOP_LINKS)
+        b.click("#more")
+        b.js("document.getElementById('t-up').click(); document.getElementById('t-up').click()")  # two up
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        b.click("#ask-mine")  # the song's own version is two up now
+        b.js("document.getElementById('t-up').click()")  # three up
+        b.click("#reset-all")
+        after = b.js("document.getElementById('shift').textContent")
+        b.click("#more")
+        b.click("#export")
+        asked = b.js(ASKED)
+    assert after == "+2"
+    assert asked is None
