@@ -41,7 +41,7 @@ from caracole.songbook import (
     songbooks_file,
 )
 from caracole.songs import find_song, update_song
-from caracole.web.app import WebApp
+from caracole.web.app import Response, WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
@@ -1087,3 +1087,25 @@ def test_a_change_over_gives_back_only_the_controls_its_lock_took(serve, cfg, li
         after = page.js(capo_off)
     assert locked == [True, True]
     assert after is True
+
+
+def test_add_a_song_says_so_when_the_search_fails(serve, cfg, library, tmp_path):
+    # An /api/search that answers a proxy's page (or nothing): the note says the search didn't answer, never
+    # "Searching…" for good.
+    def broken(app):
+        answer = app.handle
+
+        def handle(request):
+            if request.target.startswith("/api/search"):
+                return Response(502, b"<html><body>Bad Gateway</body></html>", [("Content-Type", "text/html")])
+            return answer(request)
+
+        app.handle = handle
+
+    url, _ = serve(Fake(cfg), before=broken)
+    note = "document.querySelector('#songbooks .add-status').textContent"
+    with opened(tmp_path) as page:
+        page.open(url + CAMPFIRE)
+        page.click("#songbooks .add-song input")
+        page.type("zzzz qqqq")
+        assert page.wait(f"{note} === 'No answer from the search. Type on to ask again.'"), page.js(note)

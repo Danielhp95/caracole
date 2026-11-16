@@ -1068,6 +1068,7 @@
     let asking = null;
     let asked = 0;
     let answer = null;  // the newest answer of the server's, for its query
+    let failedFor = null;  // the query whose search failed (refused, not JSON, no answer): the note says so
     const inBook = (key, id) => {
       const b = books().find((x) => x.name === bookName);
       return listOf(b && b.set).some((x) => x && ((id !== null && id !== undefined && Number(x.id) === Number(id)) ||
@@ -1131,7 +1132,8 @@
       found.replaceChildren(...hits.slice(0, 8).map(line));
       found.hidden = !hits.length;
       note.textContent = !q.trim() ? "" : hits.length ? ""
-        : server && enough(q) && !a ? "Searching your songs and the indexes…" : "Nothing found yet.";
+        : server && enough(q) && !a ? (failedFor === q ? "No answer from the search. Type on to ask again."
+          : "Searching your songs and the indexes…") : "Nothing found yet.";
     };
     const ask = (q) => {
       clearTimeout(timer);
@@ -1143,15 +1145,24 @@
         asking = new AbortController();
         fetch("api/search?q=" + encodeURIComponent(q.trim()) + "&box=" + SEARCH_BOX, {
           signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },
-        }).then((r) => r.json().catch(() => null)).then((body) => {
-          if (mine !== asked || !body || typeof body !== "object") return;
+        }).then((r) => (r.ok ? r.json().catch(() => null) : null)).then((body) => {
+          if (mine !== asked) return;
+          if (!body || typeof body !== "object") {  // refused, or not JSON (a proxy's page): said, never left waiting
+            failedFor = q;
+            show(q);
+            return;
+          }
           if (body.superseded) {
             ask(q);
             return;
           }
           answer = { q, data: body };
           show(q);
-        }, () => {});
+        }, () => {
+          if (mine !== asked) return;  // aborted for a newer one
+          failedFor = q;
+          show(q);
+        });
       }, SEARCH_PAUSE);
     };
     input.addEventListener("input", () => {
