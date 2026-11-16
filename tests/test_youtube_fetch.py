@@ -464,6 +464,36 @@ def test_each_song_without_a_human_sheet_has_a_state(conn, ycfg, fake):
     assert creep.id not in yf.song_states(conn, o, NOW)  # a human sheet: off the list
 
 
+def test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone(conn, ycfg, fake):
+    # The pause between two yt-dlp runs hands caracole's lock to a waiting lookup, which keeps the second song a
+    # sheet from UG: yt-dlp only runs for a song with no human sheet, so the pass, reading each song again before its
+    # turn, leaves it alone.
+    first = to_buy(conn, "Radiohead", "Creep", added_at="2026-11-02T00:00:00Z")
+    second = to_buy(conn, "Oasis", "Wonderwall", added_at="2026-11-01T00:00:00Z")
+    fake.search("Radiohead Creep", entry("XFkzRNyygfk", "Creep", "Radiohead - Topic", 239))
+    fake.video("XFkzRNyygfk", "Creep", "Radiohead - Topic", 239)
+    fake.search("Oasis Wonderwall", entry("oNOFfl3Hx3s", "Wonderwall", "Oasis - Topic", 239))
+    fake.video("oNOFfl3Hx3s", "Wonderwall", "Oasis - Topic", 239)
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW)] == [first.id, second.id]
+    handed = []
+
+    def pause(seconds: float) -> None:
+        if handed:
+            return
+        handed.append(seconds)
+        v = upsert_version(conn, provider="ug", tab_id="1001", song_id=second.id, slot="sheet", kind="chords",
+                           rating=4.8, votes=100, version=1, label=None, url="u", raw={}, now="x")
+        keep_file(conn, ycfg.library_dir, song=second, version_id=v, name="sheet.txt", data=b"[C]x", rank=1)
+        update_song(conn, second.id, status="found", match_decision="accept")
+
+    with YtDlp(ycfg.ytdlp_bin, ProviderPolicy(6, (5.0, 5.0)), ycfg.cache_dir, sleep=pause) as yt:
+        stats = yf.youtube_pass(conn, yt, ycfg, NOW, overrides=Overrides())
+    assert handed
+    targets = [argv[-1] for argv in fake.argvs()]
+    assert not any("Wonderwall" in t or "oNOFfl3Hx3s" in t for t in targets)
+    assert stats.downloaded == 1 and get_song(conn, second.id).audio_path is None
+
+
 def test_a_record_that_isnt_one_is_no_record(conn, ycfg):
     song = to_buy(conn)
     kv_set_json(conn, f"youtube:{song.id}", ["not", "a", "record"])

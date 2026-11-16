@@ -49,7 +49,7 @@ from caracole.megalobiz import (
     record_json,
     search_params,
 )
-from caracole.provider_pass import PassStats, each_song
+from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import Song, get_song, list_songs, update_song
 
 log = logging.getLogger(__name__)
@@ -93,17 +93,21 @@ def songs_to_ask(conn: sqlite3.Connection, now: datetime, *, recheck_after: time
                  only: Collection[int] | None = None) -> list[Song]:
     """The songs LRCLIB left for Megalobiz that it hasn't answered a miss about since ``recheck_after``: those with
     no lyrics first, then those with plain ones, newest first within each."""
-    cutoff = stamps.utc(now) - recheck_after
     none: list[Song] = []
     plain: list[Song] = []
     for song in list_songs(conn):
-        if song.status == "ignored" or (only is not None and song.id not in only) or not _wants(conn, song):
-            continue
-        checked = kv_get(conn, f"{CHECKED}{song.id}")
-        if checked is not None and not stamps.before(checked, cutoff):
-            continue
-        (plain if song.lyrics_status == "found" else none).append(song)
+        if _due(conn, song, now, recheck_after=recheck_after, only=only):
+            (plain if song.lyrics_status == "found" else none).append(song)
     return none + plain
+
+
+def _due(conn: sqlite3.Connection, song: Song, now: datetime, *, recheck_after: timedelta,
+         only: Collection[int] | None) -> bool:
+    """Whether ``songs_to_ask`` lists the song."""
+    if song.status == "ignored" or (only is not None and song.id not in only) or not _wants(conn, song):
+        return False
+    checked = kv_get(conn, f"{CHECKED}{song.id}")
+    return checked is None or stamps.before(checked, stamps.utc(now) - recheck_after)
 
 
 def fetch_megalobiz(client: Client, *, artist: str, title: str, duration_s: float | None,
@@ -162,7 +166,8 @@ def megalobiz_lyrics(
         if song.lyrics_status == "missing":  # a song is missing only once every site asked answered a miss
             update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
 
-    songs = songs_to_ask(conn, now, recheck_after=recheck_after, only=only)
+    songs = as_now(conn, songs_to_ask(conn, now, recheck_after=recheck_after, only=only),
+                   lambda song: _due(conn, song, now, recheck_after=recheck_after, only=only))
     for song, lyrics in each_song(songs, stats, turn, site="Megalobiz", on_error=back_to_pending):
         if lyrics is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)

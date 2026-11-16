@@ -3034,6 +3034,10 @@ picks one).
     try with the pick the turn asked for:
     `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced`);
   - gtptabs_fetch.py checks a song still has no file before its turn;
+  - every pass through provider_pass.py (LRCLIB, Megalobiz, AZLyrics, gtptabs.com, harptabs.com, gametabs.net,
+    YouTube) reads each song again just before its turn (`as_now`), passing over one removed or no longer due
+    (`test_megalobiz_fetch.py::test_a_song_a_sync_removed_in_the_passs_pause_is_passed_over`,
+    `test_youtube_fetch.py::test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone`);
   - and `autochords_pending` and `render_all` read each song after and overrides.toml again;
   - what comes after reads overrides.toml again too (`_common.overrides_since`): the run's next steps,
     `StepContext.read_overrides_again`; the songbooks and pages of `caracole render` and `autochords`; the pages of

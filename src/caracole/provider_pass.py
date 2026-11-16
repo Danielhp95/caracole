@@ -8,17 +8,22 @@ failure with that error, never asked about and no error of its own. Any other
 ``ProviderError`` counts the song in ``tried`` and ``errors``, names it in
 ``failures`` with its error, and leaves it for the next run; the pass goes on,
 unless the error is one of ``stop_on``.
+
+A pass lists its songs at its start, and bulk work hands caracole's lock to a lookup or a sync in its pauses
+(commands/_common.py ``hand_over``), which may give a song on the list what the pass is for, or remove it: each
+song is read again just before its turn (``as_now``), and passed over once it is gone or no longer due.
 """
 
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TypeVar
 
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError, ProviderUnavailable
-from caracole.songs import Song
+from caracole.songs import Song, get_song
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +41,19 @@ class PassStats:
     errors: int = 0
     budget_exhausted: bool = False
     failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
+
+
+def as_now(conn: sqlite3.Connection, songs: Iterable[Song],
+           due: Callable[[Song], bool] = lambda song: True) -> Iterator[Song]:
+    """Each of ``songs`` as the database has it now, read lazily, just before its turn: one removed since (or whose
+    id another song has now) left out, and one ``due`` no longer says is due (read of the song as it is now)."""
+    for song in songs:
+        try:
+            now = get_song(conn, song.id)
+        except KeyError:
+            continue
+        if now.key == song.key and due(now):
+            yield now
 
 
 def each_song(
