@@ -1250,3 +1250,28 @@ def test_mine_in_the_address_never_makes_an_export_mine(tmp_path):
             answers = b.js(ASKED)["answers"]
     assert own == [[[EXPORTS, False]], None]
     assert answers[:2] == [["Make mine", EXPORTS + "&t=3&mine=1", True], ["Download only", EXPORTS + "&t=3", False]]
+
+
+@in_chromium
+def test_reset_all_goes_back_to_the_version_just_made_yours(tmp_path):
+    """Served, a version made the song's own on the page (Export PDF, Make mine) is where Reset all goes back to, the
+    song's own version now, and Export PDF there downloads at once, asking nothing."""
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, \
+            viewer(tmp_path, site + SHEET_PATH, **DESKTOP) as b:
+        b.js(STOP_LINKS)
+        b.click("#more")
+        b.js("document.getElementById('t-up').click(); document.getElementById('t-up').click()")  # two up
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        b.click("#ask-mine")  # the song's own version is two up now
+        b.js("document.getElementById('t-up').click()")  # three up
+        b.click("#reset-all")
+        after = b.js("document.getElementById('shift').textContent")
+        b.click("#more")
+        b.click("#export")
+        asked = b.js(ASKED)
+    assert after == "+2"
+    assert asked is None

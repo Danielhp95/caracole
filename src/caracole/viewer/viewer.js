@@ -294,14 +294,16 @@
     return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
   };
   // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
-  // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves.
+  // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves: where Reset all
+  // goes back to (``ownVersion``).
   let madeMine = null;
-  const ownMusic = () => {
-    if (madeMine !== null) return madeMine;
+  const ownVersion = () => {
+    if (madeMine !== null) return JSON.parse(JSON.stringify(madeMine));
     const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
     adopt(start, mine);
-    return musicOf(mine);
+    return mine;
   };
+  const ownMusic = () => musicOf(ownVersion());
   // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
   // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start
   // there), just download it, or neither. A modal dialog, the song dimmed under it: its focus goes round within it, and
@@ -326,7 +328,8 @@
     });
     for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
     $("ask-mine").addEventListener("click", () => {
-      madeMine = musicOf(state);
+      madeMine = JSON.parse(JSON.stringify({ t: state.t, mode: state.mode, alt: state.alt, at: state.at,
+        capo: state.capo }));
       ask.close();
     });
     ask.addEventListener("keydown", (e) => {
@@ -2588,7 +2591,7 @@
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
-    adopt(start);  // the song's own version, if it has one
+    Object.assign(state, ownVersion());  // the song's own version, if it has one (the one made yours here, else its)
     if (startInst) state.inst = startInst;  // and its instrument; else the instrument stays the player's
     keepNecks();  // the rail of necks back, on every sheet
     keepPinyin();  // and the pinyin off
