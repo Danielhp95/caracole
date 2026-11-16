@@ -213,6 +213,39 @@ class AssemblyTest {
                            "backup"), phone.queue.commands.runners.keys)
     }
 
+    /** The requests a start ran are the next start's too (docs/android_port.md: the Requests tab's history kept
+     * across the app's restarts): `stateDir/requests.jsonl`, JobHistory.at's, and the ids go on after theirs. */
+    @Test fun theRequestsAStartRanAreRememberedByTheNextAndItsIdsGoOn() {
+        val library = tmp.newFolder("history-library")
+        val state = File(tmp.root, "history-state").apply { mkdirs() }
+        fun <T> start(db: String, block: (Phone) -> T): T {
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                return TestDb.fresh(tmp.newFolder(db)).use { database ->
+                    block(Phone(PhoneDeps(database, library, state, null, scope, NoAddress, secret = "s".repeat(64),
+                                          csrf = "tok", transport = { RefusingTransport })))
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+        val ran = start("db1") { phone ->
+            val job = phone.queue.submit(JobSpec("Back up the book", "backup:by-hand", "backup",
+                                                 listOf("backup" to "Backing up"),
+                                                 run = { it.stage("backup", "done", "done") })).first
+            runBlocking { phone.queue.await(job.id) }
+        }
+        assertEquals(Job.DONE, ran.state)
+        assertTrue(File(state, "requests.jsonl").isFile, "the phone's history: stateDir/requests.jsonl")
+        start("db2") { phone ->
+            assertEquals(listOf(ran.id to "Back up the book"), phone.queue.snapshot().map { it.id to it.title })
+            val next = phone.queue.submit(JobSpec("Something", "something", "add", listOf("add" to "Adding"),
+                                                  run = { it.stage("add", "done", "done") })).first
+            assertTrue(next.id > ran.id, "the ids go on after the history's: ${next.id} after ${ran.id}")
+            runBlocking { phone.queue.await(next.id) }
+        }
+    }
+
     @Test fun theLibraryAssetsAreOnTheClasspathByteForByte() {
         val source = File(System.getProperty("caracole.conformance")).resolve("../../../src/caracole/library_assets")
         val names = source.listFiles()!!.map { it.name }.filter { it.substringAfterLast('.') in setOf("js", "css", "html") }

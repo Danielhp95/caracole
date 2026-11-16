@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.Commands
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobHistory
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
@@ -97,7 +98,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
- * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
+ * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
+ * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -129,7 +131,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
 
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
-        queue = JobQueue(deps.scope, commands = Commands(commands))
+        queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
         // The lookup's seams are the real ones, PhoneRender's and SongbookPagesImpl's (SongPages.NONE and
         // SongbookPages.NONE are the corpus's lookup replays', a caracole that makes no page).
         parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
