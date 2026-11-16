@@ -134,7 +134,8 @@ def azlyrics_lyrics(
 
     songs = as_now(conn, songs_to_ask(conn, now, picks=picks, recheck_after=recheck_after, only=only),
                    lambda song: _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only))
-    for song, lyrics in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending):
+    for song, lyrics in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending,
+                                  on_cut=back_to_pending):
         if lyrics is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
             stats.missing += 1

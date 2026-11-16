@@ -255,13 +255,14 @@ def test_an_answer_that_isnt_json_is_an_error_and_asked_once_more_from_the_cache
     assert site.endpoints() == ["search", "search", "lrc"]  # the cached notice asked for once more
 
 
-def test_a_429_is_a_block_and_marks_nothing(conn, tmp_path):
+def test_a_429_is_a_block_that_marks_no_miss_and_puts_the_song_lrclib_missed_back_to_pending(conn, tmp_path):
+    # Megalobiz answered no miss: the song is missing only once every site asked answered one, as after an error.
     site = FakeMegalobiz([None], failing={"search": 429})
     song = eagles(conn)
     with pytest.raises(ProviderBlocked):
         run(site, conn, tmp_path)
     stored = get_song(conn, song.id)
-    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", EARLIER)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
     assert kv_get(conn, f"{CHECKED}{song.id}") is None
 
 
@@ -274,12 +275,13 @@ def test_three_errors_in_a_row_end_the_pass_and_name_the_songs_left(conn, tmp_pa
     assert (stats.tried, stats.errors, len(site.requests), len(stats.failures)) == (3, 3, 3, 5)
 
 
-def test_a_spent_budget_ends_the_pass_and_marks_nothing(conn, tmp_path):
+def test_a_spent_budget_ends_the_pass_marks_no_miss_and_puts_the_song_it_cut_back_to_pending(conn, tmp_path):
     site = FakeMegalobiz([None])
     song = eagles(conn)
     assert run(site, conn, tmp_path, budget=1) == MegalobizStats(budget_exhausted=True)
     stored = get_song(conn, song.id)
-    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", EARLIER)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
+    assert kv_get(conn, f"{CHECKED}{song.id}") is None
 
 
 def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):

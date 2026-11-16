@@ -255,7 +255,7 @@ object Megalobiz {
             }
         }
         val songs = songsToAsk(db, now, recheckAfter, only).asSequence()
-        val asked = Passes.eachSong(songs, stats, "Megalobiz", onError = backToPending) { song ->
+        val asked = Passes.eachSong(songs, stats, "Megalobiz", onError = backToPending, onCut = backToPending) { song ->
             val cache = db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
             fetchMegalobiz(client, song.artists[0], song.title, length(song), cache)
         }

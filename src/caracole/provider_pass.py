@@ -7,7 +7,8 @@ Errors are never misses. A block propagates. A spent budget ends the pass
 failure with that error, never asked about and no error of its own. Any other
 ``ProviderError`` counts the song in ``tried`` and ``errors``, names it in
 ``failures`` with its error, and leaves it for the next run; the pass goes on,
-unless the error is one of ``stop_on``.
+unless the error is one of ``stop_on``. ``on_cut`` hears the song whose turn a block, a spent budget or the
+client giving up cut short (a pass whose miss would stand for the site's answer puts it back: megalobiz_fetch.py).
 
 A pass lists its songs at its start, and bulk work hands caracole's lock to a lookup or a sync in its pauses
 (commands/_common.py ``hand_over``), which may give a song on the list what the pass is for, or remove it: each
@@ -65,6 +66,7 @@ def each_song(
     level: int = logging.DEBUG,
     stop_on: tuple[type[ProviderError], ...] = (),
     on_error: Callable[[Song, ProviderError], None] | None = None,
+    on_cut: Callable[[Song, Exception], None] | None = None,
 ) -> Iterator[tuple[Song, T]]:
     """Each song's ``turn``, in order, and what it came to, for the songs it came to something
     for; see the module docstring for the rest. ``songs`` is read lazily, a song just before its
@@ -74,12 +76,14 @@ def each_song(
     for song in left:
         try:
             outcome = turn(song)
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            return
-        except ProviderUnavailable as e:
+        except (ProviderBlocked, BudgetExhausted, ProviderUnavailable) as e:
+            if on_cut is not None:
+                on_cut(song, e)
+            if isinstance(e, ProviderBlocked):
+                raise
+            if isinstance(e, BudgetExhausted):
+                stats.budget_exhausted = True
+                return
             log.info("%s is unavailable for the rest of this run: %s", site, e)
             stats.failures += [(song, e), *((other, e) for other in left)]
             return

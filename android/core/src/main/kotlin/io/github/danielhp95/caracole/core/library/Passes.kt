@@ -23,7 +23,9 @@ open class PassStats(var tried: Int = 0, var errors: Int = 0, var budgetExhauste
  * - once the client gives up on the provider for the run ([ProviderUnavailable]), the pass ends and every song left,
  *   that one first, is a failure with that error, never asked about and no error of its own;
  * - any other [ProviderError] counts the song in `tried` and `errors`, names it in `failures` with its error, is told
- *   to `onError`, and leaves the song for the next run; the pass goes on, unless the error is one of `stopOn`.
+ *   to `onError`, and leaves the song for the next run; the pass goes on, unless the error is one of `stopOn`;
+ * - `onCut` hears the song whose turn a block, a spent budget or the client giving up cut short, before the ladder
+ *   goes on (megalobiz_fetch.py's puts a song LRCLIB missed back to pending: that site answered no miss).
  *
  * A song that answers counts in `tried`. Python's `site` names the provider in its log; the phone keeps no such log.
  */
@@ -40,6 +42,7 @@ object Passes {
     fun <T> eachSong(songs: Sequence<SongRow>, stats: PassStats, @Suppress("UNUSED_PARAMETER") site: String,
                      stopOn: Set<KClass<out ProviderError>> = emptySet(),
                      onError: ((SongRow, ProviderError) -> Unit)? = null,
+                     onCut: ((SongRow, Exception) -> Unit)? = null,
                      turn: (SongRow) -> T): Sequence<Pair<SongRow, T>> = sequence {
         val left = songs.iterator()
         while (left.hasNext()) {
@@ -47,11 +50,14 @@ object Passes {
             val outcome = try {
                 turn(song)
             } catch (e: ProviderBlocked) {
+                onCut?.invoke(song, e)
                 throw e
-            } catch (_: BudgetExhausted) {
+            } catch (e: BudgetExhausted) {
+                onCut?.invoke(song, e)
                 stats.budgetExhausted = true
                 return@sequence
             } catch (e: ProviderUnavailable) {
+                onCut?.invoke(song, e)
                 stats.failures += song to e
                 while (left.hasNext()) stats.failures += left.next() to e
                 return@sequence
@@ -73,8 +79,9 @@ object Passes {
      * turns before did, or whose work on an answer must stay off the ladder, takes the sequence's. */
     fun <S : PassStats> eachSong(songs: List<SongRow>, stats: S, site: String,
                                  stopOn: Set<KClass<out ProviderError>> = emptySet(),
-                                 onError: ((SongRow, ProviderError) -> Unit)? = null, turn: (SongRow) -> Unit): S {
-        eachSong(songs.asSequence(), stats, site, stopOn, onError, turn).forEach { _ -> }
+                                 onError: ((SongRow, ProviderError) -> Unit)? = null,
+                                 onCut: ((SongRow, Exception) -> Unit)? = null, turn: (SongRow) -> Unit): S {
+        eachSong(songs.asSequence(), stats, site, stopOn, onError, onCut, turn).forEach { _ -> }
         return stats
     }
 }

@@ -518,7 +518,7 @@ def test_a_megalobiz_block_cools_it_down_and_marks_no_song(conn, cfg):
     assert report.ok and report.blocked == ["megalobiz"] and report.steps["megalobiz"].startswith("blocked")
     assert is_cooling(conn, "megalobiz", NOW + timedelta(hours=25))
     assert kv_get_json(conn, f"megalobiz:checked:{song.id}") is None
-    assert get_song(conn, song.id).lyrics_status == "missing"
+    assert get_song(conn, song.id).lyrics_status == "pending"  # no miss: back to pending, as after an error
     assert len(site.requests) == 1  # nothing after the block
 
 
@@ -1391,7 +1391,7 @@ def test_an_azlyrics_block_cools_it_down_and_marks_no_song(conn, cfg):
     assert report.ok and report.blocked == ["azlyrics"] and report.steps["azlyrics"].startswith("blocked")
     assert is_cooling(conn, "azlyrics", NOW + timedelta(hours=25))
     assert kv_get_json(conn, f"azlyrics:checked:{song.id}") is None
-    assert get_song(conn, song.id).lyrics_status == "missing"
+    assert get_song(conn, song.id).lyrics_status == "pending"  # no miss: back to pending, as after an error
     assert len(site.requests) == 1  # nothing after the block
     assert [title for title, _ in out.sent].count("caracole: AZLyrics blocked") == 1  # one alert, never one a song
 

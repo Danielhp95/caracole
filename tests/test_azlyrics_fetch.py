@@ -245,19 +245,21 @@ def test_a_cached_page_that_wont_parse_is_asked_for_once_more(conn, tmp_path):
 
 @pytest.mark.parametrize("failing", [ARTIST, SONG])
 def test_its_block_page_a_200_is_a_block_and_marks_nothing(conn, tmp_path, failing):
+    # No miss: the song LRCLIB missed goes back to pending, as after an error, since AZLyrics answered none.
     song = mononoke(conn)
     with pytest.raises(ProviderBlocked):
         run(FakeAzLyrics(failing={failing: "block"}), conn, tmp_path)
     now = get_song(conn, song.id)
-    assert now.lyrics_status == "missing" and kv_get(conn, f"{CHECKED}{song.id}") is None
+    assert now.lyrics_status == "pending" and kv_get(conn, f"{CHECKED}{song.id}") is None
 
 
 def test_its_block_page_is_never_kept_in_the_cache(conn, tmp_path):
-    mononoke(conn)
+    song = mononoke(conn)
     site = FakeAzLyrics(failing={ARTIST: "block"})
     with pytest.raises(ProviderBlocked):
         run(site, conn, tmp_path)
     site.failing.clear()
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-10-01T00:00:00Z")  # LRCLIB's miss again
     assert run(site, conn, tmp_path).found == 1
     assert site.requests == [ARTIST, ARTIST, SONG]
 
