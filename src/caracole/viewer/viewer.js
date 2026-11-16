@@ -261,6 +261,8 @@
     for (const v of $("export-row").querySelectorAll(".export-v")) v.textContent = words;
     const version = new URLSearchParams(location.hash.slice(1));
     if (!traditional) version.delete("trad");
+    // What an export is asked for is the page's to say, never the address's: Make mine alone adds mine=1.
+    for (const name of ["mine", "sheet"]) version.delete(name);
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
       for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);

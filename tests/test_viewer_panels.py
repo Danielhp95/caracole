@@ -1231,3 +1231,22 @@ def test_a_progression_playing_stops_once_the_song_is_played_otherwise(tmp_path,
         after = b.js("[window.stopped, document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')]")
     assert playing == "Stop"
     assert after == [True, "Play Verse"], after
+
+
+@in_chromium
+def test_mine_in_the_address_never_makes_an_export_mine(tmp_path):
+    """An address that holds ``mine=1`` (a link sent, a bookmark edited by hand) is no Make mine: on the song's own
+    version Export PDF downloads it alone, and on another, Download only does; Make mine alone asks for it."""
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site:
+        with viewer(tmp_path, site + SHEET_PATH + "#mine=1", **DESKTOP) as b:
+            press_export(b)  # the song's own version: the download at once, no question
+            own = [b.js("window.went"), b.js(ASKED)]
+        with viewer(tmp_path, site + SHEET_PATH + "#t=3&mine=1", **DESKTOP) as b:
+            press_export(b)
+            assert b.wait("document.getElementById('export-ask').open")
+            answers = b.js(ASKED)["answers"]
+    assert own == [[[EXPORTS, False]], None]
+    assert answers[:2] == [["Make mine", EXPORTS + "&t=3&mine=1", True], ["Download only", EXPORTS + "&t=3", False]]
