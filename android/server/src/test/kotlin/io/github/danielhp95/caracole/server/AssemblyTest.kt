@@ -131,6 +131,18 @@ class AssemblyTest {
         phone { assertTrue(!left.exists(), "no earlier start's export can be asked for") }
     }
 
+    /** Overrides the reader refuses (no take writes one now; an older app's might have) never stop the phone's start:
+     * its Backups, which a restore needs, are reached through the same Phone. */
+    @Test fun overridesThatCantBeReadNeverStopThePhonesStart() = phone<Unit> { phone ->
+        phone.parts.database.writeBlocking { db ->
+            phone.parts.store.add(db, "Muse", "Hysteria", now = "2026-11-01T10:00:00Z")
+            db.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES ('transpose', 'muse/hysteria', " +
+                           "'Muse - Hysteria', '99')")
+        }
+        phone.start()
+        assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind }, "nothing it can't read is queued")
+    }
+
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
         // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
         // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code; both have

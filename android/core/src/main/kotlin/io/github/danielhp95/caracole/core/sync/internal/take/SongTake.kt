@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -124,6 +125,8 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                 }
                 val entries = need(doc, "overrides") as? JsonObject ?: throw UnitError("its overrides can't be read")
                 OverridesStore.putSongEntries(db, key, "${names.artist} - ${names.title}", entries)
+                // put_song_entries' read back: an entry the reader refuses leaves the unit, nothing written.
+                Overrides.checkSong(db, key)
                 Taken(song.id, respelled)
             }
         } catch (e: Throwable) {

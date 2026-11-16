@@ -6,7 +6,10 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.OverridesStore
+import io.github.danielhp95.caracole.core.library.internal.overrides.Addresses
+import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.PyRepr
@@ -113,8 +116,14 @@ object Take {
                     "songbook" -> if (takeSongbook(db, rest, doc)) songbooks = true
                     "alias" -> OverridesStore.putAlias(db, rest, rest, doc?.let { slugs(it) })
                     "artist_url" -> OverridesStore.putArtistUrl(db, rest, doc?.let {
-                        JsonObject(mapOf("name" to JsonPrimitive(SongTake.text(SongTake.need(it, "name"))),
-                                         "page" to JsonPrimitive(SongTake.text(SongTake.need(it, "page")))))
+                        val name = SongTake.text(SongTake.need(it, "name"))
+                        val page = SongTake.text(SongTake.need(it, "page"))
+                        // overrides.put_artist_url: a page the reader would refuse is written nowhere.
+                        if (Addresses.artistUrlValue(JsonPrimitive(page)) == null) {
+                            throw OverridesError("[artist_url] ${PyStr.repr(name)}: not a UG artist page or tab " +
+                                                     "page URL: ${PyStr.repr(page)}")
+                        }
+                        JsonObject(mapOf("name" to JsonPrimitive(name), "page" to JsonPrimitive(page)))
                     })
                     "block" -> OverridesStore.putBlock(db, tab(rest), doc != null)
                     else -> throw UnitError("we don't know entries of kind ${PyRepr.str(kind)}")

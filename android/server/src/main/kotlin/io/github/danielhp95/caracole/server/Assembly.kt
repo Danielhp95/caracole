@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -216,10 +217,16 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /**
      * What the phone queues at its start, called by the app once it has wired the queue's listeners (Caracole.start:
      * `queue.onBusy`, so the foreground service hears every job, this one too): the render job when the phone owes
-     * pages ([PhoneRender.stale]: a new build's, say). Nothing while the render is neutral.
+     * pages ([PhoneRender.stale]: a new build's, say). Nothing while the render is neutral, nor while the overrides
+     * can't be read (OverridesError): the phone starts all the same, so that its Backups can restore a library.
      */
     fun start() {
-        if (render.stale()) renderAgain()
+        val stale = try {
+            render.stale()
+        } catch (_: OverridesError) {
+            false
+        }
+        if (stale) renderAgain()
     }
 
     /** After a sync's take, inside the sync's job (SyncRoutes' `afterSync`, its stages over): the copy reloaded, the

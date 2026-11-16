@@ -99,10 +99,27 @@ data class Overrides(
          * bump (the KEY_VERSION lockstep), which M3's re-keying does not do yet.
          */
         fun read(db: Db, keyVersion: ((String) -> Any?)? = null,
-                 checkSpec: ((JsonElement) -> Unit)? = null): Overrides {
-            val rows = db.query("SELECT tbl, key, written, value FROM phone_overrides ORDER BY rowid") {
+                 checkSpec: ((JsonElement) -> Unit)? = null): Overrides =
+            parse(entries(db, ""), keyVersion, checkSpec)
+
+        /**
+         * The entries of the song of identity [key] read as [read] reads them, its [OverridesError] for the first
+         * that can't be read: what a take checks once it has written a song's entries, inside the unit's savepoint,
+         * as overrides.put_song_entries reads its document back ("Entries the reader would refuse raise
+         * OverridesError, and nothing is written"), so that no unit makes the phone's overrides unreadable.
+         */
+        fun checkSong(db: Db, key: String) {
+            val tables = (OverridesStore.SONG_TABLES + "ignore").joinToString(", ") { "'$it'" }
+            parse(entries(db, "WHERE tbl IN ($tables) AND key = ?", key), null, null)
+        }
+
+        private fun entries(db: Db, where: String, vararg args: Any?): List<Pair<String, Entry>> =
+            db.query("SELECT tbl, key, written, value FROM phone_overrides $where ORDER BY rowid", *args) {
                 it.text(0)!! to Entry(it.text(1)!!, it.text(2)!!, Canonical.parse(it.text(3)!!))
             }
+
+        private fun parse(rows: List<Pair<String, Entry>>, keyVersion: ((String) -> Any?)?,
+                          checkSpec: ((JsonElement) -> Unit)?): Overrides {
             val by = LinkedHashMap<String, MutableList<Entry>>()
             for ((table, entry) in rows) by.getOrPut(table) { ArrayList() }.add(entry)
             fun of(table: String): List<Entry> = by[table].orEmpty()

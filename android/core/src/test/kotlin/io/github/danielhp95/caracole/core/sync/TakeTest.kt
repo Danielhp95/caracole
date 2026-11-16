@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.sync.internal.take.Backups
 import io.github.danielhp95.caracole.core.sync.internal.take.Folders
@@ -190,6 +191,46 @@ class TakeTest {
                             "songbook/road" to "its entry can't be read (TypeError: check_setting() got an unexpected " +
                                 "keyword argument 'tempo')"), done.left)
         phone.write { db -> assertEquals(listOf("Home"), io.github.danielhp95.caracole.core.library.SongbookStore.all(db).map { it.name }) }
+    }
+
+    private fun quoted(text: String): String = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+    /** Muse - Hysteria's song document, a UG sheet version with no kept file, its kv, overrides, raw record and match
+     * candidates as given. */
+    private fun hysteria(kv: String = "{}", overrides: String = "{}", raw: String = "{}", candidates: String = "[]") = json("""
+        {"key": "muse/hysteria", "names": {"artist": "Muse", "artists": ["Muse"], "title": "Hysteria", "album": null,
+                                          "duration_ms": null, "variant": null},
+         "song": {"status": "wanted", "review": 0, "match_decision": null, "match_step": null, "match_score": null,
+                  "match_artist_key": null, "match_song_key": null, "match_candidates": ${quoted(candidates)},
+                  "matched_at": null, "ug_dirty": 1, "ug_checked_at": null, "lyrics_status": "pending",
+                  "lyrics_json": null, "lyrics_at": null, "lacuerda_checked_at": null},
+         "versions": [{"provider": "ug", "tab_id": "1", "slot": "sheet", "kind": "chords", "rating": 4.5, "votes": 10,
+                       "version": 1, "label": null, "coverage": null,
+                       "url": "https://tabs.ultimate-guitar.com/tab/muse/hysteria-chords-1", "raw": ${quoted(raw)},
+                       "fetched_at": "2026-11-01T10:00:00Z", "pick_rank": null, "gone": 0, "files": []}],
+         "kv": $kv, "overrides": $overrides}""")
+
+    @Test fun aSongsOverridesEntryTheReaderRefusesLeavesTheUnitAndTheOverridesReadable() {
+        val phone = phone()
+        phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
+        val key = Normalize.identityKey("Muse", "Hysteria")
+        val (source, wanted) = documents("song/$key" to hysteria(overrides = """{"transpose": 99}"""),
+                                         "artist_url/muse" to json("""{"name": "Muse", "page": "not an address"}"""))
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) }
+        assertEquals(emptyList(), done.taken)
+        assertEquals(listOf("song/$key" to "[transpose] 'Muse - Hysteria': expected semitones between -11 and 11",
+                            "artist_url/muse" to "[artist_url] 'Muse': not a UG artist page or tab page URL: " +
+                                "'not an address'"), done.left)
+        phone.write { db ->
+            assertNull(Songs.byKey(db, key), "nothing of the song is written")
+            assertEquals(Overrides(), Overrides.read(db))
+        }
+        // The same song with entries the reader takes is taken.
+        val (good, goodWanted) = documents("song/$key" to hysteria(overrides = """{"transpose": 2}"""),
+                                           "artist_url/muse" to json("""{"name": "Muse", "page": "https://www.ultimate-guitar.com/artist/muse_1000"}"""))
+        val taken = phone.write { db -> Take.applyUnits(db, phone.store, good, goodWanted, emptyMap(), NOW) }
+        assertEquals(emptyList(), taken.left)
+        phone.write { db -> assertEquals(mapOf(key to 2), Overrides.read(db).transpose) }
     }
 
     @Test fun everyFixtureTakenIntoAnEmptyPhoneIsItsValuesAndDigests() =
