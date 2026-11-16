@@ -38,7 +38,9 @@ import java.util.logging.Logger
  * The phone's server: Ktor CIO listening on 127.0.0.1 alone, every request handed whole to [app] (server.py's part
  * of caracole serve): its method, its target exactly as sent (`%2F` and all), its headers by lowercase name (a
  * header sent twice, its last value, as http.server keeps one; cookies all, joined), and its body read up to its
- * route's limit and one byte more, which App refuses as too long (413); a body the client cut short is a 400. The
+ * route's limit and one byte more, which App refuses as too long (413); a body the client cut short is a 400. A
+ * request its headers refuse already (no launch secret, another host name: App.refusedUnread) is answered before its
+ * body is read, and its connection closed. The
  * rest of a body too long is Ktor's to drop: CIO reads a request's whole Content-Length before the next request on
  * the connection, so nothing in it is read as one (where server.py closes the connection instead, which CIO, reading
  * requests ahead, can't be told to from an answer). The answer is written as App made it, a file streamed; a HEAD
@@ -86,6 +88,15 @@ class LocalServer(val app: App) : AutoCloseable {
                 for ((name, values) in call.request.headers.entries()) {
                     val key = Py.asciiLower(name)
                     headers[key] = if (key == "cookie") values.joinToString("; ") else values.last()
+                }
+                val refused = app.refusedUnread(headers)
+                if (refused != null) {
+                    // Answered on its headers, its body never read, and the connection closed after it (server.py's
+                    // close_connection), so nothing of that body is read as a request.
+                    refused.headers.add("Connection" to "close")
+                    call.respond(outgoing(refused, head = method == "HEAD", call.response.headers))
+                    finish()
+                    return@intercept
                 }
                 val response = try {
                     val body = try {

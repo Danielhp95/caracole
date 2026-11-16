@@ -131,4 +131,36 @@ class PhoneServesTest {
             }
         }
     }
+
+    /**
+     * A POST with no launch cookie to a route of a large limit (/sync/import/part, 8 MiB) is refused on its headers,
+     * its body never waited for nor held (caracole serve's refused_unread).
+     */
+    @Test fun aPostWithoutTheSecretIsRefusedBeforeItsBodyIsRead() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val port = phone.server.start(0)
+                try {
+                    Socket(InetAddress.getByName("127.0.0.1"), port).use { socket ->
+                        socket.soTimeout = 4_000
+                        val head = "POST /sync/import/part?import=0123456789abcdef&at=0 HTTP/1.1\r\n" +
+                            "Host: 127.0.0.1:$port\r\nContent-Type: application/octet-stream\r\n" +
+                            "Content-Length: ${8 * 1024 * 1024}\r\nConnection: close\r\n\r\n"
+                        socket.getOutputStream().apply { write(head.toByteArray()); flush() }
+                        // no body sent: an answer made of the headers alone comes now
+                        val line = try {
+                            socket.getInputStream().bufferedReader(Charsets.ISO_8859_1).readLine()
+                        } catch (e: SocketTimeoutException) {
+                            "no answer in 4 s: the server waits for the 8 MiB body of a request it will refuse"
+                        }
+                        assertEquals("HTTP/1.1 403 Forbidden", line)
+                    }
+                } finally {
+                    phone.server.close()
+                }
+            }
+        }
+    }
 }
