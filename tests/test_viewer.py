@@ -801,8 +801,9 @@ def test_the_viewer_starts_in_the_songs_version(tmp_path):
     assert chord_texts(dump_dom(html, tmp_path, "#fs=20")) == asked  # the text size names no version
     # An address that names one is that version, not the song's: t=0 is the sheet as written.
     assert chord_texts(dump_dom(html, tmp_path, "#t=0")) == AS_WRITTEN
-    # The address then names the version, t and all, so a reload and its export keep it, and
-    # Reset everything goes back to the song's version.
+    # The song's own version, which nobody chose there, the address leaves out (a page made again in another own
+    # version opens in that one); a version chosen there it names, t and all, so a reload and its export keep it;
+    # and Reset everything goes back to the song's version.
     hashes = run_in_page(html, tmp_path, """
       const first = location.hash;
       q("#up").click();
@@ -810,13 +811,13 @@ def test_the_viewer_starts_in_the_songs_version(tmp_path):
       q("#reset-all").click();
       out = [first, up, location.hash, q('#sheet .c[data-c="0"]').textContent];
     """)
-    assert hashes == ["#" + MINE, "#t=3&mode=dorian&capo=0", "#" + MINE, asked["0"]]
+    assert hashes == ["", "#t=3&mode=dorian&capo=0", "", asked["0"]]
     # What the browser kept for this page before the song had this version is not where it starts.
     kept = run_in_page(html, tmp_path, 'out = location.hash;', before="""
       localStorage.setItem("caracole-viewer:" + location.pathname, JSON.stringify({ base: 0, t: 5, mode: "lydian",
         capo: 4, alt: {}, at: {}, chords: "" }));
     """)
-    assert kept == "#" + MINE
+    assert kept == ""  # the song's own version, which its address leaves out
     # What it kept for this very version is where it was left: in the sheet's own mode, no shape chosen.
     left = run_in_page(html, tmp_path, 'out = location.hash;', before="""
       const written = {};

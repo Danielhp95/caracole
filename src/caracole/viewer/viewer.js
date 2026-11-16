@@ -225,13 +225,19 @@
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
-      // With a version of its own, t always: an address naming none would start in that version again.
-      keep("t", state.t, Boolean(data.start) || state.t !== (Number(data.transpose) || 0));
-      keep("mode", state.mode, state.mode !== null);
-      keep("capo", state.capo, state.capo !== null);
+      // At the song's own version, where the page opens, nobody chose one here: the address names none, so that the
+      // page made again in another own version (Make mine elsewhere, a songbook's setting) opens in that one. Away
+      // from it, or on another instrument than the one it names, t always: an address naming none would start in the
+      // own version (and on its instrument) again.
+      const chosen = !data.start || musicOf(state) !== musicOf(startVersion())
+        || (startInst !== null && state.inst !== startInst);
+      keep("t", state.t, chosen && (Boolean(data.start) || state.t !== (Number(data.transpose) || 0)));
+      keep("mode", state.mode, chosen && state.mode !== null);
+      keep("capo", state.capo, chosen && state.capo !== null);
       keep("nm", state.nm, state.nm !== null);
-      keep("alt", swapsText(state.alt), swapsText(state.alt) !== "");
-      keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","), Object.keys(state.at).length > 0);
+      keep("alt", swapsText(state.alt), chosen && swapsText(state.alt) !== "");
+      keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","),
+        chosen && Object.keys(state.at).length > 0);
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
       keep("vol", state.vol, state.vol !== VOL);
@@ -297,12 +303,12 @@
   // [transpose]), or the one made the song's own on this page since (Make mine), which its job saves: where Reset all
   // goes back to (``ownVersion``).
   let madeMine = null;
-  const ownVersion = () => {
-    if (madeMine !== null) return JSON.parse(JSON.stringify(madeMine));
+  function startVersion() {  // the one the page was written with
     const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
     adopt(start, mine);
     return mine;
-  };
+  }
+  const ownVersion = () => (madeMine !== null ? JSON.parse(JSON.stringify(madeMine)) : startVersion());
   const ownMusic = () => musicOf(ownVersion());
   // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
   // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start

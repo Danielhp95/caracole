@@ -1119,7 +1119,8 @@ def test_export_downloads_the_own_version_at_once(tmp_path):
         press_export(b)  # the song's own version is its [version]: two up, where the page opens
         mine = [b.js("window.went"), b.js(ASKED)]
     assert plain == [[[EXPORTS + "&fs=20", False]], None]
-    assert mine == [[["/export.pdf?sheet=Artist%2FMine%2Fsheet.html&t=2", False]], None]
+    # its address names no version (nobody chose one there): /export.pdf reads none as the song's own
+    assert mine == [[["/export.pdf?sheet=Artist%2FMine%2Fsheet.html", False]], None]
 
 
 @in_chromium
