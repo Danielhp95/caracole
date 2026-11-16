@@ -24,6 +24,7 @@ progress on its card.
 from __future__ import annotations
 
 import sqlite3
+import unicodedata
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -172,6 +173,9 @@ def wanted_line(app: WebApp, form: dict[str, str]) -> tuple[WantedLine, str]:
     for name, value in values.items():
         if len(value) > LIMITS[name]:
             raise Refused(400, "Too long", f"The {name} is too long: {LIMITS[name]} characters at most.")
+        if any(unicodedata.category(c) == "Cc" and not c.isspace() for c in value):
+            # a NUL would reach wanted.txt and a command no process can be started with
+            raise Refused(400, "Not a song", f"The {name} holds a control character: write it as letters.")
     artist, title, album = values["artist"], values["title"], values["album"] or None
     if not artist or not title:
         raise Refused(400, "Not a song", "A song needs an artist and a title.")

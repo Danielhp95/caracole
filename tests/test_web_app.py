@@ -269,6 +269,11 @@ def test_a_song_listed_already_is_left_as_it_is(app, cfg, queue):
     ({"artist": "Radiohead", "title": "Creep", "duration": "0:00"}, "duration"),
     ({"artist": "R" * 201, "title": "Creep"}, "too long"),
     ({"artist": "Radiohead", "title": "Creep", "album": "A" * 301}, "too long"),
+    # no command can be started with a NUL in its arguments, and no other control character is a name's
+    ({"artist": "Radio\x00head", "title": "Creep"}, "control character"),
+    ({"artist": "Radiohead", "title": "Creep\x1b[2J"}, "control character"),
+    ({"artist": "Radiohead", "title": "Creep", "album": "Pablo\x00Honey"}, "control character"),
+    ({"q": "Radio\x00head - Creep"}, "control character"),
 ])
 def test_a_request_the_file_cant_hold_is_refused_and_nothing_is_written(app, cfg, queue, fields, message):
     response = post(app, "/request", fields)
