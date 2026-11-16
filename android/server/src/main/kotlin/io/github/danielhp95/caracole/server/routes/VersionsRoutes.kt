@@ -85,7 +85,8 @@ class VersionsRoutes(val parts: PhoneParts, private val csrf: String,
                 VersionsPage.aTab(tab, doing)
                 val id = LookupForms.songId(form.getValue("song"))
                 val overrides = LookupForms.overrides(db)
-                VersionsPage.askedSong(db, overrides, rank, LookupForms.song(db, id), tab, doing)
+                val song = LookupForms.song(db, id).also { LookupForms.sameSong(it, form) }
+                VersionsPage.askedSong(db, overrides, rank, song, tab, doing)
             } else {
                 VersionsPage.asked(db, { LookupForms.overrides(db) }, rank, form["sheet"].orEmpty(), tab, doing)
             }

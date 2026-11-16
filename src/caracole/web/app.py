@@ -105,6 +105,10 @@ FRAMES = "frame-ancestors 'none'"
 HTML = "text/html; charset=utf-8"
 QUEUE_FULL = "The queue is full. Try again once it empties."
 NO_SUCH_SONG = "That song isn't in the logbook."
+# A form that names a song by its id, sent from a page that knew another song by that id (songs.id is given again
+# once the newest song is removed): ``same_song``'s refusal.
+NOT_THAT_SONG = ("The logbook changed since this page was made: that song was removed and another has its place. "
+                 "Nothing done. Reload and try again.")
 
 
 @dataclass(frozen=True)
@@ -232,6 +236,15 @@ def song_id(text: str, *, where: str = "form") -> int:
         return int(text)
     except ValueError:
         raise Refused(400, "Not a song", f"Which song? The {where} names none.") from None
+
+
+def same_song(song: Song, form: Mapping[str, str]) -> None:
+    """Refused (409) when the form names its song by an ``identity`` key other than the song's: the page that sent
+    it knew another song by that id (songs.id has no AUTOINCREMENT, so a removed song's id may be another's now).
+    A form with no ``identity`` (a hand-made one, a page of before it) is the song its id names."""
+    identity = form.get("identity", "").strip()
+    if identity and identity != song.key:
+        raise Refused(409, "Not that song", NOT_THAT_SONG)
 
 
 @contextmanager

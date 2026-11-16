@@ -792,7 +792,11 @@ It is rows.js's, shared by both pages:
     another song's identity under its id (the view's `identity`, `jobs_routes.view`);
   - removed elsewhere, its line says Removed, the song that has the id now is new to the page, and select.js and
     songbooks.js let it go (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity
-    alone).
+    alone);
+  - every form that names a song by its id sends its `identity` beside it (library.js `songForm`, Remove's question
+    and confirmation, a result's Get it, songbooks.js, outcome.py's next steps), and the route answers 409 when the id
+    is another song's now (app.py `same_song`, the phone's `LookupForms.sameSong`; test_web_same_song.py); a finished
+    job's answer kept in `app._ended` is worked out again once its id is another song's (jobs_routes.py `_still_its`).
 - The page's tabs are tabs.js's (body.html's tablist, `tab-NAME` buttons, `#tab=NAME`, `window.caracoleTabs`,
   "caracole:tab"): Library, Songbooks, Sites, then Requests, served alone, then Sync, the last, on caracole serve's
   page alone (the phone's has none); from 720 px Library and Songbooks on the left, Sites, Requests and Sync on the

@@ -48,8 +48,9 @@ object JobViews {
     /** The phone's index import's running line (its "merge" stage), apart from another caracole's index pages merged. */
     private const val INDEX_LINE = "Merging the computer's index"
 
-    /** `caracole peer sync`'s and `take`'s agree stage, done: how many units the books agree on. */
-    private val AGREED = PyRegex.compile("""^(\d+) units? the books agree on$""")
+    /** `caracole peer sync`'s, `take`'s and `import`'s agree stage, done: how many units the books agree on (an
+     * import's with ", N kept here" after it, jobs_routes._AGREED). */
+    private val AGREED = PyRegex.compile("""^(\d+) units? the books agree on(?:, \d+ kept here)?$""")
 
     /** The job's output in the library page's Requests tab, open (status.py's details_href). */
     fun detailsHref(id: Int): String = Status.detailsHref(id)

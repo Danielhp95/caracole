@@ -529,7 +529,7 @@ const caracoleRows = (icons, does) => {
     const artist = String(hit.artist || "");
     const title = String(hit.title || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
-    const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, { ug: hit.ug }, extra);
+    const pick = (extra) => Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title }, { ug: hit.ug }, extra);
     let row = null;
     const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick({}), display, row, e.currentTarget),
       (mine ? "Fetch " + display + " again" : "Fetch " + display) + " from UG");
@@ -582,7 +582,7 @@ const caracoleRows = (icons, does) => {
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const chords = /^https:[/][/]/i.test(String(hit.sheet || "")) && /^https:[/][/]/i.test(String(hit.url || ""));
       const picked = chords ? { lacuerda: String(hit.url) } : {};
-      const pick = Object.assign(mine ? { song: mine.id } : { artist, title }, picked);
+      const pick = Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title }, picked);
       const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
         (mine ? "Fetch " + display + " again" : "Fetch " + display) + (chords ? " from LaCuerda" : ""));
       main.title = chords ? "Fetches the song and keeps this LaCuerda sheet"
@@ -600,7 +600,7 @@ const caracoleRows = (icons, does) => {
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
-      const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { harptabs: String(url) });
+      const pick = (url) => Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title }, { harptabs: String(url) });
       const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick(hit.url), display, row,
         e.currentTarget), (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its harmonica tab");
       main.title = "Fetches the song and keeps this harptabs tab";
@@ -618,7 +618,7 @@ const caracoleRows = (icons, does) => {
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
-      const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { gametabs: String(url) });
+      const pick = (url) => Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title }, { gametabs: String(url) });
       const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick(hit.url), display, row,
         e.currentTarget), (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its gametabs tab");
       main.title = "Fetches the song and keeps this gametabs tab";
@@ -642,7 +642,7 @@ const caracoleRows = (icons, does) => {
       const mine = yours(hit);
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
-      const pick = mine ? { song: mine.id } : { artist, title };
+      const pick = mine ? { song: mine.id, identity: mine.identity } : { artist, title };
       const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
         (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with a Guitar Pro file from gtptabs");
       main.title = "Fetches the sheet, then a Guitar Pro file from gtptabs";
@@ -689,7 +689,7 @@ const caracoleRows = (icons, does) => {
     const title = String(first.title || "");
     const artist = String(first.artist || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
-    const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, extra);
+    const pick = (extra) => Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title }, extra);
     const chords = Boolean(lc) && https(lc.sheet) && https(lc.url);
     const sheet = chords ? { lacuerda: String(lc.url) } : {};
     const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;

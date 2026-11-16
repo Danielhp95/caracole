@@ -99,7 +99,7 @@ internal class Rows(private val db: Db, val songs: List<SongRow>, private val ca
             obj(
                 "id" to h.song.id, "display" to h.song.display, "artist" to h.song.artist, "title" to h.song.title,
                 "status" to h.song.status, "review" to h.song.review, "score" to h.score, "via" to h.via,
-                "files" to cards.readable(h.song),
+                "identity" to h.song.key, "files" to cards.readable(h.song),
             ) with cards.result(h.song.id)
         }
         val rows = index.zip(owners).map { (hit, song) ->
@@ -237,7 +237,7 @@ internal class Rows(private val db: Db, val songs: List<SongRow>, private val ca
         /** A site row's song of yours: its names, its status and its card's links. */
         fun owner(song: SongRow): JsonObject = obj(
             "id" to song.id, "artist" to song.artist, "title" to song.title, "display" to song.display,
-            "status" to song.status, "links" to result(song.id)["links"],
+            "status" to song.status, "links" to result(song.id)["links"], "identity" to song.key,
         )
 
         /** get.readable_files: where the song's sheet can be read, as paths in the library: `sheet` (its kept text),

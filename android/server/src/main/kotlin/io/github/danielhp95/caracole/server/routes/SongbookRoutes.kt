@@ -185,9 +185,12 @@ class SongbookRoutes(val parts: PhoneParts, private val clock: () -> Instant = I
             SongbookEntries.entries(db, parts.store.libraryDir, overrides, book, rekey = false, mirror = mirror()),
             overrides)
         val one = Py.strip(form["song"].orEmpty())
-        if (one.isNotEmpty()) {  // a set list's Get it: that song alone
+        val identity = Py.strip(form["identity"].orEmpty())
+        if (one.isNotEmpty()) {  // a set list's Get it: that song alone (by its identity too, when the form names it)
             val id = if (asciiDigits(one)) BigInteger(one) else null
-            songs = songs.filter { id != null && BigInteger.valueOf(it.id) == id }
+            songs = songs.filter {
+                id != null && BigInteger.valueOf(it.id) == id && (identity.isEmpty() || it.key == identity)
+            }
             if (songs.isEmpty()) {
                 throw Refused(409, "Nothing to get", "That song of \"${book.name}\" has a sheet, isn't in the book, or " +
                                                      "is ignored. Reload the page.")

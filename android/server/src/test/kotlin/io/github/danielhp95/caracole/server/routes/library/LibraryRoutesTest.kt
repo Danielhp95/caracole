@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.server.page.SongCards
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.routes.LookupRoutes
+import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.Commands
@@ -228,6 +229,24 @@ class LibraryRoutesTest {
         waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
         assertNotNull(song("Oasis", "Wonderwall"))
         assertTrue(!app.database.read { Songs.isRemoved(it, wonderwall.key) })
+    }
+
+    @Test fun `a form by an id another song has now does nothing to that song, the page having known another`() {
+        waitFor(app.postScript("/request", listOf("artist" to "Radiohed", "title" to "Creap")).json.jsonObject.getValue("job").jsonObject)
+        val typo = assertNotNull(song("Radiohed", "Creap"))  // the newest
+        val confirmed = app.postScript("/remove", listOf("song" to typo.id.toString(), "confirm" to "1", "key" to typo.key))
+        waitFor(confirmed.json.jsonObject.getValue("job").jsonObject)
+        waitFor(app.postScript("/request", listOf("artist" to "Radiohead", "title" to "Creep")).json.jsonObject.getValue("job").jsonObject)
+        val creep = assertNotNull(song("Radiohead", "Creep"))
+        assertEquals(typo.id, creep.id, "songs.id is given again")
+        val stale = listOf("song" to typo.id.toString(), "identity" to typo.key)
+        for (path in listOf("/remove", "/fetch", "/lookup")) {
+            val refused = app.postScript(path, stale)
+            assertEquals(409, refused.status, path)
+            assertEquals(LookupForms.NOT_THAT_SONG, error(refused), path)
+        }
+        assertNotNull(song("Radiohead", "Creep"))
+        assertEquals(200, app.postScript("/remove", listOf("song" to creep.id.toString(), "identity" to creep.key)).status)
     }
 
     @Test fun `a removal confirmed goes back to the library page as it was left, at the song's card`() {

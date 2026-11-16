@@ -321,7 +321,7 @@ def test_not_found_with_something_elsewhere_gets_it_from_there():
     gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
     assert said(job, gtp, song_id=3) == Outcome(
         "missing", "Not on the sites", "UG has no chords for it. gtptabs lists a page for it.",
-        Action("Fetch from there", post="/lookup", fields=(("song", "3"),)))
+        Action("Fetch from there", post="/lookup", fields=(("song", "3"), ("identity", "muse/hysteria"))))
     # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
     unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
     lc = SongFacts(not_found=True, checked_now=True,
@@ -329,7 +329,8 @@ def test_not_found_with_something_elsewhere_gets_it_from_there():
     assert said(unmatched, lc, song_id=3) == Outcome(
         "missing", "Not on the sites", "Not in UG's index under this name. LaCuerda has a sheet.",
         Action("Fetch from there", post="/lookup", fields=(
-            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
+            ("song", "3"), ("identity", "muse/hysteria"),
+            ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
         also=SEARCH)
     # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
     got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
@@ -366,7 +367,8 @@ def test_a_failed_removal_tries_again_through_its_question_never_straight_to_rem
                   [Step(label, args, state="failed") for label, args in remove_steps("Radiohead - Creep")],
                   state="failed", song_id=12)
     # What goes is asked again (POST /remove without confirm: removal.plan_removal, as of now).
-    assert said(removal).action == Action("Try again", post="/remove", fields=(("song", "12"),))
+    assert said(removal).action == Action("Try again", post="/remove",
+                                          fields=(("song", "12"), ("identity", "radiohead/creep")))
     unknown = Job(8, "Remove X - Y", REMOVING + "x/y", [Step("Removing", ("remove", "--yes"), state="failed")],
                   state="failed")
     assert said(unknown).action is None

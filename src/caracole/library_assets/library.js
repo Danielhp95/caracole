@@ -318,14 +318,16 @@
     field.setAttribute("value", String(value));
     return field;
   };
-  // A song's form for caracole serve: it posts to ``action`` with the server's token and the song's id. Without
-  // JavaScript it posts as a form.
+  // A song's form for caracole serve: it posts to ``action`` with the server's token, the song's id and its identity
+  // key, so that an id the library gave another song since the page was made does nothing to that one (the server
+  // answers 409: web/app.py ``same_song``). Without JavaScript it posts as a form.
   const songForm = (cls, action, s) => {
     const form = el("form", cls);
     form.setAttribute("method", "post");
     form.setAttribute("action", action);
     form.appendChild(hidden("csrf", String(server.csrf || "")));
     form.appendChild(hidden("song", Number(s.id)));
+    if (s.identity) form.appendChild(hidden("identity", String(s.identity)));
     return form;
   };
   // Sent by the page's script, the form leaves the page where it is: "Sending…" on the song's own line (the
@@ -548,12 +550,15 @@
       if (at === item) undo = made;
     }
     if (undo) undo.focus();
-    // The question alone: what goes. It changes nothing; the removal is sent once the seconds are over.
-    r.ready = postTo("/remove", new URLSearchParams({ csrf: String(server.csrf || ""), song: String(id) }))
+    // The question alone: what goes. It changes nothing; the removal is sent once the seconds are over. Both name
+    // the song by the line's identity too, never by what the server answers: an id another song has since the page
+    // was made removes nothing (409).
+    r.ready = postTo("/remove", new URLSearchParams({ csrf: String(server.csrf || ""), song: String(id),
+                                                      identity: String(s.identity || "") }))
       .then((answer) => {
         const plan = answer.ok && answer.body && answer.body.removal;
         if (!plan || typeof plan !== "object") throw failure(answer);
-        r.key = String(plan.key || "");
+        r.key = String(s.identity || plan.key || "");
         r.brief = String(plan.brief || "");
         eachLine(id, r, ".goes", r.brief);
       }, () => { throw UNREACHABLE; });
@@ -572,7 +577,7 @@
     };
     r.timer = setTimeout(tick, REMOVE_SECOND);
   };
-  // The seconds are over: the removal, sent with the song's key (an id the library gave another song since
+  // The seconds are over: the removal, sent with the line's key (an id the library gave another song since
   // removes nothing); its line follows the job from here, as tall as it was, so that nothing under it moves.
   const sendRemoval = (id, r) => {
     for (const item of removalItems(id, r)) {
@@ -3532,6 +3537,9 @@
         if (fields && fields[name] !== undefined && fields[name] !== null && fields[name] !== "") {
           body.set(name, String(fields[name]));
         }
+        // A song of yours, by its id: its identity key right after it, as a song's form sends it (``songForm``).
+        const mine = name === "song" && body.has("song") ? songs[byIndex.get(Number(body.get("song")))] : undefined;
+        if (mine && mine.identity) body.set("identity", String(mine.identity));
       }
       fetch(path, { method: "POST", body, headers: { Accept: "application/json" } })
         .then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })))
@@ -3552,8 +3560,8 @@
         });
     };
     // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under its chevron too.
-    getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab", "lacuerda",
-      "harptabs", "gametabs"], row, go, (answer) => answer.view);
+    getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "identity", "artist", "title", "ug", "tab",
+      "lacuerda", "harptabs", "gametabs"], row, go, (answer) => answer.view);
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);

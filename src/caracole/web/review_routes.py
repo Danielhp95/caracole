@@ -19,7 +19,7 @@ from contextlib import closing
 from typing import TYPE_CHECKING
 
 from caracole.web import pages
-from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, not_ignored, query, song_id
+from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, not_ignored, query, same_song, song_id
 from caracole.web.jobs import Job, fetch_steps, review_steps
 from caracole.web.pages import Refused
 
@@ -71,6 +71,7 @@ def review(app: WebApp, form: dict[str, str]) -> Response:
     overrides = app.overrides()
     with no_such_song(), app.db() as conn:
         song = get_song(conn, asked)
+        same_song(song, form)
         offered = _offer(conn, song, overrides, search=True)
     not_ignored(song, overrides)
     if offered is None:

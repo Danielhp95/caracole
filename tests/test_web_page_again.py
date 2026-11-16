@@ -178,7 +178,7 @@ def test_fetch_again_posts_what_the_lookup_pages_fetch_again_posts_and_shows_its
     browser.open(base)
     press_in_menu(browser, song, "Fetch again")
     body = posted.next(0)
-    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)]}
+    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)], "identity": [song.key]}
     assert shows_its_request(browser, song)
     # The lookup page's Fetch again, for the same song, posts the very same form.
     lookup_page_presses(browser, base, "como camaron", "Fetch Estopa - Como Camarón again")
@@ -213,7 +213,7 @@ def test_use_lacuerdas_sheet_posts_your_pick_as_the_lookup_pages_lacuerda_row_do
     browser.open(base)
     press_in_menu(browser, song, USE)
     body = posted.next(0)
-    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)],
+    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)], "identity": [song.key],
                                        "lacuerda": [LC + "estopa/como_camaron"]}
     assert shows_its_request(browser, song)
     # The lookup page's LaCuerda row of the song, Get it again, posts the very same form.
@@ -245,7 +245,7 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     browser.js(f"({menu_button(song, USE)}).dataset.pressMe = '1'")
     browser.click(line(song) + " .line-panel button[data-press-me]")
     body = posted.next(0)
-    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)],
+    assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)], "identity": [song.key],
                                        "lacuerda": [LC + "estopa/como_camaron"]}
     assert shows_its_request(browser, song)
     lookup_page_presses(browser, base, "como camaron", "Fetch Estopa - Como Camarón again from LaCuerda")

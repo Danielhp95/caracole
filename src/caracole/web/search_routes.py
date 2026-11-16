@@ -140,6 +140,7 @@ from caracole.web.app import (
     no_such_song,
     query,
     redirect,
+    same_song,
     wants_json,
 )
 from caracole.web.jobs import (
@@ -302,9 +303,11 @@ def _library_song(app: WebApp, form: dict[str, str], ug: tuple[str, str] | None)
         if form.get("song", "").strip():
             with no_such_song():
                 try:
-                    return get_song(conn, int(form["song"]))
+                    song = get_song(conn, int(form["song"]))
                 except ValueError:
                     raise Refused(400, "Not a song", "Which song? The form names none.") from None
+            same_song(song, form)
+            return song
         artist, title = form.get("artist", "").strip(), form.get("title", "").strip()
         if ug is not None:
             found = _Mine(list_songs(conn), app._song_forms).song_for(*ug, artist, title)
@@ -678,7 +681,8 @@ def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], song
     return [{"song": song.id if song else None,
              "same_artist": song is not None and owners_of.same_artist(song, h.artist_key, h.artist),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                         "status": song.status, "links": cards[song.id]["links"]} if song else None}
+                         "status": song.status, "links": cards[song.id]["links"], "identity": song.key}
+             if song else None}
             for h, song in zip(hits, owners)]
 
 
@@ -819,12 +823,13 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
     cards = result_cards(conn, app.cfg, list({s.id: s for s in [h.song for h in mine] + owners if s}.values()))
     library = [{"id": h.song.id, "display": h.song.display, "artist": h.song.artist, "title": h.song.title,
                 "status": h.song.status, "review": bool(h.song.review), "score": h.score, "via": h.via,
-                "files": readable_files(conn, app.cfg.library_dir, h.song), **cards[h.song.id]}
+                "identity": h.song.key, "files": readable_files(conn, app.cfg.library_dir, h.song), **cards[h.song.id]}
                for h in mine]
     hits = [{**hit, **_keys(hit["artist"], hit["title"]), "song": song.id if song else None,
              "same_artist": song is not None and owners_of.same_artist(song, hit["ug"].split("/", 1)[0], hit["artist"]),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                         "status": song.status, "links": cards[song.id]["links"]} if song else None}
+                         "status": song.status, "links": cards[song.id]["links"], "identity": song.key}
+             if song else None}
             for hit, song in zip(index, owners)]
     return library, hits
 

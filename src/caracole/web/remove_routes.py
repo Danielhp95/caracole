@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 
 from caracole.web import pages
-from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, song_id
+from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, same_song, song_id
 from caracole.web.jobs import REMOVING, remove_steps
 from caracole.web.pages import Refused
 
@@ -35,8 +35,9 @@ def remove(app: WebApp, form: dict[str, str]) -> Response:
     """Say what removing a song takes and leaves, and ask; confirmed, queue ``caracole remove --yes``
     and go back to the library, at the song's card, as ``back`` left it (``_library_at``).
 
-    The confirmation carries the song's key: a song id the database gave
-    another song since the question was asked removes nothing. To the library
+    The question may carry, and the confirmation carries, the song's key (its
+    ``identity``, the line's on the library page; ``key``): a song id the
+    database gave another song since the page was made removes nothing. To the library
     page's script, the question is data (``removal``: the song's key, what goes
     in one sentence, ``brief``, and whole), which its card says while it counts
     down to Undo; the confirmation, the job, whose line its card shows: the
@@ -50,6 +51,7 @@ def remove(app: WebApp, form: dict[str, str]) -> Response:
     back = _back(form.get("back", ""))
     with no_such_song("That song isn't in the logbook. Removed already?"), app.db() as conn:
         song = get_song(conn, asked)
+        same_song(song, form)
         plan = None if confirmed else plan_removal(conn, app.cfg, song)
     if plan is not None:
         goes, stays, notes = describe(plan, app.cfg)

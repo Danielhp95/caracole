@@ -772,6 +772,17 @@ def test_a_syncs_view_carries_its_report_once_over_and_none_while_it_runs():
     assert peer_outcome(done)["report"] == REPORT
 
 
+def test_an_imports_outcome_counts_what_the_two_agree_on_when_it_kept_an_answer_too():
+    from caracole.web.jobs_routes import peer_outcome
+
+    from test_web_sync import peer_job
+
+    # commands/peer.py's import: "N units the books agree on", then ", M kept here" for each "keep mine" remembered
+    kept = peer_job("import", "done", {"agree": ("done", "3 units the books agree on, 1 kept here")})
+    assert peer_outcome(kept)["agreed"] == 3
+    assert peer_outcome(peer_job("import", "done", {"agree": ("done", "1 unit the books agree on")}))["agreed"] == 1
+
+
 def test_an_import_of_a_staged_file_is_followed_by_its_stages():
     from caracole.commands.peer import PEER_IMPORT_STAGES
 

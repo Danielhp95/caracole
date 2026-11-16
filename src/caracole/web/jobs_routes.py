@@ -71,8 +71,9 @@ if TYPE_CHECKING:
 
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 SYNC_TAB = "#tab=sync"  # a sync's details: the library page's Sync tab, which follows it
-# ``caracole peer sync``'s and ``take``'s agree stage, done (commands/peer.py: "3 units the books agree on")
-_AGREED = re.compile(r"^(\d+) units? the books agree on$")
+# ``caracole peer sync``'s, ``take``'s and ``import``'s agree stage, done (commands/peer.py: "3 units the books agree on",
+# an import's with ", 1 kept here" for the answers "keep mine" it remembered)
+_AGREED = re.compile(r"^(\d+) units? the books agree on(?:, \d+ kept here)?$")
 
 
 ROUTES = (
@@ -321,20 +322,23 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     known) and what the local indexes have of the song elsewhere
     (``outcome.elsewhere``). Make this my version (``jobs.EXPORTING``) is about the
     song its job names (``Job.song_id``) and is none of its requests: no id. A job
-    that is over doesn't change, so its answer is worked out once (``app._ended``).
+    that is over doesn't change, so its answer is worked out once (``app._ended``),
+    and kept while its song keeps its id: songs.id is given again once the newest
+    song is removed, so an answer whose id is another song's now is worked out
+    again (``_still_its``), never a next step that names that other song.
     """
     if peer_kind(job) is not None:  # a sync's, a take's or a pull's: no song's
         return None, None
     over = not job.active
+    removal = job.song_key.startswith(REMOVING)
     if over:
         with app._ended_lock:
             ended = app._ended.get(job.id)
-        if ended is not None:
+        if ended is not None and _still_its(conn, job, ended[0], removal):
             return ended
     from caracole.library_page import sheet_href
     from caracole.songs import find_song
 
-    removal = job.song_key.startswith(REMOVING)
     export = job.song_key.startswith((EXPORTING, READING))  # a change of the song's own: by its id
     song = _song_by_id(conn, job.song_id) if export else find_song(conn, song_key_of(job.song_key))
     facts = None
@@ -368,6 +372,17 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
         with app._ended_lock:
             app._ended[job.id] = answer
     return answer
+
+
+def _still_its(conn: sqlite3.Connection, job: Job, song_id: int | None, removal: bool) -> bool:
+    """Whether the id a finished job's answer names is still its song's: none, the song of the job's key, or, for a
+    removal, no song at all (the one it removed)."""
+    if song_id is None:
+        return True
+    song = _song_by_id(conn, song_id)
+    if song is None:
+        return removal
+    return song.key == song_key_of(job.song_key)
 
 
 def _sheet_from(conn: sqlite3.Connection, song: Song) -> str:

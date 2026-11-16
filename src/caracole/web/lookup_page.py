@@ -487,7 +487,7 @@ const opener = rowKit.opener;
 function librarySong(s) {
   const files = Array.isArray(s.links) ? s.links : [];
   const opens = opener(files);
-  const again = () => button(s.files.sheet ? "Fetch again" : "Fetch", "small", () => lookUp({song: s.id}, s.display),
+  const again = () => button(s.files.sheet ? "Fetch again" : "Fetch", "small", () => lookUp({song: s.id, identity: s.identity}, s.display),
                              s.files.sheet ? "Fetch " + s.display + " again" : "Fetch " + s.display);
   const reading = (label, aria) => button(label, "small" + (opens ? "" : " primary"), () => read(s.display, s.files), aria);
   let action;
@@ -640,7 +640,8 @@ backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 
 
 function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
-  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda", "harptabs", "gametabs"]) {
+  // a song of yours by its id and its identity key, as the library page sends them (web/app.py same_song)
+  for (const name of ["song", "identity", "artist", "title", "ug", "tab", "lacuerda", "harptabs", "gametabs"]) {
     if (pick[name]) body.set(name, pick[name]);
   }
   openReader(display, "Asking for it…");
