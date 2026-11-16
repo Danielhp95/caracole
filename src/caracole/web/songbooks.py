@@ -204,7 +204,7 @@ def _setting_job(name: str, entry: str, form: Mapping[str, str]) -> SongbookJob:
                                                 "version.")
         try:
             setting = check_setting(key[:1].upper() + key[1:] if key else None, mode.lower() or None,
-                                    (int(capo) if capo.isascii() and capo.isdigit() else capo) if capo else None,
+                                    (int(capo) if capo.isascii() and capo.isdigit() and len(capo) <= 3 else capo) if capo else None,
                                     instrument.lower() or None, where="The setting")
         except SongbookError as e:
             raise Refused(400, "Not a setting", str(e)) from e
@@ -243,7 +243,7 @@ def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callab
         songs = songs_to_get(songbook_entries(conn, library_dir, overrides, book), overrides)
     one = form.get("song", "").strip()
     if one:  # a set list's Get it: that song alone
-        songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)]
+        songs = [s for s in songs if one.isascii() and one.isdigit() and len(one) <= 19 and s.id == int(one)]
         if not songs:
             raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet, isn\'t in the book, or '
                                                  "is ignored. Reload the page.")

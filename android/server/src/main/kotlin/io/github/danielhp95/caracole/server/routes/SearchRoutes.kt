@@ -120,7 +120,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
     /** search_routes.api_artist. */
     private fun ugArtist(key: String, offset: String): Response {
         if (key.isEmpty()) return jsonResponse(400, obj("error" to "Which artist? The address names none."))
-        if (offset.isEmpty() || !offset.all { it in '0'..'9' }) {
+        if (offset.isEmpty() || !offset.all { it in '0'..'9' } || offset.length > 9) {  // one SQLite takes
             return jsonResponse(400, obj("error" to "That offset isn't a number."))
         }
         return artistAlone { it.ug(key, offset) }

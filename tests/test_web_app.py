@@ -1138,6 +1138,20 @@ def test_the_pickers_page_needs_a_song_of_the_library(app, conn, path, status):
     assert get(app, path).status == status
 
 
+
+PAST_INT_DIGITS = "9" * 5000  # past Python's 4,300 digits: int() raises after isdigit() said yes
+
+
+@pytest.mark.parametrize("path,status", [
+    (f"/api/jobs/{PAST_INT_DIGITS}", 404),
+    (f"/jobs.json?jobs={PAST_INT_DIGITS}", 200),
+    (f"/requests.json?open={PAST_INT_DIGITS}", 200),
+    (f"/api/artist?key=x&offset={PAST_INT_DIGITS}", 400),
+    (f"/api/artist?key=x&offset={BEYOND_SQLITE}", 400),  # an offset SQLite can't take either
+], ids=["job", "jobs", "open", "offset", "offset-past-sqlite"])
+def test_a_number_past_what_is_read_as_one_is_refused_never_a_bug(app, conn, path, status):
+    assert get_json(app, path).status == status
+
 def test_the_pickers_page_of_a_song_that_needs_no_review_says_so(app, conn):
     settled = add_song(conn, "Oasis", "Wonderwall")
     update_song(conn, settled.id, match_decision="accept")
