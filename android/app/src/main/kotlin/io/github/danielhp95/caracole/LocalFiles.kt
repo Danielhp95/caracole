@@ -10,7 +10,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.io.ByteArrayInputStream
-import java.io.FileInputStream
 import java.io.InputStream
 import java.net.URI
 
@@ -54,7 +53,8 @@ class LocalFiles(private val handle: (Request) -> Response, origin: URI, private
         return when (val body = response.body) {
             Body.Empty -> Fetched.File(type, 0, disposition) { ByteArrayInputStream(ByteArray(0)) }
             is Body.Bytes -> Fetched.File(type, body.bytes.size.toLong(), disposition) { ByteArrayInputStream(body.bytes) }
-            is Body.FromFile -> Fetched.File(type, body.length, disposition) { FileInputStream(body.file) }
+            // opened as the server sends it (Body.FromFile.open): a file sent once loses its name as it is read
+            is Body.FromFile -> Fetched.File(type, body.length, disposition) { body.open() }
         }
     }
 

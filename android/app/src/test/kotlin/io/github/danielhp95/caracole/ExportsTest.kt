@@ -124,4 +124,18 @@ class ExportsTest {
         assertEquals(Exports.DEFAULT_NAME, bare.file.name)
         assertTrue(named.file.parentFile != bare.file.parentFile, "each copy in a folder of its own")
     }
+
+    @Test
+    fun `an export sent once is gone from the server's folder once the app has read it`() {
+        // GET /api/sync/export answers Body.FromFile(…, once = true): its name deleted as it is opened to be sent.
+        val sent = folder.newFile(".sent-bbbbbbbbbbbbbbbb.caracole").apply { writeBytes(ByteArray(4096) { 7 }) }
+        val copied = Exports.copy(files {
+            Response(200, Body.FromFile(sent, sent.length(), once = true), mutableListOf(
+                "Content-Type" to "application/vnd.caracole+zip",
+                "Content-Disposition" to "attachment; filename=\"Phone-10-11-26.caracole\""))
+        }, "$origin/api/sync/export?export=bbbbbbbbbbbbbbbb", folder.newFolder("exports"))
+        val got = assertIs<Exports.Copied.File>(copied)
+        assertEquals(4096L, got.file.length(), "the copy for the share sheet is whole")
+        assertFalse(sent.exists(), "the server's file, sent once, is deleted as it is read")
+    }
 }
