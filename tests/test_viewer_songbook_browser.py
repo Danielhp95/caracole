@@ -110,3 +110,29 @@ def test_two_tabs_of_one_songbook_keep_each_songs_own_settings(tmp_path):
     assert one == ["#song-1", "+2"] and two == ["#song-2", "−1"]
     assert back == ["#song-1", "+2"], back  # song 1 as it was left
     assert again == ["#song-2", "−1"], again  # and song 2
+
+
+@pytest.mark.parametrize("where", ["file", "served"])
+def test_a_reload_on_a_song_on_its_own_instrument_keeps_the_players_for_the_songs_after(tmp_path, where):
+    """A set list's song on its own instrument (the ukulele), the player on the piano: reloaded there (F5, a tab the
+    browser restores), the song is on its own still, and the songs after it on the player's, never the song's own."""
+    songs = [BookSong("One", "Synthetic", cho=SONG, id="aaaa"),
+             BookSong("Two", "Synthetic", cho=IN_E, id="bbbb", start="t=0&inst=ukulele"),
+             BookSong("Three", "Synthetic", cho=THREE, id="cccc")]
+    html = build_songbook("Campfire", songs)
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(html, encoding="utf-8")
+    with served({"/_songbooks/Campfire/songbook.html": (html, songbook_csp)}) if where == "served" \
+            else nullcontext() as site:
+        page = site + "/_songbooks/Campfire/songbook.html" if site else path.as_uri()
+        with open_viewer(tmp_path, page + "#song-1") as b:
+            choose(b, "Piano")  # the player's instrument
+            to_song(b, 2)  # its own: the ukulele
+            two = b.js(SETTINGS)
+            reload(b)
+            again = b.js(SETTINGS)
+            to_song(b, 3)
+            three = b.js(SETTINGS)
+    assert two["chips"][1][1] == "true" and again["chips"][1][1] == "true"  # the ukulele, its own
+    assert three["chips"][4][1] == "true", three["hash"]  # the piano: the player's

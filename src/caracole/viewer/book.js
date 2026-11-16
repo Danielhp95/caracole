@@ -51,8 +51,19 @@
   harvest();
   // The player's instrument: the one the song came with in its address (carried from the song before; none where the
   // browser keeps it), or the last one chosen here by hand; and the one the song's own version names, if any, which
-  // it opens on (viewer.js), its own alone.
-  let player = new URLSearchParams(hash).get("inst"), ownInst = null;
+  // it opens on (viewer.js), its own alone. On such a song the address's inst= is the song's own once the viewer has
+  // written it, so the player's goes on beside it (player=), for a reload there where the browser keeps nothing.
+  const given = new URLSearchParams(hash);
+  let player = given.has("player") ? given.get("player") : given.get("inst"), ownInst = null;
+  const notePlayer = () => {
+    if (ownInst === null || player === null) return;
+    try {
+      const to = new URLSearchParams(location.hash.slice(1));
+      if (to.get("player") === player) return;
+      to.set("player", player);
+      history.replaceState(null, "", "#" + to.toString());
+    } catch (err) { /* an address the page can't change */ }
+  };
 
   // The songs' names (their titles, their artists') in the characters the viewer shows the Chinese in, Simplified at
   // first: its Chinese characters, kept for every page (localStorage), else trad=1 in the address, which carryScreen
@@ -110,8 +121,11 @@
       data.textContent = JSON.stringify(song);
       ownInst = new URLSearchParams(String(song.start || "")).get("inst");
     } catch (err) { /* the viewer says so */ }
+    notePlayer();
     document.addEventListener("change", (e) => {
-      if (e.target instanceof HTMLSelectElement && e.target.id === "insts") player = e.target.value;
+      if (!(e.target instanceof HTMLSelectElement && e.target.id === "insts")) return;
+      player = e.target.value;
+      notePlayer();
     });
     const title = current.querySelector("h2.title");
     const name = document.querySelector(".book-head h1");
@@ -165,7 +179,8 @@
     const at = String(from || "").indexOf("#");
     const was = new URLSearchParams(at >= 0 ? from.slice(at + 1) : "");
     const to = new URLSearchParams(location.hash.slice(1));
-    let changed = false;
+    let changed = to.has("player");  // the song's own address alone holds it (notePlayer)
+    to.delete("player");
     for (const name of SCREEN) {
       const kept = name === "inst" && ownInst !== null ? player : was.get(name);
       if (to.get(name) === kept) continue;
