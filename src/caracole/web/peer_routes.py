@@ -57,7 +57,8 @@ from caracole import peer_push
 from caracole.web.app import Response, Route, WebApp, json_response
 from caracole.web.pages import Refused
 
-PEER_PULL = "peer-pull:"  # a pull's job key: the address it takes from after it, so a second one joins it
+PEER_PULL = "peer-pull:"  # a pull's job key: the address it takes from, then its units, so the same pull asked again
+# is the one queued, and another from that address a job of its own, after it
 PEER_PUSH = "peer-push:"  # a push's take's job key: the id of the caracole that pushed after it
 MAX_UNITS = 5000  # a pull's units at most: a library's every unit, many times over
 SQLITE = "application/vnd.sqlite3"
@@ -157,19 +158,27 @@ def song_file(app: WebApp, params: dict[str, str]) -> Response:
 
 
 def pull(app: WebApp, form: dict[str, str]) -> Response:
-    """``POST /peer/pull``: ``caracole peer pull`` of the units the form names from the caracole at ``from``, queued."""
+    """``POST /peer/pull``: ``caracole peer pull`` of the units the form names from the caracole at ``from``, queued:
+    a line a unit, ``THERE HERE UNIT`` as the asker compared it (``peer_sync.pull_line``: so that the pull leaves one
+    changed on either side since), or a unit alone. The same pull asked again is the one queued; another from that
+    address, a job of its own."""
+    import hashlib
+
     from caracole import peer_sync as sync
 
     try:
         address = sync.peer_address(form.get("from", ""))
     except sync.PeerError as e:
         raise Refused(400, "Not an address", str(e)) from None
-    units = [u.strip() for u in form.get("units", "").splitlines() if u.strip()]
-    if not units or len(units) > MAX_UNITS or any("/" not in u or len(u) > 1000 for u in units):
+    lines = [u.strip() for u in form.get("units", "").splitlines() if u.strip()]
+    units = [sync.read_pull_line(u) for u in lines]
+    if not units or len(units) > MAX_UNITS or any(u is None or len(u[0]) > 1000 for u in units):
         raise Refused(400, "No units", "Which units? The form names none we can take.")
+    args = tuple(f"--unit={sync.pull_arg(*u)}" for u in units)
     steps = [(f"Taking {len(units)} {'change' if len(units) == 1 else 'changes'} from {address}",
-              ("peer", "pull", *(f"--unit={u}" for u in units), "--", address))]
-    job, _ = app.submit(f"Share with {address}", PEER_PULL + address, steps, display=address, join=False)
+              ("peer", "pull", *args, "--", address))]
+    key = PEER_PULL + address + "\x1f" + hashlib.sha256("\n".join(args).encode()).hexdigest()
+    job, _ = app.submit(f"Share with {address}", key, steps, display=address, join=False)
     return app.queued(job)
 
 

@@ -266,8 +266,27 @@ def test_with_its_address_a_sync_asks_there_to_take_what_goes_there(two):
     assert "Asked http://localhost:8737 to take 1 from http://192.168.1.10:8737" in result.output
     assert ("POST", "/peer/pull") in asked
     job = there.app.queue.snapshot()[0]
-    assert [list(s.args) for s in job.steps] == [["peer", "pull", f"--unit=song/{mine.key}", "--",
+    digest = here.units()[f"song/{mine.key}"].digest  # as compared: this side's, and none there
+    assert [list(s.args) for s in job.steps] == [["peer", "pull", f"--unit={digest}:-:song/{mine.key}", "--",
                                                   "http://192.168.1.10:8737"]]
+
+
+def test_a_pull_as_compared_leaves_a_unit_changed_on_either_side_since(two):
+    here, there, _, _ = two
+    theirs = there.song()
+    unit = f"song/{theirs.key}"
+    digest = there.units()[unit].digest
+    result = run(here, "peer", "pull", HOST, f"--unit={'0' * 64}:-:{unit}")  # changed there since compared
+    assert result.exit_code == 1 and f"Left {unit}: changed there since compared" in result.output
+    here.song(sheet=b"[C]Creep, mine")  # changed here since compared: none here then
+    result = run(here, "peer", "pull", HOST, f"--unit={digest}:-:{unit}")
+    assert result.exit_code == 1 and f"Left {unit}: changed here since compared" in result.output
+    assert here.units()[unit].digest != digest  # the change made here since kept
+    mine = here.units()[unit].digest
+    result = run(here, "peer", "pull", HOST, f"--unit={digest}:{mine}:{unit}")
+    assert result.exit_code == 0, result.output
+    assert here.units()[unit].digest == digest
+    assert run(here, "peer", "pull", HOST, "--unit=x:-:song/a").exit_code == 2
 
 
 def test_without_its_address_a_sync_says_what_to_run_there(two):

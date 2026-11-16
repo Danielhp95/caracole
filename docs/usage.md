@@ -5890,7 +5890,9 @@ the other to take what goes there: a request queued in its Journal ("Share with 
 `caracole peer pull` line to run there.
 
 **`caracole peer pull`** takes the units named (as `diff --json` names them: `song/<key>`, `songbook/<name>`…)
-from there. It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
+from there; `--unit THERE:HERE:ID` names one as it was compared, its digest there and here (`-` for none), so that
+it is left if either side changed it since (`sync --here` asks there to pull so, and a second sync's pull from the
+same address is queued after the first). It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
 in `state_dir/backups/`), and for each unit asks there for it whole; a unit no longer as it was compared, one whose
 answer lacks what caracole reads, or a file that changed there since caracole kept it, is left as it is here, and it
 says why (exit 1). A song taken gets its wanted.txt line, its versions and kept files (each checked by its SHA-256),

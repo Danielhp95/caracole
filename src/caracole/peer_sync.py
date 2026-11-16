@@ -90,6 +90,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 import stat
@@ -883,6 +884,46 @@ STATE_PATH = "/api/peer/state"
 UNIT_PATH = "/api/peer/unit"
 FILE_PATH = "/api/peer/file"
 PULL_PATH = "/peer/pull"
+_DIGEST = r"(?:[0-9a-f]{64}|-)"
+_PULL_LINE = re.compile(rf"({_DIGEST}) ({_DIGEST}) ([^\s/][^/]*/.*)")  # POST /peer/pull's line: as compared
+_AS_COMPARED = re.compile(rf"({_DIGEST}):({_DIGEST}):([^:/]+/.*)")  # caracole peer pull --unit's
+
+
+def pull_line(unit: str, there: str | None, here: str | None) -> str:
+    """A unit of ``POST /peer/pull``'s form, as the asker compared it: ``THERE HERE UNIT``, its digest on the side
+    that gives it (``there`` to the side that takes it) and on the side that takes it, ``-`` for none."""
+    return f"{there or '-'} {here or '-'} {unit}"
+
+
+def read_pull_line(line: str) -> tuple[str, str | None, str | None] | None:
+    """``(unit, there, here)`` of a line of ``POST /peer/pull``'s form: ``THERE HERE UNIT`` (``pull_line``), or a
+    unit alone (its digests None: taken as it is there); None for a line that is neither."""
+    named = _PULL_LINE.fullmatch(line)
+    if named is not None:
+        there, here, unit = named.groups()
+        return unit, None if there == "-" else there, None if here == "-" else here
+    first = line.split(" ", 1)[0]
+    if "/" not in first or ":" in first.partition("/")[0]:
+        return None
+    return line, None, None
+
+
+def pull_unit(value: str) -> tuple[str, str | None, str | None] | None:
+    """``(unit, there, here)`` of a ``caracole peer pull --unit``: ``THERE:HERE:UNIT`` as compared, or a unit
+    alone; None for a value that is neither (a kind never holds ``:``)."""
+    named = _AS_COMPARED.fullmatch(value)
+    if named is not None:
+        there, here, unit = named.groups()
+        return unit, None if there == "-" else there, None if here == "-" else here
+    if "/" not in value or ":" in value.partition("/")[0]:
+        return None
+    return value, None, None
+
+
+def pull_arg(unit: str, there: str | None, here: str | None) -> str:
+    """``caracole peer pull``'s ``--unit`` value of a unit as compared (``pull_unit`` reads it); a unit alone for
+    one with neither digest given."""
+    return unit if there is None and here is None else f"{there or '-'}:{here or '-'}:{unit}"
 INDEX_PATH = "/api/peer/index"
 INDEXES_PATH = "/api/sync/indexes"
 PEER_TIMEOUT = 60.0  # seconds: a phone's caracole reads every song of its library to answer
@@ -1049,14 +1090,17 @@ class Peer:
                 if isinstance(site, str) and isinstance(entry, Mapping) and type(entry.get("tabs")) is int
                 and (entry.get("read") is None or isinstance(entry.get("read"), str))}
 
-    def ask_to_pull(self, here: str, units: Sequence[str], token: str) -> int:
-        """Ask it to take ``units`` from this side, at ``here`` (an address it can reach): its form posted with its
-        form token (``PeerState.token``), as its own page posts one; return the number of its job (0 unknown)."""
+    def ask_to_pull(self, here: str, units: Sequence[tuple[str, str | None, str | None]], token: str) -> int:
+        """Ask it to take ``units`` from this side, at ``here`` (an address it can reach), each ``(unit, this side's
+        digest, its digest)`` as compared, so that it leaves one changed on either side since (``pull_line``): its
+        form posted with its form token (``PeerState.token``), as its own page posts one; return the number of its
+        job (0 unknown)."""
         import httpx
 
+        lines = "\n".join(pull_line(unit, mine, theirs) for unit, mine, theirs in units)
         try:
             response = self._client.post(
-                self.address + PULL_PATH, data={"csrf": token, "from": here, "units": "\n".join(units)},
+                self.address + PULL_PATH, data={"csrf": token, "from": here, "units": lines},
                 headers={"Origin": self.address, "Sec-Fetch-Site": "same-origin", "Accept": "application/json"})
         except httpx.HTTPError as e:
             raise PeerError(f"{self.address} stopped answering: {e}") from None
