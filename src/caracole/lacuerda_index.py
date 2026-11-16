@@ -71,6 +71,7 @@ from caracole.http import (
     ProviderError,
     ProviderUnavailable,
     cached_answer,
+    read_once_more,
 )
 from caracole.lacuerda import (
     BASE_URL,
@@ -454,8 +455,10 @@ def _read(conn: sqlite3.Connection, client: Client, name: str, now: datetime,
             conn.execute("DELETE FROM lacuerda_index WHERE page = ?", (name,))
             _record(conn, name, {"checked_at": stamps.stamp(now), "gone": True})
         return ()
-    listing = parse_listing_page(resp.text, url=url)
-    _store(conn, name, listing, validators, now)
+    # A copy the cache holds cut short (a 304 hands it back) is asked for once more, past the cache.
+    listing, resp = read_once_more(client, resp, url, lambda r: (parse_listing_page(r.text, url=url), r),
+                                   LaCuerdaParseError, accept=_ACCEPT)
+    _store(conn, name, listing, _validators(resp.headers), now)
     _artist_pages_cached(conn, client, listing.artists)
     on_read()
     return listing.pages

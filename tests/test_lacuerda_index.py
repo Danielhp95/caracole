@@ -627,3 +627,22 @@ def test_an_artist_page_in_the_cache_is_put_in_the_index_with_no_request(conn, t
     kv_set(conn, li.COMPLETE_KEY, "2026-10-19T03:00:00Z")
     li.index_pass(conn, cold, NOW)
     assert site.requests == [] and len(songs_of(conn, "soda_stereo")) == 14
+
+
+def test_a_listing_cached_cut_short_is_asked_for_once_more_past_the_cache_when_the_site_answers_304(conn, tmp_path):
+    # One bad night a listing page's body stops early, under the page's own Last-Modified, and is cached as any 200:
+    # the next night's conditional request is answered 304, and the cut-short copy is asked for once more,
+    # unconditionally, rather than read again (and failed) every night until LaCuerda changes the page.
+    site = site_with(e=[E1, E2], s=[S1])
+    status, whole, headers = site.pages[E_PAGES[0]]
+    site.pages[E_PAGES[0]] = (status, whole[: len(whole) // 2], headers)
+    with pytest.raises(ProviderError):
+        refresh(site, conn, tmp_path)
+    site.pages[E_PAGES[0]] = (status, whole, headers)
+    site.requests.clear()
+    site.conditional.clear()
+    refresh(site, conn, tmp_path, NOW + timedelta(days=1))
+    assert site.requests.count(E_PAGES[0]) == 2  # the 304, then the page whole
+    assert E_PAGES[0] in site.conditional
+    assert len(artists(conn)) == 7
+    assert li.complete_at(conn) == NOW + timedelta(days=1)
