@@ -67,6 +67,16 @@ class WorkingTest {
         assertNull(Working.lineOf(queue.snapshot()), "nothing waits or runs")
     }
 
+    @Test
+    fun `a file's import is named as itself, never as sharing logs with a computer`() {
+        // SyncFileRoutes' import: a job of kind "sync" displayed "Sync with a file from <name>".
+        val gate = CompletableDeferred<Unit>()
+        val job = submit("sync", "Sync with a file from Desk", gate)
+        running(job.id)
+        assertEquals("Sync with a file from Desk…", Working.lineOf(queue.snapshot()))
+        gate.complete(Unit)
+    }
+
     /** A lookup's job of its real commands ([JobCommands]'s), run by [lookups]' runners, until its gate opens. */
     private fun lookup(title: String, key: String, display: String, commands: List<Command>,
                        gate: CompletableDeferred<Unit>): Job {
