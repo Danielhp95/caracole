@@ -142,9 +142,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
             song to if (confirmed) null else RemovalQuestion.data(db, song)
         }
         if (question != null) {
-            val brief = ((question["removal"] as JsonObject)["brief"] as JsonPrimitive).content
-            return MessagePage.page(200, "Remove ${song.display}?", "$brief ${RemovalQuestion.AFTER}")
-                .also { it.data = question }
+            return RemovalQuestion.page(song, question, form["csrf"].orEmpty(), back, libraryAt(back, song.id))
         }
         if (form["key"] != song.key) {
             throw Refused(409, "Not that song", "The logbook changed since this page was made: nothing removed. " +
