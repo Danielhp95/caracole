@@ -84,14 +84,14 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   line-height: 1.2; text-transform: uppercase; }
 .app a { display: inline-block; padding: 4px 0; text-decoration: none; }
 @media (hover: hover) { .app a:hover { text-decoration: underline; text-underline-offset: 3px; } }
-.app .mark { flex: none; width: auto; height: 1.5em; }
+.app .mark { flex: none; width: auto; height: 1.5em; color: var(--text); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .navlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); text-decoration: none; font-weight: 600; }
 .navlink:hover { border-color: var(--border-strong); }
 .navlink .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
   font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
-/* The header of the pages caracole serve writes itself (web/top.py): the "¿" and the name, which lead home, the page's
+/* The header of the pages caracole serve writes itself (web/top.py): the logo and the name, which lead home, the page's
    title after them, its links at the end, all one line; a muted line under it for what the page is of. On a phone the
    mark alone leads, a thumb's target. */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 14px 0 6px; }

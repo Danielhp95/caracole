@@ -388,7 +388,7 @@ Below the table, a section for each step whose modules have more to say.
 | inline.py | what a page holds inline: a script or a style by its hash, a JSON data block; the standard library alone |
 | pdf_fonts.py | the fonts every PDF is set in (below) |
 | page_log.py | the library page's line in the log, one a build (below) |
-| page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
+| page_icon.py | caracole's logo (docs/logo/) drawn in SVG, its black and its copper traced by docs/logo/trace.py: every page's tab (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`) and bar (`mark`); the standard library alone |
 | library_name.py | which library a page shows (below) |
 | overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
 | library.py | song folders, safe file access in the synced library |
@@ -595,7 +595,7 @@ Below the table, a section for each step whose modules have more to say.
 - Which library a page shows (`LibraryName`): its name after caracole's in the header and the tab's title of
   index.html and every page caracole serve writes itself (top.py, pages.py, lookup_page.py, guitar_page.py:
   `WebApp.library_name`).
-- On caracole serve's alone, a badge for a library that isn't the owner's usual one, with the "¿" in its colour
+- On caracole serve's alone, a badge for a library that isn't the owner's usual one, with the logo on its colour
   (`scratch_badge`, once at start):
   - `caracole serve --label`, else `SCRATCH` for a config file, library folder or state folder in a temporary folder;
   - never the NixOS or Ubuntu service's /var/lib/caracole nor a library run by hand at home: test_library_name.py;
@@ -747,7 +747,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 It is rows.js's, shared by both pages:
 
 - `countMarks`: under the box, in the bar kept at the top, what each site found:
-  - your songs' count by the page's "¿", then a mark of `looked`'s and a count a site, its songs as the lines show
+  - your songs' count by the page's logo, then a mark of `looked`'s and a count a site, its songs as the lines show
     them (`foundOn`; the library page's, library.js `foundNow`, with those "+ N more" listed since);
   - 0 quieter, a state in a colour and a glyph, never a colour alone, no control.
 - `countsSaid`: the counts in words, the line's live region and the box's description, a screen reader's alone while
@@ -1255,6 +1255,10 @@ It is rows.js's, shared by both pages:
   superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 - screenshots/: the README's pictures, of a demo library of public-domain songs, and make.py, which builds that
   library with no request and takes them again (its docstring says how): retake them when the pages they show change.
+- logo/: caracole's logo, its masters (caracole_icon.png, the project's and every page's, with a small copy for the
+  README; app_logo.png, the Android app's launcher icon) and trace.py, which traces a master's black and copper into
+  page_icon.py's paths or the launcher icon's (`drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`):
+  trace them again when a master changes.
 - superpowers/plans/2026-11-03-android-port-m1-m3.md and 2026-11-03-android-port-m4-m6.md: the Kotlin port's plans
   for milestones 1–3 and 4–6, their lanes and their interfaces; plans/2026-11-03-sync-redesign.md with
   specs/2026-11-03-sync-redesign-design.md, the sync sheet and the `.caracole` file;

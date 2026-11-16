@@ -85,7 +85,7 @@ object GuitarPage {
     }
 
     /**
-     * top.py's header: the "¿" and caracole's name, which lead home, the library's name and its badge, the page's
+     * top.py's header: the logo and caracole's name, which lead home, the library's name and its badge, the page's
      * [title] after them and its [links] at the end, named [label] to a screen reader; [sub], a muted line under it,
      * markup the caller has escaped.
      */

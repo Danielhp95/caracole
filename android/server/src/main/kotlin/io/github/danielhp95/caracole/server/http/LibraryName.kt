@@ -26,7 +26,7 @@ data class LibraryName(val name: String, val badge: String? = null) {
         return "<$tag class=\"libname\"><span class=\"name\">${PyText.escape(name)}</span>$shown</$tag>"
     }
 
-    /** The page's icon, for its head: caracole's, or with a badge the same "¿" in the badge's colour. */
+    /** The page's icon, for its head: caracole's, or with a badge the same logo on the badge's colour. */
     fun icon(): String = if (!badge.isNullOrEmpty()) PageIcon.scratchLink else PageIcon.link
 
     companion object {

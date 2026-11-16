@@ -1125,7 +1125,7 @@ const caracoleRows = (icons, does) => {
   };
   // Where caracole looked (``looked``: a site each, its ``source``, ``name``, ``state``, ``label`` and one line of
   // ``detail``) and what it found there, as the row of marks under a search box (countMarks): your songs first, by
-  // the page's own mark ("¿"), then each site's (sourceMark), in the order caracole searches them, and the count beside
+  // the page's own logo, then each site's (sourceMark), in the order caracole searches them, and the count beside
   // it (foundOn): in the text's colour where it found some, muted where it found none, and where it wasn't searched
   // none, and its state in a glyph as well as a colour, never in a colour alone: amber and a pie with a slice cut where
   // its index is read in part, red and a ban where it blocks caracole, "off" on a dashed edge turned off, a dashed edge
@@ -1206,8 +1206,8 @@ const caracoleRows = (icons, does) => {
       const item = el("li", "count-mark yours");
       Object.assign(item.dataset, { source: "library", state: "done" });
       item.title = said;
-      const page = document.querySelector("svg.mark");  // the page's own "¿", in its bar
-      const mark = page ? page.cloneNode(true) : el("span", "source letters", "¿");
+      const page = document.querySelector("svg.mark");  // the page's own logo, in its bar
+      const mark = page ? page.cloneNode(true) : el("span", "source letters", "c");
       mark.setAttribute("class", page ? "yours-mark" : "source letters");
       item.appendChild(named(mark, said));
       countOf(item, yours);

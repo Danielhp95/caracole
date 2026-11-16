@@ -16,7 +16,7 @@ internal fun caracoleResource(name: String): String {
 }
 
 /** page_icon.py's marks, from caracole/page/icon.json: the tab's icon ([link]; [scratchLink], its colour for a
- * library with a badge), the browser's /favicon.ico ([svg]) and the bar's "¿" ([mark]). */
+ * library with a badge), the browser's /favicon.ico ([svg]) and the bar's logo ([mark]). */
 object PageIcon {
     private val icons: JsonObject by lazy { Json.parseToJsonElement(caracoleResource("caracole/page/icon.json")).jsonObject }
 
@@ -80,7 +80,7 @@ object MessagePage {
             "${name.icon()}<title>${PyText.escape(name.title(title))}</title>\n<style>$style</style>\n</head>\n<body>\n" +
             "<div class=\"page\">\n${top(title, name)}$body\n</div>\n</body>\n</html>\n"
 
-    /** top.py's header: the "¿" and caracole's name, which lead home, the library's, and the page's title. */
+    /** top.py's header: the logo and caracole's name, which lead home, the library's, and the page's title. */
     private fun top(title: String, name: LibraryName): String =
         "<header class=\"top\">\n" +
             "  <a class=\"app\" href=\"/\">${PageIcon.mark}<span class=\"word\">caracole</span></a>\n" +

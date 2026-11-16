@@ -242,7 +242,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
    else its letters) and its count, in the text's colour where it found some; quieter where it found none, the pill
    unfilled, the icon grey, the count muted. Its state in a glyph as well as a colour: amber and a pie with a slice cut
    in part, red and a ban blocked, "off" on a dashed edge turned off, a dashed edge where its index is empty yet. Your
-   songs first, by the page's "¿". The row wraps a pill at a time on a narrow screen. A mark is no control: its
+   songs first, by the page's logo. The row wraps a pill at a time on a narrow screen. A mark is no control: its
    tooltip says why. While the next answer comes the row is dimmed (.busy), and while the marks show, the words beside
    them (the counts said, "Searching the sites…") are a screen reader's alone (.counted). */
 .counts-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
@@ -257,7 +257,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .count-mark .source { width: 16px; height: 16px; vertical-align: 0; }
 .count-mark .source.letters { width: auto; min-width: 18px; height: 16px; padding: 0 2px; border-radius: 4px;
   font-size: 9px; }
-.count-mark .yours-mark { flex: none; width: auto; height: 15px; color: var(--accent); }
+.count-mark .yours-mark { flex: none; width: auto; height: 15px; color: var(--text); }
 .count-mark svg.glyph { flex: none; width: 12px; height: 12px; stroke-width: 2.6; }
 .count-mark[data-n="0"] { background: transparent; color: var(--muted); font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--border); }

@@ -2357,12 +2357,12 @@ as another spelling.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. Its browser tab shows caracole's mark, an
-inverted question mark (¿) on its rust-red square, drawn inside the page itself,
+loads nothing from the network. Its browser tab shows caracole's logo, a
+black-and-copper scroll on its cream square, drawn inside the page itself,
 as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
-well within the first screen, on a phone too: caracole's "¿" mark and name, then
+well within the first screen, on a phone too: caracole's logo and name, then
 the library's (caracole.toml's `name`, one line of 80 characters at most, else
 the library folder's name: "Tabs"), which the browser tab's title says too
 ("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
@@ -3896,7 +3896,7 @@ header and in the browser tab's title ("caracole · Tabs", "Look up · caracole 
 Tabs"), as `index.html` does. A server of a library that isn't your usual one
 says so on every page it writes itself, with a badge beside the name, first in
 each title ("Scratch library · caracole · test-lib") and on a line of its own
-under the header on a phone, and the tab's "¿" in the badge's amber, so that
+under the header on a phone, and the tab's logo on the badge's amber, so that
 its pages are never taken for your library's. It prints the badge when it
 starts. How it knows:
 
@@ -4024,7 +4024,7 @@ the library, sent as they are: they carry no badge.
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching sites" until the first answer comes.
   Then it is a row of marks, one a place searched, each with how many songs it
-  found there: your songs first (the results' own, by caracole's "¿"), then
+  found there: your songs first (the results' own, by caracole's logo), then
   Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore, harptabs.com and
   gametabs.net, each by its own icon (else its letters: UG, GT, LC, MS, HT,
   GM). A site counts its songs as the results' lines show them (those "+ N
