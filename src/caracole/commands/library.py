@@ -120,7 +120,7 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
     from caracole.review import ReviewStats, accept, candidates_of, ref, reject, search_candidates, writes_alias
     from caracole.songs import get_song, list_songs
 
-    with exclusive(cfg, "review"):
+    with exclusive(cfg, "review", interactive=True):  # an answer given now
         overrides = load_ovr(cfg)
         conn = open_db(cfg)
         song = _song_named(conn, display)

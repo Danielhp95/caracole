@@ -145,7 +145,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
         fail(f"caracole takes no audio from YouTube here: {problem}{hint}")
     # Under caracole's lock from the start: overrides.toml is in the library, and a run this waited
     # for may have been blocked meanwhile.
-    with exclusive(cfg, "youtube"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "youtube", interactive=display is not None), closing(open_db(cfg)) as conn:
         if display is not None and url is not None:
             try:
                 add_youtube(cfg.overrides_file, display, url)
@@ -272,7 +272,7 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
         end(f"{NOT_SEARCHED}no YouTube sheets here ({problem}).")
         return
     say("video", "running", "asking YouTube")
-    with exclusive(cfg, f"youtube --search {query}"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"youtube --search {query}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = search_gate(cfg, conn, query, on_screen=False, now=now)
         if said is not None and said.asked is not None:
@@ -348,7 +348,7 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
         typer.echo(line)
 
     say("video", "running", "asking YouTube")
-    with exclusive(cfg, f"youtube --video {video_id}"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"youtube --video {video_id}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = video_gate(cfg, conn, video_id, now)
         if said.asked is not None:
@@ -440,7 +440,7 @@ def _decline(cfg: Config, display: str) -> None:
     from caracole.songs import find_song
     from caracole.youtube_fetch import tidy
 
-    with exclusive(cfg, "youtube"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "youtube", interactive=True), closing(open_db(cfg)) as conn:
         try:
             add_youtube(cfg.overrides_file, display, "none")
         except OverridesError as e:

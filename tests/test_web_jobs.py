@@ -620,6 +620,42 @@ def test_the_runner_runs_the_caracole_command_line(tmp_path, monkeypatch):
     assert any("No song" in line for line in lines), lines
 
 
+
+@pytest.mark.slow
+def test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run(tmp_path, monkeypatch):
+    # serve runs its commands one at a time: an add (a request without Fetch) waiting for the run as bulk work
+    # does would hold every lookup queued after it until the run's end. It waits as a lookup does instead, so
+    # the run hands the lock over at its next pause, to it and then to the lookup.
+    import time
+
+    from caracole.commands import _common
+    from caracole.config import load_config
+
+    src = Path(__file__).resolve().parents[1] / "src"
+    monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")  # a dead end: the lookup reaches no site
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'library_dir = "{tmp_path / "lib"}"\nstate_dir = "{tmp_path / "state"}"\n'
+                      f'cache_dir = "{tmp_path / "cache"}"\nmusic_dir = "{tmp_path / "music"}"\n', encoding="utf-8")
+    cfg = load_config(config, env={"HOME": str(tmp_path / "home")})
+    queue = JobQueue(CaracoleRunner(config, python=sys.executable))
+    ended = ("done", "failed")
+    with _common.exclusive(cfg, "run"):  # the nightly run holds caracole's lock, and pauses between requests
+        queue.start()
+        try:
+            add, _ = queue.submit("Add Radiohead - Creep", "radiohead/creep", add_steps("Radiohead", "Creep"))
+            get, _ = queue.submit("Fetch Muse - Uprising", "muse/uprising", lookup_steps("Muse", "Uprising"),
+                                  fetching=True)
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline and queue.job(get.id).state not in ended:
+                _common.hand_over(cfg)  # each of the run's pauses
+                time.sleep(0.05)
+            states = (queue.job(add.id).state, queue.job(get.id).state in ended)
+        finally:
+            queue.stop()
+    assert states == ("done", True), [step.output for step in queue.job(add.id).steps]
+
 @pytest.mark.slow
 def test_the_child_never_imports_a_module_from_the_folder_it_runs_in(tmp_path, monkeypatch):
     # `cd ~/Tabs && caracole serve`: a typer.py dropped into the synced library must not run.

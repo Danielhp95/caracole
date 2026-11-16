@@ -223,7 +223,7 @@ def add_song(
         fail(f"can't update {path}: {e.strerror or e}")
     pick = None
     try:
-        with exclusive(cfg, "add", fatal=False):
+        with exclusive(cfg, "add", fatal=False, interactive=True):  # asked for now
             # overrides.toml is in the library: the pick is written under the lock, as its other writers do.
             pick = _record_lacuerda(cfg, line, lacuerda) if lacuerda is not None else None
             with nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn:

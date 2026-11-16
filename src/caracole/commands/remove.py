@@ -72,7 +72,7 @@ def _remove(cfg: Config, text: str, *, yes: bool) -> None:
             if not typer.confirm("Remove it?", default=False):
                 typer.echo("Nothing was removed.")
                 return
-        with exclusive(cfg, "remove"):
+        with exclusive(cfg, "remove", interactive=True):  # asked for now
             _remove_now(conn, cfg, song.key)
 
 

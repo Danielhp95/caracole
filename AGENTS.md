@@ -3000,6 +3000,13 @@ picks one).
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
 - `caracole versions --keep`, `--keep-more` and `--clear` (which writes overrides.toml under it) wait so too, and
   `--choose` through get.
+- So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
+  serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
+  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
+  (`test_commands_lock.py::test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt`,
+  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`). A process holding
+  the lock as a lookup hands it to no other (`hand_over`), since the run waiting to take it back would take it first.
+  The phone has no lock and no nightly run, so its queue needs none of this.
 - Every changing `caracole songbook` command (make, add, remove, move, set, rename, delete, render:
   commands/songbook.py) waits the same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).

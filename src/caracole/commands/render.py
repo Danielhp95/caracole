@@ -70,7 +70,7 @@ def register(app: typer.Typer) -> None:
         if version is not None and not mine:
             _export(cfg, overrides, song, version)
             return
-        with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "render", interactive=bool(song)), closing(open_db(cfg)) as conn:
             if mine:
                 _make_mine(conn, cfg, overrides, song, version)
                 overrides = load_ovr(cfg)
@@ -119,7 +119,7 @@ def _export(cfg, overrides, song_name: str, query: str) -> None:
     """``--version``: the one export, then the pages, which list it."""
     from caracole.render import RenderError, export_sheet, export_traditional, export_version, render_version
 
-    with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "render", interactive=True), closing(open_db(cfg)) as conn:
         song = song_named(conn, song_name, overrides)
         try:
             v = export_version(query, export_sheet(conn, cfg, song).own(overrides))
