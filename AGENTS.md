@@ -2821,8 +2821,8 @@ picks one).
 - A song's lyrics are missing only once every site asked answered a miss:
   - LRCLIB's miss;
   - then Megalobiz's (a search with no result that fits, or a record gone, 404), which asks again after 30 days; an
-    error there puts a song LRCLIB missed back to pending, and a song LRCLIB failed on is never missing whatever
-    Megalobiz answers (`test_megalobiz_fetch.py::test_an_error_on_a_song_lrclib_missed_puts_it_back_to_pending`);
+    error, a block or a spent budget there (`provider_pass.each_song`'s `on_cut`) puts a song LRCLIB missed back to
+    pending, and a song LRCLIB failed on is never missing whatever Megalobiz answers (`test_megalobiz_fetch.py::test_an_error_on_a_song_lrclib_missed_puts_it_back_to_pending`);
   - AZLyrics the same way, after Megalobiz, its miss a 404 or a page that doesn't list the song
     (`test_azlyrics_fetch.py::test_an_error_on_a_song_the_others_missed_puts_it_back_to_pending`).
 - On gtptabs.com only an artist page that answered without a candidate is a miss, asked about again after 30 days.
