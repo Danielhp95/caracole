@@ -241,7 +241,7 @@ class _Sheet:
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
             message = (f"{e}\nNo more yt-dlp runs until {until} (block #{state.strikes}). Nothing was marked "
                        "missing.")
-            alert_block(self.cfg, PROVIDER, message)
+            alert_block(self.cfg, PROVIDER, message, strikes=state.strikes)
             return "skipped", f"YouTube turned us back; waiting until {until}"
         finally:
             self.result.requests[PROVIDER] = runner.requests_made
@@ -312,7 +312,7 @@ class _Sheet:
         except ProviderBlocked as e:
             state = record_block(self.conn, provider, self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            alert_block(self.cfg, provider, f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
+            alert_block(self.cfg, provider, f"{e}\nNo more requests to it until {until} (block #{state.strikes}).", strikes=state.strikes)
             return "skipped", f"{name} turned us back; waiting until {until}"
         except BudgetExhausted:
             return "skipped", f"no asks of {name} left; tonight's run asks"
@@ -383,7 +383,7 @@ class _Sheet:
         except ProviderBlocked as e:
             state = record_block(self.conn, "lrclib", self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            alert_block(self.cfg, "lrclib", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
+            alert_block(self.cfg, "lrclib", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).", strikes=state.strikes)
             return "skipped", f"no lyrics yet (LRCLIB turned us back; waiting until {until})"
         finally:
             self.result.requests["lrclib"] = client.requests_made

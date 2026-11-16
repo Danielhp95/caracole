@@ -31,7 +31,7 @@ from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, has_han, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
-from caracole.sites import status_of
+from caracole.sites import keeps_blocking_words, status_of
 from caracole.songs import Song, list_songs
 from caracole.stamps import shown
 from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
@@ -748,6 +748,8 @@ def _health(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[str]:
             status = "errors"  # nothing has worked since the last error
         else:
             status = "OK"
+        if at.state != "off" and (note := keeps_blocking_words(s)):
+            status += f"; {md(note)}"
         err = md(s.last_error) if s.last_error else ""
         if s.last_error_at:
             err += f" ({_fmt(s.last_error_at)})"

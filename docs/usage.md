@@ -1254,6 +1254,12 @@ site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
 That block is the run's too: the run sends that site nothing more, and its
 ntfy message says so, but it is one block, not two in a row.
+Only the first block of a streak sends an ntfy message, in a run and in a
+command alike: the further blocks in a row (each one try, days or weeks apart)
+are said in the run's summary, the command's output and the pages alone. Once
+a site has blocked caracole three times in a row, the Sites tab and the to-do
+page's Provider health say so, and, for a site you can turn off, that
+`[providers.<name>] enabled = false` in caracole.toml stops caracole asking it.
 Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the

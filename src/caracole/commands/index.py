@@ -367,7 +367,7 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
         state = record_block(conn, "ug", now, str(e))
         message = (f"Ultimate Guitar blocked caracole ({e}). No more requests to it until "
                    f"{shown(state.cooldown_until)} (block #{state.strikes}); {_KEPT}.")
-        _common.alert_block(cfg, "ug", message)
+        _common.alert_block(cfg, "ug", message, strikes=state.strikes)
         report.stopped(message, until=state.cooldown_until)
         return outcome
     except BudgetExhausted:

@@ -21,12 +21,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from caracole.config import NO_BUDGET
+from caracole import logs
+from caracole.config import NO_BUDGET, SWITCHABLE
 from caracole.db import kv_get_json, kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 
 if TYPE_CHECKING:
     from caracole.config import Config
+    from caracole.health import ProviderState
 
 
 @dataclass(frozen=True)
@@ -281,13 +283,29 @@ def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetim
     if provider in ("youtube", "ytimg") and (problem := route_problem(cfg)):
         return Status("off", "Off", problem)
     s = get_state(conn, provider)
+    note = keeps_blocking_words(s)
     if s.cooldown_until and now < s.cooldown_until:
         blocks = f"turned back {s.strikes} time{'s' if s.strikes != 1 else ''} in a row"
-        why = f" · {s.last_error}" if s.last_error else ""
-        return Status("cooling", "Waiting out", f"Until {_local(s.cooldown_until)}: {blocks}{why}")
+        said = " · ".join(w for w in (f"Until {_local(s.cooldown_until)}: {blocks}", s.last_error, note) if w)
+        return Status("cooling", "Waiting out", said)
     if s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
-        return Status("errors", "Errors", s.last_error)  # nothing has worked since the last error
+        # nothing has worked since the last error
+        return Status("errors", "Errors", " · ".join(w for w in (s.last_error, note) if w) or None)
     return Status("indexing", "Indexing") if partial else Status("ok", "OK")
+
+
+def keeps_blocking_words(state: ProviderState) -> str | None:
+    """What the Sites tab and the to-do page say of a provider blocked ``health.STREAK`` times in a row or more, a
+    switchable one with the setting that turns it off; None for any other."""
+    from caracole.health import keeps_blocking
+
+    if not keeps_blocking(state):
+        return None
+    said = f"{logs.provider_name(state.provider)} has blocked caracole {state.strikes} times in a row"
+    if state.provider in SWITCHABLE:
+        return (f"{said}: caracole asks it again after each wait; to stop asking it, set "
+                f"[providers.{state.provider}] enabled = false in caracole.toml")
+    return f"{said}: caracole asks it again after each wait"
 
 
 # --- the tab's data -------------------------------------------------------------------------------------------------

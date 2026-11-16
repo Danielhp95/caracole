@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from caracole.db import kv_set, kv_set_json
@@ -1006,6 +1006,14 @@ def test_provider_health_shows_cooldown(conn, cfg):
     assert "## Provider health" in text
     assert "cooling down until 2026-10-19 05:41 UTC" in text
     assert "HTTP 403" in text
+
+
+def test_provider_health_says_a_site_that_keeps_blocking_can_be_turned_off(conn, cfg):
+    for days in (40, 20, 0):
+        record_block(conn, "musescore", NOW - timedelta(days=days), "challenge page")
+    [row] = [line for line in todo(conn, cfg).splitlines() if line.startswith("| musescore |")]
+    assert "cooling down until" in row and "3 times in a row" in row
+    assert "enabled = false" in row
 
 
 def test_sources_status(conn, cfg):

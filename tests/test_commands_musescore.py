@@ -168,6 +168,20 @@ def test_a_musescore_challenge_starts_a_cooldown_and_sends_one_alert(tmp_path, s
     assert STALE not in pages(tmp_path)  # the to-do page shows the cooldown
 
 
+def test_a_block_after_a_block_of_the_same_streak_sends_no_alert(tmp_path, sites):
+    sites.musescore.pages[INDEX] = challenge()
+    seed(tmp_path)
+    conn = open_db(tmp_path)
+    try:  # the streak's first block, its cooldown over
+        record_block(conn, "musescore", datetime(2026, 1, 1, tzinfo=UTC), "musescore: 403: challenge page")
+    finally:
+        conn.close()
+    result = run(tmp_path, ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert "MuseScore blocked caracole" in result.stdout and "block #2" in result.stdout
+    assert sites.ntfy.posts == []
+
+
 def test_musescore_asks_nothing_while_it_cools_down(tmp_path, sites):
     seed(tmp_path)
     conn = open_db(tmp_path)

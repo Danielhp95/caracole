@@ -847,7 +847,7 @@ def _provider_pass[T](
                 f"{e}\nNo more requests to {name} until {shown(state.cooldown_until)} "
                 f"(block #{state.strikes}). Nothing was marked missing."
             )
-            _common.alert_block(cfg, provider, message)
+            _common.alert_block(cfg, provider, message, strikes=state.strikes)
             typer.echo(f"{name} blocked caracole: {message}")
             write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())  # with the cooldown
             return None

@@ -75,7 +75,7 @@ def register(app: typer.Typer) -> None:
                         state = record_block(conn, key, now, str(e))
                         message = (f"{source.name} blocked caracole ({e.message}); no more requests to it until "
                                    f"{state.cooldown_until:%Y-%m-%d %H:%M UTC}, and its badge stands in")
-                        alert_block(cfg, key, message)
+                        alert_block(cfg, key, message, strikes=state.strikes)
                         typer.echo(message)
                         continue
                     finally:

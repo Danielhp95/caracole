@@ -42,7 +42,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from caracole.config import DEFAULT_PROVIDERS, NO_BUDGET, SHARE_PROVIDERS, Config
 from caracole.db import kv_set_json
-from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
+from caracole.health import alerts, answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
 from caracole.overrides import Overrides, OverridesError, load_overrides
@@ -777,8 +777,9 @@ def _run_step(ctx: StepContext, step: Step) -> StepResult | str | None:
         state = record_block(conn, e.provider, now, str(e))
         report.blocked.append(e.provider)
         problem = blocked(e, step.name, state.cooldown_until, strikes=state.strikes)
-        ctx.services.notifier.send(f"caracole: {provider_name(e.provider)} blocked", problem.text,
-                                   priority="high", tags=["warning"])
+        if alerts(state.strikes):  # the first block of a streak alone
+            ctx.services.notifier.send(f"caracole: {provider_name(e.provider)} blocked", problem.text,
+                                       priority="high", tags=["warning"])
         return StepResult(problems=[problem], status=f"blocked: {e}")
     except BudgetExhausted as e:
         return StepResult(spent=[e.provider], status=f"budget spent ({e.provider})")

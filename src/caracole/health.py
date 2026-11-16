@@ -6,6 +6,11 @@ cooldown is 2 hours longer than that, so however late the timer starts a run,
 the nightly run's k-th block in a row skips the next 2^(k−1) runs, not one
 fewer and not one more. State lives in the ``kv`` table under
 ``provider:<name>``.
+
+One ntfy alert goes out for a streak of blocks, at its first (``alerts``): the tries after it come
+16, 32, 64 days apart and are blocked the same way, so they are said on the pages alone, which
+name a provider blocked ``STREAK`` times in a row or more (``keeps_blocking``) and say how to turn
+a switchable one off.
 """
 
 from __future__ import annotations
@@ -27,6 +32,19 @@ COOLDOWN_BASE = timedelta(hours=24)
 # next run about half the time. 2 h covers both and stays well short of the
 # night after.
 COOLDOWN_MARGIN = timedelta(hours=2)
+# Blocks in a row from which the Sites tab and the to-do page say a provider keeps blocking caracole.
+STREAK = 3
+
+
+def alerts(strikes: int) -> bool:
+    """Whether a block that leaves ``strikes`` blocks in a row sends its ntfy alert: the first of a
+    streak alone, the owner's choice of 2026-11-15 (a site that blocks every try needn't say so at each)."""
+    return strikes == 1
+
+
+def keeps_blocking(state: ProviderState) -> bool:
+    """Whether the provider has blocked caracole ``STREAK`` times in a row or more."""
+    return state.strikes >= STREAK
 
 
 @dataclass(frozen=True)

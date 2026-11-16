@@ -179,7 +179,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             state = record_block(conn, PROVIDER, now, str(e))
             message = (f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes}). "
                        "Nothing was marked missing.")
-            _common.alert_block(cfg, PROVIDER, message)
+            _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
             typer.echo(f"YouTube blocked caracole: {message}")
             write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
             return
@@ -294,7 +294,7 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
             message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
-            _common.alert_block(cfg, PROVIDER, message)
+            _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
             end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
                 f"{shown(state.cooldown_until)}.")
             return
@@ -369,7 +369,7 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
             message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
-            _common.alert_block(cfg, PROVIDER, message)
+            _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
             end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
                 f"{shown(state.cooldown_until)}.")
             return
@@ -416,7 +416,7 @@ def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, key: str, r
     except ProviderBlocked as e:
         state = record_block(conn, THUMBS_PROVIDER, now, str(e))
         _common.alert_block(cfg, THUMBS_PROVIDER, f"{e}\nNo more thumbnails until {shown(state.cooldown_until)} "
-                                                  f"(block #{state.strikes}).")
+                                                  f"(block #{state.strikes}).", strikes=state.strikes)
         say("thumbnail", "skipped", f"YouTube's images turned us back; waiting until {shown(state.cooldown_until)}")
         return
     except BudgetExhausted:

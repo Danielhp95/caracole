@@ -91,6 +91,20 @@ def test_ug_block_cools_down_and_never_marks_not_found(conn, cfg):
     assert alert in report.summary().splitlines()
 
 
+def test_only_the_first_block_of_a_streak_sends_an_alert_and_the_summary_says_every_one(conn, cfg):
+    # The owner's choice of 2026-11-15: a site that blocks every try (MuseScore, since early November) alerts once
+    # for the streak, never at each try 16, 32, 64 days apart; the run's summary still says each block.
+    blocked = ProviderBlocked("musescore", "https://musescore.com/sitemap.xml", 403, "challenge page")
+    record_block(conn, "musescore", NOW - timedelta(days=3), "challenge page")  # the streak's first, over
+    out = Outbox()
+    report = run_pipeline(cfg, conn=conn, services=services(out), now=NOW,
+                          steps=[step("musescore", provider="musescore", result=blocked)])
+    assert report.blocked == ["musescore"]
+    assert get_state(conn, "musescore").strikes == 2
+    assert [t for t, _ in out.sent if t.endswith("blocked")] == []
+    assert "MuseScore blocked caracole" in report.summary()
+
+
 def test_later_steps_of_a_blocked_provider_are_skipped(conn, cfg):
     calls, out = [], Outbox()
     blocked = ProviderBlocked("ug", "u", 429, "HTTP 429")

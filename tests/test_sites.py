@@ -252,6 +252,27 @@ def test_a_cooldown_reads_until_when_and_why(conn, cfg):
     assert "challenge page" in status.detail
 
 
+def test_a_site_that_keeps_blocking_says_so_and_how_to_turn_it_off(conn, cfg):
+    for days in (40, 20):  # two blocks in a row, each cooldown over: not yet a site that keeps blocking
+        health.record_block(conn, "musescore", NOW - timedelta(days=days), "challenge page")
+    assert "in a row" not in (status_of(conn, cfg, "musescore", NOW).detail or "")
+    health.record_block(conn, "musescore", NOW - timedelta(hours=1), "challenge page")
+    status = status_of(conn, cfg, "musescore", NOW)
+    assert status.state == "cooling"
+    assert "MuseScore has blocked caracole 3 times in a row" in status.detail
+    assert "[providers.musescore] enabled = false" in status.detail
+    # Once the wait is over, before its next try, it says so still.
+    later = status_of(conn, cfg, "musescore", NOW + timedelta(days=10))
+    assert later.state == "errors" and "[providers.musescore] enabled = false" in later.detail
+    # A site that can't be turned off is told of with no setting.
+    for days in (40, 20, 0):
+        health.record_block(conn, "ug", NOW - timedelta(days=days, hours=1), "HTTP 403")
+    ug = status_of(conn, cfg, "ug", NOW)
+    assert "Ultimate Guitar has blocked caracole 3 times in a row" in ug.detail and "enabled" not in ug.detail
+    health.record_ok(conn, "musescore", NOW + timedelta(days=11))
+    assert status_of(conn, cfg, "musescore", NOW + timedelta(days=11)) == Status("ok", "OK")
+
+
 def test_errors_since_the_last_good_run(conn, cfg):
     health.record_ok(conn, "ug", NOW - timedelta(days=1))
     health.record_error(conn, "ug", NOW - timedelta(hours=2), "HTTP 502")

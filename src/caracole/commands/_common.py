@@ -520,11 +520,14 @@ def transport_for(provider: str) -> httpx.BaseTransport | None:
     return None
 
 
-def alert_block(cfg: Config, provider: str, message: str) -> None:
+def alert_block(cfg: Config, provider: str, message: str, *, strikes: int) -> None:
     """The ntfy alert a block sends, titled as the nightly run titles one ("caracole: Ultimate Guitar
     blocked", ``logs.provider_name``) with the command's own message: once for the block, never per
-    song, high priority; nothing without an ntfy URL. Sending never raises (notify.py)."""
-    if not cfg.ntfy.url:
+    song, high priority; nothing without an ntfy URL. Only the first block of a streak sends one
+    (``strikes``, the blocks in a row it leaves: ``health.alerts``). Sending never raises (notify.py)."""
+    from caracole.health import alerts
+
+    if not cfg.ntfy.url or not alerts(strikes):
         return
     from caracole.notify import Notifier  # httpx: only when there is an alert to send
 

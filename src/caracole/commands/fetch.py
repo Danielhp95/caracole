@@ -120,7 +120,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
                 _send_back(conn, asked, overrides, now)
             message = (f"Ultimate Guitar blocked caracole ({e}). No more UG requests until "
                        f"{shown(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found.")
-            alert_block(cfg, e.provider, message)
+            alert_block(cfg, e.provider, message, strikes=state.strikes)
             typer.echo(message)
             write_pages(conn, cfg, overrides, utcnow())  # with what it kept, and the cooldown
             return

@@ -2616,8 +2616,12 @@ picks one).
   - the client sends nothing more that run;
   - `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after the k-th block in a row (so the next
     nightly run is always skipped);
-  - one ntfy alert goes out for the block, never one a song, titled with `logs.provider_name` (the run's step, or
-    `_common.alert_block` in a command, `caracole fetch --song` from serve's review page too; a lookup sends none);
+  - one ntfy alert goes out for the first block of a streak alone (`health.alerts`: k == 1, the owner's choice of
+    2026-11-15), never one a song, titled with `logs.provider_name` (the run's step, or `_common.alert_block` in a
+    command, `caracole fetch --song` from serve's review page too; a lookup sends none); the blocks after it are
+    said on the summary and the pages alone;
+  - from the third in a row (`health.STREAK`) the Sites tab and the to-do page's health table say the site keeps
+    blocking caracole, and how to turn a switchable one off (sites.py `keeps_blocking_words`, `status_of`);
   - and nothing retries or works around it (no proxies).
 - A block a lookup met while bulk work let it go first is that work's too: its client sends nothing more
   (`_LockedClient._after_a_lookup`), and `record_block` adds no strike for a cooldown that began after its caller did,
