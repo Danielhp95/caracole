@@ -88,6 +88,8 @@ class MainActivity : Activity() {
     private var asked: String? = null
     /** The sync sheet's flow an intent asked for ([SHEET]), until the server has started. */
     private var askedSheet: String? = null
+    /** The page shown as the WebView's renderer died, which the screen recreated opens again. */
+    private var goneAt: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -182,6 +184,12 @@ class MainActivity : Activity() {
             showPage(page)
         } else if (sheet != null) {
             showSheet(sheet)
+        } else if (saved != null && SavedScreen.reopened(saved.getString(SavedScreen.GONE_AT),
+                                                         saved.getString(SavedScreen.ORIGIN), origin,
+                                                         links!!::loads) != null) {
+            // the renderer died: the page it showed, opened again
+            web.loadUrl(saved.getString(SavedScreen.GONE_AT)!!)
+            shown = true
         } else if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) &&
             web.restoreState(saved) != null) {
             shown = true
@@ -236,6 +244,12 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        val gone = goneAt
+        if (gone != null) {  // the renderer died, its WebView with it: the page it showed, to open again
+            outState.putString(SavedScreen.GONE_AT, gone)
+            outState.putString(SavedScreen.ORIGIN, origin)
+            return
+        }
         if (shown) {
             web.saveState(outState)
             outState.putString(SavedScreen.ORIGIN, origin)
@@ -456,7 +470,9 @@ class MainActivity : Activity() {
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) = backCallback()
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-            // The page's renderer died (killed for memory, say): start the screen again rather than crash.
+            // The page's renderer died (killed for memory, say): start the screen again rather than crash, on the
+            // page it showed (SavedScreen.GONE_AT), its WebView's history gone with it.
+            goneAt = view.url
             (view.parent as? ViewGroup)?.removeView(view)
             view.destroy()
             recreate()
