@@ -170,6 +170,32 @@ def test_a_pull_is_queued_as_caracole_peer_pull_with_the_form_token_alone(cfg, c
     assert post(app, "/peer/pull", {"from": "phone:8737", "units": ""}).status == 400
 
 
+def test_a_second_pull_from_the_same_address_is_queued_too_and_the_same_one_again_joins_it(cfg, conn):
+    app = an_app(cfg)
+    origin = "192.168.1.20:8737"
+    first = post(app, "/peer/pull", {"from": origin, "units": "song/radiohead/creep"}, accept="application/json")
+    second = post(app, "/peer/pull", {"from": origin, "units": "song/oasis/wonderwall"}, accept="application/json")
+    again = post(app, "/peer/pull", {"from": origin, "units": "song/oasis/wonderwall"}, accept="application/json")
+    assert {first.status, second.status, again.status} == {200}
+    ids = [json.loads(r.body)["job"]["id"] for r in (first, second, again)]
+    assert ids[0] != ids[1] == ids[2]
+    assert [[list(s.args) for s in job.steps] for job in sorted(app.queue.snapshot(), key=lambda j: j.id)] == [
+        [["peer", "pull", "--unit=song/radiohead/creep", "--", "http://192.168.1.20:8737"]],
+        [["peer", "pull", "--unit=song/oasis/wonderwall", "--", "http://192.168.1.20:8737"]]]
+
+
+def test_a_pulls_units_as_compared_are_given_to_caracole_peer_pull(cfg, conn):
+    app = an_app(cfg)
+    there, here = "a" * 64, "b" * 64
+    units = f"{there} - song/radiohead/creep\n- {here} removed/oasis/wonderwall\nsongbook/campfire"
+    assert post(app, "/peer/pull", {"from": "192.168.1.20:8737", "units": units}).status in (200, 303)
+    assert [list(s.args) for s in app.queue.snapshot()[0].steps] == [[
+        "peer", "pull", f"--unit={there}:-:song/radiohead/creep", f"--unit=-:{here}:removed/oasis/wonderwall",
+        "--unit=songbook/campfire", "--", "http://192.168.1.20:8737"]]
+    for odd in (f"{there} song/x", f"{there[:63]} - song/x", f"{there} - {here}"):
+        assert post(app, "/peer/pull", {"from": "phone:8737", "units": odd}).status == 400, odd
+
+
 def test_overrides_that_cant_be_read_are_said_as_data(cfg, conn):
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text("[nonsense\n", encoding="utf-8")

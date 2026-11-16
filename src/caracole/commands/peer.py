@@ -41,8 +41,8 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
 - ``caracole peer import SOURCE`` syncs this library with a file another caracole exported, as if that caracole
   were here (SOURCE a ``.caracole`` file, an index export, or the folder caracole serve staged one in,
   ``state_dir/peer/import-<id>``, deleted once it is over): its stages check (the file read whole, then refused, in
-  your words, when it is this library's own export or no newer than the last sync with its caracole:
-  ``peer_file.check_importable``), take (a backup first, then each unit the file gives, as a pull takes one),
+  your words, when it is this library's own export, ``peer_file.check_importable``, or holds nothing left to take
+  since the last sync with its caracole, ``peer_file.newer_than``), take (a backup first, then each unit the file gives, as a pull takes one),
   render, agree (what the two now agree on, stamped with the file's ``made``, and each answer "keep mine" to what
   the file would give remembered: a file takes nothing back; none for an import of the indexes alone) and index (its
   indexes merged, ``index_transfer.merge``), ``PEER_IMPORT_STAGES``. A staged folder is taken only once its file is
@@ -123,8 +123,10 @@ def register(app: typer.Typer) -> None:
     def pull_cmd(
         ctx: typer.Context,
         address: str = typer.Argument(..., help="The other caracole serve's address."),
-        units: list[str] = typer.Option(..., "--unit", help="A unit to take from there (song/<key>, …); again for "
-                                                           "more."),
+        units: list[str] = typer.Option(..., "--unit", help="A unit to take from there (song/<key>, …), or "
+                                                           "THERE:HERE:UNIT, its digest on each side as compared "
+                                                           "(- for none), to leave it if either changed since; "
+                                                           "again for more."),
     ) -> None:
         """Take these units from the caracole at ADDRESS, then render what changed and write the pages."""
         from caracole import peer_sync as sync
@@ -134,7 +136,14 @@ def register(app: typer.Typer) -> None:
             address = sync.peer_address(address)
         except sync.PeerError as e:
             fail(str(e), 2)
-        done = _pull(cfg, address, list(dict.fromkeys(units)))
+        read = [sync.pull_unit(u) for u in units]
+        bad = next((u for u, r in zip(units, read) if r is None), None)
+        if bad is not None:
+            fail(f"--unit {bad!r} is neither a unit (song/<key>, …) nor THERE:HERE:UNIT", 2)
+        named = {unit: (there, here) for unit, there, here in read if there is not None or here is not None}
+        ids = list(dict.fromkeys(unit for unit, _, _ in read))
+        done = _pull(cfg, address, ids, {u: t for u, (t, _) in named.items()} if named else None,
+                     expected_here={u: h for u, (_, h) in named.items()} if named else None)
         typer.echo(_pulled(done))
         if done.left:
             raise typer.Exit(1)
@@ -244,7 +253,9 @@ def register(app: typer.Typer) -> None:
                 said.stage("give", "running", _count(len(ids)))
                 with sync.Peer(address, transport=transport_for_peer()) as peer:
                     try:
-                        job = peer.ask_to_pull(here, ids, peer.state().token or "")
+                        job = peer.ask_to_pull(here, [(d.id, d.mine.digest if d.mine else None,
+                                                        d.theirs.digest if d.theirs else None) for d in give],
+                                               peer.state().token or "")
                     except sync.PeerError as e:
                         said.stage("give", "failed", str(e))
                         fail(f"There couldn't be asked to take its {len(ids)}: {e}")

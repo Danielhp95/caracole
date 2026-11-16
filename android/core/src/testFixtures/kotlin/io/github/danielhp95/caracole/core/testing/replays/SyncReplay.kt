@@ -576,7 +576,7 @@ object SyncReplay : AreaReplay {
                         }
                         try {
                             database.read { db ->
-                                SyncFiles.checkImportable(SyncFiles.read(path, name), db, textOrNull(r.extra["own"]), ZoneOffset.UTC)
+                                SyncFiles.checkImportable(SyncFiles.read(path, name), textOrNull(r.extra["own"]))
                             }
                             null
                         } catch (e: FileError) {
@@ -704,7 +704,11 @@ object SyncReplay : AreaReplay {
         val prefer = textOrNull(r.extra["prefer"])?.let { mapOf("here" to Compare.MINE, "there" to Compare.THEIRS)[it] }
         val parts = r.extra.getValue("parts").jsonArray.map(::text)
         FileSource(sf, p.database, p.library).use { source ->
-            val compared = p.database.read { db -> SyncFiles.compareFile(db, sf, source, id) }
+            val compared = try {
+                p.database.read { db -> SyncFiles.compareFile(db, sf, source, id, ZoneOffset.UTC) }
+            } catch (e: FileError) {
+                return@phone differs(r, canonical(r.out), canonical(JsonObject(mapOf("error" to JsonPrimitive(e.message)))))
+            }
             val scoped = SyncFiles.inParts(compared, parts)
             val sides = mapOf("here" to Compare.MINE, "there" to Compare.THEIRS)
             val asChosen = scoped.filter { choices[it.id] != "skip" }

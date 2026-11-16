@@ -449,7 +449,7 @@ def _columns(conn: sqlite3.Connection, schema: str, table: str) -> list[str]:
 
 def _check_columns(conn: sqlite3.Connection, path: Path, names: Sequence[str]) -> None:
     for name in names:
-        for table in SITES[name].tables:
+        for table in ("kv", *SITES[name].tables):  # its records of how far each index has got too
             mine, theirs = _columns(conn, "main", table), _columns(conn, THEIRS, table)
             if mine != theirs:
                 raise OtherVersion(f"{path}'s {table} has the columns ({', '.join(theirs) or 'none'}), and the "

@@ -48,7 +48,7 @@ from urllib.parse import urlencode
 import pytest
 from helpers.corpus import VECTORS, check, jsonl
 
-from caracole import db
+from caracole import db, peer_file
 from caracole import peer_sync as sync
 from caracole.web import sync_file_routes
 from caracole.web.app import Request, WebApp
@@ -220,13 +220,17 @@ def route_records(corpus: FileCorpus) -> list[dict[str, Any]]:
                {"import": "../x", "at": 0, "bytes": 1}])
 
     # --- a file compared --------------------------------------------------------------------------------------
-    later = {sync.BASE_KEY + EXPORTER: {"format": sync.FORMAT, "units": {
+    creep_later = {sync.BASE_KEY + EXPORTER: {"format": sync.FORMAT, "units": {
         "song/radiohead/creep": ["0" * 64, "2026-11-04T08:00:00Z"]}}}
+    held = peer_file.read_file(corpus.file_path("full")).state.units
+    later = {sync.BASE_KEY + EXPORTER: {"format": sync.FORMAT, "units": {
+        u: [x.digest, "2026-11-04T08:00:00Z"] for u, x in sorted(held.items())}}}
     cases = (("plain", "full", {}, IMPORTER, "a library and a file that never synced"),
              ("file_conflict", "full", {}, IMPORTER, "a conflict: the two chorded alike songs otherwise"),
              ("plain", "songbooks", {}, IMPORTER, "a file of the songbooks alone: no song it lacks is a removal"),
              ("plain", "indexes", {}, IMPORTER, "a file with the indexes: the sites it read more recently"),
              ("rich", "full", {}, EXPORTER, "refused: this library's own export"),
+             ("plain", "full", creep_later, IMPORTER, "a unit agreed on since the file was made is left out"),
              ("plain", "full", later, IMPORTER, "refused: no newer than the last sync with its caracole"),
              ("plain", {"bytes": b"hello, not a file"}, {}, IMPORTER, "refused: no file caracole exported"),
              ("plain", {"file": "full", "cut": 200}, {}, IMPORTER, "refused: a file cut short"))
@@ -333,6 +337,8 @@ def test_the_vectors_show_what_each_case_says(made):
         "indexes"][0]["newer"] == "there"
     own = by["POST /sync/import/compare", "refused: this library's own export"]
     assert (own["status"], own["out"]["error"], own["staged"]) == (409, peer_file.OWN_EXPORT, False)
+    since = by["POST /sync/import/compare", "a unit agreed on since the file was made is left out"]
+    assert since["status"] == 200 and "song/radiohead/creep" not in {d["id"] for d in since["out"]["differences"]}
     older = by["POST /sync/import/compare", "refused: no newer than the last sync with its caracole"]
     assert older["status"] == 409 and older["out"]["error"].startswith("Nothing in this file is newer")
     assert by["POST /sync/import/compare", "refused: a file not whole yet, kept for the rest"]["staged"]

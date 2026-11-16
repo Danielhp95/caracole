@@ -651,3 +651,103 @@ def test_the_state_document_names_the_newest_read_of_each_sites_index(conn):
     kv_set(conn, "ug:index:refreshed_at", "2026-10-30T03:30:00Z")
     doc = sync.state_document("abc", "0.1.0", "Tabs", {}, indexes=index_transfer.newest(conn))
     assert doc["indexes"] == {"ug": "2026-10-30T03:30:00Z"}
+
+
+def test_a_tombstone_both_sides_hold_under_other_spellings_is_taken_as_theirs_and_agreed(tmp_path):
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    here.tombstone("Oasis", "Wonderwall")
+    there.tombstone("OASIS", "Wonderwall")
+    unit = "removed/oasis/wonderwall"
+    assert [(d.id, d.proposal) for d in sync.compare(here.units(), there.units(), None)] == [(unit, sync.CONFLICT)]
+    done = here.take(there, [unit])  # the owner chose theirs
+    assert done.taken == [unit] and done.left == []
+    assert here.digests()[unit] == there.digests()[unit]
+    sync.record_agreement(here.conn, "0123456789abcdef", here.units(), there.units(), "2026-11-15T00:00:00Z")
+    base = {u: d for u, (d, _) in (sync.base_of(here.conn, "0123456789abcdef") or {}).items()}
+    assert sync.compare(here.units(), there.units(), base) == []
+
+
+def test_an_artists_ug_page_both_sides_hold_under_other_spellings_is_taken_as_theirs(tmp_path):
+    from caracole.overrides import add_artist_url
+
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    page = "https://www.ultimate-guitar.com/artist/soda_stereo_12345"
+    add_artist_url(here.cfg.overrides_file, "soda stereo", page)
+    add_artist_url(there.cfg.overrides_file, "Soda Stereo", page)
+    (unit,) = [u for u in here.units() if u.startswith("artist_url/")]
+    assert here.digests()[unit] != there.digests()[unit]
+    done = here.take(there, [unit])
+    assert done.taken == [unit] and done.left == []
+    assert load_overrides(here.cfg.overrides_file).artist_url_names == {unit.partition("/")[2]: "Soda Stereo"}
+    assert here.digests()[unit] == there.digests()[unit]
+
+
+class _Altered:
+    """Another library's units, one of them changed by ``alter`` as a damaged or hostile document may hold it."""
+
+    def __init__(self, library: Library, unit_id: str, alter):
+        self.inner, self.unit_id, self.alter = library.source(), unit_id, alter
+
+    def unit(self, unit_id):
+        doc = self.inner.unit(unit_id)
+        if doc is not None and unit_id == self.unit_id:
+            doc = json.loads(json.dumps(doc))
+            self.alter(doc)
+        return doc
+
+    def file(self, key, name, sha256):
+        return self.inner.file(key, name, sha256)
+
+    def wanted(self, *unit_ids):
+        return [(u, sync.digest_of(sync.value_of_document(u, self.unit(u)))) for u in unit_ids]
+
+
+def _set_version(column, value):
+    def alter(doc):
+        doc["versions"][0][column] = value
+    return alter
+
+
+def _set_kv(value):
+    def alter(doc):
+        doc["kv"] = {"sheet_versions:yours:": value}
+    return alter
+
+
+@pytest.mark.parametrize("alter, why", [
+    (_set_version("slot", {"a": 1}), "a version's slot that can't be stored"),
+    (_set_version("votes", 2 ** 70), "a version's votes that can't be stored"),
+    (_set_version("raw", "{not json"), "a version's raw record that isn't JSON"),
+    (_set_kv("[1, 2"), "a record of its kept versions that isn't JSON"),
+    (_set_kv(["1"]), "a record of its kept versions that isn't JSON"),
+])
+def test_a_song_document_holding_what_this_library_cant_store_is_left_and_the_others_taken(tmp_path, alter, why):
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    creep = there.song("Radiohead", "Creep")
+    wall = there.song("Oasis", "Wonderwall", sheet=b"[Em]Today", tab="303")
+    odd = f"song/{creep.key}"
+    source = _Altered(there, odd, alter)
+    before = here.cfg.wanted_file.read_bytes() if here.cfg.wanted_file.exists() else None
+    done = sync.apply_units(here.conn, here.cfg, source, source.wanted(f"song/{wall.key}", odd),
+                            "2026-11-15T00:00:00Z")
+    assert done.taken == [f"song/{wall.key}"]
+    assert done.left == [(odd, f"its entry can't be read (TypeError: {why})")]
+    assert find_song(here.conn, creep.key) is None
+    assert "Creep" not in (here.cfg.wanted_file.read_text(encoding="utf-8") if before is None else "")
+
+
+def test_a_take_that_cant_write_the_songs_line_leaves_wanted_txt_as_it_was(tmp_path):
+    here, there = Library(tmp_path / "here"), Library(tmp_path / "there")
+    here.song("Radiohead", "Creep", album="Pablo Honey")
+    creep = there.song("Radiohead", "Creep", sheet=b"[G]Creep, theirs", album="Pablo Honey (Deluxe)")
+    unit = f"song/{creep.key}"
+
+    def alter(doc):
+        doc["names"]["duration_ms"] = 0  # a duration wanted.txt can't hold
+
+    source = _Altered(there, unit, alter)
+    before = here.cfg.wanted_file.read_bytes()
+    done = sync.apply_units(here.conn, here.cfg, source, source.wanted(unit), "2026-11-15T00:00:00Z")
+    assert done.taken == [] and [u for u, _ in done.left] == [unit]
+    assert find_song(here.conn, creep.key) is not None
+    assert here.cfg.wanted_file.read_bytes() == before

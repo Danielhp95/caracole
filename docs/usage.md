@@ -4823,8 +4823,8 @@ reads it whole and compares it with this library, as `POST /sync/compare` does
 with another caracole (its other side the file: `kind` `file`, when it was made,
 the parts it holds), or refuses it in the words `caracole peer import` says
 (400 for no file caracole exported, one of another version or one cut short; 409
-for this library's own export or one no newer than your last sync with its
-caracole) and deletes it. `POST /sync/apply` on that comparison queues
+for this library's own export or one with nothing left to take since your last
+sync with its caracole) and deletes it. `POST /sync/apply` on that comparison queues
 `caracole peer import` of the folder, a sync shown as "Sync with a file from
 <its library>", which deletes it once it is over. `POST /sync/import/drop`
 (JSON `{"import"}`) deletes one at once, as the page's Cancel does (409 while its
@@ -5717,7 +5717,10 @@ better kept.
 
 The nightly run's last step copies the database whole into `backups/` in the
 state folder, as `caracole-2026-10-30T034512Z.sqlite` (the time in UTC), and
-keeps the last three: about 430 MB each for a library with every index. Each
+keeps the last three: about 430 MB each for a library with every index. The
+copies a merge or a sync makes first (`…-before-merge.sqlite`,
+`…-before-sync.sqlite`) keep their own three, so that a few syncs in an
+afternoon never push out the nights'. Each
 copy is the database as it stood at one moment, whatever another caracole
 writes meanwhile (SQLite's `VACUUM INTO`), checked by SQLite before it takes the
 place of the oldest, and readable by caracole's user alone. With no room for a
@@ -5893,7 +5896,9 @@ the other to take what goes there: a request queued in its Journal ("Share with 
 `caracole peer pull` line to run there.
 
 **`caracole peer pull`** takes the units named (as `diff --json` names them: `song/<key>`, `songbook/<name>`…)
-from there. It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
+from there; `--unit THERE:HERE:ID` names one as it was compared, its digest there and here (`-` for none), so that
+it is left if either side changed it since (`sync --here` asks there to pull so, and a second sync's pull from the
+same address is queued after the first). It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
 in `state_dir/backups/`), and for each unit asks there for it whole; a unit no longer as it was compared, one whose
 answer lacks what caracole reads, or a file that changed there since caracole kept it, is left as it is here, and it
 says why (exit 1). A song taken gets its wanted.txt line, its versions and kept files (each checked by its SHA-256),
@@ -6013,9 +6018,10 @@ here stays here (export a file of your own to give it). Its steps, as `--progres
 1. **check**: the file read whole, every part of it checked, then compared. Refused before anything changes (exit 2):
    something that isn't a file caracole exported; a file of another version of caracole; one cut short, damaged or
    holding anything else ("That file can't be read whole (…): export it again."); this library's own export ("a
-   library takes nothing from itself": `caracole backup` keeps copies to go back to); and a file no newer than your
-   last sync with its caracole ("Nothing in this file is newer than your sync with horde_logbook on 03/11/26."), the
-   same file imported twice among them.
+   library takes nothing from itself": `caracole backup` keeps copies to go back to); and a file with nothing left to
+   take since your last sync with its caracole ("Nothing in this file is newer than your sync with horde_logbook on
+   03/11/26."), the same file imported whole twice among them. What you agreed on with that caracole after the file
+   was made is never taken from it.
 2. **take**: the database backed up (`…-before-sync.sqlite`), then each unit the file gives, as `caracole peer pull`
    takes one. A conflict (changed here and in the file since the two last agreed) goes by `--choose`, else
    `--prefer`, else asked, else is left. A song the file's library removed since then is removed here; a part the file
@@ -6024,9 +6030,9 @@ here stays here (export a file of your own to give it). Its steps, as `--progres
 4. **agree**: what the two agree on, stamped with when the file was made. A conflict you answered **here** (keep
    mine), or a change of the file's you chose to keep here's for, is remembered: the next file from that caracole
    doesn't ask it again while neither side changes it, and the next `caracole peer sync` with that caracole gives it
-   your version. Once the file has been imported, it is no newer than your last sync with its caracole: an import of
-   some of its parts (`--parts songbooks`) leaves the rest for a newer file. An import of its indexes alone
-   (`--parts indexes`) agrees on nothing, so its library may still be imported after.
+   your version. An import of some of its parts (`--parts songbooks`), or one that left a unit, leaves the rest of
+   the same file to import again; once nothing in it is left to take, it is refused as no newer. An import of its
+   indexes alone (`--parts indexes`) agrees on nothing, so its library may still be imported after.
 5. **index**: the file's indexes, when it holds them and `--parts` names them, merged as `caracole index merge`
    merges a file. A merge that fails says why, and the import exits 1, its units taken all the same.
 

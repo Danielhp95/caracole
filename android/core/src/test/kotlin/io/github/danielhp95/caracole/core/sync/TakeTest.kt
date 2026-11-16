@@ -103,6 +103,21 @@ class TakeTest {
 
     private fun json(text: String): JsonObject = Canonical.parse(text) as JsonObject
 
+    @Test fun aTombstoneHereUnderOtherNamesTakesTheirsSoTheTwoAgree() {
+        val phone = phone()
+        phone.write { db ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+            db.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES " +
+                       "('oasis/wonderwall', 'Oasis', 'Wonderwall', '{}', '2026-11-01T10:00:00Z')")
+        }
+        val (source, wanted) = documents("removed/oasis/wonderwall" to json(
+            """{"artist": "OASIS", "title": "Wonderwall", "source_ids": {}, "removed_at": "2026-11-02T10:00:00Z"}"""))
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { _, _ -> } }
+        assertEquals(listOf("removed/oasis/wonderwall"), done.taken)
+        val now = phone.database.read { db -> Units.libraryState(db) }.getValue("removed/oasis/wonderwall").digest
+        assertEquals(wanted.single().second, now, "taken, the two sides agree")
+    }
+
     @Test fun aLibraryThatCantBeReadLeavesEveryUnitTheComparisonNamedSayingWhy() {
         val phone = phone()
         phone.write { db ->

@@ -163,6 +163,22 @@ class ImportTest {
         here.engine.compareFile(there.export(made = "2026-11-04T08:00:00Z"))
     }
 
+    @Test fun afterTheSongbooksAloneTheRestOfTheSameFileIsStillTakenThenItIsNoNewer() {
+        val there = Caracole("sync/fixtures/rich.jsonl")
+        val here = Caracole()
+        val file = there.export()
+        here.apply(here.engine.compareFile(file), parts = listOf(Scope.SONGBOOKS))
+        val songs = there.state().keys.filter { it.startsWith("song/") }
+        assertTrue(songs.any { it !in here.state() }, "a song no songbook lists, not asked for")
+
+        val again = here.engine.compareFile(file)
+        assertTrue(again.differences.any { it.proposal == Compare.THEIRS && it.id.startsWith("song/") }, "${again.differences}")
+        here.apply(again, parts = listOf(Scope.LIBRARY))
+        assertTrue(songs.all { it in here.state() }, "${here.state().keys}")
+        assertEquals(FileError.older("Desk", "03/11/26"),
+                     assertFailsWith<FileError> { here.engine.compareFile(file) }.message)
+    }
+
     @Test fun aConflictKeptHereIsRememberedWithBothDigestsAtTheFilesMade() {
         val there = Caracole()
         val here = Caracole()

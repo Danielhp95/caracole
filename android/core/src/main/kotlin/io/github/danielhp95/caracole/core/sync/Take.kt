@@ -163,16 +163,20 @@ object Take {
 
     private fun kindOrder(id: String): Int = KINDS.indexOf(id.substringBefore('/')).let { if (it < 0) 99 else it }
 
-    /** A tombstone the peer has made where neither the song nor a tombstone of it is here; one it has no longer
-     * forgotten. */
+    /** A tombstone the peer has made where neither the song nor a tombstone of it is here; one here under other
+     * names given theirs (its unit's names alone); one it has no longer forgotten. */
     private fun takeRemoved(db: Db, key: String, doc: JsonObject?) {
         if (doc == null) {
             Upsert.forgetRemoved(db, key)
             return
         }
-        if (Songs.byKey(db, key) != null || Upsert.removedSong(db, key) != null) return
+        if (Songs.byKey(db, key) != null) return
         val artist = SongTake.text(SongTake.need(doc, "artist"))
         val title = SongTake.text(SongTake.need(doc, "title"))
+        if (Upsert.removedSong(db, key) != null) {
+            db.execute("UPDATE removed SET artist = ?, title = ? WHERE key = ?", artist, title, key)
+            return
+        }
         val ids = doc["source_ids"]
         val sourceIds = if (ids == null || falsy(ids)) JsonObject(emptyMap()) else ids
         val removedAt = SongTake.text(SongTake.need(doc, "removed_at"))
