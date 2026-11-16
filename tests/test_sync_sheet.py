@@ -442,7 +442,7 @@ def test_the_phones_page_has_the_sheet_and_no_sync_tab(conn, cfg):
     assert markup[0].count('id="sync-sheet"') == 1 and markup[0].count('id="sync-file"') == 1
     assert markup[1].count('id="tab-sync"') == 1 and markup[1].count('id="sync-sheet"') == 1
     assert markup[1].index('id="tab-requests"') < markup[1].index('id="tab-sync"')  # Sync last
-    assert markup[1].count('id="sync-start"') == 1 and markup[1].count('for="sync-file"') == 1
+    assert markup[1].count('id="sync-start"') == 1 and markup[1].count('id="sync-choose"') == 1
     for page in markup[2:]:
         assert 'id="tab-sync"' not in page and 'id="sync-sheet"' not in page
 
@@ -1237,3 +1237,15 @@ def test_escape_in_the_sheet_is_its_cancel_and_leaves_the_librarys_search_alone(
         page.press("Escape")
         assert page.wait(f"!{sheet}.open", timeout=2), "the first Escape didn't cancel the sheet"
         assert page.js(results), "Escape in the sheet dropped the Library tab's search results"
+
+
+@in_chromium
+def test_choose_a_file_is_a_tab_stop_and_opens_the_files_chooser(served, tmp_path):
+    with opened(tmp_path, served(FakeSync()) + "#tab=sync") as page:
+        assert page.wait("!document.getElementById('sync').hidden")
+        page.js("document.getElementById('sync-export').focus()")
+        page.press("Tab")
+        assert page.js("document.activeElement.id") == "sync-choose"
+        page.js("window.chose = 0; document.getElementById('sync-file').click = () => { window.chose += 1; }")
+        page.press("Enter")
+        assert page.js("window.chose") == 1

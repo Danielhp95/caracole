@@ -1097,6 +1097,9 @@
     }
     if (start && address) start.addEventListener("click", () => open("sync", { address: address.value.trim() }));
     if (exporting) exporting.addEventListener("click", () => open("export"));
+    // Choose a file: a button, so the keyboard reaches it as it does Export; the file input itself is hidden.
+    const choose = byId("sync-choose");
+    if (choose && fileInput) choose.addEventListener("click", () => fileInput.click());
     drawLast();
     document.addEventListener("caracole:tab", (e) => {
       if (e.detail && e.detail.name === "sync") loadPanel();
