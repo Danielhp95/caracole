@@ -62,7 +62,8 @@
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
     trad: false, inst: "guitar" };
-  const store = "caracole-viewer:" + location.pathname;
+  // Where its settings are kept: the page's name, or the one a songbook gives its song (book.js songStore).
+  const store = typeof data.store === "string" && data.store ? data.store : "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
   const sheetChords = Object.keys(written).map((i) => written[i]).join("|");

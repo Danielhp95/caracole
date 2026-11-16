@@ -4,8 +4,11 @@
   const doc = document.documentElement;
   const sections = Array.from(document.querySelectorAll("section.song"));
   const toc = document.getElementById("contents");
-  // The viewer keeps a page's settings under this name; each song's are kept here, and swapped in.
+  // The viewer keeps a page's settings under this name, and each song's under its own (its id after "#": songStore), so
+  // that two tabs of the songbook never write each other's. Before that, the one name held the song open last, each
+  // song's kept in the songbook's record (book.songs) and swapped in: what they still hold moves to the song's own name.
   const VIEWER = "caracole-viewer:" + location.pathname;
+  const songStore = (id) => VIEWER + "#" + id;
   const BOOK = "caracole-songbook:" + location.pathname;
   const book = (() => {
     try {
@@ -20,12 +23,15 @@
       localStorage.setItem(BOOK, JSON.stringify(book));
     } catch (err) { /* private mode, or a sandbox */ }
   };
-  // The settings the viewer saved for the song open last, into that song's own place.
+  // The settings the viewer saved under the one name, for the song open last: into that song's own place, once.
   const harvest = () => {
-    if (typeof book.at !== "string") return;
     try {
       const mine = localStorage.getItem(VIEWER);
-      if (mine !== null) book.songs[book.at] = mine;
+      if (mine === null) return;
+      if (typeof book.at === "string" && localStorage.getItem(songStore(book.at)) === null) {
+        localStorage.setItem(songStore(book.at), mine);
+      }
+      localStorage.removeItem(VIEWER);
     } catch (err) { /* no storage */ }
   };
 
@@ -100,6 +106,7 @@
       if (easy && song.key) song.easy = JSON.parse(easy.textContent);
       const winds = document.getElementById("winds");  // the winds' fingerings and the harps' notes, every song's
       if (winds) song.winds = JSON.parse(winds.textContent);
+      song.store = songStore(current.dataset.id);  // the name its settings are kept under (viewer.js store)
       data.textContent = JSON.stringify(song);
       ownInst = new URLSearchParams(String(song.start || "")).get("inst");
     } catch (err) { /* the viewer says so */ }
@@ -123,11 +130,15 @@
       namesEl.textContent = JSON.stringify(names);
     }
     const returning = book.at === current.dataset.id;
-    try {
-      const mine = book.songs[current.dataset.id];
-      if (typeof mine === "string") localStorage.setItem(VIEWER, mine);
-      else localStorage.removeItem(VIEWER);
-    } catch (err) { /* no storage */ }
+    const before = book.songs[current.dataset.id];  // kept in the songbook's record before: to its own name, once
+    if (typeof before === "string") {
+      try {
+        if (localStorage.getItem(songStore(current.dataset.id)) === null) {
+          localStorage.setItem(songStore(current.dataset.id), before);
+        }
+      } catch (err) { /* no storage */ }
+    }
+    delete book.songs[current.dataset.id];
     book.at = current.dataset.id;
     if (!returning) book.y = 0;
     keep();
@@ -142,7 +153,6 @@
   }
 
   const save = () => {
-    harvest();
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };

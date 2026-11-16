@@ -50,3 +50,63 @@ def test_the_arrows_stay_in_the_song_while_a_panel_is_open(tmp_path, panel):
         time.sleep(0.5)
         seen = b.js("[location.hash.split('=')[0], window.before === true]")
     assert seen == ["#song-1", True], seen
+
+
+
+class _Tab:
+    """Another tab of ``b``'s browser, in its browser context: the same storage."""
+
+    def __init__(self, b: Browser, url: str):
+        self.b = b
+        self.target = b._send("Target.createTarget", url=url)["targetId"]
+        self.session = b._send("Target.attachToTarget", targetId=self.target, flatten=True)["sessionId"]
+
+    def js(self, expression: str):
+        result = self.b._chromium.send("Runtime.evaluate", {"expression": expression, "returnByValue": True},
+                                       session=self.session, timeout=30)
+        assert "exceptionDetails" not in result, result
+        return result.get("result", {}).get("value")
+
+    def wait(self, expression: str, timeout: float = 10.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if self.js(f"(() => {{ try {{ return Boolean({expression}); }} catch (e) {{ return false; }} }})()"):
+                    return True
+            except Exception:  # noqa: BLE001 - a page between two documents
+                pass
+            time.sleep(0.03)
+        return False
+
+
+def test_two_tabs_of_one_songbook_keep_each_songs_own_settings(tmp_path):
+    """Two tabs of a songbook from a file, each on another song: each song comes back as it was left in its tab, never
+    with what the other tab's song wrote."""
+    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
+                                BookSong("Two", "Synthetic", cho=IN_E, id="bbbb"),
+                                BookSong("Three", "Synthetic", cho=THREE, id="cccc")])
+    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
+        b.js("document.getElementById('t-up').click(); document.getElementById('t-up').click()")  # song 1: two up
+        one = b.js(SAID)
+        other = _Tab(b, book + "#song-2")  # song 2, in another tab (this one goes out of sight)
+        assert other.wait(READY)
+        other.js("document.getElementById('t-down').click()")  # song 2: one down
+        two = other.js(SAID)
+        targets = [t["targetId"] for t in b._send("Target.getTargets")["targetInfos"]
+                   if t["type"] == "page" and t["targetId"] != other.target and "songbook.html" in t["url"]]
+        b._send("Target.activateTarget", targetId=targets[0])
+        assert b.wait("document.visibilityState === 'visible'")
+        assert other.wait("document.visibilityState === 'hidden'")
+        to_song(b, 3)
+        to_song(b, 1)
+        back = b.js(SAID)
+        b._send("Target.activateTarget", targetId=other.target)
+        assert other.wait("document.visibilityState === 'visible'")
+        other.js("window.before = true; location.hash = 'song-3'")
+        assert other.wait("!window.before && " + READY)
+        other.js("window.before = true; location.hash = 'song-2'")
+        assert other.wait("!window.before && " + READY)
+        again = other.js(SAID)
+    assert one == ["#song-1", "+2"] and two == ["#song-2", "−1"]
+    assert back == ["#song-1", "+2"], back  # song 1 as it was left
+    assert again == ["#song-2", "−1"], again  # and song 2
