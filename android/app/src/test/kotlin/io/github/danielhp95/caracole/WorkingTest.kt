@@ -67,6 +67,25 @@ class WorkingTest {
         assertNull(Working.lineOf(queue.snapshot()), "nothing waits or runs")
     }
 
+    @Test
+    fun `a file's import is named as itself, never as sharing logs with a computer`() {
+        // SyncFileRoutes' import: a job of kind "sync" displayed "Sync with a file from <name>".
+        val gate = CompletableDeferred<Unit>()
+        val job = submit("sync", "Sync with a file from Desk", gate)
+        running(job.id)
+        assertEquals("Sync with a file from Desk…", Working.lineOf(queue.snapshot()))
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun `a service start that comes once the work is over stops at once, never left saying Working`() {
+        assertEquals("Estopa - Tu calorro · Looking up the lyrics…" to false,
+                     SyncService.atStart("Estopa - Tu calorro · Looking up the lyrics…", "Working…"))
+        // The line went before the start was delivered: the watcher heard it under the earlier start, which this
+        // one kept the service past; a start with no line must stop itself.
+        assertEquals("Working…" to true, SyncService.atStart(null, "Working…"))
+    }
+
     /** A lookup's job of its real commands ([JobCommands]'s), run by [lookups]' runners, until its gate opens. */
     private fun lookup(title: String, key: String, display: String, commands: List<Command>,
                        gate: CompletableDeferred<Unit>): Job {

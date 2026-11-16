@@ -88,6 +88,8 @@ class MainActivity : Activity() {
     private var asked: String? = null
     /** The sync sheet's flow an intent asked for ([SHEET]), until the server has started. */
     private var askedSheet: String? = null
+    /** The page shown as the WebView's renderer died, which the screen recreated opens again. */
+    private var goneAt: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -182,6 +184,12 @@ class MainActivity : Activity() {
             showPage(page)
         } else if (sheet != null) {
             showSheet(sheet)
+        } else if (saved != null && SavedScreen.reopened(saved.getString(SavedScreen.GONE_AT),
+                                                         saved.getString(SavedScreen.ORIGIN), origin,
+                                                         links!!::loads) != null) {
+            // the renderer died: the page it showed, opened again
+            web.loadUrl(saved.getString(SavedScreen.GONE_AT)!!)
+            shown = true
         } else if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) &&
             web.restoreState(saved) != null) {
             shown = true
@@ -236,6 +244,12 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        val gone = goneAt
+        if (gone != null) {  // the renderer died, its WebView with it: the page it showed, to open again
+            outState.putString(SavedScreen.GONE_AT, gone)
+            outState.putString(SavedScreen.ORIGIN, origin)
+            return
+        }
         if (shown) {
             web.saveState(outState)
             outState.putString(SavedScreen.ORIGIN, origin)
@@ -363,9 +377,10 @@ class MainActivity : Activity() {
 
     /**
      * Where a link the page follows goes ([Links.route]; with [download], one the WebView's download listener heard);
-     * true when the WebView doesn't load it. The viewer's Export PDF prints the viewer shown ([Printer]).
+     * true when the WebView doesn't load it. The viewer's Export PDF prints the viewer shown ([Printer]). An address
+     * on the web opens the browser only on the owner's tap ([gesture], [Handoff.opensBrowser]), else it goes nowhere.
      */
-    private fun follow(url: String, download: Boolean = false): Boolean {
+    private fun follow(url: String, download: Boolean = false, gesture: Boolean = false): Boolean {
         val links = links ?: return true
         if (!download && SharedLink.isCancel(url, origin)) {
             leaveShare()
@@ -374,7 +389,11 @@ class MainActivity : Activity() {
         return when (val route = links.route(url, download)) {
             Route.Page -> false
             is Route.File -> { handOff(route.path); true }
-            is Route.Browser -> { Handoff.openBrowser(this, route.url); true }
+            is Route.Browser -> {
+                if (Handoff.opensBrowser(gesture, download)) Handoff.openBrowser(this, route.url)
+                else Log.i(TAG, "a navigation to the web with no tap: not opened")
+                true
+            }
             is Route.Print -> { Printer.print(this, web, route.url); true }
             Route.Ignored -> true
         }
@@ -446,12 +465,14 @@ class MainActivity : Activity() {
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-            if (request.isForMainFrame) follow(request.url.toString()) else false
+            if (request.isForMainFrame) follow(request.url.toString(), gesture = request.hasGesture()) else false
 
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) = backCallback()
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-            // The page's renderer died (killed for memory, say): start the screen again rather than crash.
+            // The page's renderer died (killed for memory, say): start the screen again rather than crash, on the
+            // page it showed (SavedScreen.GONE_AT), its WebView's history gone with it.
+            goneAt = view.url
             (view.parent as? ViewGroup)?.removeView(view)
             view.destroy()
             recreate()

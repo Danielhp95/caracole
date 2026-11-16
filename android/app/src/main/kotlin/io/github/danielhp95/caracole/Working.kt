@@ -67,6 +67,9 @@ internal class Working(
     companion object {
         const val TICK_MS = 1_000L
 
+        /** How a sync with a computer is named (SyncRoutes'): "Share with <its name>". */
+        private const val SHARE_WITH = "Share with "
+
         /** The kind of job whose worker shows its own notification. */
         private const val INDEX = "index"
 
@@ -76,7 +79,8 @@ internal class Working(
 
         /**
          * The line of [jobs] (a queue's snapshot): the job that runs, else the first to run, of those the service
-         * keeps going (every kind but an index import), a sync named as sharing logs with its computer, a lookup by its
+         * keeps going (every kind but an index import), a sync named as sharing logs with its computer (a file's import
+         * by its own name), a lookup by its
          * song (or the page it reads) and the line the library page shows for it ("Estopa - Tu calorro · Looking up
          * the lyrics…", JobViews.line with [facts], what the library knows of its song), and how many more wait
          * after it; null when none waits or runs.
@@ -87,7 +91,9 @@ internal class Working(
             if (job.state != Job.RUNNING) return "Waiting · ${what(job)}"
             val doing = when {
                 isLookup(job) -> "${job.display} · ${JobViews.line(job, facts = facts(job)).text}"
-                job.spec.kind == "sync" -> "Sharing logs with ${job.display.removePrefix("Share with ")}…"
+                // a sync with a computer ("Share with <its name>"); a file's import says its own name
+                job.spec.kind == "sync" && job.display.startsWith(SHARE_WITH) ->
+                    "Sharing logs with ${job.display.removePrefix(SHARE_WITH)}…"
                 job.spec.kind == "add" -> "Adding ${job.display}…"
                 job.spec.kind == "remove" -> "Removing ${job.display}…"
                 else -> "${job.display}…"

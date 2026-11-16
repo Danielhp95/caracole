@@ -23,6 +23,7 @@ import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.testing.TestParts
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.server.testing.TestApp
+import io.github.danielhp95.caracole.server.testing.text
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import kotlinx.coroutines.CoroutineScope
@@ -236,6 +237,28 @@ class LibraryRoutesTest {
                                               "back" to "#tab=library&q=blur"))
         assertEquals(303, page.status)
         assertEquals("/#tab=library&q=blur&song=${song2.id}", page.header("Location"))
+    }
+
+    /** The Journal's Try again of a removal (Outcomes' one-button form, the song alone, sent as a plain form) is asked
+     * on a page whose form confirms it (pages.remove_page's): its fields, the form token among them, remove the song. */
+    @Test fun `a removal asked by a plain form is a page whose own form confirms it`() {
+        waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
+        val wonderwall = assertNotNull(song("Oasis", "Wonderwall"))
+        val page = app.post("/remove", listOf("song" to wonderwall.id.toString(), "back" to "#tab=requests"))
+        assertEquals(200, page.status)
+        val html = page.text
+        val form = assertNotNull(Regex("""<form class="confirm" method="post" action="/remove">(.*?)</form>""",
+                                       RegexOption.DOT_MATCHES_ALL).find(html), html).groupValues[1]
+        val fields = Regex("""<input type="hidden" name="([^"]+)" value="([^"]*)">""").findAll(form)
+            .map { it.groupValues[1] to it.groupValues[2] }.toList()
+        assertEquals(listOf("csrf" to TestApp.CSRF, "song" to wonderwall.id.toString(), "key" to wonderwall.key,
+                            "confirm" to "1", "back" to "tab=requests"), fields)
+        assertTrue("""<a class="btn" href="/#tab=requests&amp;song=${wonderwall.id}">Keep</a>""" in form, form)
+        assertNotNull(song("Oasis", "Wonderwall"), "the question changes nothing")
+        val confirmed = app.post("/remove", fields.filter { it.first != "csrf" })
+        assertEquals(303, confirmed.status)
+        waitFor(queue.snapshot().last { it.spec.kind == "remove" }.let { JsonObject(mapOf("id" to JsonPrimitive(it.id))) })
+        assertNull(song("Oasis", "Wonderwall"))
     }
 
     private fun added(fields: List<Pair<String, String>>, path: String = "/request"): Job {

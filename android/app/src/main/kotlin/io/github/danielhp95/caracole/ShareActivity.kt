@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /**
@@ -80,6 +79,9 @@ class ShareActivity : Activity() {
     } catch (e: Exception) {
         Log.w(TAG, "a shared file not filed: $uri", e)
         Queued(notFiled(e.message ?: e::class.java.simpleName))
+    } catch (e: OutOfMemoryError) {  // staging it found no room: said, never a crash
+        Log.w(TAG, "a shared file not filed: $uri", e)
+        Queued(notFiled("no room to hold it on this phone now"))
     }
 
     /** A file shared, queued: its [job] on [phone]'s queue, or what is [said] of it. */
@@ -88,8 +90,9 @@ class ShareActivity : Activity() {
     /** A file shared: its display name, its type, and its bytes, or why there are none. */
     private class SharedFile(val name: String?, val type: String?, val data: ByteArray?, val why: String?)
 
-    /** The file at [uri], read whole (at most InboxShare.MAX_BYTES), its name the provider's display name, else its
-     * address's last part. */
+    /** The file at [uri], read whole (at most InboxShare.MAX_BYTES: one its provider says is larger refused unread,
+     * one that proves larger refused one byte past the limit, [SharedBytes]), its name the provider's display name,
+     * else its address's last part. */
     private fun read(uri: Uri, shareType: String?): SharedFile {
         refused(uri)?.let { return SharedFile(uri.lastPathSegment, shareType, null, it) }
         val name = runCatching {
@@ -98,24 +101,25 @@ class ShareActivity : Activity() {
             }
         }.getOrNull() ?: uri.lastPathSegment
         val type = runCatching { contentResolver.getType(uri) }.getOrNull() ?: shareType
+        val tooBig = "${name ?: "the file"} is over ${InboxShare.MAX_BYTES shr 20} MiB"
+        // The size its app says, when it says one: a file past the limit refused before a byte is read.
+        val said = runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+            }
+        }.getOrNull()
+        if (said != null && said > InboxShare.MAX_BYTES) return SharedFile(name, type, null, tooBig)
         return try {
             val input = contentResolver.openInputStream(uri) ?: throw IOException("its app gave nothing to read")
-            val out = ByteArrayOutputStream()
-            input.use {
-                val buffer = ByteArray(1 shl 16)
-                while (true) {
-                    val n = it.read(buffer)
-                    if (n < 0) break
-                    out.write(buffer, 0, n)
-                    if (out.size() > InboxShare.MAX_BYTES) {
-                        return SharedFile(name, type, null, "${name ?: "the file"} is over ${InboxShare.MAX_BYTES shr 20} MiB")
-                    }
-                }
-            }
-            SharedFile(name, type, out.toByteArray(), null)
+            val data = input.use { SharedBytes.readAtMost(it, InboxShare.MAX_BYTES) }
+                ?: return SharedFile(name, type, null, tooBig)
+            SharedFile(name, type, data, null)
         } catch (e: Exception) {  // a provider's refusal (SecurityException), a file gone, a read that failed
             Log.w(TAG, "a shared file not read: $uri", e)
             SharedFile(name, type, null, "${name ?: "the file"} couldn't be read (${e.message ?: e::class.java.simpleName})")
+        } catch (e: OutOfMemoryError) {  // no room for it beside what the app holds: said, never a crash
+            Log.w(TAG, "a shared file too big to hold: $uri", e)
+            SharedFile(name, type, null, "${name ?: "the file"} is too big to read on this phone now")
         }
     }
 

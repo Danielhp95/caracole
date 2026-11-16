@@ -1,0 +1,166 @@
+package io.github.danielhp95.caracole.server
+
+import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.testing.RefusingTransport
+import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.server.http.Body
+import io.github.danielhp95.caracole.server.http.Request
+import io.github.danielhp95.caracole.server.http.Security
+import io.github.danielhp95.caracole.server.routes.SyncSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+import java.net.InetAddress
+import java.net.Socket
+import java.net.SocketTimeoutException
+import java.security.MessageDigest
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/** What the phone serves as Assembly wires it: the files its cards link, what its page offers, and a request
+ * refused before its body is read. */
+class PhoneServesTest {
+    @get:Rule val tmp = TemporaryFolder()
+
+    private object NoAddress : SyncSettings {
+        override val address: String? = null
+        override fun remember(address: String) = Unit
+    }
+
+    private val secret = "s".repeat(64)
+
+    private fun <T> phone(database: Database, library: File, state: File, block: (Phone) -> T): T {
+        val scope = CoroutineScope(SupervisorJob())
+        try {
+            val deps = PhoneDeps(database, library, state, null, scope, NoAddress, secret = secret, csrf = "tok",
+                                 transport = { RefusingTransport })
+            return block(Phone(deps))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    private fun get(phone: Phone, target: String) = phone.app.handle(Request(
+        "GET", target, mapOf("cookie" to "${Security.SECRET_COOKIE}=$secret", "host" to "127.0.0.1:8738",
+                             "sec-fetch-site" to "same-origin"), ByteArray(0)))
+
+    /**
+     * A song looked up on the phone alone: its card links the lyrics.txt, lyrics.lrc and info.json of its folder
+     * (Cards.folderNames: every file there), which no `files` row records: each is served all the same.
+     */
+    @Test fun everyFileASongsCardLinksIsServed() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val artist = "Estopa"
+                val title = "Tu Calorro"
+                val key = Normalize.identityKey(artist, title)
+                val id = database.writeBlocking { db ->
+                    db.execute("INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) " +
+                               "VALUES (?, ?, ?, ?, '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z')",
+                               key, artist, title, "[\"$artist\"]")
+                    db.lastRowid()
+                }
+                val folder = File(library, "$artist/$title").apply { mkdirs() }
+                // what a lookup on the phone leaves in the folder: the sheet kept (a `files` row), the lyrics' files
+                // (LyricsFiles) and info.json (InfoJson), neither a kept file
+                val sheet = "[ch]Am[/ch] Fui a la orilla del rio\n"
+                File(folder, "sheet.txt").writeText(sheet)
+                File(folder, "lyrics.txt").writeText("Fui a la orilla del rio\n")
+                File(folder, "lyrics.lrc").writeText("[00:01.00]Fui a la orilla del rio\n")
+                File(folder, "info.json").writeText("{}\n")
+                database.writeBlocking { db ->
+                    db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                               "VALUES ('ug', '1', ?, 'sheet', 'chords', '', '2026-11-01T00:00:00Z')", id)
+                    val version = db.one("SELECT id FROM versions WHERE song_id = ?", id) { it.long(0)!! }!!
+                    val sha = MessageDigest.getInstance("SHA-256").digest(sheet.toByteArray()).joinToString("") { "%02x".format(it) }
+                    db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                               "VALUES (?, ?, 'sheet.txt', ?, ?, 0, '2026-11-01T00:00:00Z')",
+                               version, id, "$artist/$title/sheet.txt", sha)
+                }
+                val card = database.read { db -> phone.parts.cards.cards(db, listOf(Songs.byId(db, id)!!)) }.getValue(id)
+                val linked = (card.getValue("files") as JsonArray).map { it as JsonObject }
+                    .associate { (it.getValue("name") as JsonPrimitive).content to (it.getValue("href") as JsonPrimitive).content }
+                assertTrue("lyrics.txt" in linked && "sheet.txt" in linked, "the card links its folder's files: $linked")
+                val answered = linked.mapValues { (_, href) -> get(phone, "/$href").status }
+                assertEquals(linked.mapValues { 200 }, answered, "every file the card links is served")
+            }
+        }
+    }
+
+    /**
+     * A song a review must come first for (LookupForms.reviewFirst, as POST /fetch refuses it, 409) is no fetchable
+     * card on the page the phone serves (library_routes.library's `held`: `fetchable: false`).
+     */
+    @Test fun aSongAReviewMustComeFirstForIsNotFetchableOnThePage() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val key = Normalize.identityKey("Muse", "Hysteria")
+                val id = database.writeBlocking { db ->
+                    db.execute("INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at, review, " +
+                               "match_decision, match_candidates) VALUES (?, 'Muse', 'Hysteria', '[\"Muse\"]', " +
+                               "'2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', 1, 'review', ?)",
+                               key, "[{\"artist_key\":\"muse\",\"song_key\":\"hysteria-live\",\"step\":\"fuzzy_title\",\"score\":88.0}]")
+                    db.lastRowid()
+                }
+                val refused = phone.app.handle(Request(
+                    "POST", "/fetch",
+                    mapOf("cookie" to "${Security.SECRET_COOKIE}=$secret", "host" to "127.0.0.1:8738",
+                          "sec-fetch-site" to "same-origin", "content-type" to "application/x-www-form-urlencoded",
+                          "accept" to "application/json"),
+                    "csrf=tok&song=$id".toByteArray()))
+                assertEquals(409, refused.status, "the route refuses it: a review comes first")
+                val page = (get(phone, "/").body as Body.Bytes).bytes.toString(Charsets.UTF_8)
+                val block = page.substringAfter("<script type=\"application/json\" id=\"songs\">").substringBefore("</script>")
+                val data = kotlinx.serialization.json.Json.parseToJsonElement(block) as JsonObject
+                val card = (data.getValue("songs") as JsonArray).map { it as JsonObject }
+                    .single { (it.getValue("id") as JsonPrimitive).content == id.toString() }
+                assertEquals(JsonPrimitive(false), card["fetchable"], "the page offers no Fetch the server refuses")
+            }
+        }
+    }
+
+    /**
+     * A POST with no launch cookie to a route of a large limit (/sync/import/part, 8 MiB) is refused on its headers,
+     * its body never waited for nor held (caracole serve's refused_unread).
+     */
+    @Test fun aPostWithoutTheSecretIsRefusedBeforeItsBodyIsRead() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val port = phone.server.start(0)
+                try {
+                    Socket(InetAddress.getByName("127.0.0.1"), port).use { socket ->
+                        socket.soTimeout = 4_000
+                        val head = "POST /sync/import/part?import=0123456789abcdef&at=0 HTTP/1.1\r\n" +
+                            "Host: 127.0.0.1:$port\r\nContent-Type: application/octet-stream\r\n" +
+                            "Content-Length: ${8 * 1024 * 1024}\r\nConnection: close\r\n\r\n"
+                        socket.getOutputStream().apply { write(head.toByteArray()); flush() }
+                        // no body sent: an answer made of the headers alone comes now
+                        val line = try {
+                            socket.getInputStream().bufferedReader(Charsets.ISO_8859_1).readLine()
+                        } catch (e: SocketTimeoutException) {
+                            "no answer in 4 s: the server waits for the 8 MiB body of a request it will refuse"
+                        }
+                        assertEquals("HTTP/1.1 403 Forbidden", line)
+                    }
+                } finally {
+                    phone.server.close()
+                }
+            }
+        }
+    }
+}

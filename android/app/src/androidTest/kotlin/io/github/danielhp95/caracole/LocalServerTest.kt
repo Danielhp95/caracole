@@ -12,6 +12,7 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.hasData
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.Pages.evaluate
+import io.github.danielhp95.caracole.Pages.tapLink
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.server.http.Security
@@ -105,11 +106,15 @@ class LocalServerTest {
                 intending(allOf(hasAction(Intent.ACTION_VIEW), hasData(elsewhere)))
                     .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
 
-                // The page follows a link there: the browser's, never the WebView's.
-                evaluate(main, "location.href = ${JSONObject.quote(elsewhere)}")
+                // The page's own script sends the top frame there: it goes nowhere with no tap, neither the WebView
+                // nor the browser. A link the owner taps there: the browser's, never the WebView's.
+                evaluate(main, "location.href = ${JSONObject.quote(elsewhere + "scripted")}")
+                tapLink(main, elsewhere)
                 waitUntil("the link handed to the browser") {
                     Intents.getIntents().any { it.action == Intent.ACTION_VIEW && it.dataString == elsewhere }
                 }
+                assertFalse("a script's navigation opened the browser",
+                            Intents.getIntents().any { it.dataString == elsewhere + "scripted" })
                 assertTrue(url(main).startsWith("$origin/"))
 
                 // The app itself told to load it: answered in the app, a 404, and no socket is opened.

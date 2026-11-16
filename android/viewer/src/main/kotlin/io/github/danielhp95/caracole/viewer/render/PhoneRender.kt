@@ -111,6 +111,15 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
         db.kvDelete(RenderNames.BUILD_KEY)
     }
 
+    /** Whether the phone made [songId]'s pages and its unit has moved from the digest they were made at since: a
+     * change on the phone that made no page of it (a review's answer, a LaCuerda pick noted), whose pages LibraryFiles
+     * no longer serves until they are made again. False for a song it made no page of, or one gone. */
+    open fun moved(db: Db, songId: Long): Boolean {
+        val made = WrittenPages.rendered(db, songId) ?: return false
+        val song = Songs.byId(db, songId) ?: return false
+        return made.unit != Units.digestOf(db, RenderNames.unitOf(song.key))
+    }
+
     /** The pages owed made ([owed]'s songs, as listed when it starts; one a lookup made meanwhile passed over), each
      * in a write of its own, [between] two songs holding none, [progress] told how far (done, total); then kv
      * `phone:render-build`, the build the phone's pages were last made by. A song whose pass fails costs the others

@@ -20,6 +20,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.Pages.evaluate
+import io.github.danielhp95.caracole.Pages.tapLink
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.server.http.Security
@@ -129,7 +130,7 @@ class PhoneEndToEndTest {
             Intents.init()
             try {
                 intending(hasAction(Intent.ACTION_VIEW)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
-                js("location.href = ${JSONObject.quote(elsewhere)}")
+                tapLink(main, elsewhere)
                 waitUntil("the link handed to the browser") {
                     Intents.getIntents().any { it.action == Intent.ACTION_VIEW && it.dataString == elsewhere }
                 }

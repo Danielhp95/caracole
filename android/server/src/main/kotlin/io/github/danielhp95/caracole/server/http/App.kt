@@ -92,6 +92,15 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         return routeFor(method, path)?.limit ?: MAX_BODY
     }
 
+    /** The answer to a request whose headers refuse it already, before its body is read (WebApp.refused_unread's
+     * part on the phone): no launch secret, or a host name the server doesn't answer to; null otherwise. So no other
+     * app has the server read megabytes it then refuses. */
+    fun refusedUnread(headers: Map<String, String>): Response? = when {
+        !Security.hasSecret(headers, config.secret) -> finish(notThisApp())
+        !Security.answersTo(Security.hostName(headers["host"]), config.allowed) -> finish(misdirected())
+        else -> null
+    }
+
     /** Secret cookie → host → path → (GET own_page_read, route, scriptOnly token, else file) | (POST form ≤ route.limit). */
     fun handle(request: Request): Response {
         var response = try {
@@ -140,10 +149,11 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
     private fun notThisApp(): Response = Response(403, Body.Bytes("Not this app's scribe.\n".toByteArray()),
                                                   mutableListOf("Content-Type" to TEXT))
 
+    private fun misdirected(): Response = Response(421, Body.Bytes(MISDIRECTED.toByteArray()),
+                                                   mutableListOf("Content-Type" to TEXT))
+
     private fun route(request: Request): Response {
-        if (!Security.answersTo(Security.hostName(request.headers["host"]), config.allowed)) {
-            return Response(421, Body.Bytes(MISDIRECTED.toByteArray()), mutableListOf("Content-Type" to TEXT))
-        }
+        if (!Security.answersTo(Security.hostName(request.headers["host"]), config.allowed)) return misdirected()
         val path = try {
             PyUrl.unquote(PyUrl.urlsplit(request.target).path, strict = true)
         } catch (e: PyUrl.Invalid) {

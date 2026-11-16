@@ -6,6 +6,10 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverridesError
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -19,6 +23,7 @@ import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.Commands
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobHistory
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
@@ -97,7 +102,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
- * library's files behind them; one job queue for every write, its command runners (`get`, `versions`, `lacuerda`,
+ * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
+ * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -129,7 +135,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
 
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
-        queue = JobQueue(deps.scope, commands = Commands(commands))
+        queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
         // The lookup's seams are the real ones, PhoneRender's and SongbookPagesImpl's (SongPages.NONE and
         // SongbookPages.NONE are the corpus's lookup replays', a caracole that makes no page).
         parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
@@ -241,12 +247,25 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     }
 
     /** After each job: the search's answers forgotten (a lookup, a sync or an import may have changed what it
-     * finds), a job that failed told ([Alerts.failed]: the app decides whether its owner was looking), and the files
+     * finds), a job that failed told ([Alerts.failed]: the app decides whether its owner was looking), the pages of
+     * its song owed and the render job queued when it moved the song and made no page of it ([PhoneRender.moved]: a
+     * review's answer, a LaCuerda pick noted; a full queue leaves them owed, for the next start), and the files
      * shared to the app that wait for a song tried again ([InboxRetry]). */
     private fun afterJob(job: Job) {
         search.invalidate()
         if (job.state == Job.FAILED) {
             deps.alerts.failed(job.display, JobViews.line(job).text)
+        }
+        if (job.state == Job.DONE && job.spec.kind != PhoneKinds.RENDER.kind && deps.database.read { db ->
+                // its song: the one it named, else the song of its key (a review's, keyed by its song alone)
+                val song = job.songId ?: Songs.byKey(db, job.key)?.id
+                song != null && render.moved(db, song)
+            }) {
+            deps.database.writeBlocking { db -> render.owe(db) }
+            try {
+                renderAgain()
+            } catch (_: QueueFull) {
+            }
         }
         inbox.afterJob(job)
     }
@@ -284,13 +303,24 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ).first
     }
 
-    /** What the served page carries of the queue: the songs with a job that waits or runs, and those jobs. */
+    /** What the served page carries of the queue: the songs with a job that waits or runs, and those jobs; and the
+     * songs a review must come first for (library_routes.library's `held`: LookupForms.reviewFirst, as POST /fetch
+     * refuses them), which the page offers no Fetch for. */
     private fun controls(): ServerControls {
         val active = queue.snapshot().filter { it.state == "queued" || it.state == "running" }
         val removing = active.filter { it.spec.kind == "remove" }.mapNotNull { it.spec.songId }.toSet()
         val busy = active.filter { it.spec.kind != "remove" }.mapNotNull { it.spec.songId }.toSet()
+        val held = deps.database.read { db ->
+            val overrides = try {
+                Overrides.read(db)
+            } catch (_: OverridesError) {
+                null  // the page says what is wrong with them; POST /fetch refuses as it can
+            }
+            if (overrides == null) emptySet()
+            else Songs.list(db).filter { LookupForms.reviewFirst(it, overrides) }.mapTo(HashSet()) { it.id }
+        }
         return ServerControls(
-            csrf = deps.csrf, busy = busy, active = active.size, removing = removing,
+            csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
         )
     }

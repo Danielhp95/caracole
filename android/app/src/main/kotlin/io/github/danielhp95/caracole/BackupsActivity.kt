@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -112,6 +113,7 @@ class BackupsActivity : Activity() {
         buttons.addView(Button(this).apply {
             text = getString(R.string.backup_export)
             tag = EXPORT_TAG + name
+            isEnabled = backup.missing == 0  // a backup that lacks files can't be exported (Backups.exportTo)
             setOnClickListener { export(backup) }
         })
         buttons.addView(Button(this).apply {
@@ -243,8 +245,15 @@ class BackupsActivity : Activity() {
         /** The backup named [name] exported, as one zip, to [uri] (the document the picker made). */
         fun exportTo(context: Context, phone: Phone, name: String, uri: Uri) {
             val file = File(File(phone.parts.stateDir, Backups.FOLDER), name)
-            val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("the document can't be written")
-            out.use { Backups.exportTo(file, it) }
+            try {
+                val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("the document can't be written")
+                out.use { Backups.exportTo(file, it) }
+            } catch (e: Exception) {
+                // The document the picker made holds no whole export (a backup that lacks a file writes nothing):
+                // deleted, so no empty or broken zip is left where the owner put it.
+                runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                throw e
+            }
         }
 
         /**

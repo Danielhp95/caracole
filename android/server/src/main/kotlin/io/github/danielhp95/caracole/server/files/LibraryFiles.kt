@@ -72,7 +72,8 @@ class PhoneGate(val database: Database) : UnitGate {
  *    book.songbook_csp is too); else the mirror's, as below. One changed on disk, or of a unit moved since, is never
  *    served: the mirror's then, or a message page saying so;
  * 2. else the phone's own folder, [libraryDir]: a file its `files` table records at that path, or a .cho the phone
- *    wrote there while it is current as a page is, of a kind files.py serves ([FileTypes]: never a page), a regular
+ *    wrote there while it is current as a page is, or a song's `lyrics.txt`, `lyrics.lrc` or `info.json` in its
+ *    folder (which its card links), of a kind files.py serves ([FileTypes]: never a page), a regular
  *    file under [libraryDir] reached through no link, at most 64 MiB; a download named for its song
  *    (download_names.py);
  * 3. else the [mirror]'s file at that path, with the headers caracole serve listed for it exactly (a page's policy,
@@ -92,7 +93,22 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         val parts = relative.split('/')
         if (parts.any { it.isEmpty() || it == "." || it == ".." || it.startsWith(".") || '\u0000' in it }) return null
         if (isPage(parts.last())) return page(relative, parts)
-        return own(relative, parts) ?: writtenFile(parts) ?: mirrored(relative)
+        return own(relative, parts) ?: writtenFile(parts) ?: songsFile(parts) ?: mirrored(relative)
+    }
+
+    /** A file the phone writes into a song's folder but records in no `files` row, which the song's card links
+     * (Cards.folderNames): its lyrics (LyricsFiles' `lyrics.txt`, `lyrics.lrc`) and its `info.json` (InfoJson), in
+     * the folder of a song the library has; null otherwise. */
+    private fun songsFile(parts: List<String>): Response? {
+        if (parts.size != 3 || parts[2] !in SONG_FILES) return null
+        val type = FileTypes.TYPES[PyText.asciiLower(FileTypes.suffix(parts[2]))] ?: return null
+        val known = database.read { db ->
+            db.query("SELECT artist, title FROM songs") { it.text(0)!! to it.text(1)!! }
+                .any { (artist, title) -> SafeName.songFolder(artist, title) == (parts[0] to parts[1]) }
+        }
+        if (!known) return null
+        val file = regularFile(parts) ?: return null
+        return Response(200, Body.FromFile(file, file.length()), mutableListOf("Content-Type" to type))
     }
 
     /** What the phone wrote at a path, as its records and the file say. */
@@ -285,6 +301,9 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         const val SHEET = "sheet.txt"
         const val SONG = "song/"
         const val HTML = "text/html; charset=utf-8"
+
+        /** What the phone writes into a song's folder with no `files` row: its lyrics and info.json. */
+        val SONG_FILES = setOf("lyrics.txt", "lyrics.lrc", "info.json")
 
         /** render.py's HUMAN_OUTPUTS[2] and AUTO_OUTPUTS[2]: a sheet's viewer. */
         val SHEET_PAGES = setOf("sheet.html", "sheet (auto).html")

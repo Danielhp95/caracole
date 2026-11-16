@@ -42,8 +42,15 @@ class SyncService : Service() {
         lastStart = startId
         val line = Caracole.working()?.line ?: MutableStateFlow(null)
         // In the foreground at once, as startForegroundService asks of every start, then the line followed: once it
-        // is gone the service stops (stopSelf of the last start alone: a start asked since keeps it).
-        show(line.value ?: getString(R.string.working))
+        // is gone the service stops (stopSelf of the last start alone: a start asked since keeps it). A start that
+        // comes once the work is over already (the line gone before it was delivered, which the watcher heard while
+        // this start kept the service) stops at once: no line will come to stop it.
+        val (shown, over) = atStart(line.value, getString(R.string.working))
+        show(shown)
+        if (over) {
+            stop()
+            return START_NOT_STICKY
+        }
         if (watching == null) {
             watching = scope.launch {
                 line.collect { said -> if (said == null) stop() else show(said) }
@@ -97,6 +104,10 @@ class SyncService : Service() {
 
     companion object {
         private const val TAG = "CaracoleSync"
+
+        /** What a start shows with the queue's [line] now, and whether it stops after: [working]'s words and true when
+         * there is none, the work over before this start came. */
+        internal fun atStart(line: String?, working: String): Pair<String, Boolean> = (line ?: working) to (line == null)
         private const val NOTIFICATION = 3
 
         /** Started for the queue's work ([Working]'s start); refused in the background, which is said in the log. */
