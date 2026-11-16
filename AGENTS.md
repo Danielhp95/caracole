@@ -2263,7 +2263,8 @@ helpers/corpus.py.
   protocol, in the spec).
 - A `SCHEMA_VERSION` or `KEY_VERSION` bump moves the phone in lockstep: migrations.json regenerated,
   `Database.SCHEMA_VERSION` and `Normalize.KEY_VERSION` bumped, `LibraryStore.ensureCurrentKeys` re-keying as
-  `songs.ensure_current_keys` does.
+  `songs.ensure_current_keys` does, and `phone_overrides` from each entry's written name, as overrides.py keys it
+  at a load.
 - `:core`, `:viewer` and `:server` never call a JDK or ICU text API (case, normalization, `Character` classes,
   `java.util.regex`'s own `\w` or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by
   device. They use `core.py` and its tables, held by the shared check `core.testing.ForbiddenApis` (each module's

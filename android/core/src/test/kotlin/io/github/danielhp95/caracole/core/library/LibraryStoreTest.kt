@@ -268,6 +268,39 @@ class LibraryStoreTest {
         }
     }
 
+    /** Python keys an overrides entry by its written name at every load; the phone keeps a key per row, which a
+     * re-keying makes again from that name, so that a re-keyed song keeps its pins, its match, its own version. */
+    @Test fun theOverridesEntriesAreReKeyedFromTheNamesTheyAreWrittenUnder() {
+        phone { db, store ->
+            val song = store.add(db, "Muse", "Hysteria", now = NOW)
+            val old = "muse-as-keyed-before/hysteria"
+            db.execute("UPDATE songs SET key = ?, source_ids = ? WHERE id = ?", old, """{"wanted": ["$old"]}""", song.id)
+            fun entry(table: String, key: String, written: String, value: String) =
+                db.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES (?, ?, ?, ?)",
+                           table, key, written, value)
+            entry("transpose", old, "Muse - Hysteria", "2")
+            entry("ignore", "radiohead-old/creep", "Radiohead - Creep", "true")
+            entry("artist_url", "muse-old", "Muse", "\"https://www.ultimate-guitar.com/artist/muse_1000\"")
+            entry("block", "4242", "4242", "true")
+            entry("transpose", "broken", "no dash here", "3")  // a name that names no song: kept as it is
+            // Two entries that now name one song: the later one, as Python's load keeps it.
+            entry("version", old, "Muse - Hysteria", "\"key=A&capo=0\"")
+            entry("version", "muse/hysteria", "Muse - Hysteria", "\"key=G&capo=0\"")
+            db.kvSet("songs:key_version", (Normalize.KEY_VERSION - 1).toString())
+
+            store.ensureCurrentKeys(db)
+
+            val key = Normalize.identityKey("Muse", "Hysteria")
+            assertEquals(key, Songs.byId(db, song.id)!!.key)
+            assertEquals("""{"transpose":2,"version":"key=G&capo=0"}""",
+                         Canonical.write(OverridesStore.songEntries(db, key)))
+            val rows = db.query("SELECT tbl, key FROM phone_overrides ORDER BY tbl, key") { it.text(0) to it.text(1) }
+            assertEquals(listOf("artist_url" to Normalize.slugKey("Muse"), "block" to "4242",
+                                "ignore" to Normalize.identityKey("Radiohead", "Creep"), "transpose" to "broken",
+                                "transpose" to key, "version" to key), rows)
+        }
+    }
+
     // --- the song's folder ----------------------------------------------------------------------------------------
 
     @Test fun aSongsFileIsAFileOfItsFolderNeverThroughALink() {

@@ -96,7 +96,7 @@ data class Overrides(
          * Python derives each entry's key from its written name at every load, so a `normalize.KEY_VERSION` bump
          * re-keys the computer's overrides by itself; the phone reads the key the row keeps, and so relies on
          * `LibraryStore.ensureCurrentKeys` re-keying `phone_overrides` from each row's written name in the same
-         * bump (the KEY_VERSION lockstep), which M3's re-keying does not do yet.
+         * bump (the KEY_VERSION lockstep), which its re-keying does (Rekey.rekeyOverrides).
          */
         fun read(db: Db, keyVersion: ((String) -> Any?)? = null,
                  checkSpec: ((JsonElement) -> Unit)? = null): Overrides =
