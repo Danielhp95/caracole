@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.internal.overrides.Addresses
@@ -68,10 +69,12 @@ object Take {
      * database corrupt, a statement SQLite refuses), as sqlite3's errors but IntegrityError stop Python's: each unit
      * taken before it stays taken (each is a savepoint of its own), and those after it are never tried. When the
      * phone's own units can't be read for [expectedHere]'s check, every unit it names is left saying why ("this
-     * library can't be read: …"), as _digests_here says it.
+     * library can't be read: …"), as _digests_here says it. [checks] are the viewer's checks of a song's
+     * `[version]` and `[harmonica]` entries (the engine's, Assembly's), which leave a unit whose entries they refuse.
      */
     fun applyUnits(db: Db, store: LibraryStore, source: UnitSource, wanted: List<Pair<String, String?>>,
-                   expectedHere: Map<String, String?>, now: String, onUnit: ((String, String) -> Unit)? = null): Applied {
+                   expectedHere: Map<String, String?>, now: String, checks: OverrideChecks = OverrideChecks.NONE,
+                   onUnit: ((String, String) -> Unit)? = null): Applied {
         val taken = mutableListOf<String>()
         val left = mutableListOf<Pair<String, String>>()
         val songs = sortedSetOf<Long>()
@@ -107,7 +110,7 @@ object Take {
                     "song" -> if (doc == null) {
                         store.remove(db, rest, now)
                     } else {
-                        val song = SongTake(db, store, source, rest, doc, now).take()
+                        val song = SongTake(db, store, source, rest, doc, now, checks).take()
                         songs += song.id
                         songs += song.respelled.map { it.id }
                         respelled += song.respelled.filter { it.key != rest }.map { "song/${it.key}" }

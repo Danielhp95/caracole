@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.file.FileError
@@ -129,11 +130,14 @@ class SameCaracole(message: String) : Exception(message)
  *
  * Any stage that stops the sync is a [SyncFailed], with the outcome so far; a refusal before any change has none.
  * The push names the phone's library [name] and its caracole's [version] (the app's own, which it may pass).
+ * [checks] are the viewer's checks of a song's `[version]` and `[harmonica]` entries, which a take runs as
+ * overrides.put_song_entries reads its entries back (Assembly gives Versions.keyVersion and HarpTabs.checkSpec).
  */
 class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: File,
                  val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String) -> Unit)?,
                  val name: String = PHONE_NAME, val version: String = CARACOLE,
-                 val pagesFromFile: ((SyncFile, List<String>) -> Unit)? = null) {
+                 val pagesFromFile: ((SyncFile, List<String>) -> Unit)? = null,
+                 val checks: OverrideChecks = OverrideChecks.NONE) {
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
 
@@ -560,7 +564,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
                     // Each unit taken is the phone's as it is done (a savepoint of its own): recorded then, so that
                     // a take the database stops says what it took before.
-                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { id, what ->
+                    Take.applyUnits(db, store, source, wanted, expectedHere, now, checks) { id, what ->
                         if (what == "taken") done.taken.add(id)
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")

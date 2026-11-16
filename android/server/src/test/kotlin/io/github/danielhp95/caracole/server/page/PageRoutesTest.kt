@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.server.page
 
+import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.py.PyHtml
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.testing.TestApp
@@ -14,6 +16,7 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -70,6 +73,27 @@ class PageRoutesTest {
             assertTrue(page.assets.template("sync-sheet.html") in html && "id=\"tab-sync\"" !in html, "the sheet, no tab")
             // The page is the page of the data it carries, for these controls: nothing of the route's own in it.
             assertEquals(page.served(data, ServerControls(TestApp.CSRF, sync = true), ""), html)
+        }
+    }
+
+    @Test
+    fun `overrides that can't be read are caracole serve's 503 in its words, never a bug's 500`() {
+        val mirror = mirrorOf(tmp.newFolder(), libraryPage(mirroredData(emptyList())))
+        val test = TestApp(tmp.newFolder(), modules = { database ->
+            listOf(PageRoutes(database, page, PhonePageData(MirrorPageData(mirror), LibraryStore(File(tmp.root, "library"))),
+                              { ServerControls(TestApp.CSRF, sync = true) }))
+        }).also { opened.add(it) }
+        addSong(test.database, "muse/hysteria", "Muse", "Hysteria")
+        test.database.writeBlocking { db ->
+            db.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES ('transpose', 'muse/hysteria', " +
+                           "'Muse - Hysteria', '99')")
+        }
+        for (path in listOf("/", "/index.html")) {
+            val response = test.get(path)
+            assertEquals(503, response.status, path)
+            // library_routes.library's app.overrides(" Fix it, then reload this page."), the reader's words.
+            assertTrue("Can't read overrides.toml: [transpose] 'Muse - Hysteria': expected semitones between -11 and " +
+                           "11. Fix it, then reload this page." in PyHtml.unescape(response.text), response.text)
         }
     }
 

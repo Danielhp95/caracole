@@ -107,10 +107,12 @@ data class Overrides(
          * that can't be read: what a take checks once it has written a song's entries, inside the unit's savepoint,
          * as overrides.put_song_entries reads its document back ("Entries the reader would refuse raise
          * OverridesError, and nothing is written"), so that no unit makes the phone's overrides unreadable.
+         * [checks] are the viewer's (a `[version]` kept by its key, a `[harmonica]` reading), which Python's reader
+         * always runs: core reaches them only through this seam, Assembly giving the viewer's.
          */
-        fun checkSong(db: Db, key: String) {
+        fun checkSong(db: Db, key: String, checks: OverrideChecks = OverrideChecks.NONE) {
             val tables = (OverridesStore.SONG_TABLES + "ignore").joinToString(", ") { "'$it'" }
-            parse(entries(db, "WHERE tbl IN ($tables) AND key = ?", key), null, null)
+            parse(entries(db, "WHERE tbl IN ($tables) AND key = ?", key), checks.keyVersion, checks.checkSpec)
         }
 
         private fun entries(db: Db, where: String, vararg args: Any?): List<Pair<String, Entry>> =
@@ -211,5 +213,18 @@ data class Overrides(
             }
             return out
         }
+    }
+}
+
+/**
+ * The viewer's checks of an overrides entry, which core can't import (the viewer is built on it): [keyVersion],
+ * viewer/version.py's `key_version` (`Versions.keyVersion`), and [checkSpec], viewer/harptab.py's `check_spec`
+ * (`HarpTabs.checkSpec`), each refusing by raising IllegalArgumentException with its words. Assembly gives the
+ * viewer's to the sync engine, so that a take checks a song's entries as overrides.put_song_entries reads them
+ * back; [NONE] checks neither, trusting them.
+ */
+class OverrideChecks(val keyVersion: ((String) -> Any?)?, val checkSpec: ((JsonElement) -> Unit)?) {
+    companion object {
+        val NONE = OverrideChecks(null, null)
     }
 }

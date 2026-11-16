@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -45,7 +46,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *   files, those no longer kept going once the take is done. The folders' changes are undone when the savepoint is.
  */
 internal class SongTake(private val db: Db, private val store: LibraryStore, private val source: UnitSource,
-                        private val key: String, private val doc: JsonObject, private val now: String) {
+                        private val key: String, private val doc: JsonObject, private val now: String,
+                        private val checks: OverrideChecks = OverrideChecks.NONE) {
     /** The song's id here, and the songs respelled to the peer's spelling of its artist. */
     data class Taken(val id: Long, val respelled: List<SongRow>)
 
@@ -127,7 +129,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
                 val entries = need(doc, "overrides") as? JsonObject ?: throw UnitError("its overrides can't be read")
                 OverridesStore.putSongEntries(db, key, "${names.artist} - ${names.title}", entries)
                 // put_song_entries' read back: an entry the reader refuses leaves the unit, nothing written.
-                Overrides.checkSong(db, key)
+                Overrides.checkSong(db, key, checks)
                 Taken(song.id, respelled)
             }
         } catch (e: Throwable) {

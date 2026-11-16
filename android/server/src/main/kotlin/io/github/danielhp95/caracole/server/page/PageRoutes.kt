@@ -2,10 +2,12 @@ package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.server.http.App
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PageIcon
+import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
@@ -38,11 +40,16 @@ class PageRoutes(val database: Database, val page: LibraryPage, val data: PageDa
         Route("GET", "/favicon.ico", "the page's mark, for a browser that asks for it", get = GetAnswer { icon() }),
     )
 
-    /** The library page, as the phone serves it now. */
+    /** The library page, as the phone serves it now; overrides that can't be read refused (503) in caracole serve's
+     * words (library_routes.library's `app.overrides(" Fix it, then reload this page.")`). */
     fun library(): Response {
         val controls = controls()
         val now = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
-        val built = database.read { db -> withSongbooks(db, data.data(db, now)) }
+        val built = try {
+            database.read { db -> withSongbooks(db, data.data(db, now)) }
+        } catch (e: OverridesError) {
+            throw Refused(503, "Can't read overrides.toml", "Can't read overrides.toml: ${e.message}. $FIX_IT")
+        }
         val html = page.served(page.withServer(built, controls), controls, libraryName())
         return Response(200, Body.Bytes(html.toByteArray()), mutableListOf("Content-Type" to HTML, "Content-Security-Policy" to App.FRAMES))
     }
@@ -61,6 +68,9 @@ class PageRoutes(val database: Database, val page: LibraryPage, val data: PageDa
 
     companion object {
         const val HTML = "text/html; charset=utf-8"
+
+        /** What library_routes.library says after what is wrong with the overrides. */
+        const val FIX_IT = "Fix it, then reload this page."
 
         /** The Songbooks tab's data of the phone's library [data] makes the page of (its store, its mirror and its
          * cards: SongbookSection.data, `/jobs.json`'s), or null for a page of other data (a test's). */

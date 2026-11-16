@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
@@ -70,6 +71,8 @@ import io.github.danielhp95.caracole.server.routes.VersionsRoutes
 import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
 import io.github.danielhp95.caracole.server.songbooks.SongbookRunner
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
+import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
+import io.github.danielhp95.caracole.viewer.version.Versions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -168,6 +171,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         },
         // An import's pages kept as a layer of the mirror, the layers then cut to what the phone still serves.
         pagesFromFile = deps.mirror?.let { SyncFileRoutes.pagesFromFile(it, deps.libraryDir, PhoneGate(deps.database)) },
+        // A song's [version] and [harmonica] entries checked as overrides.put_song_entries reads them back.
+        checks = OVERRIDE_CHECKS,
     ).also { it.sweep() }  // the index files a sync killed in its middle left
 
     /** The Sync tab's routes, which the app's unattended sync (`alone`) and Settings' Test (`tested`) ask too. */
@@ -357,3 +362,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
 
     private fun now(): String = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
 }
+
+/** The viewer's checks of an overrides entry, which core's take reaches through OverrideChecks: viewer/version.py's
+ * `key_version` and viewer/harptab.py's `check_spec`, as Python's reader runs them on every load. */
+internal val OVERRIDE_CHECKS = OverrideChecks(Versions::keyVersion, HarpTabs::checkSpec)
