@@ -170,31 +170,33 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         for ((name, value) in carried) {
             val prefix = name.substringBefore('|')
             val more = name.substringAfter('|', "")
-            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", json(text(value), "its records"))
+            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", json(text(value), "a record of its kept versions that isn't JSON"))
         }
     }
 
     /** A text cell the phone's readers read as JSON (a carried record, a version's raw record, the match's
-     * candidates), as json.loads reads it; else UnitError, so that no unit stores what the library page can't read. */
+     * candidates), as json.loads reads it; else UnitError in peer_sync._check_storable's words ([what] "that isn't
+     * JSON"), so that no unit stores what the library page can't read. */
     private fun json(text: String, what: String): String {
         try {
             PyJson.loads(text)
         } catch (e: Exception) {
-            throw UnitError("$what can't be read: ${e.message}")
+            throw notJson(what)
         }
         return text
     }
 
+    private fun notJson(what: String) = UnitError("its entry can't be read (TypeError: $what)")
+
     /** The document's text cells read as JSON, checked before anything is written ([json]): the record's match
      * candidates, and each version's raw record, a JSON object or none (versions._row's "{}"). */
     private fun checkJsonCells(record: JsonObject) {
-        (record["match_candidates"] as? JsonPrimitive)?.takeIf { it.isString }?.let { json(it.content, "its match") }
+        (record["match_candidates"] as? JsonPrimitive)?.takeIf { it.isString }
+            ?.let { json(it.content, "its match candidates that aren't JSON") }
         for (version in versions()) {
             val raw = (version["raw"] as? JsonPrimitive)?.takeIf { it.isString }?.content
             if (raw.isNullOrEmpty()) continue
-            if (PyJson.loads(json(raw, "a version's record")) !is JsonObject) {
-                throw UnitError("a version's record can't be read: it is no JSON object")
-            }
+            if (PyJson.loads(json(raw, RAW)) !is JsonObject) throw notJson(RAW)
         }
     }
 
@@ -314,6 +316,9 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
 
         /** peer_sync.CARRIED_KV: the per-song kv a song unit carries, keyed `<prefix>|<rest>` in its document. */
         val CARRIED_KV = listOf("sheet_versions:yours:", "sheet_versions:unkeepable:", "sheet_versions:same:")
+
+        /** peer_sync._check_storable's words for a version's raw record it can't store. */
+        private const val RAW = "a version's raw record that isn't JSON"
 
         private fun string(e: JsonElement?): String? = (e as? JsonPrimitive)?.takeIf { it.isString }?.content
 

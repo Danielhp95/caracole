@@ -236,10 +236,10 @@ class TakeTest {
     @Test fun aSongsTextCellThatTheReadersCantReadAsJsonLeavesTheUnit() {
         val key = Normalize.identityKey("Muse", "Hysteria")
         for ((doc, why) in listOf(
-            hysteria(kv = """{"sheet_versions:same:|": "not json"}""") to "its records can't be read",
-            hysteria(raw = "not json") to "a version's record can't be read",
-            hysteria(raw = "[1]") to "a version's record can't be read: it is no JSON object",
-            hysteria(candidates = "not json") to "its match can't be read",
+            hysteria(kv = """{"sheet_versions:same:|": "not json"}""") to "its entry can't be read (TypeError: a record of its kept versions that isn't JSON)",
+            hysteria(raw = "not json") to "its entry can't be read (TypeError: a version's raw record that isn't JSON)",
+            hysteria(raw = "[1]") to "its entry can't be read (TypeError: a version's raw record that isn't JSON)",
+            hysteria(candidates = "not json") to "its entry can't be read (TypeError: its match candidates that aren't JSON)",
         )) {
             val phone = phone()
             phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
