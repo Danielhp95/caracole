@@ -1214,3 +1214,20 @@ def test_reading_settings_are_no_change(tmp_path):
         went = [b.js("window.went"), b.js(ASKED)]
     assert "fs=" in address and "nm=both" in address and "vol=0" in address and "necks=0" in address
     assert went[1] is None and went[0] == [[EXPORTS + "&" + address[1:], False]]
+
+
+@in_chromium
+@pytest.mark.parametrize("change", ["t-up", "capo-up"])
+def test_a_progression_playing_stops_once_the_song_is_played_otherwise(tmp_path, change):
+    """Transposed in the bar (or the capo moved) while a progression plays: it stops, ■ back to ▶, never going on in
+    chords the page no longer shows."""
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        b.js(FAKE_SOUND)
+        open_harmony(b)
+        b.js("document.querySelectorAll('#harmony .prog-play')[0].click()")
+        playing = b.js("document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')")
+        b.js("window.stopped = false")
+        b.js(f"document.getElementById('{change}').click()")
+        after = b.js("[window.stopped, document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')]")
+    assert playing == "Stop"
+    assert after == [True, "Play Verse"], after

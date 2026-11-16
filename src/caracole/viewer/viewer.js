@@ -2179,7 +2179,8 @@
     const found = window.caracoleSound;
     return found && found.available !== false && typeof found.play === "function" ? found : null;
   };
-  let playing = null;  // {n: the section, at: the numeral sounding, handle}
+  let playing = null;  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}
+  const soundsNow = () => musicOf(state) + "|" + state.inst;
   const drawPlaying = () => {
     for (const li of $("progs").children) {
       const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
@@ -2189,8 +2190,8 @@
       li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
     }
   };
-  // ■, another ▶ or the panel closed: the progression stops; the panel closed (``all``), every sound strum.js
-  // still makes too, a chord tapped among them.
+  // ■, another ▶, the song played otherwise (drawHarmony) or the panel closed: the progression stops; the panel
+  // closed (``all``), every sound strum.js still makes too, a chord tapped among them.
   function stopPlaying(all) {
     const was = playing;
     playing = null;
@@ -2218,7 +2219,7 @@
     });
     const all = [];
     for (let r = 0; r < repeats; r++) all.push(...cycle);
-    const me = { n, at: -1, handle: null };
+    const me = { n, at: -1, handle: null, sounds: soundsNow() };
     playing = me;
     drawPlaying();
     me.handle = synth.play(all, { bpm: state.bpm,
@@ -2239,6 +2240,8 @@
   };
   const drawHarmony = () => {
     if (!key) return;
+    // Transposed, or another capo, mode, swap, shape or instrument: what it plays is no longer the page's chords.
+    if (playing && playing.sounds !== soundsNow()) stopPlaying();
     $("harmony-key").textContent = "In " + keyWords() + ".";
     const neckBox = $("harmony-neck");
     const inNeck = neckBox.contains(document.activeElement);
