@@ -715,3 +715,40 @@ def test_build_from_dir_reads_the_ukulele_files_too(conn, tmp_path):
     stats = build_index(conn, None, NOW, from_dir=d)
     assert stats.parsed == ("1", "ukulele1", "last")
     assert [r[3] for r in rows(conn)] == ["chords", "chords", "ukulele"]
+
+
+def test_a_sitemap_cut_short_is_an_error_and_the_next_night_reads_it_whole_past_its_cached_copy(conn, tmp_path):
+    # One night sitemap1 answers 200 with its body cut short, under the file's own validators: it is no sitemap of
+    # fewer tabs, the build isn't finished, and the next night, whose conditional request the site answers 304, asks
+    # for it once more past the cut-short copy in the cache.
+    from datetime import timedelta
+
+    from caracole.ug.index import index_state
+
+    whole = urlset("oasis/wonderwall-chords-1001", "radiohead/creep-chords-2002")
+    cut = whole[: whole.index(b"radiohead/creep-chords-2002")]
+    etag = '"sitemap1-of-2019"'
+
+    class Site(FakeUG):
+        short = True
+
+        def handler(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/sitemap1.xml":
+                self.requests.append(("sitemap1.xml", request.headers.get("if-none-match")))
+                if request.headers.get("if-none-match") == etag:
+                    return httpx.Response(304, headers={"etag": etag})
+                return httpx.Response(200, content=cut if self.short else whole, headers={"etag": etag})
+            return super().handler(request)
+
+    site = Site({"sitemap.xml": sitemap_index("sitemap1.xml", "sitemap2.xml", "sitemap_last.xml"),
+                 "sitemap2.xml": urlset("blur/beetlebum-chords-3003"), "sitemap_last.xml": urlset("x/y-chords-9")})
+    start = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
+    with pytest.raises(ProviderError, match="cut short"):
+        build_index(conn, site.client(tmp_path / "cache"), start)
+    assert index_state(conn) != "complete"
+    site.short = False
+    refresh_index(conn, site.client(tmp_path / "cache"), start + timedelta(days=1))
+    tabs = {r[0] for r in conn.execute("SELECT tab_id FROM ug_index")}
+    assert {1001, 2002, 3003, 9} <= tabs
+    assert index_state(conn) == "complete"
+    assert [inm for name, inm in site.requests if name == "sitemap1.xml"] == [None, etag, None]

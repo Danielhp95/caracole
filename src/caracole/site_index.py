@@ -24,7 +24,6 @@ rows, keys and when it was last checked) and ``<provider>:index:complete_at``.
 from __future__ import annotations
 
 import gzip
-import re
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -33,8 +32,8 @@ from typing import Any
 
 from caracole import normalize, stamps
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
-from caracole.http import Client, ProviderError, Response
-from caracole.ug.sitemap import iter_locs
+from caracole.http import Client, ProviderError, Response, read_once_more
+from caracole.ug.sitemap import is_whole, iter_locs
 
 
 def _as_is(url: str) -> str:
@@ -43,8 +42,6 @@ def _as_is(url: str) -> str:
 
 ONE = "sitemap"  # the name of a site's one sitemap, when it has no index
 _GZIP_MAGIC = b"\x1f\x8b"
-_CLOSED = re.compile(rb"</(?:[\w.-]+:)?(?:urlset|sitemapindex)\s*>")  # a sitemap's last tag, read whole
-_TAIL = 4096  # the bytes at a sitemap's end its last tag is looked for in: past it, comments and spaces alone
 
 
 @dataclass(frozen=True)
@@ -97,7 +94,8 @@ def refresh(
     if site.child is None:  # one sitemap, no index
         listed = {ONE: site.fetch_url(site.index_url)}
     else:
-        listed = _children(site, client.get(site.index_url, cache=False, conditional=True))
+        listed = read_once_more(client, client.get(site.index_url, cache=False, conditional=True), site.index_url,
+                                lambda r: _children(site, r), ProviderError)
     for name in [n for n in sitemaps(conn, site) if n not in listed]:
         _forget(conn, site, name)
     for name, url in listed.items():
@@ -110,7 +108,9 @@ def refresh(
         if r.status == 304 and current and _validators_of(entry) == validators:
             _record(conn, site, name, {**entry, "checked_at": stamps.stamp(now)})
             continue
-        _store(conn, site, name, _rows(site, r.content, url, r.status), validators, now)
+        # A copy the cache holds cut short (a 304 hands it back) is asked for once more, past the cache.
+        rows, r = read_once_more(client, r, url, lambda a: (_rows(site, a.content, url, a.status), a), ProviderError)
+        _store(conn, site, name, rows, _validators(r.headers), now)
         on_read()
     kv_set(conn, site.complete_key, stamps.stamp(now))
 
@@ -149,7 +149,7 @@ def _locs(site: Site, data: bytes, url: str, status: int) -> list[str]:
         raise ProviderError(site.provider, url, status, f"unreadable sitemap: {e}") from e
     if not locs:
         raise ProviderError(site.provider, url, status, "not a sitemap (no <loc> entries)")
-    if _CLOSED.search(text[-_TAIL:]) is None:
+    if not is_whole(text):
         raise ProviderError(site.provider, url, status, "a sitemap cut short (no closing </urlset> or </sitemapindex>)")
     return locs
 
