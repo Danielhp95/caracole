@@ -596,6 +596,7 @@ def _locked_client() -> type[PoliteClient]:
 
 
 # Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
+CONNECT_PATIENCE = 60.0  # s: how long bulk work tries again a connection that fails before any byte is sent
 _SENT = ("ok", "not_modified", "redirect", "blocked", "error")
 _LAST_SENT = "http:last_request:"  # + provider: when any caracole last sent it a request, in seconds
 
@@ -709,7 +710,9 @@ def make_client(
     the lock to a waiting lookup in its pauses. ``interactive``, a lookup's
     (``caracole get``), keeps ``lookup_policy``: a gap of a quarter of a second, and a
     few requests; its run id starts with ``lookup:`` so the hourly budget counts
-    them, and it never hands the lock over. Either way, a site with a ``per_day``
+    them, and it never hands the lock over. Bulk work's tries a connection that fails before any byte is
+    sent again for up to ``CONNECT_PATIENCE`` (a run that starts as the laptop wakes, before its Wi-Fi has
+    an address); a lookup's says at once. Either way, a site with a ``per_day``
     (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
     """
     if interactive and not run_id.startswith(LOOKUP_RUN):
@@ -742,6 +745,7 @@ def make_client(
             conn=conn,
             yields=not interactive,
             seen=seen,
+            connect_patience=0.0 if interactive else CONNECT_PATIENCE,
         )
     except BaseException:
         _release(lock)

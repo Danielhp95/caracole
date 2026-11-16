@@ -442,6 +442,38 @@ class _Noon(datetime):
         return noon if tz is None else noon.astimezone(tz)
 
 
+def test_bulk_work_waits_for_a_network_that_isnt_up_yet_and_a_lookup_never_does(cfg, conn, pauses, monkeypatch):
+    # The nightly run starts as the laptop wakes, before Wi-Fi has an address: its first request is tried again
+    # within a minute, while a lookup, asked for now, says at once that the site couldn't be reached.
+    import httpx
+
+    from caracole.http import ProviderError
+
+    tries: list[str] = []
+
+    def answer(request):
+        tries.append(str(request.url))
+        if len(tries) <= 2:
+            raise httpx.ConnectError("[Errno -3] Temporary failure in name resolution", request=request)
+        return httpx.Response(200, text="ok")
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(answer))
+    bulk = make_client(cfg, conn, "ug", "2026-11-15T17:04:33Z")
+    try:
+        assert bulk.get("https://www.ultimate-guitar.com/sitemap.xml", cache=False).status == 200
+    finally:
+        bulk.close()
+    assert len(tries) == 3 and 2 + 4 <= sum(pauses) <= 60 + 2 * 5
+    tries.clear()
+    lookup = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        with pytest.raises(ProviderError):
+            lookup.get("https://tabs.ultimate-guitar.com/tab/1")
+    finally:
+        lookup.close()
+    assert len(tries) == 1
+
+
 def test_a_request_answered_with_a_redirect_counts_in_the_hour_the_day_and_the_pace(cfg, conn, pauses, monkeypatch):
     # gametabs.net answers a tab page with a redirect to its login, which robots.txt closes: the request reached the
     # site, so each lookup's counts it, and the next lookup's first request waits the gap after it.

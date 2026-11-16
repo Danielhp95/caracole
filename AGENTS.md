@@ -2564,6 +2564,12 @@ picks one).
 #### Either pace
 
 - One request at a time per provider (a synchronous client, and the lock below), redirect hops included.
+- A request answered with a redirect is a request sent, followed or not: `_common._SENT` and `Pace.SENT` count its
+  `redirect` event in the hour's, the day's and `http:last_request:`.
+- A connection that fails before any byte is sent (`httpx.ConnectError`: no address, no route) is tried again only
+  by bulk work, within `_common.CONNECT_PATIENCE` (60 s) a client (`PoliteClient(connect_patience=)`): a run that
+  starts as the laptop wakes, before its Wi-Fi has an address. A retry is the same request; nothing that may have
+  reached the site is ever tried again.
 - `PoliteClient` paces its own requests, and `_common._pause_after_last_request` its first after the last one any
   caracole sent (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk work's client
   paces its next one once its process let a lookup go first (`_LockedClient._after_a_lookup`).
