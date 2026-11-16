@@ -111,7 +111,11 @@ class LyricsStagesTest {
             val (blocked, _) = stage(w, AzLyricsStage::run, song, "azlyrics", mapOf(pomme to fixture("azlyrics/block.html")))
             assertEquals(StageEnd("skipped", "AZLyrics turned us back (azlyrics: 200: https://www.azlyrics.com/p/pomme.html: " +
                                       "challenge page). No more asks until later. Nothing marked not on the sites."), blocked)
-            val hit = mapOf(pomme to fixture("azlyrics/artist_pomme.html"), mononoke to fixture("azlyrics/lyrics_mononoke.html"))
+            w.db {  // the block answered no miss: back to pending, until LRCLIB's miss again
+                assertEquals("pending", io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!!.lyricsStatus)
+                io.github.danielhp95.caracole.core.library.Versions.updateSong(it, song.id, mapOf("lyrics_status" to "missing"))
+            }
+            val hit =mapOf(pomme to fixture("azlyrics/artist_pomme.html"), mononoke to fixture("azlyrics/lyrics_mononoke.html"))
             assertEquals(StageEnd("done", "lyrics from AZLyrics"), stage(w, AzLyricsStage::run, song, "azlyrics", hit).first)
             val again = w.db { io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!! }
             assertEquals(StageEnd("nothing", ""), stage(w, AzLyricsStage::run, again, "azlyrics", emptyMap()).first)
