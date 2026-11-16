@@ -3180,6 +3180,9 @@
   const UNTYPED = /^(checkbox|radio|button|submit|reset|range|color|file|image|hidden)$/;
   const typedIn = (el) => el instanceof HTMLElement && (el.isContentEditable || el.tagName === "TEXTAREA"
     || el.tagName === "SELECT" || (el.tagName === "INPUT" && !UNTYPED.test(el.type)));
+  // Escape is the Library's only while its tab shows and no dialog has it (the sync sheet's is its Cancel).
+  const inDialog = (target) => (target instanceof Element && Boolean(target.closest("dialog[open]")))
+    || Boolean(document.querySelector("dialog:modal"));
   document.addEventListener("keydown", (e) => {
     if (composing(e)) return;
     const typing = document.activeElement === input;
@@ -3188,7 +3191,7 @@
       e.preventDefault();
       input.focus();
       input.select();
-    } else if (e.key === "Escape" && state.all) {
+    } else if (e.key === "Escape" && state.all && !input.closest("[hidden]") && !inDialog(e.target)) {
       e.preventDefault();  // a search field clears itself on Escape: here it keeps what you typed
       leaveAll(!typing && results.contains(document.activeElement));
     } else if (e.key === "Escape" && typing && input.value) {

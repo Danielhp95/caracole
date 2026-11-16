@@ -1217,3 +1217,23 @@ def test_the_phones_settings_open_the_sheet_at_export_and_import_by_its_address(
     with opened(tmp_path, url + "#tab=sync", width=390, height=844, mobile=True) as page:
         at_view(page, "what")
         assert page.js("document.querySelector('[role=tab][aria-selected=true]').id") == "tab-library"
+
+
+@in_chromium
+def test_escape_in_the_sheet_is_its_cancel_and_leaves_the_librarys_search_alone(served, tmp_path):
+    # The Library tab's results stay where they were: its Escape is the Library's while that tab shows alone
+    # (library.js), so the sheet's own Escape cancels it at once.
+    sheet = "document.getElementById('sync-sheet')"
+    results = "document.body.classList.contains('searching-all')"
+    with opened(tmp_path, served(FakeSync())) as page:
+        page.js("document.getElementById('q').focus()")
+        page.type("whiskey in the jar")
+        assert page.wait("document.getElementById('found').dataset.query === 'whiskey in the jar'")
+        assert page.js(results)
+        page.click("#tab-sync")
+        assert page.wait("!document.getElementById('sync').hidden")
+        page.click("#sync-export")
+        at_view(page, "what")
+        page.press("Escape")
+        assert page.wait(f"!{sheet}.open", timeout=2), "the first Escape didn't cancel the sheet"
+        assert page.js(results), "Escape in the sheet dropped the Library tab's search results"
