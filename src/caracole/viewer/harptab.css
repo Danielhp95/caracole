@@ -44,6 +44,8 @@
 .rp[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 html:not([data-ready]) .rp { display: none; }
 .l.hl .rp { margin-bottom: 1px; }
+/* On paper, no line's ▶: nothing there plays. */
+@media print { .rp { display: none; } }
 .why { margin: 2px 0 0; color: var(--muted); font-size: .78rem; }
 .legend { margin: 8px 0 0; color: var(--muted); font-size: .82rem; }
 /* A row read with low confidence: its line and its words as written, in the viewer's tab box, its columns kept (a
