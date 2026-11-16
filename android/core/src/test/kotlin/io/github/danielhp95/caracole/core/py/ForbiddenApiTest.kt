@@ -58,6 +58,10 @@ class ForbiddenApiTest {
                      found("s.isBlank() || s.isNotBlank() || t.isNullOrBlank()"))
         assertEquals(listOf(".capitalize(", ".digitToInt("), found("s.capitalize() + c.digitToInt()"))
         assertEquals(listOf(".category"), found("val k = c.category.code"))
+        // Not text, but the same kind of trap: a class the device hasn't got (Database.kt's isSqliteError).
+        assertEquals(listOf("SQLiteException"), found("} catch (e: SQLiteException) {"))
+        assertEquals(listOf("SQLiteException"), found("if (e is androidx.sqlite.SQLiteException) x()"))
+        assertEquals(emptyList(), found("if (c.name == \"androidx.sqlite.SQLiteException\") x()"))
         assertEquals(listOf("equals(…, true)"), found("if (a.equals(b, true)) x()"))
         assertEquals(listOf("startsWith(…, true)"), found("s.startsWith(p, 2, true)"))
         assertEquals(listOf("endsWith(…, true)", "contains(…, true)"), found("s.endsWith(p,true) && s.contains(q, true)"))

@@ -1,6 +1,6 @@
 package io.github.danielhp95.caracole.core.index
 
-import androidx.sqlite.SQLiteException
+import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -98,8 +98,10 @@ object IndexExport {
             return Exported(to, names, rows, to.length())
         } catch (e: IOException) {
             throw TransferError("can't write $to: ${e.message}")
-        } catch (e: SQLiteException) {
-            throw TransferError("can't write $to: ${e.message}")
+        } catch (e: Exception) {
+            // SQLite's own error (by name: the device's class is another), never the export's own TransferError.
+            if (e !is TransferError && e.isSqliteError()) throw TransferError("can't write $to: ${e.message}")
+            throw e
         } finally {
             part.delete()
             File(part.path + "-journal").delete()
