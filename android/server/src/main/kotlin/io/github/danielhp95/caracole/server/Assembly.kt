@@ -6,7 +6,10 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -300,13 +303,24 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ).first
     }
 
-    /** What the served page carries of the queue: the songs with a job that waits or runs, and those jobs. */
+    /** What the served page carries of the queue: the songs with a job that waits or runs, and those jobs; and the
+     * songs a review must come first for (library_routes.library's `held`: LookupForms.reviewFirst, as POST /fetch
+     * refuses them), which the page offers no Fetch for. */
     private fun controls(): ServerControls {
         val active = queue.snapshot().filter { it.state == "queued" || it.state == "running" }
         val removing = active.filter { it.spec.kind == "remove" }.mapNotNull { it.spec.songId }.toSet()
         val busy = active.filter { it.spec.kind != "remove" }.mapNotNull { it.spec.songId }.toSet()
+        val held = deps.database.read { db ->
+            val overrides = try {
+                Overrides.read(db)
+            } catch (_: OverridesError) {
+                null  // the page says what is wrong with them; POST /fetch refuses as it can
+            }
+            if (overrides == null) emptySet()
+            else Songs.list(db).filter { LookupForms.reviewFirst(it, overrides) }.mapTo(HashSet()) { it.id }
+        }
         return ServerControls(
-            csrf = deps.csrf, busy = busy, active = active.size, removing = removing,
+            csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
         )
     }

@@ -97,4 +97,38 @@ class PhoneServesTest {
             }
         }
     }
+
+    /**
+     * A song a review must come first for (LookupForms.reviewFirst, as POST /fetch refuses it, 409) is no fetchable
+     * card on the page the phone serves (library_routes.library's `held`: `fetchable: false`).
+     */
+    @Test fun aSongAReviewMustComeFirstForIsNotFetchableOnThePage() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val key = Normalize.identityKey("Muse", "Hysteria")
+                val id = database.writeBlocking { db ->
+                    db.execute("INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at, review, " +
+                               "match_decision, match_candidates) VALUES (?, 'Muse', 'Hysteria', '[\"Muse\"]', " +
+                               "'2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', 1, 'review', ?)",
+                               key, "[{\"artist_key\":\"muse\",\"song_key\":\"hysteria-live\",\"step\":\"fuzzy_title\",\"score\":88.0}]")
+                    db.lastRowid()
+                }
+                val refused = phone.app.handle(Request(
+                    "POST", "/fetch",
+                    mapOf("cookie" to "${Security.SECRET_COOKIE}=$secret", "host" to "127.0.0.1:8738",
+                          "sec-fetch-site" to "same-origin", "content-type" to "application/x-www-form-urlencoded",
+                          "accept" to "application/json"),
+                    "csrf=tok&song=$id".toByteArray()))
+                assertEquals(409, refused.status, "the route refuses it: a review comes first")
+                val page = (get(phone, "/").body as Body.Bytes).bytes.toString(Charsets.UTF_8)
+                val block = page.substringAfter("<script type=\"application/json\" id=\"songs\">").substringBefore("</script>")
+                val data = kotlinx.serialization.json.Json.parseToJsonElement(block) as JsonObject
+                val card = (data.getValue("songs") as JsonArray).map { it as JsonObject }
+                    .single { (it.getValue("id") as JsonPrimitive).content == id.toString() }
+                assertEquals(JsonPrimitive(false), card["fetchable"], "the page offers no Fetch the server refuses")
+            }
+        }
+    }
 }
