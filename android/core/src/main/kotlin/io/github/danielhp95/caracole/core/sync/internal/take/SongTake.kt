@@ -70,6 +70,7 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
             }
         }
         val record = need(doc, "song") as? JsonObject ?: throw UnitError("its record can't be read")
+        checkJsonCells(record)
         val lyrics = LyricsFiles.of((record["lyrics_json"] as? JsonPrimitive)?.takeIf { it.isString }?.content)
         val before = here?.let { song ->
             db.query("SELECT name FROM files WHERE song_id = ?", song.id) { it.text(0)!! }.toSet()
@@ -169,7 +170,31 @@ internal class SongTake(private val db: Db, private val store: LibraryStore, pri
         for ((name, value) in carried) {
             val prefix = name.substringBefore('|')
             val more = name.substringAfter('|', "")
-            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", text(value))
+            if (prefix in CARRIED_KV) db.kvSet("$prefix$id$more", json(text(value), "its records"))
+        }
+    }
+
+    /** A text cell the phone's readers read as JSON (a carried record, a version's raw record, the match's
+     * candidates), as json.loads reads it; else UnitError, so that no unit stores what the library page can't read. */
+    private fun json(text: String, what: String): String {
+        try {
+            PyJson.loads(text)
+        } catch (e: Exception) {
+            throw UnitError("$what can't be read: ${e.message}")
+        }
+        return text
+    }
+
+    /** The document's text cells read as JSON, checked before anything is written ([json]): the record's match
+     * candidates, and each version's raw record, a JSON object or none (versions._row's "{}"). */
+    private fun checkJsonCells(record: JsonObject) {
+        (record["match_candidates"] as? JsonPrimitive)?.takeIf { it.isString }?.let { json(it.content, "its match") }
+        for (version in versions()) {
+            val raw = (version["raw"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (raw.isNullOrEmpty()) continue
+            if (PyJson.loads(json(raw, "a version's record")) !is JsonObject) {
+                throw UnitError("a version's record can't be read: it is no JSON object")
+            }
         }
     }
 

@@ -233,6 +233,34 @@ class TakeTest {
         phone.write { db -> assertEquals(mapOf(key to 2), Overrides.read(db).transpose) }
     }
 
+    @Test fun aSongsTextCellThatTheReadersCantReadAsJsonLeavesTheUnit() {
+        val key = Normalize.identityKey("Muse", "Hysteria")
+        for ((doc, why) in listOf(
+            hysteria(kv = """{"sheet_versions:same:|": "not json"}""") to "its records can't be read",
+            hysteria(raw = "not json") to "a version's record can't be read",
+            hysteria(raw = "[1]") to "a version's record can't be read: it is no JSON object",
+            hysteria(candidates = "not json") to "its match can't be read",
+        )) {
+            val phone = phone()
+            phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
+            val (source, wanted) = documents("song/$key" to doc)
+            val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) }
+            assertEquals(emptyList(), done.taken, why)
+            assertTrue(done.left.single().second.startsWith(why), "${done.left}")
+            phone.write { db ->
+                assertNull(Songs.byKey(db, key), why)
+                assertEquals(0L, db.one("SELECT COUNT(*) FROM kv WHERE key LIKE 'sheet_versions:%'") { it.long(0) })
+            }
+        }
+        // As the computer writes them, they are taken.
+        val phone = phone()
+        phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
+        val (source, wanted) = documents("song/$key" to hysteria(kv = """{"sheet_versions:same:|": "{\"2\": \"1\"}"}""",
+                                                                  raw = """{"a": 1}"""))
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) }
+        assertEquals(listOf("song/$key"), done.taken, "${done.left}")
+    }
+
     @Test fun everyFixtureTakenIntoAnEmptyPhoneIsItsValuesAndDigests() =
         Misses("sync fixtures taken").also { SyncReplay.fixturesTaken(it) }.assertNone()
 
