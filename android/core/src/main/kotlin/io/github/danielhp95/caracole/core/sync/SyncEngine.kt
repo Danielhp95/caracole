@@ -558,14 +558,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 database.write { db ->
                     Take.backupBeforeSync(db, stateDir, now, store)
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
-                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { _, _ ->
+                    // Each unit taken is the phone's as it is done (a savepoint of its own): recorded then, so that
+                    // a take the database stops says what it took before.
+                    Take.applyUnits(db, store, source, wanted, expectedHere, now) { id, what ->
+                        if (what == "taken") done.taken.add(id)
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                     }
                 }
             }
         }
-        done.taken.addAll(applied.taken)
         done.left.addAll(applied.left)
         stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
         return applied

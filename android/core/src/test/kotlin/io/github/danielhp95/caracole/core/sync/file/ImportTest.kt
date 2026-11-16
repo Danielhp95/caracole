@@ -233,6 +233,25 @@ class ImportTest {
         assertTrue(Instant.parse(MADE) < Instant.parse("2026-11-04T08:00:00Z"))
     }
 
+    @Test fun aTakeTheDatabaseStopsSaysTheUnitsItTookBefore() {
+        val there = Caracole().apply {
+            add("Muse", "Hysteria")
+            database.writeBlocking { db ->
+                io.github.danielhp95.caracole.core.library.SongbookStore.put(db, "Campfire", JsonArray(emptyList()))
+            }
+        }
+        val file = there.export()
+        val here = Caracole()
+        // The database's own failure at the songbook, taken after the song (SQLite's "no such table", no refusal).
+        here.database.writeBlocking { db ->
+            db.execute("CREATE TRIGGER broken AFTER INSERT ON phone_songbooks BEGIN SELECT * FROM nowhere; END")
+        }
+        val failed = assertFailsWith<SyncFailed> { here.apply(here.engine.compareFile(file)) }
+        assertTrue("no such table" in failed.message!!, failed.message)
+        assertEquals(listOf("song/muse/hysteria"), failed.outcome!!.taken, "the song it took stays taken, and says so")
+        assertTrue(here.state().keys.any { it == "song/muse/hysteria" })
+    }
+
     /** gtptabs.com's one sitemap read at [checkedAt], with [rows] rows of it. */
     private fun Caracole.gtptabs(checkedAt: String, rows: Int) = database.writeBlocking { db ->
         db.kvSet("gtptabs:sitemaps", """{"sitemap-1.xml": {"checked_at": "$checkedAt"}}""")
