@@ -1424,11 +1424,14 @@ def _json_text(value: Any) -> bool:
 def _check_storable(doc: Mapping[str, Any]) -> None:
     """TypeError, saying what, for a song's document holding what this library can't store as caracole reads it
     (one whose digest checks out may still: a damaged file, another's caracole): a record's or a version's value
-    SQLite can't hold, a version's raw record or a record of its kept versions (``CARRIED_KV``) that isn't JSON.
+    SQLite can't hold, its match candidates, a version's raw record or a record of its kept versions (``CARRIED_KV``) that isn't JSON.
     So the unit is left, whole, and the library page never meets it."""
     for c in SONG_COLUMNS:
         if not _storable(doc["song"].get(c)):
             raise TypeError(f"its record's {c} that can't be stored")
+    candidates = doc["song"].get("match_candidates")
+    if isinstance(candidates, str) and not _json_text(candidates):  # as the phone checks it (SongTake.kt)
+        raise TypeError("its match candidates that aren't JSON")
     for version in doc["versions"]:
         for c in VERSION_COLUMNS:
             if not _storable(version.get(c)):

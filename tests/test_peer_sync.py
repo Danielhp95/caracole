@@ -708,6 +708,12 @@ def _set_version(column, value):
     return alter
 
 
+def _set_song(column, value):
+    def alter(doc):
+        doc["song"][column] = value
+    return alter
+
+
 def _set_kv(value):
     def alter(doc):
         doc["kv"] = {"sheet_versions:yours:": value}
@@ -718,6 +724,7 @@ def _set_kv(value):
     (_set_version("slot", {"a": 1}), "a version's slot that can't be stored"),
     (_set_version("votes", 2 ** 70), "a version's votes that can't be stored"),
     (_set_version("raw", "{not json"), "a version's raw record that isn't JSON"),
+    (_set_song("match_candidates", "[{not json"), "its match candidates that aren't JSON"),
     (_set_kv("[1, 2"), "a record of its kept versions that isn't JSON"),
     (_set_kv(["1"]), "a record of its kept versions that isn't JSON"),
 ])
