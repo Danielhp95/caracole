@@ -137,6 +137,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
 
+    /** The latest time an index merged here may say it was read at (IndexTransfer.merge's `notAfter`): the clock and
+     * a day more, for another device's clock ahead of the phone's. */
+    private fun notAfter(): Long = Stamps.micros(clock().plus(java.time.Duration.ofDays(1)))
+
     /** The zone a refusal says a day in (an older file's "on 03/11/26"): the phone's; a test's own. */
     internal var zone: ZoneId = ZoneId.systemDefault()
 
@@ -450,7 +454,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
-                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()))
+                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter())
                 val newest = IndexTransfer.newest(db)
                 taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
             }
@@ -692,7 +696,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
-                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
+                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter())
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
