@@ -1251,15 +1251,18 @@ It is rows.js's, shared by both pages:
   - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's or a
     sheet from a YouTube video's that started (`outcome.lists_steps`; the phone's `Outcomes.listsSteps`, whose
     `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran nor a request of other commands.
-- The library page's lines read only its steps (`outcome.progress`: a lookup's chips under its line while it runs,
-  kept when it ends otherwise than Ready), never the rest: a finished one's outcome, a reason from its stages and its
+- The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
+  (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
+  a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",
+  what a screen reader hears; ended otherwise than Ready, its words and the steps as chips under them,
+  `drawSteps`), never the rest: a finished one's outcome, a reason from its stages and its
   song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step.
   - Its steps are every one the lookup has from its start, a step whose every stage ended skipped kept in its place
     (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
-    first waiting, else the last; once over the first that failed, else none; the line shows the count only while
-    the request is queued or runs.
+    first waiting, else the last; once over the first that failed, else none; the bar shows them only while the
+    request runs.
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
     of its tag: "Ultimate Guitar", "LaCuerda", "YouTube"; a tag it lacks as it is) and what it found (`found`,
     `outcome._found`: its stages done in their words, one failed in the outcome's words where they parse, else in

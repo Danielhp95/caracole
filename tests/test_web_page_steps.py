@@ -1,21 +1,22 @@
-"""A lookup's steps on the library page caracole serve serves, in a real browser: a row of chips under the song's line.
+"""A lookup's steps on the library page caracole serve serves, in a real browser: a segmented bar on the song's line.
 
-While a song is looked up (Fetch now, a search result's Get it), its request line says what runs and the place of the
-step in hand ("Fetching the lyrics from LRCLIB… · 5 of 7"), and under it each step is a chip (outcome.py's, as
-/jobs.json gives them): those done ticked, the one that runs lit, those to come grey, Match naming the index it
-matched in, Ultimate Guitar's ("Match Ultimate Guitar", or "Match · not on UG", plain), and Sheet the site it asks,
-then the one its sheet came from, each site named in full.
-Ended Ready, they fold away and the line is the song's own, which opens its sheet; ended otherwise, they stay, to
-show which step stopped, each in its place. A real ``caracole serve`` answers on a socket with the page's timers quick
-(``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get --progress``'s lines, said a stage at a
-time, stopping where the test says until it lets it go on.
+While a song is looked up (Fetch now, a search result's Get it), once its request has run a second (none before it,
+outcome.py's ``BAR_AFTER``, so a quick one draws none), its request line is a bar of its steps (outcome.py's, as
+/jobs.json gives them), a segment a step: those done in the accent, the one that runs at half, pulsing (steady where
+motion is unwelcome), those to come grey, a skipped one an outline, a failed one red, taller, with its "!"; then the
+step in hand, the site it names in full and its place among them all, "Sheet · Ultimate Guitar · 3 of 7", which is
+what a screen reader hears, in one row on a laptop and a phone alike, the segments square at their ends.
+Ended Ready, the bar folds away and the line is the song's own, which opens its sheet; ended otherwise, the line says
+how, and the steps stay under it as chips (done ticked, a failed one crossed, Match naming Ultimate Guitar's index or
+"Match · not on UG", plain), to show which step stopped, each in its place. A real ``caracole serve`` answers on a
+socket with the page's timers quick (``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get
+--progress``'s lines, said a stage at a time, stopping where the test says until it lets it go on.
 """
-
 from __future__ import annotations
 
 import json
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
@@ -27,6 +28,7 @@ from caracole.library import keep_file, song_dir
 from caracole.overrides import override_key
 from caracole.songs import find_song, update_song
 from caracole.versions import upsert_version
+from caracole.web import outcome
 from caracole.web.app import WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import allowed_hosts
@@ -90,6 +92,10 @@ NOT_ON_UG = [stage("song", "running"), stage("song", "done", "in the book"), sta
              stage("gtptabs", "running"), stage("gtptabs", "skipped", "no file wanted"), stage("pages", "running"),
              stage("pages", "done", ""), stage("songbooks", "running"), stage("songbooks", "skipped", "no songbook")]
 
+# The same, held again once its sheet failed, as it asks for the lyrics.
+LYRICS = NOT_ON_UG.index(stage("lyrics", "running")) + 1
+NOT_ON_UG_HELD = [*NOT_ON_UG[:LYRICS], HOLD, *NOT_ON_UG[LYRICS:]]
+
 
 class Staged:
     """``caracole get --progress``, said a stage at a time from ``script``: an event is printed as the command prints
@@ -151,29 +157,50 @@ def driven(tmp_path, width: int) -> Browser:
         pytest.skip(f"chromium couldn't run: {e}")
 
 
+def bar_of(item: str) -> str:
+    """The expression for the segments of ``item``'s bar (its running one, else its frozen one): each one's state."""
+    segs = f"{item} .progress.barred .step-segs > i, {item} .steps > .step-bar .step-segs > i"
+    return f"[...document.querySelectorAll({json.dumps(segs)})].map((s) => s.className.replace('seg ', ''))"
+
+
+def words_of(item: str) -> str:
+    """The expression for the words beside ``item``'s bar: [the step and its site, the count]."""
+    bar = json.dumps(f"{item} .progress.barred, {item} .step-bar")
+    return (f"(() => {{ const b = document.querySelector({bar}); "
+            "const t = (s) => (b && b.querySelector(s) || {}).textContent || ''; "
+            "return [t('.step-at'), t('.step-count')]; })()")
+
+
 def steps_of(item: str) -> str:
-    """The expression for the chips under ``item`` (a selector): each one's state and its words as shown (its mark,
-    its name, its site), what a screen reader alone hears left out."""
+    """The expression for the chips under ``item`` (a selector), once its request is over: each one's state and its
+    words as shown (its mark, its name, its site), what a screen reader alone hears left out."""
     return (f"[...document.querySelectorAll({json.dumps(item + ' .step-chips > li')})].map((c) => {{ "
             "const shown = c.cloneNode(true); shown.querySelectorAll('.visually-hidden').forEach((n) => n.remove()); "
             "return [c.className.replace('step-chip ', ''), shown.textContent]; })")
 
 
-def said(item: str) -> str:
-    """The expression for ``item``'s request line, as [its words, the count of its step in hand, if it shows one]."""
-    p = f"document.querySelector({json.dumps(item + ' .progress')})"
-    over = f"{p}.querySelector('.steps-over')"
-    return f"[{p}.firstChild.textContent, {over} && {over}.getBoundingClientRect().width > 0 ? {over}.textContent : '']"
+def colour(var: str) -> str:
+    """The expression for the colour ``var`` (a custom property of the page's) computes to: a probe's background."""
+    return (f"(() => {{ const i = document.createElement('i'); i.style.background = 'var({var})'; "
+            "document.body.appendChild(i); const c = getComputedStyle(i).backgroundColor; i.remove(); return c; })()")
 
 
-def fits(page: Browser, item: str) -> None:
-    """No page wider than the screen, and every chip within ``item``'s line."""
+ACCENT = colour("--accent")
+FAILED = colour("--failed")
+
+
+def one_row(page: Browser, item: str) -> None:
+    """``item``'s bar in one row: its segments and its count centred on one line, the count within ``item``'s line,
+    and no page wider than the screen."""
+    at = page.js(f"(() => {{ const item = document.querySelector({json.dumps(item)}); "
+                 "const r = (s) => item.querySelector(s).getBoundingClientRect(); "
+                 "const segs = r('.progress.barred .step-segs'), count = r('.progress.barred .step-count'); "
+                 "return [segs.top + segs.height / 2, count.top + count.height / 2, count.right, "
+                 "item.getBoundingClientRect().right]; })()")
+    assert abs(at[0] - at[1]) <= 2, at
+    assert at[2] <= at[3] + 0.5, at
     assert page.js("document.documentElement.scrollWidth <= window.innerWidth"), page.js(
         "[document.documentElement.scrollWidth, window.innerWidth]")
-    over = page.js(f"(() => {{ const line = document.querySelector({json.dumps(item)}).getBoundingClientRect(); "
-                   f"return [...document.querySelectorAll({json.dumps(item + ' .step-chips > li')})]"
-                   ".filter((c) => c.getBoundingClientRect().right > line.right + 0.5).length; })()")
-    assert over == 0
 
 
 def wait_for(page: Browser, expression: str, expected, timeout: float = 15.0) -> None:
@@ -182,44 +209,59 @@ def wait_for(page: Browser, expression: str, expected, timeout: float = 15.0) ->
     assert page.wait(f"JSON.stringify({expression}) === {json.dumps(shown)}", timeout=timeout), page.js(expression)
 
 
-WAITING = [["waiting", "PDF"], ["waiting", "Lyrics"], ["waiting", "Extras"], ["waiting", "Songbooks"]]
+def creep(cfg):
+    """Creep, a song Ultimate Guitar's index matched."""
+    conn = db.connect(cfg.db_path)
+    try:
+        song = add_song(conn, "Radiohead", "Creep")
+        update_song(conn, song.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+        return song
+    finally:
+        conn.close()
 
 
-@pytest.mark.parametrize("width", [1280, 390])
-def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_ready(cfg, live, tmp_path, width):
+def line_of(song) -> str:
+    return f'#list article.line[data-id="{song.id}"]'
+
+
+@pytest.mark.parametrize("width", [1280, 390, 320])
+def test_a_running_lookup_is_a_segmented_bar_on_its_line_in_one_row(cfg, live, tmp_path, width):
     base, runner = live
     runner.script = FROM_UG
-    conn = db.connect(cfg.db_path)
-    creep = add_song(conn, "Radiohead", "Creep")
-    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
-    conn.close()
-    line = f'#list article.line[data-id="{creep.id}"]'
+    line = line_of(creep(cfg))
     with driven(tmp_path, width) as page:
         page.open(base)
         page.click(f"{line} form.fetch button")
-        # Asking Ultimate Guitar for the sheet: the song and its match over, the sheet lit with its site.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
-                                        ["running", "Sheet Ultimate Guitar"], *WAITING])
-        wait_for(page, said(line), ["Fetching from UG…", "3 of 7"])
-        fits(page, line)
+        # Asking Ultimate Guitar for the sheet: the song and its match over, the sheet in hand, four steps to come.
+        wait_for(page, bar_of(line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
+        wait_for(page, words_of(line), ["Sheet · Ultimate Guitar", " · 3 of 7"])
+        p = f"document.querySelector('{line} .progress')"
+        assert page.js(f"{p}.textContent") == "Sheet · Ultimate Guitar · 3 of 7"  # what a screen reader hears
+        assert page.js(f"{p}.getAttribute('role')") == "status"
+        assert page.js(f"{p}.querySelector('.step-segs').getAttribute('aria-hidden')") == "true"
+        assert page.js(f"{p}.querySelector('.step-at b').textContent") == "Sheet"
+        assert page.js(f"document.querySelector('{line} .step-chips, {line} .steps')") is None  # no chips meanwhile
+        one_row(page, line)
+        assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.running')).animationName") == "step-pulse"
+        done = f"getComputedStyle(document.querySelector('{line} .seg.done'))"
+        assert page.js(f"{done}.backgroundColor") == page.js(ACCENT)
+        assert page.js(f"{done}.borderTopLeftRadius") == "0px"  # square ends
+        assert page.js(f"getComputedStyle({p}, '::before').content") == "none"  # the bar in place of the line's dot
         runner.go()
-        # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, the fifth step of seven.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
-                                        ["done", "✓ Sheet Ultimate Guitar"], ["done", "✓ PDF"], ["running", "Lyrics"],
-                                        ["waiting", "Extras"], ["waiting", "Songbooks"]])
-        wait_for(page, said(line), ["Fetching lyrics…", "5 of 7"])
-        assert page.js(f"document.querySelector('{line} .step-chips').getAttribute('aria-label')") == "Steps"
-        assert page.js(f"document.querySelector('{line} .step-chips [aria-current=step]').textContent") == (
-            "Lyrics: running")
-        fits(page, line)
+        # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, the fifth step of seven, no site.
+        wait_for(page, bar_of(line), ["done"] * 4 + ["running", "waiting", "waiting"])
+        wait_for(page, words_of(line), ["Lyrics", " · 5 of 7"])
+        assert page.js(f"{p}.textContent") == "Lyrics · 5 of 7"
+        one_row(page, line)
         runner.go()
-        # Ready: the chips fold away and nothing takes their place; the line is the song's, found, its sheet's button
+        # Ready: the bar folds away and nothing takes its place; the line is the song's, found, its sheet's button
         # opening it. Its request line says Ready to a screen reader alone, which hears the request end.
-        assert page.wait(f"document.querySelector('{line} .progress').dataset.tone === 'ready'", timeout=15)
-        assert page.js(f"document.querySelector('{line} .step-chips')") is None
-        assert page.js(f"document.querySelector('{line} .progress').textContent") == "Ready"
-        assert page.js(f"document.querySelector('{line} .progress a')") is None  # no "Ready · Open sheet"
-        assert page.js(f"document.querySelector('{line} .progress').getBoundingClientRect().height") <= 1
+        assert page.wait(f"{p}.dataset.tone === 'ready'", timeout=15)
+        assert page.js(f"{p}.classList.contains('barred')") is False
+        assert page.js(f"{p}.getBoundingClientRect().height") <= 1
+        assert page.js(f"document.querySelector('{line} .step-segs, {line} .step-chips')") is None
+        assert page.js(f"{p}.textContent") == "Ready"
+        assert page.js(f"{p}.querySelector('a')") is None  # no "Ready · Open sheet"
         # Found, it needs no badge: its status is the line's alone, as the page's filters read it.
         assert page.js(f"document.querySelector('{line}').dataset.status") == "found"
         assert page.js(f"document.querySelector('{line} .line-status .badge')") is None
@@ -232,33 +274,47 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
 
 def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(cfg, live, tmp_path):
     base, runner = live
-    runner.script = NOT_ON_UG
+    runner.script = NOT_ON_UG_HELD
     conn = db.connect(cfg.db_path)
     song = add_song(conn, "Estopa", "Tu Calorro")
     conn.close()
-    line = f'#list article.line[data-id="{song.id}"]'
+    line = line_of(song)
     with driven(tmp_path, 1280) as page:
         page.open(base)
         page.click(f"{line} form.fetch button")
-        # The offline index lacks it, plainly: no failure, as the sheet is asked of LaCuerda.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
-                                        ["running", "Sheet LaCuerda"], *WAITING])
-        wait_for(page, said(line), ["Fetching from LaCuerda…", "3 of 7"])
-        assert page.js(f"getComputedStyle(document.querySelector('{line} .step-chips .plain')).borderTopStyle") == (
-            "dashed")
+        # The offline index lacks it, plainly: no failure, drawn as done, as the sheet is asked of LaCuerda.
+        wait_for(page, bar_of(line), ["done", "plain", "running", "waiting", "waiting", "waiting", "waiting"])
+        wait_for(page, words_of(line), ["Sheet · LaCuerda", " · 3 of 7"])
+        assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.plain')).backgroundColor") == (
+            page.js(ACCENT))
         runner.go()
-        # Not found: the line says so with its next step, as before, and the steps stay; those that turned out not to
-        # apply (no sheet, so no PDF; no songbook lists it) keep their places, skipped.
+        # LaCuerda failed: its segment red and taller, with its "!", which a screen reader doesn't hear; no sheet, so no
+        # PDF, skipped in its place, and the lyrics now.
+        wait_for(page, bar_of(line), ["done", "plain", "failed", "skipped", "running", "waiting", "waiting"])
+        wait_for(page, words_of(line), ["Lyrics", " · 5 of 7"])
+        failed = f"document.querySelector('{line} .seg.failed')"
+        assert page.js(f"{failed}.textContent") == "!"
+        assert page.js(f"{failed}.getBoundingClientRect().height") == 12
+        assert page.js(f"getComputedStyle({failed}).backgroundColor") == page.js(FAILED)
+        assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.skipped')).backgroundColor") == (
+            "rgba(0, 0, 0, 0)")  # an outline alone
+        one_row(page, line)
+        runner.go()
+        # Not found: the line says so with its next step, as before, the bar gone, and the steps stay under it as chips;
+        # those that turned out not to apply (no songbook lists it) keep their places, skipped.
         wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
+        assert page.js(f"document.querySelector('{line} .progress').classList.contains('barred')") is False
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
                                         ["failed", "✕ Sheet LaCuerda"], ["skipped", "PDF"], ["done", "✓ Lyrics"],
                                         ["failed", "✕ Extras"], ["skipped", "Songbooks"]])
+        assert page.js(f"getComputedStyle(document.querySelector('{line} .step-chips .plain')).borderTopStyle") == (
+            "dashed")
         # Over, the view's count names the step that failed; the line, its outcome, shows none.
-        assert page.js(f"!!document.querySelector('{line} .progress .steps-over')") is False
+        assert page.js(f"document.querySelector('{line} .progress .step-count, {line} .progress .steps-over')") is None
 
 
 @pytest.mark.parametrize("width", [1280, 390])
-def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_yours(cfg, live, tmp_path, width):
+def test_a_search_results_get_it_shows_the_bar_in_its_row_then_the_song_as_yours(cfg, live, tmp_path, width):
     base, runner = live
     runner.script = FROM_UG
     sites(cfg, **WONDERWALL)
@@ -267,23 +323,71 @@ def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_you
         search(page, "wonderwall")
         assert page.wait(f"!!document.querySelector(\"{RYAN}\")")
         page.click(f"{RYAN} .line-action button")
-        # Its request line in its Get it's place, and the steps under it, in the result's own row.
+        # Its request line in its Get it's place, a bar in the result's own row.
         row = RYAN
-        wait_for(page, steps_of(row), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
-                                       ["running", "Sheet Ultimate Guitar"], *WAITING])
-        wait_for(page, said(row), ["Fetching from UG…", "3 of 7"])
-        fits(page, row)
+        wait_for(page, bar_of(row), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
+        wait_for(page, words_of(row), ["Sheet · Ultimate Guitar", " · 3 of 7"])
+        assert page.js(f"document.querySelector(\"{row} .step-chips\")") is None
+        one_row(page, row)
         runner.go()
-        wait_for(page, said(row), ["Fetching lyrics…", "5 of 7"])
-        fits(page, row)
+        wait_for(page, words_of(row), ["Lyrics", " · 5 of 7"])
+        one_row(page, row)
         runner.go()
-        # Over, and Ready: the row is the song's own line, yours, its sheet's button on it; no steps, no Ready · Open
+        # Over, and Ready: the row is the song's own line, yours, its sheet's button on it; no bar, no Ready · Open
         # sheet.
         line = "document.querySelector('#results .progress').closest('article')"
         assert page.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=15)
         assert page.wait(f"!!{line}.querySelector('.line-plays a.play-sheet')")
         assert page.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
-        assert page.js(f"{line}.querySelector('.step-chips')") is None
+        assert page.js(f"{line}.querySelector('.step-segs, .step-chips')") is None
         assert page.js(f"{line}.querySelector('.progress a')") is None
         assert page.js(f"{line}.querySelector('.progress').getBoundingClientRect().height") <= 1
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
+
+
+SEEN = ("new MutationObserver(() => { if (document.querySelector('#list .step-segs, #list .steps')) "
+        "window.barSeen = true; }).observe(document.getElementById('list'), {subtree: true, childList: true})")
+TIMED = ("window.clicked = 0; window.barAt = 0; document.addEventListener('click', () => { "
+         "if (!window.clicked) window.clicked = performance.now(); }, true); new MutationObserver(() => { "
+         "if (!window.barAt && document.querySelector('#list .step-segs')) window.barAt = performance.now(); })"
+         ".observe(document.getElementById('list'), {subtree: true, childList: true})")
+
+
+def test_the_bar_comes_after_a_second_and_a_quick_request_draws_none(cfg, live, tmp_path, monkeypatch):
+    base, runner = live
+    conn = db.connect(cfg.db_path)
+    quick = add_song(conn, "Estopa", "Tu Calorro")
+    conn.close()
+    held = creep(cfg)
+    # Quick, with no hold: over within its first second (the server, in this process, waits half a minute for it, so
+    # that a busy machine is no slower than that), its line drew no bar, nor any step.
+    runner.script = [s for s in NOT_ON_UG if s is not HOLD]
+    monkeypatch.setattr(outcome, "BAR_AFTER", timedelta(seconds=30))
+    with driven(tmp_path, 1280) as page:
+        page.open(base)
+        page.js(SEEN)
+        page.click(f"{line_of(quick)} form.fetch button")
+        wait_for(page, f"document.querySelector('{line_of(quick)} .progress').textContent",
+                 "Not on the sites·To-do page")
+        assert page.js("window.barSeen") is not True
+        # Held: the bar a second or more after Fetch, never before.
+        monkeypatch.setattr(outcome, "BAR_AFTER", timedelta(seconds=1))
+        runner.script = FROM_UG
+        page.js(TIMED)
+        page.click(f"{line_of(held)} form.fetch button")
+        assert page.wait("window.barAt > 0", timeout=15)
+        assert page.js("window.barAt - window.clicked") >= 950, page.js("[window.clicked, window.barAt]")
+
+
+def test_the_running_segment_is_steady_under_reduced_motion(cfg, live, tmp_path):
+    base, runner = live
+    runner.script = FROM_UG
+    line = line_of(creep(cfg))
+    with driven(tmp_path, 1280) as page:
+        page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
+        page.open(base)
+        page.click(f"{line} form.fetch button")
+        assert page.wait(f"!!document.querySelector('{line} .seg.running')", timeout=15)
+        running = f"getComputedStyle(document.querySelector('{line} .seg.running'))"
+        assert page.js(f"{running}.animationName") == "none"
+        assert page.js(f"{running}.opacity") == "0.5"
