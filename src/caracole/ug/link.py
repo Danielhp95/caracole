@@ -39,6 +39,8 @@ from caracole.ug_urls import SLUGGED, UgLink
 if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.http import Response
+    from caracole.search import IndexHit
+    from caracole.songs import Song
     from caracole.ug.fetch import FetchContext, Listing, TabRead
     from caracole.ug.page import UGTabPage
 
@@ -56,6 +58,7 @@ _TYPE_WORDS = {"pro": "a Guitar Pro file", "power": "a Power Tab file", "officia
 KEEPS = "caracole keeps UG's chords, tabs and ukulele chords alone"
 _KIND_WORDS = {"chords": "chords", "tabs": "tab", "ukulele": "ukulele chords"}
 GONE = "UG answers 404 for it"
+ARTIST_SONGS = 50  # an artist's songs a link's answer gives, most tabbed first, as /api/artist gives them at a time
 CLOSED = "robots.txt closes it to caracole"
 
 
@@ -116,16 +119,43 @@ def known(cfg: Config, conn: sqlite3.Connection, link: UgLink, now: datetime) ->
     from caracole.http import CachedAnswers
 
     cache = CachedAnswers(PROVIDER, cfg.cache_dir)
-    said = _tab_known(conn, cache, link) if link.kind == "tab" else _artist_known(conn, cache, link)
+    said = _tab_known(conn, cache, link, now) if link.kind == "tab" else _artist_known(conn, cache, link)
     if said.state != "auto":
         return said
     state, why = gate(cfg, conn, link, now)
     return Known(**{**said.__dict__, "state": state, "why": why})
 
 
-def _tab_known(conn: sqlite3.Connection, cache: Any, link: UgLink) -> Known:
+def tab_keys(conn: sqlite3.Connection, tab_id: int) -> tuple[str, str] | None:
+    """The keys a tab's song is filed under: as an artist page caracole read lists it (``ug_artist_tabs``), else as the
+    index does (its song's key without a variant label); None for a tab neither names."""
+    from caracole.normalize import split_variant
+    from caracole.ug.artist_tabs import listed_tab
+
+    listed = listed_tab(conn, tab_id)
+    if listed is not None:
+        return listed.artist_key, listed.song_key
+    row = conn.execute("SELECT artist_key, song_key FROM ug_index WHERE tab_id = ?", (tab_id,)).fetchone()
+    return (row[0], split_variant(row[1])[0]) if row is not None else None
+
+
+def _read_lately(conn: sqlite3.Connection, page: str, now: datetime) -> bool:
+    """Whether caracole read the artist page's lists within ``ug.fetch.ARTIST_PAGE_MAX_AGE`` (30 days): its tabs in
+    ``ug_artist_tabs`` read since."""
+    from caracole.ug.artist_tabs import page_artist
+    from caracole.ug.fetch import ARTIST_PAGE_MAX_AGE
+
+    held = page_artist(conn, page)
+    return held is not None and not stamps.before(held[3], stamps.utc(now) - ARTIST_PAGE_MAX_AGE)
+
+
+def _tab_known(conn: sqlite3.Connection, cache: Any, link: UgLink, now: datetime) -> Known:
+    """A tab link's page as caracole knows it. Its song is known (``found``) by an artist page caracole read that
+    lists it, by the index, or by its page in the cache, but a cached page that names an artist page caracole hasn't
+    read within 30 days is ``auto``: the read takes the page from the cache and reads that artist's lists, so that
+    every song of theirs is found by a search."""
     from caracole.http import robots_disallows
-    from caracole.normalize import name_forms, split_variant
+    from caracole.normalize import name_forms
     from caracole.ug.artist import artist_page_of
     from caracole.ug.artist_tabs import listed_tab
     from caracole.ug.lookup import learned_artist_url
@@ -149,9 +179,7 @@ def _tab_known(conn: sqlite3.Connection, cache: Any, link: UgLink) -> Known:
         return Known(link, "other", f"it is {_type_words(page.tab.type)}: {KEEPS}")
     assert link.tab_id is not None
     listed = listed_tab(conn, link.tab_id)
-    indexed = conn.execute("SELECT artist_key, song_key FROM ug_index WHERE tab_id = ?", (link.tab_id,)).fetchone()
-    keys = ((listed.artist_key, listed.song_key) if listed is not None else
-            (indexed[0], split_variant(indexed[1])[0]) if indexed is not None else None)
+    keys = tab_keys(conn, link.tab_id)
     tab = (_tab_of(page) if page is not None else
            Tab(listed.artist, listed.title, listed.type, None, _rating(listed.rating, listed.votes),
                listed.votes or None) if listed is not None else None)
@@ -160,7 +188,9 @@ def _tab_known(conn: sqlite3.Connection, cache: Any, link: UgLink) -> Known:
     if base is None and artist:
         base = next((u for key in name_forms(artist) if (u := learned_artist_url(conn, key))), None)
     read_at = _read_at(conn, cache, base) if base else None
-    state = "found" if page is not None or listed is not None or indexed is not None else "auto"
+    linked = artist_page_of(page.artist_url) if page is not None else None
+    unread = linked is not None and not _read_lately(conn, linked, now)  # its artist's lists to read yet
+    state = "found" if (keys is not None or page is not None) and not unread else "auto"
     return Known(link, state, tab=tab, keys=keys, page=base, read_at=read_at, artist=artist)
 
 
@@ -249,10 +279,75 @@ def gate(cfg: Config, conn: sqlite3.Connection, link: UgLink, now: datetime) -> 
     return "auto", ""
 
 
+# --- how caracole names what a link stands for --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Named:
+    """What a link stands for, named as caracole names it (``named``): the songs (``hits``: a tab's song, or an artist
+    page's songs once read, as a search gives them), the library's song of a tab (``song``), and the artist and the
+    title the panel fills in (``guess``), the line a read ends with says, and a search names the song by."""
+
+    artist: str
+    title: str
+    hits: list[IndexHit] = field(default_factory=list)
+    song: Song | None = None
+
+
+def named(conn: sqlite3.Connection, was: Known) -> Named:
+    """``was``'s songs and names: a tab's song by the keys it is filed under (``index_song``, its names a search's); an
+    artist page's songs once read (``search.artist_songs``). The names are the library's song's, the one that holds the
+    tab as a version of its own, else of those names (its ``song``); else the hit's; else UG's as a search names a song
+    only an artist page lists (``search.listed_names``: your songs' name for the artist, else the original part of
+    UG's; the title's original part, Chinese written together). An artist link's title is ""."""
+    from caracole.normalize import identity_key
+    from caracole.search import artist_songs, index_song, listed_names
+    from caracole.songs import find_song
+
+    link = was.link
+    if link.kind == "artist":
+        hits = (artist_songs(conn, was.artist_key, limit=ARTIST_SONGS)[0]
+                if was.state == "found" and was.artist_key else [])
+        return Named(listed_names(conn, was.artist, "")[0] if was.artist else "", "", hits)
+    hit = index_song(conn, *was.keys, 100.0) if was.keys is not None and was.state not in ("other", "gone") else None
+    hits = [hit] if hit is not None else []
+    artist, title = ((hit.artist, hit.title) if hit is not None else
+                     listed_names(conn, was.tab.artist, was.tab.title) if was.tab is not None else ("", ""))
+    song = _song_of(conn, link) if was.state not in ("other", "gone") else None
+    if song is None and artist and title and was.state not in ("other", "gone"):
+        song = find_song(conn, identity_key(artist, title))
+    if song is not None:  # the library's own song of it: its names
+        artist, title = song.artist, song.title
+    return Named(artist, title, hits, song)
+
+
+def _song_of(conn: sqlite3.Connection, link: UgLink) -> Song | None:
+    """The library's song that holds the tab as a version of its own (``versions``), if any."""
+    from caracole.songs import get_song
+    from caracole.versions import LIVE
+
+    row = conn.execute("SELECT song_id FROM versions WHERE provider = 'ug' AND tab_id = ? AND gone = ? "
+                       "ORDER BY song_id LIMIT 1", (str(link.tab_id), LIVE)).fetchone()
+    if row is None:
+        return None
+    try:
+        return get_song(conn, row[0])
+    except KeyError:
+        return None
+
+
+def _a_tab(conn: sqlite3.Connection, link: UgLink, page: UGTabPage) -> str:
+    """A tab read, as its line says it: its title by its artist, as caracole names them (``named``), and its kind
+    ("斑马斑马 by 宋冬野, chords"), with no bracket: status.py reads the line up to its first."""
+    assert link.tab_id is not None
+    names = named(conn, Known(link, "found", tab=_tab_of(page), keys=tab_keys(conn, link.tab_id)))
+    v = page.tab
+    return f"{names.title or v.song_name} by {names.artist or v.artist_name}, {_KIND_WORDS.get(v.kind or '', v.kind)}"
+
+
 def known_line(conn: sqlite3.Connection, was: Known) -> str:
     """What the command says of a link it reads nothing of (``known``: ``found``, ``other``, ``gone``), in the words a
-    read ends with (``said``)."""
-    from caracole.search import index_song
+    read ends with (``said``), caracole's names for the song (``named``)."""
     from caracole.ug.artist_tabs import page_artist
 
     link = was.link
@@ -262,16 +357,15 @@ def known_line(conn: sqlite3.Connection, was: Known) -> str:
         return f"Not read: {link.url}: {was.why}."
     held = page_artist(conn, was.page) if was.page else None
     tabs = held[2] if held is not None else 0
+    names = named(conn, was)
     if link.kind == "artist":
-        return f"Read: UG's page of {was.artist or 'the artist'} lists {plural(tabs, 'tab')}."
+        return f"Read: UG's page of {names.artist or 'the artist'} lists {plural(tabs, 'tab')}."
+    song = f"{names.title} by {names.artist}" if names.title and names.artist else f"tab {link.tab_id}"
     if was.tab is None:
-        hit = index_song(conn, *was.keys) if was.keys is not None else None
-        named = f"{hit.artist} - {hit.title}" if hit is not None else f"tab {link.tab_id}"
-        return f"Read: {named}, in UG's index; nothing asked."
-    t = was.tab
+        return f"Read: {song}, in UG's index; nothing asked."
     their = (f"their page lists {plural(tabs, 'tab')}" if was.read_at is not None else
              "their page isn't read yet" if was.page else "it links to no artist page")
-    return f"Read: {t.title} by {t.artist}, {_KIND_WORDS.get(t.type, t.type)}; {their}."
+    return f"Read: {song}, {_KIND_WORDS.get(was.tab.type, was.tab.type)}; {their}."
 
 
 # --- a read that failed ------------------------------------------------------------------------------------
@@ -347,7 +441,7 @@ def read(ctx: FetchContext, link: UgLink, stage: Stage) -> LinkRead:
         page = done.tab.page
         if page is None or page.tab.kind is None:
             return done
-        stage("tab", "done", _named(page))
+        stage("tab", "done", _a_tab(ctx.conn, link, page))
         done.page = _learn_artist_url(ctx.conn, page)
         if done.page is None:
             return done
@@ -371,11 +465,6 @@ def read(ctx: FetchContext, link: UgLink, stage: Stage) -> LinkRead:
     return done
 
 
-def _named(page: UGTabPage) -> str:
-    v = page.tab
-    return f"{v.song_name} by {v.artist_name}, {_KIND_WORDS.get(v.kind or '', v.kind or '')}"
-
-
 def _page_gone(conn: sqlite3.Connection, page: str) -> None:
     """UG answered 404 for the artist page: its tabs go, and every artist it was learned for learns it again."""
     from caracole.ug import artist_tabs
@@ -394,10 +483,12 @@ def lists(tabs: int, listing: Listing | None) -> str:
     return f"their page lists {plural(tabs, 'tab')}"
 
 
-def said(done: LinkRead) -> str:
-    """The line the read ends with (the module's docstring), ``Read: ``, ``Not found: `` or ``Not read: ``; a block,
-    a spent budget or an error before anything was read is the command's to say."""
+def said(conn: sqlite3.Connection, done: LinkRead) -> str:
+    """The line the read ends with (the module's docstring), ``Read: ``, ``Not found: `` or ``Not read: ``, the song
+    and the artist named as caracole names them (``named``), with no bracket in the part status.py reads; a block, a
+    spent budget or an error before anything was read is the command's to say."""
     from caracole.http import BudgetExhausted, ProviderBlocked
+    from caracole.search import listed_names
 
     link, tab = done.link, done.tab
     if tab is not None:
@@ -413,8 +504,9 @@ def said(done: LinkRead) -> str:
         page = tab.page
         assert page is not None
         if page.tab.kind is None:
-            return f"Read: {page.tab.song_name} by {page.tab.artist_name} is {_type_words(page.tab.type)}: {KEEPS}."
-        named = _named(page)
+            artist, title = listed_names(conn, page.tab.artist_name, page.tab.song_name)
+            return f"Read: {title} by {artist} is {_type_words(page.tab.type)}: {KEEPS}."
+        named = _a_tab(conn, link, page)
         if done.page is None:
             return f"Read: {named}; it links to no artist page."
         if isinstance(done.stopped, BudgetExhausted):
@@ -428,7 +520,8 @@ def said(done: LinkRead) -> str:
         return f"Read: {named}; {lists(done.tabs, done.listing)}."
     if done.listing is not None and done.listing.gone:
         return f"Not found: UG answers 404 for {link.url}."
-    name = done.listing.name if done.listing is not None and done.listing.name else "the artist"
+    ug_name = done.listing.name if done.listing is not None else ""
+    name = listed_names(conn, ug_name, "")[0] if ug_name else "the artist"
     if done.listing is not None and not done.listing.complete:
         return f"Read: {plural(done.tabs, 'tab')} of UG's page of {name} so far, the rest the next time."
     return f"Read: UG's page of {name} lists {plural(done.tabs, 'tab')}."

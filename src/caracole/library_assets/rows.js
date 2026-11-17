@@ -853,12 +853,12 @@ const caracoleRows = (icons, does) => {
   // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
   // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), or a harptabs.com artist's (POST
   // harptabs/artist: caracole harptabs --artist), by its path (``who.harptabs``), or an Ultimate Guitar artist's
-  // page that UG's artist directory names (POST ug/link: caracole ug --link), by its address (``who.ugLink``), then
+  // page that UG's artist directory names (POST ug/link: caracole ug --link), by its address (``who.ugPage``), then
   // follow the job until it is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
   const readArtistPage = (csrf, who, said) => {
     const w = who && typeof who === "object" ? who : {};
-    if (w.ugLink) {
-      return queueAndFollow("ug/link", new URLSearchParams({ csrf: String(csrf || ""), url: String(w.ugLink) }),
+    if (w.ugPage) {
+      return queueAndFollow("ug/link", new URLSearchParams({ csrf: String(csrf || ""), url: String(w.ugPage) }),
         said, { asking: "Asking…", running: "Reading their page on UG…", failed: "Page not read." });
     }
     if (w.harptabs) {

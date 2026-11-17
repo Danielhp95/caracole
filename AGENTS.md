@@ -740,6 +740,16 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     yt-dlp run of its metadata and its thumbnail).
   - Only its Add and make sheet sends the request form (`POST /request` with the video): nothing is downloaded
     before.
+- **An Ultimate Guitar link** typed or pasted into that box (library.js `ugLink`, ug_urls.py's `read_link`: a tab's
+  page or an artist's) is no query either, its panel beside the video's (`ugPanelFor`, `askUg`, `readUg`,
+  `showUgLink`):
+  - it reads `GET /api/ug/link` (no request), and for a page caracole hasn't read (`auto`) sends `POST /ug/link` once a
+    link a page (`caracole ug --link --progress`), followed on /api/jobs, asked again once its `tab` stage is done and
+    once it is over;
+  - its Fetch this version posts the lookup a search's row posts, with `tab` (`caracole get --tab`); an artist's songs
+    are search lines (rows.js `indexLine`);
+  - `/api/search` given a link (a UG page's or a video's) answers no `unseen`, `hint`, `lacuerda_search` or `youtube`
+    (search_routes.py `is_link`).
 - **LaCuerda's own search** is one of the two requests a search may bring.
   - Both pages send it by themselves (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) once the
     query has settled, the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`.
@@ -1076,7 +1086,7 @@ It is rows.js's, shared by both pages:
     caracole hasn't read and whom the index has no row of (`DirectoryHit`), `/api/search`'s `ug_directory` (with the
     requests reading their page takes at most and ug/link.py's state of it), a group on the library page whose tail,
     as "+ N more" is (library.js `tailOf`, `ugOffer`, never the heading), and a row on the lookup page, offer Read
-    their page on UG, pressed by hand alone (rows.js `readArtistPage`'s `ugLink`: `POST /ug/link`);
+    their page on UG, pressed by hand alone (rows.js `readArtistPage`'s `ugPage`: `POST /ug/link`);
   - the words of the UG index's artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept
     by triggers on `ug_index` and, schema 16, `ug_directory`, a key going with its last row):
     - an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and `WORD_ARTISTS` (LaCuerda's

@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from caracole.ug_urls import UgLink
 
 LINK_LIMIT = 600  # characters of a pasted address
-ARTIST_SONGS = 50  # an artist's songs a link's answer gives, most tabbed first, as /api/artist gives them at a time
 
 ROUTES = (
     Route("GET", "/api/ug/link", lambda app, asked: api_ug_link(app, query(asked))),
@@ -68,60 +67,25 @@ def api_ug_link(app: WebApp, asked: dict[str, list[str]], *, now: datetime | Non
 
 def link_answer(app: WebApp, conn: sqlite3.Connection, overrides: Overrides, link: UgLink,
                 now: datetime) -> dict[str, Any]:
-    """``GET /api/ug/link``'s answer for ``link``."""
-    from caracole.normalize import identity_key
-    from caracole.search import artist_songs, index_song, listed_names
-    from caracole.songs import find_song, list_songs
-    from caracole.ug.link import known
+    """``GET /api/ug/link``'s answer for ``link``: what caracole knows of its page (ug/link.py ``known``) and how it
+    names what the link stands for (``named``: its songs, the library's song of it, the names to fill in)."""
+    from caracole.songs import list_songs
+    from caracole.ug.link import known, named
     from caracole.web.search_routes import _hit_json, _rows
 
     was = known(app.cfg, conn, link, now)
-    found = was.state == "found"
-    songs = list_songs(conn)
-    hits = []
-    if found and link.kind == "tab" and was.keys is not None:
-        hit = index_song(conn, *was.keys, 100.0)
-        hits = [hit] if hit is not None else []
-    elif found and link.kind == "artist" and was.artist_key:
-        hits = artist_songs(conn, was.artist_key, limit=ARTIST_SONGS)[0]
-    if link.kind == "artist":
-        guess = (listed_names(conn, was.artist, "")[0] if was.artist else "", "")
-    elif hits:
-        guess = (hits[0].artist, hits[0].title)
-    elif was.tab is not None:
-        guess = listed_names(conn, was.tab.artist, was.tab.title)
-    else:
-        guess = ("", "")
-    song = _song_of(conn, link) if link.kind == "tab" else None
-    if song is None and link.kind == "tab" and all(guess):
-        song = find_song(conn, identity_key(*guess))
-    if song is not None:  # the library's own song of it: its names
-        guess = (song.artist, song.title)
-    rows = _rows(app, conn, [], [_hit_json(conn, h) for h in hits], songs)[1] if hits else []
+    names = named(conn, was)
+    rows = (_rows(app, conn, [], [_hit_json(conn, h) for h in names.hits], list_songs(conn))[1]
+            if names.hits else [])
     return {
         **link.as_json(), "state": was.state, **({"why": was.why} if was.why else {}),
         "tab": was.tab.as_json() if was.tab is not None else None,
         "artist_page": {"url": was.page, "read": was.read_at is not None, "read_at": was.read_at or None}
         if was.page else None,
-        "guess": {"artist": guess[0], "title": guess[1]},
-        "song": _song_json(app, conn, overrides, song, link) if song is not None else None,
+        "guess": {"artist": names.artist, "title": names.title},
+        "song": _song_json(app, conn, overrides, names.song, link) if names.song is not None else None,
         "hits": rows,
     }
-
-
-def _song_of(conn: sqlite3.Connection, link: UgLink) -> Song | None:
-    """The library's song that holds the tab as a version of its own (``versions``), if any."""
-    from caracole.songs import get_song
-    from caracole.versions import LIVE
-
-    row = conn.execute("SELECT song_id FROM versions WHERE provider = 'ug' AND tab_id = ? AND gone = ? "
-                       "ORDER BY song_id LIMIT 1", (str(link.tab_id), LIVE)).fetchone()
-    if row is None:
-        return None
-    try:
-        return get_song(conn, row[0])
-    except KeyError:
-        return None
 
 
 def _song_json(app: WebApp, conn: sqlite3.Connection, overrides: Overrides, song: Song, link: UgLink) -> dict[str, Any]:

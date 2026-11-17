@@ -18,6 +18,8 @@ import pytest
 from conftest import add_song
 from helpers.ug_pages import (
     BANMA_UG,
+    SONG_DONGYE_CHORDS_URL,
+    SONG_DONGYE_TABS_URL,
     SONG_DONGYE_URL,
     FakeUG,
     make_tab_page_html,
@@ -141,6 +143,34 @@ def test_an_artist_link_read_gives_their_songs_as_search_rows(cfg, queue, conn, 
     titles = [h["title"] for h in said["hits"]]
     assert titles[:2] == ["斑马斑马", "董小姐"] and len(titles) == 6  # most tabbed first, as /api/artist
     assert all(h["artist"] == "宋冬野" for h in said["hits"])
+
+
+def test_a_tab_in_the_cache_whose_artist_page_isnt_read_is_read_again_for_their_lists(cfg, queue, conn, ug):
+    # A tab's page in the cache (read for a pin, or by a read whose budget ran out at it) names an artist page caracole
+    # never read: every song of theirs isn't searchable yet, so the link isn't found; its read asks for their lists alone.
+    one = replace(cfg, providers={**cfg.providers, "ug": replace(cfg.provider("ug"), lookup_requests=1)})
+    read(one, FOUND)
+    assert ug.requests == [FOUND]
+    app = app_for(cfg, queue)
+    said = get(app, FOUND)[1]
+    assert said["state"] == "auto" and said["tab"]["title"] == BANMA_UG  # its names known, from the cached page
+    assert said["guess"] == {"artist": "宋冬野", "title": "斑马斑马"}
+    assert said["artist_page"] == {"url": SONG_DONGYE_URL, "read": False, "read_at": None}
+    assert post(app, FOUND)[0] == 202
+    read(cfg, FOUND)
+    assert ug.requests == [FOUND, SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL]  # the tab's page from the cache
+    assert get(app, FOUND)[1]["state"] == "found"
+
+
+def test_an_artist_page_read_more_than_30_days_ago_makes_its_cached_tab_auto_again(cfg, queue, conn, ug):
+    read(cfg, FOUND)
+    app = app_for(cfg, queue)
+    assert get(app, FOUND)[1]["state"] == "found"
+    conn.execute("UPDATE ug_artist_tabs SET read_at = '2026-01-01T00:00:00Z'")
+    said = get(app, FOUND)[1]
+    assert said["state"] == "auto" and said["artist_page"]["read_at"] == "2026-01-01T00:00:00Z"
+    # Its other version, which no cached page names, is the artist page's: found however old the read.
+    assert get(app, f"{TAB}4689017")[1]["state"] == "found"
 
 
 def test_a_tab_only_an_artist_page_names_is_found_with_its_names_and_no_version(cfg, queue, conn):
@@ -272,3 +302,58 @@ def test_a_search_for_a_link_sends_no_site_search_and_gives_no_hint(cfg, queue, 
     said = json.loads(response.body)
     assert response.status == 200
     assert (said["hint"], said["unseen"], said["lacuerda_search"], said["youtube"]) == (None, None, None, None)
+
+
+# --- the job, through caracole serve's queue -----------------------------------------------------------------------
+
+
+def test_the_queue_moves_the_jobs_stages_as_the_command_reports_them(cfg, conn, ug):
+    # caracole serve's queue reads ``caracole ug --link --progress``'s JSON lines as the job's stages (jobs._reports),
+    # so the panel asks /api/ug/link again once the tab stage is done, before the artist's page is read.
+    import threading
+    import time
+    from unittest import mock
+
+    from helpers.ug_pages import SONG_DONGYE_CHORDS_URL
+
+    from caracole.commands.ug import _read
+    from caracole.web.status import job_line
+
+    def runner(args, emit):  # the command run as the queue's child would run it, its lines the child's output
+        with mock.patch("typer.echo", lambda message="", **k: emit(str(message))):
+            _read(cfg, read_link(args[1].removeprefix("--link=")), progress=True)
+        return 0
+
+    artist_page, go_on = threading.Event(), threading.Event()
+    answer = ug.handler
+
+    def handler(request):  # the artist's chords list waits, so the job is seen between its two stages
+        if str(request.url) == SONG_DONGYE_CHORDS_URL:
+            artist_page.set()
+            go_on.wait(10)
+        return answer(request)
+
+    ug.handler = handler
+    queue = JobQueue(runner)
+    queue.start()
+    try:
+        status, queued = post(app_for(cfg, queue), FOUND)
+        assert status == 202
+        assert artist_page.wait(10)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and [s.state for s in queue.job(1).stages] != ["done", "running"]:
+            time.sleep(0.02)
+        job = queue.job(1)
+        assert [(s.name, s.state) for s in job.stages] == [("tab", "done"), ("artist", "running")]
+        assert job.stages[0].detail == "斑马斑马 by 宋冬野, chords"
+        assert job_line(job, None).text == "Reading the artist's page on UG…"
+        go_on.set()
+        while time.monotonic() < deadline and queue.job(1).active:
+            time.sleep(0.02)
+        job = queue.job(1)
+        assert job.state == "done" and [s.state for s in job.stages] == ["done", "done"]
+        assert not any(line.startswith("caracole-progress") for line in job.steps[0].output), job.steps[0].output
+        assert job_line(job, None).text == "Read: 斑马斑马 by 宋冬野, chords."
+    finally:
+        go_on.set()
+        queue.stop()

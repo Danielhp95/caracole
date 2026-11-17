@@ -437,7 +437,7 @@ function directoryRow(d) {
   const go = button("Read their page on UG", "small primary", () => {
     const mine = typed;
     go.disabled = true;
-    rowKit.readArtistPage(csrf, {ugLink: String(d.url)}, words => { say(words); }).then(read => {
+    rowKit.readArtistPage(csrf, {ugPage: String(d.url)}, words => { say(words); }).then(read => {
       if (mine !== typed || !row.isConnected) return;
       if (read.error) { go.disabled = false; say(read.error); return; }
       getArtist(String(d.artist_key), 0).then(page => {

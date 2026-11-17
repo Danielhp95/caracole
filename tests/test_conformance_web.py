@@ -772,14 +772,14 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         (queued_job("Read tab 4180894 on Ultimate Guitar", _jobs.UG_LINK + "https://tabs.ultimate-guitar.com/tab/4180894",
                     _jobs.ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894"),
                     display="A tab on Ultimate Guitar"),
-         ["Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.",
+         ["Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs.",
           "Not found: UG answers 404 for https://tabs.ultimate-guitar.com/tab/4180894.",
           "Not read: UG turned us back (ug: 403: x); no asks until 2026-11-04 11:30 UTC."]),
         (queued_job("Read an artist's page on Ultimate Guitar",
                     _jobs.UG_LINK + "https://www.ultimate-guitar.com/artist/634073",
                     _jobs.ug_link_steps("https://www.ultimate-guitar.com/artist/634073"),
                     display="An artist on Ultimate Guitar"),
-         ["Read: UG's page of Song Dongye (宋冬野) lists 8 tabs."]),
+         ["Read: UG's page of 宋冬野 lists 8 tabs."]),
     ]
     for job, endings in reads:
         kind = phone_kind(job)

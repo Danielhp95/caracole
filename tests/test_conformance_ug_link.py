@@ -7,13 +7,15 @@ ug/link.py and commands/ug.py answer (docs/superpowers/plans/2026-11-17-ug-link.
 
 - ``{"fn": "caracole.ug_urls.read_link", "args": [text], "out": {kind, url, tab_id, type} | null}``: every shape of
   tests/helpers/ug_links.py, the one list library.js's ``ugLink`` is held to too.
-- ``{"fn": "fixture", "scene", "records", "cache"}``: a scene, a library in a fresh database dumped whole
-  (``helpers.corpus.dump_fixture``; overrides.toml as the phone's ``phone_overrides`` rows) and Ultimate Guitar's
+- ``{"fn": "fixture", "scene", "records", "cache"}``: a scene, a library in a fresh database dumped whole with its
+  library folder's files (``helpers.corpus.dump_fixture``; overrides.toml as the phone's ``phone_overrides`` rows,
+  never as a file) and Ultimate Guitar's
   answers in caracole's HTTP cache (``cache``: ``{"GET <url>": {status, fetched_at, headers, body}}``, as
   helpers/scenario.py's records carry one), which the replay loads; every record after it names the scene it asks
   over. ``empty``: nothing read. ``read``: ``caracole ug --link`` run over 宋冬野's tab 4180894 (its page and its
   artist's lists), a tab UG answers 404 for (999) and a Guitar Pro tab's page (7001); 宋冬野 - 董小姐 in the library, its
-  sheet UG's tab 3016223 and a ``[pin]`` of 3204647; Soda Stereo's slugged tab 85053 in the index. ``cooling``: UG
+  sheet UG's tab 3016223 and a ``[pin]`` of 3204647; Soda Stereo's slugged tab 85053 in the index; Ma Di's tab 7003,
+  its page in the cache and its artist's page never read (``auto``: the read asks for their lists alone). ``cooling``: UG
   cooling down after a block. ``spent``: the hour's lookups to UG spent (``events``). ``failed``: tab 4180894's read
   failed within the hour (kv ``ug:link-failed``), tab 5555's page won't parse until it is due (kv
   ``ug:unreadable:5555``).
@@ -73,6 +75,9 @@ PRO = make_tab_page_html(version_dict(7001, type="Pro", song="One", artist="Meta
                                       artist_url="https://www.ultimate-guitar.com/artist/metallica_1"),
                          [], meta={"fileExtension": ".gp5"})
 CSRF = "tok"
+MA_DI_PAGE = "https://www.ultimate-guitar.com/artist/ma_di_1188"
+MA_DI = make_tab_page_html(version_dict(7003, song="南山南 Nanshan Nan", artist="Ma Di (马頔)", rating=4.6, votes=31,
+                                        artist_url=MA_DI_PAGE), [], content="[ch]C[/ch]")
 
 
 def ok(body: str) -> dict[str, Any]:
@@ -152,11 +157,13 @@ class World:
                     p.stop()
             return lines
 
+        held = self.cache()  # what an earlier run of this world left in the cache, which the record carries
         with _clock():
             made = record(self.conn, self.cfg.library_dir, fn="caracole.commands.ug._read", case=case, call=call,
                           kw={"link": link, "progress": progress}, now=NOW,
                           clients={"ug": {"budget": budget, "delay": [0.0, 0.0]}},
-                          answers={f"GET {u}": a for u, a in answers.items()}, cache_dir=self.cfg.cache_dir)
+                          answers={f"GET {u}": a for u, a in answers.items()},
+                          cache={"ug": held} if held else None, cache_dir=self.cfg.cache_dir)
         done = made.get("out") or made["after"]
         made["answers"] = {r: a for r, a in made["answers"].items() if r in done["requests"]}  # what was asked alone
         made["agent"] = DEFAULT_USER_AGENT
@@ -192,7 +199,9 @@ class World:
     def fixture(self, scene: str) -> dict[str, Any]:
         self.conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", (ADDED, ADDED))
         self.conn.execute("UPDATE files SET created_at = ?", (ADDED,))
-        records = [r for r in dump_fixture(self.conn, None)]
+        # The library's files too (a song's sheet.txt, which its card's links and the song's sheet link read), but
+        # overrides.toml, which the phone holds as its phone_overrides rows.
+        records = [r for r in dump_fixture(self.conn, self.cfg.library_dir) if r.get("file") != "overrides.toml"]
         return {"fn": "fixture", "scene": scene, "records": records, "cache": self.cache()}
 
     def app(self):
@@ -279,6 +288,9 @@ def command_records(tmp: Path) -> list[dict[str, Any]]:
     out.append(world().run("an error on the artist's page, the tab read", FOUND,
                            {**pages, SONG_DONGYE_TABS_URL: status(500, "oops")}))
     out.append(world().run("the budget spent after the tab's page", FOUND, pages, budget=1))
+    w = world()
+    w.run("", FOUND, pages, budget=1)
+    out.append(w.run("a tab's page in the cache, its artist's page never read: their lists alone", FOUND, pages))
     out.append(world().run("a page that won't parse", f"{TAB}5555",
                            {f"{TAB}5555": ok("<html><body>half a page</body></html>")}))
     w = world()
@@ -310,8 +322,12 @@ def test_the_commands_end_as_caracole_serve_reads_them(commands):
     last = {r["case"]: [line for line in r["out"]["result"] if read_progress_line(line) is None][-1]
             for r in commands}
     assert {said.split(": ")[0] for said in last.values()} == {"Read", "Not found", "Not read"}
-    assert last["a tab's page, then its artist's lists"] == (
-        "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.")
+    assert last["a tab's page, then its artist's lists"] == "Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."
+    # caracole's names, never UG's, and no bracket before the "; " status.py reads the line to
+    assert not any("Song Dongye" in said or "(" in said.split("; ")[0] for said in last.values() if
+                   said.startswith("Read: "))
+    cached = next(r for r in commands if r["case"].startswith("a tab's page in the cache"))
+    assert cached["out"]["requests"] == [f"GET {SONG_DONGYE_CHORDS_URL}", f"GET {SONG_DONGYE_TABS_URL}"]
     first = next(r for r in commands if r["case"] == "a tab's page, then its artist's lists")
     assert first["out"]["requests"] == [f"GET {FOUND}", f"GET {SONG_DONGYE_CHORDS_URL}", f"GET {SONG_DONGYE_TABS_URL}"]
     assert first["out"]["noted"] == {f"phone:read:ug:{SONG_DONGYE_URL}": STAMP}
@@ -349,6 +365,7 @@ def web_records(tmp: Path) -> list[dict[str, Any]]:
     w.run("", FOUND, song_dongye())
     w.run("", f"{TAB}999", {f"{TAB}999": status(404)})
     w.run("", f"{TAB}7001", {f"{TAB}7001": ok(PRO)})
+    w.run("", f"{TAB}7003", {f"{TAB}7003": ok(MA_DI)}, budget=1)  # its page alone: the budget ran out at it
     dong = w.song("宋冬野", "董小姐")
     version = upsert_version(w.conn, provider="ug", tab_id="3016223", song_id=dong.id, slot="sheet", kind="chords",
                              rating=4.7, votes=90, version=1, label=None, url=f"{TAB}3016223", raw={}, now=ADDED)
@@ -366,10 +383,12 @@ def web_records(tmp: Path) -> list[dict[str, Any]]:
                       ("a song of the library's pick", f"{TAB}3204647"),
                       ("a page gone", f"{TAB}999"),
                       ("a Guitar Pro tab's page read", f"{TAB}7001"),
+                      ("a tab's page in the cache, its artist's page never read", f"{TAB}7003"),
                       ("a slugged tab of the index", f"{TAB}soda-stereo/de-musica-ligera-chords-85053"),
                       ("the bare page of a slugged tab of the index", f"{TAB}85053")):
         out.append(asked(w, "read", case, url))
-    for case, url in (("a tab read", FOUND), ("a page gone", f"{TAB}999"), ("a Guitar Pro tab", f"{TAB}7001")):
+    for case, url in (("a tab read", FOUND), ("a page gone", f"{TAB}999"), ("a Guitar Pro tab", f"{TAB}7001"),
+                      ("a tab's page in the cache, its artist's page never read", f"{TAB}7003")):
         out.append(posted(w, "read", case, url))
     w.close()
 
@@ -426,3 +445,11 @@ def test_the_routes_cover_every_state_both_kinds_and_the_refusals(web):
     [found] = [r["out"]["body"] for r in web if r["fn"] == "GET /api/ug/link" and r["scene"] == "read"
                and r["url"] == FOUND]
     assert found["guess"] == {"artist": "宋冬野", "title": "斑马斑马"} and found["hits"][0]["title"] == "斑马斑马"
+    # The read scene carries its library's files: the song's sheet link and its hits' links read them.
+    [scene] = [r for r in web if r["fn"] == "fixture" and r["scene"] == "read"]
+    assert [rec["file"] for rec in scene["records"] if "file" in rec] == ["宋冬野/董小姐/sheet.txt"]
+    [cached] = [r["out"]["body"] for r in web if r["fn"] == "GET /api/ug/link" and r["url"] == f"{TAB}7003"]
+    assert cached["state"] == "auto" and cached["tab"]["artist"] == "Ma Di (马頔)"
+    assert cached["guess"] == {"artist": "马頔", "title": "南山南"}
+    [sheet] = [r["out"]["body"]["song"] for r in web if r["fn"] == "GET /api/ug/link" and r["url"] == f"{TAB}3016223"]
+    assert sheet["has_sheet"] is True and sheet["sheet"] and sheet["this_tab"] is True

@@ -51,7 +51,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -663,18 +663,3 @@ def _read_whole(conn: sqlite3.Connection, artist: DirectoryArtist, listing: Any,
     conn.execute("UPDATE ug_directory SET read_at = ?, read_tabs = ?, read_updated = ? WHERE artist_id = ?",
                  (stamps.stamp(now), artist.tabs, artist.updated_at, artist.artist_id))
     stats.read += 1
-
-
-def read_bare(conn: sqlite3.Connection, client: Any, artist_id: int, now: datetime) -> bool:
-    """Note one bare artist's page read whole now (a pasted link's read, ug/link.py), as the pass notes one, so that
-    the pass doesn't read it again before its row moves; False for an artist the directory doesn't hold bare."""
-    row = conn.execute(f"{SELECT} WHERE artist_id = ? AND slug = ''", (artist_id,)).fetchone()
-    if row is None:
-        return False
-    artist = _artist(row)
-    conn.execute("UPDATE ug_directory SET read_at = ?, read_tabs = ?, read_updated = ? WHERE artist_id = ?",
-                 (stamps.stamp(now), artist.tabs, artist.updated_at, artist_id))
-    return True
-
-
-Between = Callable[[], None]

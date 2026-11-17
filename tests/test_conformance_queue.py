@@ -71,6 +71,7 @@ from caracole.web.jobs import (
     lookup_steps,
     remove_steps,
     review_steps,
+    ug_link_steps,
     version_steps,
 )
 from caracole.web.pages import Refused
@@ -141,6 +142,8 @@ BUILDERS = [
     (lacuerda_search_steps, ["tu calorro"], {"auto": True}),
     (lacuerda_search_steps, ["tu calorro"], {"auto": False}),
     (harptabs_artist_steps, ["/artist/12", "Bob Dylan"], {}),
+    (ug_link_steps, ["https://tabs.ultimate-guitar.com/tab/4180894"], {}),
+    (ug_link_steps, ["https://www.ultimate-guitar.com/artist/634073"], {}),
 ]
 
 
@@ -168,6 +171,10 @@ COMMANDS: list[list[list[str]]] = [
     _argv(lacuerda_search_steps("q", auto=True)),
     _argv(lacuerda_artist_steps("estopa", "Estopa")),
     _argv(harptabs_artist_steps("/a/1", "Dylan")),
+    _argv(ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894")),
+    _argv(ug_link_steps("https://www.ultimate-guitar.com/artist/634073")),
+    [["ug", "--link=https://tabs.ultimate-guitar.com/tab/4180894"]],
+    [["ug", "--progress", "--", "--link=x"]],
     _argv(review_steps("A - T", pick="a/t")),
     _argv(remove_steps("A - T")),
     [["youtube", "--sheet", "--progress", "--url=https://www.youtube.com/watch?v=x", "--song=A - T"]],
@@ -572,6 +579,16 @@ def scenarios() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
                      line("searching"), event("search", "done", "12 songs"))),
             run(step(lacuerda_artist_steps("estopa", "Estopa")[0][1], line("Estopa: 31 songs"),
                      line(PROGRESS_PREFIX + json.dumps({"stage": "song", "state": "done"})))),
+        ], {}),
+        ("a UG link's read reports its tab's stage and its artist's", [
+            submit("Read tab 4180894 on Ultimate Guitar", "ug-link:https://tabs.ultimate-guitar.com/tab/4180894",
+                   ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894"), display="A tab on Ultimate Guitar"),
+            run(step(ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894")[0][1],
+                     event("tab", "running", "asking Ultimate Guitar"),
+                     event("tab", "done", "斑马斑马 by 宋冬野, chords"),
+                     event("artist", "running", "asking Ultimate Guitar"),
+                     event("artist", "done", "Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."),
+                     line("Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."))),
         ], {}),
         ("Try again queues a job over again, by hand, with its songbooks", [
             submit("Get Radiohead - Creep", KEY, lookup_steps(*CREEP, songbooks=False), fetching=True,
