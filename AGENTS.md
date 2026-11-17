@@ -644,6 +644,8 @@ sitemaps list by bare ids alone, and the fetch their page.
   - `caracole serve --label`, else `SCRATCH` for a config file, library folder or state folder in a temporary folder;
   - never the NixOS or Ubuntu service's /var/lib/caracole nor a library run by hand at home: test_library_name.py;
   - never on the written index.html, a viewer or a songbook's page.
+- On the Android app's page, `WebControls.in_app` (`ServerControls.inApp`, set by Assembly): no name row, its own
+  bar names the library; the title still does.
 - The standard library alone.
 
 #### stamps.py

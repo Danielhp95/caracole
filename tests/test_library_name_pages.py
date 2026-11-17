@@ -247,3 +247,13 @@ def test_a_page_of_caracole_serves_own_shows_the_badge_at_any_width(badged, tmp_
     assert seen["fits"] and seen["badge"], seen
     if size[0] > 500:
         assert seen["name"], seen
+
+
+def test_the_apps_page_draws_no_name_row_and_its_title_still_names_the_library(conn, cfg):
+    # The Android app's own bar says "Phone · caracole · Tabs": its page draws no row for it.
+    from caracole.library_page import assemble_page
+    app = WebControls(csrf="tok", badge="Phone", in_app=True)
+    html = assemble_page({"songs": []}, app, problem=None, library_name="Tabs")
+    assert 'class="libname"' not in html
+    assert "<title>Phone · caracole · Tabs</title>" in html
+    assert WebControls(csrf="tok").in_app is False  # caracole serve never sets it

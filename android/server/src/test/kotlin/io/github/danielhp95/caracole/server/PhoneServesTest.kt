@@ -24,6 +24,7 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** What the phone serves as Assembly wires it: the files its cards link, what its page offers, and a request
@@ -128,6 +129,19 @@ class PhoneServesTest {
                 val card = (data.getValue("songs") as JsonArray).map { it as JsonObject }
                     .single { (it.getValue("id") as JsonPrimitive).content == id.toString() }
                 assertEquals(JsonPrimitive(false), card["fetchable"], "the page offers no Fetch the server refuses")
+            }
+        }
+    }
+
+    /** The app's own bar names the library, so the page it serves draws no library-name row. */
+    @Test fun thePhonesPageDrawsNoLibraryNameRow() {
+        val library = tmp.newFolder("library")
+        val state = File(tmp.root, "state").apply { mkdirs() }
+        TestDb.fresh(tmp.newFolder("db")).use { database ->
+            phone(database, library, state) { phone ->
+                val page = (get(phone, "/").body as Body.Bytes).bytes.toString(Charsets.UTF_8)
+                assertFalse("class=\"libname\"" in page)
+                assertTrue(Regex("<title>Phone · caracole").containsMatchIn(page))
             }
         }
     }

@@ -35,6 +35,7 @@ class LibraryPageTest {
         badge = of.getValue("badge").let { if (it is JsonNull) null else it.jsonPrimitive.content },
         sync = sheet(of) ?: throw AssertionError("the phone never serves the Sync tab"),
         active = of.getValue("active").jsonPrimitive.int,
+        inApp = of.getValue("in_app").jsonPrimitive.boolean,
     )
 
     private fun sha256(text: String) =
@@ -44,6 +45,12 @@ class LibraryPageTest {
 
     /** The cases the phone serves: every one but caracole serve's Sync tab. */
     private val phones get() = cases.filter { sheet(it.getValue("controls").jsonObject) != null }
+
+    @Test fun `the app's page has no library-name row and keeps its title`() {
+        val made = page.served(mirroredData(emptyList()), ServerControls("tok", inApp = true), "Tabs")
+        assertFalse("class=\"libname\"" in made)
+        assertTrue("<title>Phone · caracole · Tabs</title>" in made)
+    }
 
     @Test
     fun `the request form's reason for no sheet from YouTube is the vector's`() {

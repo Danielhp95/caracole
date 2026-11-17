@@ -2464,7 +2464,8 @@ songbooks from their next render); caracole serve answers a browser's own
 well within the first screen, on a phone too: caracole's logo and name, then
 the library's (caracole.toml's `name`, one line of 80 characters at most, else
 the library folder's name: "Tabs"), which the browser tab's title says too
-("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title; in the
+Android app no name row at all, its own bar names the library),
 the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
 tab](#the-sites-tab)) and, served, **Journal**, the last (see Journal, under
