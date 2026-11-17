@@ -76,10 +76,7 @@ class UgLinkRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
     private fun link(request: Request): Response {
         val link = pastedLink(PyUrl.query(request.target)["url"].orEmpty())
         val now = clock()
-        val answer = parts.database.read { db ->
-            val overrides = Overrides.read(db)
-            linkAnswer(db, overrides, link, now)
-        }
+        val answer = parts.database.read { db -> linkAnswer(db, LookupForms.overrides(db), link, now) }
         return jsonResponse(200, answer)
     }
 

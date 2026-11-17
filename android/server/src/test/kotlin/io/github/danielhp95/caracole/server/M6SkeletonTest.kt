@@ -55,6 +55,8 @@ class M6SkeletonTest {
     @Test fun theServersCorpusAreasAreRegisteredOnceEach() {
         val areas = ServerReplays.all.map { it.area }
         assertEquals(areas.distinct(), areas)
-        assertEquals(listOf("cards", "songbook-tab", "choices", "guitar", "export", "review"), areas.takeLast(6))
+        val m6 = listOf("cards", "songbook-tab", "choices", "guitar", "export", "review")
+        assertEquals(m6, areas.subList(areas.indexOf("cards"), areas.indexOf("cards") + m6.size))
+        assertEquals("ug-link", areas.last())  // a UG link pasted into the search box, after milestone 6's
     }
 }

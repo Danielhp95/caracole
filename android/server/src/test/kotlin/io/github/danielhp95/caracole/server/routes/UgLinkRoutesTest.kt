@@ -103,6 +103,11 @@ class UgLinkRoutesTest {
         assertEquals(listOf("tab", "artist"), job.stages.map { it.name })
         val last = job.output.last()
         assertTrue(last.startsWith("Not read: UG failed ("), last)
+        // its progress lines are the job's stages, never its output: the tab's ended with the line, as the panel reads it
+        assertTrue(job.output.none { it.startsWith("caracole-progress: ") }, "${job.output}")
+        val tab = job.stages.first { it.name == "tab" }
+        assertEquals("skipped" to last, tab.state to tab.detail)
+        assertEquals("skipped", job.stages.first { it.name == "artist" }.state)  // never asked: the queue ends it so
         val after = known(banma)
         assertEquals("failed", after.getValue("state").jsonPrimitive.content, "$after")
         assertTrue(after.getValue("why").jsonPrimitive.content.startsWith("reading it failed within the hour ("), "$after")
