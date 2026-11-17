@@ -15,9 +15,10 @@ import kotlinx.serialization.json.JsonPrimitive
 object Dumps {
     /** helpers.corpus.FIXTURE_TABLES, then PHONE_TABLES, which every phone database has. */
     private val TABLES = listOf(
-        "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "lacuerda_index",
-        "gtptabs_index", "musescore_index", "harptabs_index", "harptabs_artists", "harptabs_artist_tabs",
-        "gametabs_index", "gametabs_games", "gametabs_game_tabs", "phone_overrides", "phone_songbooks",
+        "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "ug_directory",
+        "lacuerda_index", "gtptabs_index", "musescore_index", "harptabs_index", "harptabs_artists",
+        "harptabs_artist_tabs", "gametabs_index", "gametabs_games", "gametabs_game_tabs", "phone_overrides",
+        "phone_songbooks",
     )
 
     private fun quoted(name: String) = "\"" + name.replace("\"", "\"\"") + "\""

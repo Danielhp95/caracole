@@ -20,7 +20,11 @@
                           ``path``, for /api/artist; a song's ``title``, its row on each site, ``song``, and
                           your song's row, ``library``, for a song of yours); and whether LaCuerda's own
                           search may be sent for the query (``lacuerda_search``), never for a link pasted (a UG
-                          page's or a YouTube video's: no ``unseen``, ``hint``, ``lacuerda_search`` or ``youtube``)
+                          page's or a YouTube video's: no ``unseen``, ``hint``, ``lacuerda_search`` or ``youtube``);
+                          and the artists UG's artist directory names whose page caracole hasn't read
+                          (``ug_directory``, ug/directory.py: each with their page, its tabs, the requests reading
+                          it takes at most and whether the read may go now; Read their page on UG posts
+                          ``/ug/link``, by hand alone)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
@@ -128,7 +132,7 @@ import sqlite3
 import time
 from collections.abc import Sequence
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from caracole.web.app import (
@@ -167,7 +171,7 @@ from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
 if TYPE_CHECKING:
-    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
+    from caracole.search import DirectoryHit, IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
     from caracole.songs import Song
 
 QUERY_LIMIT = 200  # characters of a search
@@ -411,6 +415,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             # gametabs.net's tracks of games, the game as the artist, each with its tabs
             "gametabs": _gametabs_rows(app, conn, kept.gametabs, songs),
             "lacuerda": _lacuerda_rows(app, conn, kept.lacuerda, songs),
+            # the artists UG's listings name whose page caracole hasn't read: Read their page on UG (POST /ug/link)
+            "ug_directory": [_directory_json(app, conn, d) for d in kept.directory],
             "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in kept.lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, kept.index_found, kept.lc_artists, kept.lacuerda),
@@ -452,6 +458,7 @@ class IndexAnswers:
     lc_artists: list[SiteArtist]
     lacuerda: list[SiteHit]
     gametabs: list[SiteHit]
+    directory: list[DirectoryHit] = field(default_factory=list)
     close: list[Suggestion] | None = None
 
 
@@ -459,6 +466,7 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
     """The offline indexes' answers for ``q``: those kept, ``CACHE_SECONDS`` old at most, else made now and kept,
     none of a site ``left_out`` (nor of gametabs.net while it is turned off)."""
     from caracole.search import (
+        directory_artists,
         search_gametabs,
         search_gtptabs,
         search_harptabs,
@@ -470,13 +478,18 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
         return cached[1]
     index_found, index, artists, hint, unseen = _index_hits(conn, q)
+    # The artists UG's listings name whose page caracole hasn't read (ug/directory.py): a row each, whose button reads
+    # it; the index's own artist rows never twice. One such artist is no artist the index can't see: no hint.
+    directory = directory_artists(conn, q, shown=[a.artist_key for a in index_found.artists])
+    if directory:
+        hint, unseen = None, None
     gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
     musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
     harp_artists, harptabs = search_harptabs(conn, q, songs=SITE_HITS) if "harptabs" not in left_out else ([], [])
     lc_artists, lacuerda = search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out else ([], [])
     gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
     kept = IndexAnswers(index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs,
-                        lc_artists, lacuerda, gametabs)
+                        lc_artists, lacuerda, gametabs, directory)
     app._found[q] = (time.monotonic(), kept)
     while len(app._found) > CACHE_SIZE:
         app._found.popitem(last=False)
@@ -650,6 +663,25 @@ def _gametabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit
                        "instruments": list(getattr(t, "instruments", ())), "composers": list(getattr(t, "composers", ()))}
                       for t in h.tabs],
              **_keys(h.artist, h.title), **next(owners)} for h in hits]
+
+
+def _directory_json(app: WebApp, conn: sqlite3.Connection, d: DirectoryHit) -> dict[str, Any]:
+    """An artist of UG's artist directory, as the pages draw them: their name, their page (``url``, what ``POST /ug/link``
+    reads), UG's count of their tabs, the requests reading their page takes at most (``requests``: a list a kind, then
+    one more each further 100 tabs, within a lookup's), their group on the library page (``group_key``), the key
+    /api/artist lists their songs by once read (``artist_key``), and whether the read may go now (``state``, ``why``:
+    ug/link.py ``known``'s, with no request)."""
+    from caracole.commands._common import utcnow
+    from caracole.ug.link import known
+    from caracole.ug_urls import read_link
+
+    link = read_link(d.url)
+    was = known(app.cfg, conn, link, utcnow()) if link is not None else None
+    lookup = app.cfg.provider("ug").lookup_requests
+    return {"artist_id": d.artist_id, "artist": d.artist, "url": d.url, "tabs": d.tabs, "score": d.score,
+            "artist_key": d.artist_key, "group_key": _group_key(d.artist),
+            "requests": max(1, min(lookup, 2 + d.tabs // 100)),
+            "state": was.state if was is not None else "other", "why": was.why if was is not None else ""}
 
 
 def _harptabs_artist_json(app: WebApp, conn: sqlite3.Connection, a: SiteArtist, songs: list[Song]) -> dict[str, Any]:

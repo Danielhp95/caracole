@@ -293,6 +293,21 @@ class ArtistHit:
 
 
 @dataclass(frozen=True)
+class DirectoryHit:
+    """An artist UG's artist directory names (ug/directory.py) whose page caracole hasn't read, and whom the offline
+    index can't show: an artist the sitemaps list by bare ids alone ("Song Dongye (宋冬野)"). ``artist`` is UG's
+    name, ``url`` their page (what Read their page on UG reads: ``POST /ug/link``), ``tabs`` UG's count of every type,
+    ``artist_key`` the key their tabs are filed under once read (/api/artist's), ``score`` as ``ArtistHit``'s."""
+
+    artist_id: int
+    artist: str
+    url: str
+    tabs: int
+    artist_key: str
+    score: float
+
+
+@dataclass(frozen=True)
 class IndexFound:
     """What the offline index answers a query (``find_index``).
 
@@ -523,6 +538,45 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
     # Never one only an artist's name matched, nor one of a catch-all's: its artist is no one's name.
     best = first if first.score >= STRONG and first.via != "artist" and not first.catch_all else None
     return IndexFound(tuple(rows), tuple(hits), "song", best)
+
+
+DIRECTORY_ROWS_READ = 2000  # rows of ug_directory the prefilter reads, at most
+
+
+def directory_artists(conn: sqlite3.Connection, query: str, limit: int = ARTIST_ROWS, *,
+                      shown: Iterable[str] = ()) -> list[DirectoryHit]:
+    """The artists of UG's artist directory (ug/directory.py) the query names whole (an artist reading of ``STRONG``
+    or more, on any form of UG's name: "宋冬野", "Song Dongye" and "song dong ye" name "Song Dongye (宋冬野)"), whose
+    page caracole hasn't read and whom the offline index has no row of: an artist row of their own, its button the
+    read of their page. Never one of ``shown``, the artist keys an index's artist row names already, nor one whose page
+    caracole read (their songs show as any read artist's do). Most tabs first among equals, then the most popular.
+    It reads the directory alone: no site is asked anything."""
+    patterns = _patterns(name_words(query))
+    if not patterns:
+        return []
+    queries = _queries(query)
+    skip = set(shown)
+    where = " OR ".join(f"forms LIKE ?{n}" for n in range(1, len(patterns) + 1))
+    held = " + ".join(f"(forms LIKE ?{n})" for n in range(1, len(patterns) + 1))
+    rows = conn.execute(
+        f"SELECT artist_id, name, slug, tabs, artist_key, place, forms FROM ug_directory WHERE {where} "
+        f"ORDER BY {held} DESC, tabs DESC, artist_id LIMIT {DIRECTORY_ROWS_READ}", list(patterns)).fetchall()
+    found: list[tuple[float, int, int, int, DirectoryHit]] = []
+    for artist_id, name, slug, tabs, artist_key, place, forms in rows:
+        if artist_key in skip or no_ones(artist_key):
+            continue
+        score = max((q.name(f.replace("-", " ")) for q in queries for f in _same_script(q, forms.split())),
+                    default=0.0)
+        if score < STRONG:
+            continue
+        url = f"https://www.ultimate-guitar.com/artist/{slug + '_' if slug else ''}{artist_id}"
+        if conn.execute("SELECT 1 FROM ug_artist_tabs WHERE page = ? LIMIT 1", (url,)).fetchone():
+            continue  # read: the index's artist rows show them
+        if conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", (artist_key,)).fetchone():
+            continue  # the index shows them
+        found.append((-score, -tabs, place, artist_id, DirectoryHit(artist_id, name, url, tabs, artist_key,
+                                                                     round(score, 1))))
+    return [hit for *_, hit in sorted(found)[:max(limit, 0)]]
 
 
 def _without_near_names(scored: list[_Row], named: dict[str, _Named]) -> tuple[list[_Row], dict[str, _Named]]:

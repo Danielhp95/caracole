@@ -852,10 +852,15 @@ const caracoleRows = (icons, does) => {
   });
   // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
   // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), or a harptabs.com artist's (POST
-  // harptabs/artist: caracole harptabs --artist), by its path (``who.harptabs``), then follow the job until it is
-  // over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
+  // harptabs/artist: caracole harptabs --artist), by its path (``who.harptabs``), or an Ultimate Guitar artist's
+  // page that UG's artist directory names (POST ug/link: caracole ug --link), by its address (``who.ugPage``), then
+  // follow the job until it is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
   const readArtistPage = (csrf, who, said) => {
     const w = who && typeof who === "object" ? who : {};
+    if (w.ugPage) {
+      return queueAndFollow("ug/link", new URLSearchParams({ csrf: String(csrf || ""), url: String(w.ugPage) }),
+        said, { asking: "Asking…", running: "Reading their page on UG…", failed: "Page not read." });
+    }
     if (w.harptabs) {
       return queueAndFollow("harptabs/artist", new URLSearchParams({ csrf: String(csrf || ""), path: String(w.harptabs) }),
         said, { asking: "Asking…", running: "Reading harptabs…",
@@ -1063,9 +1068,10 @@ const caracoleRows = (icons, does) => {
   const readOutcome = (job, harp) => {
     const j = job && typeof job === "object" ? job : {};
     const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
+    const site = harp === "ug" ? "UG" : harp ? "harptabs" : "LaCuerda";
     const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found|Found already): /.test(line)
       ? line + " "
-      : (harp ? "harptabs" : "LaCuerda") + " gave us none of their songs this time. ";
+      : site + " gave us none of their songs this time. ";
     const why = el("p", "hint read-outcome", said);
     const id = Number(j.id);
     if (Number.isInteger(id) && id > 0) {

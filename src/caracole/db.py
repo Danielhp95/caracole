@@ -26,6 +26,9 @@ Tables (plan §5, plus ``kv``):
 - ``gametabs_index``: the game and tab pages gametabs.net's sitemaps list; ``gametabs_games`` and
   ``gametabs_game_tabs``: the game pages caracole read, and the tabs each listed, with their composers and
   instruments (schema 13, gametabs_fetch.py, gametabs_index.py).
+- ``ug_directory``: every artist UG's letter listings name, with their page's address, their tabs, and when caracole
+  last saw them there and read their page; their keys join ``ug_artists``, so a word of their names is one of the
+  artist vocabulary's (schema 16, ug/directory.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -46,7 +49,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -533,9 +536,75 @@ _SCHEMA_V15 = """
 INSERT OR IGNORE INTO kv (key, value) VALUES ('sync:id', lower(hex(randomblob(8))));
 """
 
+# UG's artist directory (ug/directory.py, docs/superpowers/specs/2026-11-17-ug-artist-directory-design.md): every
+# artist UG's letter listings (/bands/<letter>.htm) name, by UG's id: the name as UG writes it, the slug of their page
+# ('' for a bare /artist/{id}, an artist whose name has a letter outside ASCII), the listing that names them ('s',
+# '0-9') and their place there when last seen (popularity: 0 the first), the tabs UG counts of every type, when one
+# last changed (a stamp, '' for none), the key they are filed under (the index's where their slug is one of its keys,
+# else their name's slug key, as ug/artist_tabs.py files a page's tabs), their names' forms hyphenated and written
+# together (for the prefilter's LIKE, never a key), and when a listing last showed them (seen_at). read_at, read_tabs
+# and read_updated: when caracole last read their page whole ('' for never) and the tabs and update its row had then,
+# so that a page is read again only once those moved. Their keys join ug_artists, so that a word of their names is one
+# of the artist vocabulary's (ug_artist_words): a key goes from ug_artists only with the last row of ug_index and of
+# ug_directory that has it, which the index's two artist triggers now ask too. No trigger states a conflict clause
+# (schema 14).
+_SCHEMA_V16 = """
+CREATE TABLE IF NOT EXISTS ug_directory (
+  artist_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL DEFAULT '',
+  letter TEXT NOT NULL,
+  place INTEGER NOT NULL DEFAULT 0,
+  tabs INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT '',
+  artist_key TEXT NOT NULL,
+  forms TEXT NOT NULL,
+  seen_at TEXT NOT NULL,
+  read_at TEXT NOT NULL DEFAULT '',
+  read_tabs INTEGER NOT NULL DEFAULT 0,
+  read_updated TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ug_directory_key ON ug_directory(artist_key);
+CREATE INDEX IF NOT EXISTS ug_directory_letter ON ug_directory(letter, seen_at);
+CREATE INDEX IF NOT EXISTS ug_directory_bare ON ug_directory(slug, tabs);
+DROP TRIGGER IF EXISTS ug_index_artist_gone;
+DROP TRIGGER IF EXISTS ug_index_artist_changed;
+CREATE TRIGGER ug_index_artist_gone AFTER DELETE ON ug_index
+WHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)
+AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key;
+END;
+CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index
+WHEN new.artist_key IS NOT old.artist_key BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key
+  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)
+  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);
+END;
+CREATE TRIGGER ug_directory_artist_added AFTER INSERT ON ug_directory BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+END;
+CREATE TRIGGER ug_directory_artist_changed AFTER UPDATE OF artist_key ON ug_directory
+WHEN new.artist_key IS NOT old.artist_key BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key
+  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)
+  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);
+END;
+CREATE TRIGGER ug_directory_artist_gone AFTER DELETE ON ug_directory
+WHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)
+AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key;
+END;
+"""
+
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
                7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12,
-               13: _SCHEMA_V13, 14: _SCHEMA_V14, 15: _SCHEMA_V15}
+               13: _SCHEMA_V13, 14: _SCHEMA_V14, 15: _SCHEMA_V15,
+               16: _SCHEMA_V16}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

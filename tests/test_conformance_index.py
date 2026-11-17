@@ -5,7 +5,7 @@ for the Kotlin port's core.index (IndexTransfer, Stamps) to agree with.
 **Runtime data**: tests/conformance/data/caracole/schema/fresh_kv.json, ``{"kv": {key: value}}``, the kv records a
 freshly migrated caracole database holds once each site's index has made its keys current on its empty tables
 (``index_transfer._current_keys`` of every site, as a merge runs it after taking a site): the keys records
-(``ug:artist_tabs:keys``, ``lacuerda:index:keys``, ``harptabs:index:keys``, ``harptabs:artists:keys``,
+(``ug:artist_tabs:keys``, ``ug:directory:keys``, ``lacuerda:index:keys``, ``harptabs:index:keys``, ``harptabs:artists:keys``,
 ``gametabs:games:keys``), by key. ``IndexTransfer.seedFresh`` puts them in a new phone database, so that its first
 merge of an export this caracole made finds the keys records the export holds and re-keys nothing.
 
@@ -129,6 +129,12 @@ def computer(conn: sqlite3.Connection) -> None:
     tt.artist_tab(conn, SONG_DONGYE, 2001, "斑马 斑马", LATE)
     tt.artist_tab(conn, SONG_DONGYE, 2002, "安和桥", EARLY)
     tt.artist_tab(conn, SODA, 3001, "De Música Ligera", LATE)
+    # UG's artist directory: S read whole late, 0-9 begun early with Кино's page read late, T further on the phone.
+    tt.directory_page(conn, "s", 1, 1, [(634073, "Song Dongye (宋冬野)", "", 43),
+                                        (274, "Simon & Garfunkel", "simon_garfunkel", 673)], LATE)
+    tt.directory_page(conn, "0-9", 1, 2, [(13472, "Кино", "", 411)], EARLY)
+    conn.execute("UPDATE ug_directory SET read_at = ?, read_tabs = 411 WHERE artist_id = 13472", (_stamp(LATE),))
+    tt.directory_page(conn, "t", 1, 9, [(90, "Toto", "toto", 300)], EARLY)
     tt.listing(conn, "tabs/e/index0.html", [("estopa", "Estopa"), ("enanitos_verdes", "Enanitos Verdes")], LATE)
     tt.listing(conn, "tabs/s/index0.html", [("soda_stereo", "Soda Stereo")], EARLY)
     db.kv_set(conn, lacuerda_index.COMPLETE_KEY, _stamp(LATE))
@@ -164,6 +170,7 @@ def computer(conn: sqlite3.Connection) -> None:
     db.kv_set_json(conn, gametabs_fetch.SITE.sitemaps_key, {**games, "junk": 5})
     # What a re-key makes again: one row of each such table keyed as no reading of its names keys it.
     conn.execute("UPDATE ug_artist_tabs SET artist_forms = ? WHERE tab_id = 3001", (STALE,))
+    conn.execute("UPDATE ug_directory SET forms = ? WHERE artist_id = 90", (STALE,))
     conn.execute("UPDATE lacuerda_index SET artist_key = ? WHERE path = 'enanitos_verdes/'", (STALE,))
     conn.execute("UPDATE harptabs_index SET key = ? WHERE path = 'tab/26/can-t-help-falling'", (STALE,))
     conn.execute("UPDATE harptabs_artist_tabs SET song_key = ? WHERE title = 'Honesty'", (STALE,))
@@ -190,6 +197,14 @@ def phone(conn: sqlite3.Connection) -> None:
     tt.artist_tab(conn, SONG_DONGYE, 2001, "斑马 斑马", MID)
     tt.artist_tab(conn, SONG_DONGYE, 2002, "安和桥 (live)", LATE)
     tt.artist_tab(conn, "https://www.ultimate-guitar.com/artist/12", 4001, "春天里", MID)
+    # UG's artist directory: S seen before the computer's read (taken), Simon & Garfunkel seen after (kept); Кино seen
+    # alike, their page unread here (its read taken); T further on here (kept); 7 Seconds the phone's own.
+    tt.directory_page(conn, "s", 1, 2, [(634073, "Song Dongye (宋冬野)", "", 40),
+                                        (274, "Simon & Garfunkel", "simon_garfunkel", 600)], MID)
+    conn.execute("UPDATE ug_directory SET seen_at = ? WHERE artist_id = 274", (_stamp(LATE + timedelta(days=1)),))
+    tt.directory_page(conn, "0-9", 1, 2, [(13472, "Кино", "", 411), (7, "7 Seconds", "7_seconds", 9)], EARLY)
+    tt.directory_page(conn, "t", 1, 9, [(90, "Toto", "toto", 300)], EARLY)
+    tt.directory_page(conn, "t", 2, 9, [(91, "Tool", "tool", 200)], EARLY)
     # LaCuerda: e read before (taken), s after (kept), b the phone's own; Estopa's page its own (theirs not taken).
     tt.listing(conn, "tabs/e/index0.html", [("estopa", "Estopa")], MID)
     tt.listing(conn, "tabs/s/index0.html", [("soda_stereo", "Soda Stereo"), ("sabina", "Joaquín Sabina")], LATE)
@@ -318,8 +333,19 @@ def _read_at(insert: str) -> Any:
     return lambda conn, at: conn.execute(insert, (at,))
 
 
+def _letter_started(conn: sqlite3.Connection, at: str) -> None:
+    """A listing's round begun at ``at`` in UG's artist directory's record (kv ``ug:directory:letters``), beside the
+    entry ``_record`` may have written: a letter's ``started``."""
+    from caracole.ug import directory
+
+    held = json.loads(db.kv_get(conn, directory.LETTERS_KEY) or "{}")
+    held["t"] = {"started": at}
+    db.kv_set_json(conn, directory.LETTERS_KEY, held)
+
+
 def _newest_sources() -> dict[str, list[Any]]:
     """Each place newest reads a time of a site's, in its order: each a writer of that one time."""
+    from caracole.ug import directory
     from caracole.ug import index as ug
 
     def site_index(site: Any) -> list[Any]:
@@ -330,7 +356,12 @@ def _newest_sources() -> dict[str, list[Any]]:
                _read_at("INSERT INTO ug_artist_tabs (page, tab_id, type, artist, title, url, artist_key, song_key, "
                         "artist_forms, title_forms, forms, read_at) VALUES ('p', 1, 'chords', 'A', 'B', 'u', 'a', "
                         "'b', 'a', 'b', 'a b', ?)"),
-               _kv_time(ug.REFRESHED_KEY), _kv_time(ug.BUILT_KEY)],
+               _kv_time(ug.REFRESHED_KEY), _kv_time(ug.BUILT_KEY),
+               _read_at("INSERT INTO ug_directory (artist_id, name, letter, artist_key, forms, seen_at) "
+                        "VALUES (1, 'A', 'a', 'a', 'a', ?)"),
+               _read_at("INSERT INTO ug_directory (artist_id, name, letter, artist_key, forms, seen_at, read_at) "
+                        "VALUES (2, 'B', 'b', 'b', 'b', '2026-01-01T00:00:00Z', ?)"),
+               _record(directory.LETTERS_KEY, "done"), _letter_started],
         "lacuerda": [_record(lacuerda_index.PAGES_KEY, "checked_at"), _kv_time(lacuerda_index.COMPLETE_KEY)],
         "gtptabs": site_index(gtptabs_fetch.SITE),
         "musescore": site_index(musescore_fetch.SITE),
@@ -343,7 +374,7 @@ def _newest_sources() -> dict[str, list[Any]]:
     }
 
 
-NEWEST_SOURCES = 4  # the most places a site has a time (UG's), so that each is the newest of its site in one phone
+NEWEST_SOURCES = 8  # the most places a site has a time (UG's), so that each is the newest of its site in one phone
 
 
 def newest_source(k: int) -> Any:
@@ -366,8 +397,8 @@ def newest_source(k: int) -> Any:
 
 def _patch_rekey(c: sqlite3.Connection) -> None:
     c.execute(f"UPDATE {index_transfer.META} SET value = '1' WHERE key = 'keys'")
-    c.execute("UPDATE kv SET value = '1' WHERE key IN ('ug:artist_tabs:keys', 'lacuerda:index:keys', "
-              "'harptabs:artists:keys', 'gametabs:games:keys')")
+    c.execute("UPDATE kv SET value = '1' WHERE key IN ('ug:artist_tabs:keys', 'ug:directory:keys', "
+              "'lacuerda:index:keys', 'harptabs:artists:keys', 'gametabs:games:keys')")
     c.execute("DELETE FROM kv WHERE key = 'harptabs:index:keys'")
 
 
@@ -655,8 +686,8 @@ def stamps_text() -> str:
 def test_fresh_kv_json_is_what_a_new_database_holds_once_each_index_made_its_keys_current():
     text = fresh_kv_text()
     check(FRESH_KV, text)
-    assert set(json.loads(text)["kv"]) == {"ug:artist_tabs:keys", "lacuerda:index:keys", "harptabs:index:keys",
-                                           "harptabs:artists:keys", "gametabs:games:keys"}
+    assert set(json.loads(text)["kv"]) == {"ug:artist_tabs:keys", "ug:directory:keys", "lacuerda:index:keys",
+                                           "harptabs:index:keys", "harptabs:artists:keys", "gametabs:games:keys"}
 
 
 @pytest.mark.parametrize("name", [*(f"{e}-export" for e in EXPORTS), *(f"{p}-before" for p in PHONES),
@@ -725,7 +756,7 @@ def test_a_fresh_phone_seeded_merges_an_export_and_re_keys_nothing(corpus):
     after = {r["kv"]: r["value"] for r in rows("fresh-after") if "kv" in r}
     assert all(after[k] == v for k, v in seeded.items())
     stale = [r for r in rows("fresh-after") if "row" in r and STALE in r["row"].values()]
-    assert {r["table"] for r in stale} == {"ug_artist_tabs", "lacuerda_index", "harptabs_index",
+    assert {r["table"] for r in stale} == {"ug_artist_tabs", "ug_directory", "lacuerda_index", "harptabs_index",
                                            "harptabs_artist_tabs", "gametabs_game_tabs"}
     assert not [r for r in rows("unseeded-after") if "row" in r and STALE in r["row"].values()]
     assert not [r for r in rows("rekey-after") if "row" in r and STALE in r["row"].values()]
@@ -734,7 +765,8 @@ def test_a_fresh_phone_seeded_merges_an_export_and_re_keys_nothing(corpus):
 def test_the_phone_merge_takes_what_was_read_later_and_marks_the_songs_new_tabs_are_for(corpus):
     merged = next(m for m in corpus.merges if m["fixture"]["after"] == "phone-after")["out"]
     taken = {s["site"]: dict(map(tuple, s["taken"])) for s in merged["sites"]}
-    assert taken["ug"] == {"sitemap": 2, "tab of its artist pages": 2}
+    assert taken["ug"] == {"sitemap": 2, "tab of its artist pages": 2, "artist of its directory": 1,
+                           "artist page read of its directory": 1}
     assert taken["lacuerda"] == {"listing page": 1, "artist page": 1, "row of its search's answers": 1}
     assert taken["gtptabs"] == {"sitemap": 2} and taken["musescore"] == {"sitemap": 1}
     assert taken["harptabs"] == {"sitemap": 1, "artist page": 1} and taken["gametabs"] == {"sitemap": 1,

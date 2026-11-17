@@ -293,11 +293,15 @@ def artist_keys(song: Song, overrides: Overrides) -> list[str]:
 
 def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
     """Whether the song's artist page can be found: pasted in [artist_url] (a tab page there counts
-    until reading it shows it leads to no artist page), learned, or in the index."""
+    until reading it shows it leads to no artist page), learned, in the index, or named by UG's
+    artist directory (ug/directory.py)."""
+    from caracole.ug.directory import artist_page_for
+
     keys = artist_keys(song, overrides)
     if artist_url_entry(overrides, keys) is not None and _failed_paste(conn, keys, overrides) is None:
         return True
-    return any(learned_artist_url(conn, k) or artist_known(conn, k) for k in keys)
+    return any(learned_artist_url(conn, k) or artist_known(conn, k) for k in keys) or (
+        artist_page_for(conn, keys) is not None)
 
 
 def pasted_page_problem(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> tuple[str, str] | None:
@@ -1174,14 +1178,17 @@ def _best_title(hits: list[_Hit]) -> list[_Hit]:
 
 def _known_artist_page(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> str | None:
     """The artist page you pasted under [artist_url] (or the one the tab page you pasted there links
-    to, once read), else one learned from a tab page."""
+    to, once read), else one learned from a tab page, else the one UG's artist directory names
+    (ug/directory.py ``artist_page_for``: a whole name before a part, then the most tabs)."""
+    from caracole.ug.directory import artist_page_for
+
     entry = artist_url_entry(overrides, keys)
     if entry is not None and (page := _pasted_page(conn, entry[1])) is not None:
         return page
     for key in keys:
         if url := learned_artist_url(conn, key):
             return url
-    return None
+    return artist_page_for(conn, keys)
 
 
 # What reading a tab page you pasted under [artist_url] can find instead of an artist page (the

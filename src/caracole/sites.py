@@ -231,7 +231,17 @@ def index_figures(conn: sqlite3.Connection) -> dict[str, Figures]:
     progress = None
     if coverage.listed and coverage.left:
         progress = Progress(len(coverage.listed) - len(coverage.left), len(coverage.listed), "sitemaps read")
-    figures["ug"] = Indexed(songs, "songs", f"{tabs:,} tabs, from its sitemap"), progress
+    # Its artist directory (ug/directory.py): how far its listings, then its bare artists' pages, have got.
+    from caracole.ug.bands import LETTERS as UG_LETTERS
+    from caracole.ug.directory import index_state as directory_state
+
+    directory = directory_state(conn)
+    in_listings = f" · {directory.artists:,} artists in its listings" if directory.artists else ""
+    if progress is None and directory.artists and not directory.complete:
+        progress = Progress(directory.letters_read, len(UG_LETTERS), "listings read whole")
+    elif progress is None and directory.complete and directory.read < directory.bare:
+        progress = Progress(directory.read, directory.bare, "bare artists' pages read")
+    figures["ug"] = Indexed(songs, "songs", f"{tabs:,} tabs, from its sitemap{in_listings}"), progress
 
     # The songs caracole knows (the artist pages read, its search's), never the site's own total, which the listings
     # give each artist and the smaller line sums; and the letters whose every listing page is read.

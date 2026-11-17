@@ -22,8 +22,9 @@ import kotlinx.serialization.json.jsonPrimitive
  * - its identity and what it agreed with the computer (`sync:`: its id, each base and kept answer, the peer and index
  *   records), so the restored library is the phone's own change, given to the computer at the next sync;
  * - the computer's settings (`phone:settings`), the phone's own schema record, and its indexes' progress and the
- *   pages it read for them (`phone:read:`, `phone:pushed:`, each site's sitemaps, `:index:`, `:keys` records): the
- *   index tables are no backup's, so their records stay theirs;
+ *   pages it read for them (`phone:read:`, `phone:pushed:`, each site's sitemaps, `:index:`, `:keys` records, UG's
+ *   artist directory's listings and keys, `ug:directory:`): the index tables are no backup's, so their records stay
+ *   theirs;
  * - and each song's records that gate a request ([SONGS]: a site's 30-day check, UG's artist page checked), kept by
  *   the song's identity key, since a song's id may differ in the backup: a song the backup has takes the records the
  *   phone has now for that song (none, if it has none now), and one only the backup has keeps its own.
@@ -43,7 +44,7 @@ object OwnRecords {
         "provider:", "http:last_request:", "sync:", "phone:read:", "phone:pushed:",
         "lacuerda:search:", "gtptabs:unusable:", "ug:artist_url:", "ug:pasted_tab:", "ug:unreadable:",
         "youtube-search:",
-        "ug:index:", "ug:artist_tabs:", "lacuerda:index:", "harptabs:index:", "harptabs:artists:", "gametabs:index:",
+        "ug:index:", "ug:artist_tabs:", "ug:directory:", "lacuerda:index:", "harptabs:index:", "harptabs:artists:", "gametabs:index:",
         "gametabs:games:", "gtptabs:index:", "musescore:index:",
     )
 

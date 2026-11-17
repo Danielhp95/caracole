@@ -1,5 +1,5 @@
 {
- "schema": 15,
+ "schema": 16,
  "statements": {
   "1": [
    "CREATE TABLE IF NOT EXISTS songs (\n  id INTEGER PRIMARY KEY,\n  key TEXT NOT NULL UNIQUE,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  artists TEXT NOT NULL,\n  album TEXT,\n  duration_ms INTEGER,\n  isrc TEXT,\n  source_ids TEXT NOT NULL DEFAULT '{}',\n  added_at TEXT NOT NULL,\n  variant TEXT,\n  status TEXT NOT NULL DEFAULT 'wanted' CHECK (status IN ('wanted', 'found', 'ignored')),\n  review INTEGER NOT NULL DEFAULT 0,\n  match_decision TEXT,\n  match_step TEXT,\n  match_score REAL,\n  match_artist_key TEXT,\n  match_song_key TEXT,\n  match_candidates TEXT NOT NULL DEFAULT '[]',\n  matched_at TEXT,\n  ug_dirty INTEGER NOT NULL DEFAULT 1,\n  ug_checked_at TEXT,\n  lyrics_status TEXT NOT NULL DEFAULT 'pending'\n    CHECK (lyrics_status IN ('pending', 'found', 'missing', 'instrumental')),\n  lyrics_json TEXT,\n  lyrics_at TEXT,\n  lacuerda_checked_at TEXT,\n  audio_path TEXT,\n  audio_mtime REAL,\n  autochords_mtime REAL,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n);",
@@ -120,6 +120,19 @@
   ],
   "15": [
    "INSERT OR IGNORE INTO kv (key, value) VALUES ('sync:id', lower(hex(randomblob(8))));"
+  ],
+  "16": [
+   "CREATE TABLE IF NOT EXISTS ug_directory (\n  artist_id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  slug TEXT NOT NULL DEFAULT '',\n  letter TEXT NOT NULL,\n  place INTEGER NOT NULL DEFAULT 0,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  updated_at TEXT NOT NULL DEFAULT '',\n  artist_key TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  seen_at TEXT NOT NULL,\n  read_at TEXT NOT NULL DEFAULT '',\n  read_tabs INTEGER NOT NULL DEFAULT 0,\n  read_updated TEXT NOT NULL DEFAULT ''\n);",
+   "CREATE INDEX IF NOT EXISTS ug_directory_key ON ug_directory(artist_key);",
+   "CREATE INDEX IF NOT EXISTS ug_directory_letter ON ug_directory(letter, seen_at);",
+   "CREATE INDEX IF NOT EXISTS ug_directory_bare ON ug_directory(slug, tabs);",
+   "DROP TRIGGER IF EXISTS ug_index_artist_gone;",
+   "DROP TRIGGER IF EXISTS ug_index_artist_changed;",
+   "CREATE TRIGGER ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\nAND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND;",
+   "CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\n  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);\nEND;",
+   "CREATE TRIGGER ug_directory_artist_added AFTER INSERT ON ug_directory BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND;",
+   "CREATE TRIGGER ug_directory_artist_changed AFTER UPDATE OF artist_key ON ug_directory\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\n  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);\nEND;",
+   "CREATE TRIGGER ug_directory_artist_gone AFTER DELETE ON ug_directory\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\nAND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND;"
   ]
  }
 }

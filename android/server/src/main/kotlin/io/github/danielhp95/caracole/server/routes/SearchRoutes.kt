@@ -23,6 +23,7 @@ import io.github.danielhp95.caracole.server.routes.search.Superseded
 import io.github.danielhp95.caracole.server.routes.search.jsonResponse
 import io.github.danielhp95.caracole.server.routes.search.obj
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 import java.io.IOException
 import java.time.Instant
 
@@ -32,7 +33,9 @@ import java.time.Instant
  *
  *     GET /api/search?q=&box=  your library and the offline indexes, as JSON, for a search box (`box`, the id its
  *                              page made): search_routes.py's answer, key for key, with the LaCuerda page to read
- *                              (`lacuerda_unlisted`) and whether LaCuerda's own search may be sent (`lacuerda_search`,
+ *                              (`lacuerda_unlisted`), the artists UG's artist directory names whose page caracole
+ *                              hasn't read (`ug_directory`, each with whether Read their page on UG, `POST /ug/link`,
+ *                              may go now) and whether LaCuerda's own search may be sent (`lacuerda_search`,
  *                              its gate at [clock]'s time; null with [searchesLacuerda] false), the `progression`
  *                              the query types or names (the songs' progressions' records), and `youtube` null (no
  *                              yt-dlp ever)
@@ -52,7 +55,12 @@ import java.time.Instant
  * Reads go through [Database.read]; a database that can't be read is 503, `{query, error}` (an artist's, `{error}`).
  */
 class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Set<String>? = null,
-                   val searchesLacuerda: Boolean = false, val clock: () -> Instant = Instant::now) : RouteModule {
+                   val searchesLacuerda: Boolean = false, val clock: () -> Instant = Instant::now,
+                   cacheDir: File? = null) : RouteModule {
+    /** The phone's HTTP cache (`stateDir/cache`), which says with no request whether an artist UG's directory names
+     * may have their page read now (UgLinks.known); beside the database when none is given (a test's). */
+    private val cacheDir: File = cacheDir ?: File(database.path.absoluteFile.parentFile, "cache")
+
     internal val searches = Searches()
     internal val answers = AnswerCache<IndexAnswers>()
     private val forms = SongForms()
@@ -81,7 +89,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
                 database.read { db ->
                     val config = PhoneConfig.read(db)
                     jsonResponse(200, Found(db, on(config), cards, forms, answers, ticket::check, config, searchesLacuerda,
-                                            clock()).answer(q))
+                                            clock(), cacheDir).answer(q))
                 }
             } catch (e: Exception) {
                 if (e is Superseded || !unreadable(e)) throw e
@@ -100,7 +108,7 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
         try {
             database.read { db ->
                 val config = PhoneConfig.read(db)
-                Found(db, on(config), cards, forms, answers, {}, config, searchesLacuerda, clock()).answer(q)
+                Found(db, on(config), cards, forms, answers, {}, config, searchesLacuerda, clock(), cacheDir).answer(q)
             }
         } catch (e: Exception) {
             if (!unreadable(e)) throw e

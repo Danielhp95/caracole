@@ -60,7 +60,7 @@ import kotlin.concurrent.withLock
 class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), readers: Int = 4,
                val journalSizeLimit: Long = JOURNAL_SIZE_LIMIT) : AutoCloseable {
     companion object {
-        const val SCHEMA_VERSION = 15
+        const val SCHEMA_VERSION = 16
         const val SQLITE_SOURCE_ID = "2025-06-06 14:52:32 b77dc5e0f596d2140d9ac682b2893ff65d3a4140aa86067a3efebe29dc914c95"
         const val BUSY_TIMEOUT_MS = 10_000
 

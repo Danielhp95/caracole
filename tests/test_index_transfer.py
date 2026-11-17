@@ -37,8 +37,9 @@ from caracole.gametabs import ListedTab as GameListed
 from caracole.harptabs import ArtistPage
 from caracole.harptabs import ListedTab as HarpListed
 from caracole.lacuerda import LCArtist, LCSong, Listing, SearchAnswer, SearchSong
-from caracole.ug import artist_tabs
+from caracole.ug import artist_tabs, directory
 from caracole.ug import index as ug_index
+from caracole.ug.bands import ListedArtist, ListingPage
 from caracole.ug.sitemap import classify_tab_url
 
 EARLY = datetime(2026, 10, 19, 3, 30, tzinfo=UTC)
@@ -118,6 +119,21 @@ def artist_songs(conn, slug: str, name: str, titles: list[str]) -> None:
                                                   for t in titles])
 
 
+def directory_page(conn, letter: str, page: int, pages: int, artists: list[tuple[int, str, str, int]], at: datetime,
+                   *, started: datetime | None = None) -> None:
+    """A listing page of UG's artist directory read at ``at`` (its round begun at ``started``), as a pass stores it:
+    each artist ``(id, name, slug, tabs)``."""
+    listed = tuple(ListedArtist(i, name, slug, directory.page_address(i, slug), tabs, 1790000000)
+                   for i, name, slug, tabs in artists)
+    stamp = db_stamp(at)
+    directory.store_page(conn, ListingPage(letter, page, pages, len(artists) * pages, listed), seen_at=stamp,
+                         started=db_stamp(started or at), now=at)
+
+
+def db_stamp(at: datetime) -> str:
+    return at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def rows(conn, table: str, *, schema: str = "main") -> list[tuple]:
     return sorted(tuple(r) for r in conn.execute(f"SELECT * FROM {schema}.{table}"))
 
@@ -142,6 +158,8 @@ def full(conn) -> None:
     ug_sitemap(conn, "last", ["blur/song-2-chords-1001"], EARLY)
     ug_listed(conn, ["1", "last"], EARLY)
     artist_tab(conn, "https://www.ultimate-guitar.com/artist/634073", 2001, "斑马 斑马", EARLY)
+    directory_page(conn, "s", 1, 1, [(634073, "Song Dongye (宋冬野)", "", 42), (274, "Simon & Garfunkel",
+                                                                              "simon_garfunkel", 673)], EARLY)
     listing(conn, "tabs/e/index0.html", [("estopa", "Estopa"), ("enanitos_verdes", "Enanitos Verdes")], EARLY)
     db.kv_set(conn, lacuerda_index.COMPLETE_KEY, "2026-10-19T03:30:00Z")
     artist_songs(conn, "estopa", "Estopa", ["Como Camarón", "Vino Tinto"])
@@ -183,12 +201,14 @@ def test_an_export_holds_each_sites_tables_and_progress_records_and_nothing_else
         out.close()
     assert meta["format"] == str(transfer.FORMAT) and meta["schema"] == str(db.SCHEMA_VERSION)
     assert json.loads(meta["sites"]) == list(SITES) and meta["exported_at"] == "2026-10-29T18:00:00Z"
-    assert tables == {transfer.META, "kv", "ug_index", "ug_artist_tabs", "lacuerda_index", "gtptabs_index",
+    assert tables == {transfer.META, "kv", "ug_index", "ug_artist_tabs", "ug_directory", "lacuerda_index",
+                      "gtptabs_index",
                       "musescore_index", "harptabs_index", "harptabs_artists", "harptabs_artist_tabs",
                       "gametabs_index", "gametabs_games", "gametabs_game_tabs"}
     assert all(same.values()), same
     assert keys == {"ug:sitemaps", "ug:index:listed", "ug:index:built_at", "ug:index:refreshed_at",
-                    "ug:artist_tabs:keys", "lacuerda:index:pages", "lacuerda:index:complete_at",
+                    "ug:artist_tabs:keys", "ug:directory:letters", "ug:directory:keys", "lacuerda:index:pages",
+                    "lacuerda:index:complete_at",
                     "lacuerda:index:keys", "gtptabs:sitemaps", "gtptabs:index:complete_at", "musescore:sitemaps",
                     "harptabs:sitemaps", "harptabs:index:keys", "harptabs:artists:keys", "gametabs:sitemaps",
                     "gametabs:games:keys"}
@@ -260,8 +280,8 @@ def test_an_export_of_pages_holds_those_pages_rows_alone_and_how_they_are_keyed(
 
     assert exported.sites == ("ug", "lacuerda", "harptabs")  # in caracole's order
     got = exported_rows(tmp_path / "reads.sqlite")
-    assert list(got) == ["ug_index", "ug_artist_tabs", "lacuerda_index", "harptabs_index", "harptabs_artists",
-                         "harptabs_artist_tabs", "kv", transfer.META]
+    assert list(got) == ["ug_index", "ug_artist_tabs", "ug_directory", "lacuerda_index", "harptabs_index",
+                         "harptabs_artists", "harptabs_artist_tabs", "kv", transfer.META]
     assert got["ug_index"] == [] and got["harptabs_index"] == []  # no sitemap's rows
     assert [r[1] for r in got["ug_artist_tabs"]] == [3001, 3002]
     assert {r[10] for r in got["lacuerda_index"]} == {"soda_stereo/", lacuerda_index.SEARCH_PAGE}
@@ -274,8 +294,8 @@ def test_an_export_of_pages_holds_those_pages_rows_alone_and_how_they_are_keyed(
     assert all(value == str(normalize.KEY_VERSION) for _, value in got["kv"])
     meta = dict(got[transfer.META])
     assert json.loads(meta["sites"]) == ["ug", "lacuerda", "harptabs"] and meta["exported_at"] == "2026-10-29T18:00:00Z"
-    assert exported.rows == {"ug_index": 0, "ug_artist_tabs": 2, "lacuerda_index": 4, "harptabs_index": 0,
-                             "harptabs_artists": 1, "harptabs_artist_tabs": 1}
+    assert exported.rows == {"ug_index": 0, "ug_artist_tabs": 2, "ug_directory": 0, "lacuerda_index": 4,
+                             "harptabs_index": 0, "harptabs_artists": 1, "harptabs_artist_tabs": 1}
 
 
 def test_an_export_of_pages_names_no_site_beside_them_and_no_site_without_pages(home, tmp_path):
@@ -438,7 +458,7 @@ def test_a_merge_trusts_no_function_of_the_files_schema_and_leaves_the_connectio
 # --- merge: round trips --------------------------------------------------------------------------------------------
 
 TABLES = {
-    "ug": ("ug_index", "ug_artist_tabs"),
+    "ug": ("ug_index", "ug_artist_tabs", "ug_directory"),
     "lacuerda": ("lacuerda_index",),
     "gtptabs": ("gtptabs_index",),
     "musescore": ("musescore_index",),
@@ -834,3 +854,34 @@ def test_newest_agrees_with_what_a_merge_takes(home, conn, tmp_path):
     assert transfer.newest(conn) == {}
     merge(conn, path, state=tmp_path / "state")
     assert transfer.newest(conn) == transfer.newest(home)
+
+
+def test_the_directory_takes_each_artist_seen_later_each_page_read_later_and_each_listing_further_on(home, conn,
+                                                                                                    tmp_path):
+    # The file saw Song Dongye later, read Кино's page, and read S whole; the database saw Simon & Garfunkel later,
+    # holds an artist the file lacks, and is further on in T: each side's later, nothing lost.
+    directory_page(home, "s", 1, 1, [(634073, "Song Dongye (宋冬野)", "", 43), (274, "Simon & Garfunkel",
+                                                                             "simon_garfunkel", 600)], LATE)
+    directory_page(home, "0-9", 1, 2, [(13472, "Кино", "", 411)], EARLY)
+    home.execute("UPDATE ug_directory SET read_at = ?, read_tabs = 411 WHERE artist_id = 13472", (db_stamp(LATE),))
+    directory_page(home, "t", 1, 9, [(90, "Toto", "toto", 300)], EARLY)
+    directory_page(conn, "s", 1, 2, [(634073, "Song Dongye (宋冬野)", "", 40), (274, "Simon & Garfunkel",
+                                                                             "simon_garfunkel", 673)], EARLY)
+    conn.execute("UPDATE ug_directory SET seen_at = ? WHERE artist_id = 274", (db_stamp(NOW),))
+    directory_page(conn, "0-9", 1, 2, [(13472, "Кино", "", 411), (7, "7 Seconds", "7_seconds", 9)], EARLY)
+    directory_page(conn, "t", 1, 9, [(90, "Toto", "toto", 300)], EARLY)
+    directory_page(conn, "t", 2, 9, [(91, "Tool", "tool", 200)], EARLY)
+
+    merged = transfer.merge(conn, export(home, tmp_path, ["ug"]), state_dir=tmp_path / "state", now=NOW)
+
+    [ug] = merged.sites
+    assert ("artist of its directory", 1) in ug.taken and ("artist page read of its directory", 1) in ug.taken
+    assert "its directory's listings" in ug.records
+    held = {r[0]: r[1:] for r in conn.execute("SELECT artist_id, tabs, read_at FROM ug_directory")}
+    assert held[634073] == (43, "") and held[274] == (673, "") and held[13472] == (411, db_stamp(LATE))
+    assert 7 in held and 91 in held  # what the file lacks stays
+    letters = directory.letters(conn)
+    assert letters["s"].done == db_stamp(LATE) and letters["t"].next == 3  # S read whole there; T further on here
+    again = transfer.merge(conn, export(home, tmp_path, ["ug"], name="again.sqlite"), state_dir=tmp_path / "state",
+                           now=NOW)
+    assert not again.changed

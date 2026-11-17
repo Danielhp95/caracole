@@ -256,12 +256,13 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "icons", "index", "match", "lyrics", "megalobiz", "azlyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
+        "sync", "icons", "index", "ug-directory", "match", "lyrics", "megalobiz", "azlyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
         "gametabs", "musescore", "youtube", "render", "todo", "backup",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
     assert providers["harptabs"] == "harptabs" and providers["gametabs"] == "gametabs"
+    assert providers["ug-directory"] == "ug"
 
 
 def gtptabs_context(conn, cfg, client=None, overrides=None):

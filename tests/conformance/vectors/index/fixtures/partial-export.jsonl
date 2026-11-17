@@ -12,7 +12,7 @@
 {"row":{"key":"gtptabs:sitemaps","value":"{\"sitemap-tabs-1.xml\": {\"etag\": \"\\\"sitemap-tabs-1.xml-28\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-28T03:30:00Z\", \"rows\": 2, \"keys\": 2}, \"sitemap-tabs-2.xml\": {\"etag\": \"\\\"sitemap-tabs-2.xml-19\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-19T03:30:00Z\", \"rows\": 2, \"keys\": 2}, \"sitemap-tabs-9.xml\": {\"checked_at\": \"not a time\", \"rows\": 1.50, \"etag\": \"\\u00e9\", \"keys\": 2}}"},"table":"kv"}
 {"row":{"key":"musescore:sitemaps","value":"{\"song-1\": {\"etag\": \"\\\"song-1-28\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-28T03:30:00Z\", \"rows\": 1, \"keys\": 2}}"},"table":"kv"}
 {"row":{"key":"format","value":"1"},"table":"caracole_export"}
-{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"16"},"table":"caracole_export"}
 {"row":{"key":"keys","value":"2"},"table":"caracole_export"}
 {"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
 {"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}

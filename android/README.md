@@ -145,6 +145,11 @@ page pasted into the box is no search: its panel reads that page from the phone 
 tab's page, then its artist's lists), so the next search finds every song of that artist, and its Fetch this version
 keeps the tab you pasted.
 
+UG's artist directory comes with UG's index: every artist UG's letter listings name, which the computer reads (the
+phone reads no listing). A search that names one whose page caracole hasn't read, an artist the sitemaps list only by
+bare ids (宋冬野, Joaquín Sabina), shows them with the tabs UG counts of theirs and **Read their page on UG**. Pressed,
+it reads that page from the phone itself, as a pasted link does, and their songs show in their group.
+
 ## Sync from the phone
 
 The bar's **sync** button (two circular arrows, left of ⋮) opens the library page's sync sheet, from any page: the

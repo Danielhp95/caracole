@@ -48,6 +48,7 @@ Below the table, a section for each step whose modules have more to say.
 | sync | sources.py, wanted.py (the one source of songs), songs.py |
 | icons | icons.py (each source's mark) |
 | index | ug/sitemap.py, ug/index.py |
+| ug-directory | ug/bands.py, ug/directory.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | megalobiz | megalobiz.py, megalobiz_fetch.py |
@@ -63,6 +64,36 @@ Below the table, a section for each step whose modules have more to say.
 | render | chordpro.py, render.py, pdf_text.py, viewer/, songbook.py |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py, song_sites.py |
 | backup | backup.py |
+
+#### ug-directory
+
+UG's artist directory (docs/superpowers/specs/2026-11-17-ug-artist-directory-design.md, its owner's decisions above the
+rest): every artist UG's letter listings name, then every bare artist's page, so that a search finds an artist UG's
+sitemaps list by bare ids alone, and the fetch their page.
+
+- ug/bands.py: a listing page read (`/bands/<letter>.htm`, `<letter><N>.htm`, `LETTERS`: `0-9` and a–z):
+  `parse_listing`, each artist's id, name, slug ("" for a bare `/artist/{id}`), page, tabs and last update;
+  `ListingParseError` for another listing or page than the one asked, no data, or a page cut short (fewer than 50
+  before the last).
+- ug/directory.py: `ug_directory` (schema 16), the pass and what it holds.
+  - `directory_pass`: the listings due, each letter's first `FIRST_PAGES` first, then the letters one by one, a page
+    a savepoint (`store_page`: its artists upserted, `seen_at` moved on, the letter's round in kv
+    `ug:directory:letters`), a letter read again `REFRESH` (30 days) after its last whole read; then the bare
+    artists' pages due (`due_bare`: never read, or their row's `tabs` or `updated_at` moved since and 30 days past),
+    most tabs first, each read by ug/fetch.py's `read_artist_page` with a client that sends nothing (`_Planned`),
+    whose misses the workers fetch, then the read again: no rule of the fetch's written twice.
+  - A listing never removes an artist; an artist's own page's 404 does (`_gone`). A page cut short, unparseable or a
+    404 is an error, the round going on from it the next time.
+  - `artist_page_for`: the page the directory names for an artist's keys (ug/fetch.py's `_known_artist_page` and
+    `artist_is_known`, after `[artist_url]` and the learned kv): the first key that names any, a whole name before a
+    part, the part that is more of the name, the most tabs, the most popular.
+  - `index_state` (`DirectoryState`: letters, artists, bare, read, `complete`), `letter_of`, `ensure_current_keys`
+    (kv `ug:directory:keys`).
+  - Its keys join `ug_artists` (the artist vocabulary) by triggers that state no conflict clause; a key goes with the
+    last row of `ug_index` and `ug_directory` that has it.
+- Its client is `_common.directory_client` (`make_parallel_client`: http.py's `ParallelClient`, `[ug_directory]`'s
+  concurrency, delay and budget), its step `ug-directory` (pipeline.py, after the index, before match; skipped while
+  the index is empty), its command `caracole ug --directory [--budget N]` (commands/ug.py, a `builds_index` word).
 
 #### lyrics
 
@@ -351,7 +382,8 @@ Below the table, a section for each step whose modules have more to say.
 
 #### todo
 
-- todo.py: `_todo.md`.
+- todo.py: `_todo.md`; its Artists to find on Ultimate Guitar gone once UG's artist directory has read every listing
+  whole, and meanwhile only the artists whose listing it hasn't (ug/directory.py `index_state`, `letter_of`).
 - library_page.py: `index.html`.
 - library_assets/.
 - songbook_section.py: its Songbooks tab's data.
@@ -379,7 +411,7 @@ Below the table, a section for each step whose modules have more to say.
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name) |
+| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name); `[ug_directory]` (`DirectoryPolicy`: UG's artist directory's concurrency, delay and budget, politeness that never crosses to the phone) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
@@ -389,7 +421,7 @@ Below the table, a section for each step whose modules have more to say.
 | politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
-| http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
+| http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing); `ParallelClient`, PoliteClient's rules with several requests in flight (`get_many`; each request cleared one at a time under a lock, `_claim`; the events held and drained into the caller's thread, `drain`): UG's artist directory's alone |
 | health.py | cooldowns, `events` |
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
 | song_names.py | the artist and the title a free text names, the one parser of it (below) |
@@ -424,6 +456,9 @@ Below the table, a section for each step whose modules have more to say.
       tabs' songs marked);
     - harptabs.com's artist and gametabs.net's game pages by `read_at`;
     - UG's artist pages' tabs a row at a time;
+    - UG's artist directory (`ug_directory`): a row seen later in a listing (`seen_at`) its listing columns, a page
+      read later (`read_at`) its read columns, a listing's round in kv `ug:directory:letters` where it got further
+      (`_round`: its last whole read, its round's start, its next page), never back; no row is removed;
     - LaCuerda's artist pages and search rows only where the database has none;
   - progress records move on, never back;
   - backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing;
@@ -557,7 +592,7 @@ Below the table, a section for each step whose modules have more to say.
 - `elsewhere`: the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use
   another database than its. Then, unless the root `--home`:
   - `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and
-    refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`) with status 2;
+    refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`, ug `--directory`) with status 2;
   - and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as
     add and serve write first).
 - The standard library alone.
@@ -1033,7 +1068,8 @@ It is rows.js's, shared by both pages:
       waiting as a lookup does.
   - lacuerda_search.py is `caracole lacuerda --search`: LaCuerda's own search, one query, one request at the lookup
     pace.
-  - ug/link.py is `caracole ug --link` (commands/ug.py): a UG page pasted, read at the lookup pace.
+  - ug/link.py is `caracole ug --link` (commands/ug.py): a UG page pasted, read at the lookup pace; ug/directory.py
+    is `caracole ug --directory`: UG's artist directory, bulk work at the pace the owner chose for it.
   - youtube_sheet.py is `caracole youtube --sheet`: a song's auto sheet from a YouTube video now, at the bulk pace: a
     command, never a lookup.
   - review.py, search.py, removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`.
@@ -1046,8 +1082,13 @@ It is rows.js's, shared by both pages:
     harptabs_index.py) and gametabs.net's tables (its sitemaps' and the game pages read, gametabs_index.py);
   - the tombstones of removed songs (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that
     brings one back, and in `/api/search`'s `removed`, which the library page shows with Add again);
+  - UG's artist directory (`directory_artists`, ug/directory.py's table): an artist the query names whole whose page
+    caracole hasn't read and whom the index has no row of (`DirectoryHit`), `/api/search`'s `ug_directory` (with the
+    requests reading their page takes at most and ug/link.py's state of it), a group on the library page whose tail,
+    as "+ N more" is (library.js `tailOf`, `ugOffer`, never the heading), and a row on the lookup page, offer Read
+    their page on UG, pressed by hand alone (rows.js `readArtistPage`'s `ugPage`: `POST /ug/link`);
   - the words of the UG index's artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept
-    by triggers on `ug_index`, a key going with its last row):
+    by triggers on `ug_index` and, schema 16, `ug_directory`, a key going with its last row):
     - an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and `WORD_ARTISTS` (LaCuerda's
       by `lacuerda_index.WORD_ARTISTS`), placed before a small namesake by `_with_parts`, leading by `_part_leads`
       and, against LaCuerda's, `lacuerda_leads`;
@@ -1688,6 +1729,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_ug_link.py writes vectors/web/ug_link.jsonl (read_link's shapes, both routes over each
     scene, its library folder among its records) and vectors/lookup/commands_ug_link.jsonl (scenario
     records, each page stored noted for the next push): `UgLinkReplay`, area `ug-link`.
+- UG's artist directory (ug-directory), the computer's bulk work: the phone reads no listing and makes no pass, and
+  takes `ug_directory` (schema 16) with UG's index at a merge.
+  - core.index's `Merge` takes it as `_plan_directory` does: a row seen later its listing columns, a page read later
+    its read columns, a letter's round of kv `ug:directory:letters` where it got further, no row removed; under a
+    sync's clock (`notAfter`) a time the file gives after it is never newer. `newest` reads its seen, read and rounds'
+    times. core.ug's `UgDirectory` is its keys (`formsText`, `artistKeyOf`, `ensureCurrentKeys`, kv
+    `ug:directory:keys`, made current after a ug merge); OwnRecords keeps `ug:directory:` as an index's progress.
+  - core.search's `Search.directoryArtists` (`DirectoryHit`) is search.py's `directory_artists`, and Found's
+    `ug_directory` `/api/search`'s (`UgLinks.known`'s state of each artist's page, with no request; none of the
+    index's hint or unseen beside it); its Read their page on UG posts `/ug/link` with the row's `url`, `UgLinkRoutes`'
+    read of that artist page.
+  - vectors/index/ (`IndexReplay`, area `index`), vectors/search/index.jsonl (`SearchReplay`) and
+    vectors/web/api_search.jsonl (`WebReplay`).
 
 ##### The Requests tab on the phone
 
@@ -2538,11 +2592,11 @@ picks one).
 
 #### Bulk work
 
-- The nightly run (its index refresh included), `caracole index build` and every command but `caracole get`,
-  `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist` and `caracole ug
-  --link`.
+- The nightly run (its index refresh and UG's artist directory included), `caracole index build` and every command
+  but `caracole get`, `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist`
+  and `caracole ug --link`.
 - Budgets per run (`config.DEFAULT_PROVIDERS`):
-  - `ug` 60;
+  - `ug` 60, and UG's artist directory a budget of its own, `[ug_directory].budget` (25,000; below);
   - `lrclib` 200;
   - `megalobiz` 60 (a search and a record a song, `megalobiz_fetch.py`; and never more than its `per_day`, 900 a UTC
     day, every run's, command's and lookup's together, counted in `events`: `_common.within_the_day`, under its API's
@@ -2574,6 +2628,27 @@ picks one).
     3.75–7.5 s between yt-dlp runs and its last request never holding it back;
   - none for `azlyrics`, the owner's choice of 2026-10-30, at either pace.
 - Everything else below binds both.
+
+#### UG's artist directory, read at the owner's pace
+
+- The owner's choice of 2026-11-17, in their words: "Build it, first full read, I want it to last 1h. Read every
+  letter every 30 days. Second pass, all of them. Budget, enough so that I read everything in 1h. Ignore the
+  politeness for this." Asked which reads the hour covers, the owner chose both: the listings and the whole second
+  pass (docs/superpowers/specs/2026-11-17-ug-artist-directory-design.md, "The owner's decisions").
+- So this pass alone (ug/directory.py, `caracole ug --directory`, the nightly `ug-directory` step) departs from one
+  request at a time per provider, the bulk pace and UG's budget of 60: `[ug_directory]` (config.py
+  `DirectoryPolicy`) gives it `concurrency` 6 requests in flight, a `delay` of [0, 0] and a `budget` of 25,000 of its
+  own, about 20,000 requests in an hour, about five a second (http.py `ParallelClient`, `_common.directory_client`).
+  They are caracole.toml settings, never sent to the phone (politeness.py's `settings_document` gives a lookup's
+  settings alone).
+- What still holds there: robots.txt (`/bands/` and `/artist/` alone, both open to `*`); caracole's own user agent;
+  every 200 and 404 cached; each request an event of provider `ug` and `http:last_request:ug` moved on, in the
+  caller's thread; errors never misses (a listing page cut short or unparseable an error, the pass going on from it
+  the next time, never dropping an artist); a 403, a 429 or a challenge stops every worker at once (nothing more
+  begun, those in flight waited for), records the block (one cooldown of `ug`, so the fetch and lookups cool too) and
+  sends one alert, nothing retried around it; the lock handed to a waiting lookup between two batches, with no request
+  in flight (`between`), so a lookup never waits for the hour; database writes on one connection in one thread (the
+  workers fetch; the caller parses, stores and records); Ctrl-C or a stop leaves no worker running.
 
 #### An interactive lookup
 
@@ -2638,7 +2713,8 @@ picks one).
 
 #### Either pace
 
-- One request at a time per provider (a synchronous client, and the lock below), redirect hops included.
+- One request at a time per provider (a synchronous client, and the lock below), redirect hops included; UG's
+  artist directory alone has several in flight, the owner's choice above.
 - A request answered with a redirect is a request sent, followed or not: `_common._SENT` and `Pace.SENT` count its
   `redirect` event in the hour's, the day's and `http:last_request:`.
 - A connection that fails before any byte is sent (`httpx.ConnectError`: no address, no route) is tried again only
@@ -2930,7 +3006,8 @@ picks one).
 - **Bare-id tabs** (a tenth of UG's, and every tab of an artist with an accented or non-Latin name) are found on the
   artist's UG page (ug/artist.py, the `artist_page` route in ug/fetch.py; every list read kept for searches,
   ug/artist_tabs.py), `/artist/<name>_<id>` or `/artist/<id>` (`overrides.artist_page_address`):
-  - its URL from `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`;
+  - its URL from `[artist_url]`, or learned from a tab page into kv `ug:artist_url:<artist key>`, or named by UG's
+    artist directory (ug/directory.py `artist_page_for`);
   - an `[artist_url]` tab page is read once, through the run's client, for the page it links to: kv
     `ug:pasted_tab:<tab id>`;
   - one that won't parse waits as any tab page does, kv `ug:unreadable:<tab id>`.
@@ -3112,6 +3189,8 @@ picks one).
     (`test_commands_common.py::test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too`).
   - Work that sends no request does it between two songs (a `between` callback): `autochords_pending`
     (commands/autochords.py) and `render_all` (pipeline.py's render step, commands/render.py).
+  - UG's artist directory's client, which has no pause, between two batches of its requests, none in flight
+    (ug/directory.py, the client's `between`: a block the lookup met is its too).
 - A bulk caller holding state across a handoff re-reads it after one:
   - ug/fetch.py `fetch_songs` reads each song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn
     is fetched again next run);

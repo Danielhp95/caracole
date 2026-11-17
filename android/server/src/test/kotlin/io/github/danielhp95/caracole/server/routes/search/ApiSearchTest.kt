@@ -89,8 +89,9 @@ class ApiSearchTest {
         /** search_routes._found_for's members. */
         val KEYS = listOf(
             "query", "library", "index", "artists", "lead", "best", "hint", "progression", "unseen", "names", "removed",
-            "gtptabs", "musescore", "harptabs", "harptabs_artists", "gametabs", "lacuerda", "lacuerda_artists",
-            "lacuerda_unlisted", "lacuerda_leads", "lacuerda_search", "youtube", "suggest", "skipped", "partial", "looked",
+            "gtptabs", "musescore", "harptabs", "harptabs_artists", "gametabs", "lacuerda", "ug_directory",
+            "lacuerda_artists", "lacuerda_unlisted", "lacuerda_leads", "lacuerda_search", "youtube", "suggest", "skipped",
+            "partial", "looked",
         )
 
         /** search_routes._rows' row of your song: its own members, where its sheet can be read, then its card's. */
