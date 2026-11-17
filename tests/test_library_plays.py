@@ -221,6 +221,82 @@ def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, c
                                 ["harptabs", "8px", 16], ["inbox", "8px", 16]], drawn
 
 
+CHIPS = PLAYS + r"""
+note("chips", Array.from(document.querySelectorAll("#list .line")).map((l) => [l.querySelector("h3").textContent,
+  Array.from(l.querySelectorAll(".line-plays > .play")).map((a) => {
+    const text = (n) => n.textContent;
+    return { words: a.querySelector(".play-words").checkVisibility() ? text(a.querySelector(".play-words")) : null,
+    n: a.querySelector(".n") && a.querySelector(".n").checkVisibility() ? text(a.querySelector(".n")) : null,
+    marks: a.querySelector(".marks") ? a.querySelector(".marks").checkVisibility() : null,
+    height: Math.round(a.getBoundingClientRect().height),
+    hidden: a.querySelector(".play-words").getAttribute("aria-hidden") }; })]));
+"""
+WORDS = {"Hotel California": ["Chords · UG", "Guitar Pro · gtptabs", "Tab", "Harmonica · harptabs", "Score · inbox"],
+         "Take It Easy": ["Chords · UG", "Harmonica · harptabs"], "斑马，斑马": ["Auto sheet"],
+         "De Música Ligera": ["Chords · LaCuerda"]}
+
+
+def chip_library(conn, cfg):
+    """Hotel California with its versions (6 of its sheet, 2 Guitar Pro files), Take It Easy, an auto sheet alone
+    and a LaCuerda sheet: nine buttons."""
+    with_versions(conn, cfg, hotel_california(conn, cfg))
+    harmonica_song(conn, cfg)
+    zebra = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, zebra, "sheet (auto).html", "sheet (auto).pdf")
+    update_song(conn, zebra.id, status="found")
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")  # a LaCuerda sheet
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=soda.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=soda, version_id=lc, name="sheet.txt", data=b"[ch]Am[/ch]\nx", rank=1)
+    put(cfg, soda, "sheet.html")
+    update_song(conn, soda.id, status="found")
+
+
+@pytest.mark.parametrize(("size", "touch"), [("1280,900", False), ("390,844", False), ("1280,900", True)])
+def test_the_pointer_decides_chips_for_a_mouse_tiles_for_a_thumb_whatever_the_width(conn, cfg, tmp_path, size, touch):
+    chip_library(conn, cfg)
+    drawn = dict(attribute_of(run(conn, cfg, tmp_path, CHIPS, size=size, touch=touch), "data-chips"))
+    for title, words in WORDS.items():
+        shown = drawn[title]
+        if touch:  # a tile: its icon, the sites' marks at its corner, no words
+            assert all(p["words"] is None and p["marks"] is not False and p["height"] == 48 for p in shown), shown
+        else:  # a chip of about 28 px: the kind and the site in words, its count after them, no marks
+            assert [p["words"] for p in shown] == words, (title, shown)
+            assert all(p["height"] == 28 and p["marks"] in (False, None) for p in shown), shown
+        assert all(p["hidden"] == "true" for p in shown)  # its name is its aria-label, as before
+    if not touch:
+        assert [p["n"] for p in drawn["Hotel California"]] == ["6", "2", None, None, None]
+
+
+def test_a_real_mouse_gets_the_chips(conn, cfg, tmp_path):
+    from helpers.browser import FINE_POINTER, Browser
+    from test_library_page import page
+
+    from caracole.library_page import write_library_page
+
+    chip_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    with Browser(tmp_path / "chrome", args=FINE_POINTER) as b:
+        b.open(path.as_uri())
+        assert b.wait("document.querySelectorAll('#list .line-plays .play').length === 9")
+        assert b.js("matchMedia('(pointer: fine)').matches") is True
+        assert b.js("Array.from(document.querySelectorAll('#list .line-plays .play-words'))"
+                    ".filter((w) => w.checkVisibility()).length") == 9
+
+
+def test_a_chip_never_wraps_its_words_beside_a_long_title(conn, cfg, tmp_path):
+    long = add_song(conn, "宋冬野", "斑马，斑马，你不要睡着啦，再给我看看你受伤的尾巴，我不想去触碰你伤口的疤")
+    put(cfg, long, "sheet (auto).html", "sheet (auto).pdf")
+    update_song(conn, long.id, status="found")
+    script = PLAYS + """const l = document.querySelector("#list .line"), h3 = l.querySelector("h3");
+    note("long", { cut: h3.scrollWidth > h3.clientWidth, chips: Array.from(l.querySelectorAll(".play"))
+      .map((a) => Math.round(a.getBoundingClientRect().height)) });"""
+    phone = attribute_of(run(conn, cfg, tmp_path, script, size="390,844"), "data-long")
+    assert phone == {"cut": True, "chips": [28]}, phone  # the title cut short, the chip whole on one line
+    assert attribute_of(run(conn, cfg, tmp_path, script, size="1280,900"), "data-long")["chips"] == [28]
+
+
 # --- one row, on a phone and on a desktop ------------------------------------------------------------------------
 
 # Each line's parts, where they are: its title's, its buttons' (with their marks and counts), its action's, its key's
@@ -234,7 +310,7 @@ for (const line of document.querySelectorAll("#list .line")) {
     key: one(":scope > .line-key"), more: one(":scope > .line-more"), action: one(":scope > .line-action > *"),
     status: one(":scope > .line-meta .line-status"),
     plays: Array.from(line.querySelectorAll(".line-plays > .play")).map((p) => ({ box: box(p),
-      parts: Array.from(p.querySelectorAll(".n, .marks > *")).map(box) })) };
+      parts: Array.from(p.querySelectorAll(".n, .marks > *")).filter((n) => n.checkVisibility()).map(box) })) };
 }
 note("laid", { laid, page: [document.documentElement.scrollWidth, window.innerWidth] });
 """
@@ -275,6 +351,8 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
                 assert not any(a[0] < part[1] - 0.5 and part[0] < a[1] - 0.5 and a[2] < part[3] - 0.5
                                and part[2] < a[3] - 0.5 for a in others), (title, part, others)
             w, h = p["box"][1] - p["box"][0], p["box"][3] - p["box"][2]
+            if not touch:  # a chip of 28 px, as wide as its words
+                assert round(h) == 28 and round(w) >= 28, p
             if touch:  # a thumb's target, 48 px square, its marks and count inside it
                 assert (round(w), round(h)) == (48, 48), p
                 assert all(p["box"][0] - .5 <= q[0] and q[1] <= p["box"][1] + .5 and p["box"][2] - .5 <= q[2]
