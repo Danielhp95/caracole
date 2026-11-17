@@ -279,6 +279,8 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
                 assert (round(w), round(h)) == (48, 48), p
                 assert all(p["box"][0] - .5 <= q[0] and q[1] <= p["box"][1] + .5 and p["box"][2] - .5 <= q[2]
                            and q[3] <= p["box"][3] + .5 for q in p["parts"]), p
+        if touch:  # the title keeps some room even at 320 px
+            assert line["h3"] is None or line["h3"][1] - line["h3"][0] > 40, (title, line["h3"])
         if touch:  # 8 px between two on a row
             boxes = [p["box"] for p in line["plays"]]
             assert all(b[0] - a[1] >= 7.5 for a, b in zip(boxes, boxes[1:], strict=False) if same_row(a, b)), (title, boxes)
