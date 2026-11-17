@@ -77,7 +77,8 @@ class AssemblyTest {
 
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
-                            "LibraryRoutes", "LookupRoutes", "SongbookRoutes", "VersionsRoutes", "HarmonicaRoutes",
+                            "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "SongbookRoutes", "VersionsRoutes",
+                            "HarmonicaRoutes",
                             "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
                      phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
@@ -91,6 +92,7 @@ class AssemblyTest {
         val moved = mapOf(
             "LookupRoutes" to listOf("POST /lookup", "POST /fetch", "POST /lacuerda/artist", "POST /lacuerda/search",
                                      "POST /harptabs/artist", "POST /versions/keep-more"),
+            "UgLinkRoutes" to listOf("GET /api/ug/link", "POST /ug/link"),
             "RequestsRoutes" to listOf("GET /requests.json", "POST /jobs/again"),
             "LibraryRoutes" to listOf("POST /request", "POST /remove"),
             "SongbookRoutes" to listOf("make", "add", "add-song", "get", "remove", "move", "set", "rename", "delete")
@@ -247,8 +249,8 @@ class AssemblyTest {
         assertEquals(Job.FAILED, over.state)  // no runner of "nothing" on the phone
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
-        assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "review", "harmonica", "render", "songbook", "inbox",
-                           "backup"), phone.queue.commands.runners.keys)
+        assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
+                           "inbox", "backup"), phone.queue.commands.runners.keys)
     }
 
     /** The requests a start ran are the next start's too (docs/android_port.md: the Requests tab's history kept

@@ -41,6 +41,7 @@ import io.github.danielhp95.caracole.server.lookups.InboxRunner
 import io.github.danielhp95.caracole.server.lookups.LaCuerdaRunner
 import io.github.danielhp95.caracole.server.lookups.RenderRunner
 import io.github.danielhp95.caracole.server.lookups.ReviewRunner
+import io.github.danielhp95.caracole.server.lookups.UgLinkRunner
 import io.github.danielhp95.caracole.server.lookups.VersionsRunner
 import io.github.danielhp95.caracole.server.page.LibraryAssets
 import io.github.danielhp95.caracole.server.page.LibraryPage
@@ -64,6 +65,7 @@ import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.UgLinkRoutes
 import io.github.danielhp95.caracole.server.routes.sync.Exports
 import io.github.danielhp95.caracole.server.routes.sync.Imports
 import io.github.danielhp95.caracole.server.routes.sync.MirrorPages
@@ -102,12 +104,13 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
  * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
- * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
+ * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
- * `harptabs`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
+ * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
  * the local server. Its page has the Sync tab (ServerControls.sync). Building it queues nothing: the app calls
@@ -147,6 +150,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["versions"] = VersionsRunner(parts)
         commands["lacuerda"] = LaCuerdaRunner(parts)
         commands["harptabs"] = HarpTabsRunner(parts)
+        commands["ug"] = UgLinkRunner(parts)
         commands["review"] = ReviewRunner(parts)
         commands["harmonica"] = HarmonicaRunner(parts)
         commands["render"] = RenderRunner(parts)
@@ -200,6 +204,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         files,
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
+        UgLinkRoutes(parts),
         SongbookRoutes(parts),
         VersionsRoutes(parts, deps.csrf),
         HarmonicaRoutes(parts, deps.csrf),

@@ -23,6 +23,7 @@ import io.github.danielhp95.caracole.core.ug.UgFetch
 import io.github.danielhp95.caracole.core.ug.UgLookup
 import io.github.danielhp95.caracole.core.ug.UgArtist
 import io.github.danielhp95.caracole.core.ug.UgPage
+import io.github.danielhp95.caracole.core.ug.TabRead
 import io.github.danielhp95.caracole.core.ug.UgTabPage
 import io.github.danielhp95.caracole.core.ug.UgVersion
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +52,10 @@ internal class SongRun(val ctx: FetchContext, var song: SongRow) {
 
     val db: Db get() = ctx.db
 
+    /** The song's lists read at its fetch's pace and budget. */
+    val lists: ListReading
+        get() = ListReading(ctx.db, ctx.client, ctx.now, ctx.artistPageMaxAge, ctx.artistPagesPerKind, ctx.overrides.block)
+
     /** The UG artist key the song is filed under: its match, else its own artist's key. */
     val artistKey: String get() = song.matchArtistKey?.takeIf { it.isNotEmpty() } ?: Normalize.slugKey(song.artist)
 
@@ -60,6 +65,17 @@ internal class SongRun(val ctx: FetchContext, var song: SongRow) {
     fun count(kind: String) {
         fetched[kind] = (fetched[kind] ?: 0) + 1
     }
+}
+
+/**
+ * What reading an artist's UG lists needs, bound to no song (ug/fetch.py's lists, which a song's fetch and a pasted
+ * link's read share): the database, the client, the time, how long a cached list page stands ([maxAge]), how many
+ * pages of a kind are read at most ([perKind]) and the tabs you `[block]`ed, which never count as wanted.
+ */
+internal class ListReading(val db: Db, val client: Client, val now: Instant, val maxAge: Duration, val perKind: Int,
+                           val block: Set<Long>) {
+    /** The read's time as caracole stores one (`_iso`). */
+    val stamp: String get() = Stamps.of(now)
 }
 
 /** ug/fetch.py's pages and versions: reading a tab page once a run, recording the versions it lists, and what a page
@@ -145,8 +161,10 @@ internal object Pages {
     fun tabPageUrl(url: String): Boolean = onTabHost(url) && !closed(url)
 
     /** `_wanted`: a kind caracole uses (never Official), public and not blocked. */
-    fun wanted(run: SongRun, v: UgVersion): Boolean =
-        v.kind != null && v.access == "public" && v.tabId !in run.ctx.overrides.block
+    fun wanted(run: SongRun, v: UgVersion): Boolean = wanted(run.ctx.overrides.block, v)
+
+    /** [wanted], with the tabs you `[block]`ed. */
+    fun wanted(block: Set<Long>, v: UgVersion): Boolean = v.kind != null && v.access == "public" && v.tabId !in block
 
     /** `_usable`: a version caracole wants, at a tab page it may read. */
     fun usable(run: SongRun, v: UgVersion): Boolean = wanted(run, v) && tabPageUrl(v.url)
@@ -161,8 +179,11 @@ internal object Pages {
     private fun linksATabPage(v: UgVersion): Boolean = tabPageUrl(v.url) || (onTabHost(v.url) && sluggedUrl(v.url, v.tabId))
 
     /** `_check_links`: [PageParseError] when a page lists versions caracole wants and not one links to a tab page. */
-    fun checkLinks(run: SongRun, versions: List<UgVersion>, url: String) {
-        val wanted = versions.filter { wanted(run, it) }
+    fun checkLinks(run: SongRun, versions: List<UgVersion>, url: String) = checkLinks(run.ctx.overrides.block, versions, url)
+
+    /** [checkLinks], with the tabs you `[block]`ed. */
+    fun checkLinks(block: Set<Long>, versions: List<UgVersion>, url: String) {
+        val wanted = versions.filter { wanted(block, it) }
         if (wanted.isNotEmpty() && wanted.none { linksATabPage(it) }) {
             throw PageParseError(UgFetch.PROVIDER, url, null, "no version on the page links to a tab page")
         }
@@ -246,21 +267,27 @@ internal object Pages {
     fun unreadableKey(tabId: Long): String = "ug:unreadable:$tabId"
 
     /** `_waits`: whether the tab's page proved unreadable and isn't due to be asked for again yet. */
-    fun waits(run: SongRun, tabId: Long): Boolean {
-        val record = run.db.kvGetJson(unreadableKey(tabId)) as? JsonObject ?: return false
+    fun waits(run: SongRun, tabId: Long): Boolean = waits(run.db, tabId, run.ctx.now)
+
+    /** [waits] at [now]. */
+    fun waits(db: Db, tabId: Long, now: Instant): Boolean {
+        val record = db.kvGetJson(unreadableKey(tabId)) as? JsonObject ?: return false
         val until = (record["until"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
         val at = parseIso(until) ?: return false
-        return run.ctx.now < at
+        return now < at
     }
 
     /** `_note_unreadable`: when to ask for the tab's page again, which won't parse even fetched again: after a week,
      * then after twice as long each time it still won't, 90 days at most. */
-    fun noteUnreadable(run: SongRun, tabId: Long, error: UnreadablePage) {
-        val record = run.db.kvGetJson(unreadableKey(tabId)) as? JsonObject
+    fun noteUnreadable(run: SongRun, tabId: Long, error: UnreadablePage) = noteUnreadable(run.db, tabId, run.ctx.now, error)
+
+    /** [noteUnreadable] at [now]. */
+    fun noteUnreadable(db: Db, tabId: Long, now: Instant, error: UnreadablePage) {
+        val record = db.kvGetJson(unreadableKey(tabId)) as? JsonObject
         val before = (record?.get("strikes") as? JsonPrimitive)?.let { it.longOrNull ?: it.doubleOrNull?.toLong() } ?: 0L
         val strikes = before + 1
-        val until = run.ctx.now.plus(retryAfter(strikes))
-        run.db.kvSetJson(unreadableKey(tabId), JsonObject(linkedMapOf(
+        val until = now.plus(retryAfter(strikes))
+        db.kvSetJson(unreadableKey(tabId), JsonObject(linkedMapOf(
             "until" to JsonPrimitive(Stamps.of(until)), "strikes" to JsonPrimitive(strikes),
             "error" to JsonPrimitive(error.message ?: ""),
         )))
@@ -275,19 +302,42 @@ internal object Pages {
         return if (after < most) after else most
     }
 
-    /** `_unreadable`: no page for the tab this run; with [error], when to ask for it again noted. Never taken for
-     * gone: the song goes on with its other versions, and stays dirty to read this one once it is due. */
+    /** `_unreadable`: no page for the tab this run; with [error] (noted already: [readTabPage]), the request that
+     * fetched it again counted. Never taken for gone: the song goes on with its other versions, and stays dirty to
+     * read this one once it is due. */
     private fun unreadable(run: SongRun, tabId: Long, kind: String?, error: UnreadablePage? = null) {
         if (error != null) {
             run.count(kind ?: "?")  // the request that fetched it again
-            noteUnreadable(run, tabId, error)
         }
         run.pages[tabId] = null
         run.unreadable += tabId
     }
 
     /**
-     * `_page`: a tab page of this song, read once per run; null when UG says it's gone, or it can't be read. [kind]
+     * `read_tab_page`: a tab page by the fetch's rules, of no song's: from the cache, else from UG ([getPage]: a cached
+     * copy that won't parse asked for once more). `closed`: robots.txt closes [url], never asked for; `waits`: it proved
+     * unreadable and isn't due again, not asked for; `unreadable`: it won't parse even fetched again, noted (kv
+     * `ug:unreadable:<tab id>`); `redirected`: UG sent it where robots.txt closes (RobotsClosed); `gone`: UG answered
+     * 404; `read`: the page. Once read or gone, the tab is readable again. A block, a spent budget or another error
+     * propagates.
+     */
+    fun readTabPage(db: Db, client: Client, now: Instant, tabId: Long, url: String): TabRead {
+        if (closed(url)) return TabRead(TabRead.CLOSED)
+        if (waits(db, tabId, now)) return TabRead(TabRead.WAITS)
+        val (page, fresh) = try {
+            getPage(client, url, ::tabPage)
+        } catch (e: UnreadablePage) {
+            noteUnreadable(db, tabId, now, e)
+            return TabRead(TabRead.UNREADABLE, error = e)
+        } catch (e: RobotsClosed) {
+            return TabRead(TabRead.REDIRECTED, fresh = true)
+        }
+        db.kvDelete(unreadableKey(tabId))
+        return TabRead(if (page != null) TabRead.READ else TabRead.GONE, page, fresh)
+    }
+
+    /**
+     * `_page`: a tab page of this song, read once per run ([readTabPage]); null when UG says it's gone, or it can't be read. [kind]
      * (the index's type) lets a deleted tab never rated be remembered as gone. Every page teaches caracole its
      * artist's UG page, filed under the song's artist only when the tab is by that artist. A page that won't parse
      * even fetched again waits until it is due; one robots.txt closes is null without a request, neither gone nor
@@ -295,23 +345,22 @@ internal object Pages {
      */
     fun page(run: SongRun, tabId: Long, url: String, kind: String? = null): UgTabPage? {
         if (tabId in run.pages) return run.pages[tabId]
-        if (closed(url)) return null
-        if (waits(run, tabId)) {
-            unreadable(run, tabId, kind)
-            return null
+        val read = readTabPage(run.db, run.ctx.client, run.ctx.now, tabId, url)
+        when (read.said) {
+            TabRead.CLOSED -> return null
+            TabRead.WAITS, TabRead.UNREADABLE -> {
+                unreadable(run, tabId, kind, read.error)
+                return null
+            }
+            TabRead.REDIRECTED -> {
+                run.count(kind ?: "?")  // the request UG answered with the redirect
+                run.pages[tabId] = null
+                run.closed += tabId
+                return null
+            }
         }
-        val (page, fresh) = try {
-            getPage(run.ctx.client, url, ::tabPage)
-        } catch (e: UnreadablePage) {
-            unreadable(run, tabId, kind, e)
-            return null
-        } catch (e: RobotsClosed) {
-            run.count(kind ?: "?")  // the request UG answered with the redirect
-            run.pages[tabId] = null
-            run.closed += tabId
-            return null
-        }
-        run.db.kvDelete(unreadableKey(tabId))
+        val page = read.page
+        val fresh = read.fresh
         run.pages[tabId] = page
         if (fresh) run.count(page?.let { it.tab.kind } ?: kind ?: "?")
         if (page == null) {

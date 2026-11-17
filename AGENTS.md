@@ -105,6 +105,14 @@ Below the table, a section for each step whose modules have more to say.
 - ug/page.py: tab pages; `KINDS`, the types caracole uses: chords, tabs, ukulele.
 - ug/artist.py: artist pages.
 - ug/artist_tabs.py: the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7.
+- ug/fetch.py's `read_tab_page` and `read_artist_page`: a tab page and an artist page's lists read by the fetch's
+  rules, of no song's, which a song's fetch and ug/link.py share.
+- ug/link.py: a UG link pasted into the library page's box (docs/superpowers/plans/2026-11-17-ug-link.md):
+  - `known`, what caracole knows of its page, the database and the HTTP cache alone: its state (`found`, `auto`,
+    `cooling`, `spent`, `failed`, kv `ug:link-failed` of the hour, `other`, `gone`), the tab's names, its artist's
+    page, the song's keys;
+  - `read`, `caracole ug --link`'s: the tab's page, its artist's page learned and its lists read, or an artist's
+    lists; a budget, a block or an error after the tab's page no failure of the link.
 - rank.py, coverage.py, versions.py.
 - sheet_versions.py: a song's UG chords versions in rank order, or its ukulele chords ones when its sheet is one
   (`sheet_kind`, `group_of`).
@@ -391,6 +399,7 @@ Below the table, a section for each step whose modules have more to say.
 | page_icon.py | caracole's logo (docs/logo/) drawn in SVG, its black and its copper traced by docs/logo/trace.py: every page's tab (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`) and bar (`mark`); the standard library alone |
 | library_name.py | which library a page shows (below) |
 | overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
+| ug_urls.py | UG's addresses as an address bar shows them, the one reading of them: overrides.py's (`ug_path`, `pin_url`, `artist_page_address`) and a pasted link's (`read_link`), which library.js's `ugLink` mirrors (helpers/ug_links.py's shapes); the standard library alone |
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
 | notify.py | ntfy |
@@ -696,6 +705,16 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     yt-dlp run of its metadata and its thumbnail).
   - Only its Add and make sheet sends the request form (`POST /request` with the video): nothing is downloaded
     before.
+- **An Ultimate Guitar link** typed or pasted into that box (library.js `ugLink`, ug_urls.py's `read_link`: a tab's
+  page or an artist's) is no query either, its panel beside the video's (`ugPanelFor`, `askUg`, `readUg`,
+  `showUgLink`):
+  - it reads `GET /api/ug/link` (no request), and for a page caracole hasn't read (`auto`) sends `POST /ug/link` once a
+    link a page (`caracole ug --link --progress`), followed on /api/jobs, asked again once its `tab` stage is done and
+    once it is over;
+  - its Fetch this version posts the lookup a search's row posts, with `tab` (`caracole get --tab`); an artist's songs
+    are search lines (rows.js `indexLine`);
+  - `/api/search` given a link (a UG page's or a video's) answers no `unseen`, `hint`, `lacuerda_search` or `youtube`
+    (search_routes.py `is_link`).
 - **LaCuerda's own search** is one of the two requests a search may bring.
   - Both pages send it by themselves (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) once the
     query has settled, the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`.
@@ -1014,6 +1033,7 @@ It is rows.js's, shared by both pages:
       waiting as a lookup does.
   - lacuerda_search.py is `caracole lacuerda --search`: LaCuerda's own search, one query, one request at the lookup
     pace.
+  - ug/link.py is `caracole ug --link` (commands/ug.py): a UG page pasted, read at the lookup pace.
   - youtube_sheet.py is `caracole youtube --sheet`: a song's auto sheet from a YouTube video now, at the bulk pace: a
     command, never a lookup.
   - review.py, search.py, removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`.
@@ -1075,6 +1095,10 @@ It is rows.js's, shared by both pages:
     among `INDEX_READS`), and `GET /youtube/thumb/`, its thumbnail.
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
+- **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
+  request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
+  /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
+  `INDEX_READS`, its stages `UG_LINK_STAGES`, when the state is `auto`; 409 known, other or gone, 429 not now).
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
@@ -1437,8 +1461,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - A refused lookup's step ends with `error: Nothing fetched: ….` and a bug's with `error: a bug in caracole: …`
     (the queue writes an `error:` line for every step that fails), where the computer's says the first plainly and
     logs the second; the stage the library page's line reads says the same on both.
-- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`) runs in
-  `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
+- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`, `UgLinkCommands`)
+  runs in `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
   - it says its Python's `--progress` events as `LookupWords.progressLine`s (`stageLine`, `songLine`; the queue's
     `JobCommands.progressLine` to the byte, a test checks), its job's events when it reports them
     (`JobCommands.reports`, as web/jobs.py's emit reads them), and its other lines; its last line is the one it
@@ -1646,6 +1670,24 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
     lookup/gtptabs.jsonl (its stage records asked through InteractiveAsk with the records' clients):
     `TabFilesReplay`, area `tab-files`.
+- A UG link pasted into the library page's search box (ug-link), the plan docs/superpowers/plans/2026-11-17-ug-link.md:
+  - core.ug's `UgUrls.readLink` (ug_urls.py's, its `SPACES`), and `UgLinks`, ug/link.py: `known` (no request: the
+    database and the phone's HTTP cache alone), `read` (a tab's page by the fetch's rules, `Pages.readTabPage`, then
+    its artist's lists read whole, `ArtistPages.readArtistPage` of no song's over a `ListReading`; a cached tab whose
+    artist page wasn't read within 30 days is `auto`, its lists read), `named` (the songs and names a link stands
+    for, the routes' and the command's lines alike), `said`, `knownLine`, kv `ug:link-failed` (one of OwnRecords'
+    records that gate a request);
+  - `caracole ug --link` is core/lookup/sites/`UgLinkCommands` (commands/ug.py), run by server/lookups'
+    `UgLinkRunner` in a CommandContext; it asks a tab's page and its artist's lists apart (`UgLinks.readPage`,
+    `readLists`), so the envelope records a block or an error of either and tells a block once, as every lookup's on
+    the phone (the computer's command tells none), one of the artist's page the read's `stopped`, never the link's
+    failure;
+  - server/routes' `UgLinkRoutes`, web/ug_link_routes.py: `GET /api/ug/link` and `POST /ug/link` (a job of no song's
+    under `JobCommands.UG_LINK`, among `INDEX_READS`, its stages `tab` and `artist`, an artist's link the second
+    alone); `/api/search` gives a pasted link no hint, no unseen and no LaCuerda gate (Found's `isLink`);
+  - tests/test_conformance_ug_link.py writes vectors/web/ug_link.jsonl (read_link's shapes, both routes over each
+    scene, its library folder among its records) and vectors/lookup/commands_ug_link.jsonl (scenario
+    records, each page stored noted for the next push): `UgLinkReplay`, area `ug-link`.
 
 ##### The Requests tab on the phone
 
@@ -2497,7 +2539,8 @@ picks one).
 #### Bulk work
 
 - The nightly run (its index refresh included), `caracole index build` and every command but `caracole get`,
-  `caracole versions`, `caracole lacuerda --artist` and `--search`, and `caracole harptabs --artist`.
+  `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist` and `caracole ug
+  --link`.
 - Budgets per run (`config.DEFAULT_PROVIDERS`):
   - `ug` 60;
   - `lrclib` 200;
@@ -2540,6 +2583,8 @@ picks one).
     (`--choose` and `--clear` run get);
   - `caracole lacuerda --artist`, one artist's page (an artist's Songs);
   - `caracole harptabs --artist`, one artist's page (an artist's Songs, once in 30 days);
+  - `caracole ug --link`, a UG page pasted into the library page's box: a tab's page, then its artist's lists, or an
+    artist's lists (ug/link.py), each list page 30 days from the cache;
   - and `caracole lacuerda --search`, one query of LaCuerda's search (one request).
 - `caracole lacuerda --search`:
   - a query at most once in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order;

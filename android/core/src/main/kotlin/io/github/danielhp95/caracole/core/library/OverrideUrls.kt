@@ -30,6 +30,13 @@ object OverrideUrls {
      * trailing slash; for a bare tab id, the bare `/tab/{id}` page. [s] passed [tabIdFromUrl]. */
     fun pinUrl(s: String): String = Addresses.pinUrl(s)
 
+    /** overrides._ug_path: the path of an address on one of UG's hosts (as an address bar shows it), without its
+     * query, fragment and trailing slash; null for anything else. */
+    fun ugPath(url: String): String? = Addresses.ugPath(url)
+
+    /** The type token a slugged tab page's address names (`chords`, `guitar-pro`, `bass`…: ug/sitemap's), or null. */
+    fun typeToken(url: String): String? = Addresses.typeToken(url)
+
     /** overrides.artist_page_address: a UG artist page's address (`/artist/<name>_<id>`, `/artist/<id>`) on the www
      * host, or null. */
     fun artistPageAddress(url: String): String? = Addresses.artistPageAddress(url)

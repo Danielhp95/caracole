@@ -182,6 +182,41 @@
     }
     return YT_ID.test(id) ? id : "";
   };
+  // The Ultimate Guitar page a link names, as ug_urls.read_link reads one (a tab's page, /tab/{id} or
+  // /tab/{artist}/{song}-{type}-{id}, or an artist's, /artist/{name}_{id} or /artist/{id}, on www, tabs, the bare domain
+  // or a language edition's, with or without its scheme; its query and fragment don't matter): its kind, the page's
+  // path (caracole asks for a tab's on tabs, an artist's on www: the server's ``url``) and the type a slugged tab names;
+  // null for anything else, a link with words or spaces around it among them (UG_SPACE, ug_urls.SPACES: neither trim's
+  // nor \s's). A pasted link is no query (linkMode).
+  const UG_SPACE = "\\u0000-\\u0020\\u007f-\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff";
+  const UG_EDGES = new RegExp("^[" + UG_SPACE + "]+|[" + UG_SPACE + "]+$", "gu");
+  const UG_SPACED = new RegExp("[" + UG_SPACE + "]", "u");
+  const UG_HOST = /^(?:(?:www|tabs|[a-z]{2})\.)?ultimate-guitar\.com$/;
+  const UG_TAB = /^\/tab\/(?:[^/]+\/)?(?:[^/]*-)?\p{Nd}+$/u;
+  const UG_SLUGGED = /^\/tab\/[^/]+\/([^/]+)-\p{Nd}+$/u;
+  const UG_ARTIST = /^\/artist\/(?:[^/?#]+_)?\p{Nd}+$/u;
+  const UG_TYPES = ["guitar-pro", "chords", "tabs", "bass", "ukulele", "power", "official", "video", "musescore", "drums"];
+  const ugLink = (text) => {
+    const t = String(text || "").replace(UG_EDGES, "");
+    if (!t || UG_SPACED.test(t)) return null;
+    const scheme = /^[a-z][a-z0-9+.-]*:\/{2}/i.exec(t);
+    if (scheme && !/^https?:\/{2}$/i.test(scheme[0])) return null;
+    const bare = (scheme ? t.slice(scheme[0].length) : t).split("#")[0];
+    const cut = bare.search(/[/?]/);
+    const host = (cut < 0 ? bare : bare.slice(0, cut)).toLowerCase();
+    const rest = cut < 0 ? "" : bare.slice(cut);
+    const ask = rest.indexOf("?");
+    const path = (ask < 0 ? rest : rest.slice(0, ask)).replace(/\/+$/, "");
+    if (!UG_HOST.test(host)) return null;
+    if (UG_TAB.test(path)) {
+      const slug = UG_SLUGGED.exec(path);
+      const type = slug ? UG_TYPES.find((x) => slug[1] === x || slug[1].endsWith("-" + x)) || null : null;
+      return { kind: "tab", path, type };
+    }
+    return UG_ARTIST.test(path) ? { kind: "artist", path, type: null } : null;
+  };
+  // A link pasted, a video's or a UG page's: its own panel, served (linkMode), and no search.
+  const linked = (text) => Boolean(youtubeVideo(text)) || ugLink(text) !== null;
   const songKeys = songs.map((s) => keyId(s.key));
   // Whether song i matches what is typed: each word in its search text, or its title's initials whole, and
   // each key typed.
@@ -1982,7 +2017,7 @@
   let countsKey = "";
   const drawCounts = (mine) => {
     const q = normal(state.q);
-    if (!(server && state.all && q && answer && answer.model && !youtubeVideo(q))) {
+    if (!(server && state.all && q && answer && answer.model && !linked(q))) {
       countsFor = null;
       barCounts.hidden = true;
       barCounts.replaceChildren();
@@ -2949,14 +2984,163 @@
     linkBox.replaceChildren(linkPanel.box);
     askVideo(vid, true);
   };
+  // --- an Ultimate Guitar link pasted into the box: a page to read, a version to fetch (web/ug_link_routes.py) --------
+  // No site is searched for it either: its panel takes the results' place. It asks /api/ug/link, which reads what
+  // caracole knows of the page with no request; a page caracole hasn't read is read once (POST ug/link: caracole ug
+  // --link, a tab's page then its artist's lists, at the lookup pace), followed on /api/jobs, the panel asking again
+  // once the tab's names are known and once the job is over. A tab: UG's names, its type, version and rating, the
+  // Artist and Title it guesses for you to check, and Fetch this version, the lookup a search's row posts with the tab
+  // (POST /lookup, caracole get --tab), so the version pasted is the one kept; a song of yours with it says so. An
+  // artist: their songs, each a search's line (indexLine). A page it can't read says why.
+  const UG_KINDS = { chords: "Chords", tabs: "Tab", ukulele: "Ukulele chords" };
+  const ugPanelFor = (ug) => {
+    const box = el("div", "link-panel ug-panel");
+    box.dataset.ugKind = ug.kind;
+    box.dataset.ugPath = ug.path;
+    box.dataset.ugType = ug.type || "";
+    let address = "";  // the page's address as caracole asks for it, once the server said it
+    const media = el("div", "link-media");
+    const reading = ug.kind === "tab" ? "Reading the tab page…" : "Reading the artist's page…";
+    const note = el("p", "hint link-note", reading);
+    note.setAttribute("role", "status");
+    const form = el("form", "link-form");
+    const field = (name, label) => {
+      const wrap = el("label", "f");
+      wrap.appendChild(el("span", null, label));
+      const input = el("input");
+      input.name = name;
+      input.required = true;
+      input.maxLength = name === "artist" ? 200 : 300;
+      input.autocomplete = "off";
+      input.addEventListener("input", () => { input.dataset.typed = "1"; });
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    };
+    const artist = field("artist", "Artist");
+    const title = field("title", "Title");
+    const go = el("button", "btn primary", "Fetch this version");
+    go.type = "submit";
+    go.title = "Fetches the song now and keeps this version of it as its sheet";
+    form.appendChild(go);
+    form.hidden = ug.kind !== "tab";
+    const line = el("div", "link-line hit");  // its request's line, as a search's row has one (askFrom)
+    const hits = el("div", "link-hits");
+    let mine = null;  // the library's song of the tab, while its names are the ones shown
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const a = artist.value.trim();
+      const t = title.value.trim();
+      const ours = mine && !artist.dataset.typed && !title.dataset.typed ? mine : null;
+      const tab = address || ug.text;
+      const pick = ours ? { song: ours.id, identity: ours.identity, tab } : { artist: a, title: t, tab };
+      getIt(pick, ours ? String(ours.display || "") : a + " - " + t, line, go);
+    });
+    box.append(media, note, form, line, hits);
+    const fill = (data) => {
+      const d = data && typeof data === "object" ? data : {};
+      const song = d.song && typeof d.song === "object" ? d.song : null;
+      const tab = d.tab && typeof d.tab === "object" ? d.tab : null;
+      const g = d.guess && typeof d.guess === "object" ? d.guess : {};
+      if (typeof d.url === "string" && d.url) address = d.url;
+      const shown = el("div", "yt-text");
+      const name = el("h3", "yt-title");
+      const label = tab ? String(tab.title || "") : ug.kind === "tab" ? "A tab on Ultimate Guitar"
+        : String(g.artist || "") || "An artist on Ultimate Guitar";
+      name.appendChild(address ? link({ label, href: address }, null, true) : el("span", null, label));
+      shown.appendChild(name);
+      if (tab) {
+        const facts = [String(tab.artist || ""), own.call(UG_KINDS, String(tab.type)) ? UG_KINDS[tab.type] : "",
+          typeof tab.version === "number" ? "version " + tab.version : "",
+          typeof tab.rating === "number" ? tab.rating.toFixed(1) + "★ (" + many(tab.votes, "vote") + ")" : ""];
+        shown.appendChild(el("p", "yt-meta", facts.filter(Boolean).join(" · ")));
+      } else if (ug.kind === "artist" && d.state === "found") {
+        shown.appendChild(el("p", "yt-meta", many(listOf(d.hits).length, "song") + " on Ultimate Guitar"));
+      }
+      media.replaceChildren(shown);
+      mine = song;
+      if (!artist.dataset.typed && g.artist) artist.value = String(g.artist);
+      if (!title.dataset.typed && g.title) title.value = String(g.title);
+      const opens = song && typeof song.sheet === "string" && song.sheet ? song.sheet : "";
+      const said = d.state === "auto" ? (tab ? "Reading the artist's page…" : reading)  // a tab's page in the cache
+        : d.state === "found" && ug.kind === "artist" ? (listOf(d.hits).length ? "Their songs, from their page on UG."
+          : "Their page lists no chords or tabs caracole keeps.")
+        : d.state === "found" && song && song.this_tab && song.has_sheet
+          ? "In your logbook as " + String(song.display || "") + ": this version is its sheet."
+        : d.state === "found" && song ? "In your logbook as " + String(song.display || "") + "."
+        : d.state === "found" ? "Check the name, then fetch this version."
+        : d.state === "other" || d.state === "gone" ? "Nothing to fetch: " + String(d.why || "") + "."
+        : "Not read now" + (d.why ? " (" + String(d.why) + ")" : "") + ". " +
+          (ug.kind === "tab" ? "Name it, then fetch this version." : "Try again later.");
+      note.replaceChildren(said);
+      if (opens) note.append(" ", link({ label: "Open", href: opens }, null, false));
+      form.hidden = ug.kind !== "tab" || d.state === "other" || d.state === "gone" ||
+        Boolean(song && song.this_tab && song.has_sheet);
+      const items = ug.kind === "artist" ? listOf(d.hits).filter((h) => h && typeof h === "object") : [];
+      hits.replaceChildren(...items.map((h) => indexLine({ key: String(h.artist_key || "") + "/" +
+        String(h.title_key || ""), ug: h }, { get: getIt, later, again: addAgain })));
+    };
+    return { box, fill, focus: () => (form.hidden ? (hits.querySelector("button") || note) : artist.value ? go : artist).focus() };
+  };
+  const askUg = (ug, read) => fetch("api/ug/link?url=" + encodeURIComponent(ug.text),
+    { cache: "no-store", headers: { Accept: "application/json" } })
+    .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (linkFor !== ug.key || !linkPanel) return;
+      linkPanel.fill(ok ? body : { state: "failed", why: body && body.error ? String(body.error) : "" });
+      if (ok && body && body.state === "auto" && read && !linkRead.has(ug.key)) readUg(ug);
+    }, () => {
+      if (linkFor === ug.key && linkPanel) linkPanel.fill({ state: "failed", why: "no answer from caracole serve" });
+    });
+  // The page read now (POST ug/link, a job), then followed: the panel asks again once the tab's names are known (its
+  // tab stage done), and once the job is over (its artist's songs).
+  const readUg = (ug) => {
+    linkRead.add(ug.key);
+    let early = false;
+    fetch("ug/link", { method: "POST", headers: { Accept: "application/json" },
+      body: new URLSearchParams({ csrf: String(server.csrf || ""), url: ug.text }) })
+      .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
+          askUg(ug, false);
+          return;
+        }
+        const follow = () => fetch(data.url, { cache: "no-store", headers: { Accept: "application/json" } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((job) => {
+            if (!job || typeof job !== "object" || !job.active) {
+              askUg(ug, false);
+              return;
+            }
+            if (!early && listOf(job.steps).some((x) => x && x.name === "tab" && x.state === "done")) {
+              early = true;
+              askUg(ug, false);
+            }
+            setTimeout(follow, 700);
+          }, () => askUg(ug, false));
+        follow();
+      }, () => askUg(ug, false));
+  };
+  const showUgLink = (found, pasted) => {
+    const ug = Object.assign({ key: "ug:" + found.kind + ":" + found.path, text: pasted }, found);
+    linkMode(true);
+    say(ug.kind === "tab" ? "A tab on Ultimate Guitar" : "An artist on Ultimate Guitar");
+    if (linkFor === ug.key && linkPanel) return;
+    linkFor = ug.key;
+    linkPanel = ugPanelFor(ug);
+    linkBox.replaceChildren(linkPanel.box);
+    askUg(ug, true);
+  };
   const askSources = (now) => {
     const q = normal(state.q);
     const vid = server ? youtubeVideo(q) : "";
-    if (vid) {  // a link: its panel, and no search of the sites
+    const ug = server && !vid ? ugLink(q) : null;
+    if (vid || ug) {  // a link: its panel, and no search of the sites
       clearTimeout(askTimer);
       if (asking) asking.abort();
       askedFor = q;
-      showLink(vid, q);
+      if (vid) showLink(vid, q);
+      else showUgLink(ug, q);
       return;
     }
     if (results.classList.contains("link-mode")) {
@@ -3159,7 +3343,7 @@
     if (e.key === "Enter") {
       e.preventDefault();
       const q = normal(state.q);
-      if (server && youtubeVideo(q)) {  // a link: on to its panel, nothing searched
+      if (server && linked(q)) {  // a link: on to its panel, nothing searched
         if (!state.all) enterAll();
         if (linkPanel) linkPanel.focus();
         return;

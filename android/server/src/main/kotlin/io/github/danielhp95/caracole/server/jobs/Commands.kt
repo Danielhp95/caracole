@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server.jobs
 
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.ug.UgLink
+import io.github.danielhp95.caracole.core.ug.UgUrls
 import kotlinx.serialization.json.JsonObject
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -74,6 +76,10 @@ object JobCommands {
     val YOUTUBE_SEARCH_STAGES: List<Pair<String, String>> = listOf("video" to "Search YouTube",
                                                                     "thumbnail" to "Thumbnail")
 
+    /** `caracole ug --link --progress`'s (jobs.UG_LINK_STAGES): a UG link pasted into the search box read, its tab
+     * page, then its artist's page; an artist's link, the second alone. */
+    val UG_LINK_STAGES: List<Pair<String, String>> = listOf("tab" to "Tab page", "artist" to "Artist page")
+
     /** youtube_sheet.py's STAGES, `caracole youtube --sheet --progress`'s (caracole serve's alone). */
     val YOUTUBE_SHEET_STAGES: List<Pair<String, String>> = listOf(
         "song" to "Find the song",
@@ -124,6 +130,7 @@ object JobCommands {
     const val LACUERDA_SEARCH = "lacuerda-search:"  // a query of LaCuerda's search: the query's key after it
     const val HARPTABS_ARTIST = "harptabs-artist:"  // a harptabs.com artist page's read: the page's path after it
     const val YOUTUBE_SEARCH = "youtube-search:"  // a video suggested for a search
+    const val UG_LINK = "ug-link:"  // a UG link pasted into the search box read: the page's address after it
     const val YOUTUBE_SHEET = "youtube:"  // a sheet from a YouTube video: the song's identity key after it
     const val INDEX_MERGE = "index-merge:"  // an index export's merge
     const val SYNCING = "sync:"  // a sync's (sync_routes.SYNCING): the address it syncs with after it
@@ -131,7 +138,7 @@ object JobCommands {
     const val SONGBOOK = "songbook\u001f"  // a songbook's change (web/songbooks.py's KEY)
 
     /** What a site's index reads, and a search's suggestion: jobs of no song's. */
-    val INDEX_READS: List<String> = listOf(LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH)
+    val INDEX_READS: List<String> = listOf(LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK)
 
     // --- the builders -------------------------------------------------------------------------------------------
 
@@ -196,6 +203,11 @@ object JobCommands {
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
         listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))
 
+    /** Read a UG link pasted into the library page's search box now, its tab page then its artist's page:
+     * `caracole ug --link --progress`, at the lookup pace (jobs.ug_link_steps). */
+    fun ugLinkSteps(url: String): List<Command> =
+        listOf(Command("Reading the page on Ultimate Guitar", listOf("ug", "--link=$url", "--progress")))
+
     /** `caracole remove --yes`: the page asked already, and showed what goes. */
     fun removeSteps(display: String): List<Command> =
         listOf(Command("Removing from the book", listOf("remove", "--yes", "--", display)))
@@ -250,11 +262,14 @@ object JobCommands {
     /** Whether a command writes `caracole get --progress` lines: a lookup, `caracole versions --progress`, `lacuerda
      * --search --progress`, `youtube … --progress`, `peer … --progress` or `index merge --progress`. */
     fun reports(args: List<String>): Boolean = first(args) == LOOKUP ||
-        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER) && "--progress" in options(args)) ||
+        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER, "ug") && "--progress" in options(args)) ||
         (args.take(2) == INDEX_MERGE_COMMAND && "--progress" in options(args))
 
     /** Whether a command is a query of LaCuerda's search. */
     fun searches(args: List<String>): Boolean = first(args) == "lacuerda" && args.any { it.startsWith("--search=") }
+
+    /** Whether a command reads a UG link (`caracole ug --link`). */
+    fun readsUgLink(args: List<String>): Boolean = first(args) == "ug" && args.any { it.startsWith("--link=") }
 
     /** Whether a command makes a song's sheet from a YouTube video (`caracole youtube --sheet`). */
     fun sheetsFromYoutube(args: List<String>): Boolean = first(args) == "youtube" && "--sheet" in args
@@ -268,6 +283,15 @@ object JobCommands {
             "import" -> PEER_IMPORT_STAGES
             else -> emptyList()
         }
+    }
+
+    /** jobs._ug_link_stages: a command's stages when it reads a UG link (`caracole ug --link`): a tab's both, an
+     * artist's its lists alone. */
+    private fun ugLinkStages(args: List<String>): List<Pair<String, String>> {
+        if (first(args) != "ug") return emptyList()
+        val link = args.firstOrNull { it.startsWith("--link=") }?.let { UgUrls.readLink(it.removePrefix("--link=")) }
+            ?: return emptyList()
+        return if (link.kind == UgLink.TAB) UG_LINK_STAGES else UG_LINK_STAGES.drop(1)
     }
 
     /** The song's identity key in a job's key: a removal's and a sheet from YouTube's have theirs after a prefix. */
@@ -293,7 +317,7 @@ object JobCommands {
     }
 
     /** A job's stages, all waiting, as (name, label): a lookup's, then Keep it's it hasn't, a search of LaCuerda's, a
-     * sheet from a YouTube video's and a sync's with another caracole; none for other commands. */
+     * sheet from a YouTube video's, a sync's with another caracole and a UG link's read; none for other commands. */
     fun stages(commands: List<List<String>>): List<Pair<String, String>> {
         val names = LinkedHashMap<String, String>()  // as Python's dict: an update keeps a name where it was
         if (commands.any(::looksUp)) GET_STAGES.forEach { (name, label) -> names[name] = label }
@@ -306,20 +330,24 @@ object JobCommands {
             KEEP_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         }
         if (commands.any(::sheetsFromYoutube)) YOUTUBE_SHEET_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
-        for (args in commands) peerStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
+        for (args in commands) {
+            peerStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
+            ugLinkStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
+        }
         return names.map { (name, label) -> name to label }
     }
 
     /**
      * Whether a command is an interactive lookup (AGENTS.md's): `caracole get`, `versions` (keep, keep more, choose,
-     * clear), `lacuerda --artist` or `--search`, `harptabs --artist`: the jobs of the lookup kinds (song, versions,
-     * lacuerda-artist, lacuerda-search, harptabs-artist) a long job of the phone's own lets go first
+     * clear), `lacuerda --artist` or `--search`, `harptabs --artist`, `ug --link`: the jobs of the lookup kinds (song,
+     * versions, lacuerda-artist, lacuerda-search, harptabs-artist, ug-link) a long job of the phone's own lets go first
      * (JobContext.yieldToQueued).
      */
     fun isLookup(args: List<String>): Boolean = when (first(args)) {
         LOOKUP, VERSIONS -> true
         "lacuerda" -> args.any { it.startsWith("--artist=") || it.startsWith("--search=") }
         "harptabs" -> args.any { it.startsWith("--artist=") }
+        "ug" -> readsUgLink(args)
         else -> false
     }
 
@@ -340,6 +368,7 @@ object JobCommands {
         key.startsWith(LACUERDA_ARTIST) -> "lacuerda-artist"
         key.startsWith(HARPTABS_ARTIST) -> "harptabs-artist"
         key.startsWith(YOUTUBE_SEARCH) -> "youtube-search"
+        key.startsWith(UG_LINK) -> "ug-link"
         key.startsWith(YOUTUBE_SHEET) -> "youtube"
         key.startsWith(INDEX_MERGE) -> "index-merge"
         key.startsWith(SYNCING) || key.startsWith(IMPORTING) -> "sync"

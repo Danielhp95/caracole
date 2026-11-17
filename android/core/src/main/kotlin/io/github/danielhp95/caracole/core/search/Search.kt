@@ -101,6 +101,11 @@ object Search {
         return page.mapNotNull { (score, base, _) -> UgHits.indexHit(db, artistKey, base, score, via, yours) } to groups.size
     }
 
+    /** listed_names: a song only an artist page names, named as a search names it (IndexHit's `artist` and `title`):
+     * its artist as your songs name them, its title by its original name ("斑马斑马"); a pasted UG link's names. */
+    fun listedNames(db: Db, artist: String, title: String): Pair<String, String> =
+        Yours(db).artist(artist) to UgHits.originalTitle(title)
+
     /** index_artist: one artist of the index as [findIndex] gives it (score 100); null when the index has no tab of
      * theirs. */
     fun indexArtist(db: Db, artistKey: String): ArtistHit? = UgHits.artistHit(db, artistKey, 100.0)

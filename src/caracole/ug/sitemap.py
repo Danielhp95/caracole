@@ -19,26 +19,15 @@ from typing import NamedTuple
 from xml.sax.saxutils import unescape
 
 from caracole.normalize import ug_slug_key
+from caracole.ug_urls import TYPE_TOKENS
 
 # The types the index keeps: those caracole uses (ug/page.py ``KINDS``), UG's "Ukulele Chords" among them (a sheet
 # for a song with no guitar chords, ug/fetch.py). Every other type's tab is counted, by type, and left out
 # (``classify_tab_url``), Guitar Pro and Power Tab files among them.
 KEEP_TYPES = frozenset({"chords", "tabs", "ukulele"})
 
-# Every type token seen in the sitemaps. "guitar-pro" comes first, so it is peeled
-# off whole before any single-word token could match its last part.
-TYPE_TOKENS = (
-    "guitar-pro",
-    "chords",
-    "tabs",
-    "bass",
-    "ukulele",
-    "power",
-    "official",
-    "video",
-    "musescore",
-    "drums",
-)
+# Every type token seen in the sitemaps (ug_urls.py's, which reads a pasted link's by them): "guitar-pro" comes first,
+# so it is peeled off whole before any single-word token could match its last part.
 
 # Why a tab URL has no index row (``classify_tab_url``), besides an unkept type's token.
 BARE = "bare"  # /tab/{id}: no artist or song in the URL, so only the artist's page leads to it

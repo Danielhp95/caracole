@@ -345,3 +345,45 @@ def song_dongye_page_html(tabs: list[dict[str, Any]]) -> str:
 def song_dongye_sheet(lines: tuple[str, ...]) -> str:
     """A chords-over-lyrics sheet in UG markup, laid out as the live one: chords, then a line."""
     return "\n".join(f"[tab][ch]C[/ch] [ch]D[/ch] [ch]Bm[/ch] [ch]Em[/ch]\n{line}[/tab]" for line in lines)
+
+
+SONG_DONGYE_CHORDS_URL = f"{SONG_DONGYE_URL}?filter=chords"  # read live: the artist page's chords list
+SONG_DONGYE_TABS_URL = f"{SONG_DONGYE_URL}?filter=tabs"
+NOT_FOUND = "<!DOCTYPE html><html><head><title>Oops! We couldn't find that page.</title></head></html>"
+
+
+class FakeUG:
+    """Ultimate Guitar as it answered for 宋冬野 on 2026-10-19 (tests/test_live_banma.py's case): their chords and tabs
+    lists, and four of their tab pages, each listing the song's other version; UG's 404 page for anything else, or
+    ``status`` (``{url: code}``) for an address a test makes answer otherwise. ``requests`` holds each address asked,
+    in order. An ``httpx.MockTransport``'s handler::
+
+        ug = FakeUG()
+        transport = httpx.MockTransport(ug.handler)
+    """
+
+    def __init__(self):
+        self.requests: list[str] = []
+        self.status: dict[str, int] = {}
+        tabs = song_dongye_chords(t4180894=(4.8, 120), t4689017=(4.6, 40), t3016223=(4.7, 90), t3204647=(4.1, 9))
+        self.pages = {
+            SONG_DONGYE_CHORDS_URL: song_dongye_page_html(tabs),
+            SONG_DONGYE_TABS_URL: song_dongye_page_html([song_dongye_tab(5000001, "安和桥 Anhe Bridge", type="Tabs")]),
+        }
+        by_id = {t["id"]: t for t in tabs}
+        for tab_id, other, lines in ((4180894, 4689017, BANMA_TRADITIONAL_LINES),
+                                     (4689017, 4180894, BANMA_TRADITIONAL_LINES),
+                                     (3016223, 3204647, DONG_XIAOJIE_LINES),
+                                     (3204647, 3016223, DONG_XIAOJIE_LINES)):
+            # A tab page lists the song's other version of its type, never itself.
+            self.pages[f"{TAB_BASE}{tab_id}"] = make_tab_page_html(by_id[tab_id], [by_id[other]],
+                                                                   content=song_dongye_sheet(lines))
+
+    def handler(self, request: Any) -> Any:
+        import httpx
+
+        url = str(request.url)
+        self.requests.append(url)
+        if url in self.status:
+            return httpx.Response(self.status[url], text=self.pages.get(url, NOT_FOUND))
+        return httpx.Response(200, text=self.pages[url]) if url in self.pages else httpx.Response(404, text=NOT_FOUND)

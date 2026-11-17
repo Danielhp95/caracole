@@ -1248,7 +1248,7 @@ run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
-lacuerda --artist`, `caracole harptabs --artist`) sends none: it says so where you asked. A run, a command
+lacuerda --artist`, `caracole harptabs --artist`, `caracole ug --link`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
 site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
@@ -1524,6 +1524,27 @@ and cache.
   empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
   nothing changed. It can't go with `--index` (exit 2). An artist's Read their
   page on the pages `caracole serve` serves runs it.
+- **`caracole ug --link URL`** reads an Ultimate Guitar page into caracole's
+  index now: a tab's page (`https://tabs.ultimate-guitar.com/tab/4180894`, or a
+  slugged one, as an address bar shows it), then the artist's page it links to,
+  or an artist's page alone (`…/artist/634073`, its `?filter=` dropped). The
+  artist's chords and tabs lists are read as a fetch reads them (100 tabs a page,
+  30 days from the cache) and kept for searches, so a search finds every song
+  of theirs, those UG's sitemaps name by a bare `/tab/{id}` alone among them
+  (宋冬野's, every one). It asks at the lookup pace, within a lookup's budgets,
+  usually three requests. A page caracole knows already, one UG answered 404
+  for, and a tab of a type caracole keeps nothing of (a Guitar Pro file, a bass
+  tab…) are said with no request; a tab whose page caracole has, but not its
+  artist's page read within 30 days, has that page read (no request for the
+  tab). Its last line, the song named as a search names it: `Read: 斑马斑马 by
+  宋冬野, chords; their page lists 8 tabs.`,
+  `Not found: UG answers 404 for URL.`, or `Not read: …` for a cooldown, a
+  block, a spent budget or an error, all of which exit 0, nothing changed; a
+  budget spent after the tab's page leaves the artist's page for the next
+  lookup, the tab read. A read that failed isn't sent by the library page by
+  itself again for an hour; by hand it is. `--progress` writes a JSON line a
+  stage. A text that is no UG page's exits 2. The library page runs it for a UG
+  link pasted into its box (Browse and search, below).
 - **`caracole gametabs`** keeps a text tab of game music from gametabs.net for
   each song that has none, newest songs first. It reads gametabs.net's sitemaps
   (an index and six children; `sitemap_static`, the site's own pages, is never
@@ -4311,6 +4332,25 @@ the library, sent as they are: they carry no badge.
   the panel says why. Enter goes to the panel. The request form's YouTube field
   takes the same links. On the file on disk, the line to run instead:
   `caracole youtube --song 'Artist - Title' --url URL --sheet`.
+- **A pasted Ultimate Guitar link.** Paste a tab's page
+  (`tabs.ultimate-guitar.com/tab/4180894`, or a slugged one) or an artist's
+  (`ultimate-guitar.com/artist/634073`) into the search box and it is a page to
+  read, not words to search: nothing is searched for it, and no LaCuerda or
+  YouTube search goes. Its panel takes the results' place: "Reading the tab
+  page…" while caracole reads it by itself, once, as `caracole ug --link` does
+  (the tab's page, then its artist's lists, at the lookup pace, within the
+  hour's lookups; none while UG cools down, or for an hour after its read
+  failed), then UG's names for the tab, its type, version and rating, its
+  **Artist** and **Title** guessed for you to check (as a search names a song
+  only an artist page lists: 宋冬野's 斑马斑马), and **Fetch this version**,
+  which looks the song up keeping that very version as its sheet (a `[pin]`,
+  which the card's Sheet versions can change). Every song of that artist is
+  found by a search from then on, the bare-id tabs UG's sitemaps don't name
+  among them. A song of yours with that tab says so, with Open; a tab of a type
+  caracole keeps nothing of (a Guitar Pro file, a bass tab…) or a page UG
+  answers 404 for says so, and offers nothing; one caracole can't read now
+  says why, its names empty. An artist's link lists their songs, each a
+  search's line with its Fetch. On the file on disk a UG link is words.
 - **Fetch.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
   lyrics and the rest. Each wanted song's line has Fetch for its button,
