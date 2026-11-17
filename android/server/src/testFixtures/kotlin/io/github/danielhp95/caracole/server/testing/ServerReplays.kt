@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.server.testing.replays.QueueReplay
 import io.github.danielhp95.caracole.server.testing.replays.RequestsReplay
 import io.github.danielhp95.caracole.server.testing.replays.ReviewReplay
 import io.github.danielhp95.caracole.server.testing.replays.SongbookTabReplay
+import io.github.danielhp95.caracole.server.testing.replays.UgLinkReplay
 import io.github.danielhp95.caracole.server.testing.replays.WebReplay
 
 /** :server's areas of the corpus (core.testing.Replays has :core's, viewer.testing.ViewerReplays :viewer's), each its
@@ -19,5 +20,5 @@ import io.github.danielhp95.caracole.server.testing.replays.WebReplay
 object ServerReplays {
     val all: List<AreaReplay> = listOf(WebReplay, LibraryNameReplay, QueueReplay, JobViewsReplay, RequestsReplay,
                                        LookupRoutesReplay, CardsReplay, SongbookTabReplay, ChoicesReplay, GuitarReplay,
-                                       ExportReplay, ReviewReplay)
+                                       ExportReplay, ReviewReplay, UgLinkReplay)
 }
