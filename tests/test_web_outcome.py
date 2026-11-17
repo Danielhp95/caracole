@@ -1,7 +1,7 @@
 """caracole/web/outcome.py: what the requests page says of a request, the running one's steps and how a
 finished one ended, with the next step to take."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from caracole.get import MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
@@ -23,13 +23,22 @@ from caracole.web.status import SongFacts, job_line
 from conftest import add_song
 
 
+START = datetime(2026, 11, 3, 9, 0, tzinfo=UTC)  # long past: a running job asked with no ``now`` ran for days
+
+
+def times(state):
+    """A job's start and end in ``state``: started at ``START`` unless queued or cancelled, over 30 s later."""
+    return {"started_at": None if state in ("queued", "cancelled") else START,
+            "finished_at": None if state in ("queued", "running") else START + timedelta(seconds=30)}
+
+
 def lookup(state="running", stages=None, *, args=None, job_id=4, display="Muse - Hysteria"):
     """A lookup, its stages in ``stages`` (name -> (state, detail)), the others waiting."""
     made = [Step(label, tuple(a)) for label, a in lookup_steps(*display.split(" - "))] if args is None else [
         Step("Fetching", tuple(args))]
     said = stages or {}
     job = Job(job_id, f"Fetch {display}", display.lower().replace(" - ", "/"), made, fetching=True,
-              display=display, state=state,
+              display=display, state=state, **times(state),
               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in STAGES])
     if state != "running":
         made[0].state = "done" if state == "done" else "failed"
@@ -266,6 +275,20 @@ def test_a_request_that_runs_no_lookup_or_hasnt_run_has_no_steps_on_the_library_
         version_steps("Muse", "Hysteria", keep="3")[0][1]), state="running")], state="running",
                stages=[Stage(name, label) for name, label in KEEP_STAGES])
     assert progress(keep, job_line(keep, None), None) == {}
+
+
+def test_a_request_draws_nothing_for_its_first_second_and_none_if_it_ends_within_it():
+    running = lookup(stages=upto("song"))
+    assert progress(running, job_line(running, None), None, now=START + timedelta(milliseconds=999)) == {}
+    assert progress(running, job_line(running, None), None, now=START + timedelta(seconds=1))["count"] == "1 of 7"
+    quick = ended({"sheet": ("skipped", COOLING)})
+    quick.finished_at = START + timedelta(milliseconds=600)
+    assert progress(quick, job_line(quick, SongFacts()), SongFacts()) == {}  # no bar, frozen or not
+    quick.finished_at = START + timedelta(seconds=3)
+    assert progress(quick, job_line(quick, SongFacts()), SongFacts())["count"] == "3 of 7"
+    never = ended({}, state=INTERRUPTED)
+    never.started_at = None  # interrupted while it waited
+    assert progress(never, job_line(never, None), None) == {}
 
 
 def test_a_request_of_other_commands_shows_its_job_steps_the_same_way():
@@ -531,7 +554,7 @@ def youtube_job(state="running", stages=None):
     if state != "running":
         made[0].state = "done" if state == "done" else "failed"
     return Job(6, "YouTube sheet", YOUTUBE_SHEET + "nick cani/vikingos veganos", made, state=state,
-               display="Nick Cani - Vikingos veganos",
+               display="Nick Cani - Vikingos veganos", **times(state),
                stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in SHEET_STAGES])
 
 

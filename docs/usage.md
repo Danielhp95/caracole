@@ -4520,7 +4520,9 @@ the library, sent as they are: they carry no badge.
   the book…" while a nightly run holds the lock until its next pause;
   then how it ended (a lookup that stopped says why, in its stage's words).
   While a song is looked up (Fetch, Fetch again, a search result's Fetch,
-  Fetch the missing songs, the Songbooks tab's Add a song, Try again), the line
+  Fetch the missing songs, the Songbooks tab's Add a song, Try again), once the
+  request has run a second (one over within its first second never shows its
+  steps, even after a reload), the line
   says which of its steps is in hand ("Fetching lyrics… · 5 of 7": the fifth
   of seven, the one that runs, else the next to come),
   and under it each step is a chip, as in the Journal: Song, Match UG

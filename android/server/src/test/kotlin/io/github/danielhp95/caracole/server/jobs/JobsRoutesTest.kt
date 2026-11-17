@@ -25,6 +25,7 @@ import org.junit.rules.TemporaryFolder
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import java.time.Instant
 
 /** jobs_routes.py on the phone, through the App: /jobs.json for the page's script alone, a job's view with its song's
  * card once over, /api/jobs/N, and Cancel. */
@@ -236,8 +237,9 @@ class JobsRoutesTest {
         context.say("Read: LaCuerda's page of Soda Stereo lists 42 songs, in the index now (1 request).")
     }, "songbook" to CommandRunner { _, _ -> }))
 
-    private fun TestScope.served(commands: Commands): Pair<TestApp, JobQueue> {
-        val queue = JobQueue(backgroundScope, commands = commands)
+    private fun TestScope.served(commands: Commands,
+                                 clock: () -> Instant = { Instant.now() }): Pair<TestApp, JobQueue> {
+        val queue = JobQueue(backgroundScope, clock = clock, commands = commands)
         return TestApp(tmp.root, { database -> listOf(JobsRoutes(queue, Filed, database) { books }) }) to queue
     }
 
@@ -286,10 +288,11 @@ class JobsRoutesTest {
     @Test fun aLookupThatLeftNoSheetIsNotFoundOnlyOnceUltimateGuitarWasAskedSinceItStarted() = runTest {
         var asked = false
         lateinit var database: Database
+        var at = Instant.now()
         val (test, queue) = served(lookups { context ->
             if (asked) database.write { db -> db.execute("UPDATE songs SET ug_checked_at = '2999-01-01T00:00:00Z'") }
             context.stage("pdf", "skipped", "no PDF on the phone")
-        })
+        }) { at.also { at = at.plusSeconds(5) } }  // each lookup runs 5 s: past its first second, which draws no steps
         test.use {
             database = test.database
             song(test.database, "Radiohead", "Creep", "radiohead/creep")

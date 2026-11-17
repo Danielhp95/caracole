@@ -31,7 +31,9 @@ the job and what the library knows of its song:
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
   step the lookup has from its start, so the count only rises; once it ends Ready they fold away, as the song's
   line opens its sheet itself; ended otherwise they stay, to show which step stopped, ``at`` and ``count``
-  naming the first that failed, none when none did. A request that runs no lookup keeps its one line.
+  naming the first that failed, none when none did. Nothing for its first second (``BAR_AFTER``), decided here,
+  so a reload agrees: none while it has run less, and none ever for one over within it, frozen or not. A request
+  that runs no lookup keeps its one line.
 - **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs your pick, Not on the sites,
   Not fetched yet, Failed, Removed, a songbook's Made, Deleted…: the line's), a reason in one sentence
   when there is one, from the job's stages and the song's state (``SongFacts``), and the next step
@@ -70,7 +72,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
@@ -108,6 +110,7 @@ YOUTUBE_SOURCE = tag("youtube")  # the site its Audio step names
 COMMAND_STEPS = {"add": "Add", "match": "Match", "fetch": "Sheet", "render": "PDF", "review": "Your pick",
                  "remove": "Remove", "lacuerda": "LaCuerda", "songbook": "Songbook", LOOKUP: "Fetch"}
 _OVER = ("done", "skipped", "failed")
+BAR_AFTER = timedelta(seconds=1)  # how long a request runs before the library page draws its steps
 MATCHED_IN = "UG"  # the offline index a lookup's match stage matches in: Ultimate Guitar's
 NOT_ON_UG = "Match · not on UG"  # its step, for a song that index lacks
 _ASKS = {said: tag(provider) for provider, said in SHEET_FROM.items()}  # a running sheet stage's site, by its words
@@ -266,15 +269,16 @@ def _sheet_source(stage: Stage, state: str, facts: SongFacts | None) -> str:
     return ""
 
 
-def progress(job: Job, line: Line, facts: SongFacts | None) -> dict[str, Any]:
+def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | None = None) -> dict[str, Any]:
     """What the library page draws under a song's request line (/jobs.json's view): a lookup's ``steps``
     (``Chip.as_json``, each its name, its site and its state, every step it has from its start) and the step in hand
     (``_in_hand``): its place, ``at``, and ``count``, "3 of 7", its place among them all, so the count only rises.
     Nothing (an empty dict) for a request that runs no lookup, one queued or cancelled, and one whose ``line``
     (status.py's) says Ready: its steps fold away, as its song's line opens the sheet. Ended otherwise, its steps
-    stay, to show which step stopped: ``at`` and ``count`` name the one that failed, and are left out when none did."""
+    stay, to show which step stopped: ``at`` and ``count`` name the one that failed, and are left out when none did.
+    Nothing either until it has run ``BAR_AFTER`` (``_has_run``) at ``now`` (None: the clock's)."""
     if (not (job.looks_up or job.from_youtube) or job.state in ("queued", "cancelled")
-            or (line.tone == "ready" and line.text == READY)):
+            or (line.tone == "ready" and line.text == READY) or not _has_run(job, now)):
         return {}
     chips = steps(job, facts)
     if not chips:
@@ -285,6 +289,18 @@ def progress(job: Job, line: Line, facts: SongFacts | None) -> dict[str, Any]:
         shown["at"] = at
         shown["count"] = f"{at + 1} of {len(chips)}"
     return shown
+
+
+def _has_run(job: Job, now: datetime | None) -> bool:
+    """Whether ``job`` has run ``BAR_AFTER`` (read as it is asked, so a test may set it): never, one that never
+    started; one over, from its start to its end (to ``now`` when it says no end); one that runs, to ``now``."""
+    if job.started_at is None:
+        return False
+    if not job.active and job.finished_at is not None:
+        end = job.finished_at
+    else:
+        end = now or datetime.now(UTC)
+    return end - job.started_at >= BAR_AFTER
 
 
 def _in_hand(chips: list[Chip], *, running: bool) -> int | None:

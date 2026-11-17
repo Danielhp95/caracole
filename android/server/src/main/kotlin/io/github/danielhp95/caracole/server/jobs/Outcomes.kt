@@ -9,6 +9,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Duration
+import java.time.Instant
 
 /** outcome.py's Chip: a step of a request, its state (waiting, running, done, failed; skipped, every stage of it ended
  * skipped, over, in its place; or plain, over and neither, "Match · not on UG") and the site it names ([source], "" for
@@ -75,6 +77,10 @@ object Outcomes {
     )
 
     private val OVER = setOf(Job.DONE, Job.SKIPPED, Job.FAILED)
+
+    /** How long a request runs before the library page draws its steps (outcome.BAR_AFTER). */
+    val BAR_AFTER: Duration = Duration.ofSeconds(1)
+
     private const val MATCHED_IN = "UG"
     const val NOT_ON_UG = "Match · not on UG"
     private const val MATCH_NOT_FOUND = "not in UG's index"  // get.py's
@@ -181,12 +187,15 @@ object Outcomes {
 
     /** What the library page draws under a song's request line (outcome.progress): a lookup's steps, every one it
      * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"); nothing for a request
-     * that runs no lookup, one queued or cancelled, and one Ready. */
-    fun progress(job: Job, line: Line, facts: SongFacts?): Map<String, JsonElement> = progress(Shape(job), line, facts)
+     * that runs no lookup, one queued or cancelled, one Ready, and one that hasn't run [BAR_AFTER] at [now]
+     * ([hasRun]). */
+    fun progress(job: Job, line: Line, facts: SongFacts?, now: Instant = Instant.now()): Map<String, JsonElement> =
+        progress(Shape(job), line, facts, now)
 
-    internal fun progress(job: Shape, line: Line, facts: SongFacts?): Map<String, JsonElement> {
+    internal fun progress(job: Shape, line: Line, facts: SongFacts?, now: Instant = Instant.now()):
+        Map<String, JsonElement> {
         if (!(job.looksUp || job.fromYoutube) || job.state == Job.QUEUED || job.state == Job.CANCELLED ||
-            (line.tone == "ready" && line.text == Status.READY)) return emptyMap()
+            (line.tone == "ready" && line.text == Status.READY) || !hasRun(job.job, now)) return emptyMap()
         val chips = steps(job, facts)
         if (chips.isEmpty()) return emptyMap()
         val shown = linkedMapOf<String, JsonElement>("steps" to JsonArray(chips.map { it.asJson() }))
@@ -196,6 +205,14 @@ object Outcomes {
             shown["count"] = JsonPrimitive("${at + 1} of ${chips.size}")
         }
         return shown
+    }
+
+    /** Whether [job] has run [BAR_AFTER] (outcome._has_run): never, one that never started; one over, from its start
+     * to its end (to [now] when it has no end); one that runs, to [now]. */
+    internal fun hasRun(job: Job, now: Instant): Boolean {
+        val started = job.startedAt ?: return false
+        val end = job.finishedAt.takeIf { !job.active } ?: now
+        return Duration.between(started, end) >= BAR_AFTER
     }
 
     /** The place of the step in hand (outcome._in_hand): while the request runs, the step that runs, else the first

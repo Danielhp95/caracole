@@ -1257,6 +1257,9 @@ It is rows.js's, shared by both pages:
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the line shows the count only while
     the request is queued or runs.
+  - Nothing for a request's first second (`outcome.BAR_AFTER`, decided by the server, so a reload agrees): no steps
+    until it has run one at the view's `now` (one a `/jobs.json` answer, `jobs_routes.views`, the phone's
+    `JobsRoutes`), and none ever for one over within it, frozen or not.
 - Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, never one that runs, with the jobs
   `submit_all` queued `together` with it), keeping it in the history as over ("cancelled"), so a page that follows it
   hears it ended.

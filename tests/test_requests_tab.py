@@ -18,6 +18,7 @@ from helpers.targets import UNFOLD, noted, noting, small_targets
 from caracole.get import MATCH_NOT_FOUND, SHEET_FROM, STAGES, progress_line
 from caracole.library import song_dir
 from caracole.songs import update_song
+from caracole.web import jobs_routes
 from caracole.web.app import WebApp, json_response
 from caracole.web.feed import feed
 from caracole.web.jobs import Job, JobQueue, Stage, Step, lookup_steps
@@ -464,9 +465,19 @@ def kept_sheet_from(cfg, conn, song, provider: str) -> None:
     update_song(conn, song.id, status="found")
 
 
-def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn):
+def test_a_views_steps_come_once_its_job_has_run_a_second():
+    # The first second is the server's: a view carries no steps until its job has run one, so a reload agrees.
+    job = lookup(6, "Muse - Hysteria", {"song": ("done", ""), "match": ("done", ""), "sheet": ("running", "")},
+                 state="running")
+    job.started_at = NOW
+    assert "steps" not in jobs_routes.view(job, [job], None, None, now=NOW + timedelta(milliseconds=500))
+    assert len(jobs_routes.view(job, [job], None, None, now=NOW + timedelta(seconds=2))["steps"]) == 7
+
+
+def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn, monkeypatch):
     # The tab gives the running request's steps; /jobs.json gives the library page the same steps, and how many are
-    # over, for the song's line.
+    # over, for the song's line (from its first instant: the fake command runs it in less than a second).
+    monkeypatch.setattr("caracole.web.outcome.BAR_AFTER", timedelta(0))
     creep = add_song(conn, "Radiohead", "Creep")
     seen, views = [], []
 

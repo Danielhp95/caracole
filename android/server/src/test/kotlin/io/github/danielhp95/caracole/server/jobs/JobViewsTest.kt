@@ -312,7 +312,10 @@ class JobViewsTest {
                                        emptyList(), display = "Soda Stereo - De música ligera", fetching = true,
                                        commands = JobCommands.lookupSteps("Soda Stereo", "De música ligera"))).first
         runCurrent()
-        val view = JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts())
+        val now = queue.job(job.id)!!.startedAt!!.plusSeconds(5)  // past its first second, which draws no steps
+        assertEquals(null, JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts(),
+                                         now = queue.job(job.id)!!.startedAt!!)["steps"])
+        val view = JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts(), now = now)
         assertEquals("Fetching from LaCuerda…", view["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
         assertEquals(2, view["at"]!!.jsonPrimitive.int)
         assertEquals(JsonPrimitive("3 of 7"), view["count"])
