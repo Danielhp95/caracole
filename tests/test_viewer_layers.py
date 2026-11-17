@@ -25,10 +25,10 @@ from caracole.viewer.harptab_page import build_harmonica_viewer
 
 from helpers.browser import Browser, in_chromium
 from helpers.version_pages import WONDERWALL, folder
-from helpers.viewer_pages import (back, click_at, drag, entries, forward, rest, tap_at, viewer as open_viewer,
+from helpers.viewer_pages import (back, click_at, drag, entries, forward, rest, tap, tap_at, viewer as open_viewer,
                                   written)
 from test_viewer_necks import reload, served
-from test_viewer_panels import DESKTOP, LONG, PHONE, chord
+from test_viewer_panels import DESKTOP, IN_E, LONG, PHONE, SHEET_PATH, STOP_LINKS, chord
 
 FIXTURES = Path(__file__).parent / "fixtures"
 UG_CHO = (FIXTURES / "chordpro" / "ug_sheet.cho").read_text(encoding="utf-8")
@@ -425,6 +425,70 @@ def test_in_caracole_serves_sandbox_back_closes_a_layer(tmp_path):
         assert b.wait(HIDDEN["settings"])
         assert until(b, (1, 3)) == (1, 3)
         assert b.js("[window.marker, String(window.origin)]") == [1, "null"]  # the same document, in its sandbox
+
+
+# --- Aa and the question -------------------------------------------------------------------------------------------
+
+SIZES_SHOWN = "!document.getElementById('sizes').hidden"
+SIZES_HIDDEN = "document.getElementById('sizes').hidden"
+AA_EXPANDED = "document.getElementById('size').getAttribute('aria-expanded')"
+
+
+@in_chromium
+def test_aa_is_a_layer(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), **PHONE) as b:
+        b.click("#size")
+        assert b.wait(SIZES_SHOWN)
+        assert until(b, (2, 3)) == (2, 3)
+        back(b)
+        assert b.wait(SIZES_HIDDEN)
+        assert b.js(AA_EXPANDED) == "false"
+        b.click("#size")
+        assert b.wait(SIZES_SHOWN)
+        assert b.js(AA_EXPANDED) == "true"
+        tap(b, "#sheet .w")  # a tap on the song's words closes it, and its entry goes
+        assert b.wait(SIZES_HIDDEN)
+        assert until(b, (1, 3)) == (1, 3)
+        open_layer(b, "settings", PHONE)
+        b.click("#size")
+        assert b.wait(f"{SIZES_SHOWN} && {HIDDEN['settings']}")  # Aa in the settings' place
+        assert until(b, (2, 3)) == (2, 3)
+
+
+@in_chromium
+def test_aa_beside_the_settings_rail_and_back_closes_aa_first(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), **DESKTOP) as b:
+        open_layer(b, "settings", DESKTOP)
+        b.click("#size")
+        assert b.wait(SIZES_SHOWN)
+        assert until(b, (3, 4)) == (3, 4)
+        back(b)
+        assert b.wait(SIZES_HIDDEN)
+        assert b.js(SHOWN["settings"]) is True
+        assert until(b, (2, 4)) == (2, 4)
+
+
+@in_chromium
+def test_back_closes_the_question_and_leaves_the_settings_under_it(tmp_path):
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, \
+            open_viewer(tmp_path, site + SHEET_PATH, **PHONE) as b:
+        b.js(STOP_LINKS)
+        b.click("#more")
+        b.js("document.getElementById('capo-up').click(); document.getElementById('capo-up').click()")
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        assert until(b, (3, 4)) == (3, 4)  # the settings and the question
+        back(b)
+        assert b.wait("!document.getElementById('export-ask').open")
+        assert b.js(SHOWN["settings"]) is True
+        assert until(b, (2, 4)) == (2, 4)
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        assert until(b, (3, 4)) == (3, 4)
+        b.press("Escape")
+        assert b.wait("!document.getElementById('export-ask').open")
+        assert until(b, (2, 4)) == (2, 4)
+        assert b.js(SHOWN["settings"]) is True
 
 
 # --- every viewer page ---------------------------------------------------------------------------------------------

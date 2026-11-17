@@ -3156,9 +3156,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
 - **Back and Escape**: the settings (or the Harmony panel in their place), a
-  chord's card, the necks' sheet and the versions list are each one step of
+  chord's card, the necks' sheet, the versions list, Aa's text-size box and
+  Export PDF's question (served) are each one step of
   the browser's history while they are open, so the browser's Back (a phone's
-  too) closes the one on top, as Escape and its × do, and leaves the sheet
+  too) closes the one on top, as Escape and its × do (Aa's box closes on a tap
+  anywhere else too, and any other layer opening closes it; the question
+  opens over the settings and leaves them open), and leaves the sheet
   only once none is open. One closed by Escape or × takes its step off again:
   Back then leaves the page, as it would have with none opened. On a phone one
   is open at a time: opening another (a chord's card with the settings open,

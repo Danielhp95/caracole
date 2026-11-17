@@ -335,21 +335,32 @@
       $("ask-version").textContent = versionWords().filter(Boolean).join(", ");
       $("ask-just").setAttribute("href", href);
       $("ask-mine").setAttribute("href", href + "&mine=1");
-      ask.showModal();
+      open(ask, $("export"), true);
       $("ask-title").focus({ preventScroll: true });
     });
     ask.addEventListener("click", (e) => {
-      if (e.target === ask) ask.close();  // beside its box: the backdrop
+      if (e.target === ask) close(ask);  // beside its box: the backdrop
     });
-    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
+    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => close(ask));
     $("ask-mine").addEventListener("click", () => {
       madeMine = JSON.parse(JSON.stringify({ t: state.t, mode: state.mode, alt: state.alt, at: state.at,
         capo: state.capo }));
-      ask.close();
+      close(ask);
+    });
+    // However it closes (Escape, ×, Cancel, the backdrop, an answer), it leaves the stack and its entry goes.
+    ask.addEventListener("close", () => {
+      if (ask.open) return;  // the event of an earlier close, come after it opened again
+      const at = layers.findIndex((layer) => layer.el === ask);
+      const opener = at >= 0 ? layers.splice(at, 1)[0].opener : null;
+      restack();
+      const active = document.activeElement;
+      if (opener && opener.isConnected && (!active || active === document.body || ask.contains(active))) opener.focus({ preventScroll: true });
     });
     ask.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        e.stopPropagation();  // the dialog closes itself, and nothing under it
+        e.stopPropagation();  // it closes, and nothing under it
+        e.preventDefault();
+        close(ask);  // at once, the focus back on Export PDF
         return;
       }
       if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -1774,6 +1785,7 @@
     const rail = doc.dataset.panel;
     for (const which of [panel, card, harmony, vList, necksEl]) if (which) which.classList.toggle("top", which === topLayer());
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
     if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's, the versions'
     else doc.dataset.panel = "open";
@@ -1794,8 +1806,9 @@
       for (const other of rails) if (other !== which) close(other);
     }
     layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null, nested });
-    showSizes(false);
+    if (which !== sizes) close(sizes, false);  // Aa gives way to any other, at every width
     if (which === necksEl) drawNecks();  // drawn as the sheet, sheetAt set
+    else if (which === ask) ask.showModal();
     else which.hidden = false;
     slide(false);  // the bar it sits on
     restack();
@@ -1803,15 +1816,17 @@
     const to = landing(which);
     if (to) to.focus({ preventScroll: true });
   };
-  const close = (which) => {
+  const close = (which, refocus = true) => {
     const at = layers.findIndex((layer) => layer.el === which);
     if (at < 0) return;
     const opener = layers.splice(at, 1)[0].opener;
     const active = document.activeElement;
-    const mine = !active || active === document.body || which.contains(active);
+    const mine = refocus && (!active || active === document.body || which.contains(active));
     if (which === necksEl) {
       sheetAt = null;
       drawNecks();
+    } else if (which === ask) {
+      ask.close();
     } else {
       which.hidden = true;
     }
@@ -1840,13 +1855,6 @@
     if (e.key !== "Escape") return;
     if (!tip.hidden) {
       hideTip();
-      return;
-    }
-    if (!sizes.hidden) {
-      // The size box first, and the focus back to Aa when it was in there.
-      const inside = $("size-box").contains(document.activeElement);
-      showSizes(false);
-      if (inside) sizeButton.focus({ preventScroll: true });
       return;
     }
     if (layers.length) close(topLayer());
@@ -2559,16 +2567,13 @@
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
   // anywhere else, or when the focus leaves it.
-  function showSizes(on) {
-    sizes.hidden = !on;
-    sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
-  }
-  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  // A layer (the stack above): Back closes it, and so does Escape, with the focus back on Aa when it was in the box.
+  sizeButton.addEventListener("click", () => (sizes.hidden ? open(sizes, sizeButton) : close(sizes)));
   document.addEventListener("pointerdown", (e) => {
-    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) close(sizes, false);
   }, true);
   $("size-box").addEventListener("focusout", (e) => {
-    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) close(sizes, false);
   });
 
   const sheet = $("sheet");
@@ -2781,7 +2786,7 @@
   $("scroll").addEventListener("click", () => {
     closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
     halfSheet();
-    showSizes(false);
+    close(sizes, false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
@@ -2819,7 +2824,7 @@
   }
   function slide(away) {
     bar.classList.toggle("away", away);
-    if (away) showSizes(false);
+    if (away) close(sizes, false);
   }
   const keyboardIn = (el) => {
     try {
