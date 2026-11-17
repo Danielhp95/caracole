@@ -101,7 +101,7 @@ object UgLinkCommands {
                 Health.recordOk(c.db, UgLinks.PROVIDER, c.now)
             }
         }
-        val line = UgLinks.said(done)
+        val line = UgLinks.said(c.db, done)
         if (!line.startsWith(NOT_READ)) UgLinks.forgetFailure(c.db, link.url, c.now)
         return end(line, if (line.startsWith(NOT_READ)) "skipped" else "done")
     }

@@ -12,12 +12,17 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.lacuerda.internal.pages.PyBits
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.library.internal.Rekey
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.search.IndexHit
 import io.github.danielhp95.caracole.core.search.Search
 import io.github.danielhp95.caracole.core.ug.internal.fetch.ArtistPages
 import io.github.danielhp95.caracole.core.ug.internal.fetch.ListReading
@@ -128,13 +133,33 @@ object UgLinks {
      * cache's folder (`cfg.cache_dir`). */
     fun known(cfg: PhoneConfig, db: Db, cacheDir: File, link: UgLink, now: Instant): LinkKnown {
         val cache = CachedAnswers(PROVIDER, cacheDir)
-        val said = if (link.kind == UgLink.TAB) tabKnown(db, cache, link) else artistKnown(db, cache, link)
+        val said = if (link.kind == UgLink.TAB) tabKnown(db, cache, link, now) else artistKnown(db, cache, link)
         if (said.state != "auto") return said
         val (state, why) = gate(cfg, db, link, now)
         return said.copy(state = state, why = why)
     }
 
-    private fun tabKnown(db: Db, cache: CachedAnswers, link: UgLink): LinkKnown {
+    /** tab_keys: the keys a tab's song is filed under: as an artist page caracole read lists it (`ug_artist_tabs`),
+     * else as the index does (its song's key without a variant label); null for a tab neither names. */
+    fun tabKeys(db: Db, tabId: Long): Pair<String, String>? {
+        ListedTabs.listedTab(db, tabId)?.let { return it.artistKey to it.songKey }
+        return db.one("SELECT artist_key, song_key FROM ug_index WHERE tab_id = ?", tabId) {
+            it.text(0)!! to Normalize.splitVariant(it.text(1)!!).first
+        }
+    }
+
+    /** _read_lately: whether caracole read the artist page's lists within [UgFetch.ARTIST_PAGE_MAX_AGE] (30 days):
+     * its tabs in `ug_artist_tabs` read since. */
+    private fun readLately(db: Db, page: String, now: Instant): Boolean {
+        val held = ListedTabs.pageArtist(db, page) ?: return false
+        return !before(held.readAt, Stamps.micros(now.minus(UgFetch.ARTIST_PAGE_MAX_AGE)))
+    }
+
+    /** _tab_known: a tab link's page as caracole knows it. Its song is known (`found`) by an artist page caracole read
+     * that lists it, by the index, or by its page in the cache, but a cached page that names an artist page caracole
+     * hasn't read within 30 days is `auto`: the read takes the page from the cache and reads that artist's lists, so
+     * that every song of theirs is found by a search. */
+    private fun tabKnown(db: Db, cache: CachedAnswers, link: UgLink, now: Instant): LinkKnown {
         if (link.type != null && link.type !in KEPT) {
             return LinkKnown(link, "other", "it is ${TOKEN_WORDS[link.type] ?: "a ${link.type} tab"}: $KEEPS")
         }
@@ -155,14 +180,7 @@ object UgLinks {
         }
         val tabId = link.tabId!!
         val listed = ListedTabs.listedTab(db, tabId)
-        val indexed = db.one("SELECT artist_key, song_key FROM ug_index WHERE tab_id = ?", tabId) {
-            it.text(0)!! to it.text(1)!!
-        }
-        val keys = when {
-            listed != null -> listed.artistKey to listed.songKey
-            indexed != null -> indexed.first to Normalize.splitVariant(indexed.second).first
-            else -> null
-        }
+        val keys = tabKeys(db, tabId)
         val tab = when {
             page != null -> tabOf(page)
             listed != null -> LinkTab(listed.artist, listed.title, listed.type, null, rating(listed.rating, listed.votes),
@@ -177,7 +195,9 @@ object UgLinks {
             }
         }
         val readAt = base?.let { readAt(db, cache, it) }
-        val state = if (page != null || listed != null || indexed != null) "found" else "auto"
+        val linked = if (page != null) Pages.artistPageBase(page.artistUrl) else null
+        val unread = linked != null && !readLately(db, linked, now)  // its artist's lists to read yet
+        val state = if ((keys != null || page != null) && !unread) "found" else "auto"
         return LinkKnown(link, state, tab = tab, keys = keys, page = base, readAt = readAt, artist = artist)
     }
 
@@ -261,6 +281,73 @@ object UgLinks {
         ((db.kvGetJson(Pages.unreadableKey(tabId)) as? JsonObject)?.get("until") as? JsonPrimitive)
             ?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() }
 
+    // --- how caracole names what a link stands for ----------------------------------------------------------
+
+    /** ug/link.ARTIST_SONGS: an artist's songs a link's answer gives, most tabbed first, as /api/artist gives them at a
+     * time. */
+    const val ARTIST_SONGS = 50
+
+    /** ug/link.Named: what a link stands for, named as caracole names it ([named]): the songs ([hits]: a tab's song,
+     * or an artist page's songs once read, as a search gives them), the library's song of a tab ([song]), and the
+     * artist and the title the panel fills in, the line a read ends with says, and a search names the song by. */
+    data class Named(val artist: String, val title: String, val hits: List<IndexHit> = emptyList(),
+                     val song: SongRow? = null)
+
+    /** named: [was]'s songs and names: a tab's song by the keys it is filed under (Search.indexSong, its names a
+     * search's); an artist page's songs once read (Search.artistSongs). The names are the library's song's, the one
+     * that holds the tab as a version of its own, else of those names; else the hit's; else UG's as a search names a
+     * song only an artist page lists (Search.listedNames). An artist link's title is "".
+     *
+     * With [rekey], the library's songs are re-keyed first where they are looked up by those names, as find_song does
+     * (songs.ensure_current_keys: kv `songs:key_version`), as the command's writes do; a read-only answer (the route's)
+     * looks them up as they are. */
+    fun named(db: Db, was: LinkKnown, rekey: Boolean = false): Named {
+        val link = was.link
+        if (link.kind == UgLink.ARTIST) {
+            val hits = if (was.state == "found" && !was.artistKey.isNullOrEmpty()) {
+                Search.artistSongs(db, was.artistKey, limit = ARTIST_SONGS).first
+            } else {
+                emptyList()
+            }
+            return Named(if (was.artist.isNotEmpty()) Search.listedNames(db, was.artist, "").first else "", "", hits)
+        }
+        val known = was.state != "other" && was.state != "gone"
+        val hit = if (was.keys != null && known) Search.indexSong(db, was.keys.first, was.keys.second, 100.0) else null
+        var (artist, title) = when {
+            hit != null -> hit.artist to hit.title
+            was.tab != null -> Search.listedNames(db, was.tab.artist, was.tab.title)
+            else -> "" to ""
+        }
+        var song = if (known) songOf(db, link) else null
+        if (song == null && artist.isNotEmpty() && title.isNotEmpty() && known) {
+            if (rekey) Rekey.ensure(db, Stamps.now())
+            song = Songs.byKey(db, Normalize.identityKey(artist, title))
+        }
+        if (song != null) {  // the library's own song of it: its names
+            artist = song.artist
+            title = song.title
+        }
+        return Named(artist, title, listOfNotNull(hit), song)
+    }
+
+    /** _song_of: the library's song that holds the tab as a version of its own (`versions`, live), if any. */
+    private fun songOf(db: Db, link: UgLink): SongRow? {
+        val id = db.one("SELECT song_id FROM versions WHERE provider = 'ug' AND tab_id = ? AND gone = ? " +
+                            "ORDER BY song_id LIMIT 1", link.tabId.toString(), Versions.LIVE) { it.long(0) }
+            ?: return null
+        return Songs.byId(db, id)
+    }
+
+    /** _a_tab: a tab read, as its line says it: its title by its artist, as caracole names them ([named]), and its
+     * kind ("斑马斑马 by 宋冬野, chords"), with no bracket: status.py reads the line up to its first. */
+    private fun aTab(db: Db, link: UgLink, page: UgTabPage): String {
+        val known = LinkKnown(link, "found", tab = tabOf(page), keys = tabKeys(db, link.tabId!!))
+        val names = named(db, known, rekey = true)
+        val v = page.tab
+        return "${names.title.ifEmpty { v.songName }} by ${names.artist.ifEmpty { v.artistName }}, " +
+            (KIND_WORDS[v.kind ?: ""] ?: v.kind.toString())
+    }
+
     /** known_line: what the command says of a link it reads nothing of ([known]: `found`, `other`, `gone`), in the
      * words a read ends with ([said]). */
     fun knownLine(db: Db, was: LinkKnown): String {
@@ -268,19 +355,19 @@ object UgLinks {
         if (was.state == "gone") return "Not found: UG answers 404 for ${link.url}."
         if (was.state == "other") return "Not read: ${link.url}: ${was.why}."
         val tabs = was.page?.let { ListedTabs.pageArtist(db, it)?.tabs } ?: 0
-        if (link.kind == UgLink.ARTIST) return "Read: UG's page of ${was.artist.ifEmpty { "the artist" }} lists ${plural(tabs, "tab")}."
-        val t = was.tab
-        if (t == null) {
-            val hit = was.keys?.let { (artistKey, songKey) -> Search.indexSong(db, artistKey, songKey) }
-            val named = if (hit != null) "${hit.artist} - ${hit.title}" else "tab ${link.tabId}"
-            return "Read: $named, in UG's index; nothing asked."
+        val names = named(db, was, rekey = true)
+        if (link.kind == UgLink.ARTIST) {
+            return "Read: UG's page of ${names.artist.ifEmpty { "the artist" }} lists ${plural(tabs, "tab")}."
         }
+        val song = if (names.title.isNotEmpty() && names.artist.isNotEmpty()) "${names.title} by ${names.artist}"
+                   else "tab ${link.tabId}"
+        val t = was.tab ?: return "Read: $song, in UG's index; nothing asked."
         val their = when {
             was.readAt != null -> "their page lists ${plural(tabs, "tab")}"
             was.page != null -> "their page isn't read yet"
             else -> "it links to no artist page"
         }
-        return "Read: ${t.title} by ${t.artist}, ${KIND_WORDS[t.type] ?: t.type}; $their."
+        return "Read: $song, ${KIND_WORDS[t.type] ?: t.type}; $their."
     }
 
     // --- a read that failed -----------------------------------------------------------------------------------
@@ -350,7 +437,7 @@ object UgLinks {
         if (tab.said == TabRead.WAITS || tab.said == TabRead.UNREADABLE) done.until = unreadableUntil(db, tabId)
         val page = tab.page
         if (page == null || page.tab.kind == null) return done
-        stage("tab", "done", named(page))
+        stage("tab", "done", aTab(db, link, page))
         done.page = Pages.learnArtistUrl(db, page)
         return done
     }
@@ -378,11 +465,6 @@ object UgLinks {
     /** FetchContext's artist_pages_per_kind, the default a link's read reads at. */
     private const val ARTIST_PAGES_PER_KIND = 3
 
-    private fun named(page: UgTabPage): String {
-        val v = page.tab
-        return "${v.songName} by ${v.artistName}, ${KIND_WORDS[v.kind ?: ""] ?: v.kind ?: ""}"
-    }
-
     /** _page_gone: UG answered 404 for the artist page: its tabs go, and every artist it was learned for learns it
      * again. */
     private fun pageGone(db: Db, page: String) {
@@ -401,9 +483,10 @@ object UgLinks {
         return "their page lists ${plural(tabs, "tab")}"
     }
 
-    /** said: the line the read ends with, `Read: `, `Not found: ` or `Not read: `; a block, a spent budget or an error
+    /** said: the line the read ends with, `Read: `, `Not found: ` or `Not read: `, the song and the artist named as
+     * caracole names them ([named]), with no bracket in the part status.py reads; a block, a spent budget or an error
      * before anything was read is the command's to say. */
-    fun said(done: LinkRead): String {
+    fun said(db: Db, done: LinkRead): String {
         val link = done.link
         val tab = done.tab
         if (tab != null) {
@@ -421,9 +504,10 @@ object UgLinks {
             }
             val page = tab.page!!
             if (page.tab.kind == null) {
-                return "Read: ${page.tab.songName} by ${page.tab.artistName} is ${typeWords(page.tab.type)}: $KEEPS."
+                val (artist, title) = Search.listedNames(db, page.tab.artistName, page.tab.songName)
+                return "Read: $title by $artist is ${typeWords(page.tab.type)}: $KEEPS."
             }
-            val named = named(page)
+            val named = aTab(db, link, page)
             val stopped = done.stopped
             return when {
                 done.page == null -> "Read: $named; it links to no artist page."
@@ -438,7 +522,8 @@ object UgLinks {
         }
         if (done.pageGone) return "Not found: UG answers 404 for ${link.url}."
         val listing = done.listing
-        val name = listing?.name?.takeIf { it.isNotEmpty() } ?: "the artist"
+        val ugName = listing?.name.orEmpty()
+        val name = if (ugName.isNotEmpty()) Search.listedNames(db, ugName, "").first else "the artist"
         if (listing != null && !listing.complete) {
             return "Read: ${plural(done.tabs, "tab")} of UG's page of $name so far, the rest the next time."
         }

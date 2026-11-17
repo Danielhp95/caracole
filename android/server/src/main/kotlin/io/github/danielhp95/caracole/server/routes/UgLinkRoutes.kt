@@ -1,15 +1,11 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
-import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
-import io.github.danielhp95.caracole.core.search.IndexHit
-import io.github.danielhp95.caracole.core.search.Search
 import io.github.danielhp95.caracole.core.ug.UgLink
 import io.github.danielhp95.caracole.core.ug.UgLinks
 import io.github.danielhp95.caracole.core.ug.UgUrls
@@ -104,33 +100,16 @@ class UgLinkRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
         )), 202)
     }
 
-    /** link_answer: `GET /api/ug/link`'s answer for [link]. */
+    /** link_answer: `GET /api/ug/link`'s answer for [link]: what caracole knows of its page (UgLinks.known) and how it
+     * names what the link stands for (UgLinks.named: its songs, the library's song of it, the names to fill in). */
     private fun linkAnswer(db: Db, overrides: Overrides, link: UgLink, now: Instant): JsonObject {
         val config = parts.config()
         val was = UgLinks.known(config, db, cacheDir, link, now)
-        val found = was.state == "found"
-        val songs = Songs.list(db)
-        var hits: List<IndexHit> = emptyList()
-        if (found && link.kind == UgLink.TAB && was.keys != null) {
-            hits = listOfNotNull(Search.indexSong(db, was.keys!!.first, was.keys!!.second, 100.0))
-        } else if (found && link.kind == UgLink.ARTIST && !was.artistKey.isNullOrEmpty()) {
-            hits = Search.artistSongs(db, was.artistKey!!, limit = ARTIST_SONGS).first
-        }
-        var guess: Pair<String, String> = when {
-            link.kind == UgLink.ARTIST ->
-                (if (was.artist.isNotEmpty()) Search.listedNames(db, was.artist, "").first else "") to ""
-            hits.isNotEmpty() -> hits[0].artist to hits[0].title
-            was.tab != null -> Search.listedNames(db, was.tab!!.artist, was.tab!!.title)
-            else -> "" to ""
-        }
-        var song = if (link.kind == UgLink.TAB) songOf(db, link) else null
-        if (song == null && link.kind == UgLink.TAB && guess.first.isNotEmpty() && guess.second.isNotEmpty()) {
-            song = Songs.byKey(db, Normalize.identityKey(guess.first, guess.second))
-        }
-        if (song != null) guess = song.artist to song.title  // the library's own song of it: its names
-        val rows = if (hits.isEmpty()) emptyList() else {
+        val names = UgLinks.named(db, was)
+        val rows = if (names.hits.isEmpty()) emptyList() else {
             val enabled = config.providers.filterValues { it.enabled }.keys
-            Rows(db, songs, parts.cards, forms, enabled).rows(emptyList(), hits.map { hitJson(db, it) }).second
+            Rows(db, Songs.list(db), parts.cards, forms, enabled).rows(emptyList(), names.hits.map { hitJson(db, it) })
+                .second
         }
         val out = linkedMapOf<String, Any?>("kind" to link.kind, "url" to link.url, "tab_id" to link.tabId,
                                             "type" to link.type, "state" to was.state)
@@ -142,18 +121,10 @@ class UgLinkRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
         out["artist_page"] = was.page?.let {
             obj("url" to it, "read" to (was.readAt != null), "read_at" to was.readAt?.takeIf { at -> at.isNotEmpty() })
         }
-        out["guess"] = obj("artist" to guess.first, "title" to guess.second)
-        out["song"] = song?.let { songJson(db, overrides, it, link) }
+        out["guess"] = obj("artist" to names.artist, "title" to names.title)
+        out["song"] = names.song?.let { songJson(db, overrides, it, link) }
         out["hits"] = rows
         return obj(*out.toList().toTypedArray())
-    }
-
-    /** _song_of: the library's song that holds the tab as a version of its own (`versions`, live), if any. */
-    private fun songOf(db: Db, link: UgLink): SongRow? {
-        val id = db.one("SELECT song_id FROM versions WHERE provider = 'ug' AND tab_id = ? AND gone = ? " +
-                            "ORDER BY song_id LIMIT 1", link.tabId.toString(), Versions.LIVE) { it.long(0) }
-            ?: return null
-        return Songs.byId(db, id)
     }
 
     /** _song_json: the library's song of a link, as the panel names it: whether it has a sheet and the link to it, and
@@ -179,9 +150,6 @@ class UgLinkRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
     companion object {
         /** ug_link_routes.LINK_LIMIT: characters of a pasted address. */
         const val LINK_LIMIT = 600
-
-        /** ug_link_routes.ARTIST_SONGS: an artist's songs a link's answer gives, most tabbed first. */
-        const val ARTIST_SONGS = 50
 
         /** songs.HUMAN_SHEET. */
         private const val HUMAN_SHEET = "sheet.txt"

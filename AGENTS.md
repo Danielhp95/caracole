@@ -1673,8 +1673,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - A UG link pasted into the library page's search box (ug-link), the plan docs/superpowers/plans/2026-11-17-ug-link.md:
   - core.ug's `UgUrls.readLink` (ug_urls.py's, its `SPACES`), and `UgLinks`, ug/link.py: `known` (no request: the
     database and the phone's HTTP cache alone), `read` (a tab's page by the fetch's rules, `Pages.readTabPage`, then
-    its artist's lists read whole, `ArtistPages.readArtistPage` of no song's over a `ListReading`), `said`,
-    `knownLine`, kv `ug:link-failed` (one of OwnRecords' records that gate a request);
+    its artist's lists read whole, `ArtistPages.readArtistPage` of no song's over a `ListReading`; a cached tab whose
+    artist page wasn't read within 30 days is `auto`, its lists read), `named` (the songs and names a link stands
+    for, the routes' and the command's lines alike), `said`, `knownLine`, kv `ug:link-failed` (one of OwnRecords'
+    records that gate a request);
   - `caracole ug --link` is core/lookup/sites/`UgLinkCommands` (commands/ug.py), run by server/lookups'
     `UgLinkRunner` in a CommandContext; it asks a tab's page and its artist's lists apart (`UgLinks.readPage`,
     `readLists`), so the envelope records a block or an error of either and tells a block once, as every lookup's on
