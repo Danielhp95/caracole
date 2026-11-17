@@ -682,7 +682,8 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             assert page.js("document.querySelector('#req-3 .req-output').open") is True  # as you left it
             # A link to another tab of the page (a request line's Details) stays on the page; one to the library's own
             # words (Request by name) shows the library, searched.
-            page.click("#tab-library")
+            page.click("#tab-library")  # the step out of the library taken back: shown once Back is
+            assert page.wait("window.caracoleTabs.current() === 'library'")
             page.js("(() => { const a = document.createElement('a'); a.id = 'to-4'; a.href = '/#tab=requests&job=4';"
                     " a.textContent = 'Details'; document.getElementById('list').prepend(a); window.here = 1; })()")
             page.click("#to-4")
@@ -701,8 +702,8 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             page.press("ArrowLeft")
             assert page.js("[document.activeElement.id, document.querySelector('[aria-selected=true]').id]") == [
                 "tab-sync", "tab-sync"]
-            page.press("Home")
-            assert page.js("document.activeElement.id") == "tab-library"
+            page.press("Home")  # the step out of the library taken back, the focus on its tab once Back shows it
+            assert page.wait("document.activeElement.id === 'tab-library'")
             page.press("ArrowRight")
             assert page.js("[document.activeElement.id, location.hash]") == ["tab-songbooks", "#q=Creep&tab=songbooks"]
             # Opened at a request (job=N, where the server sends a form back), its output is open and in view.

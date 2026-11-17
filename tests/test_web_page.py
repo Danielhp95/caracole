@@ -1041,7 +1041,8 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
           form.requestSubmit(); })()""")
         assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
                          "'Ready'", timeout=20), page.js("document.getElementById('requested').innerText")
-        page.click("#tab-library")
+        page.click("#tab-library")  # the step out of the library taken back: shown once Back is
+        assert page.wait("window.caracoleTabs.current() === 'library'")
         shown = page.js("""(() => { const song = %s; return {
           creep: [song.querySelector('h3').textContent, song.querySelector('.progress').textContent, song.dataset.id],
           list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),

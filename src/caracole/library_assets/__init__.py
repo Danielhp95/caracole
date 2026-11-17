@@ -54,6 +54,13 @@ file, and none of it loads anything from the network.
   each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
   address (none for the library); clicked, or with the tablist's keys, a tab shows its panel and hides the others,
   as a link to the page that names a tab does (a request line's Details), and Back to an address that names another.
+  Back: leaving the library for another tab is one step of the browser's history (an entry of its own, ``{ tab: 1 }``,
+  with search mode's ``search`` count beside it while ``body.search-mode`` is on), so Back returns to the library;
+  between the other tabs each replaces the one before, and the library's tab pressed (or reached with the keys)
+  while that step is there (``fromLibrary``) is ``history.back()``, nothing added. An address that names a tab, as
+  the page opens or by Back or Forward, shows it with no step; a browser that refuses the step changes the tab in
+  place. Every address it writes in place keeps ``history.state``, as library.js's and sync.js's do, and so does the
+  entry once each tab's script has heard it shown (songbooks.js's writes pass none).
   Its seam, ``window.caracoleTabs`` (``show``, ``current``), and "caracole:tab", which every tab's script hears: a
   tab put in body.html is one more, with no change to it.
 - sites.css and sites.js, after songbooks.js: the Sites tab, in the file as served: a line a site, drawn once from

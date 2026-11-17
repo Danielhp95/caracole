@@ -1437,7 +1437,7 @@
     if (state.prog) params.set("prog", state.prog);
     if (state.all) params.set("all", "1");
     try {
-      history.replaceState(null, "", "#" + params.toString());
+      history.replaceState(history.state, "", "#" + params.toString());
     } catch (err) {
       // Some browsers refuse this for local files; the page works the same, it just isn't remembered.
     }
