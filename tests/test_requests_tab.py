@@ -495,10 +495,10 @@ def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn):
                                  {"name": "Match", "source": "UG", "state": "done"},
                                  {"name": "Sheet", "source": "UG", "state": "running"}]
     asking, lyrics = views
-    assert asking["line"]["text"] == "Fetching from UG…" and asking["count"] == "2 of 7 done"
+    assert asking["line"]["text"] == "Fetching from UG…" and asking["count"] == "3 of 7"
     assert asking["steps"] == card["steps"]
     # Once done, the sheet says where the song's sheet came from: its version's site, as the library has it.
-    assert lyrics["line"]["text"] == "Fetching lyrics…" and lyrics["count"] == "4 of 7 done"
+    assert lyrics["line"]["text"] == "Fetching lyrics…" and lyrics["count"] == "5 of 7"
     assert lyrics["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
     assert requests(seen[1], "Now")[0]["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
     # Over, and Ready: the steps fold away from the song's line.

@@ -18,7 +18,7 @@ the page's script with data.
 
 Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
 an id songs.id gives again once the newest song is removed never shares), its line (status.py, as a song's
-line says it: ``song_line``), a lookup's steps and how many are over (outcome.py's ``progress``) and, once
+line says it: ``song_line``), a lookup's steps and the step in hand (outcome.py's ``progress``) and, once
 it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
 songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
@@ -250,7 +250,7 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     identity.
 
     Its ``line`` is as a song's line says it (``song_line``): Ready alone, and its sheet as ``sheet``, which the
-    list of requests opens by the song's name. A lookup's ``steps`` and, while it runs, its ``count`` are
+    list of requests opens by the song's name. A lookup's ``steps`` and the step in hand, ``at`` and ``count``, are
     outcome.py's ``progress``: none once it ends Ready."""
     from caracole.web.outcome import PEER_STEPS, progress
     from caracole.web.songbooks import songbook_of

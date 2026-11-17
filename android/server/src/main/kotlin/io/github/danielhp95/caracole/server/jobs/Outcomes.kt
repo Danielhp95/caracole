@@ -10,8 +10,9 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** outcome.py's Chip: a step of a request, its state (waiting, running, done, failed; or plain, over and neither,
- * "Match · not on UG") and the site it names ([source], "" for none). */
+/** outcome.py's Chip: a step of a request, its state (waiting, running, done, failed; skipped, every stage of it ended
+ * skipped, over, in its place; or plain, over and neither, "Match · not on UG") and the site it names ([source], "" for
+ * none). */
 data class Chip(val name: String, val state: String, val source: String = "") {
     fun asJson(): JsonObject = JsonObject(linkedMapOf(
         "name" to JsonPrimitive(name), "source" to JsonPrimitive(source), "state" to JsonPrimitive(state),
@@ -178,8 +179,9 @@ object Outcomes {
         else -> ""
     }
 
-    /** What the library page draws under a song's request line (outcome.progress): a lookup's steps and, while it
-     * runs, how many are over; nothing for a request that runs no lookup, one queued or cancelled, and one Ready. */
+    /** What the library page draws under a song's request line (outcome.progress): a lookup's steps, every one it
+     * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"); nothing for a request
+     * that runs no lookup, one queued or cancelled, and one Ready. */
     fun progress(job: Job, line: Line, facts: SongFacts?): Map<String, JsonElement> = progress(Shape(job), line, facts)
 
     internal fun progress(job: Shape, line: Line, facts: SongFacts?): Map<String, JsonElement> {
@@ -188,16 +190,31 @@ object Outcomes {
         val chips = steps(job, facts)
         if (chips.isEmpty()) return emptyMap()
         val shown = linkedMapOf<String, JsonElement>("steps" to JsonArray(chips.map { it.asJson() }))
-        if (job.state == Job.RUNNING) {
-            val over = chips.count { it.state == Job.DONE || it.state == "plain" }
-            shown["count"] = JsonPrimitive("$over of ${chips.size} done")
+        val at = inHand(chips, running = job.state == Job.RUNNING)
+        if (at != null) {
+            shown["at"] = JsonPrimitive(at)
+            shown["count"] = JsonPrimitive("${at + 1} of ${chips.size}")
         }
         return shown
     }
 
-    /** A step's state from its stages'; null for a step not drawn (no stage, or every one skipped). */
+    /** The place of the step in hand (outcome._in_hand): while the request runs, the step that runs, else the first
+     * that waits, else the last; once over, the first that failed, else none. */
+    internal fun inHand(chips: List<Chip>, running: Boolean): Int? {
+        val states = chips.map { it.state }
+        if (!running) return states.indexOf(Job.FAILED).takeIf { it >= 0 }
+        for (state in listOf(Job.RUNNING, Job.WAITING)) {
+            val at = states.indexOf(state)
+            if (at >= 0) return at
+        }
+        return chips.lastIndex.takeIf { it >= 0 }
+    }
+
+    /** A step's state from its stages'; skipped once every one ended skipped; null for a step with no stage, not
+     * drawn. */
     private fun stateOf(states: List<String>): String? {
-        if (states.isEmpty() || states.all { it == Job.SKIPPED }) return null
+        if (states.isEmpty()) return null
+        if (states.all { it == Job.SKIPPED }) return Job.SKIPPED
         if (Job.RUNNING in states) return Job.RUNNING
         if (states.all { it in OVER }) return if (Job.FAILED in states) Job.FAILED else Job.DONE
         if (states.any { it in OVER }) return Job.RUNNING

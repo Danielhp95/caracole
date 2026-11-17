@@ -87,9 +87,10 @@
   };
 
   // A running lookup's steps (outcome.py's), as library.js draws them under a song's line: those done ticked, the
-  // one that runs lit and the current step, those to come grey, a failed one crossed; a plain one its name alone.
+  // one that runs lit and the current step, those to come grey, a failed one crossed; a plain one its name alone,
+  // and a skipped one in its place.
   const MARKS = { done: "✓ ", failed: "✕ " };
-  const STATES = ["waiting", "running", "done", "failed", "plain"];
+  const STATES = ["waiting", "running", "done", "failed", "plain", "skipped"];
   const stepChips = (chips) => {
     const box = el("ol", "step-chips");
     box.setAttribute("aria-label", "Steps");

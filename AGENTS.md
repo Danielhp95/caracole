@@ -1252,6 +1252,11 @@ It is rows.js's, shared by both pages:
   kept when it ends otherwise than Ready), never the rest: a finished one's outcome, a reason from its stages and its
   song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step.
+  - Its steps are every one the lookup has from its start, a step whose every stage ended skipped kept in its place
+    (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
+  - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
+    first waiting, else the last; once over the first that failed, else none; the line shows the count only while
+    the request is queued or runs.
 - Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, never one that runs, with the jobs
   `submit_all` queued `together` with it), keeping it in the history as over ("cancelled"), so a page that follows it
   hears it ended.

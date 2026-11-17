@@ -665,13 +665,13 @@
   };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
   // Its link says where to go next; details, the request's output in the Requests tab, follows it. ``counted``: a song's line or
-  // a result's row (showRequest), which says how many of its lookup's steps are over, "· 4 of 7 done" (the view's
-  // ``count``, while it runs).
+  // a result's row (showRequest), which says the place of its lookup's step in hand, "· 3 of 7" (the view's ``count``),
+  // while it runs: an ended view's count names the step that failed, which its steps show.
   const showLine = (p, view, counted) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
     const more = typeof line.details === "string" ? line.details : "";
-    const count = counted && view && typeof view.count === "string" ? view.count : "";
+    const count = counted && view && isActive(view) && typeof view.count === "string" ? view.count : "";
     const key = [line.tone, line.text, to ? to.href : "", more, count].map(String).join("|");
     if (p.dataset.key === key) return;
     const focused = p !== document.activeElement && p.contains(document.activeElement);
@@ -697,11 +697,12 @@
   };
   // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names and its state) as chips
   // under its request line ``p`` (steps.css's, the Requests tab's markup): those done ticked, the one that runs lit
-  // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone.
+  // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone,
+  // and a skipped one, with nothing to do for the song, in its place.
   // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
   // lookup, or ended Ready, its steps folded away): none drawn.
   const STEP_MARKS = { done: "✓ ", failed: "✕ " };
-  const STEP_STATES = ["waiting", "running", "done", "failed", "plain"];
+  const STEP_STATES = ["waiting", "running", "done", "failed", "plain", "skipped"];
   const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("step-chips")
     ? p.nextElementSibling : null);
   const drawSteps = (p, view) => {

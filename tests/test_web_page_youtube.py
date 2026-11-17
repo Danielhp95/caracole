@@ -233,7 +233,7 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
     # The line says how it goes, the stages as steps, the form gone while it runs.
     progress = json.dumps(line(song) + " .progress")
     assert browser.wait(f"(document.querySelector({progress}) || {{}}).textContent === "
-                        "'Working out the chords…·3 of 5 done'"), \
+                        "'Working out the chords…·4 of 5'"), \
         browser.js(f"(document.querySelector({progress}) || {{}}).textContent")
     chips = browser.js(f"[...document.querySelectorAll({json.dumps(line(song) + ' .step-chip')})]"
                        ".map((c) => c.textContent)")

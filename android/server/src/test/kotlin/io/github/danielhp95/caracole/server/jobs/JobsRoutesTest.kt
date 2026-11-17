@@ -297,8 +297,12 @@ class JobsRoutesTest {
             runCurrent()
             val first = view(test, waited.id)
             assertEquals(listOf("waiting", "Not fetched yet", null, "#tab=requests&job=${waited.id}"), line(first))
-            assertEquals(listOf("Song", "Match", "Sheet"),  // a pdf stage skipped is none, as those the queue skipped
-                         first["steps"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content })
+            // A pdf stage skipped keeps its place, as those the queue skipped do: the steps are fixed when it starts.
+            assertEquals(listOf("Song" to "done", "Match" to "done", "Sheet" to "done", "PDF" to "skipped",
+                                "Lyrics" to "skipped", "Extras" to "skipped", "Songbooks" to "skipped"),
+                         first["steps"]!!.jsonArray.map {
+                             it.jsonObject["name"]!!.jsonPrimitive.content to it.jsonObject["state"]!!.jsonPrimitive.content
+                         })
             asked = true
             val found = queue.submit(lookup()).first
             runCurrent()

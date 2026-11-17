@@ -348,7 +348,7 @@ def test_a_lookup_that_joined_a_keep_it_starts_its_stages_afresh():
         "pages": "waiting"}
     assert [(c["name"], c["state"]) for c in shown["steps"]][:4] == [
         ("Song", "done"), ("Match", "done"), ("Sheet", "running"), ("PDF", "waiting")]
-    assert shown["count"] == "2 of 7 done"
+    assert shown["count"] == "3 of 7"
 
 
 def test_a_lookup_asked_for_while_the_songs_keep_it_runs_comes_after_it():

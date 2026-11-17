@@ -1,11 +1,11 @@
 """A lookup's steps on the library page caracole serve serves, in a real browser: a row of chips under the song's line.
 
-While a song is looked up (Fetch now, a search result's Get it), its request line says what runs and how many steps
-are over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"), and under it each step is a chip (outcome.py's, as
+While a song is looked up (Fetch now, a search result's Get it), its request line says what runs and the place of the
+step in hand ("Fetching the lyrics from LRCLIB… · 5 of 7"), and under it each step is a chip (outcome.py's, as
 /jobs.json gives them): those done ticked, the one that runs lit, those to come grey, Match naming the index it
 matched in ("Match UG", or "Match · not on UG", plain) and Sheet the site it asks, then the one its sheet came from.
 Ended Ready, they fold away and the line is the song's own, which opens its sheet; ended otherwise, they stay, to
-show which step stopped. A real ``caracole serve`` answers on a socket with the page's timers quick
+show which step stopped, each in its place. A real ``caracole serve`` answers on a socket with the page's timers quick
 (``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get --progress``'s lines, said a stage at a
 time, stopping where the test says until it lets it go on.
 """
@@ -159,7 +159,7 @@ def steps_of(item: str) -> str:
 
 
 def said(item: str) -> str:
-    """The expression for ``item``'s request line, as [its words, its count of steps over, if it shows one]."""
+    """The expression for ``item``'s request line, as [its words, the count of its step in hand, if it shows one]."""
     p = f"document.querySelector({json.dumps(item + ' .progress')})"
     over = f"{p}.querySelector('.steps-over')"
     return f"[{p}.firstChild.textContent, {over} && {over}.getBoundingClientRect().width > 0 ? {over}.textContent : '']"
@@ -199,14 +199,14 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
         # Asking Ultimate Guitar for the sheet: the song and its match over, the sheet lit with its site.
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"],
                                         *WAITING])
-        wait_for(page, said(line), ["Fetching from UG…", "2 of 7 done"])
+        wait_for(page, said(line), ["Fetching from UG…", "3 of 7"])
         fits(page, line)
         runner.go()
-        # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, four of seven over.
+        # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, the fifth step of seven.
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["done", "✓ Sheet UG"],
                                         ["done", "✓ PDF"], ["running", "Lyrics"], ["waiting", "Extras"],
                                         ["waiting", "Songbooks"]])
-        wait_for(page, said(line), ["Fetching lyrics…", "4 of 7 done"])
+        wait_for(page, said(line), ["Fetching lyrics…", "5 of 7"])
         assert page.js(f"document.querySelector('{line} .step-chips').getAttribute('aria-label')") == "Steps"
         assert page.js(f"document.querySelector('{line} .step-chips [aria-current=step]').textContent") == (
             "Lyrics: running")
@@ -242,16 +242,18 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
         # The offline index lacks it, plainly: no failure, as the sheet is asked of LaCuerda.
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
                                         ["running", "Sheet LaCuerda"], *WAITING])
-        wait_for(page, said(line), ["Fetching from LaCuerda…", "2 of 7 done"])
+        wait_for(page, said(line), ["Fetching from LaCuerda…", "3 of 7"])
         assert page.js(f"getComputedStyle(document.querySelector('{line} .step-chips .plain')).borderTopStyle") == (
             "dashed")
         runner.go()
         # Not found: the line says so with its next step, as before, and the steps stay; those that turned out not to
-        # apply (no sheet, so no PDF; no songbook lists it) are gone.
+        # apply (no sheet, so no PDF; no songbook lists it) keep their places, skipped.
         wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
         wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
-                                        ["failed", "✕ Sheet LaCuerda"], ["done", "✓ Lyrics"], ["failed", "✕ Extras"]])
-        assert page.js(f"!!document.querySelector('{line} .progress .steps-over')") is False  # over: no count
+                                        ["failed", "✕ Sheet LaCuerda"], ["skipped", "PDF"], ["done", "✓ Lyrics"],
+                                        ["failed", "✕ Extras"], ["skipped", "Songbooks"]])
+        # Over, the view's count names the step that failed; the line, its outcome, shows none.
+        assert page.js(f"!!document.querySelector('{line} .progress .steps-over')") is False
 
 
 @pytest.mark.parametrize("width", [1280, 390])
@@ -267,10 +269,10 @@ def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_you
         # Its request line in its Get it's place, and the steps under it, in the result's own row.
         row = RYAN
         wait_for(page, steps_of(row), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"], *WAITING])
-        wait_for(page, said(row), ["Fetching from UG…", "2 of 7 done"])
+        wait_for(page, said(row), ["Fetching from UG…", "3 of 7"])
         fits(page, row)
         runner.go()
-        wait_for(page, said(row), ["Fetching lyrics…", "4 of 7 done"])
+        wait_for(page, said(row), ["Fetching lyrics…", "5 of 7"])
         fits(page, row)
         runner.go()
         # Over, and Ready: the row is the song's own line, yours, its sheet's button on it; no steps, no Ready · Open

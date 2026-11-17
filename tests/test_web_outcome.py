@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from caracole.get import MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
 from caracole.web.jobs import (
+    INTERRUPTED,
     KEEP_STAGES,
     LACUERDA_ARTIST,
     REMOVING,
@@ -39,6 +40,12 @@ def ended(stages, state="done", **kw):
     """A lookup that is over: every stage not named done, unless named."""
     every = {name: ("done", "") for name, _ in STAGES} | stages
     return lookup(state, every, **kw)
+
+
+def upto(name, state="running", **said):
+    """A lookup's stages: those before ``name`` done, ``name`` in ``state``, then ``said`` over them."""
+    names = [n for n, _ in STAGES]
+    return {n: ("done", "") for n in names[:names.index(name)]} | {name: (state, "")} | said
 
 
 # --- the running request's steps ---------------------------------------------------------------------
@@ -82,15 +89,15 @@ def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its
         "This fetch's 6 asks of gametabs.net are spent. The game music tab waits until tonight.")
 
 
-def test_a_step_the_request_doesnt_use_is_not_drawn():
-    # Its songbooks left to a later job (Get the missing songs): no Songbooks step.
-    job = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])
-    assert [c.name for c in steps(job)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Extras"]
-    # A stage that ended with nothing to do for this song: no sheet, so no PDF; no songbook lists it.
-    skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in UG's index"),
-                             "sheet": ("skipped", "the offline index doesn't have it"), "pdf": ("skipped", "no sheet yet"),
+def test_a_lookups_steps_are_fixed_when_it_starts_and_a_skipped_one_keeps_its_place():
+    skipped = lookup(stages={"song": ("done", ""), "match": ("done", MATCH_NOT_FOUND),
+                             "sheet": ("skipped", NOT_IN_INDEX), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
-    assert [c.name for c in steps(skipped)] == ["Song", "Match · not on UG", "Lyrics", "Extras", "Songbooks"]
+    assert [(c.name, c.state) for c in steps(skipped)] == [
+        ("Song", "done"), ("Match · not on UG", "plain"), ("Sheet", "skipped"), ("PDF", "skipped"),
+        ("Lyrics", "running"), ("Extras", "waiting"), ("Songbooks", "waiting")]
+    leaves = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])  # fixed by its command
+    assert [c.name for c in steps(leaves)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Extras"]
     # A failed stage stays, as failed.
     failed = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
                             "pdf": ("failed", "chordpro couldn't make the PDF (see the log)"),
@@ -133,7 +140,7 @@ def test_a_sheet_that_failed_names_the_site_it_asked_when_it_did():
     assert steps(bug)[2] == Chip("Sheet", "failed")
 
 
-def test_the_library_page_draws_a_running_lookups_steps_with_the_count_of_those_over():
+def test_the_library_page_draws_a_running_lookups_steps_with_the_count_of_the_step_in_hand():
     facts = SongFacts(sheet_from="UG")
     lyrics = lookup(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf")} | {"lyrics": (
         "running", "")})
@@ -143,33 +150,68 @@ def test_the_library_page_draws_a_running_lookups_steps_with_the_count_of_those_
                   {"name": "Lyrics", "source": "", "state": "running"},
                   {"name": "Extras", "source": "", "state": "waiting"},
                   {"name": "Songbooks", "source": "", "state": "waiting"}],
-        "count": "4 of 7 done"}
-    # Match: not on UG is over, as a done step is; a step that drops out drops from the count.
+        "at": 4, "count": "5 of 7"}
+    # Match: not on UG is over, as a done step is; a skipped step keeps its place, and the total stays.
     lacuerda = lookup(stages={"song": ("done", ""), "match": ("done", MATCH_NOT_FOUND),
                               "sheet": ("running", SHEET_FROM["lacuerda"])})
-    assert progress(lacuerda, job_line(lacuerda, None), None)["count"] == "2 of 7 done"
+    assert progress(lacuerda, job_line(lacuerda, None), None)["count"] == "3 of 7"
     dropped = lookup(stages={"song": ("done", ""), "match": ("done", MATCH_NOT_FOUND),
                              "sheet": ("skipped", NOT_IN_INDEX), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
-    assert progress(dropped, job_line(dropped, None), None)["count"] == "2 of 5 done"
+    assert progress(dropped, job_line(dropped, None), None)["count"] == "5 of 7"
+
+
+def test_the_count_names_the_step_in_hand_and_only_rises():
+    said = [{}, upto("song"), upto("match", "waiting"),
+            upto("lyrics", sheet=("skipped", NOT_IN_INDEX), pdf=("skipped", "no sheet yet")),
+            upto("lacuerda", "waiting"), upto("pages"), upto("songbooks")]
+    shown = [progress(job, job_line(job, None), None) for job in (lookup(stages=s) for s in said)]
+    assert [s["count"] for s in shown] == ["1 of 7", "1 of 7", "2 of 7", "5 of 7", "6 of 7", "7 of 7", "7 of 7"]
+    assert [s["at"] for s in shown] == [0, 0, 1, 4, 5, 6, 6] and {len(s["steps"]) for s in shown} == {7}
+
+
+def test_once_over_the_count_names_the_step_that_failed_and_nothing_else():
+    stopped = ended({"sheet": ("skipped", COOLING), "pdf": ("skipped", "no sheet yet"),
+                     "songbooks": ("skipped", "in no songbook")})
+    shown = progress(stopped, job_line(stopped, SongFacts()), SongFacts())
+    assert [s["state"] for s in shown["steps"]] == ["done", "done", "failed", "skipped", "done", "done", "skipped"]
+    assert (shown["at"], shown["count"]) == (2, "3 of 7")
+    missing = ended({"match": ("done", MATCH_NOT_FOUND), "sheet": ("skipped", NOT_IN_INDEX),
+                     "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "in no songbook")})
+    facts = SongFacts(not_found=True, checked_now=True)
+    assert set(progress(missing, job_line(missing, facts), facts)) == {"steps"}  # no failure: the bar alone
+    refused = ended({"song": ("failed", "overrides.toml can't be read: line 3")}
+                    | {name: ("skipped", "") for name, _ in STAGES[1:]}, state="failed")
+    shown = progress(refused, job_line(refused, None), None)
+    assert [s["state"] for s in shown["steps"]] == ["failed"] + ["skipped"] * 6 and shown["count"] == "1 of 7"
+    cut = ended(upto("sheet", INTERRUPTED) | {n: ("skipped", "") for n, _ in STAGES[3:]}, state=INTERRUPTED)
+    shown = progress(cut, job_line(cut, None), None)
+    assert [s["state"] for s in shown["steps"]] == ["done", "done", "failed"] + ["skipped"] * 4
+    assert shown["count"] == "3 of 7"
 
 
 def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_otherwise():
     ready = SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")
     over = ended({"songbooks": ("skipped", "in no songbook")})
     assert progress(over, job_line(over, ready), ready) == {}  # the song's line opens the sheet itself
-    # Ended otherwise, the steps stay, with no count: they show which step stopped.
+    # Ended otherwise, the steps stay, each in its place: they show which step stopped, the count naming the one that
+    # failed, and none when none did.
     missing = ended({"match": ("done", MATCH_NOT_FOUND), "sheet": ("skipped", NOT_IN_INDEX),
                      "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "in no songbook")})
     facts = SongFacts(not_found=True, checked_now=True)
     assert job_line(missing, facts).text == "Not on the sites"
     assert progress(missing, job_line(missing, facts), facts) == {"steps": [
         {"name": "Song", "source": "", "state": "done"}, {"name": "Match · not on UG", "source": "", "state": "plain"},
-        {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"}]}
+        {"name": "Sheet", "source": "", "state": "skipped"}, {"name": "PDF", "source": "", "state": "skipped"},
+        {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"},
+        {"name": "Songbooks", "source": "", "state": "skipped"}]}
     failed = ended({"song": ("failed", "overrides.toml can't be read: line 3")} | {
         name: ("skipped", "") for name, _ in STAGES[1:]}, state="failed")
     assert progress(failed, job_line(failed, None), None) == {"steps": [
-        {"name": "Song", "source": "", "state": "failed"}]}
+        {"name": "Song", "source": "", "state": "failed"}, {"name": "Match", "source": "UG", "state": "skipped"},
+        {"name": "Sheet", "source": "", "state": "skipped"}, {"name": "PDF", "source": "", "state": "skipped"},
+        {"name": "Lyrics", "source": "", "state": "skipped"}, {"name": "Extras", "source": "", "state": "skipped"},
+        {"name": "Songbooks", "source": "", "state": "skipped"}], "at": 0, "count": "1 of 7"}
 
 
 COOLING = "Waiting out Ultimate Guitar until 2026-10-28 14:00 UTC"
@@ -191,14 +233,15 @@ def test_a_sheet_a_block_a_cooldown_or_a_spent_budget_stopped_stays_to_show_whic
         assert line.text == "Not fetched yet"
         assert progress(waited, line, facts) == {"steps": [
             {"name": "Song", "source": "", "state": "done"}, {"name": "Match", "source": "UG", "state": "done"},
-            {"name": "Sheet", "source": "", "state": "failed"}, {"name": "Lyrics", "source": "", "state": "done"},
-            {"name": "Extras", "source": "", "state": "done"}]}, detail
-    # While it runs, the step stays in the count: over, and not done.
+            {"name": "Sheet", "source": "", "state": "failed"}, {"name": "PDF", "source": "", "state": "skipped"},
+            {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"},
+            {"name": "Songbooks", "source": "", "state": "skipped"}], "at": 2, "count": "3 of 7"}, detail
+    # While it runs, the step keeps its place: over, and not done.
     running = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria"),
                              "sheet": ("skipped", COOLING), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
     assert Chip("Sheet", "failed") in steps(running)
-    assert progress(running, job_line(running, None), None)["count"] == "2 of 6 done"
+    assert progress(running, job_line(running, None), None)["count"] == "5 of 7"
     # A block met while it asked names the site it asked.
     blocked = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria")})
     blocked.heard({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]})
@@ -503,16 +546,18 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
     assert steps(job) == [Chip("Song", "done"), Chip("Audio", "done", "YouTube"), Chip("Lyrics", "running"),
                           Chip("Chords", "waiting"), Chip("PDF", "waiting")]
     line = job_line(job, None)
-    assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "count": "2 of 5 done"}
+    assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "at": 2, "count": "3 of 5"}
     ready = youtube_job("done", EVERY)
     assert progress(ready, job_line(ready, SHEET), SHEET) == {}  # Ready: its steps fold away
     waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube turned us back; waiting until "
                                                                "2026-10-30 20:00 UTC"),
                                           "chords": ("skipped", "no audio")})
-    # The audio a block stopped is the step that stopped it, drawn failed; those it left with nothing to do go.
+    # The audio a block stopped is the step that stopped it, drawn failed; one it left with nothing to do keeps its
+    # place, skipped.
     assert progress(waited, job_line(waited, SHEET), SHEET)["steps"] == [
         {"name": "Song", "source": "", "state": "done"}, {"name": "Audio", "source": "YouTube", "state": "failed"},
-        {"name": "Lyrics", "source": "", "state": "done"}, {"name": "PDF", "source": "", "state": "done"}]
+        {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Chords", "source": "", "state": "skipped"},
+        {"name": "PDF", "source": "", "state": "done"}]
 
 
 def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():

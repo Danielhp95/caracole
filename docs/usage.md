@@ -4249,8 +4249,8 @@ the library, sent as they are: they carry no badge.
   beside Ultimate Guitar's song, Fetch with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from UG… · 2 of 7
-  done"), with the lookup's steps as chips under it, as on a song's line
+  line of its own ("Sending…", "Fetching from UG… · 3 of 7"), with the
+  lookup's steps as chips under it, as on a song's line
   (below), and once the sheet is kept the line is the song's own line, yours,
   its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Fetch does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Fetch would,
@@ -4521,7 +4521,8 @@ the library, sent as they are: they carry no badge.
   then how it ended (a lookup that stopped says why, in its stage's words).
   While a song is looked up (Fetch, Fetch again, a search result's Fetch,
   Fetch the missing songs, the Songbooks tab's Add a song, Try again), the line
-  counts the steps over ("Fetching lyrics… · 4 of 7 done"),
+  says which of its steps is in hand ("Fetching lyrics… · 5 of 7": the fifth
+  of seven, the one that runs, else the next to come),
   and under it each step is a chip, as in the Journal: Song, Match UG
   (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
   it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
@@ -4529,9 +4530,10 @@ the library, sent as they are: they carry no badge.
   Songbooks; those done ticked, the one that runs lit, those to come grey, a
   failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
   UG**, drawn plain (dashed), never as a failure: the sheet may come from
-  LaCuerda. A step that turns out not to apply drops out, and the count with
-  it (no PDF without a sheet, no Songbooks when no songbook lists the song);
-  the Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
+  LaCuerda. The steps are those the lookup has from its start, so the count
+  only rises: a step that turns out not to apply keeps its place, skipped (no
+  PDF without a sheet, no Songbooks when no songbook lists the song), and the
+  Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
   site's error stopped, so a lookup that ends Not fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
@@ -4594,12 +4596,12 @@ the library, sent as they are: they carry no badge.
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
     tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
     harmonica tab) and Songbooks,
-    the same chips the library page draws under a song's line, leaving out a
-    step it
-    doesn't use (Songbooks when Fetch the missing songs makes the songbook
-    after, a step that ended with nothing to do for the song, such as the PDF
-    of a song with no sheet, but never the Sheet a cooldown, a block or a spent
-    budget stopped, drawn failed); for a request of other commands, its commands.
+    the same chips the library page draws under a song's line, each step the
+    lookup has from its start (no Songbooks when Fetch the missing songs makes
+    the songbook after): a step that ended with nothing to do for the song,
+    such as the PDF of a song with no sheet, keeps its place, skipped, and the
+    Sheet a cooldown, a block or a spent budget stopped is drawn failed; for a
+    request of other commands, its commands, leaving out one skipped.
     Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and

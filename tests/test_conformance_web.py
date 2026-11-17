@@ -1106,10 +1106,11 @@ def test_outcome_jsonl_is_what_the_requests_tab_says_of_each_job():
     check(WEB / "outcome.jsonl", jsonl([tables, *records], corpus="web/outcome", made_by=MADE_BY))
 
 
-def test_a_skipped_pdf_stage_is_no_chip_and_says_nothing():
-    # A caracole that makes no PDF skips its pdf stage, whatever its words: no step drawn, no reason read.
+def test_a_skipped_pdf_stage_is_a_skipped_step_and_says_nothing():
+    # A caracole that makes no PDF skips its pdf stage, whatever its words: the step keeps its place, skipped, and no
+    # reason is read.
     job = in_state(lookup_job(), "done", DONE_ALL)
-    assert "PDF" not in [chip.name for chip in _outcome.steps(job)]
+    assert ("PDF", "skipped") in [(chip.name, chip.state) for chip in _outcome.steps(job)]
     line = _status.job_line(job, _status.SongFacts(sheet=SHEET), todo=None)
     assert _outcome.outcome(job, line, _status.SongFacts(sheet=SHEET)).reason == ""
 
