@@ -119,6 +119,8 @@ object Status {
         "chords" to "Working out the chords",
         "video" to "Searching YouTube",
         "thumbnail" to "Getting the thumbnail",
+        "tab" to "Reading the tab page on UG",
+        "artist" to "Reading the artist's page on UG",
         "compare" to "Comparing books",
         "take" to "Taking their entries",
         "give" to "Sharing our entries",

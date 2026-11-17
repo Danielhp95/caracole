@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server.routes.search
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.ug.UgUrls
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
@@ -112,11 +114,14 @@ internal class Found(
                                            lacuerdaArtists = kept.lcArtists, lacuerdaSongs = kept.lacuerda)
             ?.let { (name, letter) -> obj("name" to name, "letter" to letter) }
         check()
-        val gate = if (searchesLacuerda) lacuerdaSearchGate(q, kept, mine) else null
+        // a link pasted (a UG page's, a YouTube video's) is no query: no hint, no unseen artist, no search sent for it
+        val link = isLink(q)
+        val gate = if (searchesLacuerda && !link) lacuerdaSearchGate(q, kept, mine) else null
         check()
         return obj(
             "query" to q, "library" to library, "index" to hits, "artists" to artists, "lead" to lead,
-            "best" to best(answer.best), "hint" to kept.hint, "progression" to progression, "unseen" to kept.unseen,
+            "best" to best(answer.best), "hint" to (if (link) null else kept.hint), "progression" to progression,
+            "unseen" to (if (link) null else kept.unseen),
             // the artist and the title the query names, which the request form is filled in with; null for none
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
             "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
@@ -256,6 +261,10 @@ internal class Found(
     }
 
     private companion object {
+        /** search_routes._is_link: a query that is a UG link (ug_urls.read_link) or a YouTube video's
+         * (youtube_urls.video_id_from_url), which the pages read as no query. */
+        fun isLink(q: String): Boolean = UgUrls.readLink(q) != null || OverrideUrls.videoIdFromUrl(q) != null
+
         /** search_routes.SUGGESTED_KEY: what /api/artist takes of each site's artist. */
         val SUGGESTED_KEY = mapOf("ug" to "artist_key", "lacuerda" to "slug", "harptabs" to "path")
     }
