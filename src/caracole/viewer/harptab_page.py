@@ -2,7 +2,7 @@
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
 It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its three scripts (strum.js, overlay.js, then harptab.js) and its two stylesheets (viewer.css, then harptab.css) by
+its four scripts (strum.js, overlay.js, layers.js, then harptab.js) and two stylesheets (viewer.css, harptab.css) by
 their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole over the syllable it is blown
 on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w`` columns: a line wraps between its
 words, never parting a hole from its syllable), a blow in the accent colour, a draw in blue with its "−", a bend's
@@ -73,6 +73,7 @@ from caracole.viewer.page import (
     HERE,
     LIBRARY_PAGE,
     _assets,
+    _layers,
     _overlay,
     _page,
     _sound,
@@ -155,7 +156,8 @@ def build_harmonica_viewer(
         + json_block("harp-data", data)
         + (json_block("song-names", names) if names else "")
     )
-    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), script), names=names)
+    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), _layers(), script),
+                 names=names)
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
