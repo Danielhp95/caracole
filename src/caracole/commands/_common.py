@@ -768,6 +768,95 @@ def make_client(
         raise
 
 
+@functools.cache
+def _locked_parallel() -> type:
+    """The class of ``make_parallel_client``'s clients, made the first time a command makes one."""
+    from caracole.http import ParallelClient, ProviderBlocked
+
+    class _LockedParallel(ParallelClient):
+        """A ParallelClient holding caracole's lock until it is closed. Its workers never hand the lock over (they
+        never touch the database); between two batches of its requests, with none in flight, its caller does
+        (``between``)."""
+
+        def __init__(self, *args, lock: Path, cfg: Config, conn: sqlite3.Connection, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._lock_file: Path | None = lock
+            self._cfg = cfg
+            self._conn = conn
+
+        def between(self) -> bool:
+            """Let a lookup that waits have caracole's lock now, and take it back; True when one did. Once one has, a
+            block it met (health.py, as the lookup recorded it) is this client's too, and nothing more is sent; else
+            its next request keeps the pause after the lookup's last one, as bulk work's client does."""
+            self.drain()
+            if not hand_over(self._cfg, self._conn):
+                return False
+            if is_cooling(self._conn, self.provider, self._wall_clock()):
+                self._blocked = ProviderBlocked(self.provider, None, None, "met by a lookup caracole let go first")
+                return True
+            last = _last_request(self._conn, self.provider)
+            if last is not None:
+                self._last_request = self._clock() - max(0.0, time.time() - last)
+            return True
+
+        def close(self) -> None:
+            try:
+                super().close()
+            finally:
+                if self._lock_file is not None:
+                    _release(self._lock_file)
+                    self._lock_file = None
+
+    return _LockedParallel
+
+
+def make_parallel_client(
+    cfg: Config,
+    conn: sqlite3.Connection,
+    provider: str,
+    run_id: str,
+    *,
+    policy: ProviderPolicy,
+    workers: int,
+    on_event: Callable[[Event], None] | None = None,
+) -> PoliteClient:
+    """A client for bulk work that has several requests in flight at once (``http.ParallelClient``): UG's artist
+    directory alone, the owner's choice of 2026-11-17 (ug/directory.py). As ``make_client``'s, it holds caracole's
+    lock until it is closed, its first request keeps the pause after the provider's last one, and every request is
+    logged to ``events`` and moves ``http:last_request:`` on, in this thread (the workers' events are drained into it).
+    ``policy`` is the pass's own (its budget and pause), ``workers`` its requests in flight; between two batches, its
+    caller hands the lock to a waiting lookup (its ``between``)."""
+    lock = _acquire(cfg, f"{provider} directory requests")
+    try:
+        policy = within_the_day(conn, provider, policy)
+        _pause_after_last_request(conn, provider, policy.delay, cfg=cfg)
+        log = EventLog(conn, run_id)
+
+        def logged(event: Event) -> None:
+            log(event)
+            if event.decision in _SENT:
+                db.kv_set(conn, _LAST_SENT + provider, f"{time.time():.3f}")
+            if on_event is not None:
+                on_event(event)
+
+        return _locked_parallel()(
+            provider, policy, cfg.cache_dir, user_agent=cfg.user_agent, transport=transport_for(provider),
+            sleep=lambda seconds: sleep(seconds), on_event=logged, workers=workers, lock=lock, cfg=cfg, conn=conn,
+            connect_patience=CONNECT_PATIENCE,
+        )
+    except BaseException:
+        _release(lock)
+        raise
+
+
+def directory_client(cfg: Config, conn: sqlite3.Connection, run_id: str, *, budget: int | None = None) -> PoliteClient:
+    """UG's artist directory's client (ug/directory.py), with ``[ug_directory]``'s concurrency, pause and budget (or
+    ``budget``): provider ``ug``, its every request counted as UG's."""
+    d = cfg.ug_directory
+    policy = replace(cfg.provider("ug"), budget=d.budget if budget is None else budget, delay=d.delay)
+    return make_parallel_client(cfg, conn, "ug", run_id, policy=policy, workers=d.concurrency)
+
+
 def make_youtube(
     cfg: Config,
     conn: sqlite3.Connection,

@@ -1,6 +1,7 @@
 {"corpus":"index/fixtures/reads-export","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
 {"sql":"CREATE TABLE ug_index (\n  tab_id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  type TEXT NOT NULL,\n  sitemap TEXT NOT NULL,\n  first_seen TEXT NOT NULL,\n  path TEXT NOT NULL DEFAULT ''\n)"}
 {"sql":"CREATE TABLE ug_artist_tabs (\n  page TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  type TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  label TEXT,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  url TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  artist_forms TEXT NOT NULL,\n  title_forms TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  read_at TEXT NOT NULL,\n  PRIMARY KEY (page, tab_id)\n)"}
+{"sql":"CREATE TABLE ug_directory (\n  artist_id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  slug TEXT NOT NULL DEFAULT '',\n  letter TEXT NOT NULL,\n  place INTEGER NOT NULL DEFAULT 0,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  updated_at TEXT NOT NULL DEFAULT '',\n  artist_key TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  seen_at TEXT NOT NULL,\n  read_at TEXT NOT NULL DEFAULT '',\n  read_tabs INTEGER NOT NULL DEFAULT 0,\n  read_updated TEXT NOT NULL DEFAULT ''\n)"}
 {"sql":"CREATE TABLE lacuerda_index (\n  path TEXT PRIMARY KEY,\n  artist_slug TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title TEXT NOT NULL DEFAULT '',\n  title_key TEXT NOT NULL DEFAULT '',\n  songs INTEGER NOT NULL DEFAULT 0,\n  versions TEXT NOT NULL DEFAULT '',\n  acordes INTEGER NOT NULL DEFAULT 0,\n  popular INTEGER,\n  page TEXT NOT NULL\n)"}
 {"sql":"CREATE TABLE harptabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)"}
 {"sql":"CREATE TABLE harptabs_artists (\n  path TEXT PRIMARY KEY,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)"}
@@ -17,7 +18,7 @@
 {"row":{"key":"lacuerda:index:keys","value":"2"},"table":"kv"}
 {"row":{"key":"ug:artist_tabs:keys","value":"2"},"table":"kv"}
 {"row":{"key":"format","value":"1"},"table":"caracole_export"}
-{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"16"},"table":"caracole_export"}
 {"row":{"key":"keys","value":"2"},"table":"caracole_export"}
 {"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
 {"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}

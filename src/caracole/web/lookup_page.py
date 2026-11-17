@@ -264,8 +264,9 @@ function show(data, text) {
   const lcArtists = objects(data.lacuerda_artists), lc = objects(data.lacuerda);
   const htArtists = objects(data.harptabs_artists), ht = objects(data.harptabs);
   const gt = objects(data.gametabs);
+  const ugListed = objects(data.ug_directory);  // the artists UG's listings name, their page not read yet
   const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length + htArtists.length +
-    ht.length + gt.length;
+    ht.length + gt.length + ugListed.length;
   // The artists and the songs it may have meant first ("Did you mean", a row each), whatever else it found: an
   // artist's row, whose Their songs lists their songs; a song's, as the search's rows of it are (suggestedSong).
   const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s), suggestedSong);
@@ -286,6 +287,7 @@ function show(data, text) {
   if (data.lead === "artist") results.append(...named);
   if (data.index.length) results.append(...group("On UG", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
+  if (ugListed.length) results.append(...group("On UG's artist listings", ugListed.map(directoryRow)));
   if (data.lacuerda_leads !== true) results.append(...lcGroup);
   // harptabs.com's: its artists, then its songs (a song's harmonica tabs by an artist whose page caracole read; a tab
   // by its title alone, a possible match, to open), with its mark and the Harmonica badge.
@@ -421,6 +423,36 @@ function pickBest() {
 
 // An artist of the offline index, with its most tabbed songs said: Songs lists every one (ROWS_SCRIPT's row).
 function artistRow(a) { return rowKit.artistHit(a, () => openArtist(a, true)); }
+
+// An artist UG's artist directory names whose page caracole hasn't read (ug/directory.py): their name, UG's count of
+// their tabs, and Read their page on UG, pressed by hand alone (POST /ug/link: a job of its own, at the lookup pace),
+// then their songs listed as any artist's (openArtist); a read that lists none says what UG answered. Not now (a
+// cooldown, the hour's lookups spent): why, and no button.
+function directoryRow(d) {
+  const row = el("div", "hit artist-row");
+  row.append(el("span", "artist-name", String(d.artist)),
+             el("span", "counts", " · " + rowKit.many(d.tabs, "tab") + " on UG · up to " +
+                rowKit.many(d.requests, "request")));
+  if (d.state && d.state !== "auto") { row.append(el("p", "hint read-outcome", String(d.why || ""))); return row; }
+  const go = button("Read their page on UG", "small primary", () => {
+    const mine = typed;
+    go.disabled = true;
+    rowKit.readArtistPage(csrf, {ugLink: String(d.url)}, words => { say(words); }).then(read => {
+      if (mine !== typed || !row.isConnected) return;
+      if (read.error) { go.disabled = false; say(read.error); return; }
+      getArtist(String(d.artist_key), 0).then(page => {
+        if (mine !== typed || !row.isConnected) return;
+        if (page && page.total) { showArtist(page, true); return; }
+        row.querySelectorAll(".read-outcome").forEach(x => x.remove());
+        const said = rowKit.readOutcome(read.job, "ug");
+        row.append(said);
+        say(said.firstChild.textContent.trim());
+      });
+    });
+  }, "Read " + String(d.artist) + "'s page on UG");
+  row.append(go);
+  return row;
+}
 
 function getArtist(key, offset, signal) {
   return fetch("/api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,

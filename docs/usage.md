@@ -121,6 +121,11 @@ lookup_requests = 2               # a tidal.link short link's hop, then the page
 enabled = true
 lookup_requests = 1
 
+[ug_directory]                    # UG's artist directory: its listings, then every bare artist's page
+concurrency = 6                   # requests in flight at once (1-32)
+delay = [0, 0]                    # seconds before each request, chosen at random; [0, 0]: none
+budget = 25000                    # requests a pass, of its own beside [providers.ug]'s budget
+
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
 margin = 8                        # ...when the next different title is this far behind
@@ -198,7 +203,9 @@ query (see [caracole search](#caracole-search)): the first command after the upg
 from the index, in about ten seconds (8 s, the copy included, for a full index of 1.4 million
 tabs), and it adds about 25 MB to it. Schema 13 adds gametabs.net's index and the tabs of its game
 pages, empty until the nightly run, or `caracole gametabs` and `caracole gametabs --index`, reads
-them (see [caracole gametabs](#one-step-at-a-time)).
+them (see [caracole gametabs](#one-step-at-a-time)). Schema 16 adds UG's artist directory, empty
+until `caracole ug --directory`, or the nightly run, reads it (see [UG's artist
+directory](#ugs-artist-directory)).
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -997,8 +1004,11 @@ resume.
 
 **`caracole index stats`** prints the number of tabs of each type, of artists
 and of sitemaps, the newest tab id, and when the index was built and last
-refreshed; then, once harptabs.com's sitemap is read, how far its artist index
-has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
+refreshed; then, once begun, how far UG's artist directory has got: `UG's
+artist directory: 41,200 of about 175,000 artists, 9 of 27 listings read whole;
+0 of 3,100 bare artists' pages read; caracole ug --directory reads the rest.`
+(see [UG's artist directory](#ugs-artist-directory)); then, once harptabs.com's
+sitemap is read, how far its artist index has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
 harptabs --index reads the rest.`, and once gametabs.net's sitemaps are read,
 how far its game index has got: `gametabs.net: 93 of 1658 game pages read, 512
 tabs; caracole gametabs --index reads the rest.`
@@ -1201,6 +1211,13 @@ run spends seven on its sitemap index and six sitemaps, and reads them again
 after 30 days, when each unchanged one costs a request. Then each song costs
 its artist's page, which serves every song by that artist for 30 days, and a
 download for its file.
+
+UG's artist directory is the one pass that asks quicker, your choice of
+2026-11-17 ("Ignore the politeness for this"): several requests in flight at
+once, no pause, a budget of its own (`[ug_directory]`, above), so its first
+read, about 3,500 listing pages and then every bare artist's page (some 10,000
+to 17,000 requests), takes about an hour at about five requests a second. See
+[UG's artist directory](#ugs-artist-directory).
 
 harptabs.com gets at most 20 requests a run, 2.5–5 seconds apart. The first run
 spends one on its sitemap, a single 6.4 MB file with no validators, read again
@@ -1543,6 +1560,20 @@ and cache.
   itself again for an hour; by hand it is. `--progress` writes a JSON line a
   stage. A text that is no UG page's exits 2. The library page runs it for a UG
   link pasted into its box (Browse and search, below).
+- **`caracole ug --directory [--budget N]`** reads UG's artist directory
+  (see [UG's artist directory](#ugs-artist-directory)): its letter listings,
+  then the page of every artist they name by a bare address, going on where the
+  last pass stopped, with `[ug_directory]`'s concurrency, pause and budget
+  (`--budget`, its requests this time). It says what it read and how far the
+  directory has got: `UG's listings: 3,512 pages read, 175,420 artists (175,420
+  new); read whole: 0-9, a, b, …`, `Bare artists' pages: 6,310 pages read.`, `The
+  directory: 175,420 of about 175,600 artists, 27 of 27 listings read whole;
+  6,310 of 6,310 bare artists' pages read.` A block says so, cools Ultimate
+  Guitar down for every request of caracole's (the fetch and lookups too) and
+  sends one ntfy message; a block or a cooldown exits 0. It builds an index, so
+  on a machine whose service uses another database it is refused (exit 2):
+  run the service's, `sudo caracole-admin ug --directory`. `--link` and
+  `--directory` are one or the other (exit 2).
 - **`caracole gametabs`** keeps a text tab of game music from gametabs.net for
   each song that has none, newest songs first. It reads gametabs.net's sitemaps
   (an index and six children; `sitemap_static`, the site's own pages, is never
@@ -1931,6 +1962,53 @@ the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
 `caracole serve`) while the nightly run works is made in the run's next pause,
 in seconds, rather than after the whole run.
+
+## UG's artist directory
+
+UG's sitemaps list a tenth of its tabs by a bare `/tab/{id}`, every tab of an
+artist whose name has a letter outside ASCII among them (宋冬野, Joaquín Sabina,
+Кино), and no sitemap names an artist. UG's letter listings do
+(`/bands/s.htm`, `/bands/s2.htm` …, 27 of them: a–z, and `0-9` for every name
+that doesn't begin with A–Z), about 175,000 artists on about 3,500 pages, most
+popular first, each with their page's address and how many tabs UG counts of
+theirs. caracole reads them whole into its database, then the page of every
+artist they name by a bare address (`/artist/{id}`), which alone names that
+artist's tabs, most tabs first:
+
+- a search finds such an artist by name: 宋冬野, Song Dongye or Joaquín Sabina
+  gets a group of its own, "Song Dongye (宋冬野): 42 tabs on UG, their page not
+  read yet", with **Read their page on UG**, which you press (a lookup, as a
+  pasted link's, `POST /ug/link`); once their page is read, by that or by the
+  directory's second pass, their songs show as any read artist's do, and a
+  search by title (斑马斑马) finds them;
+- the nightly fetch finds a wanted song's artist page with no `[artist_url]`:
+  the directory names it, a whole name before a part of one, then the most
+  tabs. The to-do page's Artists to find on Ultimate Guitar goes once every
+  listing is read whole, and meanwhile lists only artists whose listing isn't.
+
+The first read is yours to start, once, by hand, on the service:
+
+    sudo caracole-admin ug --directory
+
+It takes about an hour: every listing page, then every bare artist's page,
+some 14,000 to 20,000 requests, about five a second (`[ug_directory]`: six
+in flight at once, no pause, a budget of 25,000). The nightly run's
+`ug-directory` step, after the index refresh and before matching, then keeps it:
+each listing is read again 30 days after its last whole read, and a bare
+artist's page again only once their listing row's tab count or last update
+moved since, never within 30 days. A pass a budget or a stop ends goes on where
+it stopped. A listing page cut short, or one that won't read, is an error, never
+a page of no artist: the pass goes on from it the next time, and a listing never
+removes an artist (only their own page's 404 does). A block stops every request
+in flight at once, cools Ultimate Guitar down for the fetch and lookups too, and
+sends one ntfy message. robots.txt opens `/bands/` and `/artist/` to every
+crawler, and caracole asks for nothing else of them, with its own user agent.
+A lookup you start meanwhile goes first between two batches of requests, never
+waiting for the hour.
+
+The directory travels with UG's index: `caracole index export` and `merge`, a
+`.caracole` file's indexes and a sync's Site indexes carry it (about 25 MB). The
+phone reads no listing.
 
 ## Lyrics from LRCLIB, Megalobiz and AZLyrics
 
@@ -5789,8 +5867,8 @@ library_dir = "/var/lib/caracole/library"
 Where it is, caracole on its home defaults:
 
 - **builds no index**: `caracole run`, `index build`, `index refresh`,
-  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index` and `lacuerda
-  --index` exit 2 before they write or ask anything, naming both places, with
+  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index`, `lacuerda
+  --index` and `ug --directory` exit 2 before they write or ask anything, naming both places, with
   the two ways on: `sudo caracole-admin gametabs --index` builds the service's,
   `caracole --home gametabs --index` the home one all the same;
 - **warns once** before any other command writes or sends a request (as it

@@ -66,7 +66,9 @@ and half to two thirds of `0-9`'s.
    page was never read: "Song Dongye (宋冬野) · 42 tabs on UG · Read their page on UG · up to 2 requests". The button
    is the UG link lookup run on the artist's address (`POST /ug/link`, `caracole ug --link=<address>`). Once it has
    read the page, their songs show as any read artist's do. "Up to N" comes from the lists that read asks for (chords,
-   then tabs, 100 a page): `min(lookup_requests, 2 + tabs // 100)`.
+   then tabs, 100 a page): `min(lookup_requests, 2 + tabs // 100)`. On the library page its button is the group's
+   tail, as "+ N more" is (library.js `tailOf`, beneath the group's lines, never in its heading, `h2.artist-title`): a
+   group with a tail never folds, and such an artist's group has no line at all, only the tail.
 2. **The nightly match finds a wanted song's artist page** with no `[artist_url]` and no slugged tab. ug/fetch.py's
    `_known_artist_page` and `artist_is_known` take the directory as one more source, after `[artist_url]` and the
    learned kv. Where the directory names the artist, the fetch saves the `LEARN_TRIES` tab reads too.

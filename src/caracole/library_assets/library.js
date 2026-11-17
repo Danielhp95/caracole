@@ -2145,6 +2145,12 @@
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
     }
+    // The artists UG's artist directory names whose page caracole hasn't read (``ug_directory``): a group of no line,
+    // its tail the offer to read their page (tailOf, ugOffer), never the index's artist twice.
+    for (const d of objects(data.ug_directory)) {
+      const g = groupOf(model, model.alias.get(String(d.group_key)) || String(d.group_key || ""), d.artist);
+      if (!g.ug && !g.directory) g.directory = d;
+    }
     // The artists and the songs the query may have meant (``suggest``, a typo's), each artist's group first: an
     // artist's band that says so, whose foot lists their songs (tailOf); a song a line in its artist's band, as the
     // search's lines are (indexLine: Get it; your own line, a song of yours); the songs of yours by them under it, as
@@ -2175,6 +2181,7 @@
       for (const source of ["ug", "lacuerda", "harptabs"]) {
         if (g[source] && !g.items.some((item) => item[source] && !item.meant)) n[source] += 1;
       }
+      if (g.directory && !g.ug) n.ug += 1;  // an artist UG's listings name, their page not read yet
     }
     return n;
   };
@@ -2183,13 +2190,13 @@
   // or a name LaCuerda's page was read for, is something; a song it may have meant is not.
   const foundNothing = (model) => Boolean(model) && !Array.from(model.items.values()).some((item) => !item.meant) &&
     !model.titles.length && !model.harps.length &&
-    !Array.from(model.groups.values()).some((g) => g.ug || g.lacuerda || g.harptabs);
+    !Array.from(model.groups.values()).some((g) => g.ug || g.lacuerda || g.harptabs || g.directory);
   const yourSong = (row) => (row.song === null || row.song === undefined ? undefined : byIndex.get(Number(row.song)));
   const groupOf = (model, key, name) => {
     let g = model.groups.get(key);
     if (!g) {
       g = { key, name: String(name || ""), ug: null, lacuerda: null, harptabs: null, items: [], ugListed: 0, ugOffset: 0,
-        lcListed: false, htListed: false, tail: null, meant: null };
+        lcListed: false, htListed: false, tail: null, meant: null, directory: null };
       model.groups.set(key, g);
       model.order.push(key);
     }
@@ -2251,11 +2258,16 @@
   // An artist's group's foot, made once: "+ 57 more by Estopa" (the rest of their songs on Ultimate Guitar, fifty at a
   // time, from /api/artist), "+ 3 more by Estopa on LaCuerda" (the rest the index holds of theirs), the same on
   // harptabs.com, or, for an artist whose page caracole has never read there, the offer to read it; for an artist the
-  // query may have meant, until their songs are listed, "Their 7 songs on UG ›" (openSuggested). None when there is
-  // nothing more: null.
+  // query may have meant, until their songs are listed, "Their 7 songs on UG ›" (openSuggested); for an artist UG's
+  // artist directory names whose page caracole hasn't read, Read their page on UG (ugOffer), the group's tail as
+  // "+ N more" is (a group with a tail never folds). None when there is nothing more: null.
   const tailOf = (m) => {
     if (!m.tail) {
-      m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null };
+      m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null, ugOffer: null };
+      if (m.directory && !m.ug) {
+        m.tail.ugOffer = ugOffer(m);
+        m.tail.box.appendChild(m.tail.ugOffer);
+      }
       if (m.meant && !m.ug && !m.lacuerda && !m.harptabs) {
         const model = answer.model;
         const s = m.meant;
@@ -2354,6 +2366,57 @@
       m.tail.htOffer = null;
     }
     say(String(page.artist) + ": " + many(objects(page.songs).length, "song") + " on harptabs");
+  };
+  // An artist UG's artist directory names whose page caracole hasn't read: how many tabs UG counts of theirs, and Read
+  // their page on UG, pressed by hand alone (POST ug/link: caracole ug --link, a job of its own, at the lookup pace),
+  // then their songs listed in their group (/api/artist), as an artist's are once read; a read that lists none says
+  // what UG answered, under the offer. Not now (UG's cooldown, the hour's lookups spent): why, and no button.
+  const ugOffer = (m) => {
+    const d = m.directory;
+    const name = String(d.artist || m.name);
+    const box = el("div", "read-page");
+    box.appendChild(el("p", null, name + ": " + many(d.tabs, "tab") + " on UG, their page not read yet. Reading it " +
+      "costs up to " + many(d.requests, "request") + "."));
+    if (d.state && d.state !== "auto") {
+      box.appendChild(el("p", "hint read-outcome", String(d.why || "")));
+      return box;
+    }
+    box.appendChild(button("Read their page on UG", "small primary", (e) => readUgPage(m, e.currentTarget, box),
+      "Read " + name + "'s page on UG"));
+    return box;
+  };
+  const readUgPage = (m, go, box) => {
+    const was = answer;
+    go.disabled = true;
+    readArtistPage(server.csrf, { ugLink: String(m.directory.url || "") }, say).then((read) => {
+      if (answer !== was || !state.all) return;
+      if (read.error) {
+        go.disabled = false;
+        say(read.error);
+        return;
+      }
+      artistPage(String(m.directory.artist_key || ""), 0).then((page) => {
+        if (answer !== was || !state.all) return;
+        const got = page ? objects(page.songs) : [];
+        if (got.length) {
+          m.ug = { artist_key: page.artist_key, artist: page.artist, songs: page.total, tabs: page.tabs,
+            group_key: m.key, top: [] };
+          for (const h of got) addSong(was.model, "ug", h, m).meant = false;  // listed now: found, no guess
+          m.ugOffset = got.length;
+          m.ugListed = got.length;
+          m.tail = null;  // made again: the rest of their songs, "+ N more"
+          drawGroups();
+          say(String(page.artist) + ": " + many(page.total, "song") + " on UG");
+          return;
+        }
+        const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
+        go.disabled = line.tone === "missing";  // no such page: asking again finds none either
+        box.querySelectorAll(".read-outcome").forEach((x) => x.remove());
+        const said = readOutcome(read.job, "ug");
+        box.appendChild(said);
+        say(said.firstChild.textContent.trim());
+      });
+    });
   };
   // A harptabs.com artist whose page caracole has never read: the button that reads it (a request, a job of its own),
   // then lists their songs in their group.
