@@ -11,10 +11,10 @@
 
 The Requests tab (feed.py, drawn by library_assets/requests.js) shows the request that runs with its steps and
 those queued under it, each with Cancel, then the finished ones newest first, each as outcome.py says it: its
-outcome, a reason, when it finished and its next step (Open, Pick the match, Get it from there, Request by name, Try
-again…), read from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local
-indexes have elsewhere, ``outcome.elsewhere``). Cancel and Try again answer a form with the tab (``REQUESTS``), and
-the page's script with data.
+outcome, a reason, a lookup's steps (``outcome.lists_steps``), when it finished and its next step (Open, Pick the
+match, Get it from there, Request by name, Try again…), read from its line and its song (``song_of``: for a song a
+fetch left without a sheet, what the local indexes have elsewhere, ``outcome.elsewhere``). Cancel and Try again answer
+a form with the tab (``REQUESTS``), and the page's script with data.
 
 Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
 an id songs.id gives again once the newest song is removed never shares), its line (status.py, as a song's

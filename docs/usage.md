@@ -4620,8 +4620,10 @@ the library, sent as they are: they carry no badge.
     cancels the other too, while it waits.
   - **Today** and **Earlier** (by when each ended, in the server's time
     zone): the requests that are over, newest first, each with its outcome as
-    a coloured word, the reason in a sentence when there is one, the time it
-    ended and its next step:
+    a coloured word, the reason in a sentence when there is one, a lookup's
+    steps (or a sheet from a YouTube video's) as it left them, each saying what
+    it found, the time it ended and its next step; a lookup cancelled before
+    it ran has no steps, and a request of other commands keeps its one line:
     - **Ready** · **Open**, its sheet; a reason says what waits for tonight's
       run, in the site's own answer ("LRCLIB answered 503: the lyrics wait
       for tonight's run.");

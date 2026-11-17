@@ -130,8 +130,18 @@ object Outcomes {
 
     // --- the running request's steps --------------------------------------------------------------------------
 
-    /** The request's steps, as the Requests tab draws the one that runs; [facts], its song's. */
+    /** The request's steps, as the Requests tab draws the one that runs, and a finished one [listsSteps] takes;
+     * [facts], its song's. */
     fun steps(job: Job, facts: SongFacts? = null): List<Chip> = steps(Shape(job), facts)
+
+    /** Whether the Requests tab lists [job]'s steps once it is over (outcome.lists_steps): a lookup's, or a sheet from
+     * a YouTube video's, that started, as it left them; never one cancelled before it ran, nor a request of other
+     * commands. */
+    fun listsSteps(job: Job): Boolean {
+        if (job.active || job.startedAt == null) return false
+        val shape = Shape(job)
+        return shape.looksUp || shape.fromYoutube
+    }
 
     internal fun steps(job: Shape, facts: SongFacts?): List<Chip> {
         if (job.peer != null || job.staged) {

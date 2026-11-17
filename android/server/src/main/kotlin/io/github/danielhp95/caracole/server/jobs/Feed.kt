@@ -27,8 +27,9 @@ import java.time.ZonedDateTime
  * page draws under a song's line), and those queued under it in order ("Queued · next", "Queued · 2nd"), each with
  * Cancel (`POST /jobs/cancel`); then the finished ones, newest first under **Today** and **Earlier** (by when each
  * ended, in the phone's time zone), each with its outcome (a word in its tone, a reason, its next step and the one
- * beside it) and when it ended. A next step is a link (`href`) or a form the tab posts with the form token (`post`
- * and its `fields`); the ones that are the request's way on are `primary` ([PRIMARY]).
+ * beside it), a lookup's or a sheet from a YouTube video's steps as it left them, right after the reason
+ * (Outcomes.listsSteps: one that started), and when it ended. A next step is a link (`href`) or a form the tab posts
+ * with the form token (`post` and its `fields`); the ones that are the request's way on are `primary` ([PRIMARY]).
  *
  * Every request keeps what it ran (`output`): its title and when it was asked for (in the phone's zone, named as
  * Python's `%Z` names it: [ZoneNames]), a lookup's stages, each with its state and why, and each command it ran with
@@ -37,11 +38,11 @@ import java.time.ZonedDateTime
  * offline index gets what `caracole search` finds for it as a next step when its outcome has none that leads there.
  *
  * What feed.py works out of the job and its song (its line, its chips, its outcome) the caller gives, as
- * jobs_routes.requests_json does: [feed]'s `lines` (Status), `steps` (Outcomes.steps of the running request, with
- * its song's facts) and `outcomes` (Outcomes.outcome of each over, with its song's facts and id). Where one isn't
- * given, Feed works it out of the job alone, as feed.py does: a request over with a line and no outcome, Outcomes'
- * outcome of that line; the running one with no steps, Outcomes.steps with no facts; a request over with neither line
- * nor outcome says its state.
+ * jobs_routes.requests_json does: [feed]'s `lines` (Status), `steps` (Outcomes.steps of the running request and of
+ * each over one Outcomes.listsSteps takes, with its song's facts) and `outcomes` (Outcomes.outcome of each over, with
+ * its song's facts and id). Where one isn't given, Feed works it out of the job alone, as feed.py does: a request over
+ * with a line and no outcome, Outcomes' outcome of that line; the running one, or one over whose steps are listed,
+ * with no steps, Outcomes.steps with no facts; a request over with neither line nor outcome says its state.
  */
 object Feed {
     val STATE_TEXT: Map<String, String> = linkedMapOf(
@@ -71,10 +72,10 @@ object Feed {
      * count), and `groups`, Now, Today and Earlier, each that has a request, with its `requests`.
      *
      * [lines] are Status's, by job id; [outcomes] each finished one's (Outcomes.outcome; else read from its line);
-     * [steps] the running one's chips (Outcomes.steps; else the job's alone); [picks] the songs of finished requests
-     * that wait for a pick now, by song key; [opened], the requests whose output comes with what each command printed;
-     * [now], the answer's time; [zone], the phone's, whose days Today and Earlier are and whose clock the times are
-     * shown on.
+     * [steps] the chips of the running one and of each over one Outcomes.listsSteps takes (Outcomes.steps; else the
+     * job's alone), any other's never drawn; [picks] the songs of finished requests that wait for a pick now, by song
+     * key; [opened], the requests whose output comes with what each command printed; [now], the answer's time; [zone],
+     * the phone's, whose days Today and Earlier are and whose clock the times are shown on.
      */
     fun feed(jobs: List<Job>, lines: Map<Int, Line>, outcomes: Map<Int, Outcome> = emptyMap(),
              steps: Map<Int, List<Chip>> = emptyMap(), picks: Map<String, Pick> = emptyMap(),
@@ -98,8 +99,9 @@ object Feed {
             val pick = pending[job.id]
             val picking = pick != null && waitsForPick(job, pick)
             val said = outcomes[job.id] ?: lines[job.id]?.let { Outcomes.outcome(job, it) }
+            val chips = if (Outcomes.listsSteps(job)) steps[job.id] ?: Outcomes.steps(job) else null
             groups.getValue(if (day) "Earlier" else "Today") += plus(
-                finished(job, said, ended, pick, day),
+                finished(job, said, ended, pick, chips, day),
                 "output" to output(job, opened = job.id in opened, zone, names, picking = picking))
         }
         return JsonObject(linkedMapOf(
@@ -129,9 +131,10 @@ object Feed {
         return JsonObject(shown)
     }
 
-    /** A finished request: its outcome in a word, the reason, its next steps and when it ended (with its day for one
-     * before today). */
-    private fun finished(job: Job, said: Outcome?, ended: ZonedDateTime, pick: Pick?, day: Boolean): JsonObject {
+    /** A finished request: its outcome in a word, the reason, its steps as it left them ([chips]: null for a request
+     * whose steps aren't listed), its next steps and when it ended (with its day for one before today). */
+    private fun finished(job: Job, said: Outcome?, ended: ZonedDateTime, pick: Pick?, chips: List<Chip>?,
+                         day: Boolean): JsonObject {
         val shown: LinkedHashMap<String, JsonElement>
         val actions = ArrayList<JsonObject>()
         if (said == null) {
@@ -142,6 +145,7 @@ object Feed {
             action(said.action)?.let(actions::add)
             action(said.also, primary = false)?.let(actions::add)
         }
+        if (chips != null) shown["steps"] = JsonArray(chips.map(Chip::asJson))
         if (pick != null && pick.search) {  // a song the index didn't match: what caracole search finds, if not there
             val href = "/review?song=${pick.songId}"
             if (actions.none { (it["href"] as? JsonPrimitive)?.contentOrNull == href }) {

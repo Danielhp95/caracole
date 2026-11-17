@@ -1248,6 +1248,9 @@ It is rows.js's, shared by both pages:
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
+  - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's or a
+    sheet from a YouTube video's that started (`outcome.lists_steps`; the phone's `Outcomes.listsSteps`, whose
+    `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran nor a request of other commands.
 - The library page's lines read only its steps (`outcome.progress`: a lookup's chips under its line while it runs,
   kept when it ends otherwise than Ready), never the rest: a finished one's outcome, a reason from its stages and its
   song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,

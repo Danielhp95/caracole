@@ -167,6 +167,40 @@ def test_each_outcome_says_its_word_its_reason_and_its_next_step():
     assert "_todo.md" not in json.dumps(fed) and "to-do page" not in json.dumps(fed)
 
 
+def test_a_finished_lookup_keeps_its_steps_and_nothing_else_does():
+    shown = by_id(mockup_feed())
+    assert [(c["name"], c["state"]) for c in shown[5]["steps"]] == [
+        ("Song", "done"), ("Match", "done"), ("Sheet", "skipped"), ("PDF", "skipped"), ("Lyrics", "done"),
+        ("Extras", "done"), ("Songbooks", "done")]
+    assert list(shown[5])[:6] == ["id", "display", "state", "says", "reason", "steps"]
+    assert "steps" not in shown[2]  # a songbook deleted: no lookup
+    assert "steps" not in shown[7]  # queued: its place and Cancel
+    # Each as the running one's: the step that stopped short says what it found, in the outcome's words.
+    assert shown[3]["steps"][4] == {"name": "Lyrics", "site": "", "state": "failed",
+                                    "found": "LRCLIB answered 503. The lyrics wait until tonight."}
+
+
+def test_a_lookup_cancelled_before_it_ran_lists_no_steps_and_a_sheet_from_youtube_lists_its_own():
+    from test_web_outcome import EVERY, SHEET, youtube_job
+
+    # Cancelled in the queue, it never started: its steps and stages skipped, none of them run.
+    cancelled = lookup(9, "Estopa - Como Camarón", {name: ("skipped", "") for name, _ in STAGES}, state="cancelled",
+                       finished=NOW)
+    cancelled.started_at = None
+    for step in cancelled.steps:
+        step.state = "skipped"
+    line = job_line(cancelled, None)
+    shown = by_id(feed([cancelled], {9: line}, outcomes={9: outcome(cancelled, line)}, now=NOW))[9]
+    assert shown["says"] == {"tone": "cancelled", "text": "Cancelled"} and "steps" not in shown
+    made = youtube_job("done", EVERY)
+    line = job_line(made, SHEET)
+    shown = by_id(feed([made], {made.id: line}, outcomes={made.id: outcome(made, line, SHEET)},
+                       facts={made.id: SHEET}, now=NOW))[made.id]
+    assert [(c["name"], c["site"], c["state"]) for c in shown["steps"]] == [
+        ("Song", "", "done"), ("Audio", "YouTube", "done"), ("Lyrics", "", "done"), ("Chords", "", "done"),
+        ("PDF", "", "done")]
+
+
 def test_every_request_keeps_its_output_and_what_each_command_printed_once_it_is_opened():
     fed = mockup_feed()
     for request in by_id(fed).values():

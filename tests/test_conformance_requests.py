@@ -24,10 +24,10 @@
     (``_record``, its output whole), which JobHistory.jobOf reads; ``lines``, status.py's line of each by its id
     (``Line.as_json``, with ``todo=None``, as the phone's lines are); ``outcomes``, outcome.py's of each over (``tone``, ``word``, ``reason``, ``action`` and
     ``also``, each ``{label, href, post, fields: [[name, value], …]}`` or null), given for every one as
-    jobs_routes.requests_json gives them; ``steps``, the running one's chips (``outcome.steps``, ``Chip.as_json``),
-    which feed.py works out of the job and its song's facts; ``picks``, the songs that wait for a pick by key
-    (``song_id``, ``search``: ``pages.Pick``'s fields feed.py reads); ``opened``, the requests whose output comes with
-    what each command printed.
+    jobs_routes.requests_json gives them; ``steps``, the chips (``outcome.steps``, ``Chip.as_json``) of the running one
+    and of each over one ``outcome.lists_steps`` takes, which feed.py works out of the job and its song's facts;
+    ``picks``, the songs that wait for a pick by key (``song_id``, ``search``: ``pages.Pick``'s fields feed.py reads);
+    ``opened``, the requests whose output comes with what each command printed.
 
 Regenerate with ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_requests.py`` after a
 change to feed.py, stamps.py's ``shown``, library_page.py's Requests tab, or tzdata (flake.lock's nixpkgs).
@@ -66,7 +66,7 @@ from caracole.web.jobs import (
     lookup_steps,
     remove_steps,
 )
-from caracole.web.outcome import Action, Outcome, outcome, steps
+from caracole.web.outcome import Action, Outcome, lists_steps, outcome, steps
 from caracole.web.pages import Pick
 from caracole.web.status import Line, SongFacts, job_line
 
@@ -371,7 +371,8 @@ def feed_record(note: str, zone: str, now: str, found: list[tuple[Job, SongFacts
     said = {j.id: outcome(j, made_lines[j.id], f, song_id=song_id) for j, f, song_id in found
             if not j.active and j.id in made_lines}
     said |= outcomes or {}
-    chips = {j.id: [chip.as_json() for chip in steps(j, facts.get(j.id))] for j in jobs if j.state == "running"}
+    chips = {j.id: [chip.as_json() for chip in steps(j, facts.get(j.id))] for j in jobs
+             if j.state == "running" or lists_steps(j)}
     with local_zone(zone):
         out = feed(jobs, made_lines, outcomes=said, facts=facts, picks=picks, opened=opened, now=at(now))
     return {"fn": "caracole.web.feed.feed", "note": note, "tz": zone, "now": now,

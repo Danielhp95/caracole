@@ -5,9 +5,10 @@ Under **Now**, the request that runs, with how long ago it started, its line and
 the chips the library page draws under a song's line), and those queued under it in order ("Queued · next",
 "Queued · 2nd"), each with Cancel (``POST /jobs/cancel``); then the finished ones, newest first under **Today** and
 **Earlier** (by when each ended, in the server's local time zone), each with its outcome (outcome.py's
-``Outcome``: a word in its tone, a reason, its next step and the one beside it) and when it ended. A next step is
-a link (``href``) or a form the tab posts with the form token (``post`` and its ``fields``); the ones that are the
-request's way on are ``primary`` (``PRIMARY``).
+``Outcome``: a word in its tone, a reason, its next step and the one beside it), a lookup's or a sheet from a
+YouTube video's steps as it left them, right after the reason (outcome.py's ``lists_steps``: one that started), and
+when it ended. A next step is a link (``href``) or a form the tab posts with the form token (``post`` and its
+``fields``); the ones that are the request's way on are ``primary`` (``PRIMARY``).
 
 Every request keeps what it ran (``output``): its title and when it was asked for (in the server's time zone,
 named), a lookup's stages, each with its state and why, and each command it ran with its state; what each
@@ -30,7 +31,7 @@ from caracole.stamps import shown, stamp
 
 if TYPE_CHECKING:
     from caracole.web.jobs import Job, Stage, Step
-    from caracole.web.outcome import Action, Outcome
+    from caracole.web.outcome import Action, Chip, Outcome
     from caracole.web.pages import Pick
     from caracole.web.status import Line, SongFacts
 
@@ -52,11 +53,11 @@ def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, O
     tab's count), and ``groups``, Now, Today and Earlier, each that has a request, with its ``requests``.
 
     ``lines`` are status.py's, by job id; ``outcomes`` outcome.py's for the finished ones (else read from their
-    line); ``facts`` their songs' (where a running lookup's sheet came from); ``picks`` the songs of finished
+    line); ``facts`` their songs' (where a lookup's sheet came from, running or over); ``picks`` the songs of finished
     requests that wait for a pick now, by song key (review_routes.py's ``picks_waiting``); ``opened``, the requests
     whose output comes with what each command printed; ``now``, the answer's time (the clock's).
     """
-    from caracole.web.outcome import outcome
+    from caracole.web.outcome import lists_steps, outcome, steps
 
     now = now or datetime.now(UTC)
     pending = _waiting_picks(jobs, picks or {})
@@ -78,9 +79,10 @@ def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, O
         day = ended.date() != today
         pick = pending.get(job.id)
         picking = pick is not None and _waits_for_pick(job, pick)
+        chips = steps(job, (facts or {}).get(job.id)) if lists_steps(job) else None
         groups["Earlier" if day else "Today"].append(
-            _finished(job, said, ended, pick, day=day) | {"output": _output(job, opened=job.id in opened,
-                                                                            picking=picking)})
+            _finished(job, said, ended, pick, chips, day=day) | {"output": _output(job, opened=job.id in opened,
+                                                                                   picking=picking)})
     return {"active": sum(job.active for job in jobs),
             "groups": [{"name": name, "requests": shown_jobs} for name, shown_jobs in groups.items() if shown_jobs]}
 
@@ -105,9 +107,10 @@ def _queued(job: Job, place: int) -> dict[str, Any]:
     return shown_job
 
 
-def _finished(job: Job, said: Outcome | None, ended: datetime, pick: Pick | None, *, day: bool) -> dict[str, Any]:
-    """A finished request: its outcome in a word, the reason, its next steps and when it ended (with its day for one
-    before today)."""
+def _finished(job: Job, said: Outcome | None, ended: datetime, pick: Pick | None, chips: list[Chip] | None, *,
+              day: bool) -> dict[str, Any]:
+    """A finished request: its outcome in a word, the reason, its steps as it left them (``chips``: None for a request
+    whose steps aren't listed), its next steps and when it ended (with its day for one before today)."""
     if said is None:
         shown_job = _head(job, job.state, STATE_TEXT.get(job.state, job.state))
         actions: list[dict[str, Any]] = []
@@ -116,6 +119,8 @@ def _finished(job: Job, said: Outcome | None, ended: datetime, pick: Pick | None
         if said.reason:
             shown_job["reason"] = said.reason
         actions = [a for a in (_action(said.action), _action(said.also, primary=False)) if a is not None]
+    if chips is not None:
+        shown_job["steps"] = [chip.as_json() for chip in chips]
     if pick is not None and pick.search:  # a song the index didn't match: what caracole search finds, if not there
         href = f"/review?song={pick.song_id}"
         if not any(a.get("href") == href for a in actions):

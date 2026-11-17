@@ -4,8 +4,10 @@ import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.server.testing.replays.RequestsReplay
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -13,6 +15,7 @@ import org.junit.Test
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The Requests tab's feed is feed.py's, byte for byte (vectors/web/requests.jsonl, RequestsReplay), its times named
@@ -104,8 +107,63 @@ class FeedTest {
         assertTrue(jobs.any { it.state == Job.RUNNING } && jobs.any { !it.active && it.id in lines })
         val given = Feed.feed(jobs, lines, jobs.filter { !it.active && it.id in lines }.associate {
             it.id to Outcomes.outcome(it, lines.getValue(it.id))
-        }, jobs.filter { it.state == Job.RUNNING }.associate { it.id to Outcomes.steps(it) }, now = now, zone = zone)
+        }, jobs.filter { it.state == Job.RUNNING || Outcomes.listsSteps(it) }.associate { it.id to Outcomes.steps(it) },
+            now = now, zone = zone)
         assertEquals(given, Feed.feed(jobs, lines, now = now, zone = zone))
+    }
+
+    @Test
+    fun `a finished lookup lists its steps after its reason, given or worked out of the job, and nothing else does`() {
+        val r = Corpus.records(RequestsReplay.VECTOR).first {
+            it.fn == "caracole.web.feed.feed" && it.extra.getValue("note").jsonPrimitive.content.startsWith("a queue at work")
+        }
+        val jobs = r.extra.getValue("jobs").jsonArray.map { JobHistory.jobOf(it.jsonObject) }
+        val lines = r.extra.getValue("lines").jsonObject.entries.associate { (id, line) ->
+            id.toInt() to RequestsReplay.line(line.jsonObject)
+        }
+        val outcomes = r.extra.getValue("outcomes").jsonObject.entries.filter { it.value !is JsonNull }
+            .associate { (id, said) -> id.toInt() to RequestsReplay.outcome(said.jsonObject) }
+        val now = RequestsReplay.time(r.extra.getValue("now").jsonPrimitive.content)
+        val zone = ZoneId.of(RequestsReplay.zone(r))
+        // The lookups that started and are over; never the running one, those queued, a cancelled add, the fetches of
+        // other commands nor a LaCuerda search.
+        assertEquals(listOf(19, 18, 17, 13, 11, 10, 9), jobs.filter(Outcomes::listsSteps).map { it.id })
+        fun requests(fed: JsonObject): Map<Int, JsonObject> = fed.getValue("groups").jsonArray
+            .flatMap { it.jsonObject.getValue("requests").jsonArray }.map { it.jsonObject }
+            .associateBy { it.getValue("id").jsonPrimitive.int }
+        val worked = requests(Feed.feed(jobs, lines, outcomes, now = now, zone = zone))
+        val crimen = worked.getValue(17)
+        assertEquals(listOf("id", "display", "state", "says", "reason", "steps"), crimen.keys.take(6))
+        assertEquals(JsonArray(Outcomes.steps(jobs.single { it.id == 17 }).map(Chip::asJson)), crimen["steps"])
+        assertEquals(listOf("id", "display", "state", "says", "steps", "actions"), worked.getValue(19).keys.take(6))
+        for (id in listOf(23, 22, 21, 16, 15, 14, 12, 8)) assertNull(worked.getValue(id)["steps"], "$id")
+        // Given, they are the caller's (its song's facts name the sheet's site); a request it doesn't list draws none.
+        val mine = listOf(Chip("Song", Job.DONE, found = "given"))
+        val given = requests(Feed.feed(jobs, lines, outcomes, mapOf(17 to mine, 14 to mine), now = now, zone = zone))
+        assertEquals(JsonArray(mine.map(Chip::asJson)), given.getValue(17)["steps"])
+        assertNull(given.getValue(14)["steps"])
+        // Cancelled before it ran, a lookup never started: none; a sheet from a YouTube video over: its own.
+        val cancelled = Job(30, JobSpec("Fetch A - B", "a/b", "song", emptyList(), display = "A - B", fetching = true,
+                                        commands = JobCommands.lookupSteps("A", "B"))).apply {
+            state = Job.CANCELLED
+            finishedAt = now
+        }
+        val made = Job(31, JobSpec("YouTube sheet", JobCommands.YOUTUBE_SHEET + "a/b", "song", emptyList(),
+                                   commands = listOf(Command("Making the sheet", listOf(
+                                       "youtube", "--sheet", "--progress", "--", "https://www.youtube.com/watch?v=x"))))
+        ).apply {
+            state = Job.DONE
+            startedAt = now.minusSeconds(30)
+            finishedAt = now
+        }
+        assertEquals(listOf(false, true), listOf(cancelled, made).map(Outcomes::listsSteps))
+        assertEquals(listOf("Song", "Audio", "Lyrics", "Chords", "PDF"),
+                     requests(Feed.feed(listOf(made, cancelled), emptyMap(), now = now, zone = zone)).let { fed ->
+                         assertNull(fed.getValue(30)["steps"])
+                         fed.getValue(31).getValue("steps").jsonArray.map {
+                             it.jsonObject.getValue("name").jsonPrimitive.content
+                         }
+                     })
     }
 
     @Test

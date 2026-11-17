@@ -4,7 +4,8 @@ The library page's song lines keep status.py's ``Line``, and draw a lookup's ste
 the Requests tab (feed.py) reads that same line and says it its own way, never from anything else than
 the job and what the library knows of its song:
 
-- **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few steps
+- **Steps** (``steps``), for the request that runs, and for a lookup or a sheet from a YouTube video once it is
+  over, as it left them (``lists_steps``: one that started): a lookup's stages (get.py's ``STAGES``) as a few steps
   in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored
   and its tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file, harptabs.com's harmonica tab and gametabs.net's tab
   of game music, from the
@@ -198,8 +199,8 @@ class Outcome:
 
 
 def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
-    """The request's steps, as the Requests tab draws the one that runs; ``facts``: its song's, for where its
-    sheet came from."""
+    """The request's steps, as the Requests tab draws the one that runs, and a finished one ``lists_steps`` takes;
+    ``facts``: its song's, for where its sheet came from."""
     if peer_kind(job) is not None:  # a sync's or a take's: its stages, each skipped one not drawn
         return [Chip(PEER_STEPS.get(stage.name, stage.label), "failed" if stage.state == INTERRUPTED else stage.state)
                 for stage in job.stages if stage.state != "skipped"]
@@ -215,6 +216,12 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
         state = "failed" if step.state == INTERRUPTED else step.state
         chips.append(Chip(name, state if state in ("waiting", "running", "done", "failed") else "done"))
     return chips
+
+
+def lists_steps(job: Job) -> bool:
+    """Whether the Requests tab lists the steps of ``job`` once it is over: a lookup's, or a sheet from a YouTube
+    video's, that started, as it left them; never one cancelled before it ran, nor a request of other commands."""
+    return not job.active and job.started_at is not None and (job.looks_up or job.from_youtube)
 
 
 def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
