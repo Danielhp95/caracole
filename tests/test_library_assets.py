@@ -116,3 +116,28 @@ def test_the_caracole_mark_that_leads_home_reads_at_body_size_at_least():
     rule = re.search(r"\.app \{([^}]*)\}", BASE_STYLE).group(1)
     size = re.search(r"font-size: ([\d.]+)rem", rule)
     assert size and float(size.group(1)) >= 1.05
+
+
+SELECTORS = re.compile(r"(?:^|[{}])\s*([^{}@][^{}]*?)\s*\{")  # each rule's selector list, inside @media too
+PLAY = re.compile(r"\.(?:play|line-plays|foot(?:-[a-z]+)?)(?![\w-])")
+LINE = re.compile(r"\.line(?:-panel|-title)?(?![\w-])")
+PLACED = re.compile(r"\.line-title > \.line-plays$")  # lane 1's: where the buttons sit on a line
+PANE = re.compile(r"^#card-pane(?![\w-])")  # lane 1's: the laptop's pane (1d.6)
+BOX = re.compile(r"^\.line(?::not\(\.hit\)|\.card-gone)|^\.line-panel\.song-card(?![\w-])")  # the opened card's box
+LANE_1 = {"rows.css": (PLACED,), "library.css": (PLACED, PANE)}
+
+
+def selectors_of(name):
+    """Each selector of ``name``'s rules, a list split at its top-level commas."""
+    lists = SELECTORS.findall(re.sub(r"/\*.*?\*/", "", text_of(name), flags=re.S))
+    return [s.strip() for l in lists for s in re.split(r",(?![^()]*\))", l)]
+
+
+def test_the_play_buttons_and_the_cards_parts_are_styled_in_card_css_alone():
+    from caracole.library_page import STYLESHEETS
+
+    others = {name: [s for s in selectors_of(name) if PLAY.search(s)
+                     and not any(p.search(s) for p in LANE_1.get(name, ()))]
+              for name in STYLESHEETS if name != "card.css"}
+    assert {name: found for name, found in others.items() if found} == {}  # but lane 1's placement and pane rules
+    assert [s for s in selectors_of("card.css") if LINE.search(s) and not BOX.search(s)] == []  # the box alone

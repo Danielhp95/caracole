@@ -932,6 +932,9 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
+- The play buttons', the foot's and the opened card's box's rules are card.css's; where the buttons sit on a line (a
+  selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
+  library.css) are lane 1's: test_library_assets.py.
 - A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, the marks of the sites its versions
