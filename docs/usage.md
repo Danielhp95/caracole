@@ -4530,16 +4530,19 @@ the library, sent as they are: they carry no badge.
   taller, with a "!"; then the step in hand, the site it names in full, and
   its place among them ("Sheet · Ultimate Guitar · 3 of 7": the third of
   seven, the one that runs, else the next to come), which is what a screen
-  reader hears. The steps are Song, Match (in Ultimate Guitar's offline
-  index), Sheet (then the site it asks, Sheet · Ultimate Guitar or Sheet ·
-  LaCuerda, switching when it falls back to the other), PDF, Lyrics, Extras
-  and Songbooks. A song Ultimate Guitar's index lacks reads **Match: not on
-  UG**, drawn as done, never as a failure: the sheet may come from
-  LaCuerda. They are every step the lookup has from its start, so the count
-  only rises: a step that turns out not to apply keeps its place, skipped (no
-  PDF without a sheet, no Songbooks when no songbook lists the song), and the
-  Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
-  site's error stopped, so a lookup that ends Not fetched yet shows it.
+  reader hears. While a nightly run holds the book, the bar says so in the
+  step's place ("Waiting for the book · 1 of 7"), that step grey and still,
+  until the lookup's turn comes. The steps are Song, Match (in Ultimate
+  Guitar's offline index), Sheet (then the site it asks, Sheet · Ultimate
+  Guitar or Sheet · LaCuerda, switching when it falls back to the other),
+  PDF, Lyrics, Extras and Songbooks. A song Ultimate Guitar's index lacks
+  reads **Match: not on UG**, drawn as done, never as a failure: the sheet
+  may come from LaCuerda. They are every step the lookup has from its start,
+  so the count only rises: a step that turns out not to apply keeps its
+  place, skipped (no PDF without a sheet, no Songbooks when no songbook lists
+  the song), and the Sheet a cooldown, a block or a spent budget stopped
+  stays, red, as one a site's error stopped, so a lookup that ends Not
+  fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
   - **Ready**: the bar folds away and nothing takes its place; the line is

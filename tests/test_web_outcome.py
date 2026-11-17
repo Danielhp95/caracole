@@ -349,6 +349,27 @@ def test_a_request_draws_nothing_for_its_first_second_and_none_if_it_ends_within
     assert progress(never, job_line(never, None), None) == {}
 
 
+def test_a_lookup_waiting_for_the_book_says_so_of_its_step_in_hand():
+    # A nightly run holds caracole's lock: the song stage runs, waiting for it (get.py's words, the very ones its line
+    # says "Waiting for the book…" of), and the view says so beside the step in hand, Song, "1 of 7".
+    held = "waiting for the book (pid 42: run); a fetch goes first at its next pause"
+    waiting = lookup(stages=upto("song", song=("running", held)))
+    assert job_line(waiting, None).text == "Waiting for the book…"
+    shown = progress(waiting, job_line(waiting, None), None)
+    assert (shown["at"], shown["count"], shown["waits"]) == (0, "1 of 7", True)
+    assert list(shown) == ["steps", "at", "count", "waits"]  # right after the count
+    assert shown["steps"][0]["state"] == "running"  # the step's own state: the page draws it waiting
+    # The lock taken, the song stage goes on: no wait any more, nor once it moved on to the match.
+    for stages in (upto("song"), upto("match")):
+        going = lookup(stages=stages)
+        assert "waits" not in progress(going, job_line(going, None), None)
+    # A sheet from a YouTube video waits the same way (youtube_sheet.py's words).
+    youtube = youtube_job(stages={"song": ("running", "waiting for the book (pid 9: run)")})
+    assert progress(youtube, job_line(youtube, None), None)["waits"] is True
+    # Nothing for its first second, as for any request, and never once it is over.
+    assert progress(waiting, job_line(waiting, None), None, now=START + timedelta(milliseconds=500)) == {}
+
+
 def test_a_request_of_other_commands_shows_its_job_steps_the_same_way():
     job = Job(2, "Pick muse/hysteria for Muse - Hysteria, and fetch it", "muse/hysteria", [
         Step("Noting your answer in overrides.toml", ("review", "--song=Muse - Hysteria", "--pick=muse/hysteria"),

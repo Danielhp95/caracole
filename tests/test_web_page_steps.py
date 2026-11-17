@@ -96,6 +96,12 @@ NOT_ON_UG = [stage("song", "running"), stage("song", "done", "in the book"), sta
 LYRICS = NOT_ON_UG.index(stage("lyrics", "running")) + 1
 NOT_ON_UG_HELD = [*NOT_ON_UG[:LYRICS], HOLD, *NOT_ON_UG[LYRICS:]]
 
+# A song whose lookup waits for the book (a nightly run holds caracole's lock, get.py's words) until the test lets it
+# go on; then FROM_UG's, held as it asks Ultimate Guitar for the sheet.
+WAITS_FOR_THE_BOOK = [stage("song", "running"),
+                      stage("song", "running", "waiting for the book (pid 42: run); a fetch goes first at its next "
+                                               "pause"), HOLD, *FROM_UG[1:]]
+
 
 class Staged:
     """``caracole get --progress``, said a stage at a time from ``script``: an event is printed as the command prints
@@ -311,6 +317,28 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
             "dashed")
         # Over, the view's count names the step that failed; the line, its outcome, shows none.
         assert page.js(f"document.querySelector('{line} .progress .step-count, {line} .progress .steps-over')") is None
+
+
+def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
+    base, runner = live
+    runner.script = WAITS_FOR_THE_BOOK
+    line = line_of(creep(cfg))
+    with driven(tmp_path, 1280) as page:
+        page.open(base)
+        page.click(f"{line} form.fetch button")
+        # A nightly run holds the book: the bar says so in place of the step's name, its place kept, and the step in
+        # hand drawn waiting, unlit and steady, as nothing moves.
+        wait_for(page, bar_of(line), ["waiting"] * 7)
+        wait_for(page, words_of(line), ["Waiting for the book", " · 1 of 7"])
+        p = f"document.querySelector('{line} .progress')"
+        assert page.js(f"{p}.textContent") == "Waiting for the book · 1 of 7"  # what a screen reader hears
+        song = f"getComputedStyle(document.querySelector('{line} .seg'))"
+        assert page.js(f"{song}.animationName") == "none"
+        assert page.js(f"{song}.backgroundColor") != page.js(ACCENT)
+        runner.go()
+        # The book its own: the song found, the sheet asked of Ultimate Guitar, the step's name again.
+        wait_for(page, bar_of(line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
+        wait_for(page, words_of(line), ["Sheet · Ultimate Guitar", " · 3 of 7"])
 
 
 @pytest.mark.parametrize("width", [1280, 390])

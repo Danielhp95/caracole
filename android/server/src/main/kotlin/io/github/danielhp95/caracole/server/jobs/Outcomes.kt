@@ -221,9 +221,9 @@ object Outcomes {
     }
 
     /** What the library page draws under a song's request line (outcome.progress): a lookup's steps, every one it
-     * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"); nothing for a request
-     * that runs no lookup, one queued or cancelled, one Ready, and one that hasn't run [BAR_AFTER] at [now]
-     * ([hasRun]). */
+     * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"), and `waits`, true,
+     * while that step waits for the book ([waitsForTheBook]); nothing for a request that runs no lookup, one queued or
+     * cancelled, one Ready, and one that hasn't run [BAR_AFTER] at [now] ([hasRun]). */
     fun progress(job: Job, line: Line, facts: SongFacts?, now: Instant = Instant.now()): Map<String, JsonElement> =
         progress(Shape(job), line, facts, now)
 
@@ -238,9 +238,16 @@ object Outcomes {
         if (at != null) {
             shown["at"] = JsonPrimitive(at)
             shown["count"] = JsonPrimitive("${at + 1} of ${chips.size}")
+            if (job.state == Job.RUNNING && waitsForTheBook(job.stages)) shown["waits"] = JsonPrimitive(true)
         }
         return shown
     }
+
+    /** Whether the stage that runs waits for the book (outcome._waits_for_the_book): its detail begins as
+     * [Status.WAITING], as [Status.stageLine] reads it for "Waiting for the book…". The phone takes no lock, so none of
+     * its own lookups waits; the rule is Python's, held by the vectors. */
+    internal fun waitsForTheBook(stages: List<Stage>): Boolean =
+        stages.firstOrNull { it.state == Job.RUNNING }?.detail?.startsWith(Status.WAITING) == true
 
     /** Whether [job] has run [BAR_AFTER] (outcome._has_run): never, one that never started; one over, from its start
      * to its end (to [now] when it has no end); one that runs, to [now]. */

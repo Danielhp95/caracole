@@ -668,22 +668,24 @@
   // song's line or a result's row (showRequest), where a lookup that runs, with its steps (the view's ``steps``, none
   // for its first second, outcome.py's BAR_AFTER), is a bar of them in place of its words (p ``barred``): a segment a
   // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``),
-  // which is what a screen reader hears. Anywhere else (the tray, a set list) and once it is over, its words.
+  // which is what a screen reader hears; while a nightly run holds the book (``waits``), "Waiting for the book · 1 of
+  // 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
   const showLine = (p, view, onLine) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
     const more = typeof line.details === "string" ? line.details : "";
     const chips = chipsOf(view);
     const barred = Boolean(onLine && line.tone === "running" && view && isActive(view) && chips.length);
-    const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count]
-      : [line.tone, line.text, to ? to.href : "", more]).map(String).join("|");
+    const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count,
+      view.waits === true] : [line.tone, line.text, to ? to.href : "", more]).map(String).join("|");
     if (p.dataset.key === key) return;
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
     p.classList.toggle("barred", barred);
     if (barred) {
-      p.replaceChildren(segsOf(chips), ...stepWords(chips, view));
+      const shown = waitsIn(chips, view);
+      p.replaceChildren(segsOf(shown), ...stepWords(shown, view));
       if (focused) focusOn(p);
       return;
     }
@@ -717,16 +719,22 @@
     return segs;
   };
   // The words beside the bar: the step in hand (the view's ``at``), its site, and its place among them all
-  // (``count``, "3 of 7"); none when the view names no step in hand.
+  // (``count``, "3 of 7"); none when the view names no step in hand. While it waits for the book (``waits``), the
+  // wait in place of the step's name.
+  const WAITS = "Waiting for the book";
   const stepWords = (chips, view) => {
     const at = view ? view.at : null;
     if (!Number.isInteger(at) || at < 0 || at >= chips.length || typeof view.count !== "string") return [];
     const c = chips[at];
     const words = el("span", "step-at");
-    words.appendChild(el("b", null, String(c.name)));
+    words.appendChild(el("b", null, view.waits === true ? WAITS : String(c.name)));
     if (c.site) words.append(" · " + String(c.site));
     return [words, el("span", "step-count", " · " + view.count)];
   };
+  // The steps as the bar draws them: while a nightly run holds the book (the view's ``waits``, outcome.py's), the step
+  // in hand waiting, unlit and steady, as nothing moves.
+  const waitsIn = (chips, view) => (view && view.waits === true && Number.isInteger(view.at) && chips[view.at]
+    ? chips.map((c, i) => (i === view.at ? Object.assign({}, c, { state: "waiting" }) : c)) : chips);
   // A lookup's steps as chips under its request line ``p`` once it is no longer a bar (steps.css's, the Requests tab's
   // markup): those done ticked, the one that runs lit and the current step, those to come grey, a failed one crossed;
   // a plain one ("Match: not on UG") its name alone, and a skipped one, with nothing to do for the song, in its place.

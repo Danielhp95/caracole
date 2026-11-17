@@ -331,6 +331,35 @@ class JobViewsTest {
         gate.complete(Unit)
     }
 
+    @Test fun aLookupWaitingForTheBookSaysSoOfItsStepInHand() = runTest {
+        val held = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val commands = Commands(mapOf("get" to CommandRunner { _, context ->
+            context.stage("song", "running", "waiting for the book (pid 42: run); a fetch goes first at its next pause")
+            held.await()
+            context.stage("song", "done")
+            context.stage("match", "running")
+            gate.await()
+        }))
+        val queue = JobQueue(backgroundScope, commands = commands)
+        val job = queue.submit(JobSpec("Fetch Soda Stereo - De música ligera", "soda stereo/de musica ligera", "song",
+                                       emptyList(), display = "Soda Stereo - De música ligera", fetching = true,
+                                       commands = JobCommands.lookupSteps("Soda Stereo", "De música ligera"))).first
+        runCurrent()
+        val now = queue.job(job.id)!!.startedAt!!.plusSeconds(5)
+        val view = JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts(), now = now)
+        assertEquals("Waiting for the book…", view["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals(listOf("at", "count", "waits"), view.keys.filter { it in setOf("at", "count", "waits") })
+        assertEquals(JsonPrimitive("1 of 7"), view["count"])
+        assertEquals(JsonPrimitive(true), view["waits"])
+        held.complete(Unit)
+        runCurrent()
+        val going = JobViews.view(queue.job(job.id)!!, queue, facts = SongFacts(), now = now)
+        assertEquals(JsonPrimitive("2 of 7"), going["count"])
+        assertEquals(null, going["waits"])
+        gate.complete(Unit)
+    }
+
     /** A lookup with its song stage running. */
     private fun fakeRunningSong(job: Job): Job = job.copy().also {
         it.stages.forEach { stage -> stage.state = Job.WAITING }

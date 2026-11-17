@@ -139,7 +139,7 @@ object Status {
     /** How each says it is done (status.py's _PEER_DONE). */
     internal val PEER_DONE = mapOf("sync" to "Shared", "peer-push" to "Taken", "peer-pull" to "Taken",
                                    INDEX_MERGE_KIND to "Merged")
-    private const val WAITING = "waiting for the book"  // get.py's song stage while the lock is held
+    internal const val WAITING = "waiting for the book"  // get.py's song stage while the lock is held
 
     /** get.py's SHEET_FROM's words, a running sheet stage's line by its site. */
     internal val SHEET_LINES = listOf("from LaCuerda", "from UG").associateWith { "Fetching $it" }

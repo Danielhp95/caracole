@@ -1254,7 +1254,8 @@ It is rows.js's, shared by both pages:
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",
-  what a screen reader hears; ended otherwise than Ready, its words and the steps as chips under them,
+  what a screen reader hears; while a nightly run holds the book, the view's `waits`, "Waiting for the book · 1 of
+  7", that step drawn waiting, `waitsIn`; ended otherwise than Ready, its words and the steps as chips under them,
   `drawSteps`), never the rest: a finished one's outcome, a reason from its stages and its
   song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step.
@@ -1262,7 +1263,9 @@ It is rows.js's, shared by both pages:
     (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the bar shows them only while the
-    request runs.
+    request runs. `waits`, true, right after them, while that step's running stage waits for the book
+    (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes for
+    "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
     of its tag: "Ultimate Guitar", "LaCuerda", "YouTube"; a tag it lacks as it is) and what it found (`found`,
     `outcome._found`: its stages done in their words, one failed in the outcome's words where they parse, else in

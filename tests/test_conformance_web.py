@@ -885,6 +885,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     youtube = queued_job(f"YouTube sheet {V_DISPLAY}", _jobs.YOUTUBE_SHEET + V_KEY,
                          _jobs.youtube_sheet_steps(V_DISPLAY, "https://www.youtube.com/watch?v=XFkzRNyygfk"),
                          display=V_DISPLAY)
+    add("a sheet from YouTube, waiting for the book", in_state(youtube, "running", {"song": (
+        "running", "waiting for the book (pid 9: run)")}), facts=ready)
     add("a sheet from YouTube, its audio", in_state(youtube, "running", {"song": ("done", ""),
                                                                         "audio": ("running", "")}), facts=ready)
     add("a sheet from YouTube, ready", in_state(youtube, "done", {
