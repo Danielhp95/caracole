@@ -562,6 +562,22 @@ const caracoleCard = (icons, rows) => {
   const instOf = (s, t) => (t.kind === "sheet"
     ? (listOf(s.instruments).indexOf("ukulele") >= 0 ? "sheet ukulele" : "sheet")
     : t.kind === "harmonica" || t.kind === "score" ? t.kind : "guitar");
+  // With a mouse each button is a chip that says what it is and where it came from ("Chords · UG"): the kind, then
+  // the site of its first source (the one in use); the words are for the eye (aria-hidden), the name is the label.
+  const PLAY_KIND = { sheet: "Chords", ukulele: "Ukulele", auto: "Auto sheet", guitar: "Guitar Pro", tab: "Tab",
+    harmonica: "Harmonica", gametab: "Game tab", score: "Score" };
+  const PLAY_SITE = { auto: "", inbox: "inbox" };
+  const playWords = (t) => {
+    const words = el("span", "play-words");
+    words.setAttribute("aria-hidden", "true");
+    const key = t.kind === "sheet" ? (t.auto ? "auto" : t.glyph === "ukulele" ? "ukulele" : "sheet") : t.kind;
+    words.appendChild(el("span", "play-kind", PLAY_KIND[key]));
+    const first = t.sources[0];
+    const site = typeof first !== "string" ? "" : own.call(PLAY_SITE, first) ? PLAY_SITE[first]
+      : own.call(ICONS, first) && ICONS[first] && ICONS[first].name ? String(ICONS[first].name) : "";
+    if (site) words.appendChild(el("span", "play-site", " · " + site));
+    return words;
+  };
   const plays = (s, opts) => {
     const shown = things(s, opts).filter((t) => PLAYS.indexOf(t.kind) >= 0);
     if (!shown.length) return null;
@@ -576,6 +592,7 @@ const caracoleCard = (icons, rows) => {
       a.dataset.kind = t.kind;
       a.dataset.inst = instOf(s, t);
       a.appendChild(glyph(t.glyph));
+      a.appendChild(playWords(t));
       if (t.count > 1) {
         const n = el("span", "n", t.count);
         n.setAttribute("aria-hidden", "true");

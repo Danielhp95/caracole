@@ -412,6 +412,11 @@ def _driven_chromium(args: tuple[str, ...]) -> _Driven:
     return made
 
 
+# Chromium's switches for a mouse, (pointer: fine) and (hover: hover), which headless Chromium reports as none:
+# Browser(profile, args=FINE_POINTER).
+FINE_POINTER = ("--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2",)
+
+
 class Browser:
     """A page of its own, ``width`` × ``height`` CSS pixels (``mobile``: a phone's), in a headless Chromium on real time,
     to type, press keys, click and touch; ``args``, more of Chromium's switches (``--blink-settings=minimumFontSize=40``:

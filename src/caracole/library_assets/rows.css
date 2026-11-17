@@ -112,29 +112,8 @@ button.artist-only:hover { background: color-mix(in srgb, currentColor 14%, tran
 a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 /* A song of yours: its title opens its card, as its chevron does. */
 .line-title.opens-card { cursor: pointer; }
-/* What a song of yours holds to play from, a button each right after its title (card.js plays): its instrument's glyph
-   in the accent (an auto sheet's in its own colour) on a sunk square, the marks of the sites its versions came from
-   at its foot, how many versions at its corner, each overhanging the square a little, inside the row's padding. The
-   buttons take what the title needs of the row but 5rem, and wrap to a second row of their own where more won't fit:
-   a long title is cut short first. */
-.line-plays { --over: 2px; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 7px;
-  max-width: calc(100% - 5rem); padding: var(--over) var(--over) var(--over) 0; }
-.play { --mark-size: 12px; position: relative; flex: none; display: inline-grid; place-items: center; width: 30px;
-  height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--sunk);
-  color: var(--accent); text-decoration: none; }
-.play:hover { border-color: var(--control-edge); background: var(--raised); }
-.play svg.glyph { width: 17px; height: 17px; }
-.play.auto { color: var(--auto); }
-.play .n { position: absolute; top: calc(-1 * var(--over)); right: calc(-1 * var(--over)); min-width: var(--mark-size);
-  height: var(--mark-size); padding: 0 3px; border-radius: calc(var(--mark-size) / 2); background: var(--raised);
-  box-shadow: 0 0 0 1px var(--border-strong); color: var(--text); font-size: 9px; font-weight: 700;
-  line-height: var(--mark-size); text-align: center; font-variant-numeric: tabular-nums; }
-.play .marks { position: absolute; right: calc(-1 * var(--over)); bottom: calc(-1 * var(--over)); display: flex;
-  gap: 2px; }
-.play .marks > .source { width: var(--mark-size); height: var(--mark-size); border: 0; border-radius: 3px;
-  background: var(--raised); box-shadow: 0 0 0 2px var(--surface); font-size: 6px; line-height: var(--mark-size);
-  vertical-align: 0; }
-.play .marks > img.source { padding: 1px; }
+/* Where a song's buttons sit on its line: the buttons' own rules are card.css's. */
+.line-title > .line-plays { flex: none; max-width: calc(100% - 4rem); }
 .line-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0;
   color: var(--muted); font-size: .8rem; line-height: 1.3; }
 .line-meta:empty { display: none; }
@@ -198,7 +177,6 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
-.line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }
 /* From 720px one row: the title and its buttons, the artist (where no group names it), the status, the action (as wide
    as it is), the key and the chevron. A site's song has no key: its status and counts take most of that room, its
    marks the rest (--sources-w, as wide as the five sites a search names), then its action, which ends where a song of
@@ -229,12 +207,6 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .line-action .btn, .line-busy { min-height: 44px; }
   .line-action .btn.line-fetch { width: 44px; min-height: 44px; }
   .line-more { height: 44px; }
-  /* A play button a thumb's 44 px square, its marks and its count bigger, overhanging it 4 px. */
-  .line-plays { --over: 4px; gap: 6px; }
-  .play { --mark-size: 15px; width: 44px; height: 44px; border-radius: 9px; }
-  .play svg.glyph { width: 23px; height: 23px; }
-  .play .n { font-size: 10px; }
-  .play .marks > .source { border-radius: 4px; font-size: 7px; }
   button.artist, button.artist-only { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }

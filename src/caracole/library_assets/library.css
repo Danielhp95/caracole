@@ -247,8 +247,6 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 @media (pointer: coarse) { .link-form .btn { min-height: 44px; } }
 .link-line:empty, .link-hits:empty { display: none; }
 .link-hits { display: grid; gap: 6px; }
-.foot { display: flex; }
-.foot form { margin: 0; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
