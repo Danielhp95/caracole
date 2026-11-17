@@ -2500,7 +2500,9 @@ in the browser when `caracole serve` shows it there (else a download), the
 harmonica tab's page, the text, the score. Each shows its instrument, the
 marks of the sites its versions came from at its foot (two at most, the one in
 use first), and how many versions the card lists of it at its corner when more
-than one; its name says all of it, to a screen reader and as a tooltip ("Open
+than one. On a touch screen each is a filled tile 48 px square, 8 px from the
+next, its sites' letters (or icons) in its bottom corner and the count in its
+top one, both inside it; its name says all of it, to a screen reader and as a tooltip ("Open
 the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
 file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
 title leaves too little room for them, they wrap to a second row beside it, and

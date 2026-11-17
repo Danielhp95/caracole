@@ -206,6 +206,21 @@ def test_fetch_now_is_the_download_glyph_on_the_same_row(conn, cfg, tmp_path):
                      "glyph": "glyph glyph-download", "action": "/fetch", "have": 0}
 
 
+def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, cfg, tmp_path):
+    hotel_california(conn, cfg)
+    script = PLAYS + """
+    const look = (n) => { const s = getComputedStyle(n); return [s.borderTopStyle, s.backgroundColor !== "rgba(0, 0, 0, 0)"]; };
+    note("tiles", { tiles: Array.from(lineOf("Hotel California").querySelectorAll(".line-plays > .play")).map(look),
+      letters: Array.from(lineOf("Hotel California").querySelectorAll(".play .marks > .source")).map((m) =>
+        [m.dataset.source, getComputedStyle(m).fontSize, Math.round(m.getBoundingClientRect().height)]) });"""
+    drawn = attribute_of(run(conn, cfg, tmp_path, script, size="390,844", touch=True), "data-tiles")
+    assert drawn["tiles"] == [["none", True]] * 5  # no outline; the fill keeps its shape
+    # The sheet's UG, the Guitar Pro files' gtptabs and inbox, the harmonica tab's harptabs, the score's inbox (the
+    # text tab has no site): letters, or the inbox's glyph, at 8 px on a mark 16 px tall.
+    assert drawn["letters"] == [["ug", "8px", 16], ["gtptabs", "8px", 16], ["inbox", "8px", 16],
+                                ["harptabs", "8px", 16], ["inbox", "8px", 16]], drawn
+
+
 # --- one row, on a phone and on a desktop ------------------------------------------------------------------------
 
 # Each line's parts, where they are: its title's, its buttons' (with their marks and counts), its action's, its key's
@@ -225,7 +240,7 @@ note("laid", { laid, page: [document.documentElement.scrollWidth, window.innerWi
 """
 
 
-@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("1280,900", False), ("820,1180", True)])
+@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("1280,900", False), ("820,1180", True), ("320,640", True)])
 def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phone(conn, cfg, tmp_path, size, touch):
     hotel_california(conn, cfg)
     harmonica_song(conn, cfg)
@@ -259,9 +274,14 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
                 assert line["line"][2] - 0.5 <= part[2] and part[3] <= line["line"][3] + 0.5, (title, part)
                 assert not any(a[0] < part[1] - 0.5 and part[0] < a[1] - 0.5 and a[2] < part[3] - 0.5
                                and part[2] < a[3] - 0.5 for a in others), (title, part, others)
-            # A thumb's target, 44 px square; a mouse's, smaller.
             w, h = p["box"][1] - p["box"][0], p["box"][3] - p["box"][2]
-            assert (round(w), round(h)) == ((44, 44) if touch else (30, 24)), p
+            if touch:  # a thumb's target, 48 px square, its marks and count inside it
+                assert (round(w), round(h)) == (48, 48), p
+                assert all(p["box"][0] - .5 <= q[0] and q[1] <= p["box"][1] + .5 and p["box"][2] - .5 <= q[2]
+                           and q[3] <= p["box"][3] + .5 for q in p["parts"]), p
+        if touch:  # 8 px between two on a row
+            boxes = [p["box"] for p in line["plays"]]
+            assert all(b[0] - a[1] >= 7.5 for a, b in zip(boxes, boxes[1:], strict=False) if same_row(a, b)), (title, boxes)
     # Needs review: on a phone a row of its own under the title, Fetch now's glyph on the title's row.
     desperado = laid["Desperado"]
     assert same_row(desperado["more"], desperado["action"]) and same_row(desperado["more"], desperado["h3"])

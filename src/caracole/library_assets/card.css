@@ -175,9 +175,9 @@
 /* A song's line's buttons (card.js plays) */
 /* What a song of yours holds to play from, a button each right after its title (card.js plays): its instrument's glyph
    in the accent (an auto sheet's in its own colour) on a sunk square, the marks of the sites its versions came from
-   at its foot, how many versions at its corner, each overhanging the square a little, inside the row's padding. The
-   buttons take what the title needs of the row but 5rem, and wrap to a second row of their own where more won't fit:
-   a long title is cut short first. */
+   at its foot, how many versions at its corner. On a touch screen each is a filled 48 px tile, the marks and the count
+   inside it. The buttons take what the title needs of the row but 4rem, and wrap to a second row of their own where
+   more won't fit: a long title is cut short first. */
 .line-plays { --over: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 7px;
   padding: var(--over) var(--over) var(--over) 0; }
 .play { --mark-size: 12px; position: relative; flex: none; display: inline-grid; place-items: center; width: 30px;
@@ -205,10 +205,17 @@
 [data-lit~="score"] .line-plays .play[data-inst~="score"] { border-color: var(--accent); background: var(--accent);
   color: var(--on-accent); }
 @media (pointer: coarse) {
-  /* A play button a thumb's 44 px square, its marks and its count bigger, overhanging it 4 px. */
-  .line-plays { --over: 4px; gap: 6px; }
-  .play { --mark-size: 15px; width: 44px; height: 44px; border-radius: 9px; }
-  .play svg.glyph { width: 23px; height: 23px; }
-  .play .n { font-size: 10px; }
-  .play .marks > .source { border-radius: 4px; font-size: 7px; }
+  /* A play button a thumb's 48 px tile, filled, 8 px from the next; its count and its sites' marks (letters at 8 px)
+     inside its corners. */
+  .line-plays { gap: 8px; padding: 0; }
+  .play { --mark-size: 16px; width: 48px; height: 48px; border: 0; border-radius: var(--radius-l, 12px);
+    background: var(--raised); }
+  .play:hover { background: color-mix(in srgb, var(--text) 8%, var(--raised)); }
+  .play svg.glyph { width: 24px; height: 24px; }
+  .play .n { top: 3px; right: 3px; font-size: 10px; }
+  .play .marks { right: 3px; bottom: 3px; }
+  .play .marks > .source { width: auto; min-width: 16px; height: 16px; padding: 0 2px; font-size: 8px;
+    line-height: 16px; border-radius: 4px; }
+  .play .marks > img.source { width: 16px; padding: 1px; }
+}
 }

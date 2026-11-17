@@ -113,7 +113,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 /* A song of yours: its title opens its card, as its chevron does. */
 .line-title.opens-card { cursor: pointer; }
 /* Where a song's buttons sit on its line: the buttons' own rules are card.css's. */
-.line-title > .line-plays { flex: none; max-width: calc(100% - 5rem); }
+.line-title > .line-plays { flex: none; max-width: calc(100% - 4rem); }
 .line-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0;
   color: var(--muted); font-size: .8rem; line-height: 1.3; }
 .line-meta:empty { display: none; }
