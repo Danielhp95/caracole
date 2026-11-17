@@ -121,7 +121,7 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
             record_error(conn, PROVIDER, now, str(done.stopped))
         elif answered_any(conn, run_id, PROVIDER, client.requests_made):
             record_ok(conn, PROVIDER, now)
-        line = said(done)
+        line = said(conn, done)
         if not line.startswith(NOT_READ):
             forget_failure(conn, link.url, now)
     end(line, "skipped" if line.startswith(NOT_READ) else "done")

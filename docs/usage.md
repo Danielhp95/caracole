@@ -1534,8 +1534,10 @@ and cache.
   (宋冬野's, every one). It asks at the lookup pace, within a lookup's budgets,
   usually three requests. A page caracole knows already, one UG answered 404
   for, and a tab of a type caracole keeps nothing of (a Guitar Pro file, a bass
-  tab…) are said with no request. Its last line: `Read: 斑马 斑马 Banma Banma
-  Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.`,
+  tab…) are said with no request; a tab whose page caracole has, but not its
+  artist's page read within 30 days, has that page read (no request for the
+  tab). Its last line, the song named as a search names it: `Read: 斑马斑马 by
+  宋冬野, chords; their page lists 8 tabs.`,
   `Not found: UG answers 404 for URL.`, or `Not read: …` for a cooldown, a
   block, a spent budget or an error, all of which exit 0, nothing changed; a
   budget spent after the tab's page leaves the artist's page for the next

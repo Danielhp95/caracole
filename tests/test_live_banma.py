@@ -298,8 +298,7 @@ def test_the_owners_link_pasted_is_read_found_by_a_search_and_fetched_with_its_v
     link = "/api/ug/link?" + urlencode({"url": FOUND})
     assert get(link)["state"] == "auto" and ug.requests == []
     read = run(post("/ug/link", {"url": FOUND})["job"])
-    assert read.stdout.splitlines()[-1] == (
-        "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.")
+    assert read.stdout.splitlines()[-1] == "Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."
     assert ug.requests == [FOUND, CHORDS, TABS]
     assert all(robots_disallows(u) is None and "search.php" not in u for u in ug.requests)
 
