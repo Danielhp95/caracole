@@ -7,8 +7,9 @@ ug/link.py and commands/ug.py answer (docs/superpowers/plans/2026-11-17-ug-link.
 
 - ``{"fn": "caracole.ug_urls.read_link", "args": [text], "out": {kind, url, tab_id, type} | null}``: every shape of
   tests/helpers/ug_links.py, the one list library.js's ``ugLink`` is held to too.
-- ``{"fn": "fixture", "scene", "records", "cache"}``: a scene, a library in a fresh database dumped whole
-  (``helpers.corpus.dump_fixture``; overrides.toml as the phone's ``phone_overrides`` rows) and Ultimate Guitar's
+- ``{"fn": "fixture", "scene", "records", "cache"}``: a scene, a library in a fresh database dumped whole with its
+  library folder's files (``helpers.corpus.dump_fixture``; overrides.toml as the phone's ``phone_overrides`` rows,
+  never as a file) and Ultimate Guitar's
   answers in caracole's HTTP cache (``cache``: ``{"GET <url>": {status, fetched_at, headers, body}}``, as
   helpers/scenario.py's records carry one), which the replay loads; every record after it names the scene it asks
   over. ``empty``: nothing read. ``read``: ``caracole ug --link`` run over 宋冬野's tab 4180894 (its page and its
@@ -192,7 +193,9 @@ class World:
     def fixture(self, scene: str) -> dict[str, Any]:
         self.conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", (ADDED, ADDED))
         self.conn.execute("UPDATE files SET created_at = ?", (ADDED,))
-        records = [r for r in dump_fixture(self.conn, None)]
+        # The library's files too (a song's sheet.txt, which its card's links and the song's sheet link read), but
+        # overrides.toml, which the phone holds as its phone_overrides rows.
+        records = [r for r in dump_fixture(self.conn, self.cfg.library_dir) if r.get("file") != "overrides.toml"]
         return {"fn": "fixture", "scene": scene, "records": records, "cache": self.cache()}
 
     def app(self):
@@ -426,3 +429,8 @@ def test_the_routes_cover_every_state_both_kinds_and_the_refusals(web):
     [found] = [r["out"]["body"] for r in web if r["fn"] == "GET /api/ug/link" and r["scene"] == "read"
                and r["url"] == FOUND]
     assert found["guess"] == {"artist": "宋冬野", "title": "斑马斑马"} and found["hits"][0]["title"] == "斑马斑马"
+    # The read scene carries its library's files: the song's sheet link and its hits' links read them.
+    [scene] = [r for r in web if r["fn"] == "fixture" and r["scene"] == "read"]
+    assert [rec["file"] for rec in scene["records"] if "file" in rec] == ["宋冬野/董小姐/sheet.txt"]
+    [sheet] = [r["out"]["body"]["song"] for r in web if r["fn"] == "GET /api/ug/link" and r["url"] == f"{TAB}3016223"]
+    assert sheet["has_sheet"] is True and sheet["sheet"] and sheet["this_tab"] is True

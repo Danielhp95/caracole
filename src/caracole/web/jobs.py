@@ -332,9 +332,10 @@ def _fetches(steps: Sequence[Step]) -> bool:
 
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
-    --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress``, or ``caracole
-    peer take --progress``, ``peer sync --progress`` or ``index merge --progress``."""
-    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), (PEER,))
+    --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress`` (``--search``,
+    ``--video``), ``caracole ug --link --progress``, or ``caracole peer take --progress``, ``peer sync --progress`` or
+    ``index merge --progress``."""
+    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), ("ug",), (PEER,))
                                      and "--progress" in _options(args)) or (
         args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args))
 
