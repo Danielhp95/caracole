@@ -23,7 +23,8 @@ no sitemap names an artist. UG's letter listings do.
   reviews, wiki, courses, lessons, books and forum threads.
 - **robots.txt**, `User-agent: *`, allows `/bands/` and `/artist/`. It closes `/search.php` to everyone, and `/explore`
   to Bingbot and msnbot alone.
-- **The listings** are `/bands/<letter>.htm`, then `/bands/<letter><N>.htm` for page N (`s2.htm` … `s293.htm`). There
+- **The listings** are `/bands/<letter>.htm`, then `/bands/<letter><N>.htm` for page N (`s2.htm` … `s293.htm`;
+  `0-9`'s page 2 is `0-92.htm`, checked on 2026-11-17: Аквариум, "Weird Al" Yankovic, page 2 of 104). There
   are 27: a–z, and `0-9`. `0-9` holds names that begin with a digit or a symbol, and every name whose first letter
   isn't A–Z: Кино, Édith Piaf, Đorđe Balašević. "The Beatles" is under T.
 - **A page's `div.js-store`** holds `store.page.data`:
