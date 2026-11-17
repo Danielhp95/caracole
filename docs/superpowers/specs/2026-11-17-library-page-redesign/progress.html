@@ -1,0 +1,127 @@
+<style>
+  .cx { --bg:#151312; --surface:#1d1a18; --raised:#26221f; --band:#211d1b; --line:#2b2724; --text:#ece6e2; --muted:#a89f9a; --accent:#f0895c;
+        --done:#8fcf9f; --run:#6aa6ff; --wait:#3d3632;
+        font: 15px/1.35 system-ui, "Adwaita Sans", Roboto, sans-serif; }
+  .cx-grid { display:grid; grid-template-columns: repeat(auto-fill, 372px); gap: 18px; align-items:start; }
+  .cx-phone { width:340px; color:var(--text); background:var(--bg); border-radius:18px; border:6px solid #000; overflow:hidden; }
+  .cx-head { height:34px; display:flex; align-items:center; padding:0 14px; color:var(--accent); font-weight:700; font-size:14.5px; background:var(--band); }
+  .cx-count { margin-left:auto; color:var(--muted); font-size:12.5px; font-weight:600; }
+  .cx-line { border-bottom:1px solid var(--line); padding:0 10px 0 14px; }
+  .cx-row { display:flex; align-items:center; gap:7px; height:53px; }
+  .cx-name { flex:1; min-width:0; }
+  .cx-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cx-key { font-size:12.5px; font-weight:700; color:var(--muted); min-width:28px; text-align:center; flex:none; }
+  .cx-chev { color:var(--muted); flex:none; font-size:13px; }
+  .t-tile { position:relative; width:36px; height:36px; border-radius:9px; background:var(--surface); border:1px solid var(--line); display:grid; place-items:center; flex:none; }
+  .t-badge { position:absolute; right:-4px; bottom:-5px; font-size:8px; font-weight:800; color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:3px; padding:0 2px; line-height:10px; }
+  .cx svg.i { width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:1.8; }
+  .under { padding:0 0 10px; margin-top:-6px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .under b { color:var(--text); font-weight:600; }
+  .stat { color:#f3c66b; font-weight:600; font-size:13px; display:flex; align-items:center; gap:6px; margin:-6px 0 6px; }
+  .stat::before { content:""; width:7px; height:7px; border-radius:50%; background:#c9a24a; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; padding-bottom:10px; }
+  .chips.one { flex-wrap:nowrap; overflow:hidden; }
+  .chip { font-size:12px; font-weight:600; padding:3px 8px; border-radius:7px; background:var(--raised); color:var(--muted); white-space:nowrap; }
+  .chip.done { background:#1f3a29; color:var(--done); } .chip.run { background:#13263f; color:#cfe2ff; outline:1.5px solid var(--run); }
+  .seg { display:flex; gap:3px; width:112px; flex:none; }
+  .seg i { flex:1; height:7px; border-radius:2px; background:var(--wait); }
+  .seg i.d { background:var(--done); } .seg i.r { background:var(--run); animation: pulse 1.2s ease-in-out infinite; } .seg i.s { background:transparent; outline:1px solid #5a514b; outline-offset:-1px; }
+  @keyframes pulse { 50% { opacity:.45; } }
+  .dots { letter-spacing:2px; font-size:12px; flex:none; } .dots .d { color:var(--done); } .dots .r { color:var(--run); animation: pulse 1.2s ease-in-out infinite; } .dots .w { color:#5a514b; }
+  .bar { width:120px; height:5px; border-radius:3px; background:var(--wait); overflow:hidden; flex:none; } .bar span { display:block; height:100%; width:38%; background:var(--run); }
+  .queued { color:var(--muted); } .cancel { margin-left:auto; color:var(--accent); font-weight:600; }
+  .cx-caption h3 { margin:10px 2px 2px; } .cx-caption p { margin:0 2px; font-size:13px; }
+  .card { margin-top:22px; max-width:760px; }
+  .check { width:340px; color:var(--text); background:var(--bg); border-radius:12px; border:1px solid #000; padding:12px 14px; font-size:13.5px; }
+  .check div { display:flex; gap:10px; padding:4px 0; align-items:baseline; } .check .g { width:16px; text-align:center; flex:none; }
+  .check .ok .g { color:var(--done); } .check .now .g { color:var(--run); } .check .now { font-weight:600; } .check .todo { color:var(--muted); }
+  .check small { margin-left:auto; color:var(--muted); }
+</style>
+
+<h2>D6 · How should a request's progress show on a song's line?</h2>
+<p class="subtitle">On the phone: Karma Police is being looked up (step 3 of 7: the sheet from Ultimate Guitar), No Surprises waits its turn. In every option the total stays 7 from start to end (a skipped step counts as done), and nothing shows in the first second.</p>
+
+<div class="cx">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="p-sheet" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M11 17.5a1.6 1.6 0 1 1-1.6-1.6c.9 0 1.6.7 1.6 1.6V11l4 -1"/></symbol>
+</svg>
+
+<div class="cx-grid">
+
+  <div>
+    <div class="cx-phone">
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#p-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-chev">⌄</span></div>
+        <div class="stat">Fetching the sheet…</div>
+        <div class="chips"><span class="chip done">✓ Song</span><span class="chip done">✓ Match</span><span class="chip run">Sheet UG</span><span class="chip">PDF</span><span class="chip">Lyrics</span><span class="chip">Extras</span><span class="chip">Songbooks</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-chev">⌄</span></div>
+        <div class="stat">Waiting…</div></div>
+    </div>
+    <div class="cx-caption"><h3>Today</h3><p>A status line, then seven chips that wrap onto two rows on a phone.</p></div>
+  </div>
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#p-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="seg"><i class="d"></i><i class="d"></i><i class="r"></i><i></i><i></i><i></i><i></i></span><span><b>Sheet</b> · Ultimate Guitar · 3 of 7</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="queued">Waiting · 2nd in line</span><span class="cancel">Cancel</span></div></div>
+    </div>
+    <div class="cx-caption"><h3>A · Segmented bar</h3><p>Seven short segments (done green, running lit, waiting grey, a skipped one hollow), then the step in words and "3 of 7". Like Android 16's progress notifications.</p></div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#p-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="dots"><span class="d">●●</span><span class="r">●</span><span class="w">○○○○</span></span><span><b>Sheet</b> · UG</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="queued">Waiting · 2nd in line</span><span class="cancel">Cancel</span></div></div>
+    </div>
+    <div class="cx-caption"><h3>B · Dots and the step</h3><p>The smallest: a dot a step and the current one named. Seven dots are harder to count at a glance.</p></div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#p-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-chev">⌄</span></div>
+        <div class="chips one"><span class="chip done">✓ Song</span><span class="chip done">✓ Match</span><span class="chip run">Sheet UG</span><span class="chip">+ 4 more</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="queued">Waiting · 2nd in line</span><span class="cancel">Cancel</span></div></div>
+    </div>
+    <div class="cx-caption"><h3>C · Today's chips, one row</h3><p>Closest to today: the done and running chips, the rest counted as "+ 4 more". Never wraps; no status line above it.</p></div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#p-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="bar"><span></span></span><span>Fetching the sheet… 3 of 7</span></div></div>
+      <div class="cx-line"><div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-chev">⌄</span></div>
+        <div class="under"><span class="queued">Waiting · 2nd in line</span><span class="cancel">Cancel</span></div></div>
+    </div>
+    <div class="cx-caption"><h3>D · One thin bar</h3><p>The plainest: a bar and the step in words. It doesn't show which step stopped if one fails.</p></div>
+  </div>
+
+</div>
+
+<div class="card">
+  <h3>In the open card and the Journal, whatever you pick above</h3>
+  <p style="font-size:13px;margin:0 0 8px">A list, one line a step with what it found and when it ended. Skipped steps fold into one quiet line when the request ends.</p>
+  <div class="check">
+    <div class="ok"><span class="g">✓</span>Found the song<small>0:01</small></div>
+    <div class="ok"><span class="g">✓</span>Matched on Ultimate Guitar<small>0:02</small></div>
+    <div class="now"><span class="g">◐</span>Sheet from Ultimate Guitar…</div>
+    <div class="todo"><span class="g">○</span>PDF</div>
+    <div class="todo"><span class="g">○</span>Lyrics</div>
+    <div class="todo"><span class="g">○</span>Extras</div>
+    <div class="todo"><span class="g">○</span>Songbooks</div>
+  </div>
+</div>
+</div>
