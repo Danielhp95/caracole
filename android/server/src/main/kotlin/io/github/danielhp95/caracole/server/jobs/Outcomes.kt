@@ -12,12 +12,15 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.time.Duration
 import java.time.Instant
 
-/** outcome.py's Chip: a step of a request, its state (waiting, running, done, failed; skipped, every stage of it ended
- * skipped, over, in its place; or plain, over and neither, "Match · not on UG") and the site it names ([source], "" for
- * none). */
-data class Chip(val name: String, val state: String, val source: String = "") {
+/** outcome.py's Chip: a step of a request, its [state] (waiting, running, done, failed; skipped, every stage of it
+ * ended skipped, over, in its place; or plain, over and neither, "Match · not on UG"), the site it names in full
+ * ([site], Outcomes.SITE_NAMES': "Ultimate Guitar"; "" for none) and what it found ([found], Outcomes.found: "" for
+ * nothing, a plain step, a skipped one and one that waits). A step of a sync, a take or a request of other commands
+ * has neither. */
+data class Chip(val name: String, val state: String, val site: String = "", val found: String = "") {
     fun asJson(): JsonObject = JsonObject(linkedMapOf(
-        "name" to JsonPrimitive(name), "source" to JsonPrimitive(source), "state" to JsonPrimitive(state),
+        "name" to JsonPrimitive(name), "site" to JsonPrimitive(site), "state" to JsonPrimitive(state),
+        "found" to JsonPrimitive(found),
     ))
 }
 
@@ -63,6 +66,14 @@ object Outcomes {
         "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
     )
     private const val YOUTUBE_SOURCE = "YouTube"
+
+    /** A step's site in full, by its tag (outcome.SITE_NAMES: get.py's NAMES by icons.tag, YouTube's, and where an
+     * auto sheet or a file you filed came from); a tag it lacks is named as it is. */
+    val SITE_NAMES: Map<String, String> = linkedMapOf(
+        "UG" to "Ultimate Guitar", "LRCLIB" to "LRCLIB", "Megalobiz" to "Megalobiz", "AZLyrics" to "AZLyrics",
+        "LaCuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "MuseScore" to "MuseScore", "harptabs" to "harptabs.com",
+        "gametabs" to "gametabs.net", YOUTUBE_SOURCE to "YouTube", "auto" to "auto-chords", "inbox" to "your inbox",
+    )
 
     /** A request of other commands: each command's step, by what it does. */
     val COMMAND_STEPS: Map<String, String> = mapOf(
@@ -144,11 +155,14 @@ object Outcomes {
         val chips = ArrayList<Chip>()
         for ((name, names) in LOOKUP_STEPS) {
             if (name == "Songbooks" && leaves) continue
-            val state = stateOf(names.mapNotNull { byName[it] }.map(::sheetWaited)) ?: continue
+            val read = names.mapNotNull { byName[it] }.map { it to sheetWaited(it) }
+            val state = stateOf(read.map { it.second }) ?: continue
             chips += when (name) {
-                "Match" -> match(byName.getValue("match"), state)
-                "Sheet" -> Chip(name, state, sheetSource(byName.getValue("sheet"), state, facts))
-                else -> Chip(name, state)
+                "Match" -> match(byName.getValue("match"), state, found(read))
+                "Sheet" -> sheetSource(byName.getValue("sheet"), state, facts).let { where ->
+                    Chip(name, state, SITE_NAMES[where] ?: where, found(read))
+                }
+                else -> Chip(name, state, "", found(read))
             }
         }
         return chips
@@ -158,12 +172,12 @@ object Outcomes {
         val byName = job.stages.associateBy { it.name }
         val chips = ArrayList<Chip>()
         for ((name, names) in YOUTUBE_STEPS) {
-            val states = names.mapNotNull { byName[it] }.map { stage ->
-                if ((stage.name == "audio" && stage.state == Job.SKIPPED && stage.detail.isNotEmpty()) ||
+            val read = names.mapNotNull { byName[it] }.map { stage ->
+                stage to if ((stage.name == "audio" && stage.state == Job.SKIPPED && stage.detail.isNotEmpty()) ||
                     stage.state == Job.INTERRUPTED) Job.FAILED else stage.state
             }
-            val state = stateOf(states) ?: continue
-            chips += Chip(name, state, if (name == "Audio") YOUTUBE_SOURCE else "")
+            val state = stateOf(read.map { it.second }) ?: continue
+            chips += Chip(name, state, if (name == "Audio") SITE_NAMES.getValue(YOUTUBE_SOURCE) else "", found(read))
         }
         return chips
     }
@@ -174,9 +188,19 @@ object Outcomes {
         if (stage.state == Job.INTERRUPTED || (stage.name == "sheet" && stage.state == Job.SKIPPED && waited(stage.detail)))
             Job.FAILED else stage.state
 
-    private fun match(stage: Stage, state: String): Chip =
+    /** What a step found (outcome._found), from its stages, each with its state as the step reads it: each one done in
+     * its words, each one failed in the outcome's ([stageReason]) when they say something, else in its own; in order,
+     * joined by " · "; "" for none. */
+    private fun found(read: List<Pair<Stage, String>>): String = read
+        .filter { (_, state) -> state == Job.DONE || state == Job.FAILED }
+        .map { (stage, state) -> if (state == Job.DONE) stage.detail else stageReason(stage).ifEmpty { stage.detail } }
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
+
+    /** Match (outcome._match), in Ultimate Guitar's offline index, in every state but a song it lacks, plain. */
+    private fun match(stage: Stage, state: String, found: String): Chip =
         if (state == Job.DONE && stage.detail.startsWith(MATCH_NOT_FOUND)) Chip(NOT_ON_UG, "plain")
-        else Chip("Match", state, MATCHED_IN)
+        else Chip("Match", state, SITE_NAMES.getValue(MATCHED_IN), found)
 
     private fun sheetSource(stage: Stage, state: String, facts: SongFacts?): String = when {
         state == Job.RUNNING -> ASKS[stage.detail] ?: ""

@@ -4525,11 +4525,12 @@ the library, sent as they are: they carry no badge.
   steps, even after a reload), the line
   says which of its steps is in hand ("Fetching lyrics… · 5 of 7": the fifth
   of seven, the one that runs, else the next to come),
-  and under it each step is a chip, as in the Journal: Song, Match UG
-  (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
-  it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
-  other, and once done the site the sheet came from), PDF, Lyrics, Extras and
-  Songbooks; those done ticked, the one that runs lit, those to come grey, a
+  and under it each step is a chip, as in the Journal, its site named in
+  full: Song, Match Ultimate Guitar (the offline index it matched in,
+  Ultimate Guitar's), Sheet (then the site it asks, Sheet Ultimate Guitar or
+  Sheet LaCuerda, switching when it falls back to the other, and once done
+  the site the sheet came from), PDF, Lyrics, Extras and Songbooks; those
+  done ticked, the one that runs lit, those to come grey, a
   failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
   UG**, drawn plain (dashed), never as a failure: the sheet may come from
   LaCuerda. The steps are those the lookup has from its start, so the count
@@ -4593,8 +4594,9 @@ the library, sent as they are: they carry no badge.
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Making the PDF…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
-    Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
-    LaCuerda once it asks a site, then where the sheet came from), PDF,
+    Song, Match Ultimate Guitar (or Match: not on UG, plain), Sheet (Sheet
+    Ultimate Guitar or Sheet LaCuerda once it asks a site, then where the
+    sheet came from), PDF,
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
     tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
     harmonica tab) and Songbooks,

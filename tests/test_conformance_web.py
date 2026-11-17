@@ -1053,8 +1053,9 @@ def reason_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | 
 
 
 def tables_record() -> dict:
-    """The words status.py and outcome.py look up by a stage's, a step's or a command's name, whole: what the
-    records above don't draw (the phone's own sync's mirror and index stages among them)."""
+    """The words status.py and outcome.py look up by a stage's, a step's, a command's or a site's name (a step's site
+    in full by its tag, ``SITE_NAMES``), whole: what the records above don't draw (the phone's own sync's mirror and
+    index stages among them)."""
     from caracole.web import songbooks
 
     return {"fn": "tables", "args": [], "kw": {}, "out": {
@@ -1064,7 +1065,8 @@ def tables_record() -> dict:
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
-        "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE}}
+        "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
+        "SITE_NAMES": _outcome.SITE_NAMES}}
 
 
 def outcome_records() -> list[dict]:

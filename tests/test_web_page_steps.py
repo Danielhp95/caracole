@@ -3,7 +3,8 @@
 While a song is looked up (Fetch now, a search result's Get it), its request line says what runs and the place of the
 step in hand ("Fetching the lyrics from LRCLIB… · 5 of 7"), and under it each step is a chip (outcome.py's, as
 /jobs.json gives them): those done ticked, the one that runs lit, those to come grey, Match naming the index it
-matched in ("Match UG", or "Match · not on UG", plain) and Sheet the site it asks, then the one its sheet came from.
+matched in, Ultimate Guitar's ("Match Ultimate Guitar", or "Match · not on UG", plain), and Sheet the site it asks,
+then the one its sheet came from, each site named in full.
 Ended Ready, they fold away and the line is the song's own, which opens its sheet; ended otherwise, they stay, to
 show which step stopped, each in its place. A real ``caracole serve`` answers on a socket with the page's timers quick
 (``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get --progress``'s lines, said a stage at a
@@ -197,15 +198,15 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
         page.open(base)
         page.click(f"{line} form.fetch button")
         # Asking Ultimate Guitar for the sheet: the song and its match over, the sheet lit with its site.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"],
-                                        *WAITING])
+        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
+                                        ["running", "Sheet Ultimate Guitar"], *WAITING])
         wait_for(page, said(line), ["Fetching from UG…", "3 of 7"])
         fits(page, line)
         runner.go()
         # The sheet kept, from Ultimate Guitar, and its PDF: the lyrics now, the fifth step of seven.
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match UG"], ["done", "✓ Sheet UG"],
-                                        ["done", "✓ PDF"], ["running", "Lyrics"], ["waiting", "Extras"],
-                                        ["waiting", "Songbooks"]])
+        wait_for(page, steps_of(line), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
+                                        ["done", "✓ Sheet Ultimate Guitar"], ["done", "✓ PDF"], ["running", "Lyrics"],
+                                        ["waiting", "Extras"], ["waiting", "Songbooks"]])
         wait_for(page, said(line), ["Fetching lyrics…", "5 of 7"])
         assert page.js(f"document.querySelector('{line} .step-chips').getAttribute('aria-label')") == "Steps"
         assert page.js(f"document.querySelector('{line} .step-chips [aria-current=step]').textContent") == (
@@ -268,7 +269,8 @@ def test_a_search_results_get_it_shows_the_steps_in_its_row_then_the_song_as_you
         page.click(f"{RYAN} .line-action button")
         # Its request line in its Get it's place, and the steps under it, in the result's own row.
         row = RYAN
-        wait_for(page, steps_of(row), [["done", "✓ Song"], ["done", "✓ Match UG"], ["running", "Sheet UG"], *WAITING])
+        wait_for(page, steps_of(row), [["done", "✓ Song"], ["done", "✓ Match Ultimate Guitar"],
+                                       ["running", "Sheet Ultimate Guitar"], *WAITING])
         wait_for(page, said(row), ["Fetching from UG…", "3 of 7"])
         fits(page, row)
         runner.go()

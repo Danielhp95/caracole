@@ -695,10 +695,10 @@
     }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };
-  // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names and its state) as chips
-  // under its request line ``p`` (steps.css's, the Requests tab's markup): those done ticked, the one that runs lit
-  // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone,
-  // and a skipped one, with nothing to do for the song, in its place.
+  // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names in full, ``site``, and its
+  // state) as chips under its request line ``p`` (steps.css's, the Requests tab's markup): those done ticked, the one
+  // that runs lit and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its
+  // name alone, and a skipped one, with nothing to do for the song, in its place.
   // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
   // lookup, or ended Ready, its steps folded away): none drawn.
   const STEP_MARKS = { done: "✓ ", failed: "✕ " };
@@ -712,7 +712,7 @@
       if (box) box.remove();
       return;
     }
-    const key = JSON.stringify(chips.map((c) => [c.name, c.source, c.state]));
+    const key = JSON.stringify(chips.map((c) => [c.name, c.site, c.state]));
     if (box && box.dataset.key === key) return;
     if (!box) {
       box = el("ol", "step-chips");
@@ -730,7 +730,7 @@
         chip.appendChild(mark);
       }
       chip.appendChild(document.createTextNode(String(c.name)));
-      if (c.source) chip.append(" ", el("b", null, String(c.source)));
+      if (c.site) chip.append(" ", el("b", null, String(c.site)));
       if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
       return chip;
     }));

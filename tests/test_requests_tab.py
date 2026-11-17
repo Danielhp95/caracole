@@ -113,8 +113,9 @@ def test_the_running_lookup_comes_first_with_its_stages_as_steps():
     card = now[0]
     assert (card["display"], card["state"], card["ago"]) == ("Muse - Hysteria", "running", "started 12 s ago")
     assert card["says"] == {"tone": "running", "text": "Making the PDF…"}
-    assert [(c["name"], c["source"], c["state"]) for c in card["steps"]] == [
-        ("Song", "", "done"), ("Match", "UG", "done"), ("Sheet", "UG", "done"), ("PDF", "", "running"),
+    assert [(c["name"], c["site"], c["state"]) for c in card["steps"]] == [
+        ("Song", "", "done"), ("Match", "Ultimate Guitar", "done"), ("Sheet", "Ultimate Guitar", "done"),
+        ("PDF", "", "running"),
         ("Lyrics", "", "waiting"), ("Extras", "", "waiting"), ("Songbooks", "", "waiting")]
     assert "actions" not in card  # the running one: never stopped halfway
 
@@ -125,9 +126,9 @@ def test_the_running_steps_say_a_song_ultimate_guitars_index_lacks_plainly_and_w
                                               "sheet": ("running", SHEET_FROM["lacuerda"])}, state="running")
     [card] = requests(feed([estopa], {8: job_line(estopa, None)}, now=NOW), "Now")
     assert card["says"]["text"] == "Fetching from LaCuerda…"
-    assert card["steps"][:3] == [{"name": "Song", "source": "", "state": "done"},
-                                 {"name": "Match · not on UG", "source": "", "state": "plain"},
-                                 {"name": "Sheet", "source": "LaCuerda", "state": "running"}]
+    assert card["steps"][:3] == [{"name": "Song", "site": "", "state": "done", "found": "in the book"},
+                                 {"name": "Match · not on UG", "site": "", "state": "plain", "found": ""},
+                                 {"name": "Sheet", "site": "LaCuerda", "state": "running", "found": ""}]
 
 
 def test_queued_requests_say_their_place_and_each_can_be_cancelled():
@@ -502,16 +503,17 @@ def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn, mo
     queue.run_pending()
     [card] = requests(seen[0], "Now")
     assert card["says"]["text"] == "Fetching from UG…" and card["ago"].startswith("started ")
-    assert card["steps"][:3] == [{"name": "Song", "source": "", "state": "done"},
-                                 {"name": "Match", "source": "UG", "state": "done"},
-                                 {"name": "Sheet", "source": "UG", "state": "running"}]
+    assert card["steps"][:3] == [{"name": "Song", "site": "", "state": "done", "found": "in the book"},
+                                 {"name": "Match", "site": "Ultimate Guitar", "state": "done",
+                                  "found": "matched to radiohead/creep"},
+                                 {"name": "Sheet", "site": "Ultimate Guitar", "state": "running", "found": ""}]
     asking, lyrics = views
     assert asking["line"]["text"] == "Fetching from UG…" and asking["count"] == "3 of 7"
     assert asking["steps"] == card["steps"]
     # Once done, the sheet says where the song's sheet came from: its version's site, as the library has it.
     assert lyrics["line"]["text"] == "Fetching lyrics…" and lyrics["count"] == "5 of 7"
-    assert lyrics["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
-    assert requests(seen[1], "Now")[0]["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
+    sheet = {"name": "Sheet", "site": "Ultimate Guitar", "state": "done", "found": "tab 1 from Ultimate Guitar"}
+    assert lyrics["steps"][2] == sheet and requests(seen[1], "Now")[0]["steps"][2] == sheet
     # Over, and Ready: the steps fold away from the song's line.
     [over] = answer(get_json(app, "/jobs.json"))["jobs"]
     assert over["line"]["text"] == "Ready" and "steps" not in over and "count" not in over
@@ -588,7 +590,8 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
                                                  "tab-sync"]  # Sync last
         assert shown["groups"] == ["Now", "Today"]
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
-        assert shown["chips"] == ["✓ Song: done", "✓ Match UG: done", "✓ Sheet UG: done", "PDF: running",
+        assert shown["chips"] == ["✓ Song: done", "✓ Match Ultimate Guitar: done", "✓ Sheet Ultimate Guitar: done",
+                                  "PDF: running",
                                   "Lyrics: waiting", "Extras: waiting", "Songbooks: waiting"]
         assert shown["says"][:3] == [["Making the PDF…", "running"], ["Queued · next", "queued"],
                                      ["Not on the sites", "missing"]]

@@ -320,7 +320,7 @@ class JobViewsTest {
         assertEquals(2, view["at"]!!.jsonPrimitive.int)
         assertEquals(JsonPrimitive("3 of 7"), view["count"])
         val sheet = view["steps"]!!.jsonArray[2].jsonObject
-        assertEquals(Json.parseToJsonElement("""{"name":"Sheet","source":"LaCuerda","state":"running"}"""), sheet)
+        assertEquals(Json.parseToJsonElement("""{"name":"Sheet","site":"LaCuerda","state":"running","found":""}"""), sheet)
         // The song new to the library, its song stage adds it, as caracole add would.
         assertEquals("Adding to the book…", Status.jobLine(fakeRunningSong(queue.job(job.id)!!), null).text)
         gate.complete(Unit)

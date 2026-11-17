@@ -104,7 +104,7 @@
         chip.appendChild(mark);
       }
       chip.appendChild(document.createTextNode(String(c.name)));
-      if (c.source) chip.append(" ", el("b", null, String(c.source)));
+      if (c.site) chip.append(" ", el("b", null, String(c.site)));
       if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
       box.appendChild(chip);
     }
