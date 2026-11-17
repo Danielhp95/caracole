@@ -225,3 +225,97 @@ def test_the_live_artist_page_lists_banma_under_the_names_ug_gave_it(library, co
     assert tab.tab.raw["artist_id"] == 634073 and tab.artist_url == SONG_DONGYE_URL
     assert [(v.tab_id, v.type, v.version) for v in tab.versions] == [(4689017, "Chords", 2)]
     assert tab.content is not None and tab.content.startswith("[tab][ch]C[/ch] [ch]D[/ch] [ch]Bm[/ch] [ch]Em[/ch]\n")
+
+
+def test_the_owners_link_pasted_is_read_found_by_a_search_and_fetched_with_its_version(tmp_path, monkeypatch):
+    # 2026-11-17: the owner searched for 斑马斑马, found nothing, and pasted the page UG has it at into the library
+    # page's box. The page asks /api/ug/link (no request: never read), posts /ug/link, whose job is caracole ug --link:
+    # the tab's page and its artist's lists, through the lookup's polite client. Then the link is found, a search finds
+    # the song, and Fetch this version (POST /lookup with the tab) keeps that very version as the song's pick.
+    from urllib.parse import urlencode
+
+    from helpers.scenario import _empty_pass
+    from typer.testing import CliRunner
+
+    from caracole import db
+    from caracole.cli import build_app
+    from caracole.commands import _common
+    from caracole.config import load_config
+    from caracole.overrides import load_overrides
+    from caracole.web.app import Request, WebApp
+    from caracole.web.jobs import JobQueue
+
+    config = tmp_path / "caracole.toml"
+    providers = "".join(f"[providers.{p}]\ndelay = [0, 0]\nlookup_delay = [0, 0]\n"
+                        for p in ("ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore",
+                                  "harptabs", "gametabs"))
+    config.write_text(f'data_dir = "{tmp_path / "data"}"\n{providers}', encoding="utf-8")
+    cfg = load_config(config, env={"HOME": str(tmp_path / "home")})
+    cfg.state_dir.mkdir(parents=True)
+    cfg.library_dir.mkdir(parents=True)
+    with db.connect(cfg.db_path) as conn:  # a complete index without the artist, as UG's sitemaps are
+        conn.executemany(
+            "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+            "VALUES (?, ?, ?, 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
+            [(1, "radiohead", "creep", "radiohead/creep-chords-1"), (2, "oasis", "wonderwall", "oasis/wonderwall-chords-2")])
+        mark_built(conn, NIGHT)
+    ug, lrclib, elsewhere = FakeUG(), FakeLRCLIB(), []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host.endswith("ultimate-guitar.com"):
+            return ug.handler(request)
+        if request.url.host == "lrclib.net":
+            return lrclib.handler(request)
+        elsewhere.append(str(request.url))
+        return httpx.Response(404, text="not here")
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(handler))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    for target, kind in (("caracole.render.render_all", "render"), ("caracole.todo.write_pages", "pages"),
+                         ("caracole.songbook.render_songbooks", "songbooks")):
+        monkeypatch.setattr(target, _empty_pass(kind))  # a caracole with no ChordPro: no PDF, no page
+    app = WebApp(cfg, JobQueue(lambda args, emit: 0, limit=5), allowed=frozenset({"localhost"}), csrf="tok")
+    host = {"host": "localhost:8737", "sec-fetch-site": "same-origin", "accept": "application/json"}
+
+    def get(path: str) -> dict:
+        response = app.handle(Request("GET", path, host))
+        assert response.status == 200, response.body
+        return json.loads(response.body)
+
+    def post(path: str, fields: dict) -> dict:
+        sent = host | {"content-type": "application/x-www-form-urlencoded", "origin": "http://localhost:8737"}
+        response = app.handle(Request("POST", path, sent, urlencode({"csrf": "tok", **fields}).encode("utf-8")))
+        assert response.status == 202, response.body
+        return json.loads(response.body)
+
+    def run(job_id: int):
+        """The queued job's command, as caracole serve's queue runs it."""
+        [step] = app.queue.job(job_id).steps
+        result = CliRunner().invoke(build_app(), ["--config", str(config), *step.args])
+        assert result.exit_code == 0, result.output
+        return result
+
+    link = "/api/ug/link?" + urlencode({"url": FOUND})
+    assert get(link)["state"] == "auto" and ug.requests == []
+    read = run(post("/ug/link", {"url": FOUND})["job"])
+    assert read.stdout.splitlines()[-1] == (
+        "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.")
+    assert ug.requests == [FOUND, CHORDS, TABS]
+    assert all(robots_disallows(u) is None and "search.php" not in u for u in ug.requests)
+
+    found = get(link)
+    assert found["state"] == "found" and found["guess"] == {"artist": "宋冬野", "title": "斑马斑马"}
+    assert [(h["artist"], h["title"]) for h in found["hits"]] == [("宋冬野", "斑马斑马")]
+    searched = get("/api/search?" + urlencode({"q": "斑马斑马"}))
+    assert ("宋冬野", "斑马斑马") in [(h["artist"], h["title"]) for h in searched["index"]]
+
+    lookup = post("/lookup", {"artist": "宋冬野", "title": "斑马斑马", "tab": FOUND})  # Fetch this version
+    assert f"--tab={FOUND}" in app.queue.job(lookup["job"]).steps[0].args
+    run(lookup["job"])
+    with db.connect(cfg.db_path) as conn:
+        song = find_song(conn, BANMA)
+        assert kept_sheet(cfg, conn, BANMA)[0] == 4180894 and song.match_decision == "pinned"
+    assert load_overrides(cfg.overrides_file).pin[BANMA] == (4180894,)  # the card's Sheet versions can change it
+    mine = get(link)["song"]
+    assert (mine["display"], mine["has_sheet"], mine["this_tab"]) == ("宋冬野 - 斑马斑马", True, True)
+    assert not any("ultimate-guitar" in u for u in elsewhere)
