@@ -23,7 +23,8 @@ the job and what the library knows of its song:
   and once done where the song's sheet came from (``SongFacts.sheet_from``), never guessed. Each says what it found
   (``Chip.found``, ``_found``): its stages' words, those done as they said them ("in the book", "tab 1 from Ultimate
   Guitar"), one that failed as the outcome words it where it can ("Ultimate Guitar answered 502. The sheet waits
-  until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits.
+  until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits, nor from a stage
+  the server cut off, whose words are what it said while it ran.
 - **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Chords
   and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
   a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
@@ -255,9 +256,10 @@ def _youtube_steps(job: Job) -> list[Chip]:
 def _found(read: list[tuple[Stage, str]]) -> str:
     """What a step found, from its stages, each with its state as the step reads it (a sheet a wait stopped, or a
     YouTube sheet's audio, failed): each one done in its words, each one failed in the outcome's (``_stage_reason``)
-    when they say something, else in its own; in order, joined by " · "; "" for none."""
+    when they say something, else in its own; in order, joined by " · "; "" for none. A stage the server cut off
+    (``INTERRUPTED``) found nothing: its words are what it said while it ran ("from UG"), no finding."""
     said = [stage.detail if state == "done" else _stage_reason(stage) or stage.detail
-            for stage, state in read if state in ("done", "failed")]
+            for stage, state in read if state in ("done", "failed") and stage.state != INTERRUPTED]
     return " · ".join(s for s in said if s)
 
 

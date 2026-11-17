@@ -730,6 +730,10 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
                                                                            "match": ("running", "")})),
         facts=_status.SongFacts())
     add("interrupted before it ran", _interrupted(look), None)
+    # Cut off as it asked Ultimate Guitar for the sheet: what it said while it ran is no finding.
+    add("interrupted as it asked for the sheet", _interrupted(in_state(look, "running", {
+        "song": ("done", "in the book"), "match": ("done", "matched to radiohead/creep"),
+        "sheet": ("running", SHEET_FROM["ug"])})), facts=_status.SongFacts())
     first = in_state(look, "running", {"song": ("done", ""), "match": ("running", "")})
     first.started_at = V_NOW  # at the records' ``now`` it has run 0 s: no steps
     add("a lookup running, its first second", first, facts=_status.SongFacts())

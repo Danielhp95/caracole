@@ -231,6 +231,17 @@ def test_once_over_the_count_names_the_step_that_failed_and_nothing_else():
     shown = progress(cut, job_line(cut, None), None)
     assert [s["state"] for s in shown["steps"]] == ["done", "done", "failed"] + ["skipped"] * 4
     assert shown["count"] == "3 of 7"
+    # Cut off as it asked Ultimate Guitar: the site it asked, and nothing found, what it said while it ran being no
+    # finding.
+    asking = lookup(stages={"song": ("done", "in the book"), "match": ("done", "matched to muse/hysteria")})
+    asking.heard({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]})
+    asking.heard({"stage": "sheet", "state": INTERRUPTED, "detail": SHEET_FROM["ug"]})  # as jobs.py leaves it
+    assert steps(asking)[2] == Chip("Sheet", "failed", "Ultimate Guitar")
+    # A stage of the same step that ended keeps its words.
+    later = ended(upto("lacuerda", INTERRUPTED, ug=("done", "sheet 1"), lacuerda=(INTERRUPTED, "asking LaCuerda"))
+                  | {n: ("skipped", "") for n, _ in STAGES[7:]}, state=INTERRUPTED)
+    assert progress(later, job_line(later, None), None)["steps"][5] == {
+        "name": "Extras", "site": "", "state": "failed", "found": "sheet 1"}
 
 
 def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_otherwise():
@@ -632,6 +643,10 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
         {"name": "Lyrics", "site": "", "state": "done", "found": "found, timed"},
         {"name": "Chords", "site": "", "state": "skipped", "found": ""},
         {"name": "PDF", "site": "", "state": "done", "found": "made"}]
+    # Cut off as it took the audio: failed, and nothing found, what it said while it ran being no finding.
+    cut = youtube_job(INTERRUPTED, EVERY | {"audio": (INTERRUPTED, "taking the audio"), "lyrics": ("skipped", ""),
+                                            "chords": ("skipped", ""), "pdf": ("skipped", "")})
+    assert steps(cut)[1] == Chip("Audio", "failed", "YouTube")
 
 
 def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():

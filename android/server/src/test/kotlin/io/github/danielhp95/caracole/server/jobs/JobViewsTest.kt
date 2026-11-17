@@ -321,6 +321,11 @@ class JobViewsTest {
         assertEquals(JsonPrimitive("3 of 7"), view["count"])
         val sheet = view["steps"]!!.jsonArray[2].jsonObject
         assertEquals(Json.parseToJsonElement("""{"name":"Sheet","site":"LaCuerda","state":"running","found":""}"""), sheet)
+        // Cut off there (the server stopped): failed, naming the site it asked, and nothing found, what it said while it
+        // ran being no finding; the match it found stays.
+        val cut = queue.job(job.id)!!.copy().also { it.stages.first { stage -> stage.name == "sheet" }.state = Job.INTERRUPTED }
+        assertEquals(listOf(Chip("Match", "done", "Ultimate Guitar", "accepted"), Chip("Sheet", "failed", "LaCuerda")),
+                     Outcomes.steps(cut).subList(1, 3))
         // The song new to the library, its song stage adds it, as caracole add would.
         assertEquals("Adding to the book…", Status.jobLine(fakeRunningSong(queue.job(job.id)!!), null).text)
         gate.complete(Unit)

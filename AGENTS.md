@@ -1260,8 +1260,8 @@ It is rows.js's, shared by both pages:
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
     of its tag: "Ultimate Guitar", "LaCuerda", "YouTube"; a tag it lacks as it is) and what it found (`found`,
     `outcome._found`: its stages done in their words, one failed in the outcome's words where they parse, else in
-    its own, joined by " · "; nothing for a plain, a skipped or a waiting step); a sync's, a take's and a command's
-    step has neither.
+    its own, joined by " · "; nothing for a plain, a skipped or a waiting step, nor from a stage the server cut
+    off, whose words are what it said while it ran); a sync's, a take's and a command's step has neither.
   - Nothing for a request's first second (`outcome.BAR_AFTER`, decided by the server, so a reload agrees): no steps
     until it has run one at the view's `now` (one a `/jobs.json` answer, `jobs_routes.views`, the phone's
     `JobsRoutes`), and none ever for one over within it, frozen or not.

@@ -190,9 +190,10 @@ object Outcomes {
 
     /** What a step found (outcome._found), from its stages, each with its state as the step reads it: each one done in
      * its words, each one failed in the outcome's ([stageReason]) when they say something, else in its own; in order,
-     * joined by " · "; "" for none. */
+     * joined by " · "; "" for none. A stage the server cut off (interrupted) found nothing: its words are what it
+     * said while it ran. */
     private fun found(read: List<Pair<Stage, String>>): String = read
-        .filter { (_, state) -> state == Job.DONE || state == Job.FAILED }
+        .filter { (stage, state) -> (state == Job.DONE || state == Job.FAILED) && stage.state != Job.INTERRUPTED }
         .map { (stage, state) -> if (state == Job.DONE) stage.detail else stageReason(stage).ifEmpty { stage.detail } }
         .filter { it.isNotEmpty() }
         .joinToString(" · ")
