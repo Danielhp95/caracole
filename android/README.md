@@ -140,7 +140,10 @@ merge's words ("the file was exported at schema version 14…": export it again 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
 artist's songs. LaCuerda's own search goes from the phone itself, as on the computer ([Lookups on the
-phone](#lookups-on-the-phone)); YouTube's suggestions need the computer.
+phone](#lookups-on-the-phone)); YouTube's suggestions need the computer. A link to an Ultimate Guitar tab or artist
+page pasted into the box is no search: its panel reads that page from the phone itself, once, at a lookup's pace (the
+tab's page, then its artist's lists), so the next search finds every song of that artist, and its Fetch this version
+keeps the tab you pasted.
 
 ## Sync from the phone
 

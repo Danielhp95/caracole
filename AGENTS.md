@@ -1451,8 +1451,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - A refused lookup's step ends with `error: Nothing fetched: ….` and a bug's with `error: a bug in caracole: …`
     (the queue writes an `error:` line for every step that fails), where the computer's says the first plainly and
     logs the second; the stage the library page's line reads says the same on both.
-- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`) runs in
-  `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
+- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`, `UgLinkCommands`)
+  runs in `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
   - it says its Python's `--progress` events as `LookupWords.progressLine`s (`stageLine`, `songLine`; the queue's
     `JobCommands.progressLine` to the byte, a test checks), its job's events when it reports them
     (`JobCommands.reports`, as web/jobs.py's emit reads them), and its other lines; its last line is the one it
@@ -1660,6 +1660,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_tab_files.py writes vectors/sites/gtptabs*.jsonl, musescore.jsonl and
     lookup/gtptabs.jsonl (its stage records asked through InteractiveAsk with the records' clients):
     `TabFilesReplay`, area `tab-files`.
+- A UG link pasted into the library page's search box (ug-link), the plan docs/superpowers/plans/2026-11-17-ug-link.md:
+  - core.ug's `UgUrls.readLink` (ug_urls.py's, its `SPACES`), and `UgLinks`, ug/link.py: `known` (no request: the
+    database and the phone's HTTP cache alone), `read` (a tab's page by the fetch's rules, `Pages.readTabPage`, then
+    its artist's lists read whole, `ArtistPages.readArtistPage` of no song's over a `ListReading`), `said`,
+    `knownLine`, kv `ug:link-failed` (one of OwnRecords' records that gate a request);
+  - `caracole ug --link` is core/lookup/sites/`UgLinkCommands` (commands/ug.py), run by server/lookups'
+    `UgLinkRunner` in a CommandContext, the envelope recording a block or an error of the tab's page and the command
+    those of its artist's page, as Python records them;
+  - server/routes' `UgLinkRoutes`, web/ug_link_routes.py: `GET /api/ug/link` and `POST /ug/link` (a job of no song's
+    under `JobCommands.UG_LINK`, among `INDEX_READS`, its stages `tab` and `artist`, an artist's link the second
+    alone); `/api/search` gives a pasted link no hint, no unseen and no LaCuerda gate (Found's `isLink`);
+  - tests/test_conformance_ug_link.py writes vectors/web/ug_link.jsonl (read_link's shapes, both routes over each
+    scene, the library's kept files made from their rows) and vectors/lookup/commands_ug_link.jsonl (scenario
+    records, each page stored noted for the next push): `UgLinkReplay`, area `ug-link`.
 
 ##### The Requests tab on the phone
 
