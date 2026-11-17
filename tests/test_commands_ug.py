@@ -32,7 +32,7 @@ from caracole.http import robots_disallows
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
 FOUND = f"{TAB}4180894"  # the page the owner found on UG
-READ = "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs."
+READ = "Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."  # caracole's names, as a search's
 
 
 class Sites:
@@ -91,7 +91,7 @@ def test_a_tab_link_reads_its_page_then_its_artists_lists_at_the_lookup_pace(tmp
 
     assert result.exit_code == 0, result.output
     assert result.stdout.splitlines()[-1] == READ
-    assert served(result) == "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye."
+    assert served(result) == "Read: 斑马斑马 by 宋冬野, chords."  # its words up to "; ", with no bracket
     assert sites.ug.requests == [FOUND, SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL] and polite(sites.ug.requests)
     conn = database(tmp_path)
     try:
@@ -113,7 +113,7 @@ def test_its_progress_is_a_json_line_a_stage(tmp_path, sites):
     events = [e for line in result.stdout.splitlines() if (e := read_progress_line(line))]
     assert [(e["stage"], e["state"]) for e in events] == [
         ("tab", "running"), ("tab", "running"), ("tab", "done"), ("artist", "running"), ("artist", "done")]
-    assert events[2]["detail"] == "斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords"
+    assert events[2]["detail"] == "斑马斑马 by 宋冬野, chords"
     assert events[-1]["detail"] == READ and result.stdout.splitlines()[-1] == READ
 
 
@@ -121,7 +121,8 @@ def test_an_artist_link_reads_their_lists_alone(tmp_path, sites):
     result = run(tmp_path, "--link", f"{SONG_DONGYE_URL}?filter=chords", "--progress")
 
     assert result.exit_code == 0, result.output
-    assert result.stdout.splitlines()[-1] == "Read: UG's page of Song Dongye (宋冬野) lists 8 tabs."
+    assert result.stdout.splitlines()[-1] == "Read: UG's page of 宋冬野 lists 8 tabs."
+    assert served(result) == "Read: UG's page of 宋冬野 lists 8 tabs."
     assert sites.ug.requests == [SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL]
     events = [e for line in result.stdout.splitlines() if (e := read_progress_line(line))]
     assert {e["stage"] for e in events} == {"artist"}
@@ -155,7 +156,7 @@ def test_a_tab_that_links_to_no_artist_page_is_read_alone(tmp_path, sites):
     del tab["artist_url"]
     sites.ug.pages[f"{TAB}7002"] = make_tab_page_html(tab, [], content="[ch]C[/ch]")
     result = run(tmp_path, "--link", f"{TAB}7002")
-    assert result.stdout == "Read: 新歌 New Song by Song Dongye (宋冬野), chords; it links to no artist page.\n"
+    assert result.stdout == "Read: 新歌 by 宋冬野, chords; it links to no artist page.\n"
     assert sites.ug.requests == [f"{TAB}7002"]
 
 
@@ -198,9 +199,14 @@ def test_an_error_is_remembered_an_hour_and_read_again_by_hand(tmp_path, sites):
 def test_a_budget_spent_after_the_tab_page_leaves_its_artists_page_for_later(tmp_path, sites):
     result = run(tmp_path, "--link", FOUND, lookup_requests=1)
     assert result.exit_code == 0, result.output
-    assert result.stdout == ("Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page waits "
-                             "for the next lookup (its asks of UG are spent).\n")
+    assert result.stdout == ("Read: 斑马斑马 by 宋冬野, chords; their page waits for the next lookup (its asks of UG "
+                             "are spent).\n")
     assert sites.ug.requests == [FOUND]
+    # The tab's page in the cache, its artist's page never read: the next read takes the page from the cache and asks
+    # for their lists alone, so that every song of theirs is found.
+    again = run(tmp_path, "--link", FOUND)
+    assert again.stdout.splitlines()[-1] == READ
+    assert sites.ug.requests == [FOUND, SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL]
 
 
 def test_the_hours_lookups_spent_asks_nothing(tmp_path, sites):

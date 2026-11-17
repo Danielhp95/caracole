@@ -3062,7 +3062,7 @@
       if (!artist.dataset.typed && g.artist) artist.value = String(g.artist);
       if (!title.dataset.typed && g.title) title.value = String(g.title);
       const opens = song && typeof song.sheet === "string" && song.sheet ? song.sheet : "";
-      const said = d.state === "auto" ? reading
+      const said = d.state === "auto" ? (tab ? "Reading the artist's page…" : reading)  // a tab's page in the cache
         : d.state === "found" && ug.kind === "artist" ? (listOf(d.hits).length ? "Their songs, from their page on UG."
           : "Their page lists no chords or tabs caracole keeps.")
         : d.state === "found" && song && song.this_tab && song.has_sheet

@@ -301,3 +301,27 @@ def test_a_song_of_yours_whose_sheet_is_the_tab_says_so_with_open_and_offers_no_
     assert browser.js(f"{NOTE}.querySelector('a').getAttribute('href')")
     assert browser.js(f"{PANEL}.querySelector('form').hidden") is True
     assert posted == [] and ug.requests == []  # known: nothing read
+
+
+def test_a_tab_in_the_cache_whose_artist_page_isnt_read_has_that_page_read(cfg, live, ug, browser):
+    # Its page read before (its budget ran out at it): the panel names the tab at once, and reads their lists.
+    from dataclasses import replace
+
+    from caracole.commands.ug import _read
+    from caracole.ug_urls import read_link
+
+    one = replace(cfg, providers={**cfg.providers, "ug": replace(cfg.provider("ug"), lookup_requests=1)})
+    with mock.patch("typer.echo", lambda message="", **k: None):
+        _read(one, read_link(FOUND), progress=False)
+    assert ug.requests == [FOUND]
+    base, posted, runner = live
+    runner.hold.clear()  # the job waits
+    browser.open(base)
+    paste(browser, FOUND)
+    names = f"['artist', 'title'].map((n) => {PANEL}.querySelector(`input[name=${{n}}]`).value)"
+    assert browser.wait(f"{PANEL} !== null && {NOTE}.textContent === 'Reading the artist\\'s page…'")
+    assert browser.js(f"{names}.join('|')") == "宋冬野|斑马斑马"
+    runner.hold.set()
+    assert browser.wait(f"{NOTE}.textContent === 'Check the name, then fetch this version.'", timeout=20)
+    assert [p for p, _ in posted] == ["/ug/link"]
+    assert ug.requests == [FOUND, SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL]  # the tab's page from the cache

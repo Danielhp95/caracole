@@ -18,6 +18,8 @@ import pytest
 from conftest import add_song
 from helpers.ug_pages import (
     BANMA_UG,
+    SONG_DONGYE_CHORDS_URL,
+    SONG_DONGYE_TABS_URL,
     SONG_DONGYE_URL,
     FakeUG,
     make_tab_page_html,
@@ -141,6 +143,34 @@ def test_an_artist_link_read_gives_their_songs_as_search_rows(cfg, queue, conn, 
     titles = [h["title"] for h in said["hits"]]
     assert titles[:2] == ["斑马斑马", "董小姐"] and len(titles) == 6  # most tabbed first, as /api/artist
     assert all(h["artist"] == "宋冬野" for h in said["hits"])
+
+
+def test_a_tab_in_the_cache_whose_artist_page_isnt_read_is_read_again_for_their_lists(cfg, queue, conn, ug):
+    # A tab's page in the cache (read for a pin, or by a read whose budget ran out at it) names an artist page caracole
+    # never read: every song of theirs isn't searchable yet, so the link isn't found; its read asks for their lists alone.
+    one = replace(cfg, providers={**cfg.providers, "ug": replace(cfg.provider("ug"), lookup_requests=1)})
+    read(one, FOUND)
+    assert ug.requests == [FOUND]
+    app = app_for(cfg, queue)
+    said = get(app, FOUND)[1]
+    assert said["state"] == "auto" and said["tab"]["title"] == BANMA_UG  # its names known, from the cached page
+    assert said["guess"] == {"artist": "宋冬野", "title": "斑马斑马"}
+    assert said["artist_page"] == {"url": SONG_DONGYE_URL, "read": False, "read_at": None}
+    assert post(app, FOUND)[0] == 202
+    read(cfg, FOUND)
+    assert ug.requests == [FOUND, SONG_DONGYE_CHORDS_URL, SONG_DONGYE_TABS_URL]  # the tab's page from the cache
+    assert get(app, FOUND)[1]["state"] == "found"
+
+
+def test_an_artist_page_read_more_than_30_days_ago_makes_its_cached_tab_auto_again(cfg, queue, conn, ug):
+    read(cfg, FOUND)
+    app = app_for(cfg, queue)
+    assert get(app, FOUND)[1]["state"] == "found"
+    conn.execute("UPDATE ug_artist_tabs SET read_at = '2026-01-01T00:00:00Z'")
+    said = get(app, FOUND)[1]
+    assert said["state"] == "auto" and said["artist_page"]["read_at"] == "2026-01-01T00:00:00Z"
+    # Its other version, which no cached page names, is the artist page's: found however old the read.
+    assert get(app, f"{TAB}4689017")[1]["state"] == "found"
 
 
 def test_a_tab_only_an_artist_page_names_is_found_with_its_names_and_no_version(cfg, queue, conn):
@@ -315,7 +345,7 @@ def test_the_queue_moves_the_jobs_stages_as_the_command_reports_them(cfg, conn, 
             time.sleep(0.02)
         job = queue.job(1)
         assert [(s.name, s.state) for s in job.stages] == [("tab", "done"), ("artist", "running")]
-        assert job.stages[0].detail == "斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords"
+        assert job.stages[0].detail == "斑马斑马 by 宋冬野, chords"
         assert job_line(job, None).text == "Reading the artist's page on UG…"
         go_on.set()
         while time.monotonic() < deadline and queue.job(1).active:
@@ -323,7 +353,7 @@ def test_the_queue_moves_the_jobs_stages_as_the_command_reports_them(cfg, conn, 
         job = queue.job(1)
         assert job.state == "done" and [s.state for s in job.stages] == ["done", "done"]
         assert not any(line.startswith("caracole-progress") for line in job.steps[0].output), job.steps[0].output
-        assert job_line(job, None).text == "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye."
+        assert job_line(job, None).text == "Read: 斑马斑马 by 宋冬野, chords."
     finally:
         go_on.set()
         queue.stop()

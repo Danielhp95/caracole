@@ -585,12 +585,10 @@ def scenarios() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
                    ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894"), display="A tab on Ultimate Guitar"),
             run(step(ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894")[0][1],
                      event("tab", "running", "asking Ultimate Guitar"),
-                     event("tab", "done", "斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords"),
+                     event("tab", "done", "斑马斑马 by 宋冬野, chords"),
                      event("artist", "running", "asking Ultimate Guitar"),
-                     event("artist", "done", "Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; "
-                                             "their page lists 8 tabs."),
-                     line("Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 "
-                          "tabs."))),
+                     event("artist", "done", "Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."),
+                     line("Read: 斑马斑马 by 宋冬野, chords; their page lists 8 tabs."))),
         ], {}),
         ("Try again queues a job over again, by hand, with its songbooks", [
             submit("Get Radiohead - Creep", KEY, lookup_steps(*CREEP, songbooks=False), fetching=True,
