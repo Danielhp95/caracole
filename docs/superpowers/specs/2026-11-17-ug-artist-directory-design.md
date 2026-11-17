@@ -1,6 +1,7 @@
 # An Ultimate Guitar artist directory
 
-Status: proposed on 2026-11-17, for the owner to approve or turn down. Nothing is built. It is the other half of
+Status: approved by the owner on 2026-11-17, with the choices in "The owner's decisions" below, which override the
+suggestions and the politeness sections of this spec wherever they differ. It is the other half of
 docs/superpowers/plans/2026-11-17-ug-link.md (branch `feat/ug-link`), which reads a UG link the owner pastes. This
 spec finds an artist when there is no link.
 
@@ -241,11 +242,25 @@ What holds:
 
 ## The owner's decisions
 
-1. **Build it, or turn it down**, leaving the pasted link as the only way in.
-2. **The first read**: by hand in one evening (about 4 h), or a nightly budget (120: 30 nights; 240: 15).
-3. **The upkeep**: each letter again after 30, 90 or 180 days (about 117, 40 or 20 requests a night).
-4. **The second pass**: none; the 1,000 or 3,000 bare artists with most tabs; or all. And its nightly budget.
-5. **Its budgets**: their own beside UG's 60 (AGENTS.md's "ug 60" grows), or only what the 60 leaves.
+Made on 2026-11-17, in the owner's words: "Build it, first full read, I want it to last 1h. Read every letter every
+30 days. Second pass, all of them. Budget, enough so that I read everything in 1h. Ignore the politeness for this."
+Asked which reads the hour covers, the owner chose both: the listings and the whole second pass.
+
+1. **Built.**
+2. **The first read is one run of about an hour**: every listing page (about 3,500) and then every bare artist's
+   page (about 10,000–17,000), some 14,000–20,000 requests, about 5 a second. That takes several requests in flight
+   at once (a concurrency of its own, about 6, with no pause between requests), so this pass alone departs from
+   "one request at a time per provider", the bulk pace and UG's budget of 60, by the owner's choice. Its pace,
+   concurrency and budget are settings, so the owner can change them without a release.
+3. **The upkeep**: every letter is read again 30 days after its last whole read. A bare artist's page is read again
+   when its listing row's `tabs` or `updated_at` moved since, as "The second pass" says. Both go at the same pace.
+4. **The second pass: every bare artist**, most tabs first.
+5. **Its budget is its own**: enough for the whole read in one run (UG's nightly 60 for the fetch is unchanged).
+
+What still holds, as before: robots.txt (`/bands/` and `/artist/` only), caracole's own user agent, the cache, errors
+never misses, and a block (403, 429, a challenge) stops the pass at once and cools UG down for every UG request,
+fetch and lookups included, with one alert. Nothing is retried around a block. The lock is still handed to a waiting
+lookup between pages, so a lookup never waits for the hour.
 
 ## Open questions
 
