@@ -94,7 +94,6 @@ html.sheet-open { overflow: hidden; }
 .filter-panel .show-n, .filter-panel:modal .live { display: none; }
 .filter-panel:modal .show-n { display: inline-flex; }
 @media (max-width: 719px) {
-  .masthead.lib { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "app tabs" "sum sum"; gap: 4px 8px; }
   .masthead.lib .summary { justify-self: start; }
   .masthead.lib .app .word { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
   .masthead.lib .tab .n { min-width: 16px; padding: 0 4px; }

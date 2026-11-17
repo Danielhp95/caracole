@@ -182,10 +182,11 @@ label.btn { cursor: pointer; }
 .sync-note { margin: 0; color: var(--muted); font-size: .86rem; }
 /* Five tabs on a phone's width (Library, Songbooks, Sites, Requests, Sync: caracole serve's page): the row scrolls
    (library.css), the page never does. Below 380px (a small phone) they take a row of their own under the mark, whose
-   summary goes beside it. */
+   summary goes beside it (a badge's pill before them). */
 @media (max-width: 379px) {
   .masthead.lib:has(#tab-sync) { grid-template-areas: "app sum" "tabs tabs"; }
-  .masthead.lib:has(#tab-sync):has(.scratch) { grid-template-areas: "app name" "tabs tabs" "sum sum"; }
+  .masthead.lib:has(#tab-sync) { grid-template-columns: auto minmax(0, 1fr); }
+  .masthead.lib:has(#tab-sync):has(.scratch) { grid-template-areas: "app sum" "name tabs"; }
   .masthead.lib:has(#tab-sync) .tabs { justify-content: space-between; }
 }
 @media (pointer: coarse) {

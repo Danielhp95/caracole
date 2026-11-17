@@ -2464,7 +2464,7 @@ songbooks from their next render); caracole serve answers a browser's own
 well within the first screen, on a phone too: caracole's logo and name, then
 the library's (caracole.toml's `name`, one line of 80 characters at most, else
 the library folder's name: "Tabs"), which the browser tab's title says too
-("caracole · Tabs"; on a phone the mark alone, the library's name in the title; in the
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title, and a badge a small pill in the tab row; in the
 Android app no name row at all, its own bar names the library),
 the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
@@ -4000,8 +4000,8 @@ Every page it serves names the library it shows, after caracole's name in its
 header and in the browser tab's title ("caracole · Tabs", "Look up · caracole ·
 Tabs"), as `index.html` does. A server of a library that isn't your usual one
 says so on every page it writes itself, with a badge beside the name, first in
-each title ("Scratch library · caracole · test-lib") and on a line of its own
-under the header on a phone, and the tab's logo on the badge's amber, so that
+each title ("Scratch library · caracole · test-lib") and, on a phone in a
+browser, as a small pill in the row of tabs, before them, and the tab's logo on the badge's amber, so that
 its pages are never taken for your library's. It prints the badge when it
 starts. How it knows:
 
