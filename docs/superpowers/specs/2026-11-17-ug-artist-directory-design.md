@@ -251,9 +251,11 @@ What holds:
 
 1. How much the order moves from night to night, the tail's above all. The first read measures it: each round's ids
    seen against `artists_count`.
-2. UG's terms of service (ultimate-guitar.com/about/tos.htm) were not read for this spec, since reading them would
-   have been a ninth request. caracole has read UG in bulk since 2026-10-18 without AGENTS.md naming its terms. The
-   directory reads more of the same site, so the owner may want them checked first. If they forbid automated access,
-   UG joins AGENTS.md's second exception, by the owner's choice alone.
+2. UG's terms of service (ultimate-guitar.com/about/tos.htm, read on 2026-11-17, one request) name no bots,
+   scrapers, crawlers or automated access. They say content "may be accessed for your personal, non-commercial use
+   only", and that you "will not duplicate or otherwise reproduce the Content … onto any … memory or device", except
+   to print text tabs and lyrics for personal, non-commercial use. That bears on what caracole already keeps (a UG
+   sheet in a private library) more than on the directory, which keeps artists' names and ids, never a tab. Whether
+   AGENTS.md should name these terms, as it does harptabs.com's, is the owner's call.
 3. Namesakes: is "whole name, then most tabs" right? Or should a song with two UG artists of one name stay on the
    to-do page until a `[artist_url]` picks one?
