@@ -1385,3 +1385,49 @@ def test_the_inbox_section_says_how_a_guitar_pro_file_is_named_for_any_song(conn
     assert ("a Guitar Pro or Power Tab file (.gp3, .gp4, .gp5, .gpx, .gp, .ptb) as `Artist - Title.gp5`, for any "
             "song, as its guitar-N") in section
     assert "Guitar Pro pages to click" not in section
+
+
+def _directory(conn, letters, artists=()):
+    """UG's artist directory with these listings read whole (ug/directory.py), and these artists (id, name, slug)."""
+    from caracole.ug import directory
+    from caracole.ug.bands import LETTERS, ListedArtist, ListingPage
+
+    for letter in letters:
+        listed = tuple(ListedArtist(i, name, slug, directory.page_address(i, slug), 9, None)
+                       for i, name, slug in artists if directory.letter_of(name) == letter)
+        directory.store_page(conn, ListingPage(letter, 1, 1, len(listed), listed), seen_at="2026-10-18T03:00:00Z",
+                             started="2026-10-18T03:00:00Z", now=NOW)
+    assert set(letters) <= set(LETTERS)
+
+
+def test_artists_to_find_lists_only_those_whose_listing_ugs_directory_hasnt_read_whole(conn, cfg):
+    covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
+    pereza = add_song(conn, "Pereza", "Princesas")
+    update_song(conn, pereza.id, match_decision="not_found")
+    assert "**Pereza** (1 song)" in todo(conn, cfg)
+    _directory(conn, ["p"])  # P read whole: UG lists no Pereza, nothing to find; M, Maná's, not read yet
+    text = todo(conn, cfg)
+    assert "## Artists to find on Ultimate Guitar (1)" in text and "**Maná** (1 song)" in text
+    assert "**Pereza**" not in text
+
+
+def test_once_every_listing_is_read_the_section_goes_and_a_review_says_ug_lists_no_such_artist(conn, cfg):
+    from caracole.ug.bands import LETTERS
+
+    covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
+    _directory(conn, LETTERS)
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    item = review_item(text, "Maná - Rayando el Sol")
+    assert "UG's artist listings, read whole, name no Maná" in item and "find the artist's page" not in item
+
+
+def test_an_artist_the_directory_names_is_looked_for_on_their_page(conn, cfg):
+    from caracole.ug.fetch import songs_to_fetch
+
+    s = covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
+    _directory(conn, ["m"], [(7004, "Maná", "")])
+    assert [x.id for x in songs_to_fetch(conn, Overrides(), NOW)] == [s.id]
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    assert "caracole looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")

@@ -1331,6 +1331,28 @@ def test_banma_found_on_its_artist_page_once_its_url_is_pasted(conn, tmp_path):
     assert songs_to_fetch(conn, PASTED, NOW) == []
 
 
+def test_banma_found_on_the_artist_page_ugs_directory_names_with_no_page_pasted(conn, tmp_path):
+    # UG's artist directory (ug/directory.py) names 宋冬野's page: no [artist_url], and no tab read to learn it.
+    from caracole.ug import directory
+    from caracole.ug.bands import ListedArtist, ListingPage
+
+    song = banma(conn)
+    ug = FakeUG()
+    best = banma_tab(2001234, rating=4.7, votes=50)
+    other = banma_tab(2001235, version=2, rating=4.2, votes=5)
+    serve_banma(ug, [best, other])
+    assert songs_to_fetch(conn, Overrides(), NOW) == []
+    named = ListedArtist(1234567, "Song Dongye (宋冬野)", "song_dongye", BANMA_ARTIST, 42, None)
+    directory.store_page(conn, ListingPage("s", 1, 1, 1, (named,)), seen_at="2026-10-18T03:00:00Z",
+                         started="2026-10-18T03:00:00Z", now=NOW)
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [song.id]
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert ug.requests == [artist_list(BANMA_ARTIST), f"{TAB}2001234", f"{TAB}2001235"]
+    assert out.sheet == 2001234 and get_song(conn, song.id).match_step == "artist_page"
+
+
 def soda_dml(conn):
     """Soda Stereo - De Música Ligera: every one of its tabs is a bare id, so the matcher found nothing."""
     song = matched(conn, "Soda Stereo", "De Música Ligera", "not_found", added_at="2026-10-17T00:00:00Z")
