@@ -5125,7 +5125,10 @@ in `Library/_songbooks/<name>/`:
   itself, the artist's name that opens the library page on their songs), each
   song opening where the songbook plays it (on its instrument too) and keeping its
   own settings, its scroll
-  speed, text size and chosen shapes among them. Previous and Next name the
+  speed, text size and chosen shapes among them. What a song opens (the settings, a
+  chord's card) Back closes, and the songbook stays on that song with what you
+  changed there; only a step to another song loads the page again, and Back from
+  it returns to the song before. Previous and Next name the
   songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone
   Next has a row of its own, with room for the title. They, a swipe across the
