@@ -234,7 +234,7 @@ form.youtube-sheet .f { flex: 1 1 260px; }
   .yt-thumb { width: 96px; height: 72px; }
 }
 @media (pointer: coarse) { .youtube-row .btn { min-height: 44px; } }
-/* A YouTube video's link pasted into the box (library.js linkMode): its panel in the results' place. */
+/* A link pasted into the box, a YouTube video's or a UG page's (library.js linkMode): its panel in the results' place. */
 .link-off { display: none !important; }
 .results.link-mode .request { display: none; }
 .link-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
@@ -245,6 +245,8 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 .link-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .link-form .f { flex: 1 1 200px; }
 @media (pointer: coarse) { .link-form .btn { min-height: 44px; } }
+.link-line:empty, .link-hits:empty { display: none; }
+.link-hits { display: grid; gap: 6px; }
 .foot { display: flex; }
 .foot form { margin: 0; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
