@@ -129,7 +129,9 @@ otherwise, this section wins.
     it without them. In their place:
     - rule 4: songbooks.css keeps its radii; 1f's radius test keeps `#songbooks` in its skip list for good, and the
       last of 1f, lane 2 and 3b to merge cuts the skip list to `("#songbooks",)` rather than emptying it;
-    - rule 9: songbooks.js's `replaceState(null, …)` stays (its entries are never search entries: harmless);
+    - rule 9: songbooks.js's `replaceState(null, …)` calls pass `history.state` all the same (one token each, no change
+      to what the tab does), a named crossing of Task 1a.4's: a `null` there wipes tabs.js's `{ tab: 1 }` entry and
+      1c's `search` count, so it is not harmless after all;
     - rule 10: Task 1b.1 deletes songbooks.css's one-artist leftovers itself (the `.selecting` rules naming
       `.filter-mark` or `.artist-only`, and the `by` column at ≥ 720 px), a named crossing, as the task that makes
       them dead;
