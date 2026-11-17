@@ -12,7 +12,9 @@ toolbar; Auto/Light/Dark and a strip of chord shapes; the sung line lit, a key m
 **Architecture:** Lane 5, beside the library page's four lanes, in six stages (5a–5f) merged into `main` one by one,
 each a branch from `main` after the one before merged, in the worktree `../caracole-lane5`. It owns
 src/caracole/viewer/ and render.py's page data, and their Kotlin port in `android/viewer` (SheetPage, HarmonicaPage, the
-songbook, SongPass); every change to what a page holds regenerates the corpus and moves the port in the same commit.
+songbook, SongPass), and in 5c.1 alone chordpro.py's chord-only lines and ChordPro.kt (the bars' rule it shares with
+sheet.py; no library lane's file); every change to what a page holds regenerates the corpus and moves the port in the
+same commit.
 
 **Tech Stack:** plain JavaScript and CSS inlined into the pages (viewer/), Python 3.14 (page.py, book.py, render.py;
 pytest with pytest-xdist; Chromium browser tests through tests/helpers/browser.py), Kotlin (`:viewer`, Gradle), Nix
@@ -60,8 +62,11 @@ columns), and the research in `.claude/handoff/ui-research-2026-11-17/reports/Sh
    key's word ("+2", "capo 2"), the key list. Tasks 5b.3, 5d.3, 5d.4.
 4. **A song with no timed lyrics, and one whose lyrics match too few lines**: no highlight, no clock, nothing broken.
    Tasks 5f.1, 5f.3.
-5. **A phone on its side, a 320 px phone, reduced motion**: the automatic full screen, 44–48 px targets, the steady
-   segment-free page. Tasks 5a.7, 5d.7, 5f.4.
+5. **A phone on its side, a 320 px phone, reduced motion**: the automatic full screen, 44–48 px targets (44 px wide
+   below 380 px), the steady segment-free page. Tasks 5a.7, 5d.7, 5f.4.
+6. **One script order on every viewer page** ("Where the stages meet" 9): Python's tuples, the Kotlin
+   `ViewerAssets.Page` lists and the tests that pin them agree after each of 5a.1, 5b.5, 5b.8 and 5e.2. Tasks 5a.1,
+   5b.5, 5b.8, 5e.2.
 
 ## Before the stages
 
@@ -78,18 +83,25 @@ columns), and the research in `.claude/handoff/ui-research-2026-11-17/reports/Sh
 Where a stage's section below says otherwise, this section wins.
 
 1. **Names.** 5a's and 5b's "Interfaces these stages produce" are the names every later stage uses: layers.js
-   (`window.caracoleLayers`: `history`, `doubleTap`, `SHORT`, `placeUnder`), viewer.js's stack (`open`, `close`,
-   `closeAll`, `topLayer`, `layers`, `DOCKED`), full screen's `data-controls` and `html[data-full]`, the header's
-   `header.head` with `#versions`, `#ver-now`, `#ver-line`, `#kinds`, `dl.facts#facts`, and kinds.js
-   (`window.caracoleKinds`). Where 5c–5f's sections name one of these by its role ("5a's layer helper", "the header"),
-   they mean these.
+   (`window.caracoleLayers`: `history`, `doubleTap`, `MARGIN_SKIP`, `SHORT`, `autoFull`, `placeUnder`, and 5d.6's
+   `toolbar`), viewer.js's stack (`open`, `close`, `closeAll`, `topLayer`, `layers`, `DOCKED`), full screen's
+   `data-controls` and `html[data-full]`, the header's `header.head` with `#versions`, `#ver-now`, `#ver-line`,
+   `#kinds`, `dl.facts#facts`, and kinds.js (`window.caracoleKinds`). Where 5c–5f's sections name one of these by its
+   role ("5a's layer helper", "the header"), they mean these. JavaScript both the sheet viewer and the harmonica page
+   need (the margins a double tap skips, the short screen's automatic full screen, the toolbar's place) is written once,
+   in layers.js; the dark palette (5e.1) and kinds.js's copy of the library's glyphs (5b.5) stay copies, each held by
+   its test.
 2. **D8, revised by the owner after planning: narrower columns, not a step-down in size.** Task 5c.6 lowers the
-   two-column layout's minimum column width (today 28 em) so two columns still fit the page at the reader's text size up
-   to about 22 px; the rule that two columns show only when the whole song fits on the screen stays; no `COLUMN_SIZES`
-   step-down and no `--cols-fs`. Its tests: at 1280 × 800 and 21 px a song that fits whole shows two columns (today it
-   shows one); at 18 px nothing changes for a song too tall to fit whole.
+   two-column layout's minimum column width from 28 em to 24 em (`[data-columns="2"] .sheet { columns: 2 24em; }`), so
+   two columns and their 56 px gap fit the page's 1,148 px at the reader's text size up to 22 px and not at 23; the
+   rule that two columns show only when the whole song fits on the screen stays; no `COLUMN_SIZES` step-down and no
+   `--cols-fs`. Its tests set the size in the address (`#fs=21`, `#fs=22`, `#fs=23`): at 1280 × 800 (the rail of
+   necks hidden, `#necks=0`) and 21 px a song that fits whole shows two columns (today it shows one); at 18 px nothing
+   changes for a song too tall to fit whole.
 3. **screen.js** (5e.2) is the one shared script for the reader's screen choices: the theme (5e), the key map (5f.4)
    and the screen timer (5f.5) all live in it; 5e.2 creates it (listed in `BUILD_FILES` and the Kotlin asset lists).
+   It is inlined on every viewer page (sheet.html, a kept version's page, a songbook, a harmonica tab's page), so no
+   script guards `screenKit` or has a branch for a page without it.
 4. **The bar's height.** 5d.2 raises `--foot` from 53 to 63 px for the words under the buttons; 5c.5's end room is
    written in `var(--foot)`, so whichever merges second needs no change.
 5. **The strip of chord shapes.** 5d.1 makes ⋯'s "All chord shapes" the strip's one switch (the bar's guitar button
@@ -99,6 +111,27 @@ Where a stage's section below says otherwise, this section wins.
 7. **The library's glyphs** are copied into kinds.js (5b.5) with a browser test that fails if they drift from rows.js's;
    if a library lane changes a glyph in rows.js, the test tells lane 5 to follow.
 8. **The version steppers (‹ ›) go** with the D2 C list, as the owner's mockups show.
+9. **One script order on every viewer page**, which each task that inlines a script extends, in Python and Kotlin
+   alike:
+   - sheet.html and a kept version's page: `strum, overlay, instruments, winds, layers, kinds, screen, viewer`;
+   - a songbook: `book, strum, overlay, instruments, winds, layers, screen, viewer` (no kinds.js);
+   - a harmonica tab's page: `strum, overlay, layers, kinds, screen, harptab`.
+
+   A stage's literal tuple or list below is "the list as it stands, plus the new script" in this order. The task that
+   adds a script updates, in the same commit, every test that pins the list: the order tests (test_viewer_layers.py's,
+   test_viewer_theme.py's: "before the page's own script", never "right before"), test_viewer_book.py's
+   `len(scripts)`, test_viewer_harptab_page.py's script list and its `</script>` count, and the `pieces` assets of
+   test_conformance_viewer_pages.py (the sheet's) and test_conformance_viewer_harmonica.py; and in Kotlin
+   `ViewerAssets.Page` (SHEET, SONGBOOK, HARMONICA) and `RenderBuild.ASSETS`.
+10. **The toolbar's room, from 1200 px** (5d.6): the autoscroll pill sits under the toolbar, and the key map's `room()`
+    (5f.4) counts it at the top there; 5c.5's half-screen test takes the window's foot as its floor where the bar sits
+    at the top; 5c.6's two-column tests use songs with more than the toolbar's 56 px of slack, and 5d.6 re-pins any
+    that stops fitting. The full-screen handle stays at the foot at every width (D14).
+11. **One rule for what moved** (D10): the header's Key (5b.3) and the bar's and the settings' word (5d.3) count the
+    move by viewer.js's `moved()`; 5d.3 puts `drawFacts` on it.
+12. **The README's pictures** are retaken only by whichever of 5d.8, 5e.6, 5f.7 and the library lanes merges last,
+    after taking main's `docs/screenshots/`; a PNG is never merged by hand (a conflict in one: take main's, retake).
+    In this lane that is 5f.7, unless a library lane that retakes them (1f.4) merges after it.
 
 **Merge order.** 5a, 5b, 5c, 5d, 5e, 5f, each from `main` after the one before merged; 5f.1 and 5f.2 land in one merge.
 
@@ -108,16 +141,22 @@ Where a stage's section below says otherwise, this section wins.
   opening a chord's card on a phone brings the controls back; the automatic full screen on a short screen has no
   history entry; layers opened at load (`#panel=1`, `#chord=`) push an entry.
 - 5b: the Capo line is left out on an instrument with no capo, as Tuning on one with no strings; the auto sheet beside a
-  human one keeps no version line; sources named as the library card names them ("gtptabs").
+  human one keeps no version line; sources named as the library card names them ("gtptabs"); the version line names
+  the version's label after "Ver N of M" where it has one ("acoustic"); a text tab and a game music tab take the
+  library card's guitar glyph; the settings keep their Guitar Pro row beside the list's Guitar Pro group (D11
+  deduplicates the two switches alone).
 - 5c: bars are kept in the .cho (chordpro prints them as "Am C | G Em |"); four beats a bar, shared among its chords;
   marks before the first chord or after the last sit outside the cells; the harmonica page keeps its 0.12 em spacing.
 - 5d: "+2" counts how far the chords on screen moved from the sheet as written (so taking off a sheet's capo reads
-  "no capo · +2"); the settings keep "Transpose" over the bar's word; the key's scale neck moves to the Harmony tab
-  (the harmonica page's Guitar tab keeps it); the toolbar is moved into the page by script (the tab order changes from
-  1200 px) and doesn't slide away; 44 px widths below 380 px.
-- 5e/5f: the strip is per song; no lit line in songbooks (their data has no lyrics); the lit line stays while paused
-  and goes when autoscroll ends; ↑ and ↓ become page turns on sheet pages; ← → in a songbook stay blocked while any
-  layer is open.
+  "no capo · +2"), and the header's Key counts the same (`moved()`); the settings keep "Transpose" over the bar's word;
+  the key's scale neck moves to the Harmony tab (the harmonica page's Guitar tab keeps it); the key list is a
+  right-hand rail from 900 px, docked on a phone; the toolbar is moved into the page by script (the tab order changes
+  from 1200 px) and doesn't slide away, the autoscroll pill under it and the full-screen handle at the foot (D14); 44 px
+  widths below 380 px, where the spec asks 48 (six 48 px tools leave a 320 px phone's key 24 px; put to the owner).
+- 5e/5f: the strip is per song, and shows by default below 1200 px, where no rail shows the shapes (the spec says "on
+  a phone"; told the owner); no lit line in songbooks (their data has no lyrics); the lit line stays while paused
+  and goes when autoscroll ends; ↑ and ↓ become page turns on sheet pages; the key map works in full screen; ← → in a
+  songbook stay blocked while any layer but full screen is open.
 
 ---
 
@@ -141,22 +180,35 @@ header", D2 "Versions and kinds", "Where it applies"). Mockups: `header.html` (o
   passes `history.state`, never `null`** (a layer's entry keeps its depth through `save()`).
 - `doubleTap(root, skip, then)`: `then(event)` on two `click`s within `DOUBLE_MS` (350) ms and `DOUBLE_PX` (30) px of
   each other whose targets are not inside `skip` (a selector), keyboard clicks (`detail === 0`) never counting.
+- `MARGIN_SKIP` (5a.6): the selector of what a double tap on the margins skips, the song's own elements and the
+  controls; the sheet viewer passes it as it is, the harmonica page with its own elements added (5a.8); 5c.2 adds
+  `.barcell, .beat`.
 - `SHORT`: `"(max-height: 499.98px)"`, the short screen (a phone on its side).
+- `autoFull({ handle, idle, changed })` (5a.7) → `{ end() }`: the short screen's automatic full screen, for both
+  pages.
 - `placeUnder(pop, anchor)` (5b.7): sets `--pop-top` and `--pop-left` on `pop` (px, in the page's coordinates) so it sits
-  6 px under `anchor`'s box, its left edge on the anchor's, kept 8 px inside `.page`'s box. 5d's key list on a laptop
-  uses it.
+  6 px under `anchor`'s box, its left edge on the anchor's, kept 8 px inside `.page`'s box. The versions list uses it
+  from 900 px.
+- `toolbar(bar, head)` (5d.6) → `{ wide, place(), edge() }`: the bar as a toolbar under the song's header from 1200 px,
+  for both pages.
+- layers.js makes no element of its own; it writes only to the elements its callers hand it (`placeUnder`'s
+  `pop`, `autoFull`'s `handle` and `<html>`'s `data-full`, `toolbar`'s `bar` and `<html>`'s `--toolbar-bottom`).
 
 **viewer.js's stack** (5a.2): `layers` (`[{el, opener, nested}]`, last on top), `open(el, opener)`, `close(el)`,
 `closeAll(keep)`, `topLayer()`; below 900 px (`wide`) one layer at a time (opening one closes every other but a nested
 one); `DOCKED` (the elements that dock at the foot on a phone: `panel`, `card`, `harmony`, `vList`, `necksEl`), which
-`dock()` reads. **5d's key list** is a layer: it is pushed with `open(keyList, keyButton)`, and is added to `DOCKED`.
-**5f's key map** asks `layers.length` (a layer open) and `topLayer()`.
+`dock()` reads. **5d.4's key list** is a layer: it is pushed with `open(keyList, keyNow)`, is added to `DOCKED` (on a
+phone it docks) and to `rails` (from 900 px a right-hand rail in the settings' place); **5d.5** takes `harmony` out of
+`DOCKED`, `rails` and `restack()`'s list with its panel. **5f's key map** asks `layers.length` (a layer open) and
+`topLayer()`, full screen's layer not counted (it keeps the keys working, D14 with D16).
 
 **Full screen** (5a.6–5a.8): `html[data-full="on"]` (a layer whose element is `button.handle#handle`) or
 `html[data-full="auto"]` (the short screen's, no history entry). While it is set, CSS hides **every element marked
 `data-controls`** (5a marks `#bar`; **5d marks its laptop toolbar `data-controls`** and nothing else changes), `.facts`
 and `.why`; viewer.js's `railOn()` is false (the rail goes, the song takes the width). `#handle`'s click, Escape and
-Back restore. The settings' row `#full-open` ("Hide controls") opens it.
+Back restore. The handle sits at the window's foot at every width (D14), the laptop's toolbar (5d.6) included. The
+settings' row `#full-open` ("Hide controls") opens it, the first row of `#places`: Hide controls, then Guitar Pro (the
+song's files, `_with_guitar`, after `_FULL_ROW` once 5d.5 takes the Harmony row out), then Export PDF.
 
 **The header** (5b), on sheet.html, version pages and the harmonica page, in this order inside `header.head`:
 `a.back` ("‹", 48 × 48 px, `aria-label` "Library" or, on a harmonica page with a sheet, "Chord sheet" with
@@ -167,8 +219,10 @@ Back restore. The settings' row `#full-open` ("Hide controls") opens it.
 viewer.js `drawFacts()` redraws it in `render()`.
 
 **kinds.js** (5b.5, on sheet pages and the harmonica page, not the songbook; `window.caracoleKinds`, frozen):
-`GLYPHS` (the library card's drawings of `sheet`, `ukulele`, `guitar`, `harmonica`, `score`), `attach(o)` →
-`{ links(), place() }` or null; the data member `kinds` (render.py `_kinds_data`, shape in 5b.4); the list
+`GLYPHS` (the library card's drawings of `sheet`, `ukulele`, `guitar`, `harmonica`, `score`), `GLYPH_OF` (each kind's
+glyph, card.js's: `tab` and `gametab` → `guitar`), `attach(o)` → `{ links(), place() }` or null (`o.open(el, opener)`
+and `o.close(el)` take the list's element, `o.sheetPath` absent where the song has no sheet); the data member `kinds`
+(render.py `_kinds_data`, shape in 5b.4); the list
 `#version-list` holds `section.kind-group[data-kind]` each with `h3.kind-head` and `ol.vers`.
 
 ### Before you start (both stages)
@@ -201,11 +255,13 @@ viewer.js `drawFacts()` redraws it in `render()`.
   _winds(), _layers(), script`; docstring "six scripts" → seven)
 - Modify: `src/caracole/viewer/harptab_page.py` (scripts `(_sound(), _overlay(), _layers(), script)`; docstring)
 - Modify: `android/viewer/src/main/kotlin/io/github/danielhp95/caracole/viewer/ViewerAssets.kt` (`Page`: `layers.js`
-  before `viewer.js` in SHEET and SONGBOOK, before `harptab.js` in HARMONICA),
+  after `winds.js`, before `viewer.js` in SHEET and SONGBOOK, after `overlay.js`, before `harptab.js` in HARMONICA:
+  "Where the stages meet" 9),
   `.../viewer/render/RenderBuild.kt` (`ASSETS` + `"layers.js"`), `.../viewer/pages/HarmonicaPage.kt` (KDoc's scripts)
 - Modify: `tests/test_viewer_book.py` (`len(scripts) == 7`), `tests/test_viewer_harptab_page.py` (the scripts list:
   `strum.js, overlay.js, layers.js, harptab.js`; the `</script>` count + 1), `tests/test_conformance_viewer_harmonica.py`
-  (the assets list near line 638 + `("layers.js", page._layers())`)
+  (the assets list near line 638 + `("layers.js", page._layers())`), `tests/test_conformance_viewer_pages.py`
+  (`pieces`' assets + `("layers.js", page._layers())` after `winds.js`)
 - Modify: `tests/helpers/viewer_pages.py` (`back`, `forward`, `entries`, `double_tap`)
 - Test: `tests/test_viewer_layers.py` (new)
 
@@ -245,11 +301,14 @@ viewer.js `drawFacts()` redraws it in `render()`.
     `error` listener; open, shut, open → `errors == []`, `entries(b) == (1, 2)`, `backs == []`.
   - `test_every_viewer_page_inlines_layers_js_before_its_own_script` (no browser): in `build_viewer(UG_CHO)`,
     `build_songbook(...)` and `build_harmonica_viewer("4 -4 5", title="T", tab_file="harmonica-1.txt")`, layers.js's text
-    is inlined, and its `<script>` comes right before viewer.js's (harptab.js's).
+    is inlined once, after winds.js's (overlay.js's on the harmonica page) and before the page's own script, viewer.js's
+    (harptab.js's): "before", never "right before", since 5b.5, 5b.8 and 5e.2 put kinds.js and screen.js between
+    them ("Where the stages meet" 9).
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_viewer_layers.py`: no such file
   layers.js (FileNotFoundError while writing the bare page).
-- [ ] **Step 3: Implement** — layers.js, an IIFE, `"use strict"`, standard library only, no DOM writes. The
-  reconciliation (the tests leave the bookkeeping open):
+- [ ] **Step 3: Implement** — layers.js, an IIFE, `"use strict"`, standard library only, no element of its own (its
+  later helpers write only to the elements their callers hand them: Interfaces). The reconciliation (the tests leave
+  the bookkeeping open):
   ```js
   const depthOf = (s) => (s && Number.isInteger(s.caracoleLayer) && s.caracoleLayer > 0 ? s.caracoleLayer : 0);
   let pushed = depthOf(history.state), wanted = 0, pending = false, queued = false, off = false;
@@ -278,7 +337,8 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - [ ] **Step 5: Commit** — `git add src/caracole/viewer/layers.js src/caracole/viewer/page.py
   src/caracole/viewer/book.py src/caracole/viewer/harptab_page.py android/viewer tests/test_viewer_layers.py
   tests/helpers/viewer_pages.py tests/test_viewer_book.py tests/test_viewer_harptab_page.py
-  tests/test_conformance_viewer_harmonica.py tests/conformance/` — `feat(viewer): layers.js, one history entry a layer`.
+  tests/test_conformance_viewer_harmonica.py tests/test_conformance_viewer_pages.py tests/conformance/` —
+  `feat(viewer): layers.js, one history entry a layer`.
 
 #### Task 5a.2: The sheet viewer's layers in the history, one at a time on a phone
 
@@ -314,7 +374,7 @@ viewer.js `drawFacts()` redraws it in `render()`.
     card hidden, settings shown; `back(b)` → settings hidden.
   - `test_a_change_made_with_a_layer_open_stays_after_back`: phone, settings, `b.click("#up")` →
     `[location.hash, history.state.caracoleLayer] == ["#t=1", 1]`; `back(b)` → `location.hash == "#t=1"`,
-    `#shift` "+1".
+    `#shift` "+1" (5d.3 gives `#shift` a key and a word: it then reads `#shift .d`, whose word ends "+1").
   - `test_a_file_whose_history_refuses_entries_still_opens_and_closes_them` (brief case 1): `pushState` made to throw
     (as 5a.1), settings opened and closed by Escape, a card by ×: no page error (`window.errors == []`),
     `entries(b) == (1, 2)`.
@@ -391,7 +451,8 @@ viewer.js `drawFacts()` redraws it in `render()`.
     test_viewer_necks.py `served` with `songbook_csp`; brief case 1: no storage there): song 1 of a songbook of two
     (`BookSong`s of test_viewer_instruments_page.py's `IN_E` and `THREE`), `window.marker = 1`, settings, `#up` → hash
     `song-1=&t=1`; `back(b)` → `#panel`
-    hidden, `window.marker == 1` (no reload), `#shift` "+1", `location.hash` still has `t=1`.
+    hidden, `window.marker == 1` (no reload), `#shift` "+1" read through the file's `SAID` (which 5d.3 points at
+    `#shift .d`), `location.hash` still has `t=1`.
   - `test_a_step_to_the_next_song_with_a_layer_open_then_back_returns_to_it` (laptop): settings rail, the pager's
     `a[rel=next]` → song 2 shown (a load: `window.marker` gone); `back(b)` → song 1, no layer open, and after its settle
     `history.state` has no `caracoleLayer`.
@@ -434,28 +495,38 @@ viewer.js `drawFacts()` redraws it in `render()`.
   aria-label="Show controls"></button>\n'`; `_FULL_ROW = '<div id="full-row"><button type="button" class="goto"
   id="full-open"><span class="goto-lab">Hide controls</span><span class="goto-v">full screen' + _GO +
   '</span></button></div>\n'`; `_CONTROLS`: `data-controls` on `<div class="bar" id="bar" …>`, `_FULL_ROW` first in
-  `#places` (before `_HARMONY_ROW`), `_HANDLE` right after the pill's `</div>`; the comment above `_CONTROLS`)
-- Modify: `src/caracole/viewer/layers.js` (`doubleTap`, `DOUBLE_MS`, `DOUBLE_PX`)
+  `#places` (before `_HARMONY_ROW`, so the places read Hide controls, Harmony, Guitar Pro, Export PDF; `_with_guitar`
+  still anchors after `_HARMONY_ROW` until 5d.5 moves it after `_FULL_ROW`), `_HANDLE` right after the pill's
+  `</div>`; the comment above `_CONTROLS`)
+- Modify: `src/caracole/viewer/layers.js` (`doubleTap`, `DOUBLE_MS`, `DOUBLE_PX`, `MARGIN_SKIP`)
 - Modify: `src/caracole/viewer/viewer.css` (`.handle`; `html[data-full] :is([data-controls], .facts, .why) { display:
   none !important; }`)
 - Modify: `src/caracole/viewer/viewer.js` (`handle` a layer: `open(handle, opener)` sets `doc.dataset.full = "on"`,
   shows it, `drawNecks()`, `layout()`; `close(handle)` the reverse; `landing(handle)` is the handle; `railOn()` and
-  `drawNecks()` read `!doc.dataset.full`; `#full-open` → `close(panel)`, `open(handle, more)`; `doubleTap(document,
-  MARGIN_SKIP, …)` opens it unless `data-full` is set; the handle's click closes it)
+  `drawNecks()` read `!doc.dataset.full`; `#full-open` → `close(panel)`, `open(handle, more)`;
+  `caracoleLayers.doubleTap(document, caracoleLayers.MARGIN_SKIP, …)` opens it unless `data-full` is set; the handle's
+  click closes it)
+- Modify: `tests/test_viewer_panels.py` (`test_harmony_guitar_pro_and_export_are_rows_at_the_end`: `PLACES`' rows
+  gain the full-screen row first, `["full-open", "Hide controls", "full screen", None, None]` in `folded["rows"]`
+  and `["full-open", "Hide controls", "full screen"]` in the served `row[:3]`s; `served_rows["rows"][1]` and `[2]`
+  become `[2]` and `[3]`)
 - Modify: `docs/usage.md` (a bullet **Full screen**), `AGENTS.md` (viewer/: full screen, `data-controls`)
 - Test: `tests/test_viewer_full_screen.py` (new)
 
 **Interfaces:**
 - Consumes: 5a.2's stack, `double_tap` (5a.1).
-- Produces: `#handle`, `#full-open`, `[data-controls]`, `html[data-full]`, `caracoleLayers.doubleTap`; viewer.js's
-  `MARGIN_SKIP` = `"a, button, input, select, textarea, summary, label, [role=button], [tabindex], .c, .s, .w, .y, .m,
+- Produces: `#handle`, `#full-open`, `[data-controls]`, `html[data-full]`, `caracoleLayers.doubleTap`;
+  `caracoleLayers.MARGIN_SKIP` (layers.js, so the harmonica page reads it too: 5a.8) =
+  `"a, button, input, select, textarea, summary, label, [role=button], [tabindex], .c, .s, .w, .y, .m,
   pre, h1, h2, h3, .artist, .facts, .versions, .sheet-ui, .bar, .pill, .handle, .necks, .strip, .tip, details, .notice,
-  .credit, .foot, .pager"`.
+  .credit, .foot, .pager"` (5c.2 adds `.barcell, .beat`).
 
 - [ ] **Step 1: Write the failing test** —
   - `test_the_page_has_a_handle_and_hide_controls` (no browser): `build_viewer(UG_CHO)` holds `_HANDLE` once, hidden,
     named "Show controls"; `#bar` carries `data-controls`; `#full-open` reads "Hide controls" and is the first row of
     `#places`; a songbook's page holds both too.
+  - test_viewer_panels.py's `test_harmony_guitar_pro_and_export_are_rows_at_the_end` as Files says: it fails until
+    the row is there.
   - `test_hide_controls_hides_the_bar_the_facts_and_the_rail_and_the_handle_brings_them_back` (laptop 1280: the rail
     shows): `#more`, `#full-open` → `data-full == "on"`, `#bar`'s and `#facts`' `display == "none"`, `#necks` hidden and
     no `data-necks`, `#sheet` wider than before, `#handle` shown at the foot (its bottom within 1 px of `innerHeight`,
@@ -485,23 +556,28 @@ viewer.js `drawFacts()` redraws it in `render()`.
   tests/test_viewer_necks.py tests/test_viewer_layout.py tests/test_viewer_print.py`; corpus step (page.json's
   `_CONTROLS` and `_SHEET_CONTROLS` move: the Kotlin port reads them as data and needs no change).
 - [ ] **Step 5: Commit** — `git add src/caracole/viewer/page.py src/caracole/viewer/layers.js src/caracole/viewer/viewer.css
-  src/caracole/viewer/viewer.js tests/test_viewer_full_screen.py docs/usage.md AGENTS.md tests/conformance/` —
-  `feat(viewer): full screen, from More or a double tap beside the song`.
+  src/caracole/viewer/viewer.js tests/test_viewer_full_screen.py tests/test_viewer_panels.py docs/usage.md AGENTS.md
+  tests/conformance/` — `feat(viewer): full screen, from More or a double tap beside the song`.
 
 #### Task 5a.7: On a short screen the controls slim to the handle by themselves
 
 **Files:**
-- Modify: `src/caracole/viewer/layers.js` (`SHORT`)
-- Modify: `src/caracole/viewer/viewer.js` (`const short = matchMedia(caracoleLayers.SHORT)`; `autoFull()` at start and
-  on `short`'s `change`: sets `doc.dataset.full = "auto"` and shows the handle when it matches, no layer is open and
-  `data-full` is unset, and `slimmed` is false; ends it when it stops matching; the handle's click and Escape in
-  `"auto"`, and any `open()`, end it and set `slimmed = true` until `short` changes again; no history entry)
+- Modify: `src/caracole/viewer/layers.js` (`SHORT`; `autoFull({ handle, idle, changed })`, the short screen's rule
+  written once for both pages: `matchMedia(SHORT)`, and at start and on its `change`, sets
+  `document.documentElement.dataset.full = "auto"` and shows `handle` when it matches, `idle()` is true (no layer
+  open), `data-full` is unset and `slimmed` is false; ends it (deletes `data-full`, hides `handle`) when it stops
+  matching; calls `changed()` after either; returns `{ end() }`, which ends `"auto"` and sets `slimmed = true` until
+  `SHORT` changes again; no history entry)
+- Modify: `src/caracole/viewer/viewer.js` (`const auto = caracoleLayers.autoFull({ handle, idle: () => layers.length
+  === 0, changed: () => { drawNecks(); layout(); } })`; the handle's click and Escape in `"auto"`, and any `open()`,
+  call `auto.end()`)
 - Modify: `docs/usage.md` (the Full screen bullet: on its side)
 - Test: `tests/test_viewer_full_screen.py`
 
 **Interfaces:**
 - Consumes: 5a.6.
-- Produces: `html[data-full="auto"]`; `caracoleLayers.SHORT`.
+- Produces: `html[data-full="auto"]`; `caracoleLayers.SHORT`, `caracoleLayers.autoFull` (5a.8's harmonica page calls
+  it too).
 
 - [ ] **Step 1: Write the failing test** —
   - `test_under_500_px_tall_the_controls_slim_by_themselves_and_a_tap_brings_them_back` (`{"width": 844, "height":
@@ -526,13 +602,15 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - Modify: `src/caracole/viewer/harptab_page.py` (`_BAR`, and so `_BAR_RAW`: `data-controls` on `#bar`;
   `_PILL = """…""" + page._HANDLE`, imported from page.py)
 - Modify: `src/caracole/viewer/harptab.js` (layer `"full"`: `data-full`, the handle, the rail off while it is set
-  (`drawRail`), Escape and Back; `caracoleLayers.doubleTap(document, MARGIN_SKIP + ", .h, .rp, .legend, .why", …)`; the
-  short screen as viewer.js)
+  (`drawRail`), Escape and Back; `caracoleLayers.doubleTap(document, caracoleLayers.MARGIN_SKIP + ", .h, .rp, .legend,
+  .why", …)` (layers.js's selector: viewer.js isn't on this page); the short screen through layers.js's rule, `const
+  auto = caracoleLayers.autoFull({ handle, idle: () => layers.length === 0, changed: drawRail })`, its handle's click,
+  Escape and any `openLayer()` calling `auto.end()`, never a copy of viewer.js's)
 - Modify: `docs/usage.md` (the harmonica page's paragraph: full screen by a double tap and on its side)
 - Test: `tests/test_viewer_full_screen.py` (section "a harmonica tab's page")
 
 **Interfaces:**
-- Consumes: 5a.5, 5a.6, 5a.7.
+- Consumes: 5a.5, 5a.6, 5a.7 (`caracoleLayers.MARGIN_SKIP`, `caracoleLayers.autoFull`).
 - Produces: harptab.js's `"full"` layer.
 
 - [ ] **Step 1: Write the failing test** — `test_a_harmonica_page_goes_full_screen_by_a_double_tap` (laptop, a readable
@@ -599,7 +677,11 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - Modify: `src/caracole/viewer/viewer.css` (`.back`: `width: 48px; height: 48px; margin: 0 0 0 -14px;
   justify-content: center; font-size: 1.75rem; line-height: 1;`)
 - Modify: `android/viewer/.../pages/SheetPage.kt` (`body`), `.../pages/HarmonicaPage.kt` (`header`)
-- Modify: `tests/test_viewer.py`, `tests/test_viewer_harptab_page.py` (their "‹ Library" / "‹ Chord sheet" text)
+- Modify: `tests/test_viewer.py`, `tests/test_viewer_harptab_page.py` (their "‹ Library" / "‹ Chord sheet" text),
+  `tests/test_render_harmonica.py` (lines ~87 and ~118: `'<a class="back" href="sheet.html" data-sheet>‹ Chord
+  sheet</a>'` → `'<a class="back" href="sheet.html" data-sheet aria-label="Chord sheet" title="Chord sheet">‹</a>'`,
+  `'<a class="back" href="../../index.html">‹ Library</a>'` → `'<a class="back" href="../../index.html"
+  aria-label="Library" title="Library">‹</a>'`)
 - Test: `tests/test_viewer_header.py` (new)
 
 **Interfaces:**
@@ -612,7 +694,8 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_viewer_header.py`.
 - [ ] **Step 3: Implement** — as in Files.
 - [ ] **Step 4: Run it and see it pass** — the same, then `nix develop -c pytest -q tests/test_viewer.py
-  tests/test_viewer_harptab_page.py`; corpus step (`PagesReplay`, `HarmonicaPageReplay`).
+  tests/test_viewer_harptab_page.py tests/test_render_harmonica.py`; corpus step (`PagesReplay`,
+  `HarmonicaPageReplay`).
 - [ ] **Step 5: Commit** — `feat(viewer): the title block's ‹, a thumb's target` with the files above and
   `tests/conformance/`.
 
@@ -666,7 +749,9 @@ viewer.js `drawFacts()` redraws it in `render()`.
 **Files:**
 - Modify: `src/caracole/viewer/viewer.js` (`drawFacts()` in `render()` in place of the `#facts` block near line 956;
   `keyFacts(moved)`: no capo `[["", sounds, moved, key.from]]`, a capo `[["", keyName(shift()), " shapes", ""],
-  ["sounds ", sounds, moved, ""]]` and `["", "", "", "key " + key.from]`; `keyLine` stays for `keyLabel`)
+  ["sounds ", sounds, moved, ""]]` and `["", "", "", "key " + key.from]`; `moved` the move's words (" (+1)"),
+  from `state.t` here; 5d.3 makes it `moved()`'s, the bar's rule ("Where the stages meet" 11); `keyLine` stays for
+  `keyLabel`)
 - Modify: `docs/usage.md` ("The sheet viewer": the header's facts)
 - Test: `tests/test_viewer_header.py`
 
@@ -680,7 +765,9 @@ viewer.js `drawFacts()` redraws it in `render()`.
   [r.dataset.fact, r.querySelector('dd').textContent])"`:
   - `test_the_facts_follow_the_capo_and_the_transposition` (UG_CHO, G shapes capo 2): at load `[["tuning", "E A D G B
     E"], ["capo", "2"], ["key", "G shapes · sounds A · key from the tab"]]`; `#capo-down` twice → capo "none", key
-    "A · from the tab"; `#up` → key "A# (+1) · …" as `keyName` spells it (assert the bold text and " (+1)").
+    "A · from the tab"; `#up` → key "A# (+1) · …" as `keyName` spells it (assert the bold text and " (+1)"). 5d.3
+    moves these two onto `moved()`: "A (+2) · from the tab" with the capo off, "A# (+3) · …" after `#up`, as the bar's
+    "no capo · +3".
   - `test_another_instrument_has_its_own_strings_and_one_with_none_has_no_tuning_or_capo` (brief case 4): Instrument
     ukulele → tuning "G C E A"; piano → rows `["key"]` only; harmonica → no tuning, no capo, an `inst` row from
     winds.js.
@@ -698,7 +785,7 @@ viewer.js `drawFacts()` redraws it in `render()`.
 #### Task 5b.4: render.py gives every page of the song its other kinds
 
 **Files:**
-- Modify: `src/caracole/render.py` (`_kinds_data(conn, song, files, tabs) -> dict`; `render_song` passes it as
+- Modify: `src/caracole/render.py` (`_kinds_data(conn, song, files, tabs) -> dict`; `_render_song` passes it as
   `kinds=` to the human sheet's viewer and an auto sheet standing alone (`_render_sheet`, `_write_viewer`) and to each
   version page (`_render_versions`, `_render_version`), never to an auto sheet beside a human one; `_SCORE_FORMATS`)
 - Modify: `src/caracole/viewer/page.py` (`build_viewer(..., kinds=None)` → `data["kinds"] = dict(kinds)` after
@@ -738,7 +825,7 @@ viewer.js `drawFacts()` redraws it in `render()`.
   library_page._SCORE_FORMATS`).
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_render_kinds.py`: no `kinds`.
 - [ ] **Step 3: Implement** — as in Interfaces; one query of the song's files and their versions' providers
-  (`kept_files`, `get_version`), `guitar_files`, the harmonica `tabs` already read in `render_song`.
+  (`kept_files`, `get_version`), `guitar_files`, the harmonica `tabs` already read in `_render_song`.
 - [ ] **Step 4: Run it and see it pass** — the same, then `nix develop -c pytest -q tests/test_render_versions.py
   tests/test_render_harmonica.py tests/test_render_all.py`; corpus step (render.jsonl: `RenderReplay` and SongPass.kt).
 - [ ] **Step 5: Commit** — `feat(render): every viewer of a song names its other kinds`.
@@ -746,12 +833,14 @@ viewer.js `drawFacts()` redraws it in `render()`.
 #### Task 5b.5: kinds.js and the version line with an icon a kind
 
 **Files:**
-- Create: `src/caracole/viewer/kinds.js` (`GLYPHS`; `attach(o)`; the line: `#ver-line`'s words and `#kinds`'s icons)
+- Create: `src/caracole/viewer/kinds.js` (`GLYPHS`; `GLYPH_OF`; `attach(o)`; the line: `#ver-line`'s words and
+  `#kinds`'s icons)
 - Modify: `src/caracole/viewer/page.py` (`_VERSIONS` = `<div class="versions" id="versions" hidden>\n<button
   type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list"
   aria-expanded="false"><span id="ver-line"></span><svg …today's chevron…/><span class="kinds" id="kinds"></span>
   </button>\n</div>\n`; `_body` places it after the artist line, before `facts_html`; `BUILD_FILES` + kinds.js;
-  `_kinds()` loader; scripts `(…, _winds(), _layers(), _kinds(), script)`)
+  `_kinds()` loader; scripts `(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), script)`: "Where
+  the stages meet" 9; the module docstring's "six scripts" → seven; book.py's songbook takes no kinds.js)
 - Modify: `src/caracole/viewer/viewer.js` (the versions block near lines 2362–2534 moves into kinds.js; `‹ ›`
   (`vPages`, `vAt`, `#ver-prev`, `#ver-next`) go; `const kinds = window.caracoleKinds ? caracoleKinds.attach({data,
   here: pageName(), served, sheetPath: sheetPath(), carry: vAddress, open, close, inSight}) : null;` `save()` calls
@@ -759,21 +848,28 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - Modify: `src/caracole/viewer/viewer.css` (`.vstep` goes; `.kinds { display: inline-flex; gap: 10px; }`,
   `.kind { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }`, `.kind svg { width: 16px;
   height: 16px; }`, `.kind .n { font-size: .8rem; font-variant-numeric: tabular-nums; }`)
-- Modify: `android/viewer/.../ViewerAssets.kt` (SHEET + `kinds.js` before `viewer.js`), `.../render/RenderBuild.kt`
-  (`ASSETS` + `"kinds.js"`)
+- Modify: `android/viewer/.../ViewerAssets.kt` (SHEET `strum.js, overlay.js, instruments.js, winds.js, layers.js,
+  kinds.js, viewer.js`), `.../render/RenderBuild.kt` (`ASSETS` + `"kinds.js"`)
 - Modify: `tests/test_viewer_versions.py` (`SEEN` drops prev/next; the line tests; ‹ › tests go;
-  `test_the_text_size_goes_along_to_the_next_version` and `…rail_of_necks_hidden…` read a list link's `href`)
+  `test_the_text_size_goes_along_to_the_next_version` and `…rail_of_necks_hidden…` read a list link's `href`),
+  `tests/test_conformance_viewer_pages.py` (`pieces`' assets + `("kinds.js", page._kinds())` after `layers.js`),
+  `tests/test_viewer_layers.py` (its order test also finds kinds.js between layers.js and viewer.js on a sheet, and none
+  in a songbook)
 - Modify: `docs/usage.md` (the versions paragraph near line 2461), `AGENTS.md` (viewer/ **Versions** bullet)
 - Test: `tests/test_viewer_versions.py`
 
 **Interfaces:**
 - Consumes: 5b.4's `kinds`; 5a's `open`/`close`.
 - Produces: `caracoleKinds.attach(o)`: `o = {data, here, served, sheetPath, carry(page) → href, open(el, opener),
-  close(el), inSight(el)}`, returning `{links(), place()}`, or null on a page with no `#versions` or nothing to show;
-  `GLYPHS`; the line's words: `[group name ("Chords", "Ukulele chords"), this page's "Ver N of M" (M = `versions.total`,
-  none for M = 1) or, on a page that is none of UG's, `vOne.label` ("LaCuerda's sheet"), then its rating
+  close(el), inSight(el)}` (`sheetPath` may be absent: a harmonica tab of a song with no sheet, 5b.8), returning
+  `{links(), place()}`, or null on a page with no `#versions` or nothing to show; `GLYPHS`; `GLYPH_OF`, each kind's
+  glyph as card.js's things name it: `{sheet: "sheet", ukulele: "ukulele", guitar: "guitar", tab: "guitar",
+  harmonica: "harmonica", gametab: "guitar", score: "score"}`; the line's words: `[group name ("Chords", "Ukulele
+  chords"), this page's "Ver N of M" (M = `versions.total`, none for M = 1) or, on a page that is none of UG's,
+  `vOne.label` ("LaCuerda's sheet"), then the version's label where it has one ("acoustic"), then its rating
   "★ 4.86 (408)" (votes `toLocaleString("en-US")`) or "New"]` joined " · ", no "the one" tag on the line; the icons in
-  the card's order, the chord sheet's count `versions.total` (1 without versions), each group's its items'; a `.vh`
+  the card's order, each drawn by `GLYPH_OF[kind]`, the chord sheet's count `versions.total` (1 without versions),
+  each group's its items'; a `.vh`
   span names them ("13 chord versions, 2 Guitar Pro files, 1 harmonica tab"). The line shows where `versions` lists
   any version, or the song has more than this page alone.
 
@@ -788,13 +884,17 @@ viewer.js `drawFacts()` redraws it in `render()`.
   - `test_without_versions_or_other_kinds_there_is_no_line` and `test_the_songbook_has_no_line` (as today's).
   - `test_the_kind_icons_are_the_library_cards_drawings`: a page inlining library_assets/rows.js, then kinds.js, then a
     script comparing, for each name of `caracoleKinds.GLYPHS`, its paths with `caracoleRows({}).glyph(name)`'s (the
-    sprite's `#glyph-NAME` symbol's paths where rows.js draws a `<use>`, else the svg's own) → all equal.
+    sprite's `#glyph-NAME` symbol's paths where rows.js draws a `<use>`, else the svg's own) → all equal; and
+    `caracoleKinds.GLYPH_OF` against card.js's things, read from library_assets/card.js's source (its `kind: "…",
+    glyph: "…"` pairs, the sheet's `ukulele ? "ukulele" : "sheet"` as both) → every kind of 5b.4's `kinds` has
+    card.js's glyph (`tab` and `gametab` the guitar's).
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_viewer_versions.py -k "line or one_version
   or lacuerda or ukulele or without or songbook or icons"`.
 - [ ] **Step 3: Implement** — as in Files and Interfaces; the five GLYPHS' paths copied from rows.js's `GLYPHS`, drawn
-  as rows.js's `glyph` draws them (24-unit grid, stroke `currentColor`, width 1.8, round caps, `aria-hidden`).
+  as rows.js's `glyph` draws them (24-unit grid, stroke `currentColor`, width 1.8, round caps, `aria-hidden`);
+  `GLYPH_OF` copied from card.js's things.
 - [ ] **Step 4: Run it and see it pass** — the same, then `nix develop -c pytest -q tests/test_viewer_versions.py
-  tests/test_render_versions.py tests/test_sheet_versions_end_to_end.py`; corpus step.
+  tests/test_render_versions.py tests/test_sheet_versions_end_to_end.py tests/test_viewer_layers.py`; corpus step.
 - [ ] **Step 5: Commit** — `feat(viewer): the version line names the kind and counts every kind the song has`.
 
 #### Task 5b.6: One list grouped by kind
@@ -803,17 +903,18 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - Modify: `src/caracole/viewer/page.py` (`_VERSION_LIST`: its head as today, the h2 "Versions", then `<div
   id="kind-groups"></div>`; `#ver-acts` and `#ver-items` are drawn inside the Chords group)
 - Modify: `src/caracole/viewer/kinds.js` (`drawGroups()`: `section.kind-group[data-kind]` > `h3.kind-head` (its glyph,
-  its name, its count); Chords: `#ver-acts` then `ol.vers#ver-items`, today's rows, the page's own ticked (a check
-  glyph before its name, `aria-current="page"`, no link), "★ 4.85 (81)" or "New", Keep, Make this the one, Back to our
-  pick and "On UG" as today; without `versions`, one row, the chord sheet (`kinds.page`), named "Chord sheet" or
-  "Ukulele chords"; each other group `ol.vers` of `li.ver > a.ver-main`, named by its `label`: Guitar Pro served and
-  `browser` → `/guitar?file=` + the encoded library path, "in the browser"; else the file with its `download`; a text
-  tab and a game music tab their file; a harmonica tab its `page` + `carry`; a score PDF the file, any other score its
-  `download`)
+  `GLYPH_OF[kind]`, its name, its count); Chords: `#ver-acts` then `ol.vers#ver-items`, today's rows, the page's own
+  ticked (a check glyph before its name, `aria-current="page"`, no link), "★ 4.85 (81)" or "New", Keep, Make this the
+  one, Back to our pick and "On UG" as today; without `versions`, one row, the chord sheet (`kinds.page`), named "Chord
+  sheet" or "Ukulele chords"; each other group `ol.vers` of `li.ver > a.ver-main`, named by its `label`: Guitar Pro
+  served and `browser` → `/guitar?file=` + the encoded library path, "in the browser"; else the file with its
+  `download`; a text tab and a game music tab their file; a harmonica tab its `page` + `carry`; a score PDF the file,
+  any other score its `download`)
 - Modify: `src/caracole/viewer/viewer.css` (`.kind-group + .kind-group { margin-top: 10px; }`, `.kind-head { display:
   flex; align-items: center; gap: 6px; margin: 4px 0; color: var(--muted); font-size: .75rem; font-weight: 800;
   letter-spacing: .08em; text-transform: uppercase; }`)
-- Modify: `src/caracole/viewer/viewer.js` (the settings' Guitar Pro row stays: 5d's deduplication)
+- The settings' Guitar Pro row stays beside the list's Guitar Pro group (the spec's D11 deduplicates the two switches
+  alone, 5d.1): viewer.js doesn't change for it.
 - Modify: `docs/usage.md` (the list's groups)
 - Test: `tests/test_viewer_versions.py`
 
@@ -856,7 +957,8 @@ viewer.js `drawFacts()` redraws it in `render()`.
 - Test: `tests/test_viewer_versions.py` (`…docks_at_the_foot…` and `…is_a_rail_and_one_rail_at_a_time` rewritten)
 
 **Interfaces:**
-- Produces: `caracoleLayers.placeUnder` (5d's key list).
+- Produces: `caracoleLayers.placeUnder`, the versions list's alone (5d.4's key list is a right-hand rail from 900 px,
+  never a popover); it writes only to the `pop` it is handed.
 
 - [ ] **Step 1: Write the failing test** — `test_on_a_phone_the_list_is_a_sheet_from_the_bottom_and_back_closes_it`
   (390 and 320 px): docked above the bar, no sideways scroll, `back(b)` closes it, one entry.
@@ -876,20 +978,29 @@ viewer.js `drawFacts()` redraws it in `render()`.
   `kinds=`)
 - Modify: `src/caracole/viewer/harptab_page.py` (`build_harmonica_viewer(..., versions=None, kinds=None)` →
   `data["versions"]`, `data["kinds"]` after `data["overlay"]` when given; `_header` puts `page._VERSIONS` after the
-  artist line; the body appends `page._VERSION_LIST` after `_PILL`; scripts `(…, _layers(), _kinds(), script)`;
-  docstring)
-- Modify: `src/caracole/viewer/harptab.js` (layer `"list"`; `caracoleKinds.attach({data, here, served, sheetPath:
-  folder + "/" + data.kinds.page, carry, open: openLayer, close: closeLayer, inSight})`; `carry(page)` as
-  `backToSheet` builds its address; on a phone the list docks (`.top`, `data-dock="version-list"`, `--dock`))
+  artist line; the body appends `page._VERSION_LIST` after `_PILL`; scripts `(_sound(), _overlay(), _layers(),
+  _kinds(), script)`: "Where the stages meet" 9; docstring)
+- Modify: `src/caracole/viewer/harptab.js` (layer `"list"`; `caracoleKinds.attach({data, here, served, sheetPath,
+  carry, open: (el, opener) => openLayer("list", opener), close: () => closeLayer("list"), inSight})`: kinds.js hands
+  `open` and `close` the list's element, so harptab.js's name-based `openLayer`/`closeLayer` are wrapped; `sheetPath`
+  is `folder + "/" + data.kinds.page` only when `data.kinds && data.kinds.page` is set, absent otherwise (a tab of a
+  song with no sheet: never "…/null"); a new `inSight(el)`, as viewer.js's (`!el.hidden`, and from 900 px
+  or the top of harptab.js's `layers`, `"list"` for the list); `carry(page)` as `backToSheet` builds its address; on a
+  phone the list docks (`.top`, `data-dock="version-list"`, `--dock`))
 - Modify: `android/viewer/.../pages/HarmonicaPage.kt` (`build(..., versions, kinds)`, `header`, the body),
-  `.../ViewerAssets.kt` (HARMONICA + `kinds.js`), `.../render/internal/SongPass.kt` (the harmonica pages' inputs),
+  `.../ViewerAssets.kt` (HARMONICA `strum.js, overlay.js, layers.js, kinds.js, harptab.js`),
+  `.../render/internal/SongPass.kt` (the harmonica pages' inputs),
   `android/viewer/src/testFixtures/.../replays/HarmonicaPageReplay.kt` (kw `versions`, `kinds`)
-- Modify: `tests/test_conformance_viewer_harmonica.py` (pages with `versions` and `kinds`; the assets list)
+- Modify: `tests/test_conformance_viewer_harmonica.py` (pages with `versions` and `kinds`; the assets list
+  + `("kinds.js", page._kinds())` after `layers.js`)
+- Modify: `tests/test_viewer_harptab_page.py` (the scripts list `strum.js, overlay.js, layers.js, kinds.js,
+  harptab.js`; the `</script>` count + 1), `tests/test_viewer_layers.py` (its order test: kinds.js between layers.js
+  and harptab.js on the harmonica page)
 - Modify: `docs/usage.md` (the harmonica page: its line and list)
 - Test: `tests/test_render_kinds.py`, `tests/test_viewer_versions.py` (section "a harmonica tab's page")
 
 **Interfaces:**
-- Consumes: 5b.4–5b.7; 5a.5's `openLayer`/`closeLayer`.
+- Consumes: 5b.4–5b.7; 5a.5's `openLayer`/`closeLayer`, wrapped as kinds.js's `open(el, opener)` and `close(el)`.
 - Produces: the harmonica line's words `["Harmonica", "Tab N of M" (M > 1)]`; its own tab ticked in the Harmonica group.
 
 - [ ] **Step 1: Write the failing test** — `test_a_harmonica_page_names_the_versions_and_the_kinds`
@@ -898,12 +1009,14 @@ viewer.js `drawFacts()` redraws it in `render()`.
   the sheet's; the list's Chords rows link `sheet.html` and the kept versions, none current; the Harmonica group's
   tab 1 current; served, Keep links `/versions?sheet=Artist%2FTitle%2Fsheet.html&…`; `back(b)` closes the list.
   `test_a_tab_with_no_sheet_and_nothing_else_has_no_line`.
+  `test_a_tab_of_a_song_with_no_sheet_lists_its_kinds_with_no_sheet_path`: a song with two harmonica tabs and a Guitar
+  Pro file, no sheet (`kinds.page` null): the line and the list show, no link or command holds "null", no page error.
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_render_kinds.py
   tests/test_viewer_versions.py -k harmonica`.
 - [ ] **Step 3: Implement** — as in Files.
 - [ ] **Step 4: Run it and see it pass** — the same, then `nix develop -c pytest -q tests/test_viewer_harptab_page.py
-  tests/test_viewer_harptab_browser.py tests/test_render_harmonica.py`; corpus step (harmonica_pages*.jsonl,
-  render.jsonl, theory_assets.jsonl).
+  tests/test_viewer_harptab_browser.py tests/test_render_harmonica.py tests/test_viewer_layers.py`; corpus step
+  (harmonica_pages*.jsonl, render.jsonl, theory_assets.jsonl).
 - [ ] **Step 5: Commit** — `feat(viewer): a harmonica tab's page has the version line and its list`.
 
 #### Task 5b.9: Merge 5b
@@ -939,10 +1052,10 @@ viewer.js `drawFacts()` redraws it in `render()`.
 
 The design's 5c row: D3 A (wrapped tails flush left, about 0.4 em between sung lines and none between a line's rows),
 a chord inside a word never splitting the word, D4 C (a chord-only line that writes bars drawn as bar cells with beat
-dots; the PDF prints it as written), D8 B (two columns stepped down before one column), and the sheet's end leaving
-room for the bar plus half a screen. Everything goes through page.py's one renderer, so sheet.html, a kept version's
-page (`build_viewer(export=False)`) and a songbook's songs (book.py reuses `_song_html`) all change; the harmonica
-tab's page has its own line markup (harptab_page.py) and keeps it.
+dots; the PDF prints it as written), D8 as the owner revised it (narrower columns, so two fit at larger text sizes),
+and the sheet's end leaving room for the bar plus half a screen. Everything goes through page.py's one renderer, so
+sheet.html, a kept version's page (`build_viewer(export=False)`) and a songbook's songs (book.py reuses `_song_html`)
+all change; the harmonica tab's page has its own line markup (harptab_page.py) and keeps it.
 
 What the code says that the design doesn't:
 
@@ -954,13 +1067,12 @@ What the code says that the design doesn't:
   width (5c.1 pins it).
 - **Beats are counted evenly** (the design left it to the builder): the `.cho` keeps no spacing, so four beats a
   bar, shared by its chords.
-- **D8 is today's rule at the default size.** viewer.css already sets two columns at `--fs` (18 px) and one column
-  at `--fs` + 3 px (21 px); the research read it as two columns at 21 px. 5c.6 does what the design says: it tries
-  two columns at 21, 20, 19 and then 18 px. But `columns: 2 28em` in a page of at most 1180 px gets two columns only
-  at 19 px or less. So at the default size a song gets two columns at 19 px where it got 18 px, and no song gets two
-  columns that didn't before. The steps are a table, `COLUMN_SIZES`. If the owner wants more songs in two columns,
-  the step-down must go below the reader's text size (for example `[3, 2, 1, 0, -1, -2]`), or the 28em minimum must
-  shrink. That is the owner's call: the plan doesn't take it.
+- **D8, as revised.** viewer.css already sets two columns at `--fs` (18 px) and one column at `--fs` + 3 px (21 px),
+  for a song the window shows whole that way. But `columns: 2 28em` in a page of at most 1180 px (1,148 px for its
+  columns) gets two columns only at 19 px or less. The owner chose narrower columns: 5c.6 lowers the minimum to
+  24 em, so two columns and their 56 px gap fit at the reader's text size up to 22 px (1,112 px) and not at 23
+  (1,160 px). The "fits whole" rule stays; there is no step-down in size (`COLUMN_SIZES`, `--cols-fs`). At 18 px this
+  puts no new song in two columns; it keeps two columns as the text grows.
 - **The class names `.bar` and `.wd` are taken** (the controls bar; winds.js's fingering SVG), so the cells are
   `span.barcell` and a word's columns `span.word`.
 
@@ -1079,6 +1191,8 @@ Every task below runs in that worktree.
 - Modify: `src/caracole/viewer/sheet.py`: `BEATS`, `Bars`, `bars`.
 - Modify: `src/caracole/viewer/page.py`: `_line_html`'s `ChordRow` branch, and a new `_bars_html`.
 - Modify: `src/caracole/viewer/viewer.css`: `.l.bars`, `.barcell`, `.beat`.
+- Modify: `src/caracole/viewer/layers.js`: `MARGIN_SKIP` gains `.barcell, .beat` (a double tap between an intro's beat
+  dots is on the song, never on its margins: D14).
 - Modify: `src/caracole/viewer/__init__.py`: the docstring's sheet.py line.
 - Modify: `tests/helpers/viewer_corpus.py`: one more `EDGE_SHEETS` entry, at the end.
 - Modify: `tests/test_conformance_viewer_sheet.py`: `BEATS` exported; `read_of` gains `"bars"`.
@@ -1088,10 +1202,10 @@ Every task below runs in that worktree.
   (`readOf` checks `"bars"`).
 - Modify: `docs/usage.md` (the viewer's bullets, after "Chords over the lyrics") and `AGENTS.md` (viewer/'s rules).
 - Test: `tests/test_viewer_sheet.py`, `tests/test_viewer.py`, `tests/test_viewer_lines.py` (create),
-  `android/…/viewer/sheet/SheetsTest.kt`, `android/…/viewer/pages/SheetPageTest.kt`.
+  `tests/test_viewer_full_screen.py`, `android/…/viewer/sheet/SheetsTest.kt`, `android/…/viewer/pages/SheetPageTest.kt`.
 
 **Interfaces:**
-- Consumes: `sheet.BAR`, and the `[*|]` marks the `.cho` writes (5c.1).
+- Consumes: `sheet.BAR`, and the `[*|]` marks the `.cho` writes (5c.1); `caracoleLayers.MARGIN_SKIP` (5a.6).
 - Produces:
   - `sheet.BEATS = 4`, a bar's beats.
   - `@dataclass(frozen=True) class Bars` with three fields: `lead: tuple[str, ...]`,
@@ -1166,13 +1280,18 @@ The rule, which `bars`' docstring states once:
     - After `#t-up`, the four first cell chords' texts equal the sung line's four chords' texts.
     - `tap(b, "#sheet .l.bars .c")` opens `#card`.
 
+  `tests/test_viewer_full_screen.py`, `test_a_double_tap_on_a_bar_cell_is_on_the_song_not_its_margins`: `INTRO`
+  (test_viewer_lines.py's) at 390×844, `double_tap(b, x, y)` at the centre of the first cell's first `.beat`, then at a
+  cell's gap after its last beat → no `data-full`; `double_tap(b, 4, …)` beside the row (the page's left padding) →
+  `data-full == "on"`.
+
   `SheetsTest.kt`, `aLineOfChordsThatWritesBarsReadsAsBars`: the first and third cases above, as `Sheets.bars`.
   `SheetPageTest.kt`, `aSungLineSetsEachChordOverItsSyllable`: its `ChordRow(listOf(Item.Chord(0), Item.Mark("|")))`
   is now a bar line, so expect `<p class="l chords bars"><span class="barcell">…G…` followed by three beats and
   `</span></p>`.
 - [ ] **Step 2: Run them and see them fail**: `nix develop -c pytest -q tests/test_viewer_sheet.py tests/test_viewer.py
-  tests/test_viewer_lines.py -k "bar"`. Expect an ImportError on `Bars`/`bars`, then `<i class="m">|</i>` where the
-  cells should be.
+  tests/test_viewer_lines.py tests/test_viewer_full_screen.py -k "bar"`. Expect an ImportError on `Bars`/`bars`, then
+  `<i class="m">|</i>` where the cells should be, and full screen on a double tap between beat dots.
 - [ ] **Step 3: Implement**
   - sheet.py: `BEATS`, `Bars` and `bars` by the rule above.
   - page.py: `_line_html`'s `ChordRow` branch returns `_bars_html(found, names)` when the line is no legend and
@@ -1184,6 +1303,7 @@ The rule, which `bars`' docstring states once:
     - `.l.bars .c { margin-right: 0 }`.
     - `.beat`: `color: var(--muted); font-weight: 400; user-select: none`.
     - Exact sizes are the builder's, within the test: four cells in a 358 px row at 18 px.
+  - layers.js: `MARGIN_SKIP` ends `…, .foot, .pager, .barcell, .beat"`.
   - `__init__.py`: "sheet.py reads that file back, and a line of chords' bars (`bars`)".
   - viewer_corpus.py: append to `EDGE_SHEETS` a sheet holding the test's cases. Its lines are
     `[*|:] [Am] [*|] [*|] [E] [*:|] [*x2]`, `[*x2] [*|] [Am] [C] [G] [*|] [A] [B] [C] [D] [E]`,
@@ -1205,8 +1325,9 @@ The rule, which `bars`' docstring states once:
   command, run twice), then run gradle's `test`. `SheetReplay` (area sheet) and `PagesReplay` (area pages) must pass
   with the Kotlin above.
 - [ ] **Step 5: Commit**: `git add src/caracole/viewer tests/test_viewer_sheet.py tests/test_viewer.py tests/test_viewer_lines.py
-  tests/helpers/viewer_corpus.py tests/test_conformance_viewer_sheet.py tests/conformance android/viewer docs/usage.md
-  AGENTS.md`, then `feat(viewer): a line of chords that writes bars is a row of bar cells with its beats`.
+  tests/test_viewer_full_screen.py tests/helpers/viewer_corpus.py tests/test_conformance_viewer_sheet.py
+  tests/conformance android/viewer docs/usage.md AGENTS.md`, then `feat(viewer): a line of chords that writes bars is a
+  row of bar cells with its beats`.
 
 #### Task 5c.3: A word with a chord inside it wraps whole
 
@@ -1225,13 +1346,16 @@ The rule, which `bars`' docstring states once:
 - Produces:
   - `page._glued(before: str, after: str) -> bool`: whether a chord between two texts sits inside a word. That is,
     both are non-empty, and `_words` would cut neither at the end of `before` nor at the start of `after` (no space
-    and no wide character on either side).
+    and no wide character on either side). The caller passes the nearest texts on either side of the chord, looking
+    through a part with no text: in "wo[G][D]rd", G's `before` is "wo" and its `after` "rd", as D's are.
   - Markup: a run of columns (`span.s`, `span.w`) that one word spans is wrapped in `<span class="word">…</span>` inside
     its `p.l`. That holds where a part's head is glued to the previous part's text, chain and all
-    ("[C]a[G]la[D]bama"). Other columns are as today.
+    ("[C]a[G]la[D]bama"), and across a part with no text ("wo[G][D]rd": one `span.word` holding "wo", both chords and
+    "rd"), so a word never parts across rows. Other columns are as today.
   - A line's columns are `p.l .s, p.l .w`, nested or not, in document order. `fit()` and the pinyin units read them
     so, and no rule or script may read them as a line's children.
-  - Kotlin: `PageHtml.glued(before: String, after: String): Boolean`, in code points.
+  - Kotlin: `PageHtml.glued(before: String, after: String): Boolean`, in code points, `lineHtml` looking through a
+    part with no text as page.py's does.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1246,6 +1370,13 @@ The rule, which `bars`' docstring states once:
               f'<span class="y">la</span></span><span class="s">{c(4, "D")}<span class="y">bama</span></span></span>') in sheet
       assert sheet.count('class="word"') == 2
 
+  def test_two_chords_inside_a_word_glue_across_the_part_with_no_text():
+      sheet = sheet_of(build_viewer("{title: T}\n{artist: A}\n[Am]a wo[G][D]rd here\n"))
+      assert sheet.count('class="word"') == 1
+      word = sheet[sheet.index('<span class="word">'):]  # the group, then what follows it
+      assert (word.index('<span class="w">wo</span>') < word.index('data-c="1"') < word.index('data-c="2"')
+              < word.index('<span class="y">rd'))
+
   def test_a_chord_beside_a_chinese_character_glues_nothing():
       zh = to_chordpro((FIXTURES / "zh_sheet.txt").read_text(encoding="utf-8"), title="斑马斑马", artist="宋冬野")
       assert 'class="word"' not in sheet_of(build_viewer(zh))
@@ -1254,7 +1385,8 @@ The rule, which `bars`' docstring states once:
   - `test_a_chord_inside_a_word_never_parts_the_word_across_rows`: `[Am]To cast me [E]off dis[E7]courteously` at
     390×844 with `#fs=30`. The `.w` "dis" and the `.s` whose `.y` is "courteously" share a bottom and touch
     (`dis.right ≈ s.left`, ±1 px). "dis" starts its row (its left is the line's, ±1). The line wraps (its height is
-    at least twice the column's). There is no sideways scroll.
+    at least twice the column's). There is no sideways scroll. The same for `[Am]To cast me [E]off wo[G][D]rd` at
+    `#fs=30`: "wo" and the `.s` whose `.y` starts "rd" share a bottom, the two chords' columns between them.
   - `test_a_word_longer_than_the_line_wraps_inside_its_group_rather_than_widen_the_page`:
     `[G]Supercalifragilistic[D]expialidocious` at 320×640 with `#fs=30`: `scrollWidth <= clientWidth`.
 
@@ -1262,14 +1394,15 @@ The rule, which `bars`' docstring states once:
   `:scope > .y` stay. `SONG` gains a line `[G]Ala[D]bama dis[E]courteously`, so a group's chords are checked in text
   drawn larger too.
 
-  `SheetPageTest.kt`, `aWordWithAChordInsideItWrapsWhole`: the first `test_viewer` case, through
-  `SheetPage.sectionHtml`.
+  `SheetPageTest.kt`, `aWordWithAChordInsideItWrapsWhole`: the first `test_viewer` case and the `wo[G][D]rd` one,
+  through `SheetPage.sectionHtml`.
 - [ ] **Step 2: Run them and see them fail**: `nix develop -c pytest -q tests/test_viewer.py tests/test_viewer_lines.py
-  -k "word or chinese_character"`. Expect no `span.word`, and "dis" ending row 1 with "courteously" on row 2.
+  -k "word or chinese_character or glue"`. Expect no `span.word`, and "dis" ending row 1 with "courteously" on row 2.
 - [ ] **Step 3: Implement**
   - page.py: the `Lyrics` branch builds its columns as today, each column with whether it is glued to the one before
-    it: a part's first column is glued when `_glued(previous part's text, this part's text)`. Then it wraps each
-    maximal run of glued columns, with the column it is glued to, in `span.word`.
+    it: a part's first column is glued when `_glued(before, after)`, `before` the nearest previous part's text that
+    isn't empty and `after` the nearest text from this part on (a part with no text glued when its neighbours are).
+    Then it wraps each maximal run of glued columns, with the column it is glued to, in `span.word`.
   - viewer.css: `.word { display: inline-flex; flex-wrap: wrap; align-items: flex-end; max-width: 100%;
     vertical-align: bottom; }`. A group goes to the next row whole, and wraps inside itself only when it is wider
     than the line. Rewrite `.l.py > .s > .y::before`, `.l.py > .w::before`, `.l.py > .w > ruby.py > rt` and
@@ -1281,7 +1414,7 @@ The rule, which `bars`' docstring states once:
   - Kotlin `lineHtml` and `glued`, the same.
   - viewer_corpus.py: append an edge sheet whose line is `Ala[C]bama dis[E]courteously [C]a[G]la[D]bama wo[G][D]rd
     我[C]们 in[*x2]side`, so the corpus holds a head-less part glued, a chain, two chords with no text between them
-    (not glued), Chinese and a glued mark.
+    (glued across the part with no text: one `span.word`), Chinese and a glued mark.
   - docs/usage.md, in "Chords over the lyrics": "A word with a chord inside it ("dis·courteously") wraps whole, onto
     the next row." AGENTS.md: 5c.2's bullet gains "a word a chord falls inside is one `span.word`, which wraps whole;
     a line's columns are `p.l .s, p.l .w`, nested or not".
@@ -1355,6 +1488,8 @@ The rule, which `bars`' docstring states once:
   - `.page::after { content: ""; display: block; height: 50vh; }` is the over-scroll, and it is `content: none` in
     print.
   - `layout()` reads `.page`'s padding as the bar's room: the over-scroll is never in it, and 5c.6 relies on that.
+  - At 1280 px its half-screen test's floor is `#bar`'s top while the bar sits at the foot; 5d.6 makes it the
+    window's foot once the bar is the toolbar at the top ("Where the stages meet" 10).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1396,53 +1531,62 @@ The rule, which `bars`' docstring states once:
 - [ ] **Step 5: Commit**: `git add src/caracole/viewer/viewer.css tests/test_viewer_bar.py tests/test_viewer_print.py tests/conformance
   docs/usage.md AGENTS.md`, then `fix(viewer): the song's end clears the bar and comes up half a screen`.
 
-#### Task 5c.6: Two columns stepped down before one column
+#### Task 5c.6: Narrower columns, so two fit at larger text sizes (D8, revised)
 
 **Files:**
-- Modify: `src/caracole/viewer/viewer.js`: `layout()`, and a new `COLUMN_SIZES` beside `FS`.
-- Modify: `src/caracole/viewer/viewer.css`: the `@media (min-width: 1100px)` block.
+- Modify: `src/caracole/viewer/viewer.css`: the `@media (min-width: 1100px)` block, `[data-columns="2"] .sheet`'s
+  `columns: 2 28em` → `columns: 2 24em`, and its comment.
+- Modify: `src/caracole/viewer/viewer.js`: the comment over `layout()` alone (its rule doesn't change).
 - Modify: `docs/usage.md` ("On a wide screen") and `AGENTS.md` (5c.5's bullet).
 - Test: `tests/test_viewer_layout.py`.
 
 **Interfaces:**
-- Consumes: the over-scroll outside `.page`'s padding (5c.5).
+- Consumes: the over-scroll outside `.page`'s padding (5c.5), which `layout()` measures the room against.
 - Produces:
-  - `const COLUMN_SIZES = [3, 2, 1, 0]`, the pixels above the text size at which two columns are tried, in order. The
-    one column stays at `--fs` + 3 px.
-  - viewer.js sets the custom property `--cols-fs` on `<html>` to the size being tried, and removes it when the song
-    reads in one column.
-  - viewer.css: `[data-columns="2"] .sheet { columns: 2 28em; column-gap: 56px; font-size: var(--cols-fs, var(--fs)); }`.
+  - `[data-columns="2"] .sheet { columns: 2 24em; column-gap: 56px; }`. Two columns and their gap take 48 em + 56 px,
+    which the page's 1,148 px for its columns (1180 less its padding) holds up to 22 px (1,112 px) and not at 23 px
+    (1,160 px).
+  - No `COLUMN_SIZES` and no `--cols-fs`: two columns are at the reader's text size (`--fs`), one column at `--fs` +
+    3 px, as today.
+  - `layout()`'s rule as today: two columns only where the song's end lies in the right half and the sheet's height
+    is within the room (`innerHeight` less `.page`'s padding), "fits whole on the screen".
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_viewer_layout.py`.
-  - `test_two_columns_take_the_largest_size_that_fits_from_the_one_columns_down`: `TINY` at `DESKTOP`, and at
-    1199×800. Both give two columns (`right > 0`) at `font == 19`. Today's code gives 18. The page gives its columns
-    1148 px (1180 less its padding): two of 28em fit at 19 px (1120 px with the gap) and not at 20 px (1176 px).
-  - `test_a_window_too_low_for_larger_two_columns_steps_them_down_before_one_column`. Open `SHORT` at `DESKTOP`: two
-    columns at 19.
-    - Read the sheet's height (`h19`) and `.page`'s `paddingBottom` (`pad`).
-    - Set `--cols-fs` to `18px` by hand and read `h18`. Assert `h19 - h18 > 4`, so the window below has room to fall
-      between them.
-    - With `resize`, make the window's `innerHeight` `pad + (h18 + h19) / 2`: resize, read `innerHeight`, then
-      resize again by the difference. Wait for two columns at 18 px.
-    - Make it `pad + h18 - 20`, and wait for one column (`right === 0`) at 21 px.
-  - The existing tests stay as they are. `test_the_columns_follow_the_window_and_the_text_size`'s A+ (20 px) tries 23
-    to 20 and gets one column. `test_the_settings_rail…` compares the two fonts, both 19.
-- [ ] **Step 2: Run them and see them fail**: `nix develop -c pytest -q tests/test_viewer_layout.py -k "largest or steps"`.
-  Expect `font == 18`.
-- [ ] **Step 3: Implement**: `layout()` keeps its first branch, where two columns aren't offered: `data-columns` "1",
-  `--cols-fs` removed. Otherwise, for each offset of `COLUMN_SIZES`, it sets `--cols-fs` to `state.fs + offset`,
-  runs `fit()`, and keeps the first size whose end lies in the right half with a height within the room. The room
-  is `innerHeight` less `.page`'s padding, as today. If no size fits, the song reads in one column at the larger
-  size. The scroll position is restored once, at the end, as today. The comment over `layout()` says the steps and
-  why they stop at the text size: the reader's own size is never undercut.
-  - docs/usage.md, "On a wide screen": "A song is tried in two columns from the one column's size down to your text
-    size, a pixel at a time, and the largest at which the window shows it whole is used; else one column."
-  - AGENTS.md, 5c.5's bullet gains: "two columns are tried at `COLUMN_SIZES` above `--fs` (`--cols-fs`), the first
-    that shows the song whole".
+- [ ] **Step 1: Write the failing tests** in `tests/test_viewer_layout.py`, the text size set in the address
+  (`#fs=N`: `sizeOf` takes any whole size from 13 to 30), each read by `LAYOUT`.
+  - `test_two_columns_hold_at_larger_text_sizes`: `TINY` at the file's `DESKTOP` (1600 × 800), at 1199 × 800 (no
+    rail of necks) and at 1280 × 800 with the rail hidden (`#necks=0`; from 1200 px the rail takes 345 px off the
+    room, as `test_the_rail_of_necks_takes_its_width_off_the_room_for_two_columns` pins).
+    - `#fs=21` and `#fs=22`: two columns (`right > 0`) at `font == 21` and `22`. Today `#fs=21` gives one column at
+      24 px.
+    - `#fs=23`: one column (`right == 0`) at 26 px.
+    - `TINY` keeps hundreds of px of slack in the window, more than the 56 px 5d.6's toolbar takes off the room from
+      1200 px, so these hold after 5d.6 ("Where the stages meet" 10).
+  - `test_at_the_default_size_nothing_changes`: at `DESKTOP`, `LONG` (too tall to fit whole) reads in one column at
+    21 px, and `SHORT` in two at 18 px, as today.
+  - `test_the_size_buttons_keep_two_columns_up_to_22_px`: `TINY` at `DESKTOP`; A+ once (20 px) and twice (22 px): two
+    columns; a third time (24 px): one column at 27 px; A− once (22 px): two again.
+  - Two existing tests pressed A+ once on 28 em's limit, and press it three times now (24 px), then A− three times:
+    `test_the_columns_follow_the_window_and_the_text_size` (`seen == [True, False, True]` kept) and
+    `test_text_too_large_for_two_columns_reads_in_one_centred_even_in_a_short_song` (`one["font"] > 20` kept: 27 px).
+  - Every other test stays as it is. At 1280 the rail leaves less than 2 × 24 em + 56 px (920 px at 18 px), so
+    `test_the_rail_of_necks_…` still reads one column there; the settings rail likewise. If one flips, its window
+    moves so the room stays short of two columns; the rule never does.
+- [ ] **Step 2: Run them and see them fail**: `nix develop -c pytest -q tests/test_viewer_layout.py -k "larger or
+  default_size or size_buttons"`. Expect one column at `#fs=21` and at A+'s 20 px.
+- [ ] **Step 3: Implement**: `columns: 2 24em`.
+  - viewer.css, the comment above the block gains: "each column at least 24 em, so two and their gap fit the 1180 px
+    page up to 22 px of text (the owner's narrower columns, D8)".
+  - viewer.js, the comment over `layout()`: two columns at the reader's own size wherever the whole song shows that
+    way, never at a smaller size; else one column, 3 px larger.
+  - docs/usage.md, "On a wide screen": "Two columns, each at least 24 em wide, show at your text size up to about
+    22 px, wherever the whole song fits on the screen that way; else one column, a little larger."
+  - AGENTS.md, 5c.5's bullet gains: "two columns are narrow (`columns: 2 24em`), so they fit at the reader's own size
+    up to 22 px, and show only where the song shows whole".
 - [ ] **Step 4: Run them and see them pass**: the Step 2 command, then `nix develop -c pytest -q tests/test_viewer_layout.py
-  tests/test_viewer_preamble.py tests/test_viewer_necks.py`. Regenerate the corpus, then run gradle's `test`.
+  tests/test_viewer_preamble.py tests/test_viewer_necks.py tests/test_viewer_book.py`. Regenerate the corpus
+  (viewer.css is inlined in every page), then run gradle's `test`: no Kotlin code changes.
 - [ ] **Step 5: Commit**: `git add src/caracole/viewer tests/test_viewer_layout.py tests/conformance docs/usage.md AGENTS.md`,
-  then `feat(viewer): two columns tried from the one column's size down to the text size`.
+  then `feat(viewer): narrower columns, so two fit at larger text sizes`.
 
 #### Task 5c.7: Merge stage 5c
 
@@ -1500,8 +1644,9 @@ sheet does (the version line and icons are 5b's, which it has none of).
     layers `restack()` walks; full screen's state on `<html>` and its handle at the foot; "Hide controls" in More.
   - **5b's header**: the song's `<header class="head">` (page.py `_body`, book.py `_song`, harptab_page.py `_header`):
     the title block, the facts lines, the version line. This stage only places the toolbar after it.
-  - If 5c merged first: how it writes the page's room at its foot (`.page`'s `padding-bottom`). If 5e merged first:
-    the strip's switch (D7) is still `#strip-toggle`; 5d.1 keeps it.
+  - **5c's room at the page's foot** (5c merged before 5d): `.page`'s `padding-bottom`, written from `--foot`
+    (5c.5), and the narrower columns (5c.6). The strip's switch (D7) is `#strip-toggle`; 5d.1 keeps it, and 5e.4, which
+    merges after 5d, turns the strip on by default below 1200 px.
 - Running the corpus and the phone, the same in every task below (call it **the corpus step**):
   ```
   CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py   # twice: one file reads another's
@@ -1702,8 +1847,8 @@ harmonica page's `#notes` "Notes" (the key's own word is 5d.3's). Each button's 
     var(--accent); color: var(--on-accent); }`, lit: `.bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px
     var(--surface), 0 0 0 4px var(--accent); }`; the arrow's path takes `fill: none` against `.bar svg`'s fill.
   - The bar is 10 px taller: `--foot: calc(63px + env(safe-area-inset-bottom))`. The page's foot room follows it:
-    `.page { padding-bottom: calc(var(--foot) + 19px + var(--pill)); }` and `html[data-dock] .page` likewise with
-    `var(--dock)` (72 px was 53 + 19); if 5c already writes that room from `--foot`, only `--foot` changes.
+    5c.5 already writes `.page { padding-bottom: calc(var(--foot) + 19px + var(--pill)); }` and `html[data-dock]
+    .page` likewise with `var(--dock)` (72 px was 53 + 19), so only `--foot` changes.
   - viewer.js and harptab.js `showScroll()`: `$("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true")`.
 
 - [ ] **Step 4: Run them and see them pass**
@@ -1717,22 +1862,25 @@ harmonica page's `#notes` "Notes" (the key's own word is 5d.3's). Each button's 
   `git add src/caracole/viewer/ docs/usage.md AGENTS.md tests/ && git commit -m "feat(viewer): a word under every
   bar button, and a scroll arrow in place of ▶"`
 
-#### Task 5d.3: The key says what changed, on the bar and in the settings (D10 B)
+#### Task 5d.3: The key says what changed, on the bar and in the settings (D10 C)
 
 Today the bar says "Em" over "shapes · capo 2 · +1". The design: "+2" when transposed, "capo 2" when a capo plays it,
 "key" when neither; the mockup's second bar ("Greensleeves moved up two semitones": "Am" over "capo 2") counts what
-moved the chords shown, not the sound. One rule, below; the settings' Transpose value says the same.
+moved the chords shown, not the sound. One rule, below; the settings' Transpose value says the same, and so does the
+header's Key (5b.3's `drawFacts`, D10: "Where the stages meet" 11).
 
 **Files:**
 - Modify: `src/caracole/viewer/viewer.js` (new `moved()` and `changes()`; `keyShort()`, `keyLabel()`, `fitKey()`;
-  `render()`'s `#shift`; move `wrapT` above `keyShort`)
+  `render()`'s `#shift`; move `wrapT` above `keyShort`; `drawFacts()`'s move from `moved()`, `" (" +
+  signed(wrapT(moved())) + ")"` while `moved() !== 0`, in place of 5b.3's `state.t`)
 - Modify: `src/caracole/viewer/page.py` (`_CONTROLS`' `#shift`: `<output id="shift"><span class="k">0</span><span
   class="d" aria-hidden="true"></span></output>`)
 - Modify: `src/caracole/viewer/viewer.css` (`.now .d.changed`; `#panel .stepper output` two lines, `.k` and `.d` as
   the bar's)
 - Modify: `docs/usage.md` (**The bar**: what's under the key; **The settings**: Transpose shows the key and the same word)
 - Test: `tests/test_viewer_bar.py`, `tests/test_viewer_panels.py`, `tests/test_viewer.py`, `tests/test_viewer_reload.py`,
-  `tests/test_viewer_songbook_browser.py`, `tests/test_viewer_instruments_page.py`
+  `tests/test_viewer_songbook_browser.py`, `tests/test_viewer_instruments_page.py`, `tests/test_viewer_layers.py`
+  (5a.2's `#shift` assertion), `tests/test_viewer_header.py` (5b.3's facts on `moved()`)
 
 **Interfaces:**
 - Produces (viewer.js): `moved()`, the semitones the chords shown moved from the sheet as written by your hand,
@@ -1792,7 +1940,13 @@ The rule's cases, which the tests pin (bar key, its word, the full line a screen
     (`test_transpose_reset_goes_back_to_the_pdfs_transposition`'s `zero`, `test_reset_everything_is_last_and_quiet`'s
     `after[0]`); line ~1273 reads `#shift .d` too (`"+2"`).
   - `tests/test_viewer_reload.py` `SAID` and `tests/test_viewer_songbook_browser.py` `SAID`: `#shift .d` (their
-    `"+2"`, `"+4"`, `"+5"` stay; a `"0"` is `"key"`).
+    `"+2"`, `"+4"`, `"+5"` stay; a `"0"` is `"key"`), which 5a.4's
+    `test_back_closes_a_songs_layer_and_stays_on_the_song` reads too ("+1").
+  - `tests/test_viewer_layers.py::test_a_change_made_with_a_layer_open_stays_after_back` (5a.2): its `#shift` "+1"
+    reads `document.querySelector('#shift .d').textContent`, whose word ends "+1".
+  - `tests/test_viewer_header.py::test_the_facts_follow_the_capo_and_the_transposition` (5b.3), on `moved()` as the
+    bar: the capo taken off (`#capo-down` twice), the key "A (+2) · from the tab" where the bar says "no capo · +2";
+    then `#up`, "A# (+3) · …" where the bar says "no capo · +3" (it said " (+1)", from `state.t`).
   - `tests/test_viewer.py`'s capo test of a keyless sheet (around line 630): its `#key-full` member after `#capo=0` is
     `"Transpose +1 · no capo"` (the chords moved a fret's worth); its `#facts` member is whatever 5b made it.
   - `tests/test_viewer_instruments_page.py::test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back`:
@@ -1803,14 +1957,15 @@ The rule's cases, which the tests pin (bar key, its word, the full line a screen
   `nix develop -c pytest -q tests/test_viewer_bar.py tests/test_viewer_panels.py -k "says_the_key or transpose or
   settings_say"`: `"shapes · capo 2"` where `"capo 2"` is expected; `#shift` has no children.
 
-- [ ] **Step 3: Implement** the rule as Interfaces states it, in viewer.js beside `keyShort`. CSS: `.now .d.changed {
-  color: var(--accent); font-weight: 700; }`.
+- [ ] **Step 3: Implement** the rule as Interfaces states it, in viewer.js beside `keyShort`; `drawFacts()` reads
+  its move from `moved()` too, as Files says. CSS: `.now .d.changed { color: var(--accent); font-weight: 700; }`.
 
 - [ ] **Step 4: Run them and see them pass**
 
   `nix develop -c pytest -q tests/test_viewer_bar.py tests/test_viewer_panels.py tests/test_viewer.py
   tests/test_viewer_reload.py tests/test_viewer_songbook_browser.py tests/test_viewer_instruments_page.py
-  tests/test_viewer_versions.py tests/test_web_page_search.py -k "not lacuerda"`, then the corpus step.
+  tests/test_viewer_versions.py tests/test_viewer_layers.py tests/test_viewer_header.py tests/test_web_page_search.py
+  -k "not lacuerda"`, then the corpus step.
 
 - [ ] **Step 5: Commit**
 
@@ -1822,8 +1977,10 @@ The rule's cases, which the tests pin (bar key, its word, the full line a screen
 **Files:**
 - Modify: `src/caracole/viewer/page.py` (`_CONTROLS`: `#key-now` a button in place of the `<output>`; `_KEY_LIST`,
   appended in `_CONTROLS` right after the `#panel` section; the comments)
-- Modify: `src/caracole/viewer/viewer.js` (`keyList`, `drawKeyList()`, `chooseKey(k)`, `#key-now`'s click; `rails` and
-  `restack()`'s list and `aria-expanded`; `render()` draws the list while it is open; `keyNow.disabled = !key`)
+- Modify: `src/caracole/viewer/viewer.js` (`keyList`, `keyNow`, `drawKeyList()`, `chooseKey(k)`, `#key-now`'s
+  click; `DOCKED` gains `keyList` after its other members (so on a phone it docks at the foot as the settings do, and
+  `dock()` sets `data-dock="key-list"`); `rails` (`[panel, harmony, keyList]`) and `restack()`'s list and
+  `aria-expanded`; `render()` draws the list while it is open; `keyNow.disabled = !key`)
 - Modify: `src/caracole/viewer/viewer.css` (`.bar .now` as a button, off `.bar button`'s 44 px box; `.keys12`)
 - Modify: `src/caracole/viewer/book.js` (`busy()`: `"key-list"` beside `"panel"` and `"card"`)
 - Modify: `docs/usage.md` (**The bar**: tap the key for the twelve keys)
@@ -1836,9 +1993,9 @@ The rule's cases, which the tests pin (bar key, its word, the full line a screen
   one layer at a time below 900 px).
 - Produces: `#key-now`, `<button type="button" class="now" id="key-now" aria-haspopup="dialog" aria-controls="key-list"
   aria-expanded="false">` holding today's `.k`, `.d` and `#key-full` (its name: the full line); `#key-list`, a
-  `.sheet-ui.panel.keylist` layer (docked on a phone, the right-hand rail from 900 px, in the settings' and the versions
-  list's place, as `rails` holds them); `#key-items > button[data-k]` (k 0–11, `aria-pressed`), the first
-  `.key-as` spanning its row. 5d.5 leaves `rails` with the key list in it.
+  `.sheet-ui.panel.keylist` layer (in `DOCKED`: docked on a phone; in `rails`: the right-hand rail from 900 px, in the
+  settings' place, one rail at a time); `#key-items > button[data-k]` (k 0–11, `aria-pressed`), the first `.key-as`
+  spanning its row. 5d.5 leaves `rails` and `DOCKED` with the key list in them.
 
 ```html
 <section class="sheet-ui panel keylist" id="key-list" hidden role="dialog" aria-labelledby="key-list-title">
@@ -1875,7 +2032,8 @@ grid-template-columns: repeat(4, 1fr); gap: 6px; }`, `.key-as { grid-column: 1 /
       with viewer(tmp_path, written(tmp_path, MINOR)) as b:
           b.click("#key-now")
           shown = b.js(KEYS)
-          where = b.js(LOOK)  # the list docked on the bar, the focus on its heading, #key-now aria-expanded "true"
+          where = b.js(LOOK)  # the list docked on the bar (in DOCKED: html[data-dock="key-list"]), the focus on its
+                              # heading, #key-now aria-expanded "true"
       assert [t for t, _ in shown] == [names[0] + " · as written"] + names[1:]
       assert [p for _, p in shown] == ["true"] + ["false"] * 11
       ...
@@ -1910,8 +2068,9 @@ grid-template-columns: repeat(4, 1fr); gap: 6px; }`, `.key-as { grid-column: 1 /
 
   `nix develop -c pytest -q tests/test_viewer_key_list.py`: no `id="key-list"`; `#key-now` is an `<output>`.
 
-- [ ] **Step 3: Implement** as above. `restack()` keeps `#key-now`'s `aria-expanded` in step and the list in its
-  `top` toggling; Reset all and a render while it is open redraw it.
+- [ ] **Step 3: Implement** as above. `const keyNow = $("key-now")`; `DOCKED` and `rails` gain `keyList`, as Files
+  says. `restack()` keeps `#key-now`'s `aria-expanded` in step and the list in its `top` toggling; Reset all and a
+  render while it is open redraw it.
 
 - [ ] **Step 4: Run them and see them pass**
 
@@ -1935,27 +2094,31 @@ progression's ▶ plays as today; leaving the tab stops it, as closing the panel
   header's documentation of `window.caracoleOverlay`)
 - Modify: `src/caracole/viewer/viewer.js` (`hasHarmony`; `harmonyPane(pane)` from today's `drawHarmony` and the
   panel's markup; `guitarTab()`'s `key` null where `hasHarmony`; the rail's `harmony` and `left`; `drawPlaying()` reads
-  `#progs`; `setBpm()` with the pane not drawn; stops (below); out: the `harmony` const, its `rails` entry, restack's,
-  the scroll reveal's `!harmony.hidden`, `close()`'s `which === harmony`, `#harmony-open`'s listener, `more`'s
-  `close(harmony)`, render()'s `if (!harmony.hidden) drawHarmony()`, the railWide listener's `drawHarmony()`,
-  `drawNames()`'s `harmony-row` line, `setKeyNeck()`'s own focus code)
-- Modify: `src/caracole/viewer/page.py` (`_CONTROLS`: the `#harmony` section out; `_HARMONY_ROW` out; `_PLACES_OPEN =
-  '<div class="places ruled" id="places">\n'`; `_with_guitar` puts `_GUITAR_ROW` right after `_PLACES_OPEN`; the
-  comments on the settings' places)
+  `#progs`; `setBpm()` with the pane not drawn; stops (below); out: the `harmony` const, its `rails` entry, its
+  `DOCKED` entry (`DOCKED` keeps `keyList`, 5d.4's), restack's, `close()`'s `which === harmony`, `#harmony-open`'s
+  listener, `more`'s `close(harmony)`, render()'s `if (!harmony.hidden) drawHarmony()`, the railWide listener's
+  `drawHarmony()`, `drawNames()`'s `harmony-row` line, `setKeyNeck()`'s own focus code; the bar's scroll reveal names
+  no layer since 5a.2 (`layers.length > 0 || …`), so it needs no change)
+- Modify: `src/caracole/viewer/page.py` (`_CONTROLS`: the `#harmony` section out; `_HARMONY_ROW` out; `_with_guitar`
+  puts `_GUITAR_ROW` right after `_FULL_ROW` (5a.6's Hide controls), so the places read Hide controls, Guitar Pro,
+  Export PDF; the comments on the settings' places)
 - Modify: `src/caracole/viewer/viewer.css` (`.harmony` in the overlay; `#harmony-neck` out; `.ov-tabs` three tabs
   fitting the rail's head beside Hide)
 - Modify: `src/caracole/viewer/book.js` (`busy()`: `"harmony"` out)
 - Modify: `android/viewer/src/main/kotlin/io/github/danielhp95/caracole/viewer/pages/internal/PageConstants.kt`
-  (`HARMONY_ROW` → `PLACES_OPEN = text("_PLACES_OPEN")`), `.../viewer/pages/SheetPage.kt` (`withGuitar` after
-  `PLACES_OPEN`)
+  (`HARMONY_ROW` → `FULL_ROW = text("_FULL_ROW")`), `.../viewer/pages/SheetPage.kt` (`withGuitar` after
+  `FULL_ROW`)
 - Modify: `android/viewer/src/test/kotlin/io/github/danielhp95/caracole/viewer/pages/SheetPageTest.kt`
-  (`theControlsHoldTheHarmonyRowOnceForTheGuitarProRowToFollow` → `theControlsOpenThePlacesOnceForTheGuitarProRowToFollow`:
-  `<div class="places ruled" id="places">` once in `SheetPage.CONTROLS`)
-- Modify: `tests/test_conformance_viewer_pages.py` (`CONSTANTS`: `"_HARMONY_ROW"` → `"_PLACES_OPEN"`; the docstring;
-  `test_the_data_reads_back_as_page_py_holds_it` replaces after `_PLACES_OPEN`)
+  (`theControlsHoldTheHarmonyRowOnceForTheGuitarProRowToFollow` →
+  `theControlsHoldTheFullScreenRowOnceForTheGuitarProRowToFollow`: `PageConstants.FULL_ROW` once in
+  `SheetPage.CONTROLS`)
+- Modify: `tests/test_conformance_viewer_pages.py` (`CONSTANTS`: `"_HARMONY_ROW"` → `"_FULL_ROW"`, page.json's anchor
+  for Kotlin's `withGuitar`; the docstring; `test_the_data_reads_back_as_page_py_holds_it` replaces after
+  `_FULL_ROW`)
 - Modify: `docs/screenshots/make.py` (the `harmony` shot: `#nm=both` with the rail shown, then `("click", "#necks
   [role=tab][data-tab=harmony]")`, `("wait", "document.querySelector('#harmony .prog') !== null")`), `README.md` (its
-  alt text: "The Harmony tab beside the song: …")
+  alt text: "The Harmony tab beside the song: …"); the script alone: its PNG is retaken by whichever merges last
+  ("Where the stages meet" 12), never here
 - Modify: `docs/usage.md` (**Harmony ›** becomes **Harmony**, the overlay's third tab; **The overlay**: three tabs, the
   key's neck on Harmony; **Showing and hiding it**: drop "Hidden, the Harmony panel shows the key's neck"), `AGENTS.md`
   (strum.js: "the Harmony tab's ▶", "the Harmony tab left" for "the panel closed"; "The rail of necks": "three tabs on a
@@ -1979,9 +2142,10 @@ progression's ▶ plays as today; leaving the tab stops it, as closing the panel
   takes it, where `data.keyScale`), `div.row#tempo-row` (`#bpm-down`, `output#bpm`, `#bpm-up`, "bpm · 1 chord a
   bar"), `ol.progs#progs`, `p#progs-none`. `data-f` values: `bpm-down`, `bpm-up`, `prog-go:<n>`, `prog-play:<n>`,
   `prog-songs:<n>`, `prog-named:<n>:<j>` (n the section, j the link's index); the neck's chips keep keyNeck's `kn`.
-- Produces (page.py): `_PLACES_OPEN`; `_CONTROLS` with no `#harmony` and no `#harmony-row`. If 5b already removed
-  `_GUITAR_ROW` and `_with_guitar` (Guitar Pro in the kinds list), only `_HARMONY_ROW` goes, and `CONSTANTS` and
-  `PageConstants` lose it with nothing in its place.
+- Produces (page.py): `_CONTROLS` with no `#harmony` and no `#harmony-row`; `_with_guitar` anchored after
+  `_FULL_ROW`, page.json's `_FULL_ROW` in `_HARMONY_ROW`'s place for Kotlin's `withGuitar`. The settings' Guitar Pro
+  row stays (5b kept it: D11 deduplicates the two switches alone).
+- Produces (viewer.js): `DOCKED` and `rails` without `harmony`, `keyList` still in both (5d.4).
 - Produces (tests/helpers/viewer_pages.py): `HARMONY_TAB`, JavaScript that shows the Harmony tab at any width (below
   1200 px it presses `#necks-open` unless `#necks[data-sheet]` is open, then `#necks [role=tab][data-tab=harmony]`),
   for `tapped()` as for `b.js`; `LEAVE_HARMONY`, its leaving by the width's way (the sheet's `.ov-close`, the rail's
@@ -2035,7 +2199,9 @@ and every sound strum.js still makes, a chord tapped among them, as closing the 
       # at 1200 and 1400: each tab's text whole in its button, the tablist's right <= .nk-hide's left
   ```
   - test_viewer_panels.py: the Harmony section goes (moved); `test_harmony_guitar_pro_and_export_are_rows_at_the_end`
-    → `test_guitar_pro_and_export_are_rows_at_the_end` (no Harmony row); `'harmony-open'` out of the lists in
+    → `test_hide_controls_guitar_pro_and_export_are_the_settings_places`: `PLACES`' rows in this order, Hide controls
+    (5a.6's `["full-open", "Hide controls", "full screen", None, None]`), the Guitar Pro rows, Export PDF, folded and
+    served alike, no Harmony row and no `harmony` check; `'harmony-open'` out of the lists in
     `test_the_songbook_has_the_same_panel_without_export` and `test_on_a_phone_every_control_of_the_settings_is_a_thumbs_target`.
   - test_viewer_sound.py: `harmony_at_200_bpm`, `OPEN_HARMONY` and `PLAY` through `HARMONY_TAB` and `#harmony
     .prog-play`; each `#harmony [data-close]` click is `LEAVE_HARMONY`; in
@@ -2089,32 +2255,38 @@ From 1200 px wide the bar is a toolbar of pills under the song's header, in the 
 Scroll, More), in the page's flow so it sticks to the window's top once the title scrolls away; below 1200 px the
 bottom bar as now. The sheet keeps room for it: it takes its own room under the title, and `scroll-padding-top` keeps
 whatever is brought into view below it. It never slides away as you scroll; while autoscroll counts down and runs it
-hides as the bar does, keeping its room so the song doesn't jump. The autoscroll pill and the full-screen handle sit
-under it.
+hides as the bar does, keeping its room so the song doesn't jump. The autoscroll pill sits under it (5f.4's key map
+counts it at the top there); the full-screen handle stays at the window's foot, as at every width (D14).
 
 **Files:**
 - Modify: `src/caracole/viewer/viewer.css` (a `@media screen and (min-width: 1200px)` block for the toolbar, below;
   the bar's `html[data-necks]`/`html[data-panel]` insets below 1200 px only)
-- Modify: `src/caracole/viewer/viewer.js` (`toolbarWide`, `placeBar()`, `toolbarEdge()`; `dock()`; the scroll
-  handler; `place()`; `layout()`'s room; the resize handler)
-- Modify: `src/caracole/viewer/harptab.js` (`toolbarWide`, `placeBar()`, `toolbarEdge()`; `showScroll()`; its scroll
-  handler), `src/caracole/viewer/harptab.css` (`.bar .keys`'s max-width in the toolbar)
+- Modify: `src/caracole/viewer/layers.js` (`toolbar(bar, head)`: the toolbar's place, written once for both pages)
+- Modify: `src/caracole/viewer/viewer.js` (`const toolbar = caracoleLayers.toolbar(bar, () => sheetEl.parentElement
+  .querySelector(":scope > header.head"))`, `toolbar.place()` at load and on `toolbar.wide`'s change, `toolbar.edge()`
+  on scroll and resize; `dock()`; the scroll handler; `place()`; `layout()`'s room; the resize handler)
+- Modify: `src/caracole/viewer/harptab.js` (`const toolbar = caracoleLayers.toolbar(bar, () =>
+  document.querySelector(".page > header.head"))`, called as viewer.js calls it; `showScroll()`; its scroll handler),
+  `src/caracole/viewer/harptab.css` (`.bar .keys`'s max-width in the toolbar)
 - Modify: `docs/usage.md` (**The bar**: on a laptop, a toolbar under the title), `AGENTS.md` (viewer/: a bullet "From
-  1200 px the bar is a toolbar…", naming `placeBar` and `data-asleep`)
+  1200 px the bar is a toolbar…", naming layers.js's `toolbar` and `data-asleep`)
 - Create: `tests/test_viewer_toolbar.py`
 - Test: `tests/test_viewer_bar.py`, `tests/test_viewer_necks.py`, `tests/test_viewer_panels.py`,
-  `tests/test_viewer_scroll.py`, `tests/test_viewer_versions.py`, `tests/test_viewer_harptab_browser.py`
+  `tests/test_viewer_scroll.py`, `tests/test_viewer_versions.py`, `tests/test_viewer_harptab_browser.py`,
+  `tests/test_viewer_layout.py` (5c.6's two-column tests), `tests/test_viewer_full_screen.py` (5a.6's handle at the
+  foot, unchanged)
 
 **Interfaces:**
 - Consumes: 5b's song header, `<header class="head">`: on sheet.html, a kept version's page and the harmonica page
   `.page > header.head`; in a songbook the shown song's, `section.song > header.head` (`#sheet`'s parent's
-  `:scope > header.head`); 5a's full-screen handle (the element 5a put at the foot) and its state; 5d.2's `.bw`,
-  `.disc`; 5d.1's order.
-- Produces: `toolbarWide` (`matchMedia("(min-width: 1200px)")`) and `placeBar()` in viewer.js and harptab.js (the bar
-  right after the song's header while wide, back before `#pill`, where the page wrote it, while narrow; the focus kept
-  on the control that had it); `bar[data-asleep]` while autoscroll counts down and runs (both scripts, every width);
-  `--toolbar-bottom` on `<html>` (px: the toolbar's bottom edge in the window, 0 at least; written on scroll, resize
-  and `placeBar()`, only while wide); `--toolbar` (56px, the toolbar's height, a viewer.css token).
+  `:scope > header.head`); 5a's full-screen state (its handle stays at the foot: no rule here); 5d.2's `.bw`, `.disc`;
+  5d.1's order.
+- Produces: `caracoleLayers.toolbar(bar, head)` → `{ wide, place(), edge() }`, which viewer.js and harptab.js both
+  call, neither holding a copy: `wide` is `matchMedia("(min-width: 1200px)")`; `place()` puts the bar right after
+  `head()` while wide, back before `#pill`, where the page wrote it, while narrow, the focus kept on the control that
+  had it; `edge()` writes `--toolbar-bottom` on `<html>` (px: the toolbar's bottom edge in the window, 0 at least;
+  only while wide; `place()` calls it too). `bar[data-asleep]` while autoscroll counts down and runs (both scripts,
+  every width); `--toolbar` (56px, the toolbar's height, a viewer.css token).
 
 viewer.css, the rules the tests hold it to (sizes are the builder's):
 ```css
@@ -2128,11 +2300,11 @@ viewer.css, the rules the tests hold it to (sizes are the builder's):
   .bar-in { justify-content: flex-start; gap: 8px; max-width: none; margin: 0; }
   /* each tool a pill, its icon and its word side by side; the key's pill its key over its word; none pushed right */
   .sizes { top: calc(100% + 10px); bottom: auto; }
-  .pill { top: calc(var(--toolbar-bottom, 0px) + 12px); bottom: auto; }
-  /* 5a's full-screen handle: top: 0; bottom: auto */
+  .pill { top: calc(var(--toolbar-bottom, 0px) + 12px); bottom: auto; }  /* 5f.4's room() counts it at the top */
+  /* no rule for 5a's full-screen handle: it stays at the window's foot (D14) */
 }
 ```
-viewer.js: `dock()` sets `bar.hidden = away && !toolbarWide.matches` and `bar.toggleAttribute("data-asleep", away)`;
+viewer.js: `dock()` sets `bar.hidden = away && !toolbar.wide.matches` and `bar.toggleAttribute("data-asleep", away)`;
 the scroll handler slides the bar below 1200 px alone (from 1200 it notes `reveal.y` and returns, and Aa's box stays
 open); `place()`'s floor is the window's foot from 1200 px and its ceiling the toolbar's bottom (a card goes above its
 chord only where it clears the toolbar); `layout()`'s room for two columns takes `--toolbar`'s height off from 1200 px.
@@ -2176,12 +2348,20 @@ harptab.js: `showScroll()` toggles `data-asleep` with `moving()`; its scroll han
   def test_a_harmonica_tabs_page_has_the_toolbar_too(tmp_path):
       # ids == ["h-down", "h-up", "necks-toggle", "notes", "size", "scroll"]; scrolling by itself: visibility hidden
 
-  def test_in_full_screen_its_handle_sits_at_the_top(tmp_path):
-      # 5a's way into full screen (Hide controls in More): the handle's top == 0 at 1280
+  def test_both_pages_place_the_toolbar_through_layers_js(tmp_path):
+      # (no browser) viewer.js and harptab.js call caracoleLayers.toolbar; neither defines placeBar or toolbarEdge
   ```
+  The full-screen handle has no test here: 5a.6's `test_hide_controls_…` pins it at the foot at 1280, and holds.
+
   Updates: test_viewer_bar.py's 1280 cases (`test_the_bar_fits_…` lists 1100 in its place for the bottom bar, the
   toolbar's own test above holds 1280; `test_the_keyboard_reaches_every_control_even_when_the_bar_is_away` at 1100,
-  where `necks-open` is in `necks-toggle`'s place); test_viewer_necks.py (`seen["bar"]["left"] == rail["right"]` and
+  where `necks-open` is in `necks-toggle`'s place); 5c.5's
+  `test_the_songs_end_comes_up_half_a_screen_clear_of_the_bar`: its floor is `innerHeight` where the bar sits at the
+  top (`const floor = bar.hidden || !r.height || bar.classList.contains('away') || r.top < innerHeight / 2 ?
+  innerHeight : r.top`), so at 1280 the song's end comes up half a screen clear of the window's foot;
+  test_viewer_layout.py's two-column tests (5c.6's, and today's at 1600 and 1280): the toolbar's 56 px off the room
+  leaves their songs fitting (5c.6 chose them with more slack), and one that stops fitting is re-pinned here (a taller
+  window or a shorter song), never the rule; test_viewer_necks.py (`seen["bar"]["left"] == rail["right"]` and
   `rail["bar"]["left"] == 345` from 1200 px become "the toolbar inside the song's column"); test_viewer_panels.py's
   desktop `look()` uses of `bar` (the card's floor), test_viewer_scroll.py's 1280 cases (the pill under the toolbar,
   not above a foot bar), test_viewer_versions.py line ~377 and test_viewer_harptab_browser.py's 1280 bar checks.
@@ -2196,8 +2376,8 @@ harptab.js: `showScroll()` toggles `data-asleep` with `moving()`; its scroll han
 
   `nix develop -c pytest -q tests/test_viewer_toolbar.py tests/test_viewer_bar.py tests/test_viewer_necks.py
   tests/test_viewer_panels.py tests/test_viewer_scroll.py tests/test_viewer_versions.py tests/test_viewer_layout.py
-  tests/test_viewer_harptab_browser.py tests/test_viewer_harmony_tab.py tests/test_viewer_key_list.py`, then the corpus
-  step.
+  tests/test_viewer_harptab_browser.py tests/test_viewer_harmony_tab.py tests/test_viewer_key_list.py
+  tests/test_viewer_full_screen.py`, then the corpus step.
 
 - [ ] **Step 5: Commit**
 
@@ -2207,16 +2387,19 @@ harptab.js: `showScroll()` toggles `data-asleep` with `moving()`; its scroll han
 #### Task 5d.7: A finger's 48 px, and the corners reaching the screen's edge
 
 Under `pointer: coarse` the bar's and the pill's buttons grow from 44 to 48 px; the bottom corners' buttons (− at the
-left, More at the right, or the harmonica page's Scroll, its last) take taps up to the screen's edges. Below 380 px a
-phone keeps 44 px widths (48 tall): at 6 × 48 px a 320 px phone would leave the key 24 px.
+left, `#t-down`, or the harmonica page's `#h-down`; More at the right, or the harmonica page's Scroll, its last) take
+taps up to the screen's edges. Below 380 px a phone keeps 44 px widths (48 tall): the spec asks 48, but at 6 × 48 px a
+320 px phone would leave the key 24 px (the owner was told).
 
 **Files:**
 - Modify: `src/caracole/viewer/viewer.css` (the bar's side paddings as tokens `--bar-l`, `--bar-r` (`max(8px,
   env(safe-area-inset-left))`, 4 px below 420 px, as today); `@media (pointer: coarse)`: `.bar .tool`, `.keys .step`,
-  `.pill button` 48 × 48, `html[data-pill] { --pill: 68px; }`; `@media (pointer: coarse) and (max-width: 379.98px)`:
-  their widths 44; `@media (pointer: coarse) and (max-width: 743.98px)`, where `.bar-in` spans the bar whole: `#t-down`
-  and `#more`, `.bar-in > #scroll:last-child` `position: relative` and an `::after` reaching left (`calc(-1 *
-  var(--bar-l))`) or right and down (`calc(-4px - env(safe-area-inset-bottom))`) to the edges)
+  `.pill button` `min-width: 48px; min-height: 48px` (a minimum: the tools stay 54 px tall, 5d.2's icon over its word,
+  and `--foot` stays 63 px), `html[data-pill] { --pill: 68px; }`; `@media (pointer: coarse) and (max-width:
+  379.98px)`: their `min-width: 44px`; `@media (pointer: coarse) and (max-width: 743.98px)`, where `.bar-in` spans the
+  bar whole: `#t-down`, the harmonica page's `#h-down` and `#more`, `.bar-in > #scroll:last-child` `position:
+  relative` and an `::after` reaching left (`calc(-1 * var(--bar-l))`) or right and down (`calc(-4px -
+  env(safe-area-inset-bottom))`) to the edges)
 - Modify: `docs/usage.md` (**The bar**: a finger's 48 px, the corners)
 - Test: `tests/test_viewer_bar.py`, `tests/test_viewer_harptab_browser.py`
 
@@ -2231,7 +2414,8 @@ phone keeps 44 px widths (48 tall): at 6 × 48 px a 320 px phone would leave the
                                                          (360, 740, 44), (320, 640, 44)])
   def test_on_a_touch_screen_every_bar_and_pill_button_is_a_fingers_48_px(tmp_path, width, height, wide):
       # viewer(..., mobile=True): coarse. #scroll, #go twice (paused: the bar and the pill both shown); every shown
-      # '#bar button, #pill button': height >= 48 and width >= wide; #key-now >= 48 wide; scrollWidth <= width
+      # '#bar button, #pill button': height >= 48 and width >= wide; #key-now >= 48 wide; scrollWidth <= width;
+      # each '#bar .tool' still 54 px tall, its word whole under its icon (5d.2)
 
   @in_chromium
   def test_with_a_mouse_they_stay_44_px(tmp_path):
@@ -2243,11 +2427,11 @@ phone keeps 44 px widths (48 tall): at 6 × 48 px a 320 px phone would leave the
       with viewer(tmp_path) as b:  # 390×844, coarse
           corners = b.js(f"[{hit}(0, innerHeight - 1), {hit}(innerWidth - 1, innerHeight - 1)]")
       assert corners == ["t-down", "more"]
-      # and the harmonica page's right corner is "scroll"
+      # and the harmonica page's corners are ["h-down", "scroll"]
   ```
   `test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it`: `m["smallest"] >= (48 if mobile and width >=
-  380 else 44)`; its key-size expectations as measured at 390 and 430 (the key keeps 94 px at 390: "Ab mixolydian"
-  whole, `12 <= size <= 16`).
+  380 else 44)`, its `60 <= m["height"] <= 66` (5d.2's) kept; its key-size expectations as measured at 390 and 430
+  (the key keeps 94 px at 390: "Ab mixolydian" whole, `12 <= size <= 16`).
 
 - [ ] **Step 2: Run them and see them fail**
 
@@ -2268,8 +2452,8 @@ phone keeps 44 px widths (48 tall): at 6 × 48 px a 320 px phone would leave the
 
 #### Task 5d.8: Check it on screen, and merge
 
-**Files:**
-- Modify: `docs/screenshots/*.png` (retaken: the bar's words, the Harmony tab, the toolbar)
+**Files:** none new. The README's pictures are not retaken here: 5f.7 or a later library lane, whichever merges last,
+retakes them ("Where the stages meet" 12).
 
 - [ ] **Step 1: The gate**, every one passing:
   ```
@@ -2284,9 +2468,9 @@ phone keeps 44 px widths (48 tall): at 6 × 48 px a 320 px phone would leave the
   `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py --serve`, and look
   at a sheet, a version's page, a songbook song and a harmonica tab's page at 320, 390, 768, 1100 and 1280 px and on a
   phone in the app: the words, the arrow lit while scrolling, "+2"/"capo 2", the key list, the Harmony tab, the toolbar
-  stuck at the top with the pill under it, nothing over the song's last lines. Then the pictures:
-  `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py`;
-  `git add docs/screenshots && git commit -m "docs: the screenshots retaken with the bar's words and the Harmony tab"`.
+  stuck at the top with the pill under it, the full-screen handle at the foot, nothing over the song's last lines.
+  The PNGs in `docs/screenshots/` stay as main has them (5d.5's make.py change waits for the last retake); a PNG that
+  conflicts in the merge takes main's, never a hand merge.
 - [ ] **Step 3: Merge**, in the checkout that holds `main` (its working tree clean):
   ```
   git switch main
@@ -2314,21 +2498,24 @@ Named by role, since those stages are planned apart. Where a name below differs 
 
 - **5a's layers**: the one list of what a sheet page has open over or beside the song (viewer.js's `layers` and
   `topLayer()` today: the settings, the card, the Harmony panel, the versions list, the necks' sheet; 5a adds Aa,
-  the key list and full screen). "A layer has the focus" below means `document.activeElement` is inside one of them,
-  or inside `#sizes`, `#tip`, `#necks` or a `dialog`.
+  the export question and full screen, 5d.4 the key list, and 5d.5 takes the Harmony panel out). "A layer has the
+  focus" below means `document.activeElement` is inside one of them, or inside `#sizes`, `#tip`, `#necks` or a
+  `dialog`, full screen's `#handle` excepted: full screen hides the controls for reading, and the keys keep working
+  there (D14 with D16).
 - **5b's version line and list**: their links to the song's other pages are still written by viewer.js's
   `vAddress(page)`, which calls `screenChoices(params)`.
 - **5c's lines**: the sung lines are the elements the data's `pinyin` indexes (viewer.js `songLines`,
   `:scope > section.sec > p.l` today; page.py `_drawn_lines(sheet)`), whatever 5c draws a chord-only line as.
 - **5d's bar and panels**: the Aa button and its popover (`#size`, `#sizes`), More (`#panel`), the one switch left
   for the strip of chord shapes (the settings' `#strip-toggle`; the bar's `#shapes` too if 5d kept it), and from
-  1200 px the toolbar the bar became (5d: sticky at the top of the window).
+  1200 px the toolbar the bar became (5d: sticky at the top of the window, the autoscroll pill under it, the
+  full-screen handle still at the foot).
 
 #### New names these stages make
 
 | Name | Where | What |
 |---|---|---|
-| `screen.js`, `window.caracoleScreen` | src/caracole/viewer/ | the screen's choices for every viewer page: the theme (5e), the key map and keeping the screen on (5f); inlined in a sheet, a songbook and a harmonica tab's page just before viewer.js or harptab.js |
+| `screen.js`, `window.caracoleScreen` | src/caracole/viewer/ | the screen's choices for every viewer page: the theme (5e), the key map and keeping the screen on (5f); inlined on every viewer page (a sheet, a kept version's page, a songbook and a harmonica tab's page) just before viewer.js or harptab.js, after layers.js and kinds.js where the page has it ("Where the stages meet" 9) |
 | `html[data-theme]` | viewer.css | `light` or `dark` chosen; absent for Auto |
 | localStorage `caracole-viewer-theme`, address `theme=` | screen.js | `auto`, `light`, `dark`; the address names it only while it is `light` or `dark` |
 | `state.shapes` | viewer.js | the strip of chord shapes shown (`true`) or hidden (`false`) by hand for this song, `null` for the default |
@@ -2440,25 +2627,35 @@ Named by role, since those stages are planned apart. Where a name below differs 
   `src/caracole/viewer/viewer.css` (`.sizes`), `tests/helpers/viewer_pages.py`
 - Modify (Kotlin): `android/viewer/src/main/kotlin/io/github/danielhp95/caracole/viewer/ViewerAssets.kt`
   (`Page`), `android/viewer/src/main/kotlin/io/github/danielhp95/caracole/viewer/render/RenderBuild.kt` (`ASSETS`)
+- Modify (the tests that pin the scripts' order, "Where the stages meet" 9): `tests/test_viewer_book.py`
+  (`len(scripts) == 8`: book.js, strum.js, overlay.js, instruments.js, winds.js, layers.js, screen.js, viewer.js),
+  `tests/test_viewer_harptab_page.py` (the scripts list `strum.js, overlay.js, layers.js, kinds.js, screen.js,
+  harptab.js`; the `</script>` count + 1), `tests/test_conformance_viewer_harmonica.py` (`pieces`' assets +
+  `("screen.js", page._screen())` after `kinds.js`), `tests/test_conformance_viewer_pages.py` (`pieces`' assets +
+  `("screen.js", page._screen())` after `kinds.js`)
 - Test: `tests/test_viewer_theme.py`, `tests/test_viewer_bar.py` (the Aa box's markup assertion),
   `tests/test_viewer_numerals.py` (imports `NO_STORAGE` from the helper)
 
 **Interfaces:**
-- Consumes: 5e.1's `html[data-theme]`; 5d's `#size`, `#sizes`.
+- Consumes: 5e.1's `html[data-theme]`; 5d's `#size`, `#sizes`; the scripts as 5a.1, 5b.5 and 5b.8 left them
+  (layers.js, kinds.js).
 - Produces: `window.caracoleScreen`, frozen: `THEME` (`"caracole-viewer-theme"`), `theme()` → `"auto" | "light" |
   "dark"`, `setTheme(choice)` (applies it, keeps it in localStorage; a value not of the three is ignored),
   `carry(params)` (sets `theme` in a `URLSearchParams` while the theme is light or dark, deletes it for Auto; returns
   `params`; 5f.5 adds `awake`). The Aa box's `#theme` group (`.seg`, `role="group"`, `aria-label="Theme"`) and its
   buttons `#theme-auto`, `#theme-light`, `#theme-dark` (`aria-pressed`). viewer.js's `screenKit`
-  (`window.caracoleScreen || null`). `helpers.viewer_pages`: `NO_STORAGE` (moved from test_viewer_numerals.py) and
-  `viewer(..., before=())`, each script of `before` given to `Page.addScriptToEvaluateOnNewDocument` before the page
-  opens.
+  (`window.caracoleScreen`: screen.js is inlined on every viewer page, so it is never null and no call guards it;
+  5f.4 and 5f.5 call `screenKit.keys` and `screenKit.awake` alike). `helpers.viewer_pages`: `NO_STORAGE` (moved from
+  test_viewer_numerals.py) and `viewer(..., before=())`, each script of `before` given to
+  `Page.addScriptToEvaluateOnNewDocument` before the page opens.
 
 - [ ] **Step 1: Write the failing tests** (`tests/test_viewer_theme.py`)
 
   - `test_screen_js_is_inlined_before_each_pages_own_script`: `page.HERE / "screen.js" in page.BUILD_FILES`; in
-    `build_viewer(SONG)`, `build_songbook(...)` and `build_harmonica_viewer(...)`, screen.js's text appears once, after
-    winds.js's and before viewer.js's (harptab.js's on the harmonica page).
+    `build_viewer(SONG)`, `build_viewer(SONG, export=False)` (a kept version's page), `build_songbook(...)` and
+    `build_harmonica_viewer(...)`, screen.js's text appears once, in the one order ("Where the stages meet" 9): after
+    kinds.js's (layers.js's in the songbook, which has no kinds.js) and before viewer.js's (harptab.js's on the
+    harmonica page).
   - `test_aa_offers_auto_light_and_dark_and_the_choice_holds_for_every_page`: phone (390×844), system light. Click
     `#size`; the `#theme` buttons read `["Auto", "Light", "Dark"]`, `#theme-auto` pressed. Click `#theme-dark`:
     `html[data-theme] == "dark"`, body background `rgb(19, 19, 18)`, only `#theme-dark` pressed,
@@ -2498,9 +2695,10 @@ Named by role, since those stages are planned apart. Where a name below differs 
     so the songbook's contents, where viewer.js doesn't run, follow it too.
   - **page.py**: `BUILD_FILES` gains `HERE / "screen.js"` (comment: "the screen's choices, before viewer.js and
     harptab.js"); `_screen()` as `_sound()`; `build_viewer`'s scripts
-    `(_sound(), _overlay(), _instruments(), _winds(), _screen(), script)`. book.py's
-    `(book_script, _sound(), _overlay(), _instruments(), _winds(), _screen(), script)`; harptab_page.py's
-    `(_sound(), _overlay(), _screen(), script)` (its control is 5e.3's).
+    `(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), _screen(), script)`. book.py's
+    `(book_script, _sound(), _overlay(), _instruments(), _winds(), _layers(), _screen(), script)`; harptab_page.py's
+    `(_sound(), _overlay(), _layers(), _kinds(), _screen(), script)` (its control is 5e.3's). Each docstring's count of
+    scripts follows (the sheet eight, the songbook eight, the harmonica page six).
   - **The Aa box** (`_CONTROLS`): `#sizes` loses its `role` and `aria-label` and holds two rows:
     `<span class="size-row" role="group" aria-label="Text size">` with today's `#smaller`, `#fs-now`, `#bigger`, then
     `<span class="seg theme" id="theme" role="group" aria-label="Theme">` with
@@ -2508,22 +2706,24 @@ Named by role, since those stages are planned apart. Where a name below differs 
     `#theme-dark` "Dark". viewer.css: `.sizes` a column (`flex-direction: column; align-items: stretch`), `.size-row`
     today's row; the box kept within the window (anchored at Aa's right edge, `left: auto; right: 0; transform: none`,
     where centring on Aa would cross the window's edge; the 320 px test decides).
-  - **viewer.js**: `const screenKit = window.caracoleScreen || null;` by the other kits. `drawTheme()` (in `render`)
+  - **viewer.js**: `const screenKit = window.caracoleScreen;` by the other kits. `drawTheme()` (in `render`)
     sets each `#theme` button's `aria-pressed` from `screenKit.theme()`; a click on one: `screenKit.setTheme(…)`,
     `render()`. `save()` calls `screenKit.carry(params)` after the `keep(…)` lines; `screenChoices(params)` calls it too
     (so `vAddress`, `view().carry` and a harmonica tab's link take it); `exportLink`'s from-a-file command deletes
-    `theme` with `fs`, `speed`, `vol`, `necks`, `py`. Reset all leaves it. Without screen.js (`screenKit` null) the
-    control is hidden.
+    `theme` with `fs`, `speed`, `vol`, `necks`, `py`. Reset all leaves it. No branch for a page without screen.js:
+    every viewer page inlines it ("Where the stages meet" 3).
   - **book.js**: `SCREEN = ["necks", "py", "trad", "inst", "theme"]`, its comment naming the theme.
-  - **Kotlin**: `ViewerAssets.Page`: `SHEET` scripts `strum.js, overlay.js, instruments.js, winds.js, screen.js,
-    viewer.js`; `SONGBOOK` the same after `book.js`; `HARMONICA` `strum.js, overlay.js, screen.js, harptab.js`.
+  - **Kotlin**: `ViewerAssets.Page`: `SHEET` scripts `strum.js, overlay.js, instruments.js, winds.js, layers.js,
+    kinds.js, screen.js, viewer.js`; `SONGBOOK` `book.js, strum.js, overlay.js, instruments.js, winds.js, layers.js,
+    screen.js, viewer.js`; `HARMONICA` `strum.js, overlay.js, layers.js, kinds.js, screen.js, harptab.js`.
     `RenderBuild.ASSETS` gains `"screen.js"` between `"overlay.js"` and `"strum.js"`. Nothing else: copyViewerAssets
     copies every `*.js`, and page.json's `_CONTROLS` is regenerated.
 
 - [ ] **Step 4: Run them and see them pass**
 
   `nix develop -c pytest -q -n 0 tests/test_viewer_theme.py tests/test_viewer_bar.py tests/test_viewer_book.py
-  tests/test_viewer_songbook_browser.py tests/test_viewer_numerals.py`;
+  tests/test_viewer_songbook_browser.py tests/test_viewer_numerals.py tests/test_viewer_harptab_page.py
+  tests/test_viewer_layers.py`;
   `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py` (theory_assets.jsonl, page.json,
   pages*, harmonica_pages*, render.jsonl move); `nix develop ./android -c gradle -p android test` (PagesReplay,
   HarmonicaPageReplay, the theory replay's assets, PhoneRenderTest's `ASSETS` held to its folder).
@@ -2563,7 +2763,8 @@ Named by role, since those stages are planned apart. Where a name below differs 
 
 - [ ] **Step 3: Implement**
 
-  `_BAR`'s Aa box as `_CONTROLS`' (5e.2). harptab.js: `screenKit`, the buttons' `aria-pressed` drawn in its `render`,
+  `_BAR`'s Aa box as `_CONTROLS`' (5e.2). harptab.js: `const screenKit = window.caracoleScreen` (inlined on this page
+  too: no guard), the buttons' `aria-pressed` drawn in its `render`,
   a click `setTheme` then `render()` and `save()`; `save()` and `backToSheet()` call `screenKit.carry(params)`.
 
 - [ ] **Step 4: Run it and see it pass** — the test, `tests/test_viewer_harptab_browser.py`,
@@ -2589,7 +2790,8 @@ Named by role, since those stages are planned apart. Where a name below differs 
 - Consumes: 5d's switch for the strip (`#strip-toggle`, and `#shapes` if kept); 5b's header (the strip stays between
   it and the sheet: page.py `_song_html` already puts `#strip` before `#sheet`).
 - Produces: `state.shapes` (`null | true | false`, saved per song as today's `strip` was); `stripShown()` →
-  `state.shapes ?? !railWide.matches`.
+  `state.shapes ?? !railWide.matches`: by default below 1200 px, where no rail shows the shapes (the spec's D7 says
+  "on a phone"; the viewer's own boundary is kept, and the owner was told).
 
 - [ ] **Step 1: Write the failing tests** (`tests/test_viewer_strip.py`, `@in_chromium` module)
 
@@ -2671,14 +2873,15 @@ Named by role, since those stages are planned apart. Where a name below differs 
 
 - [ ] On screen: `nix develop -c caracole serve` (a library of yours, or `docs/screenshots/make.py --serve`): a
   sheet, a version page, a songbook song and a harmonica tab's page on a phone-sized window and a laptop, each theme,
-  the strip; then retake the README's pictures, whose phone sheets now show the strip:
-  `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py`.
+  the strip. The README's pictures (whose phone sheets now show the strip) are not retaken here: 5f merges after
+  this stage, so 5f.7 or a later library lane retakes them ("Where the stages meet" 12); the PNGs in `docs/screenshots/`
+  stay as main has them.
 - [ ] `nix develop -c pytest -q`; `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py`
   leaves `git status` clean; `nix develop ./android -c gradle -p android test`; `nix flake check`;
   `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`.
-- [ ] In the worktree: `git add docs/screenshots && git commit -m "docs: the README's pictures with the strip of chord
-  shapes"`; then in the main checkout: `git switch main && git merge --no-ff feat/sheet-5e-reading &&
-  GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
+- [ ] In the main checkout: `git switch main && git merge --no-ff feat/sheet-5e-reading &&
+  GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main` (a PNG that conflicts takes main's, never a hand
+  merge).
 
 ---
 
@@ -2915,11 +3118,16 @@ Named by role, since those stages are planned apart. Where a name below differs 
 - Test: `tests/test_viewer_keys.py` (create); `tests/test_viewer_scroll.py` (still passing)
 
 **Interfaces:**
-- Consumes: 5a's layers (`busy`), 5d's toolbar and bar (`room`).
+- Consumes: 5a's layers (`busy`), 5d's toolbar and bar (`room`; 5d.6's `toolbar.wide`), 5e.2's `screenKit` (never
+  null: no guard).
 - Produces: `caracoleScreen.keys({ toggle, pause, room, busy })`: binds the key map on `document` once. `toggle()`,
   the page's Space and Enter: the bar's ▶ when autoscroll is off, else the pill's `#go` (counting: at once; running:
   pause; paused: count-in again). `pause()`: autoscroll paused if it moves. `room()` → `{ top, bottom }`, the CSS px
-  of the window the page's controls cover at its top and its foot. `busy()`: a layer of the page has the focus.
+  of the window the page's controls cover at its top and its foot: below 1200 px `top` 0 and `bottom` above the bar
+  and above the pill while it shows; from 1200 px, where the bar is the toolbar at the top and the pill sits under it
+  (5d.6), `top` the larger of the toolbar's bottom (`--toolbar-bottom`, the bar's height once stuck) and the pill's
+  bottom while it shows, and `bottom` `innerHeight`. `busy()`: a layer of the page has the focus, full screen's
+  `#handle` not counted (full screen is for reading: the keys work there, D14 with D16).
   Constants `KEPT = 2` (lines kept by a turn) and `LINE = 2.6` (a chord row and its words, in the text's em, for a
   turn with fewer than three whole lines in view).
 
@@ -2927,14 +3135,18 @@ Named by role, since those stages are planned apart. Where a name below differs 
   test_viewer_scroll's `LONG`; `key(b, name, code)`, `b.press(" ")`)
 
   ```python
-  # The lines wholly in view between the page's controls, by their index among the sheet's lines: below the toolbar
-  # where the bar is one at the top (1280 px), above the bar's place where it sits at the foot (its height whether
-  # slid away or not), and above the pill while it shows.
+  # The lines wholly in view between the page's controls, by their index among the sheet's lines. From 1200 px the
+  # bar is the toolbar at the top and the pill sits under it: below both. Below 1200 px the bar sits at the foot:
+  # above its place (its height whether slid away or not), and above the pill while it shows. In full screen the bar
+  # isn't displayed and counts for nothing.
   WHOLE = """(() => { const bar = document.getElementById('bar'), pill = document.getElementById('pill');
-    const atTop = bar.getBoundingClientRect().top < innerHeight / 2;
-    const top = atTop && !bar.hidden ? bar.offsetHeight : 0;
-    let bottom = !atTop && !bar.hidden ? innerHeight - bar.offsetHeight : innerHeight;
-    if (!pill.hidden) bottom = Math.min(bottom, pill.getBoundingClientRect().top);
+    const wide = matchMedia('(min-width: 1200px)').matches, shown = !bar.hidden && bar.offsetHeight > 0;
+    let top = wide && shown ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+    let bottom = !wide && shown ? innerHeight - bar.offsetHeight : innerHeight;
+    if (!pill.hidden) {
+      const p = pill.getBoundingClientRect();
+      if (wide) top = Math.max(top, p.bottom); else bottom = Math.min(bottom, p.top);
+    }
     return [...document.querySelectorAll('#sheet p, #sheet pre')].map((el, n) => [n, el.getBoundingClientRect()])
       .filter(([, r]) => r.height && r.top >= top - 1 && r.bottom <= bottom + 1).map(([n]) => n); })()"""
   ```
@@ -2946,6 +3158,14 @@ Named by role, since those stages are planned apart. Where a name below differs 
   - `test_space_and_enter_start_and_stop_autoscroll` (focus on the page): Space → counting; Space → running; Enter →
     paused; Enter → counting; the page didn't move by Space's own scroll.
   - `test_a_page_key_while_it_scrolls_pauses_it_and_turns`: running; `PageDown`: `#go` "Resume" and turned as above.
+  - `test_from_1200_px_a_turn_keeps_its_lines_below_the_pill_under_the_toolbar` (1280×900): the toolbar stuck (scrolled
+    down first), autoscroll paused (`#scroll`, `#go` twice: the pill shown under the toolbar); `PageDown` scrolls
+    forward (`scrollY` grows) and the last two lines wholly in view before are the first two after, by `WHOLE`, the
+    pill's band counted at the top; `PageUp` back likewise.
+  - `test_in_full_screen_the_keys_still_turn_and_start`, phone and laptop: Hide controls (`#more`, `#full-open`: the
+    focus on `#handle`); `PageDown` turns keeping two lines; Space starts autoscroll (counting), Space again runs it;
+    `data-full` still "on" throughout; Escape brings the controls back. On a songbook song in full screen, `ArrowRight`
+    still opens song 2 (5a.6's test, kept).
   - `test_keys_are_left_alone_in_a_text_field_or_a_layer`: More open with the focus in it, then the card, the Aa
     box, the `#insts` menu, the rail's tabs at 1280 px: Space, PageDown and ArrowDown neither start nor turn; Space
     on a focused chord opens its card; with the focus on `#scroll`, Enter presses it (as today).
@@ -2962,7 +3182,8 @@ Named by role, since those stages are planned apart. Where a name below differs 
 
   screen.js `keys`: one `keydown` listener. Left alone: `e.defaultPrevented`, any of Alt, Ctrl, Meta, Shift, a text
   field with the focus (`input, textarea, select, [contenteditable]`), `busy()`. Space and Enter, but not on a
-  control with the focus (`button, a[href], summary, [role=button], [tabindex]`, whose own activation they are):
+  control with the focus (`button, a[href], summary, [role=button], [tabindex]`, whose own activation they are) other
+  than full screen's `#handle`, where they are the map's (a tap on the handle, Escape or Back restores the controls):
   `preventDefault`, `toggle()`. PageDown and ArrowDown, PageUp and ArrowUp: `preventDefault`, `pause()`, then a turn,
   measured after the pause (the bar comes back with it): with `[top, bottom]` from `room()`, the lines wholly between
   them (`#sheet p, #sheet pre`, shown); with three or more, PageDown scrolls the second-last to `top` and PageUp the
@@ -2971,22 +3192,25 @@ Named by role, since those stages are planned apart. Where a name below differs 
   them for a songbook), nor is anything a version line does.
 
   viewer.js: `screenKit.keys({ toggle: () => (scroll.state === "off" ? $("scroll") : go).click(),
-  pause: pauseScroll, room, busy })`; `room()`: `bottom` is `innerHeight` less the bar's height while it isn't hidden
-  (`bar.offsetHeight`, slid away or not, as scrolling back up brings it) where the bar sits at the foot, and above that
-  the pill's top while it shows or a docked layer's; `top` is the bar's height where 5d made it the toolbar at the
-  top, else 0; `busy()` as "What these stages take from 5a–5d" says. Its `SCROLL_KEYS` listener keeps `Home` and `End`
-  alone (the map now handles Space and the four page keys: left in, it would pause a scroll that Space then resumes).
-  harptab.js likewise, with its bar and pill, its `busy()` the focus inside `#sizes` or `#necks`.
+  pause: pauseScroll, room, busy })`, `screenKit` unguarded (5e.2); `room()`: below 1200 px, `top` 0 and `bottom`
+  `innerHeight` less the bar's height while it isn't hidden (`bar.offsetHeight`, slid away or not, as scrolling back
+  up brings it), and above that the pill's top while it shows or a docked layer's; from 1200 px (`toolbar.wide`),
+  `bottom` `innerHeight` and `top` the larger of the toolbar's bottom (`--toolbar-bottom`, the bar's height once
+  stuck) and the pill's bottom while the pill shows (5d.6 puts it under the toolbar); in full screen the bar counts
+  for nothing; `busy()` as "What these stages take from 5a–5d" says, full screen's `#handle` not counted. Its
+  `SCROLL_KEYS` listener keeps `Home` and `End` alone (the map now handles Space and the four page keys: left in, it
+  would pause a scroll that Space then resumes). harptab.js likewise, with its bar and pill (from 1200 px the pill
+  under its toolbar too), its `busy()` the focus inside `#sizes` or `#necks` (never `#handle`).
 
 - [ ] **Step 4: Run them and see them pass** — the new file, `tests/test_viewer_scroll.py`,
-  `tests/test_viewer_songbook_browser.py`, `tests/test_viewer_harptab_browser.py`; the corpus written again;
-  `:viewer:test`.
+  `tests/test_viewer_songbook_browser.py`, `tests/test_viewer_harptab_browser.py`, `tests/test_viewer_full_screen.py`;
+  the corpus written again; `:viewer:test`.
 
 - [ ] **Step 5: Commit** — docs/usage.md: a "Keys and pedals" bullet after Auto-scroll (a Bluetooth page turner is a
   keyboard: Space or Enter starts and stops autoscroll; PageDown or ↓ turns a screen keeping two lines, PageUp or ↑
   back; any of them pauses a scroll; ← → change songs in a songbook; nothing while the settings, a card or a menu has
-  the focus; no key changes the version); the harmonica tab's page paragraph names them too. AGENTS.md: **screen.js**
-  holds the key map; a page key never navigates.
+  the focus, but all of them in full screen; no key changes the version); the harmonica tab's page paragraph names them
+  too. AGENTS.md: **screen.js** holds the key map; a page key never navigates.
   `git add src/caracole/viewer tests docs/usage.md AGENTS.md` ·
   `git commit -m "feat(viewer): a key map for pedals: start and stop, turn a screen keeping two lines"`
 
@@ -3002,7 +3226,8 @@ Named by role, since those stages are planned apart. Where a name below differs 
   (`test_the_screen_stays_on_while_it_scrolls` moves to the new file as below)
 
 **Interfaces:**
-- Consumes: 5d's More (`#panel`).
+- Consumes: 5d's More (`#panel`); 5e.2's `screenKit`, inlined on every viewer page and so never null: once viewer.js's
+  and harptab.js's own wake locks go, `screenKit.awake` is the one, called with no guard.
 - Produces: `caracoleScreen.AWAKE` (`"caracole-viewer-awake"`), `minutes()` (0 to 60 by 5, 10 by default; the
   address's `awake=` read as the theme is), `setMinutes(n)` (kept in localStorage), `carry(params)` writes `awake=`
   while it isn't 10, `awake(moving)` → `sync()`, which the page calls whenever `moving()` may have changed. While a
@@ -3041,10 +3266,10 @@ Named by role, since those stages are planned apart. Where a name below differs 
   on, schedules one `setTimeout` for the moment they run out (cleared and set again on the next). Wanted: the page
   visible and (`moving()` or minutes on and within them). `sync()`: a lock asked when wanted and none held or asked,
   released when not wanted; never `navigator.permissions.query`. A lock let go by the browser (its `release` event)
-  clears `data-awake`. viewer.js and harptab.js call `const awake = screenKit.awake(moving)` and `awake()` where they
-  called `holdScreen` and `letScreenSleep`. The row in `_CONTROLS` after the reading switches and before the places to
-  go (`#places`), drawn by viewer.js's `render` (`#awake-down` disabled at 0, `#awake-up` at 60); `exportLink`'s
-  command deletes `awake` too. book.js: `SCREEN` gains `"awake"`.
+  clears `data-awake`. viewer.js and harptab.js call `const awake = screenKit.awake(moving)` (no guard, no fallback:
+  "Where the stages meet" 3) and `awake()` where they called `holdScreen` and `letScreenSleep`. The row in `_CONTROLS`
+  after the reading switches and before the places to go (`#places`), drawn by viewer.js's `render` (`#awake-down`
+  disabled at 0, `#awake-up` at 60); `exportLink`'s command deletes `awake` too. book.js: `SCREEN` gains `"awake"`.
 
 - [ ] **Step 4: Run them and see them pass** — the new file, `tests/test_viewer_scroll.py`,
   `tests/test_viewer_panels.py`, `tests/test_viewer_songbook_browser.py`, `tests/test_viewer_harptab_browser.py`;
@@ -3098,6 +3323,12 @@ Named by role, since those stages are planned apart. Where a name below differs 
   `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`;
   `android/scripts/device-test.sh PedalTest="$(mktemp -d)" PinchTest="$(mktemp -d)"` (the WebView's keys, wake lock
   and text zoom).
+- [ ] **The README's pictures** ("Where the stages meet" 12): 5f is lane 5's last stage, so it retakes them unless a
+  library lane that retakes them (1f.4) is still to merge, which then does. To retake: first take main's pictures
+  (`git checkout main -- docs/screenshots/`: any PNG a library lane retook comes along, never merged by hand); then
+  `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py`,
+  every picture the sheet pages changed (the bar's words, the Harmony tab, the toolbar, the strip), and
+  `git add docs/screenshots && git commit -m "docs: the README's pictures retaken with the sheet pages' redesign"`.
 - [ ] `git switch main && git merge --no-ff feat/sheet-5f-hands-free &&
   GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
