@@ -237,6 +237,13 @@ internal object Addresses {
         return null
     }
 
+    /** The type token a slugged tab page's address names (ug/sitemap's `_peel_type` of its last part, before the
+     * id: `chords`, `guitar-pro`, `bass`…), whatever its keys; null for a bare `/tab/{id}` or no token. */
+    fun typeToken(url: String): String? {
+        val m = PyRe.fullmatch(TAB_URL, url) ?: return null
+        return peelType(m.groupValues[2])?.second
+    }
+
     /** ug/sitemap.classify_tab_url: the index row, or why there is none ([BARE], [UNRECOGNIZED], or a type the index
      * doesn't keep). */
     fun classifyTabUrl(url: String): Any {

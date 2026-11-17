@@ -67,7 +67,7 @@ internal object ArtistPages {
             if (pasteProblem(run.db, keys, overrides) != null) return false
             return notOnArtistPage(run)
         }
-        val listing = readArtistPage(run, base, ArtistRoute.ARTIST_PAGE_KINDS,
+        val listing = readArtistPage(run.lists, base, ArtistRoute.ARTIST_PAGE_KINDS,
                                      Normalize.nameForms(Normalize.cleanTitle(run.song.title)))
         if (!listing.complete) return false
         if (listing.gone) {
@@ -96,7 +96,7 @@ internal object ArtistPages {
         val base = knownArtistPage(run.db, keys, overrides) ?: learnFromOwnTabs(run, own, keys)
             ?: learnArtistPage(run, keys)
         if (base != null) {
-            val listing = readArtistPage(run, base, kinds, matchedTitleForms(run.song))
+            val listing = readArtistPage(run.lists, base, kinds, matchedTitleForms(run.song))
             if (!listing.complete) return false
             if (listing.gone) {
                 artistPageGone(run, keys, base)
@@ -246,11 +246,11 @@ internal object ArtistPages {
      * `_read_list`: the song's entries in the artist's list of [kind]; whether the list was read far enough (false
      * when this run's page cap stopped it); and the list's first page (null when UG answered 404). Lists are sorted
      * by title, so reading stops once the title's entries end, and goes on to the next page only when they reach the
-     * end of this one. A page robots.txt closes, or UG redirects to where it does, ends the list, unread. Every page
-     * read is kept for searches, and a list read to its end, an empty one (404) included, is every tab of its kind.
+     * end of this one; with no title ([forms] null, a pasted link's read), the list is read to its end. A page
+     * robots.txt closes, or UG redirects to where it does, ends the list, unread. Every page read is kept for
+     * searches, and a list read to its end, an empty one (404) included, is every tab of its kind.
      */
-    private fun readList(run: SongRun, base: String, kind: String, forms: List<String>): Triple<List<Hit>, Boolean, UgArtistPage?> {
-        val ctx = run.ctx
+    fun readList(r: ListReading, base: String, kind: String, forms: List<String>?): Triple<List<Hit>, Boolean, UgArtistPage?> {
         val hits = ArrayList<Hit>()
         var first: UgArtistPage? = null
         var fetched = 0
@@ -261,21 +261,21 @@ internal object ArtistPages {
         var whole = false
         var broke = false
         while (number <= last) {
-            if (fetched >= ctx.artistPagesPerKind) return Triple(hits, false, first)
+            if (fetched >= r.perKind) return Triple(hits, false, first)
             val url = UgArtist.pageUrl(base, kind = kind, page = number)
             if (Pages.closed(url)) {
                 broke = true
                 break
             }
             val (page, resp) = try {
-                Pages.readPage(ctx.client, url, ::artistPage, maxAge = ctx.artistPageMaxAge, now = ctx.now)
+                Pages.readPage(r.client, url, ::artistPage, maxAge = r.maxAge, now = r.now)
             } catch (e: RobotsClosed) {
                 broke = true
                 break
             }
             val fresh = !resp.fromCache
             if (fresh) fetched += 1
-            val readAt = readAt(run, resp.fetchedAt)
+            val readAt = readAt(r, resp.fetchedAt)
             oldest = oldest?.let { if (readAt < it) readAt else it } ?: readAt
             if (page == null) {
                 whole = number == 1  // an empty list may answer 404
@@ -285,9 +285,9 @@ internal object ArtistPages {
             first = first ?: page
             last = maxOf(last, page.pages)
             val listed = page.tabs.filter { it.kind == kind }
-            Pages.checkLinks(run, listed, url)
-            kept += ArtistTabs.store(run.db, base, page.name, listed, readAt, now = run.stamp)
-            val found = listed.mapNotNull { titleHit(it, forms, fresh) }
+            Pages.checkLinks(r.block, listed, url)
+            kept += ArtistTabs.store(r.db, base, page.name, listed, readAt, now = r.stamp)
+            val found = if (forms == null) emptyList() else listed.mapNotNull { titleHit(it, forms, fresh) }
             hits += found
             if (hits.isNotEmpty() && !(found.isNotEmpty() && found.last().tab === listed.last())) {
                 whole = number >= last
@@ -297,38 +297,38 @@ internal object ArtistPages {
             number += 1
         }
         if (!broke) whole = true
-        if (whole && oldest != null) ArtistTabs.keepOnly(run.db, base, kind, kept, oldest)
+        if (whole && oldest != null) ArtistTabs.keepOnly(r.db, base, kind, kept, oldest)
         return Triple(hits, true, first)
     }
 
-    /** `resp.fetched_at or _iso(now)`: when a page was read, the run's time for an answer that names none. */
-    private fun readAt(run: SongRun, fetchedAt: String?): String = fetchedAt?.takeIf { it.isNotEmpty() } ?: run.stamp
+    /** `resp.fetched_at or _iso(now)`: when a page was read, the read's time for an answer that names none. */
+    private fun readAt(r: ListReading, fetchedAt: String?): String = fetchedAt?.takeIf { it.isNotEmpty() } ?: r.stamp
 
     /** `_offered_kinds`: the kinds of list the artist page offers, read from its unfiltered first page; null when it's
      * gone, and none when robots.txt closes it (or the page redirects to where it does). Its tabs, every kind mixed,
      * are kept for searches, never as all of a kind's. */
-    private fun offeredKinds(run: SongRun, base: String): Set<String>? {
+    fun offeredKinds(r: ListReading, base: String): Set<String>? {
         val url = UgArtist.pageUrl(base)
         if (Pages.closed(url)) return emptySet()
         val (page, resp) = try {
-            Pages.readPage(run.ctx.client, url, ::artistPage, maxAge = run.ctx.artistPageMaxAge, now = run.ctx.now)
+            Pages.readPage(r.client, url, ::artistPage, maxAge = r.maxAge, now = r.now)
         } catch (e: RobotsClosed) {
             return emptySet()
         }
         if (page == null) return null
-        ArtistTabs.store(run.db, base, page.name, page.tabs, readAt(run, resp.fetchedAt), now = run.stamp)
+        ArtistTabs.store(r.db, base, page.name, page.tabs, readAt(r, resp.fetchedAt), now = r.stamp)
         return page.filters.ifEmpty { ArtistRoute.ARTIST_PAGE_KINDS.toSet() }
     }
 
-    /** `_read_artist_page`: the song's entries in the artist's lists of [kinds], read in order. The first list read
-     * tells, from its filter bar, which of the others the artist has; an empty list may answer 404, so the unfiltered
-     * page tells then, and a 404 there too means the page is gone. */
-    private fun readArtistPage(run: SongRun, base: String, kinds: List<String>, forms: List<String>): Listing {
+    /** `_read_artist_page`: the song's entries in the artist's lists of [kinds], read in order (every list whole, with
+     * [forms] null). The first list read tells, from its filter bar, which of the others the artist has; an empty list
+     * may answer 404, so the unfiltered page tells then, and a 404 there too means the page is gone. */
+    fun readArtistPage(r: ListReading, base: String, kinds: List<String>, forms: List<String>?): Listing {
         val listing = Listing()
         var offered: Set<String>? = null
         for (kind in kinds) {
             if (offered != null && kind !in offered) continue
-            val (found, complete, first) = readList(run, base, kind, forms)
+            val (found, complete, first) = readList(r, base, kind, forms)
             if (!complete) {
                 listing.complete = false
                 return listing
@@ -337,7 +337,7 @@ internal object ArtistPages {
                 if (listing.name.isEmpty()) listing.name = first.name
                 if (offered == null && first.filters.isNotEmpty()) offered = first.filters
             } else if (offered == null) {
-                offered = offeredKinds(run, base)
+                offered = offeredKinds(r, base)
                 if (offered == null) {
                     listing.gone = true
                     return listing
@@ -350,11 +350,14 @@ internal object ArtistPages {
 
     /** `_artist_page_gone`: UG answered 404 for the artist page: the address learned for it forgotten, and what it
      * listed, which a search no longer finds. */
-    private fun artistPageGone(run: SongRun, keys: List<String>, base: String) {
+    private fun artistPageGone(run: SongRun, keys: List<String>, base: String) = artistPageGone(run.db, keys, base)
+
+    /** [artistPageGone] of the artist filed under [keys]. */
+    fun artistPageGone(db: Db, keys: List<String>, base: String) {
         for (key in keys) {
-            if (UgLookup.learnedArtistUrl(run.db, key) == base) UgLookup.forgetArtistUrl(run.db, key)
+            if (UgLookup.learnedArtistUrl(db, key) == base) UgLookup.forgetArtistUrl(db, key)
         }
-        ArtistTabs.forget(run.db, base)
+        ArtistTabs.forget(db, base)
     }
 
     // --- titles ----------------------------------------------------------------------------------------------------

@@ -10,14 +10,14 @@ import io.github.danielhp95.caracole.core.py.Py
  * [artistKey] and [songKey] are what it is filed under, [artistForms] and [titleForms] its names' forms, [readAt]
  * when UG gave the list.
  */
-internal data class ListedTab(
+data class ListedTab(
     val page: String, val tabId: Long, val type: String, val artist: String, val title: String, val label: String?,
     val rating: Double, val votes: Int, val url: String, val artistKey: String, val songKey: String,
     val artistForms: List<String>, val titleForms: List<String>, val readAt: String,
 )
 
 /** ug/artist_tabs.py's read side, for searches: the tabs of the artist pages caracole read (`ug_artist_tabs`). */
-internal object ListedTabs {
+object ListedTabs {
     /** artist_tabs.ROWS_READ: rows the prefilter reads, at most. */
     const val ROWS_READ = 2000
 
@@ -64,6 +64,27 @@ internal object ListedTabs {
         ) { it.text(0)!! to it.long(1)!!.toInt() }.forEach { (k, n) -> out[k] = n }
         return out
     }
+
+    /** listed_tab: a tab as the artist page that listed it last names it (its latest read, the first page by address
+     * on a tie); null when no page caracole read lists it. */
+    fun listedTab(db: Db, tabId: Long): ListedTab? =
+        db.one("$SELECT WHERE tab_id = ? ORDER BY read_at DESC, page LIMIT 1", tabId) { listed(it) }
+
+    /** page_artist: an artist page as caracole read it: UG's name of its artist, the key its tabs are filed under
+     * (those most of them are), how many tabs it lists, and its latest read; null when caracole holds none of its
+     * tabs. */
+    fun pageArtist(db: Db, page: String): PageArtist? {
+        val (artist, key) = db.one(
+            "SELECT artist, artist_key, COUNT(*) FROM ug_artist_tabs WHERE page = ? GROUP BY artist, artist_key " +
+                "ORDER BY COUNT(*) DESC, artist, artist_key LIMIT 1", page,
+        ) { it.text(0)!! to it.text(1)!! } ?: return null
+        return db.one("SELECT COUNT(*), MAX(read_at) FROM ug_artist_tabs WHERE page = ?", page) {
+            PageArtist(artist, key, it.long(0)!!.toInt(), it.text(1)!!)
+        }
+    }
+
+    /** page_artist's answer. */
+    data class PageArtist(val artist: String, val artistKey: String, val tabs: Int, val readAt: String)
 
     /** artist_page: the artist page that lists most of an artist's tabs, as filed; null when none does. */
     fun artistPage(db: Db, artistKey: String): String? = db.one(
