@@ -857,7 +857,7 @@ It is rows.js's, shared by both pages:
 - The page's tabs are tabs.js's (body.html's tablist, `tab-NAME` buttons, `#tab=NAME`, `window.caracoleTabs`,
   "caracole:tab"): Library, Songbooks, Sites, then Requests, served alone, then Sync, the last, on caracole serve's
   page alone (the phone's has none); from 720 px Library and Songbooks on the left, Sites, Requests and Sync on the
-  right (sync.css), a phone's one row unsplit (test_sync_sheet.py, test_requests_tab.py fits five on a phone).
+  right (sync.css), a phone's one row, each tab 48 px, scrolling sideways when five don't fit (test_library_tabs.py, test_sync_sheet.py, test_requests_tab.py).
 
 ##### The Sync tab and its sheet
 

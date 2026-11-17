@@ -53,7 +53,15 @@
     const from = current;
     current = to;
     save();
-    if (opts.focus) tabs[names.indexOf(to)].focus();
+    if (opts.focus) tabs[names.indexOf(to)].focus({ preventScroll: true });
+    // A row that scrolls sideways shows the chosen tab whole (the row alone: scrollIntoView would move the page).
+    const chosen = tabs[names.indexOf(to)];
+    if (list.scrollWidth > list.clientWidth) {
+      const row = list.getBoundingClientRect();
+      const box = chosen.getBoundingClientRect();
+      if (box.left < row.left) list.scrollLeft += box.left - row.left;
+      else if (box.right > row.right) list.scrollLeft += box.right - row.right;
+    }
     document.dispatchEvent(new CustomEvent("caracole:tab", { detail: { name: to, from, words: opts.words || null } }));
   };
   for (const tab of tabs) tab.addEventListener("click", () => show(nameOf(tab)));

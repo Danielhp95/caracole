@@ -25,6 +25,14 @@
     padding-left: 0; border-left: 0; overflow: visible; clip: auto; }
 }
 .masthead.lib .tabs { grid-area: tabs; min-width: 0; margin: 0; border-bottom: 0; }
+/* On a phone each tab is a thumb's (library-screens.css, 48 px) and a row too wide for the page scrolls sideways by
+   itself, never the page (tabs.js keeps the chosen tab in its view). */
+@media (max-width: 719px) {
+  .masthead.lib .tabs { gap: 0; overflow: auto hidden; overscroll-behavior-x: contain; scrollbar-width: none;
+    padding-bottom: 1px; }  /* room for the chosen tab's line, which hangs 1px below the row */
+  .masthead.lib .tabs::-webkit-scrollbar { display: none; }
+  .masthead.lib .tab { padding: 0 10px; font-size: .9rem; gap: 4px; }
+}
 .masthead.lib .summary { grid-area: sum; justify-self: end; gap: 8px; margin: 0; }
 .masthead.lib .summary:empty { display: none; }
 /* The page's tabs, in the masthead (tabs.js): each shows its panel; a count beside its name (songbooks, requests that

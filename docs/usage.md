@@ -2472,8 +2472,9 @@ tab](#the-sites-tab)) and, served, **Journal**, the last (see Journal, under
 [caracole serve](#caracole-serve)), Songbooks and the Journal counting what they
 hold (songbooks; requests that wait or run), the address remembering which
 (`#tab=songbooks`, `#tab=sites`, `#tab=requests`), and at the end the number of songs
-wanted or ignored when there are any. On a phone the tabs fit beside the mark,
-four of them too. Under it the search
+wanted or ignored when there are any. On a phone each tab is a thumb's 48 px tall and the
+row of tabs scrolls sideways when they don't fit beside the mark, the chosen one
+kept in view. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
 **Filter** and **Sort** beside it, icons alone on a phone. The filters on come
 under it, each a tag
