@@ -58,7 +58,8 @@ by the task named.
 3. **A library of one-song artists, and one artist of 300 songs**: folding, bands and the long-list containers (runs of
    40, groups over 50 cut) all right. Tasks 1b.3 and 1e.3.
 4. **A blocked, turned-off or empty site in a search, and a search where every count is 0**: the count row's rules
-   (a blocked site keeps its own mark, see "Where the lanes meet" 5), no row at all at 0. Task 1c.5.
+   (a site's 0, a blocked one's too, folds into "0 on N more", its state in the tooltip, as the spec says), no row at
+   all at 0. Task 1c.5.
 5. **A request cancelled, interrupted, failed in its first second, or all of whose steps were skipped**: the fixed
    total, the frozen bar, Ready folding away, no bar for a sub-second job after a reload. Tasks 2.1, 2.2 and 2.6.
 
@@ -84,28 +85,34 @@ otherwise, this section wins.
    back quietly. There is no shared `backEntry` helper: lane 1d's draft named one as a placeholder.
 2. **Back closes the card's ⋯ menu: lane 3 (Task 3b.5), not lane 1.** The menu is card.js's. Task 1d.5 is dropped;
    its one guard, "opening a card adds no history entry, at 390 and 1280 px", moves into Task 1d.6's tests. The
-   menu's entry is `{ caracoleMenu: 1 }`, plus `search` in search mode as rule 1 says; lane 1 never copies
+   menu's entry is `{ caracoleMenu: n }` (n a serial), plus `search: (Number(history.state && history.state.search)
+   || 0) + 1` in search mode as rule 1 says, never `search` spread from `history.state`; lane 1 never copies
    `caracoleMenu` into its own entries.
 3. **The card's CSS seam.** Task 3a.1 moves into card.css the `.play`, `.line-plays` and `.foot` rules and filter.css's
    lit rule, deleting them from rows.css, library.css and filter.css (a named crossing); `.line-title > .line-plays`
-   stays in rows.css as the one placement rule, and `.line-plays` stays a direct child of `.line-title` (lane 1b's
+   stays in rows.css as its one placement rule, and `.line-plays` stays a direct child of `.line-title` (lane 1b's
    folded grid depends on it). The opened line's box rules stay in card.css: Task 3b.4 keys
-   `.line:not(.hit) > .line-panel` and its `.foot` rule to `.line-panel.song-card`, and adds `:not(.selected)` to
-   `.line:not(.hit):has(> .line-more[aria-expanded="true"])`, using the classes Task 1d.2 and 1d.6 introduce
-   (`song-card` on every song's panel, `selected` on a line whose card is in the pane). Lane 1 styles `#card-pane` in
-   library.css and never re-adds `.play` or `.foot` rules (test_library_assets.py guards it).
+   `.line:not(.hit) > .line-panel` to `.line-panel.song-card` (the foot's rule is a plain `.foot` since 3a.1), and
+   adds `:not(.selected)` to `.line:not(.hit):has(> .line-more[aria-expanded="true"])`, using the classes Task 1d.2
+   and 1d.6 introduce (`song-card` on every song's panel, `selected` on a line whose card is in the pane). Lane 1
+   styles `#card-pane` in library.css and never re-adds `.play` or `.foot` rules (test_library_assets.py guards it:
+   outside card.css, `.play`, `.line-plays` and `.foot*` are named only by lane 1's placement rules, a selector
+   ending `.line-title > .line-plays` in rows.css or library.css (1b.3's and 1b.4's folded grids), and its
+   `#card-pane …` rules in library.css (1d.6's `#card-pane .foot-menu`)).
 4. **Four radii.** Task 1f.1 defines `--radius-s: 4px; --radius-m: 8px; --radius-l: 12px; --radius-pill: 999px` in
-   base.css. Lanes 2, 3 and 4 write `var(--radius-m, 8px)` and the like, so they hold before and after 1f lands;
-   1f's radius test leaves their elements out until the last of them merges, which removes the exclusions.
-5. **The count row's blocked sites (Task 1c.5): a site whose state is `blocked` keeps its own mark even at 0**, its
-   red glyph and its words, since it is a problem to see, not a zero; only zeros of the other states (searched,
-   in part, empty, off) fold into "0 on N more". The task's first test changes accordingly (below).
+   base.css. Lanes 2, 3 and 4 write `var(--radius-m, 8px)` and the like, so they hold before and after 1f lands:
+   Task 2.8 brings requests.css's radii to the four and Task 4.1 songbooks.css's (`.pickbar` and `.selecting .pick`
+   too); 3a.2, 3a.3 and 3b.6 write theirs as tokens with fallbacks; lane 2's bar segments have square ends (radius 0,
+   allowed). 1f's radius test, `odd_radii(skip)`, counts rendered elements alone and leaves out what is inside an
+   element its skip list matches; the last of 1f, lane 2, 3b and lane 4 to merge removes the skip list.
+5. **Withdrawn** (the pre-flight scan's F20: the spec wins). A blocked site's 0 is a zero as the others are: it folds
+   into "0 on N more", its state in the tooltip (Task 1c.5).
 6. **Dead step CSS.** Lane 2 deletes `.line > .step-chips` and `.row > .step-chips` (rows.css) and
    `.progress .steps-over` (library.css) in Task 2.6, a named crossing; lane 1b's line grid keeps `.line > .progress`
    and `.line > .steps` spanning the whole line.
 7. **The step list in the pane.** Lane 2's open-card list is `.line > .steps > ol.step-list`. Whichever of Tasks 1d.6
    and 2.6 merges second shows it for the selected line in the pane (moved into `#card-pane`, or the rule widened),
-   with a test at 1280 px.
+   with a test at 1280 px; both tasks carry that step, each doing it only when the other has merged.
 8. **The phone tabs' assertion in `tests/test_requests_tab.py`** (lane 2's file) is changed by Task 1a.2, a named
    crossing.
 9. **`replaceState(null, …)` elsewhere:** songbooks.js is lane 4's to fix (Task 4.1), requests.js lane 2's (Task 2.8),
@@ -120,6 +127,13 @@ otherwise, this section wins.
 **Merge order.** Lane 1's stages in order (1a, 1b, 1c, 1d, 1e, 1f), each from `main` after the one before merged.
 Lanes 2, 3a and 4 any time. Lane 3b after 1d (its container queries and `song-card` keys depend on it). Whoever
 merges second in any pair rebases and regenerates the corpus.
+
+**Every merge task** (1a.5, 1b.5, 1c.8, 1d.8, 1e.5, 1f.4, 2.9, 3a.4, 3b.7, 4.3) runs the whole suite (`nix develop -c
+pytest -q`), the corpus twice, `nix develop ./android -c gradle -p android test`, `nix flake check`, and
+`CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` when the corpus moved; merges with
+`git merge --no-ff`; then pushes main, `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`. Docs
+change in the task that changes the behaviour; a merge task only checks them. The README's screenshots are retaken
+once, in the merge task of whichever of lane 1 (1f.4), lane 2 (2.9), lane 3 (3b.7) and lane 4 (4.3) merges last.
 
 ## Calls the planners made where the spec was silent (the owner may overrule)
 
@@ -164,17 +178,19 @@ History (1a, 1c):
 
 - **Every `history.replaceState` in library.js and tabs.js passes `history.state`**, never `null`, so an entry's marker
   survives the list's and the tabs' own address writes. A script that pushes an entry pushes an object with a marker.
-- tabs.js pushes one entry when Library is left for another tab (`pushState(null, …)` plus an in-memory flag,
-  `fromLibrary`), replaces between the other tabs, and the Library tab pressed while `fromLibrary` is set is
-  `history.back()`. A tab change never touches `history.state.search`.
+- tabs.js pushes one entry when Library is left for another tab (`pushState({ tab: 1 }, …)`, rule 1's marker, plus an
+  in-memory flag, `fromLibrary`), replaces between the other tabs, and the Library tab pressed while `fromLibrary` is
+  set is `history.back()`. A tab change never touches `history.state.search`.
 - Search mode's entries carry `{ search: n }` (n = how many entries since search began: 1 for the entry pushed on
   entering search from an empty box, +1 for each `searchFor` push). **Any entry pushed while `body.search-mode` is on
   carries `search: (Number(history.state && history.state.search) || 0) + 1` beside its own marker**, so ← can take
   every one back with `history.go(-n)`: lane 3's card ⋯ menu entry (design: "adds a history entry, so Back closes it")
-  is `{ caracoleMenu: 1, search: … }` in search and `{ caracoleMenu: 1 }` out of it, and never `replaceState(null, …)`; 1d's laptop pane
-  pushes nothing. tabs.js's pushes carry no `search` (they pop themselves).
-- songbooks.js (lane 4), requests.js (lane 2) and sync.js (no lane) call `replaceState(null, …)` today. Their entries are
-  never search entries, so this is harmless; a lane that edits one of those lines passes `history.state` instead.
+  is `{ caracoleMenu: n, search: … }` in search and `{ caracoleMenu: n }` out of it (n a serial, `search` never spread
+  from `history.state`), and never `replaceState(null, …)`; 1d's laptop pane pushes nothing. tabs.js's push is
+  `{ tab: 1 }`, with rule 1's `search` beside it while `body.search-mode` is on.
+- songbooks.js (lane 4), requests.js (lane 2) and sync.js call `replaceState(null, …)` today. Their entries are never
+  search entries, so this is harmless; still, Tasks 4.1 (songbooks.js line 89), 2.8 (requests.js line 293) and 1a.4
+  (sync.js line 1129) each make theirs pass `history.state` ("Where the lanes meet" 9).
 
 Masthead and search mode (1a, 1c):
 
@@ -194,7 +210,7 @@ Masthead and search mode (1a, 1c):
 - Recently opened: localStorage `caracole-library-recent` (JSON array, ≤ 5, newest first, one entry a song:
   `{ identity, href, said }`), drawn in `#recent` (body.html, in `.searchbar` after `.bar-said`); `rememberOpened(line,
   link)` in library.js records it from any click on `a[href]` inside an `article.line[data-id]` (and its `.line-panel`).
-  1d's pane must keep `data-id` on the card's container or call `rememberOpened` itself.
+  Task 1d.6 makes the listener find a link's line through `itemOf(node)`, so a link in the pane is the selected line's.
 
 The list (1b):
 
@@ -210,8 +226,8 @@ The list (1b):
   `span.artist-counts`), the line's own `.line-by` (the artist button) shown as an overline.
 - A band: `section.artist:not(.folded) > h2.artist-title`, `height: var(--band-h)` (34 px), the name
   (`button.artist.artist-search` or `span.artist-name`) ellipsized, `span.artist-counts` right-aligned, its textContent
-  as today (`" · yours 2"`, `" · yours 1 · UG 3"`), what shows: `2` in the list, `yours 1 · UG 3` in results (a
-  `span.visually-hidden` holds the rest).
+  as today (`" · yours 2"`, `" · yours 1 · UG 3"`), what shows, in a `span` of its own: `2` in the list, `yours 1 · UG
+  3` in results (a `span.visually-hidden` before it holds the rest).
 - Folded lines are by context, never a class on the line (lines are cached and move between list and results):
   `section.artist.folded .line` and `section.flat .line` (descendant: 1e may wrap runs of flat lines). On a phone their
   grid is `"meta plays act key more" "name plays act key more"` with `.line-title { display: contents }`, so lane 3's
@@ -229,7 +245,10 @@ Search (1c, shared with caracole serve's lookup page):
   > 0 in `looked` order, then at most one `li.count-mark.rest` (`data-source="rest"`, `data-n="0"`). Each site mark holds
   `span.count-name` (the site's name in full, shown from 720 px unless the list has class `short`).
 - rows.js `fitCounts(list)`: after drawing, sets `short` on the list when its marks with names shown take more than one
-  line; refits on the list's resize. Both pages call it after `replaceChildren`.
+  line; refits on the list's resize.
+- rows.js `drawCountMarks(list, data, yours, found)`: the row drawn for both pages (library.js `drawCounts`,
+  lookup_page.py `showCounts`): `list.replaceChildren(...countMarks(…))`, `list.hidden` when there are none,
+  `fitCounts(list)`; it returns the marks.
 - rows.js `countsSaid(data, yours, found)`: no site with a count says `"nothing in the sites' indexes"`, nothing at all
   `"Nothing in your songs or the sites' indexes"`.
 - rows.js `nothingFound(data, query, does)`: `does.yours` (a number; > 0 drops "your songs or" from its words); its
@@ -249,6 +268,8 @@ Search (1c, shared with caracole serve's lookup page):
 - Modify: `android/server/src/main/kotlin/io/github/danielhp95/caracole/server/page/LibraryPage.kt` (`ServerControls`:
   `val inApp: Boolean = false`; `served`: `__LIBRARY__` → `""` when `controls.inApp`)
 - Modify: `android/server/src/main/kotlin/io/github/danielhp95/caracole/server/Assembly.kt` (`controls()`: `inApp = true`)
+- Modify: `docs/usage.md` (the library page's header paragraph, ~line 2366: in the Android app no name row, its own
+  bar names the library), `AGENTS.md` ("#### library_name.py" or the page's header line: `WebControls.in_app`)
 - Test: `tests/test_library_name_pages.py`, `android/server/src/test/kotlin/io/github/danielhp95/caracole/server/page/LibraryPageTest.kt`,
   `android/server/src/test/kotlin/io/github/danielhp95/caracole/server/PhoneServesTest.kt`
 
@@ -302,12 +323,12 @@ inApp = of.getValue("in_app").jsonPrimitive.boolean,
 - [ ] **Step 2: Run them and see them fail** — `nix develop -c pytest -q -n 0 tests/test_library_name_pages.py::test_the_apps_page_draws_no_name_row_and_its_title_still_names_the_library`
   (TypeError: unexpected keyword `in_app`).
 - [ ] **Step 3: Implement** — the field, the one `replace` in each `assemble_page`/`served`, `inApp = true` in
-  `Assembly.controls()`. Regenerate `tests/test_conformance_library_page.py`'s vectors.
+  `Assembly.controls()`; the docs above. Regenerate `tests/test_conformance_library_page.py`'s vectors.
 - [ ] **Step 4: Run them and see them pass** — the Python test, `nix develop -c pytest -q -n 0
   tests/test_conformance_library_page.py`, then `nix develop ./android -c gradle -p android :server:test --tests
   '*LibraryPageTest' --tests '*PhoneServesTest' --tests '*PageRoutesTest'`.
 - [ ] **Step 5: Commit** — `git add src/caracole/library_page.py tests/test_library_name_pages.py
-  tests/test_conformance_library_page.py tests/conformance android/server` ·
+  tests/test_conformance_library_page.py tests/conformance android/server docs/usage.md AGENTS.md` ·
   `feat(android): the app's library page draws no library-name row, its own bar names the library`
 
 #### Task 1a.2: Larger tabs on a phone, a row that scrolls sideways
@@ -323,6 +344,8 @@ inApp = of.getValue("in_app").jsonPrimitive.boolean,
 - Modify: `src/caracole/library_assets/sync.css` (drop `.masthead.lib .tabs:has(#tab-sync)`'s scrolling and its `.tab {
   padding: 0 3px; font-size: .84rem }`, now every tab row's; keep the 380 px rule)
 - Modify: `src/caracole/library_assets/tabs.js` (`show`: the chosen tab scrolled into the row's view, the row only)
+- Modify: `docs/usage.md` (the library page's header paragraph, ~line 2366: "On a phone the tabs fit beside the mark"
+  → each tab a thumb's 48 px, the row scrolling sideways when they don't fit)
 - Test: `tests/test_library_tabs.py` (new), `tests/test_requests_tab.py`
   (`test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_and_dark`: lane 2's file, this one
   assertion block only)
@@ -367,10 +390,12 @@ row with the page not scrolling sideways (`five["wide"] <= shown["page"]` stays)
   padding 3–4 px, four tabs' row `overflow-x: visible`).
 - [ ] **Step 3: Implement** — the CSS above. In tabs.js `show`, after the panels: when `list.scrollWidth >
   list.clientWidth`, set `list.scrollLeft` so the chosen tab is wholly in view (`tab.offsetLeft` against
-  `list.scrollLeft` and `list.clientWidth`; never `scrollIntoView`, which would move the page). Regenerate the corpus file.
+  `list.scrollLeft` and `list.clientWidth`; never `scrollIntoView`, which would move the page). docs/usage.md as
+  above. Regenerate the corpus file.
 - [ ] **Step 4: Run it and see it pass** — the new file, `tests/test_requests_tab.py`, `tests/test_sync_sheet.py -k tab`.
 - [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_tabs.py tests/test_requests_tab.py
-  tests/conformance` · `feat(library): a thumb's tabs on a phone, the row scrolling sideways when they don't fit`
+  tests/conformance docs/usage.md` · `feat(library): a thumb's tabs on a phone, the row scrolling sideways when they
+  don't fit`
 
 #### Task 1a.3: A badge in a phone browser is a pill in the tab row
 
@@ -379,18 +404,23 @@ row with the page not scrolling sideways (`five["wide"] <= shown["page"]` stays)
   grid-template-areas: "app name tabs" "sum sum sum"`; `.masthead.lib .libname` visually hidden unless it `:has(.scratch)`,
   then static with its `.name` visually hidden and `.scratch` at `font-size: .62rem; padding: 0 6px; line-height: 1.6`;
   drop the `"name name"` row)
-- Modify: `src/caracole/library_assets/sync.css` (its 380 px rule gains `grid-template-columns: auto minmax(0, 1fr)`,
-  as the phone grid now has three columns; its areas, `:has(.scratch)`'s `"app name" "tabs tabs" "sum sum"` among them,
-  stay)
+- Modify: `src/caracole/library_assets/sync.css` (its below-380 px rule, five tabs: `grid-template-columns: auto
+  minmax(0, 1fr)`, as the phone grid now has three columns; `.masthead.lib:has(#tab-sync)`'s `"app sum" "tabs tabs"`
+  stays; `:has(.scratch)`'s `"app name" "tabs tabs" "sum sum"`, which puts the badge beside the mark, is replaced by
+  `"app sum" "name tabs"`, so the pill sits in the tab row, before the tabs)
+- Modify: `docs/usage.md` (the library page's header paragraph, ~line 2366: a badge a pill in the tab row)
 - Test: `tests/test_library_name_pages.py`
   (`test_on_a_phone_the_badge_shows_under_the_bar_and_the_usual_library_keeps_one_bar` → renamed
-  `test_on_a_phone_the_badge_is_a_pill_in_the_tab_row_and_the_usual_library_shows_none`)
+  `test_on_a_phone_the_badge_is_a_pill_in_the_tab_row_and_the_usual_library_shows_none`; `library_page(conn, cfg,
+  badge=None, sync=None)`, its `sync` passed to `WebControls`)
 
 **Interfaces:**
-- Produces: phone masthead areas `"app name tabs" "sum sum sum"`.
+- Produces: phone masthead areas `"app name tabs" "sum sum sum"`; below 380 px with the Sync tab, `"app sum" "name
+  tabs"` when badged.
 
 - [ ] **Step 1: Write the failing test** — `LOOK` and `look` as they are; parametrize `size` over `(390, 844)` and
-  `(320, 640)`:
+  `(320, 640)`, and `sync` over `None` (four tabs) and `"tab"` (caracole serve's page with the Sync tab, five tabs:
+  at 320 px its below-380 px rule is the one tested), each `library_page(...)` call passing `sync=sync`:
 
 ```python
 usual = look(library_page(conn, cfg), tmp_path, size, scheme)
@@ -403,12 +433,14 @@ assert badged["first"] <= usual["first"] + 1, badged  # no row of its own
 assert badged["colour"] != badged["background"], badged
 ```
 
-- [ ] **Step 2: Run it and see it fail** — the pill is a row of its own today (`first` 40 px lower).
-- [ ] **Step 3: Implement** — the grid and the pill's rules above; regenerate the corpus file.
+- [ ] **Step 2: Run it and see it fail** — the pill is a row of its own today (`first` 40 px lower); at 320 px with
+  the Sync tab, beside the mark, the tabs on a row of their own.
+- [ ] **Step 3: Implement** — the grid and the pill's rules above, sync.css's below-380 px areas; docs/usage.md;
+  regenerate the corpus file.
 - [ ] **Step 4: Run it and see it pass** — `nix develop -c pytest -q -n 0 tests/test_library_name_pages.py
   tests/test_library_tabs.py`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_name_pages.py tests/conformance` ·
-  `feat(library): a Demo or Scratch badge on a phone is a pill in the tab row`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_name_pages.py tests/conformance
+  docs/usage.md` · `feat(library): a Demo or Scratch badge on a phone is a pill in the tab row`
 
 #### Task 1a.4: Leaving Library is a step Back returns from
 
@@ -416,12 +448,19 @@ assert badged["colour"] != badged["background"], badged
 - Modify: `src/caracole/library_assets/tabs.js` (`save(how)`, `show`'s `push`/`pop`/`load` options, the Library tab and
   its keys, `popstate`)
 - Modify: `src/caracole/library_assets/library.js` (`save`: `history.replaceState(history.state, …)`)
+- Modify: `src/caracole/library_assets/sync.js` (line 1129: `history.replaceState(history.state, "", "#" +
+  params.toString())` in place of `null`, "Where the lanes meet" 9)
 - Modify: `src/caracole/library_assets/__init__.py` (tabs.js's paragraph: Back)
+- Modify: `docs/usage.md` (the library page's header paragraph, ~line 2366: Back from Songbooks, Sites, Journal or
+  Share returns to Library, the other tabs replacing one another), `AGENTS.md` ("Songs gone, and the page's tabs":
+  the Back rule, `fromLibrary`, tabs.js's `{ tab: 1 }` entry, every replace passing `history.state`; "##### The Sync
+  tab and its sheet" untouched)
 - Test: `tests/test_library_tabs.py`
 
 **Interfaces:**
 - Consumes: 1a.2's tabs.js.
-- Produces: the history rules at the top (`fromLibrary`, `history.state` preserved by every replace).
+- Produces: the history rules at the top (`fromLibrary`, the `{ tab: 1 }` entry, `history.state` preserved by every
+  replace).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -434,6 +473,7 @@ def test_leaving_library_is_one_step_back_and_the_other_tabs_replace_it(conn, cf
     n = page.js("history.length")
     page.click("#tab-sites")
     assert page.wait(f"{CURRENT} === 'sites'") and page.js("history.length") == n + 1
+    assert page.js("history.state && history.state.tab") == 1  # rule 1's marker
     assert page.js("[...new URLSearchParams(location.hash.slice(1))].sort().join()") == "sort,title,tab,sites"
     page.click("#tab-songbooks")  # between other tabs: replaced
     assert page.wait(f"{CURRENT} === 'songbooks'") and page.js("history.length") == n + 1
@@ -460,37 +500,40 @@ def test_where_the_browser_refuses_a_step_the_tabs_change_all_the_same(...):  # 
 ```
 
 - [ ] **Step 2: Run them and see them fail** — `history.length` stays `n` (tabs.js only replaces).
-- [ ] **Step 3: Implement** — `save(how)`: `"push"` tries `history.pushState(null, "", url)` and sets `fromLibrary =
-  true`, falling back to `replaceState` when it throws; otherwise `replaceState(history.state, "", url)`. `show(name,
-  {focus, words, pop, load})`: push when `from === first && to !== first && !pop && !load`, else replace. The Library tab
+- [ ] **Step 3: Implement** — `save(how)`: `"push"` tries `history.pushState({ tab: 1 }, "", url)` (with rule 1's
+  `search: (Number(history.state && history.state.search) || 0) + 1` beside `tab` while `body.search-mode` is on, a
+  class 1c.2 brings) and sets `fromLibrary = true`, falling back to `replaceState` when it throws; otherwise
+  `replaceState(history.state, "", url)`. `show(name, {focus, words, pop, load})`: push when `from === first && to !==
+  first && !pop && !load`, else replace. The Library tab
   (click, or the tablist's keys landing on it) while `fromLibrary`: `history.back()` and nothing else, with the focus
   owed to the tab when a key asked (`refocus`); `popstate` clears `fromLibrary`, then shows the address's tab with `{
-  pop: true, focus: refocus }`. In library.js `save`, pass `history.state`. Regenerate the corpus file.
+  pop: true, focus: refocus }`. In library.js `save` and sync.js's line 1129, pass `history.state`. The docs above.
+  Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — `nix develop -c pytest -q -n 0 tests/test_library_tabs.py
-  tests/test_web_server.py -k keeps_its_settings tests/test_web_page_search.py -k back`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_tabs.py tests/conformance` ·
-  `feat(library): Back from another tab returns to Library`
+  tests/test_web_server.py -k keeps_its_settings tests/test_web_page_search.py -k back tests/test_sync_sheet.py`.
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_tabs.py tests/conformance
+  docs/usage.md AGENTS.md` · `feat(library): Back from another tab returns to Library`
 
 #### Task 1a.5: Merge stage 1a
 
 **Files:**
-- Modify: `docs/usage.md` (the library page's header paragraph, ~line 2366: "On a phone the tabs fit beside the mark"
-  → each tab a thumb's 48 px, the row scrolling sideways when they don't fit; a badge a pill in the tab row; in the
-  Android app no name row; Back from Songbooks, Sites, Journal or Share returns to Library, the other tabs replacing one
-  another)
-- Modify: `AGENTS.md` ("Songs gone, and the page's tabs": the Back rule, `fromLibrary`, every replace passing
-  `history.state`; "#### library_name.py" or the page's header line: `WebControls.in_app`; "##### The Sync tab and its
-  sheet" untouched)
+- Check (written by the tasks that changed the behaviour: 1a.1 to 1a.4): `docs/usage.md` (the library page's header
+  paragraph, ~line 2366: each tab a thumb's 48 px, the row scrolling sideways when they don't fit; a badge a pill in
+  the tab row; in the Android app no name row; Back from Songbooks, Sites, Journal or Share returns to Library, the
+  other tabs replacing one another), `AGENTS.md` ("Songs gone, and the page's tabs": the Back rule, `fromLibrary`,
+  every replace passing `history.state`; `WebControls.in_app`)
 
 - [ ] **Step 1** — `nix develop -c pytest -q` (whole suite) and the whole corpus twice; `git status` shows no vector
   left changed after the second run.
 - [ ] **Step 2** — `nix develop ./android -c gradle -p android test`;
-  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (android/ was touched);
-  `nix flake check`.
-- [ ] **Step 3** — the docs above; commit `docs: the library page's tabs on a phone, and Back from a tab`.
+  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (android/ was touched, the corpus
+  moved); `nix flake check`.
+- [ ] **Step 3** — check the docs above against what the stage does; a gap goes into a `docs:` commit here, and is
+  named in the merge's report.
 - [ ] **Step 4** — look at it on screen: `caracole serve` on a phone-width window and in the app (adb), Back from
   Sites, a Scratch badge.
-- [ ] **Step 5** — `git switch main && git merge --no-ff feat/library-1a-navigation`.
+- [ ] **Step 5** — `git switch main && git merge --no-ff feat/library-1a-navigation`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ### Stage 1b · The phone list
 
@@ -510,6 +553,10 @@ def test_where_the_browser_refuses_a_step_the_tabs_change_all_the_same(...):  # 
   coarse `button.artist` alone), `library.css` (delete `.artist-title .filter-mark`, `.artist-title button.artist-only`
   rules)
 - Modify: `src/caracole/library_page.py` (module docstring, ~line 60: the funnel's paragraph)
+- Modify: `docs/usage.md` (~line 2513, the artist's name: no funnel; a name searches for the artist, served or from a
+  file, and `#by=`/`#artist=` do the same; the tags no longer have "by Queen ×"), `AGENTS.md` ("##### The library
+  page's list": "An artist's name" drops the funnel and `artistFilter`; "##### Searching from the pages": "Your songs
+  there keep to the Filter panel's filters" without the artist's tag)
 - Test: `tests/test_library_page.py`, `tests/test_library_filter.py`, `tests/test_web_page_search.py`,
   `tests/test_library_page_songbooks.py` (`LINE_TARGETS`' `funnel`)
 
@@ -568,17 +615,17 @@ test_library_filter.py's addresses lose `&artist=eagles` and their "by Eagles" e
 - [ ] **Step 3: Implement** — the deletions above. `addressed()`: `const by = normal(params.get("by") || "")`; `const
   named = artistName(params.get("artist") || "")`; when `!at.q && !at.prog`, `at.q = by || named` and `at.all =
   searchesAsYouType(at.q)`. `cameBy` is `has("by") || has("artist")`. `searchFor` keeps today's push (1c gives it its
-  marker). Regenerate the corpus file.
+  marker). The docs above. Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — the files above, then `nix develop -c pytest -q -m "not slow"`.
-- [ ] **Step 5: Commit** — `git add src/caracole tests` · `feat(library): an artist's name searches for them, served or
-  from a file; no funnel, no one-artist view`
+- [ ] **Step 5: Commit** — `git add src/caracole tests docs/usage.md AGENTS.md` · `feat(library): an artist's name
+  searches for them, served or from a file; no funnel, no one-artist view`
 
 #### Task 1b.2: A 34 px band for an artist of two or more lines
 
 **Files:**
 - Modify: `src/caracole/library_assets/library.js` (`artistGroup`'s counts: `span.artist-counts` =
-  `span.visually-hidden(" · yours ")` + `mine` when the counts hold `mine` alone, else `span.visually-hidden(" · ")` +
-  `said.join(" · ")`: textContent unchanged)
+  `span.visually-hidden(" · yours ")` + `span(mine)` when the counts hold `mine` alone, else
+  `span.visually-hidden(" · ")` + `span(said.join(" · "))`: what shows in a `span` of its own, textContent unchanged)
 - Modify: `src/caracole/library_assets/library.css` (`.list, #found { --band-h: 34px; --fold-h: 64px }`; `.artist-title`:
   `display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--band-h); min-height: 0; padding: 0
   12px; font-size: .906rem; font-weight: 700; line-height: 1.2; overflow: hidden; color: var(--artist)`; its name
@@ -588,6 +635,9 @@ test_library_filter.py's addresses lose `&artist=eagles` and their "by Eagles" e
   min-height: 24px }`)
 - Modify: `tests/helpers/targets.py` (`small_targets(exempt: str = "", least: int = 44)`: the threshold `least - 0.5`;
   the module docstring)
+- Modify: `docs/usage.md` (~2611, touch: 44 px but an artist's name, 24 px; the list: an artist of two or more songs
+  under a 34 px band, your count on its right), `src/caracole/library_assets/__init__.py` (rows.css/library.css
+  paragraph: the bands)
 - Test: `tests/test_library_bands.py` (new), `tests/test_library_page.py`
   (`test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own`: deleted, replaced below;
   `test_lines_meet_touch_and_contrast`), `tests/test_web_page_search.py` (`test_the_bar_and_its_results_fit_a_phone`,
@@ -605,7 +655,8 @@ BAND = """(() => { const s = document.querySelector('#list section.artist[data-a
   const h = s.querySelector('.artist-title'), name = h.querySelector('.artist-name'), c = h.querySelector('.artist-counts');
   const css = getComputedStyle, box = (n) => n.getBoundingClientRect();
   return { height: box(h).height, size: parseFloat(css(name).fontSize), weight: Number(css(name).fontWeight),
-    colour: css(name).color, counts: [c.innerText, c.textContent, css(c).color, box(h).right - box(c).right],
+    colour: css(name).color, counts: [c.querySelector(':scope > span:not(.visually-hidden)').textContent, c.textContent,
+      css(c).color, box(h).right - box(c).right],
     target: box(h.querySelector('button.artist')).height, tokens: TOKENS }; })()"""
 # TOKENS: {"--artist": …, "--muted": …, "--text": …, "--accent": …}, each resolved by a probe span as
 # test_library_page.py's HEADER_LOOK resolves them (move its `token` probe into a string both files share).
@@ -617,6 +668,7 @@ def test_an_artist_with_two_songs_has_a_34px_band_naming_them_in_their_colour_an
     band = noted(dom, "data-band")
     assert 33.5 <= band["height"] <= 34.5 and 14 <= band["size"] <= 15 and band["weight"] >= 700, band
     assert band["colour"] == band["tokens"]["--artist"]
+    # what shows is the visible count span's textContent (innerText would hold the hidden " · yours " too)
     assert band["counts"][:2] == ["2", " · yours 2"] and band["counts"][2] == band["tokens"]["--muted"]
     assert band["counts"][3] <= 16  # on the band's right
     if touch:
@@ -627,11 +679,11 @@ def test_an_artist_with_two_songs_has_a_34px_band_naming_them_in_their_colour_an
 least=24)`, both `[]`; the three phone tests of test_web_page_search.py the same pair.
 
 - [ ] **Step 2: Run it and see it fail** — the band is ~41 px at 1.125rem today.
-- [ ] **Step 3: Implement** — the CSS and the counts' markup above; regenerate the corpus file.
+- [ ] **Step 3: Implement** — the CSS and the counts' markup above; the docs above; regenerate the corpus file.
 - [ ] **Step 4: Run it and see it pass** — `tests/test_library_bands.py`, `tests/test_library_page.py -k "touch or
   header or grouped"`, `tests/test_web_page_search.py -k phone`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests` · `feat(library): an artist's songs under a
-  34 px band, their name in their colour and your count on its right`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests docs/usage.md` · `feat(library): an artist's
+  songs under a 34 px band, their name in their colour and your count on its right`
 
 #### Task 1b.3: A one-song artist folds into its line
 
@@ -642,6 +694,9 @@ least=24)`, both `[]`; the three phone tests of test_web_page_search.py the same
 - Modify: `src/caracole/library_assets/library.css` (`section.artist .line-by { display: none }` →
   `section.artist:not(.folded) .line-by`; `section.artist .line` at ≥ 720 → `section.artist:not(.folded) .line`;
   `section.artist.folded > .artist-title` visually hidden; the folded line's phone grid; the overline's type)
+- Modify: `docs/usage.md` (the list: a one-song artist folded into its line, their name an overline over the title),
+  `AGENTS.md` ("##### The library page's list": bands and folding by context, `artistGroup`'s `tail`),
+  `src/caracole/library_assets/__init__.py` (rows.css/library.css paragraph: folded lines)
 - Test: `tests/test_library_bands.py`, `tests/test_library_page.py`
   (`test_the_library_is_lines_grouped_by_artist_a_to_z`: four of its five artists now fold, its headings' texts stay)
 
@@ -709,17 +764,19 @@ section.artist.folded .line > .line-title > .line-plays { grid-area: plays; }
   font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow:
   hidden; text-overflow: ellipsis; max-width: 100%`, coarse `min-height: 24px`. From 720 px a folded line takes the flat
   line's columns (rows.css's `"title by status act key more"`, `.line.hit`'s with `src`), the overline in the `by`
-  column. Regenerate the corpus file.
+  column. The docs above. Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — `tests/test_library_bands.py`, `tests/test_library_page.py`,
   `tests/test_web_page_search.py -k "group or artist"`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests` · `feat(library): a one-song artist folds into its
-  line, their name an overline over the title`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests docs/usage.md AGENTS.md` · `feat(library): a
+  one-song artist folds into its line, their name an overline over the title`
 
 #### Task 1b.4: Sorted by title or by when they came, every line is folded
 
 **Files:**
 - Modify: `src/caracole/library_assets/library.css` (the 1b.3 phone grid and overline type also for `section.flat .line`
   and `section.flat .line-by`)
+- Modify: `docs/usage.md` (the list: sorted by title or by when they came, every line folded, the artist above the
+  title)
 - Test: `tests/test_library_bands.py`, `tests/test_library_page.py`
   (`test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its_title` → renamed
   `test_a_phones_title_sorted_line_has_its_artist_above_its_title_and_its_status_beside_it`)
@@ -740,31 +797,33 @@ def test_a_sorted_list_folds_every_line_its_artist_above_its_title(conn, cfg, tm
   The renamed phone test keeps its library and asserts each artist whole above its title (`.line-by` width ≥ its
   scrollWidth for ABBA and Queen), "Needs review" beside it, the long name cut, nothing sideways.
 - [ ] **Step 2: Run it and see it fail** — today the artist sits under the title.
-- [ ] **Step 3: Implement** — add `section.flat` to 1b.3's selectors (one selector list each rule); regenerate the corpus
-  file.
+- [ ] **Step 3: Implement** — add `section.flat` to 1b.3's selectors (one selector list each rule); docs/usage.md;
+  regenerate the corpus file.
 - [ ] **Step 4: Run it and see it pass** — `tests/test_library_bands.py`, `tests/test_library_page.py -k "phone or sort"`,
   `tests/test_library_page_songbooks.py`, `tests/test_songbooks_tab.py -k select`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests` · `feat(library): a list by title or by when they
-  came folds every line, artist above title`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests docs/usage.md` · `feat(library): a list by title
+  or by when they came folds every line, artist above title`
 
 #### Task 1b.5: Merge stage 1b
 
 **Files:**
-- Modify: `docs/usage.md` (~line 2513, the artist's name: no funnel; a name searches for the artist, served or from a
-  file, and `#by=`/`#artist=` do the same; ~2611, touch: 44 px but an artist's name, 24 px; the list: 34 px bands, folded
-  one-song artists, folded lines sorted by title or by when they came; the tags no longer have "by Queen ×")
-- Modify: `AGENTS.md` ("##### The library page's list": "An artist's name" drops the funnel and `artistFilter`; bands and
-  folding by context, `artistGroup`'s `tail`; "##### Searching from the pages": "Your songs there keep to the Filter
-  panel's filters" without the artist's tag)
-- Modify: `src/caracole/library_assets/__init__.py` (rows.css/library.css paragraph: bands, folded lines)
+- Check (written by 1b.1 to 1b.4): `docs/usage.md` (~line 2513, the artist's name: no funnel; a name searches for the
+  artist, served or from a file, and `#by=`/`#artist=` do the same; ~2611, touch: 44 px but an artist's name, 24 px;
+  the list: 34 px bands, folded one-song artists, folded lines sorted by title or by when they came; the tags no longer
+  have "by Queen ×"), `AGENTS.md` ("##### The library page's list": "An artist's name" without the funnel and
+  `artistFilter`; bands and folding by context, `artistGroup`'s `tail`; "##### Searching from the pages": "Your songs
+  there keep to the Filter panel's filters" without the artist's tag), `src/caracole/library_assets/__init__.py`
+  (rows.css/library.css paragraph: bands, folded lines)
 
-- [ ] **Step 1** — whole suite; corpus twice; `nix develop ./android -c gradle -p android test`; the e2e test; `nix
-  flake check`.
-- [ ] **Step 2** — the docs; commit `docs: the library list's bands and folded lines, an artist's name a search`.
+- [ ] **Step 1** — whole suite; corpus twice; `nix develop ./android -c gradle -p android test`;
+  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus moved); `nix flake
+  check`.
+- [ ] **Step 2** — check the docs above against what the stage does; a gap goes into a `docs:` commit here.
 - [ ] **Step 3** — on screen: a phone browser and the app, the owner's library (宋冬野 斑马斑马), title sort, a search.
 - [ ] **Step 4** — raise with lane 4: songbooks.css's `.selecting` rules name `.filter-mark`, `.artist-only` (dead now)
-  and give a `by` column at ≥ 720 px that a grouped line no longer has.
-- [ ] **Step 5** — `git switch main && git merge --no-ff feat/library-1b-list`.
+  and give a `by` column at ≥ 720 px that a grouped line no longer has (Task 4.1 deletes them, or 4.3's rebase).
+- [ ] **Step 5** — `git switch main && git merge --no-ff feat/library-1b-list`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ### Stage 1c · Search
 
@@ -798,6 +857,10 @@ def test_the_viewport_lets_the_keyboard_resize_the_page(conn, cfg):
   Escape listener; delete `backButton` and its `results-head` button, keeping `keptNote`)
 - Modify: `src/caracole/library_assets/library.css` (`.leave`: absolute at the field's left, 44 × 44, muted; `.field:has(>
   .leave:not([hidden])) input { padding-left: 44px }`)
+- Modify: `docs/usage.md` (~4121: ← and Back leave search, × clears and stays, no "Back to your songs" row),
+  `AGENTS.md` ("##### Searching from the pages": search mode, `#leave`, the `{ search: n }` entries; the history rules
+  of this plan's "Where the lanes meet" 1), `src/caracole/library_assets/__init__.py` (library.js's paragraph: search
+  mode)
 - Test: `tests/test_library_search_mode.py` (new), `tests/test_web_page_search.py` (`BACK` and the tests using it:
   `test_a_query_that_finds_nothing_…`, the one at ~line 1313, ~line 512's "Back to your songs" walk)
 
@@ -853,10 +916,11 @@ def test_no_row_over_the_results_says_back_to_your_songs_the_arrow_does(cfg, liv
   - `searchFor` sets `state.q` and renders before it focuses the box, so the focus finds search mode on and pushes
     nothing more.
   - Escape, the box focused and empty, in search mode: `backFromSearch()`.
+  - The docs above.
   Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — the new file, `tests/test_web_page_search.py`, `tests/test_library_tabs.py`.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests` · `feat(library): search is a step of its own: ←
-  and Back leave it, × clears and stays`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests docs/usage.md AGENTS.md` · `feat(library): search
+  is a step of its own: ← and Back leave it, × clears and stays`
 
 #### Task 1c.3: On a phone, search takes the screen
 
@@ -867,6 +931,7 @@ def test_no_row_over_the_results_says_back_to_your_songs_the_arrow_does(cfg, liv
   margin-top: calc(-1 * var(--mast-h, 0px)); visibility: hidden; } }`; `@media (prefers-reduced-motion: no-preference) {
   .masthead.lib { transition: margin-top .2s ease, visibility 0s linear 0s; } body.search-mode .masthead.lib {
   transition: margin-top .2s ease, visibility 0s linear .2s; } }`)
+- Modify: `docs/usage.md` (~4121: on a phone the logo and tabs slide away while you search)
 - Test: `tests/test_library_search_mode.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -890,42 +955,49 @@ def test_on_a_laptop_the_masthead_stays_in_search(...):  # 1280: focus → searc
 - [ ] **Step 2: Run them and see them fail** — the masthead stays visible.
 - [ ] **Step 3: Implement** — the property and the CSS above; if the scrolled-down test fails where scroll anchoring
   doesn't hold, `window.scrollBy(0, -height)` in the same frame when `scrollY >= height` (and `+height` on leaving).
-  Regenerate the corpus file.
+  docs/usage.md. Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass.**
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_search_mode.py tests/conformance` ·
-  `feat(library): on a phone the logo and tabs slide away while you search`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_search_mode.py tests/conformance
+  docs/usage.md` · `feat(library): on a phone the logo and tabs slide away while you search`
 
 #### Task 1c.4: Scrolling the results puts the keyboard away
 
 **Files:**
 - Modify: `src/caracole/library_assets/library.js` (`document.addEventListener("touchmove", …, { passive: true })`: the
   box focused and the touch outside `.searchbar` → `input.blur()`)
+- Modify: `docs/usage.md` (~4121: scrolling the results puts the keyboard away)
 - Test: `tests/test_library_search_mode.py`
 
 - [ ] **Step 1: Write the failing test** — served (`live`), phone: type "creep", wait for the answer, then
   `Input.dispatchTouchEvent` touchStart/touchMove (−150 px)/touchEnd over the first `#results article`:
   `document.activeElement.id !== 'q'` and still search mode; at 1280 a `mouseWheel` over the results leaves the focus in
   the box.
-- [ ] **Step 2–4** — fails (the focus stays); the listener; regenerate the corpus file; passes.
-- [ ] **Step 5: Commit** — `feat(library): scrolling the results puts the keyboard away`
+- [ ] **Step 2–4** — fails (the focus stays); the listener and docs/usage.md; regenerate the corpus file; passes.
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_search_mode.py tests/conformance
+  docs/usage.md` · `feat(library): scrolling the results puts the keyboard away`
 
 #### Task 1c.5: The count row: yours, the sites that found something, then the rest in one mark
 
 **Files:**
-- Modify: `src/caracole/library_assets/rows.js` (`countMarks`, `countsSaid`, new `fitCounts`, the export list; the
-  section's comment)
+- Modify: `src/caracole/library_assets/rows.js` (`countMarks`, `countsSaid`, new `fitCounts` and `drawCountMarks`, the
+  export list; the section's comment)
 - Modify: `src/caracole/library_assets/rows.css` (`.count-name` hidden, shown from 720 px in `.counts:not(.short)`;
   `.count-mark.rest` as today's `[data-n="0"]`; `.counts-row.counted > .counts ~ *` screen reader's alone, the `:not([hidden])`
   gone; `.bar-said.counted:has(> .counts[hidden])` takes no room; the row still wraps, `fitCounts` dropping the names
   first)
-- Modify: `src/caracole/library_assets/library.js` (`drawCounts`: `const items = countMarks(…)`, `barCounts.hidden =
-  !items.length`, `fitCounts(barCounts)`; `say(…, true)` either way)
-- Modify: `src/caracole/web/lookup_page.py` (`showCounts`: the same three lines)
+- Modify: `src/caracole/library_assets/library.js` (`drawCounts`: `drawCountMarks(barCounts, …)` in place of its
+  `replaceChildren`; `say(…, true)` either way)
+- Modify: `src/caracole/web/lookup_page.py` (`showCounts`: the same one call, `drawCountMarks(…)`, no lines of its own)
 - Modify: `src/caracole/library_page.py` (docstring ~lines 118–126)
+- Modify: `docs/usage.md` (~4041–4073: the count row's new rules, "0 on N more", a blocked site's 0 among the rest, no
+  row at all, names in full on a laptop), `AGENTS.md` ("##### What a search says beside its results": `countMarks`,
+  `fitCounts`, `drawCountMarks`, `countsSaid`), `src/caracole/library_assets/__init__.py` (rows.js's paragraph: the
+  count row)
 - Test: `tests/test_web_page_search.py`, `tests/test_web_lookup_page.py`
 
 **Interfaces:**
-- Produces: `countMarks`, `fitCounts`, `countsSaid` as at the top.
+- Produces: `countMarks`, `fitCounts`, `drawCountMarks`, `countsSaid` as at the top: one rows.js helper draws the row
+  for both pages, so neither page holds lines of its own for it.
 
 - [ ] **Step 1: Write the failing tests** — `rg -n "count-mark|bar-counts|COUNTS_SHOWN|ROW_FITS|Not on the sites"
   tests/test_web_page_search.py tests/test_web_lookup_page.py` lists those that move.
@@ -940,12 +1012,14 @@ def test_the_row_shows_yours_then_the_sites_that_found_some_then_the_rest_in_one
     # ug radiohead/creep ×4; gtptabs a creep page; read_to(cfg, ("_num", "a", "b", "c")) (LaCuerda in part);
     # blocking(cfg, "musescore"); harptabs and gametabs empty; library Radiohead - Creep; query "creep"
     marks = browser.js(MARKS)
-    assert [m[0] for m in marks] == ["library", "ug", "gtptabs", "musescore", "rest"]  # a blocked site keeps its mark
+    assert [m[0] for m in marks] == ["library", "ug", "gtptabs", "rest"]  # a blocked site's 0 is one of the rest
     rest = marks[-1]
-    assert marks[3][1] == "0" and rest[1] == "0" and rest[2] == "0 on 3 more"
-    assert rest[3] == "0 on 3 more: LaCuerda, harptabs.com, gametabs.net"
-    assert rest[4].split("\n") == ["0 on LaCuerda · index in part, up to C", "0 on harptabs.com · index empty", "0 on gametabs.net · index empty"]
-    # (each line countSaid's for that site's `looked` entry: take the exact words from the answer if _looked's differ)
+    assert rest[1] == "0" and rest[2] == "0 on 4 more"
+    assert rest[3] == "0 on 4 more: LaCuerda, MuseScore, harptabs.com, gametabs.net"  # `looked` order
+    assert rest[4].split("\n") == ["0 on LaCuerda · index in part, up to C", "0 on MuseScore · turned us back",
+                                   "0 on harptabs.com · index empty", "0 on gametabs.net · index empty"]
+    # (each line countSaid's for that site's `looked` entry, its state in it, MuseScore's blocked one too: take the
+    # exact words from the answer if _looked's differ)
 
 def test_a_search_whose_every_count_is_0_has_no_count_row(cfg, live, phone):  # case 4
     # empty indexes, no song of yours matching "zzzqqq": #bar-counts hidden, no li; .bar-said height ≤ 1;
@@ -962,16 +1036,20 @@ and `fits["lines"] == 1`; `COUNT_READS` also reads `.count-rest`.
 - [ ] **Step 2: Run them and see them fail** — seven marks, zeros each a mark.
 - [ ] **Step 3: Implement** — `countMarks`: compute every site's `n` (and `state`) first; `if (!(Number(yours) > 0) &&
   sites.every(n === 0)) return []`; yours' mark first (when `yours` isn't null); each site with `n > 0` and a searched
-  state, or whose state is `blocked` whatever its `n`, as today, plus `el("span", "count-name", siteName(s))` between its mark and its count; the others gathered into
-  one `li.count-mark.rest` (`dataset.source = "rest"`, `dataset.n = "0"`, `span.count-rest` aria-hidden with `"0 on " + k
-  + " more"`, `span.visually-hidden` with that, `": "` and their names joined by `", "`, `title` their `countSaid` lines
-  joined by `"\n"`). `fitCounts(list)`: remove `short`; if the first `.count-name` doesn't show, stop; when the items'
-  `offsetTop`s differ, add `short`; a `ResizeObserver` (once a list, a WeakSet) fits it again. `countsSaid`'s last
-  member: `mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"`. Regenerate
-  the corpus file.
+  state, as today, plus `el("span", "count-name", siteName(s))` between its mark and its count; the others, whatever
+  their state (a blocked site's 0 among them), gathered into one `li.count-mark.rest` (`dataset.source = "rest"`,
+  `dataset.n = "0"`, `span.count-rest` aria-hidden with `"0 on " + k + " more"`, `span.visually-hidden` with that,
+  `": "` and their names joined by `", "`, `title` their `countSaid` lines, each saying its site's state, joined by
+  `"\n"`).
+  `fitCounts(list)`: remove `short`; if the first `.count-name` doesn't show, stop; when the items' `offsetTop`s differ,
+  add `short`; a `ResizeObserver` (once a list, a WeakSet) fits it again. `drawCountMarks(list, data, yours, found)`:
+  `const items = countMarks(data, yours, found)`, `list.replaceChildren(...items)`, `list.hidden = !items.length`,
+  `fitCounts(list)`, `return items`; library.js's `drawCounts` and lookup_page.py's `showCounts` call it and nothing
+  else for the row. `countsSaid`'s last member: `mine.length ? "nothing in the sites' indexes" : "Nothing in your songs
+  or the sites' indexes"`. The docs above. Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — both files.
-- [ ] **Step 5: Commit** — `git add src/caracole tests` · `feat(search): the count row shows what found something, the
-  rest in one quiet mark`
+- [ ] **Step 5: Commit** — `git add src/caracole tests docs/usage.md AGENTS.md` · `feat(search): the count row shows
+  what found something, the rest in one quiet mark`
 
 #### Task 1c.6: Nothing found: where caracole looked, and Request the one filled button
 
@@ -986,6 +1064,8 @@ and `fits["lines"] == 1`; `COUNT_READS` also reads `.count-rest`.
   `grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr) var(--line-more); grid-template-areas: "title act .
   more"`; `.row.miss` the same areas)
 - Modify: `src/caracole/web/lookup_page.py` (its comment's "Not on the sites")
+- Modify: `docs/usage.md` (~4041–4073: nothing found's words and its Request), `AGENTS.md` ("##### What a search says
+  beside its results": `nothingFound`'s words and `does.yours`)
 - Test: `tests/test_web_page_search.py`, `tests/test_web_lookup_page.py`
 
 **Interfaces:**
@@ -1019,10 +1099,10 @@ def test_nothing_on_the_sites_but_a_song_of_yours_says_the_sites_indexes_alone(c
   The lookup page's `test_a_close_spelling_says_did_you_mean_…` headings end with `"Nothing for “lynrd” in your songs or
   the sites' indexes"`; `READS`' selectors stay and its 4.5:1 checks hold.
 - [ ] **Step 2: Run them and see them fail** — "Not on the sites", the italic quoted query.
-- [ ] **Step 3: Implement** — as above; regenerate the corpus file.
+- [ ] **Step 3: Implement** — as above, the docs too; regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass** — both files, `tests/test_web_page_lacuerda_search.py`.
-- [ ] **Step 5: Commit** — `git add src/caracole tests` · `feat(search): nothing found says where caracole looked, with
-  Request the one filled button`
+- [ ] **Step 5: Commit** — `git add src/caracole tests docs/usage.md AGENTS.md` · `feat(search): nothing found says
+  where caracole looked, with Request the one filled button`
 
 #### Task 1c.7: Recently opened songs in the empty box
 
@@ -1035,6 +1115,8 @@ def test_nothing_on_the_sites_but_a_song_of_yours_says_the_sites_indexes_alone(c
   `preventDefault`, so a tap opens it with the box's focus kept)
 - Modify: `src/caracole/library_assets/library.css` (`.recent`: under the box, a line a song, its title then its artist
   muted, each link ≥ 44 px on coarse)
+- Modify: `docs/usage.md` (~4121: recently opened, in the empty box), `src/caracole/library_assets/__init__.py`
+  (library.js's paragraph: recently opened)
 - Test: `tests/test_library_search_mode.py`
 
 **Interfaces:**
@@ -1068,26 +1150,29 @@ def test_with_no_storage_the_box_works_and_lists_nothing(...):  # NO_STORAGE (te
   identity dropped, cut to 5, written in try/catch. The click listener: `a[href]:not([download]):not([target=_blank])`
   inside `article.line[data-id]`. `drawRecent`: shown when the box has the focus, is empty and the Library tab shows;
   each entry whose identity is a counted song's, `a.recent-song` (`safeHref`), its title and artist by `shownName`,
-  `title` its `said`. Regenerate the corpus file.
+  `title` its `said`. The docs above. Regenerate the corpus file.
 - [ ] **Step 4: Run them and see them pass.**
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_search_mode.py tests/conformance` ·
-  `feat(library): the songs you opened last, in the empty search box`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets tests/test_library_search_mode.py tests/conformance
+  docs/usage.md` · `feat(library): the songs you opened last, in the empty search box`
 
 #### Task 1c.8: Merge stage 1c
 
 **Files:**
-- Modify: `docs/usage.md` (~4041–4073: the count row's new rules, "0 on N more", no row at all, names in full on a
-  laptop; nothing found's words and its Request; ~4121: ← and Back leave search, × clears and stays, no "Back to your
-  songs" row; the phone's masthead in search; scrolling puts the keyboard away; recently opened)
-- Modify: `AGENTS.md` ("##### What a search says beside its results": `countMarks`, `fitCounts`, `countsSaid`,
-  `nothingFound`'s words and `does.yours`; "##### Searching from the pages": search mode, `#leave`, the `{ search: n }`
-  entries; the history rules at the top of this plan)
-- Modify: `src/caracole/library_assets/__init__.py` (rows.js's and library.js's paragraphs)
+- Check (written by 1c.2 to 1c.7): `docs/usage.md` (~4041–4073: the count row's new rules, "0 on N more", no row at
+  all, names in full on a laptop; nothing found's words and its Request; ~4121: ← and Back leave search, × clears and
+  stays, no "Back to your songs" row; the phone's masthead in search; scrolling puts the keyboard away; recently
+  opened), `AGENTS.md` ("##### What a search says beside its results": `countMarks`, `fitCounts`, `drawCountMarks`,
+  `countsSaid`, `nothingFound`'s words and `does.yours`; "##### Searching from the pages": search mode, `#leave`, the
+  `{ search: n }` entries; the history rules at the top of this plan), `src/caracole/library_assets/__init__.py`
+  (rows.js's and library.js's paragraphs)
 
-- [ ] **Step 1** — whole suite; corpus twice; gradle; the e2e test; `nix flake check`.
-- [ ] **Step 2** — the docs; commit `docs: search on the library page, its count row and what it says of a miss`.
+- [ ] **Step 1** — whole suite; corpus twice; `nix develop ./android -c gradle -p android test`;
+  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus moved); `nix flake
+  check`.
+- [ ] **Step 2** — check the docs above against what the stage does; a gap goes into a `docs:` commit here.
 - [ ] **Step 3** — on screen: the owner's Sony in the app and in Chrome (the keyboard up, ←, Back), the lookup page.
-- [ ] **Step 4** — `git switch main && git merge --no-ff feat/library-1c-search`.
+- [ ] **Step 4** — `git switch main && git merge --no-ff feat/library-1c-search`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ### What the design leaves open or the code makes awkward (decided here, flagged for review)
 
@@ -1098,8 +1183,9 @@ def test_with_no_storage_the_box_works_and_lists_nothing(...):  # NO_STORAGE (te
    both keep `--artist` (the laptop mockup's `#e3b48a` is `--artist`).
 3. **"Nothing for … in your songs or the sites' indexes" is false on the library page when a song of yours matched**
    (nothingFound shows whenever the sites found nothing): it then says "in the sites' indexes" (`does.yours`).
-4. **The count row's zeros.** Yours stays first at 0 when a site found something; a site off, empty or in part with 0
-   goes into "0 on N more", its state in the tooltip; a blocked site keeps its own mark ("Where the lanes meet" 5).
+4. **The count row's zeros.** Yours stays first at 0 when a site found something; a site off, empty, in part or
+   blocked with 0 goes into "0 on N more", its state in the tooltip (the spec's row: "Where the lanes meet" 5 is
+   withdrawn).
 5. **"On a phone, their letters"** read as today's mark (the site's icon, else its letters); "on a laptop" as ≥ 720 px,
    the fit measured per draw (`fitCounts`).
 6. **24 px vs 44 px.** base.css gives every control 44 px on touch; only the two artist names (band, overline) drop to the
@@ -1113,8 +1199,9 @@ def test_with_no_storage_the_box_works_and_lists_nothing(...):  # NO_STORAGE (te
 9. **`pushState` on a file**: Chromium allows it; where a browser refuses, tabs and search still change, ← leaves
    directly and the system Back leaves the page.
 10. **Crossings to raise, not done**: test_requests_tab.py (lane 2's file) holds the five-tabs-fit assertion 1a.2
-    changes; songbooks.css's `.selecting` rules (lane 4) reference the funnel and a `by` column; songbooks.js,
-    requests.js and sync.js `replaceState(null, …)`; lane 3 keeps `.line-plays` a child of `.line-title`.
+    changes; songbooks.css's `.selecting` rules (lane 4) reference the funnel and a `by` column (Task 4.1 deletes
+    them); songbooks.js's and requests.js's `replaceState(null, …)` (Tasks 4.1 and 2.8 pass `history.state`; sync.js's
+    is 1a.4's); lane 3 keeps `.line-plays` a child of `.line-title`.
 
 ---
 
@@ -1126,7 +1213,8 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 ### Before you start
 
 - **One branch a stage**, each from `main` once the stage before it merged, in a worktree of its own:
-  `git worktree add ../caracole-1d -b feat/library-card main` (1e: `perf/library-long-lists`, 1f: `style/library-calm`).
+  `git worktree add ../caracole-1d -b feat/library-card-place main` (1e: `perf/library-long-lists`, 1f:
+  `style/library-calm`; lane 3b's branch is `feat/library-card-insides`).
 - **What these stages take from 1a–1c** (named for what they are; the coordinator aligns the names):
   - 1a's Back entries: the helper that pushes a history entry whose Back runs an `undo`, and drops it (popped without
     running `undo`) when the thing it undoes was closed otherwise; it degrades quietly where `history.pushState`
@@ -1149,7 +1237,8 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
   - Lane 2: untouched. `.line-meta` stays a direct child of the line, so `progressIn` finds it as before; the card's
     head (below) lives in the panel, not the line.
   - 1f's radius test leaves out lane 2's (`.step-chips`, `#requests`), lane 3's (`.line-panel`, `.play`) and lane
-    4's (`#songbooks`) elements, for them to follow; the last lane to merge removes the exclusions.
+    4's (`#songbooks`, `.pickbar`, `.pick`) elements, for them to follow (2.8, 3a.2, 3a.3, 3b.6 and 4.1 write the
+    tokens); the last of 1f, lane 2, 3b and lane 4 to merge removes the skip list.
 - **The tests' default window is 1280 × 900** (`test_library_page.dump_dom`, `helpers.browser.Browser`), which is
   past 1200 px: once the pane lands, a card is not inside its line there; and once cards are built on first open, an
   unopened line's card has nothing in it. Task 1d.1 moves every test that reads a card to helpers that find it
@@ -1175,9 +1264,10 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 **Interfaces:**
 - Produces, in `tests/helpers/cards.py` (module docstring says what each gives, as tests/helpers/' modules do):
   - `KIT`, JavaScript: `cardOf(line)` (the element whose id the line's `.line-more` names in `aria-controls`, or
-    null), `openCard(line)` (clicks the chevron unless `aria-expanded` is `"true"`; returns `cardOf(line)`),
-    `closeCard(line)`.
-  - `install(page)`: for a `Browser`, the same three as `window.cardOf`, `window.openCard`, `window.closeCard`, for
+    null), `openCardOf(line)` (clicks the chevron unless `aria-expanded` is `"true"`; returns `cardOf(line)`),
+    `closeCard(line)`. The line form is `openCardOf`, so a script that also holds test_library_card.py's title form,
+    `openCard(title)`, declares each name once.
+  - `install(page)`: for a `Browser`, the same three as `window.cardOf`, `window.openCardOf`, `window.closeCard`, for
     `page.js` and `page.wait` (an evaluation can't declare a `const` twice); `open_card(page, line_selector) -> str`
     opens the line's card and returns `"#" + its id`, a selector for `page.click`.
   - `card_of(dom, title) -> str`: from a DOM dump, the markup of the element the chevron of the line headed `title`
@@ -1187,16 +1277,17 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 
 - [ ] **Step 1: Write the failing test** — `test_the_tests_find_a_card_by_its_chevron(conn, cfg, tmp_path)`: Creep
   and Karma Police (Radiohead), found, `sheet.pdf` each; the file page with `cards.KIT` and a script that runs
-  `openCard(lineOf("Creep"))` and notes `{ id: cardOf(line).id, named: line.querySelector(".line-more").getAttribute("aria-controls"), other: cardOf(lineOf("Karma Police")).hidden }`.
+  `openCardOf(lineOf("Creep"))` and notes `{ id: cardOf(line).id, named: line.querySelector(".line-more").getAttribute("aria-controls"), other: cardOf(lineOf("Karma Police")).hidden }`.
   Assert `noted["id"] == noted["named"]`, `noted["other"] is True`, and
   `cards.card_of(dom, "Creep").startswith('<div class="line-panel')` with `"Add to a songbook…" in` it.
 - [ ] **Step 2: Run it and see it fail** —
   `nix develop -c pytest -q tests/test_library_card_place.py::test_the_tests_find_a_card_by_its_chevron`:
   `ModuleNotFoundError: No module named 'helpers.cards'`.
 - [ ] **Step 3: Implement** — the module, then the switch, by one rule: a test that reads a part of a song's card
-  opens the card first (`openCard`, `open_card`, or a script that opens it before the dump) and reads it through
+  opens the card first (`openCardOf`, `open_card`, or a script that opens it before the dump) and reads it through
   `cardOf` / `card_of`, never `line.querySelector` or `line_of(...)`'s string; a test that reads several cards of one
-  page in one dump runs at `IN_PLACE`. test_library_card.py's `KIT` gets `cards.KIT` and its `noteCard`,
+  page in one dump runs at `IN_PLACE`. test_library_card.py's `KIT` gets `cards.KIT`; its own title form,
+  `openCard(title)`, stays (`openCardOf(lineOf(title))`, returning the line as today), and its `noteCard`,
   `noteDrawer`, `chipOf` read `cardOf(lineOf(title))`. No product change.
 - [ ] **Step 4: Run it and see it pass** — the new test, then every file Step 3 touched:
   `nix develop -c pytest -q tests/test_library_card_place.py tests/test_library_card.py tests/test_library_page.py tests/test_web_page*.py tests/test_web_downloads.py tests/test_web_guitar_browser.py`: all pass.
@@ -1209,6 +1300,9 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 - Modify: `src/caracole/library_assets/rows.js` (`foldMore`, `denseLine`, `resultRow`'s options)
 - Modify: `src/caracole/library_assets/library.js` (`lineFor` split into `lineFor` and `cardFor`; `makePicker`'s
   `pickable` as `canPick`; `serverAction`; `refill`; `pickHere`; `showPicker`; `countdownIn`)
+- Modify: `AGENTS.md` ("index.html's assets (library_assets/)": a song's card built on first open by `cardFor`),
+  `src/caracole/library_assets/__init__.py` (card.css and card.js's paragraph: "library.js `cardFor` puts its parts in
+  the line's panel, the first time it opens")
 - Test: `tests/test_library_card_place.py`
 
 **Interfaces:**
@@ -1227,7 +1321,7 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 - [ ] **Step 1: Write the failing test** —
   - `test_a_songs_card_is_made_the_first_time_it_opens`: `hotel(conn, cfg)` (test_library_card.py's) and Creep;
     file page; a script notes, before anything opens, every song line's panel `{ empty: panel.childElementCount === 0, hidden: panel.hidden, cls: panel.className }`,
-    then `openCard(lineOf("Hotel California"))` and notes its card's child count and Creep's panel's again. Assert
+    then `openCardOf(lineOf("Hotel California"))` and notes its card's child count and Creep's panel's again. Assert
     every panel `empty and hidden` and `"song-card" in cls` before; Hotel California's card has children after; Creep's
     still `empty`.
   - `test_a_card_first_opened_while_its_request_runs_has_no_pick_and_no_fetch_again` (served: test_web_page_again.py's
@@ -1253,10 +1347,12 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
   - `pickHere` and `showPicker`: open the card first, then find `details.picker` in it.
   - Update test_library_card.py's and test_library_page.py's assertions that expected a card built with the list,
     if 1d.1 left any.
+  - The docs above.
 - [ ] **Step 4: Run it and see it pass** — the three tests, then
   `nix develop -c pytest -q tests/test_library_card.py tests/test_library_page.py tests/test_web_page.py tests/test_web_page_again.py tests/test_library_page_songbooks.py`
   (`test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed` among them); the corpus regenerated and checked.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/rows.js src/caracole/library_assets/library.js tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/rows.js src/caracole/library_assets/library.js
+  src/caracole/library_assets/__init__.py AGENTS.md tests/ tests/conformance/` ;
   `git commit -m "feat(library): a song's card is built the first time it opens, not with the list"`.
 
 #### Task 1d.3: The card's parts in order, with a head
@@ -1266,6 +1362,8 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 - Modify: `src/caracole/library_assets/library.css` (`.card-head`, `.card-name`, `.card-by`, `.card-close`)
 - Modify: `tests/test_library_card.py` (the two `parts` assertions: `test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links`,
   `test_musescore_links_show_beside_a_sheet_too`)
+- Modify: `docs/usage.md` ("Library/index.html": the card's paragraphs, "Its chevron opens the song in place…": the
+  order of its parts), `AGENTS.md` ("index.html's assets (library_assets/)": the card's order, `.card-head`)
 - Test: `tests/test_library_card_place.py`
 
 **Interfaces:**
@@ -1290,10 +1388,11 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
   `cardHead(s)`; the facts; what needs you (the picker or why there is none, the YouTube note, the sheet from a
   YouTube video, the LaCuerda pick, Look in the index); the tiles; the foot (Fetch again, Use LaCuerda's sheet, Add
   to a songbook…, ⋯ with info.json and Remove); the Files group and the alphaTab note; On the sites; Elsewhere;
-  Progressions. `.card-head` until 1d.4: `display: none`. The two older `parts` assertions take the new order.
+  Progressions. `.card-head` until 1d.4: `display: none`. The two older `parts` assertions take the new order. The
+  docs above.
 - [ ] **Step 4: Run it and see it pass** — the new test and `nix develop -c pytest -q tests/test_library_card.py`;
   the corpus regenerated and checked.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ docs/usage.md AGENTS.md` ;
   `git commit -m "feat(library): a card's parts in the phone's order: facts, tiles, actions, sites, progressions last"`.
 
 #### Task 1d.4: The card's head sticks under the bar; closing brings the line back
@@ -1305,6 +1404,8 @@ Design: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Th
 - Modify: `src/caracole/library_assets/library-screens.css` (`scroll-margin-top: calc(var(--bar-h) + 8px)` in place of
   `108px`)
 - Modify: `src/caracole/library_assets/library.js` (the bar's height, the away watch, the close)
+- Modify: `docs/usage.md` ("Library/index.html": the card's paragraphs: a long card's head sticks under the search
+  bar, and closing it brings its line back)
 - Test: `tests/test_library_card_place.py`
 
 **Interfaces:**
@@ -1345,14 +1446,15 @@ card's own, in its panel.
     one line with an ellipsis; no transition.
   - Closing in place (from `onToggle(false, …)`, whatever closed it): `line.scrollIntoView({ block: "nearest",
     behavior: smooth() })`. `.card-close` in place calls `closeCard(line)`.
+  - The docs above.
 - [ ] **Step 4: Run it and see it pass** — the four tests, and
   `nix develop -c pytest -q tests/test_library_card.py tests/test_library_page.py -k "card or line"`; the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ docs/usage.md` ;
   `git commit -m "feat(library): a long card's head sticks under the search bar, and closing it brings its line back"`.
 
 #### Task 1d.5: (moved to lane 3)
 
-Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes meet" 2). This stage keeps one guard, in Task 1d.6's tests: opening a card adds no history entry, at 390 × 844 and 1280 × 900 (`history.length` unchanged after `openCard`).
+Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes meet" 2), which documents it too. This stage keeps one guard, in Task 1d.6's tests: opening a card adds no history entry, at 390 × 844 and 1280 × 900 (`history.length` unchanged after `openCardOf`).
 
 #### Task 1d.6: The laptop: one column under 1200 px, the list and the pane from 1200 px
 
@@ -1360,8 +1462,15 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 - Modify: `src/caracole/library_assets/body.html` (the library view's columns and the pane)
 - Modify: `src/caracole/library_assets/library.css` (the column, the columns, the pane, `.line.selected`)
 - Modify: `src/caracole/library_assets/library.js` (placing a card; the helpers that find a line's card wherever it
-  is, used where the code assumed the card inside its line)
-- Test: `tests/test_library_card_place.py`
+  is, used where the code assumed the card inside its line; 1c.7's click listener finds a link's line by `itemOf`)
+- Modify: `docs/usage.md` ("Library/index.html": the card's paragraphs: the pane from 1200 px and the 800 px column),
+  `AGENTS.md` ("index.html's assets (library_assets/)": the pane `#card-pane` from 1200 px and
+  `cardOf`/`itemOf`/`partsOf`/`inItem`; "##### The library page's list": the card in the pane),
+  `src/caracole/library_assets/__init__.py` (card.css and card.js's paragraph: "…the first time it opens, under the
+  line or in the pane")
+- Modify, only if lane 2's Task 2.6 has merged ("Where the lanes meet" 7): `src/caracole/library_assets/steps.css`
+  or library.js (the selected line's `ol.step-list` shown in the pane), as a named crossing
+- Test: `tests/test_library_card_place.py`; and, only if Task 2.6 has merged, `tests/test_web_page_steps.py`
 
 **Interfaces:**
 - Consumes: `onToggle`, `cardHead`, `openCard`/`closeCard`, `--bar-h`, `refill`.
@@ -1374,7 +1483,10 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
     null), `selectLine(line, panel, byKeyboard)`, `unselect({ keepOpen })`; `cardOf(item)` (by the chevron's
     `aria-controls`), `itemOf(node)` (`node.closest("article")`, else `selected` for a node in the pane), `partsOf(item)`
     (`[item]`, and its card when it is outside it), `inItem(item, selector)` (the first match in `partsOf(item)`).
-  - CSS: `.line.selected` with `aria-current="true"`; `.card-pane`, `.pane-empty`.
+  - CSS: `.line.selected` with `aria-current="true"`; `.card-pane`, `.pane-empty`; `#card-pane .foot-menu` (the one
+    way lane 1 names a card's `.foot*` part, which 3a.1's guard allows); from 1200 px the line's title column sized and
+    `.line-title > .line-plays` wrapping below the title ("Where the lanes meet" 12).
+  - The guard "Where the lanes meet" 2 moved here: opening a card adds no history entry, at 390 × 844 and 1280 × 900.
 
 - [ ] **Step 1: Write the failing test** — on the file page, in `Browser`:
   - `test_from_1200_px_the_list_and_an_empty_pane` (1280 × 900 and 1200 × 900): `.pane-empty` shows "Open a song to
@@ -1395,17 +1507,36 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
     line.
   - `test_the_panes_head_keeps_a_long_name_on_one_line`: 宋冬野 with a 120-character title, selected at 1280: its
     `.card-name` one line, cut short.
-- [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card_place.py -k "pane or 1200 or 800"`:
-  no `.pane-empty`.
+  - `test_opening_a_card_adds_no_history_entry` (parametrized over 390 × 844, `mobile=True`, the card in place, and
+    1280 × 900, the card in the pane): `history.length` and `history.state` the same before and after
+    `openCardOf(lineOf("Creep"))`, and after closing it.
+  - `test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off` (1280 × 900): Hotel California
+    (test_library_card.py's `hotel`: five play buttons, chips of 100–150 px each once lane 3a has merged) and Creep (one
+    play button): each line's `.line-key` and `.line-more` keep their columns (their lefts the same on both lines
+    within 1 px, their rights inside the 760 px list), every `.play` inside its line, Hotel California's
+    `.line-plays` below its title (its top ≥ the `h3`'s bottom − 1) when they don't fit beside it, its `h3` at least
+    half the line's width; `document.documentElement.scrollWidth <= innerWidth`.
+  - `test_a_song_opened_from_the_pane_is_recently_opened` (1280 × 900, `STAY` as 1c.7's tests): select Creep, click
+    its card's first `a.tile-open` in `#card-pane`; focus `#q`: `#recent`'s first link is Creep's, its href the
+    tile's.
+  - Only if Task 2.6 has merged: `test_on_a_laptop_the_selected_lines_steps_are_listed_in_the_pane` in
+    tests/test_web_page_steps.py (served, 1280 × 900; Estopa - Tu Calorro, `NOT_ON_UG`, as
+    `test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line` sets it up): once it ended, click the
+    line's title (its card in the pane): an `ol.step-list` inside `#card-pane` is visible with `steps_of`'s six
+    entries, while the line in `#list` shows its frozen `.step-bar` and no list.
+- [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card_place.py -k "pane or 1200 or 800 or history_entry or chips_wrap"`:
+  no `.pane-empty` (the 390 px no-entry case may pass already and stays as the guard).
 - [ ] **Step 3: Implement** —
   - CSS: `.card-pane { display: none; }`; `@media (min-width: 720px) and (max-width: 1199px) { #library-view {
     max-width: 800px; margin: 0 auto; } }` (the masthead and the other tabs keep the page's width);
     `@media (min-width: 1200px)`: `.lib-cols { display: grid; grid-template-columns: minmax(0, 760px) minmax(400px,
     480px); column-gap: 24px; align-items: start; }`, `.card-pane { display: block; position: sticky; top:
     calc(var(--bar-h) + 8px); max-height: calc(100vh - var(--bar-h) - 16px); overflow-y: auto; overscroll-behavior:
-    contain; margin-top: 10px; background: var(--card); }`, the pane's `.card-head` static and always visible, its
-    `.foot-menu` opening downward (`top: calc(100% + 6px); bottom: auto`), `.line.selected { background:
-    var(--raised); box-shadow: inset 3px 0 0 var(--accent); }`.
+    contain; margin-top: 10px; background: var(--card); }`, the pane's `.card-head` static and always visible,
+    `#card-pane .foot-menu { top: calc(100% + 6px); bottom: auto; }` (its ⋯ menu opening downward), `.line.selected {
+    background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }`; room for chips: the line's title column
+    `minmax(0, 1fr)` beside its key and chevron columns, `.line-title { flex-wrap: wrap; }` and `.line-title >
+    .line-plays { max-width: 100%; }`, so the play buttons wrap below the title rather than push the key off the line.
   - `onToggle(open, panel, e)` of a song's line: wide and open → `selectLine(line, panel, e.isTrusted && e.detail ===
     0)`; closed and `line === selected` → `unselect()`; narrow → 1d.4's in-place behaviour.
   - `selectLine`: closes the line selected before (`closeCard`); moves `panel` into the pane; `.selected` and
@@ -1417,16 +1548,24 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   - `paneWide`'s `change`: wide → the card opened last of those open in place goes to the pane, the others close;
     narrow → `unselect({ keepOpen: true })`.
   - After `render()` and `drawGroups()`: `if (selected && !selected.checkVisibility()) unselect()` (one element).
+  - Recently opened: 1c.7's click listener takes the link's line from `itemOf(link)` (a link in the pane is the
+    selected line's, which keeps its `data-id`) in place of `link.closest("article.line[data-id]")`, so a play or a
+    tile opened from the pane is remembered (`rememberOpened(itemOf(link), link)`).
+  - Only if Task 2.6 has merged ("Where the lanes meet" 7): the selected line's `.steps > ol.step-list` shows in the
+    pane (moved into `#card-pane` with the card and back with it, or the rule widened), and steps.css's
+    `.line:has(> .line-more[aria-expanded="true"])` rule leaves a `.selected` line its frozen bar; else this is Task
+    2.6's, when it merges second.
   - Use the helpers where the code took the card to be inside its line: `postInPlace` and `removeForm`'s submit
     (`itemOf(form)`), `countdownIn` (`partsOf(item)`'s form buttons), `stopRemoval` (the item holding the focus and its
     Remove, through `partsOf`/`inItem`), `paint` (`.actions.again`, `form.youtube-sheet`, `form.pick-form` through
     `inItem`), `pickHere`, `showPicker`, `refill` (old's card read with `cardOf` before the merge: in the pane, it
     gives its place to fresh's card, opened; outside old and closed, it goes), `removed`'s `card-gone` (not for a
     selected line).
+  - The docs above.
 - [ ] **Step 4: Run it and see it pass** — the tests, and every Chromium test of the library page at its default 1280
-  width: `nix develop -c pytest -q tests/test_library_card.py tests/test_library_card_place.py tests/test_library_page.py tests/test_library_plays.py tests/test_library_filter.py tests/test_library_page_songbooks.py`;
-  the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+  width: `nix develop -c pytest -q tests/test_library_card.py tests/test_library_card_place.py tests/test_library_page.py tests/test_library_plays.py tests/test_library_filter.py tests/test_library_page_songbooks.py tests/test_library_search_mode.py`
+  (and `tests/test_web_page_steps.py` if Task 2.6 has merged); the corpus.
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ docs/usage.md AGENTS.md` ;
   `git commit -m "feat(library): from 1200 px the list and the selected song's card side by side; one column of 800 px under"`.
 
 #### Task 1d.7: The pane's forms on caracole serve's page
@@ -1462,24 +1601,26 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 #### Task 1d.8: Merge stage 1d
 
 **Files:**
-- Modify: `docs/usage.md` ("Library/index.html": the card's paragraphs, "Its chevron opens the song in place…" to
-  "…keeps its card open, its drawer closed": the order, the head that sticks, Back closing ⋯, the pane from 1200 px
-  and the 800 px column)
-- Modify: `AGENTS.md` ("index.html's assets (library_assets/)": a song's card built on first open by `cardFor`, its
-  order, `.card-head`, the pane `#card-pane` from 1200 px and `cardOf`/`itemOf`/`partsOf`/`inItem`; "##### The
-  library page's list": the card in the pane)
-- Modify: `src/caracole/library_assets/__init__.py` (card.css and card.js's paragraph: "library.js `cardFor` puts its
-  parts in the line's panel, the first time it opens, under the line or in the pane")
+- Check (written by 1d.2 to 1d.6): `docs/usage.md` ("Library/index.html": the card's paragraphs, "Its chevron opens
+  the song in place…" to "…keeps its card open, its drawer closed": the order, the head that sticks, the pane from
+  1200 px and the 800 px column; Back closing ⋯ is 3b.5's, not this stage's), `AGENTS.md` ("index.html's assets
+  (library_assets/)": a song's card built on first open by `cardFor`, its order, `.card-head`, the pane `#card-pane`
+  from 1200 px and `cardOf`/`itemOf`/`partsOf`/`inItem`; "##### The library page's list": the card in the pane),
+  `src/caracole/library_assets/__init__.py` (card.css and card.js's paragraph: "library.js `cardFor` puts its parts in
+  the line's panel, the first time it opens, under the line or in the pane")
 
 - [ ] **Step 1:** Rebase onto `main` (1a–1c and whatever of lanes 2–4 merged); with lane 3 merged, check its card.css
   selectors match `.song-card` and `:not(.selected)` (raised above), else raise it again before merging.
-- [ ] **Step 2:** `nix develop -c pytest -q` (the whole suite); the corpus regenerated and checked; `nix develop
+- [ ] **Step 2:** `nix develop -c pytest -q` (the whole suite); the corpus regenerated twice and checked; `nix develop
   ./android -c gradle -p android test` (`LibraryPageTest` and the `web` and `job-views` replays read the regenerated
-  vectors; a break there is fixed in this lane's Kotlin, `server/page/LibraryPage.kt`).
+  vectors; a break there is fixed in this lane's Kotlin, `server/page/LibraryPage.kt`);
+  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus moved); `nix flake
+  check`.
 - [ ] **Step 3:** On screen: `nix develop -c python docs/screenshots/make.py --serve`, at 390 (a phone's window) and
-  1280: a long card's head, the pane, Back on ⋯.
-- [ ] **Step 4:** Commit the docs (`docs: the card on a phone and the laptop's pane`), then
-  `git checkout main && git merge --no-ff feat/library-card`.
+  1280: a long card's head, the pane.
+- [ ] **Step 4:** Check the docs above against what the stage does (a gap goes into a `docs:` commit here), then
+  `git checkout main && git merge --no-ff feat/library-card-place`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
@@ -1492,6 +1633,7 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 - Test: `tests/test_big_library.py`
 - Modify: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ("Measurements before building": a
   table "2,000 songs on a phone", the before column)
+- Modify: `AGENTS.md` ("### Running the tests": `python -m tests.helpers.big_library measure`)
 
 **Interfaces:**
 - Produces:
@@ -1520,9 +1662,9 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   commit before 1d's merge) and write the numbers in the spec's new table (columns: before 1d, before 1e, after 1e),
   with how they were taken: headless Chromium, 390 × 844, touch, CPU 4× slower. If the owner's phone is at hand
   (wireless adb), the same five actions by hand in Chrome's remote DevTools on the page `build` wrote, a row of their
-  own.
+  own. AGENTS.md's line for the command.
 - [ ] **Step 4: Run it and see it pass** — `nix develop -c pytest -q tests/test_big_library.py`.
-- [ ] **Step 5: Commit** — `git add tests/helpers/big_library.py tests/test_big_library.py docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` ;
+- [ ] **Step 5: Commit** — `git add tests/helpers/big_library.py tests/test_big_library.py docs/superpowers/specs/2026-11-17-library-page-redesign-design.md AGENTS.md` ;
   `git commit -m "test(library): a library of 2,000 songs, and how the list does with it on a phone"`.
 
 #### Task 1e.2: One SVG sprite for the glyphs
@@ -1530,6 +1672,8 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 **Files:**
 - Modify: `src/caracole/library_assets/rows.js` (`glyph`, a `sprite()` made once)
 - Modify: `src/caracole/library_assets/rows.css` (`.glyph-sprite`)
+- Modify: `AGENTS.md` ("index.html's assets": the glyphs, one sprite), `src/caracole/library_assets/__init__.py`
+  (rows.js's paragraph: the glyphs one sprite)
 - Test: `tests/test_library_long.py` (new: stage 1e's tests)
 
 **Interfaces:**
@@ -1546,10 +1690,10 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   no sprite.
 - [ ] **Step 3: Implement** — as above; `.glyph-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }`
   (no `style` attribute: the policy allows none). `test_no_external_resources_and_no_urls_outside_the_data` still finds
-  the SVG namespace once.
+  the SVG namespace once. The docs above.
 - [ ] **Step 4: Run it and see it pass** — the test, `nix develop -c pytest -q tests/test_library_filter.py tests/test_library_plays.py tests/test_library_page.py tests/test_web_lookup_page.py`
   (they read `glyph glyph-NAME` classes); the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ AGENTS.md` ;
   `git commit -m "perf(library): the glyphs, one SVG sprite drawn by <use>"`.
 
 #### Task 1e.3: Groups and runs off the screen aren't laid out
@@ -1557,6 +1701,7 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 **Files:**
 - Modify: `src/caracole/library_assets/library.js` (`render`: groups and runs marked, runs made)
 - Modify: `src/caracole/library_assets/library.css` (`.cv`, the heights, the dividers across runs)
+- Modify: `AGENTS.md` ("index.html's assets": the runs and `content-visibility`)
 - Test: `tests/test_library_long.py`
 
 **Interfaces:**
@@ -1578,8 +1723,9 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   - `test_dividers_stay_between_runs_and_groups`: the first line of each run but the list's first, and each group but
     the first, have a 1 px top border.
   - `test_find_in_page_finds_a_song_off_the_screen`: `window.find(<the last song's title>)` is true.
-  - `test_a_cards_menu_at_a_runs_top_is_not_cut`: the card of a run's first line with no tiles, its ⋯ open:
-    `elementFromPoint` at Remove's centre (served) is Remove.
+  - `test_a_cards_menu_at_a_runs_top_is_not_cut` (390 × 844, mobile: the card in place, inside its run, where a run's
+    containment could cut it; at 1280 it would be in the pane, outside every run): the card of a run's first line with
+    no tiles, its ⋯ open: `elementFromPoint` at Remove's centre (served) is Remove.
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_long.py -k "runs or estimate or dividers or find_in_page or menu"`:
   no `.cv`.
 - [ ] **Step 3: Implement** — in `render()`, after the groups are drawn: a band group of `BIG_GROUP` lines or fewer is
@@ -1589,10 +1735,11 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   them). CSS: `#list .cv { content-visibility: auto; contain-intrinsic-size: auto calc(var(--bands, 0) * var(--band-h)
   + var(--lines, 0) * var(--line-h) + var(--folds, 0) * var(--fold-h)); }`, the heights measured once at 390 coarse
   and 1280 fine and written in; `#list .cv:has(.line-panel:not([hidden])) { content-visibility: visible; }` (an open
-  card's drawer and menu are never clipped by a run's containment); the dividers' selectors follow the runs.
+  card's drawer and menu are never clipped by a run's containment); the dividers' selectors follow the runs. The
+  docs above.
 - [ ] **Step 4: Run it and see it pass** — the tests; `nix develop -c pytest -q tests/test_library_page.py tests/test_library_page_songbooks.py tests/test_library_filter.py`
   (the A–Z strip, Select's boxes); the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ AGENTS.md` ;
   `git commit -m "perf(library): groups and runs of lines off the screen are not laid out"`.
 
 #### Task 1e.4: No layout read across many lines
@@ -1621,18 +1768,21 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 #### Task 1e.5: Merge stage 1e
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` (the table's after column)
-- Modify: `AGENTS.md` ("index.html's assets": the runs and `content-visibility`, the sprite; "### Running the tests":
-  `python -m tests.helpers.big_library measure`)
-- Modify: `src/caracole/library_assets/__init__.py` (rows.js's paragraph: the glyphs one sprite)
+- Modify: `docs/superpowers/specs/2026-11-17-library-page-redesign-design.md` (the table's after column: measured at
+  the merge, after the stage)
+- Check (written by 1e.1 to 1e.3): `AGENTS.md` ("index.html's assets": the runs and `content-visibility`, the sprite;
+  "### Running the tests": `python -m tests.helpers.big_library measure`), `src/caracole/library_assets/__init__.py`
+  (rows.js's paragraph: the glyphs one sprite)
 
 - [ ] **Step 1:** Rebase onto `main`; `measure` again, the after column written; a number worse than before is
   explained there or fixed before merging.
-- [ ] **Step 2:** `nix develop -c pytest -q`; the corpus regenerated and checked; `nix develop ./android -c gradle -p
-  android test`.
+- [ ] **Step 2:** `nix develop -c pytest -q`; the corpus regenerated twice and checked; `nix develop ./android -c
+  gradle -p android test`; `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus
+  moved); `nix flake check`.
 - [ ] **Step 3:** On screen, 2,000 songs (`build`'s page opened as a file) at 390 and 1280: scrolling, the A–Z strip,
-  find-in-page.
-- [ ] **Step 4:** Commit (`docs: the list with 2,000 songs, measured`); `git checkout main && git merge --no-ff perf/library-long-lists`.
+  find-in-page; check the docs above (a gap goes into a `docs:` commit here).
+- [ ] **Step 4:** Commit (`docs: the list with 2,000 songs, measured`); `git checkout main && git merge --no-ff
+  perf/library-long-lists`, then push main: `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
@@ -1646,8 +1796,11 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 - Modify: `src/caracole/library_assets/library.css`, `filter.css`, `rows.css` (not `.play` rules), `sync.css`,
   `sites.css`, `picker.css` (every `border-radius` one of the four, or 0)
 - Create: in `tests/helpers/targets.py`, `odd_radii(skip)`: the JavaScript expression that lists each element (a short
-  path) whose computed corner radius is none of `0px`, `4px`, `8px`, `12px`, `999px`, `50%`, leaving out what `skip`
-  matches
+  path) whose computed corner radius is none of `0px`, `4px`, `8px`, `12px`, `999px`, `50%`, counting rendered
+  elements alone (an element with `!el.checkVisibility()` is left out) and leaving out every element inside one the
+  skip list matches (`skip` a tuple of selectors; an element is left out when `el.closest(skip.join(", "))`)
+- Modify: `AGENTS.md` ("The pages caracole writes and serves" or "index.html's assets": base.css's four radii),
+  `src/caracole/library_assets/__init__.py` (base.css's paragraph: the radius tokens)
 - Test: `tests/test_page_calm.py` (new: stage 1f's tests)
 
 **Interfaces:**
@@ -1656,16 +1809,19 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 - [ ] **Step 1: Write the failing test** — `test_the_library_page_has_four_corner_radii` (`@in_chromium`, served, 390
   mobile and 1280, light and dark): with each tab shown in turn, the Filter panel open, a search's results, the Sync
   sheet open and a request in the tray, `odd_radii(OTHER_LANES)` is `[]`, where `OTHER_LANES = (".line-panel",
-  ".play", "#songbooks", ".step-chips", "#requests")` (raised above).
+  ".play", "#songbooks", ".pickbar", ".pick", ".step-chips", "#requests")`: the elements of the lanes not merged yet
+  (raised above; lane 2's bar segments are square, radius 0, and need no place in it). The last of 1f, lane 2, 3b and
+  lane 4 to merge empties it (`odd_radii(())`); if 1f.1 is itself written after the three others merged, it is `()`
+  from the start.
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_page_calm.py::test_the_library_page_has_four_corner_radii`:
   `11px`, `14px`, `16px`…
 - [ ] **Step 3: Implement** — each radius to its token: 6 px or less `--radius-s` (marks, `code`, a source's letters),
   7–11 px `--radius-m` (buttons, fields, chips, the key, the jump letters), 12–20 px `--radius-l` (boxes, panels,
   dialogs, sheets, the tray open, the request form), pills and dots `--radius-pill`; a corner set (`11px 11px 0 0`)
-  with its token; a computed one (`calc(var(--mark-size) / 2)`) is `.play`'s, lane 3's.
+  with its token; a computed one (`calc(var(--mark-size) / 2)`) is `.play`'s, lane 3's. The docs above.
 - [ ] **Step 4: Run it and see it pass** — the test, `nix develop -c pytest -q tests/test_library_page.py tests/test_library_filter.py tests/test_web_pages.py`;
   the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ AGENTS.md` ;
   `git commit -m "style(library): four corner radii, as base.css tokens"`.
 
 #### Task 1f.2: No outline around the list or the key; one weight a role
@@ -1673,6 +1829,9 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 **Files:**
 - Modify: `src/caracole/library_assets/library.css` (`.lines, .groups`, the first band's corners)
 - Modify: `src/caracole/library_assets/rows.css` (`.rows`, `.line-key`, `.row-key`, `.row-title`, `#results` titles)
+- Modify: `AGENTS.md` ("The pages caracole writes and serves" or "index.html's assets": the list with no outline),
+  `docs/usage.md` only where it describes a look that changed (the line's key "in a small box" in
+  "Library/index.html" becomes plain muted text)
 - Test: `tests/test_page_calm.py`
 
 **Interfaces:**
@@ -1689,10 +1848,10 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
   the list's 1 px border.
 - [ ] **Step 3: Implement** — `.lines, .groups` and `.rows`: no border, shadow or background of their own (the bands
   keep theirs, the dividers stay); `.line-key`/`.row-key`: plain text, `color: var(--muted); font-weight: 700`, no
-  border or padding; titles 600 everywhere, the results' "one weight for all" kept at 600.
+  border or padding; titles 600 everywhere, the results' "one weight for all" kept at 600. The docs above.
 - [ ] **Step 4: Run it and see it pass** — the test, `nix develop -c pytest -q tests/test_library_page.py tests/test_web_page_search.py tests/test_web_lookup_page.py`
   (their contrast and layout tests); the corpus.
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/` ;
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/ tests/ tests/conformance/ AGENTS.md docs/usage.md` ;
   `git commit -m "style(library): no outline around the list or the key; titles semi-bold, counts and keys muted"`.
 
 #### Task 1f.3: caracole serve's own pages, and the phone's, as calm
@@ -1722,24 +1881,33 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 - [ ] **Step 5: Commit** — `git add src/caracole/web/ tests/ tests/conformance/` ;
   `git commit -m "style(web): caracole serve's own pages share the four radii"`.
 
-#### Task 1f.4: Merge stage 1f, and the README's screenshots
+#### Task 1f.4: Merge stage 1f, and the README's screenshots if lane 1 merges last
 
 **Files:**
-- Modify: `AGENTS.md` ("The pages caracole writes and serves" or "index.html's assets": base.css's four radii, the
-  list with no outline)
-- Modify: `src/caracole/library_assets/__init__.py` (base.css's paragraph: the radius tokens)
-- Modify: `docs/usage.md` only where it describes a look that changed (the line's key "in a small box" in
-  "Library/index.html" becomes plain muted text)
-- Modify: `docs/screenshots/*.png` (only those that changed)
+- Check (written by 1f.1 and 1f.2): `AGENTS.md` ("The pages caracole writes and serves" or "index.html's assets":
+  base.css's four radii, the list with no outline), `src/caracole/library_assets/__init__.py` (base.css's paragraph:
+  the radius tokens), `docs/usage.md` (the line's key plain muted text, no longer "in a small box")
+- Modify, only if lanes 2, 3b and 4 have all merged: `tests/test_page_calm.py` (`OTHER_LANES` emptied),
+  `docs/screenshots/*.png` (only those that changed)
 
-- [ ] **Step 1:** Rebase onto `main`; `nix develop -c pytest -q`; the corpus; `nix develop ./android -c gradle -p android test`.
+- [ ] **Step 1:** Rebase onto `main`; `nix develop -c pytest -q`; the corpus twice; `nix develop ./android -c gradle
+  -p android test`; `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus
+  moved); `nix flake check`.
 - [ ] **Step 2:** On screen, served and as a file, 390 and 1280, light and dark: the Library, Songbooks, Sites,
-  Journal and Share tabs, the lookup page, a pick, a message page, the Guitar Pro page.
-- [ ] **Step 3:** `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py`;
+  Journal and Share tabs, the lookup page, a pick, a message page, the Guitar Pro page; check the docs above (a gap
+  goes into a `docs:` commit here).
+- [ ] **Step 3:** The radius skip list: if lanes 2, 3b and 4 have all merged, this merge is the last of 1f, lane 2, 3b
+  and lane 4: `OTHER_LANES = ()` and `test_the_library_page_has_four_corner_radii` passes with it (commit
+  `test(library): the four radii across the whole page, no lane left out`); else the list stays, for the last of them
+  to remove.
+- [ ] **Step 4:** Only if lanes 2, 3 (3b) and 4 have all merged (lane 1 the last of the four): retake the README's
+  screenshots. `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python docs/screenshots/make.py`;
   for each picture, `git show HEAD:docs/screenshots/<name>.png > old.png` (outside the repository) and
   `compare -metric AE old.png docs/screenshots/<name>.png null:` (ImageMagick, through `omnibin-shell` if it isn't
-  on PATH): `git restore` those with 0 differing pixels, keep the others.
-- [ ] **Step 4:** Commit (`docs: the README's screenshots of the calmer page`); `git checkout main && git merge --no-ff style/library-calm`.
+  on PATH): `git restore` those with 0 differing pixels, keep the others; commit (`docs: the README's screenshots of
+  the redesigned page`). Else leave them to the last lane's merge task.
+- [ ] **Step 5:** `git checkout main && git merge --no-ff style/library-calm`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
@@ -1812,12 +1980,15 @@ unchanged: its words (Queued · N requests ahead…, the running stage lines) st
 ### Meeting points to raise (not done here)
 
 - **Lane 1 (rows.css, library.css)**: after 2.6, `.line > .step-chips` and `.row > .step-chips` in rows.css and
-  `.progress .steps-over` in library.css are dead; lane 1 deletes them (or agrees that lane 2 does). steps.css places
-  `.line > .steps` and `.row > .steps` itself. Lane 1b's new line grid keeps `.line > .progress` and `.line > .steps`
-  spanning the whole line.
+  `.progress .steps-over` in library.css are dead; Task 2.6 deletes them, a named crossing ("Where the lanes meet" 6;
+  both files in its Files). steps.css places `.line > .steps` and `.row > .steps` itself. Lane 1b's new line grid keeps
+  `.line > .progress` and `.line > .steps` spanning the whole line.
 - **Lane 1d (the laptop's pane)**: the open card's step list is `.line > .steps > ol.step-list`, shown by
   `.line:has(> .line-more[aria-expanded="true"])`. In the pane layout the list must show in the pane (moved, or the
-  rule widened to the selected line): lane 1d's to wire.
+  rule widened to the selected line): whichever of Tasks 1d.6 and 2.6 merges second wires it, with a test at 1280 px
+  (both tasks carry the step, conditional: "Where the lanes meet" 7).
+- **`window.caracoleLibrary`** (lane 1's frozen object) gains one member, `stepList`, in Task 2.6 (a named crossing),
+  for requests.js (2.8) to draw the Journal's list with the same function.
 - **Lane 4 (songbooks.js)**: `window.caracoleLibrary.showLine(p, view)` keeps its signature; a set list's line stays a
   line of words (no bar, no Cancel), as the third argument is library.js's own.
 - library.js's `postTo`, `isActive`, `server`, `failure`, `UNREACHABLE` are read, never edited.
@@ -1836,7 +2007,7 @@ unchanged: its words (Queued · N requests ahead…, the running stage lines) st
 - **Plain** ("Match · not on UG") is drawn as done in the bar and ticked in the list.
 - **The "!"** can't fit a 6 px segment: a failed segment is 12 px tall with the glyph in it.
 - **The open card**: the list is drawn beside the bar on the line and shown while the card is open; the bar stays on
-  the line's row above it. On the laptop's pane it is lane 1d's to place (above).
+  the line's row above it. On the laptop's pane, whichever of 1d.6 and 2.6 merges second places it (above).
 - **The Journal**: a finished lookup keeps its list (every lookup and YouTube sheet that started), its skipped steps
   folded; it lengthens the Journal by up to seven lines a request.
 - **"What it found"** is get.py's stage words as the stages say them ("in the book", "tab 1 from Ultimate Guitar",
@@ -1855,7 +2026,8 @@ unchanged: its words (Queued · N requests ahead…, the running stage lines) st
 - Modify: `android/server/src/main/kotlin/io/github/danielhp95/caracole/server/jobs/Outcomes.kt` (`stateOf`,
   `progress`, new `inHand`)
 - Modify: `docs/usage.md` (the count's examples, "4 of 7 done"; the Journal's "leaving out a step it doesn't use"
-  sentence, around lines 4145, 4398, 4471)
+  sentence, around lines 4145, 4398, 4471), `AGENTS.md` (the "The library page's lines read only its steps" bullet:
+  `outcome.progress`'s rules, `at`, `count`, a skipped step kept in its place)
 - Test: `tests/test_web_outcome.py`, `tests/test_conformance_web.py` (`test_a_skipped_pdf_stage_is_no_chip_and_says_
   nothing`), `tests/test_web_page_steps.py`, `tests/test_web_page_youtube.py`, `tests/test_requests_tab.py`,
   `tests/test_web_jobs.py`, `android/server/src/test/kotlin/io/github/danielhp95/caracole/server/jobs/JobViewsTest.kt`
@@ -1938,6 +2110,8 @@ def test_once_over_the_count_names_the_step_that_failed_and_nothing_else():
   - Kotlin `Outcomes.stateOf` and `progress` alike (`inHand`, `"at"` then `"count"` in the map's order).
   - Docstrings: outcome.py's Steps paragraph ("A step the request doesn't use is not drawn…") says the steps are fixed
     when it starts, a step whose every stage ended skipped keeping its place; Progress says `at` and `count`.
+  - docs/usage.md as listed in Files; AGENTS.md's bullet on the library page's lines says `outcome.progress`'s rules
+    (`at`, `count`, a skipped step kept in its place).
   - Chromium and other expectations: test_web_page_steps.py's `said(...)` counts become "3 of 7" and "5 of 7", its
     `NOT_ON_UG` end chips `[["done","✓ Song"],["plain","Match · not on UG"],["failed","✕ Sheet LaCuerda"],
     ["skipped","PDF"],["done","✓ Lyrics"],["failed","✕ Extras"],["skipped","Songbooks"]]`; test_web_page_youtube.py's
@@ -1953,7 +2127,7 @@ def test_once_over_the_count_names_the_step_that_failed_and_nothing_else():
   and `--tests 'io.github.danielhp95.caracole.server.page.*'`: all pass.
 
 - [ ] **Step 5: Commit** — `git add src/caracole/web/outcome.py src/caracole/library_assets/library.js
-  src/caracole/library_assets/requests.js tests/ docs/usage.md android/server/src`
+  src/caracole/library_assets/requests.js tests/ docs/usage.md AGENTS.md android/server/src`
   `git commit -m "feat(web): a request's steps fixed when it starts, a skipped one keeping its place, and the step in hand counted"`
 
 #### Task 2.2: Nothing for the first second
@@ -2106,7 +2280,8 @@ def test_each_step_names_its_site_in_full_and_says_what_it_found():
   docstring)
 - Modify: `Feed.kt` (`feed`, `finished`), `RequestsRoutes.kt` (the `steps` map), `Outcomes.kt` (`listsSteps`)
 - Modify: `tests/test_conformance_requests.py` (`feed_record`'s `chips`), `docs/usage.md` (the Journal's finished
-  requests, around line 4486)
+  requests, around line 4486), `AGENTS.md` (the bullet on the library page's lines, or the Requests tab's: feed.py's
+  finished steps, `lists_steps`)
 - Test: `tests/test_requests_tab.py`, `android/server/src/test/kotlin/io/github/danielhp95/caracole/server/jobs/FeedTest.kt`
 
 **Interfaces:**
@@ -2136,13 +2311,13 @@ def test_a_finished_lookup_keeps_its_steps_and_nothing_else_does():
 - [ ] **Step 3: Implement** — `feed` gives `_finished` the chips of a job `lists_steps` takes
   (`steps(job, facts.get(job.id))`), which it writes after the reason. `feed_record` puts those jobs' chips in its
   `steps` too. Kotlin: `RequestsRoutes` computes steps for running and listed jobs; `Feed.finished(..., chips)` writes
-  them in the same place. docs/usage.md: a finished lookup in the Journal lists its steps (their look comes in 2.8).
-  Regenerate the corpus.
+  them in the same place. docs/usage.md: a finished lookup in the Journal lists its steps (their look comes in 2.8);
+  AGENTS.md: feed.py's finished steps (`lists_steps`). Regenerate the corpus.
 
 - [ ] **Step 4: Run it and see it pass** — `nix develop -c pytest -q tests/test_requests_tab.py
   tests/test_conformance_requests.py`, then the gradle command of 2.1.
 
-- [ ] **Step 5: Commit** — `git add src/caracole/web tests docs/usage.md android/server/src`
+- [ ] **Step 5: Commit** — `git add src/caracole/web tests docs/usage.md AGENTS.md android/server/src`
   `git commit -m "feat(web): the Journal keeps a finished lookup's steps"`
 
 #### Task 2.5: The segmented bar on a running line
@@ -2189,6 +2364,7 @@ def test_a_running_lookup_is_a_segmented_bar_on_its_line_in_one_row(cfg, live, t
         one_row(page, line)  # segments and count on one top, the count inside the line, no sideways scroll
         assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.running')).animationName") == "step-pulse"
         assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.done')).backgroundColor") == page.js(ACCENT)
+        assert page.js(f"getComputedStyle(document.querySelector('{line} .seg')).borderTopLeftRadius") == "0px"  # square
         runner.go()
         wait_for(page, bar_of(line), ["done"] * 4 + ["running", "waiting", "waiting"])
         wait_for(page, words_of(line), ["Lyrics", " · 5 of 7"])
@@ -2241,7 +2417,9 @@ def test_the_running_segment_is_steady_under_reduced_motion(cfg, live, tmp_path)
     replaces them).
   - steps.css: `.progress.barred` (flex, centred, gap 8 px, `white-space: nowrap`, `overflow: hidden`, muted, weight
     500; `::before { content: none }`, the line's dot), `.step-segs` (flex: none, width 112 px, gap 3 px), `.seg` and
-    its states (the contract's colours; 6 px tall, radius 2 px), `.step-at` (min-width 0, ellipsis; its `b` in
+    its states (the contract's colours; 6 px tall, a failed one 12 px; square ends, `border-radius: 0`, which the four
+    radii allow: "Where the lanes meet" 4; any other radius this lane writes is a token with its fallback,
+    `var(--radius-m, 8px)` and the like), `.step-at` (min-width 0, ellipsis; its `b` in
     `var(--text)`, weight 600), `.step-count` (flex: none), `@keyframes step-pulse { 50% { opacity: .2 } }` under
     `@media (prefers-reduced-motion: no-preference)`.
   - docs/usage.md: the running line is a bar of its steps and "Sheet · Ultimate Guitar · 3 of 7", from its first
@@ -2259,17 +2437,23 @@ def test_the_running_segment_is_steady_under_reduced_motion(cfg, live, tmp_path)
 #### Task 2.6: The frozen bar under a line that ended, and the open card's list
 
 **Files:**
-- Modify: `library.js` (`drawSteps`, `stepsAfter`; new `stepList`; `STEP_MARKS` goes), `steps.css` (`.steps`,
+- Modify: `library.js` (`drawSteps`, `stepsAfter`; new `stepList`; `STEP_MARKS` goes; and one member more on
+  `window.caracoleLibrary`, `stepList`, a named crossing: the frozen object is lane 1's), `steps.css` (`.steps`,
   `.step-bar`, `.step-list`, `.step`; `.line > .steps` and `.row > .steps` placed as rows.css places today's chips)
+- Modify: `src/caracole/library_assets/rows.css` (delete `.line > .step-chips` and `.row > .step-chips`) and
+  `src/caracole/library_assets/library.css` (delete `.progress .steps-over`): dead once the chips go, a named crossing
+  ("Where the lanes meet" 6)
+- Modify, only if lane 1's Task 1d.6 has merged ("Where the lanes meet" 7): library.js or steps.css (the selected
+  line's `ol.step-list` shown in `#card-pane`), as a named crossing
 - Modify: `docs/usage.md` (a line that ended otherwise than Ready; the open card's list)
 - Test: `tests/test_web_page_steps.py`, `tests/test_web_page.py` (the tray's assertion: `'class="steps"'` and
   `step-segs` not in it)
 
 **Interfaces:**
 - Consumes: 2.5's `chipsOf`, `segsOf`, `stepWords`, `p.barred`.
-- Produces: `div.steps` > `div.step-bar[role=img]` and `ol.step-list` as the contract says; `stepList(chips, over)`;
-  `stepsAfter(p)` finds `div.steps` (so `refill` and `countdownIn` keep working unchanged); `drawSteps(p, null)` also
-  takes `barred` off `p`.
+- Produces: `div.steps` > `div.step-bar[role=img]` and `ol.step-list` as the contract says; `stepList(chips, over)`,
+  also `window.caracoleLibrary.stepList` (requests.js's, 2.8); `stepsAfter(p)` finds `div.steps` (so `refill` and
+  `countdownIn` keep working unchanged); `drawSteps(p, null)` also takes `barred` off `p`.
 
 - [ ] **Step 1: Write the failing tests** in `tests/test_web_page_steps.py`:
 
@@ -2310,6 +2494,15 @@ def test_the_open_cards_list_follows_a_running_lookup_and_folds_away_once_ready(
     # stays on the line's row. Ready: no .steps, as on a closed line.
 ```
 
+  2.5's running-line assertion, `document.querySelector('{line} .step-chips, {line} .steps')` is None, is rewritten to
+  this task's contract: no `{line} .step-chips`, and `{line} .step-list` not displayed
+  (`getComputedStyle(...).display === "none"`) while the card is closed.
+
+  Only if Task 1d.6 has merged: `test_on_a_laptop_the_selected_lines_steps_are_listed_in_the_pane` (1280 × 900;
+  Estopa - Tu Calorro, `NOT_ON_UG`, as the frozen bar's test sets it up): once it ended, click the line's title (its
+  card in the pane): an `ol.step-list` inside `#card-pane` is visible with `steps_of`'s six entries, while the line in
+  `#list` shows its frozen `.step-bar` and no list. Else Task 1d.6 writes it, when it merges second.
+
 - [ ] **Step 2: Run them and see them fail** — `nix develop -c pytest -q tests/test_web_page_steps.py -k "frozen or
   open_cards"`: no `.step-bar`, no `.step-list`.
 
@@ -2318,20 +2511,28 @@ def test_the_open_cards_list_follows_a_running_lookup_and_folds_away_once_ready(
     over), a frozen `.step-bar` only while `p` isn't barred (its aria-label "Steps: " and each step's "name[, site]:
     state", joined by "; ", a plain one "done"), then `stepList(chips, !isActive(view))`.
   - `stepList(chips, over)`: the contract's list; over, the skipped steps leave their places for one last
-    `li.step.skipped-all` (its glyph "–", "Skipped: " and their names joined by ", ").
+    `li.step.skipped-all` (its glyph "–", "Skipped: " and their names joined by ", "). It is handed to requests.js as
+    `window.caracoleLibrary.stepList` (one more member of the frozen object), the one function that draws a list of
+    steps.
+  - The dead chips' rules go: rows.css's `.line > .step-chips` and `.row > .step-chips`, library.css's `.progress
+    .steps-over`.
+  - Only if Task 1d.6 has merged: the selected line's `.steps > ol.step-list` shows in the pane (moved into
+    `#card-pane` with the card and back with it, or the rule widened), and the
+    `.line:has(> .line-more[aria-expanded="true"])` rule leaves a `.selected` line its frozen bar.
   - steps.css: `.line > .steps` (`grid-column: 1 / -1; margin: 3px 0 4px`), `.row > .steps` (`grid-column: 2 / -1;
     margin: 3px 0 2px`); `.step-bar` as `.progress.barred`'s row; `.steps > .step-list { display: none }`, and under
     `.line:has(> .line-more[aria-expanded="true"])` the list `display: grid` and the bar `display: none`; `.step-list`
     (grid, gap 2 px, no bullets, .85rem), `.step` (flex, baseline, gap 8 px, min-width 0), `.step-glyph` (1.1em,
     centred; accent for done, plain and running, `var(--failed)` for failed), waiting, skipped and skipped-all muted,
     the running one weight 600, `.step-found` muted, `overflow-wrap: anywhere`.
-  - The other tests of the file: the chips' assertions become `bar_of` and `steps_of`; Ready asserts no `.steps`.
+  - The other tests of the file: the chips' assertions become `bar_of` and `steps_of`; Ready asserts no `.steps`; 2.5's
+    running-line assertion as Step 1 says.
   - docs/usage.md says the frozen bar and the card's list. Regenerate library_page.json.
 
 - [ ] **Step 4: Run it and see it pass** — 2.5's Step 4 commands.
 
-- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/library.js src/caracole/library_assets/steps.css tests
-  docs/usage.md`
+- [ ] **Step 5: Commit** — `git add src/caracole/library_assets/library.js src/caracole/library_assets/steps.css
+  src/caracole/library_assets/rows.css src/caracole/library_assets/library.css tests docs/usage.md`
   `git commit -m "feat(library): a request that ended keeps its bar frozen under its line, and its card lists the steps"`
 
 #### Task 2.7: Cancel beside a queued line
@@ -2370,8 +2571,9 @@ def test_a_queued_request_says_its_place_with_cancel_beside_it(cfg, live, tmp_pa
   dot and `cancelButton(p, view)` (the key gains the id). Its click disables it and posts `csrf` and `job`: answered,
   the line says `{tone: "cancelled", text: "Cancelled"}` (what the next view says too); refused, `failure(answer)`;
   no answer, `UNREACHABLE`; the next view of the job draws the line again. The focus stays on the line (`showLine`
-  keeps it). steps.css: `.progress .cancel` as library.css's `.progress .undo` (a text button, 32 px), 44 × 44 px
-  under `(pointer: coarse)`. docs/usage.md. Regenerate library_page.json.
+  keeps it). steps.css: `.progress .cancel` as library.css's `.progress .undo` (a text button, 32 px; its radius
+  `var(--radius-m, 8px)`, "Where the lanes meet" 4), 44 × 44 px under `(pointer: coarse)`. docs/usage.md. Regenerate
+  library_page.json.
 
 - [ ] **Step 4: Run it and see it pass** — 2.5's Step 4 commands.
 
@@ -2382,14 +2584,20 @@ def test_a_queued_request_says_its_place_with_cancel_beside_it(cfg, live, tmp_pa
 #### Task 2.8: The Journal's list of steps
 
 **Files:**
-- Modify: `src/caracole/library_assets/requests.js` (`stepChips` becomes `stepList`, as library.js's; its header),
-  `src/caracole/library_assets/requests.css` (`.req .step-list` in place of the `.req .step-chips` rules),
-  `src/caracole/library_assets/steps.css` (the `.step-chips` and `.step-chip` rules go: nothing draws them now)
+- Modify: `src/caracole/library_assets/requests.js` (`stepChips` goes: the list is library.js's `stepList`, through
+  `window.caracoleLibrary.stepList`, no copy of it here; line 293's `history.replaceState(null, "", "#" +
+  params.toString())` passes `history.state`, "Where the lanes meet" 9; its header),
+  `src/caracole/library_assets/requests.css` (`.req .step-list` in place of the `.req .step-chips` rules; every
+  `border-radius` one of the four as a token with its fallback, by 1f.1's mapping: `.req`'s 14 px `var(--radius-l,
+  12px)`, `.req-step`'s 10 px and `.req-output pre`'s 8 px `var(--radius-m, 8px)`, `.req-says`' 999 px
+  `var(--radius-pill, 999px)`), `src/caracole/library_assets/steps.css` (the `.step-chips` and `.step-chip` rules go:
+  nothing draws them now)
 - Modify: `docs/usage.md` (the Journal's Now and finished requests, around lines 4465–4486)
 - Test: `tests/test_requests_tab.py` (`DRAWN`)
 
 **Interfaces:**
-- Consumes: 2.4's finished `steps`; 2.6's list markup and steps.css's `.step-list` rules.
+- Consumes: 2.4's finished `steps`; 2.6's list markup, `window.caracoleLibrary.stepList` and steps.css's
+  `.step-list` rules.
 - Produces: `li.req > ol.step-list` for every request with steps, over ones with their skipped steps folded.
 
 - [ ] **Step 1: Write the failing test** — in `DRAWN`, `chips:` becomes
@@ -2413,16 +2621,21 @@ assert shown["over"] == [["step done", "Song"], ["step done", "Match · Ultimate
                          ["step skipped-all", "Skipped: Sheet, PDF"]]
 ```
 
-  (the phone and laptop widths, light and dark, as the test runs; no small targets, no sideways scroll).
+  (the phone and laptop widths, light and dark, as the test runs; no small targets, no sideways scroll). `DRAWN` also
+  notes `radii`, the computed `borderTopLeftRadius` of every rendered element in `#requests`
+  (`checkVisibility()`), and the test asserts `set(shown["radii"]) <= {"0px", "4px", "8px", "12px", "999px"}`; and
+  requests.js's text has no `stepChips` and defines no `stepList` of its own
+  (`re.search(r"\b(function|const|let)\s+stepList\b", text)` is None): one function draws a list of steps.
 
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_requests_tab.py -k draws_every`: no
   `.step-list`.
 
-- [ ] **Step 3: Implement** — requests.js's `stepList(chips, over)` writes the contract's markup (over: the item's
-  state neither running nor queued); `makeItem` draws it where the chips were. requests.css: `.req .step-list
-  { grid-column: 1 / -1; margin: 2px 0 0 }` (the list is no `.steps` child, so steps.css's closed-line rule doesn't
-  hide it). docs/usage.md: the Journal lists a request's steps, one line a step, skipped ones folded once it ends.
-  Regenerate library_page.json.
+- [ ] **Step 3: Implement** — `makeItem` draws `window.caracoleLibrary.stepList(chips, over)` where the chips were
+  (over: the item's state neither running nor queued), the contract's markup; where `window.caracoleLibrary` has no
+  `stepList`, the steps' names as plain words. requests.css: `.req .step-list { grid-column: 1 / -1; margin: 2px 0 0 }`
+  (the list is no `.steps` child, so steps.css's closed-line rule doesn't hide it), and its radii as the tokens above.
+  requests.js's line 293 passes `history.state`. docs/usage.md: the Journal lists a request's steps, one line a step,
+  skipped ones folded once it ends. Regenerate library_page.json.
 
 - [ ] **Step 4: Run it and see it pass** — `nix develop -c pytest -q tests/test_requests_tab.py
   tests/test_conformance_library_page.py tests/test_web_page_steps.py`, then the page's gradle command of 2.5.
@@ -2433,7 +2646,9 @@ assert shown["over"] == [["step done", "Song"], ["step done", "Match · Ultimate
 #### Task 2.9: Merge the lane
 
 **Files:**
-- Modify: `AGENTS.md`, `docs/usage.md` (a last read against what the lane did), the corpus
+- Check (written by 2.1 to 2.8): `AGENTS.md`, `docs/usage.md` (a last read against what the lane did); the corpus
+- Modify, only if this merge is the last of 1f, lane 2, 3b and lane 4: `tests/test_page_calm.py` (`OTHER_LANES`
+  emptied); only if lane 2 is the last of the four lanes to merge: `docs/screenshots/*.png` (those that changed)
 
 - [ ] **Step 1: Bring main in** — `git fetch . main && git rebase main` (lane 1 may have merged a stage: library.js,
   rows.css and test_web_page*.py are the likely conflicts; keep lane 1's code, re-apply this lane's block). Raise the
@@ -2445,13 +2660,24 @@ assert shown["over"] == [["step done", "Song"], ["step done", "Match · Ultimate
   `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus moved);
   `nix flake check`. All pass; a Kotlin test that breaks is this lane's to follow here (Outcomes.kt, JobViews.kt,
   Feed.kt, RequestsRoutes.kt, JobViewsTest, FeedTest, JobViewsReplay, RequestsReplay).
-- [ ] **Step 4: Docs** — docs/usage.md says: the running bar and its words from the first second, Cancel beside a
-  queued line, the frozen bar under a line that ended otherwise than Ready, the open card's and the Journal's lists,
-  skipped steps kept in place and folded once over; AGENTS.md's bullet on the library page's lines says
-  `outcome.progress`'s rules (`BAR_AFTER`, `at`, `count`, skipped kept) and feed.py's finished steps
-  (`lists_steps`). The README's screenshots wait for the last lane.
-- [ ] **Step 5: Merge** — `git checkout main && git merge feat/progress-bar` (a merge commit, as the lanes before),
-  then `git worktree remove ../caracole-progress`. Push only when the owner asks.
+- [ ] **Step 4: Docs, checked** — docs/usage.md says (each task wrote its part): the running bar and its words from
+  the first second, Cancel beside a queued line, the frozen bar under a line that ended otherwise than Ready, the open
+  card's and the Journal's lists, skipped steps kept in place and folded once over; AGENTS.md's bullet on the library
+  page's lines says `outcome.progress`'s rules (`BAR_AFTER`, `at`, `count`, skipped kept) and feed.py's finished
+  steps (`lists_steps`). A gap goes into a `docs:` commit here.
+- [ ] **Step 5: The radius skip list** — only if 1f, 3b and lane 4 have all merged, this merge is the last of 1f, lane
+  2, 3b and lane 4: `tests/test_page_calm.py`'s `OTHER_LANES = ()` and `test_the_library_page_has_four_corner_radii`
+  passes with it (commit `test(library): the four radii across the whole page, no lane left out`); else the list
+  stays, for the last of them to remove.
+- [ ] **Step 6: The README's screenshots** — only if lanes 1 (1f), 3 (3b) and 4 have all merged (lane 2 the last of
+  the four): retake them: `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python
+  docs/screenshots/make.py`; for each picture, `git show HEAD:docs/screenshots/<name>.png > old.png` (outside the
+  repository) and `compare -metric AE old.png docs/screenshots/<name>.png null:` (ImageMagick, through
+  `omnibin-shell` if it isn't on PATH): `git restore` those with 0 differing pixels, keep the others; commit `docs: the
+  README's screenshots of the redesigned page`. Else they wait for the last lane.
+- [ ] **Step 7: Merge** — `git checkout main && git merge --no-ff feat/progress-bar` (a merge commit, as the lanes
+  before, even where the rebase would let it fast-forward), then push main: `GH_TOKEN="$(gh auth token --user
+  Danielhp95)" git push origin main`, then `git worktree remove ../caracole-progress`.
 
 ---
 
@@ -2506,20 +2732,25 @@ card.foot(s, { actions, book, info, remove }) // <div class="foot"> | null
 ```
 
 - Each part is a self-contained element styled by its own classes in card.css, never by where lane 1 puts it (3a.1
-  makes that true); lane 1 orders and places them (in the line on a phone, in the pane on a laptop) and may build them
-  on first open: nothing in card.js measures the page or observes a resize after 3b.3.
+  makes that true of the parts, and 3b.4 of the card's box, keyed to `.line-panel.song-card`); lane 1 orders and
+  places them (in the line on a phone, in the pane on a laptop) and may build them on first open: nothing in card.js measures the page or observes a resize after 3b.3.
 - `plays`: each child is `a.play.play-<kind>[.auto]` with `data-kind`, `data-inst`, `aria-label` and `title` as today
   (library.js `showRequest` focuses `.line-plays a`); inside, `svg.glyph`, `span.play-words[aria-hidden]`
   (`span.play-kind`, `span.play-site`), `span.n[aria-hidden]` (more than one version) and `span.marks[aria-hidden]`.
   card.css shows the words with a mouse and the marks on a touch screen.
 - Placement stays lane 1's: rows.css keeps one rule for the buttons, `.line-title > .line-plays { flex: none;
-  max-width: calc(100% - 5rem); }`, which lane 1 may change. **Chips are wide** ("Guitar Pro · gtptabs" is about
+  max-width: calc(100% - 5rem); }`, which lane 1 may change, and library.css lane 1's other placement rules (a
+  selector ending `.line-title > .line-plays`, 1b's folded grids) and its `#card-pane …` rules (1d.6's
+  `#card-pane .foot-menu`), the only names of `.play`, `.line-plays` or `.foot*` outside card.css that 3a.1's guard
+  allows. **Chips are wide** ("Guitar Pro · gtptabs" is about
   150 px): lane 1's laptop line (1b, 1d's 760 px list) gives them room as the mockup does (title, chips, key, chevron;
   no artist column), or they wrap under that rule.
-- **History**: the card's ⋯ menu (3b.5) pushes `{ ...history.state, caracoleMenu: <n> }` on a touch screen. Lane 1's
-  own pushes (search mode, leaving Library) build their state from their own members and never carry
-  `caracoleMenu`; its `popstate` handlers read their own members alone and act only when those changed. card.js's
-  handler skips (`history.back()`) an entry that still carries `caracoleMenu` once its menu has closed.
+- **History**: the card's ⋯ menu (3b.5) pushes `{ caracoleMenu: <n> }` on a touch screen, plus `search:
+  (Number(history.state && history.state.search) || 0) + 1` while `body.search-mode` is on ("Where the lanes meet" 1
+  and 2), never a spread of `history.state` (which would copy `search: n` where n + 1 is owed). Lane 1's own pushes
+  (search mode, leaving Library) build their state from their own members and never carry `caracoleMenu`; its
+  `popstate` handlers read their own members alone and act only when those changed. card.js's handler skips
+  (`history.back()`) an entry that still carries `caracoleMenu` once its menu has closed.
 
 Cross-lane points this section raises are listed at its end.
 
@@ -2535,20 +2766,27 @@ feat/library-play-buttons main`.
 A move: nothing looks different.
 
 **Files:**
-- Modify: `src/caracole/library_assets/card.css` (gains the play buttons' rules and the lit rule; loses the opened
-  line's box; its foot rule written by the foot's own class)
+- Modify: `src/caracole/library_assets/card.css` (gains the play buttons' rules and the lit rule; keeps the opened
+  line's box, its first block, where it is: "Where the lanes meet" 3, which 3b.4 keys; its foot rule written by the
+  foot's own class)
 - Modify: `src/caracole/library_assets/rows.css` (loses `.line-plays`' inner rules, every `.play` rule, including the
   `@media (pointer: coarse)` block's five lines "A play button a thumb's 44 px square…", and `.line-panel .foot`;
-  keeps `.line-title > .line-plays { flex: none; max-width: calc(100% - 5rem); }`; gains card.css's opened-line box)
+  keeps `.line-title > .line-plays { flex: none; max-width: calc(100% - 5rem); }`)
 - Modify: `src/caracole/library_assets/filter.css` (loses the lit rule `[data-lit~="sheet"] .line-plays
   .play[data-inst~="sheet"], …`)
 - Modify: `src/caracole/library_assets/library.css` (loses `.foot { display: flex; }` and `.foot form { margin: 0; }`)
+- Modify: `AGENTS.md` ("index.html's assets (library_assets/)": a line "The play buttons', the foot's and the opened
+  card's box's rules are card.css's; where the buttons sit on a line (a selector ending `.line-title > .line-plays`,
+  rows.css and library.css) and the laptop's pane (`#card-pane …`, library.css) are lane 1's: test_library_assets.py")
 - Test: `tests/test_library_assets.py`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces: the seam both lanes keep, pinned by the test: `.play`, `.line-plays` and `.foot*` are styled in card.css
-  alone (but rows.css's one placement rule); card.css styles no `.line`, `.line-panel` or `.line-title`.
+  alone, but for lane 1's placement rules (a selector ending `.line-title > .line-plays`, in rows.css or library.css:
+  rows.css's one rule and 1b.3's and 1b.4's folded grids) and its `#card-pane …` rules (library.css: 1d.6's
+  `#card-pane .foot-menu`); card.css's `.line`, `.line-panel` and `.line-title` selectors are the opened line's box
+  alone (`.line:not(.hit)…`, `.line.card-gone…`, and `.line-panel.song-card` once 3b.4 keys it).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2557,36 +2795,44 @@ A move: nothing looks different.
 SELECTORS = re.compile(r"(?:^|[{}])\s*([^{}@][^{}]*?)\s*\{")  # each rule's selector list, inside @media too
 PLAY = re.compile(r"\.(?:play|line-plays|foot(?:-[a-z]+)?)(?![\w-])")
 LINE = re.compile(r"\.line(?:-panel|-title)?(?![\w-])")
+PLACED = re.compile(r"\.line-title > \.line-plays$")  # lane 1's: where the buttons sit on a line
+PANE = re.compile(r"^#card-pane(?![\w-])")  # lane 1's: the laptop's pane (1d.6)
+BOX = re.compile(r"^\.line(?::not\(\.hit\)|\.card-gone)|^\.line-panel\.song-card(?![\w-])")  # the opened card's box
+LANE_1 = {"rows.css": (PLACED,), "library.css": (PLACED, PANE)}
 
 
 def selectors_of(name):
-    return [s.strip() for s in SELECTORS.findall(re.sub(r"/\*.*?\*/", "", text_of(name), flags=re.S))]
+    """Each selector of ``name``'s rules, a list split at its top-level commas."""
+    lists = SELECTORS.findall(re.sub(r"/\*.*?\*/", "", text_of(name), flags=re.S))
+    return [s.strip() for l in lists for s in re.split(r",(?![^()]*\))", l)]
 
 
 def test_the_play_buttons_and_the_cards_parts_are_styled_in_card_css_alone():
     from caracole.library_page import STYLESHEETS
 
-    others = {name: [s for s in selectors_of(name) if PLAY.search(s)] for name in STYLESHEETS if name != "card.css"}
-    assert {name: found for name, found in others.items() if found} == {
-        "rows.css": [".line-title > .line-plays"]}  # where the buttons sit on a line: lane 1's
-    assert [s for s in selectors_of("card.css") if LINE.search(s)] == []  # the line and its panel are rows.css's
+    others = {name: [s for s in selectors_of(name) if PLAY.search(s)
+                     and not any(p.search(s) for p in LANE_1.get(name, ()))]
+              for name in STYLESHEETS if name != "card.css"}
+    assert {name: found for name, found in others.items() if found} == {}  # but lane 1's placement and pane rules
+    assert [s for s in selectors_of("card.css") if LINE.search(s) and not BOX.search(s)] == []  # the box alone
 ```
 
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q
   tests/test_library_assets.py::test_the_play_buttons_and_the_cards_parts_are_styled_in_card_css_alone`: fails,
-  listing rows.css's `.play…` selectors, filter.css's lit rule, library.css's `.foot`, and card.css's
-  `.line:not(.hit):has(> .line-more[aria-expanded="true"])`.
+  listing rows.css's `.play…` selectors, filter.css's lit rule and library.css's `.foot`.
 - [ ] **Step 3: Implement** — Move, text unchanged but for the selectors named here:
   - into card.css, at its end under a comment "A song's line's buttons (card.js plays)": rows.css's `.line-plays` rule
     less `flex` and `max-width` (its `--over`, display, wrap, gap, padding), every `.play…` rule, the `(pointer:
     coarse)` block's `.line-plays` and `.play…` lines in a `@media (pointer: coarse)` of its own, and filter.css's lit
     rule with its comment (card.css comes after filter.css and rows.css in `STYLESHEETS`, and the selectors keep their
     specificity, so the cascade is the same);
-  - into rows.css, after `.line-panel`: card.css's first block (its comment, `.line:not(.hit):has(> .line-more[aria-expanded="true"]), .line.card-gone`,
-    its `+ .line` rule, `.line:not(.hit) > .line-panel`);
+  - card.css's first block, the opened line's box (its comment, `.line:not(.hit):has(> .line-more[aria-expanded="true"]),
+    .line.card-gone`, its `+ .line` rule, `.line:not(.hit) > .line-panel`), stays where it is, unchanged: 3b.4 keys it
+    to `.line-panel.song-card` and `:not(.selected)` ("Where the lanes meet" 3);
   - card.css's `.line:not(.hit) > .line-panel > .foot` becomes `.foot`, merged with library.css's `.foot { display:
     flex; }` and rows.css's `.line-panel .foot` (whose `justify-content: flex-start` it takes; its `margin-top: 2px`
     goes, card.css's `margin: 0` wins today); library.css's `.foot form` moves with it.
+  - AGENTS.md's line above.
 - [ ] **Step 4: Run it and see it pass** — the test above, then the browser tests that pin today's look:
   `nix develop -c pytest -q tests/test_library_plays.py tests/test_library_card.py
   tests/test_library_filter.py::test_a_lines_button_of_a_chosen_instrument_is_lit` (all pass unchanged), and
@@ -2594,18 +2840,21 @@ def test_the_play_buttons_and_the_cards_parts_are_styled_in_card_css_alone():
 - [ ] **Step 5: Commit** — regenerate the corpus first (`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0
   tests/test_conformance_*.py`, twice), then `git add src/caracole/library_assets/card.css
   src/caracole/library_assets/rows.css src/caracole/library_assets/filter.css src/caracole/library_assets/library.css
-  tests/test_library_assets.py tests/conformance/vectors/web/library_page.json` and `git commit -m "refactor(library):
-  the play buttons' rules in card.css, the opened line's box in rows.css"`.
+  tests/test_library_assets.py tests/conformance/vectors/web/library_page.json AGENTS.md` and `git commit -m
+  "refactor(library): the play buttons' and the foot's rules in card.css alone"`.
 
 #### Task 3a.2: On a touch screen, filled tiles of 48 px, 8 px apart, their sites' letters at 8 px
 
 **Files:**
 - Modify: `src/caracole/library_assets/card.css` (its `@media (pointer: coarse)` block of the play buttons)
+- Modify: `docs/usage.md` (the paragraph on a song's line, from "A tap on one opens that one at once": on a touch
+  screen each button is a tile, the sites' letters (or icons) at its corner, how many versions at the other)
 - Test: `tests/test_library_plays.py`
 
 **Interfaces:**
 - Consumes: 3a.1's play rules in card.css.
-- Produces: on `(pointer: coarse)`, `a.play` 48 × 48 px, no border, filled with `--raised`, radius 12 px;
+- Produces: on `(pointer: coarse)`, `a.play` 48 × 48 px, no border, filled with `--raised`, radius 12 px
+  (`var(--radius-l, 12px)`: "Where the lanes meet" 4);
   `.line-plays` `gap: 8px`; `.n` and `.marks` inside the box's corners (no overhang: `--over` goes); marks 16 px tall,
   their letters 8 px.
 
@@ -2644,15 +2893,15 @@ def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, c
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_plays.py -k "touch or one_row"`:
   44 ≠ 48, the marks overhang by 4 px, `borderTopStyle` is "solid", the letters are "7px" and 15 px tall.
 - [ ] **Step 3: Implement** — in card.css's coarse block: `.line-plays { gap: 8px; padding: 0; }`, `.play { --mark-size:
-  16px; width: 48px; height: 48px; border: 0; border-radius: 12px; background: var(--raised); }`, `.play svg.glyph`
-  24 px, `.play .n { top: 3px; right: 3px; font-size: 10px; }`, `.play .marks { right: 3px; bottom: 3px; }`, `.play
+  16px; width: 48px; height: 48px; border: 0; border-radius: var(--radius-l, 12px); background: var(--raised); }`,
+  `.play svg.glyph` 24 px, `.play .n { top: 3px; right: 3px; font-size: 10px; }`, `.play .marks { right: 3px; bottom: 3px; }`, `.play
   .marks > .source { width: auto; min-width: 16px; height: 16px; padding: 0 2px; font-size: 8px; line-height: 16px; }`
   (an `img.source` stays 16 × 16). `:hover` keeps the fill, a shade darker (`color-mix(in srgb, var(--text) 8%,
-  var(--raised))`).
+  var(--raised))`). docs/usage.md's tile.
 - [ ] **Step 4: Run it and see it pass** — the same command, then `nix develop -c pytest -q tests/test_library_card.py
   -k "reads or touch"` (contrast and targets still met).
 - [ ] **Step 5: Commit** — corpus regenerated as in 3a.1; `git add src/caracole/library_assets/card.css
-  tests/test_library_plays.py tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(library): a
+  tests/test_library_plays.py tests/conformance/vectors/web/library_page.json docs/usage.md`; `git commit -m "feat(library): a
   phone's play tiles 48 px, 8 px apart, their sites' letters at 8 px"`.
 
 #### Task 3a.3: With a mouse, a chip naming the kind and the site ("Chords · UG")
@@ -2662,6 +2911,11 @@ def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, c
 - Modify: `src/caracole/library_assets/card.css` (the play buttons' base rules become the chip; the coarse block
   hides the words and shows the marks; the lit rule covers the chip's glyph and site)
 - Modify: `tests/helpers/browser.py` (`FINE_POINTER`)
+- Modify: `docs/usage.md` (the paragraph on a song's line, from "A tap on one opens that one at once": with a mouse a
+  chip that says what it is and where it came from, "Chords · UG", "Guitar Pro · gtptabs", "Harmonica · harptabs",
+  how many after it, whatever the window's width), `AGENTS.md` ("index.html's assets (library_assets/)": rule 11 of
+  "Where the lanes meet": the line's buttons are card.js `plays`, each showing, on a touch screen, its sites' marks;
+  with a mouse, its kind and its site in words (`play-words`); how many)
 - Test: `tests/test_library_plays.py`, `tests/test_library_filter.py`
 
 **Interfaces:**
@@ -2771,31 +3025,33 @@ def test_a_chip_never_wraps_its_words_beside_a_long_title(conn, cfg, tmp_path):
   - `plays` appends, after the glyph, `span.play-words` (`aria-hidden="true"`) with `span.play-kind` and `span.play-site`
     (text " · " + site), then `.n`, then `.marks`.
   - card.css base (no media query, so a mouse and no pointer): `.play { display: inline-flex; align-items: center;
-    gap: 5px; height: 28px; padding: 0 9px 0 7px; border: 0; border-radius: 8px; background: var(--raised); color:
-    var(--text); font-size: .8rem; font-weight: 600; line-height: 1; white-space: nowrap; text-decoration: none; }`,
+    gap: 5px; height: 28px; padding: 0 9px 0 7px; border: 0; border-radius: var(--radius-m, 8px); background:
+    var(--raised); color: var(--text); font-size: .8rem; font-weight: 600; line-height: 1; white-space: nowrap; text-decoration: none; }`,
     `.play svg.glyph { flex: none; width: 16px; height: 16px; color: var(--accent); }`, `.play.auto svg.glyph { color:
     var(--auto); }`, `.play-site { color: var(--muted); font-weight: 600; }`, `.play .n` static, a muted count after the
     words (`margin-left: 2px; color: var(--muted); font-variant-numeric: tabular-nums;`), `.play .marks { display:
     none; }`; coarse: `.play { display: inline-grid; place-items: center; padding: 0; }`, `.play-words { display:
     none; }`, `.play .marks { display: flex; }`, `.n` absolute as 3a.2. The lit rule gains `… .play[data-inst~="X"]
     :is(svg.glyph, .play-site, .n) { color: inherit; }` for each instrument.
+  - docs/usage.md's chip, and AGENTS.md's sentence (rule 11): "on a touch screen, its sites' marks; with a mouse, its
+    kind and its site in words".
 - [ ] **Step 4: Run it and see it pass** — the command of step 2, then `nix develop -c pytest -q
   tests/test_library_plays.py tests/test_library_card.py tests/test_library_page.py tests/test_web_page.py`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.js
   src/caracole/library_assets/card.css tests/helpers/browser.py tests/test_library_plays.py
-  tests/test_library_filter.py tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(library): with a
+  tests/test_library_filter.py tests/conformance/vectors/web/library_page.json docs/usage.md AGENTS.md`; `git commit -m "feat(library): with a
   mouse a play button is a chip naming its kind and its site"`.
 
 #### Task 3a.4: Merge 3a
 
-- [ ] **Step 1: Docs** — docs/usage.md, the paragraph on a song's line (from "A tap on one opens that one at once"):
-  on a touch screen each button is a tile, the sites' letters (or icons) at its corner, how many versions at the
-  other; with a mouse a chip that says what it is and where it came from ("Chords · UG", "Guitar Pro · gtptabs",
-  "Harmonica · harptabs"), how many after it, whatever the window's width. AGENTS.md, "index.html's assets
-  (library_assets/)": the line's buttons are card.js `plays`, each "its instrument's `glyph`, …, the marks of the
-  sites its versions came from (a touch screen's tile; a mouse's chip names its kind and the site in use in words,
-  `play-words`), how many"; and a line "The play buttons' rules are card.css's, the line's (and where the buttons sit
-  on it, `.line-title > .line-plays`) rows.css's (test_library_assets.py)".
+- [ ] **Step 1: Docs, checked** (written by 3a.1 to 3a.3) — docs/usage.md, the paragraph on a song's line (from "A tap
+  on one opens that one at once"): on a touch screen each button is a tile, the sites' letters (or icons) at its
+  corner, how many versions at the other; with a mouse a chip that says what it is and where it came from ("Chords ·
+  UG", "Guitar Pro · gtptabs", "Harmonica · harptabs"), how many after it, whatever the window's width. AGENTS.md,
+  "index.html's assets (library_assets/)": the line's buttons are card.js `plays`, on a touch screen its sites'
+  marks, with a mouse its kind and its site in words (rule 11, 3a.3's); and 3a.1's line on the seam (the play
+  buttons', the foot's and the opened card's box's rules card.css's; lane 1's placement and pane rules;
+  test_library_assets.py). A gap goes into a `docs:` commit here.
 - [ ] **Step 2: The gates** — `nix develop -c pytest -q` (whole suite); `CARACOLE_CORPUS=write nix develop -c pytest -q
   -n 0 tests/test_conformance_*.py` twice and `git status` shows only `tests/conformance/vectors/web/library_page.json`
   changed, then `nix develop -c pytest -q -n 0 tests/test_conformance_*.py` passes in check mode; `nix develop
@@ -2804,17 +3060,17 @@ def test_a_chip_never_wraps_its_words_beside_a_long_title(conn, cfg, tmp_path):
   `nix flake check`.
 - [ ] **Step 3: Look at it** — `caracole serve` on a demo library (docs/screenshots/make.py builds one): a laptop's
   chips, and the phone (the app on the Sony, or Chromium's device mode with touch) at 390 and 320 px.
-- [ ] **Step 4: Commit and merge** — `git add docs/usage.md AGENTS.md`; `git commit -m "docs: the play buttons, tiles
-  on a touch screen and chips with a mouse"`; rebase onto `main` if lane 1 merged first (rows.css, filter.css,
-  library.css: keep lane 1's lines, move only the rules 3a.1 names); `git checkout main && git merge --no-ff
-  feat/library-play-buttons`.
+- [ ] **Step 4: Merge** — rebase onto `main` if lane 1 merged first (rows.css, filter.css, library.css: keep lane 1's
+  lines, move only the rules 3a.1 names); `git checkout main && git merge --no-ff feat/library-play-buttons`, then
+  push main: `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
 ### Lane 3b: the card's insides
 
-Branch `feat/library-card` from `main` once 3a has merged: `git worktree add ../caracole-card -b feat/library-card
-main`.
+Branch `feat/library-card-insides` from `main` once 3a and lane 1's 1d have merged: `git worktree add ../caracole-card
+-b feat/library-card-insides main`. Its tests read a card's parts only through tests/helpers/cards.py (1d.1: `cardOf`,
+`openCardOf`, `open_card`, `card_of`), at every width: from 1200 px an open card is in `#card-pane`, not in its line.
 
 #### Task 3b.1: A rating as "★ 4.85 (81)", "New" without one
 
@@ -2822,6 +3078,8 @@ main`.
 - Modify: `src/caracole/library_assets/card.js` (`stars` becomes `rated`; `versionRow`'s `votes` goes; `ugDrawer`;
   `things`' sheet `from`)
 - Modify: `src/caracole/library_assets/card.css` (`.vrow .stars .new`)
+- Modify: `docs/usage.md` (the card's paragraphs, from "Then what you play from it, a tile each": a tile's name and
+  version, `Ver 3 · ★ 4.86 (408) · in use`; a rating with its votes, "New" for a version nobody rated)
 - Test: `tests/test_library_card.py`, `tests/test_library_page.py`, `tests/test_sheet_versions_end_to_end.py`
 
 **Interfaces:**
@@ -2860,18 +3118,19 @@ def test_a_version_with_no_rating_is_new(conn, cfg, tmp_path):
   sheet_versions"`: "4.86★ · 408 votes" ≠ "★ 4.86 (408)", "Ver 1 · 0.00★ · in use".
 - [ ] **Step 3: Implement** — `rated` as above; `ugDrawer` gives `versionRow` `{ ver, stars: rated(x), … }` and
   `versionRow` draws `★ r` bold and ` (n)` plain, or `span.new`; the sheet's `from` joins `rated(one)`. `.vrow .stars
-  .new { color: var(--muted); font-weight: 650; }`.
+  .new { color: var(--muted); font-weight: 650; }`. docs/usage.md as above.
 - [ ] **Step 4: Run it and see it pass** — the command of step 2, then `nix develop -c pytest -q
   tests/test_library_card.py::test_the_card_reads_in_both_themes`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.js
   src/caracole/library_assets/card.css tests/test_library_card.py tests/test_library_page.py
-  tests/test_sheet_versions_end_to_end.py tests/conformance/vectors/web/library_page.json`; `git commit -m
+  tests/test_sheet_versions_end_to_end.py tests/conformance/vectors/web/library_page.json docs/usage.md`; `git commit -m
   "feat(library): a version's rating with its votes, ★ 4.85 (81), and New for none"`.
 
 #### Task 3b.2: A UG version named by what differs ("Acoustic")
 
 **Files:**
 - Modify: `src/caracole/library_assets/card.js` (`ugDrawer`'s note)
+- Modify: `docs/usage.md` (the card's paragraphs: a UG version's note names what differs, "Acoustic")
 - Test: `tests/test_library_card.py`
 
 **Interfaces:**
@@ -2895,11 +3154,11 @@ def test_a_ug_version_is_named_by_what_differs(conn, cfg, tmp_path):
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card.py -k differs`: the note
   is "80% of the lyrics".
 - [ ] **Step 3: Implement** — in `ugDrawer`, before `share`: `if (typeof x.label === "string" && x.label)
-  note.push(x.label.charAt(0).toUpperCase() + x.label.slice(1))`.
+  note.push(x.label.charAt(0).toUpperCase() + x.label.slice(1))`; docs/usage.md as above.
 - [ ] **Step 4: Run it and see it pass** — the same command.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.js tests/test_library_card.py
-  tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(library): a UG version named by what differs,
-  Acoustic, Intro"`.
+  tests/conformance/vectors/web/library_page.json docs/usage.md`; `git commit -m "feat(library): a UG version named
+  by what differs, Acoustic, Intro"`.
 
 #### Task 3b.3: A drawer for each tile, its versions by source and its downloads in it
 
@@ -2912,6 +3171,13 @@ a Guitar Pro file's source…), each part what that chip's drawer was. Grouped b
   `place`, `placed` and the `ResizeObserver` go)
 - Modify: `src/caracole/library_assets/card.css` (`.tile-source`, `.tile-more`, `.drawer-files`, `.drawer-part`; the
   `.vchip`, `.tile-versions`, `.tile-downloads` rules go; the drawer's `--point` arrow goes)
+- Modify: `docs/usage.md` (the card's paragraphs: the chevron opens its drawer under it, its downloads first (the
+  sheet's PDF, PDF Traditional, Text, ChordPro and its exports; a Guitar Pro file's; the lyrics' Text and Timed; each
+  score's format), then a part a source of its versions, as the chips' drawers were; the Lyrics tile's "From
+  Megalobiz" (lines 1943, 1969) is its source's link on the tile's row), `AGENTS.md` ("index.html's assets": "a tile
+  for each thing to play from, every one alike, its chevron opening its drawer under it (its downloads, then a part
+  a source of its versions), which reads the page's data alone, never a request"; under megalobiz, "the card's Lyrics
+  tile" stays true)
 - Test: `tests/test_library_card.py` (`KIT` and the tests below), `tests/test_library_page.py`,
   `tests/test_sheet_versions_end_to_end.py`, `tests/test_web_downloads.py`
 
@@ -2937,8 +3203,9 @@ a Guitar Pro file's source…), each part what that chip's drawer was. Grouped b
   - One drawer open at a time: a chevron opens its tile's (closing another), again closes it; ✕ and Escape close it
     and give the focus back to the chevron; nothing is asked of anyone.
   - Test KIT (`tests/test_library_card.py`, shared by test_library_page.py, test_library_plays.py,
-    test_sheet_versions_end_to_end.py): `chipOf` goes; `drawerOf(title, kind)` opens the card and that tile's drawer
-    and returns its chevron; `noteDrawer(title, source)` returns `{ hidden, id, after, label, tile, files: [{ text,
+    test_sheet_versions_end_to_end.py), each of its helpers reading the card through cards.KIT's
+    `cardOf(lineOf(title))` (1d.1), so a card in `#card-pane` too: `chipOf` goes; `drawerOf(title, kind)` opens the
+    card and that tile's drawer and returns its chevron; `noteDrawer(title, source)` returns `{ hidden, id, after, label, tile, files: [{ text,
     said, href, download }], parts: [source…], what, said, head, rows, rest, command, restButtons }`, the last seven of
     the part of `source` (the first part when none is given), as the drawer's were; `noteCard`'s tiles lose `lead`,
     `chips` and `downloads` and gain `sources` (each `.tile-source [data-source]`), `link` (`a.tile-source`'s href, or
@@ -2954,7 +3221,7 @@ def test_each_tiles_drawer_holds_its_downloads_and_a_part_a_source(conn, cfg, tm
     note("drawers", { more: card.tiles.map((t) => t.more), sources: card.tiles.map((t) => t.sources),
       drawers: kinds.map((k) => { drawerOf("Hotel California", k); const d = noteDrawer("Hotel California");
         return [d.tile, d.after.split(" ")[1], d.files.map((f) => f.text), d.parts]; }),
-      open: lineOf("Hotel California").querySelectorAll(".drawer:not([hidden])").length });"""
+      open: cardOf(lineOf("Hotel California")).querySelectorAll(".drawer:not([hidden])").length });"""
     shown = attribute_of(run(conn, cfg, tmp_path, script), "data-drawers")
     assert shown["more"] == ["Chord sheet: its versions and downloads", "Guitar Pro: its files and downloads",
                              "Guitar tab: its downloads", "Harmonica tab: its downloads", "Lyrics: its downloads",
@@ -3001,29 +3268,36 @@ def test_each_tiles_drawer_holds_its_downloads_and_a_part_a_source(conn, cfg, tm
   32 × 32 px glyph button (44 on a touch screen), its chevron turned while expanded (the transition only under
   `prefers-reduced-motion: no-preference`), `.drawer-files { display: flex; flex-wrap: wrap; align-items: center; gap:
   4px 14px; padding: 10px 48px 10px 12px; }`, `.drawer-part + .drawer-part, .drawer-files + .drawer-part { border-top:
-  1px solid var(--border); }`, `.drawer-close` at the drawer's top right as today.
+  1px solid var(--border); }`, `.drawer-close` at the drawer's top right as today. The docs above.
 - [ ] **Step 4: Run it and see it pass** — `nix develop -c pytest -q tests/test_library_card.py
   tests/test_library_page.py tests/test_sheet_versions_end_to_end.py tests/test_web_downloads.py
   tests/test_library_plays.py`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.js
   src/caracole/library_assets/card.css tests/test_library_card.py tests/test_library_page.py
-  tests/test_sheet_versions_end_to_end.py tests/test_web_downloads.py tests/conformance/vectors/web/library_page.json`;
-  `git commit -m "feat(library): a drawer for each tile, its downloads and its versions by source in it"`.
+  tests/test_sheet_versions_end_to_end.py tests/test_web_downloads.py tests/conformance/vectors/web/library_page.json
+  docs/usage.md AGENTS.md`; `git commit -m "feat(library): a drawer for each tile, its downloads and its versions by
+  source in it"`.
 
 #### Task 3b.4: A tile one row at every width; the card at a pane's width
 
 **Files:**
 - Modify: `src/caracole/library_assets/card.css` (`.tiles` a container; `.tile` one grid row; the `@media (min-width:
-  720px)` and `(max-width: 719px)` rules become `@container tiles` rules)
+  720px)` and `(max-width: 719px)` rules become `@container tiles` rules; the opened card's box keyed, "Where the
+  lanes meet" 3: `.line:not(.hit) > .line-panel` becomes `.line-panel.song-card`, and `:not(.selected)` joins
+  `.line:not(.hit):has(> .line-more[aria-expanded="true"])` and its `+ .line` rule)
+- Modify: `docs/usage.md` (the card's paragraphs: a tile is one row, its name and version, the marks of where it came
+  from, a chevron), `AGENTS.md` (3b.3's tile sentence: "every one alike, one row")
 - Test: `tests/test_library_card.py`
 
 **Interfaces:**
-- Consumes: 3b.3's tile and drawer.
+- Consumes: 3b.3's tile and drawer; 1d.2's `song-card` on every song's panel, 1d.6's `selected` on a line whose card
+  is in `#card-pane`.
 - Produces: `.tiles { container: tiles / inline-size; grid-template-columns: 1fr; }`; a tile is one row (its open
   link, its sources, its chevron) 56–64 px tall on a touch screen, at most 48 px with a mouse; its drawer touches it
   (`.tile.open` square bottom corners, the drawer square top ones, same left and right); `.vrow`'s four columns from
   a card 560 px wide (`@container tiles (min-width: 560px)`), stacked below, whatever the window, so the card reads
-  the same in lane 1's 400–480 px pane and in place.
+  the same in lane 1's 400–480 px pane and in place. The box (raised, its margin, its panel's gap and padding) is
+  `.line-panel.song-card`'s wherever the card is, and a `.selected` line, whose card is in the pane, is no empty card.
 
 - [ ] **Step 1: Write the failing test** — `test_a_tile_is_one_row…` parametrized over `("390,844", True)` and
   `("1280,900", False)`, its `mids` of `.tile-open`, `.tile-source`, `.tile-more` within 16 px, heights `56 <= h <=
@@ -3034,74 +3308,100 @@ def test_each_tiles_drawer_holds_its_downloads_and_a_part_a_source(conn, cfg, tm
 
 ```python
 PANE = """
-const line = openCard("Hotel California");
-const pane = document.createElement("div");
-pane.style.width = "440px";
-document.querySelector("#list").before(pane);
-pane.appendChild(line.querySelector(".tiles"));  // as lane 1's pane holds it on a wide screen
-drawerOf("Hotel California", "sheet", pane);
+const line = openCard("Hotel California");  // at 1440 its card goes into lane 1's #card-pane (1d.6), 400-480 px wide
+const card = cardOf(line), pane = document.getElementById("card-pane");
+drawerOf("Hotel California", "sheet");
 const box = (n) => n.getBoundingClientRect();
-const row = pane.querySelector('.drawer-part[data-source="ug"] .vrow');
-note("pane", { wide: pane.scrollWidth, stacked: box(row.querySelector(".vbtns")).top >= box(row.querySelector(".ver")).bottom - 0.5,
-  rows: Array.from(pane.querySelectorAll(".tile")).map((t) => Math.round(box(t).height)) });
+const row = card.querySelector('.drawer-part[data-source="ug"] .vrow');
+note("pane", { inPane: pane.contains(card), width: pane.clientWidth, wide: pane.scrollWidth,
+  stacked: box(row.querySelector(".vbtns")).top >= box(row.querySelector(".ver")).bottom - 0.5,
+  rows: Array.from(card.querySelectorAll(".tile")).map((t) => Math.round(box(t).height)) });
 """
 
 
-def test_the_card_fits_a_pane_440_px_wide_on_a_wide_screen(conn, cfg, tmp_path):
+def test_the_card_fits_the_laptops_pane_on_a_wide_screen(conn, cfg, tmp_path):
     hotel(conn, cfg)
     pane = attribute_of(run(conn, cfg, tmp_path, PANE, controls=SERVED, size="1440,900"), "data-pane")
-    assert pane["wide"] <= 440 and pane["stacked"] is True and all(h <= 48 for h in pane["rows"]), pane
+    assert pane["inPane"] and 400 <= pane["width"] <= 480 and pane["wide"] <= pane["width"], pane
+    assert pane["stacked"] is True and all(h <= 48 for h in pane["rows"]), pane
+
+
+BOX = """
+const line = openCard("Hotel California"), card = cardOf(line), css = getComputedStyle;
+note("box", { inPane: document.getElementById("card-pane").contains(card), selected: line.classList.contains("selected"),
+  line: css(line).marginTop, card: [css(card).rowGap, css(card).paddingBottom], foot: css(card.querySelector(".foot")).display });
+"""
+
+
+@pytest.mark.parametrize("size", ["1280,900", cards.IN_PLACE])
+def test_the_cards_box_is_its_panels_own_and_a_selected_line_is_no_empty_card(conn, cfg, tmp_path, size):
+    hotel(conn, cfg)
+    box = attribute_of(run(conn, cfg, tmp_path, BOX, controls=SERVED, size=size), "data-box")
+    assert box["card"] == ["14px", "14px"] and box["foot"] == "flex", box  # .line-panel.song-card's, in place or not
+    if size == "1280,900":  # the card in the pane: its line, selected, isn't raised as an empty card
+        assert box["inPane"] and box["selected"] and box["line"] == "0px", box
+    else:  # in place, the opened line is raised as today
+        assert not box["inPane"] and box["line"] == "6px", box
 ```
 
-  (the KIT's `drawerOf(title, kind, root)` looks for the tile in `root`, `openCard(title)` by default: here the pane
-  holds it.)
+  (`openCard(title)` opens the line's card and returns the line; the KIT's `drawerOf(title, kind)` and the tests read
+  the card through `cardOf`, 1d.1's, so the same calls find it in the pane: 3b runs after 1d.)
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card.py -k "one_row or
-  under_its_tile or pane"`: at 1440 the `.vrow` has its four columns (the viewport is past 720), the phone's tile is
-  three rows high.
+  under_its_tile or pane or box"`: at 1440 the `.vrow` has its four columns (the viewport is past 720), the phone's
+  tile is three rows high; in the pane the card has no gap or padding of its own (`.line:not(.hit) > .line-panel`
+  doesn't match it) and its selected line is raised as an empty card.
 - [ ] **Step 3: Implement** — `.tile { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items:
   center; column-gap: 8px; padding-right: 6px; }`, `.tile-open` `padding: 5px 4px 5px 10px` (a mouse) and `9px 4px
   9px 10px` on a touch screen, `.tiles { gap: 8px; }`, `.drawer { margin-top: -8px; }`; the `.vrow` and `.drawer-head`
   width rules under `@container tiles (min-width: 560px)` and `(max-width: 559px)`; the `(min-width: 720px)` tile rules
-  go (one row everywhere).
+  go (one row everywhere). The box keyed: card.css's first block becomes `.line:not(.hit):not(.selected):has(>
+  .line-more[aria-expanded="true"]), .line.card-gone`, its `+ .line` rule the same, and `.line:not(.hit) >
+  .line-panel` becomes `.line-panel.song-card` (its gap and padding the same). The docs above.
 - [ ] **Step 4: Run it and see it pass** — the command of step 2, then `nix develop -c pytest -q
   tests/test_library_card.py tests/test_library_page.py -k "mark or card"`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.css tests/test_library_card.py
-  tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(library): a card's tile one row at every
-  width, the card as at home in a pane"`.
+  tests/conformance/vectors/web/library_page.json docs/usage.md AGENTS.md`; `git commit -m "feat(library): a card's
+  tile one row at every width, the card as at home in a pane"`.
 
 #### Task 3b.5: On a touch screen the ⋯ menu is a history entry, so Back closes it
 
 **Files:**
 - Modify: `src/caracole/library_assets/card.js` (`foot`'s `details.foot-more`; one module-level `popstate` listener)
+- Modify: `docs/usage.md` (the card's paragraphs: on a touch screen Back closes the ⋯ menu; 1d.8 leaves this to
+  this task), `AGENTS.md` (the history contract, `caracoleMenu` and its `search` in search mode, in a line of its own
+  under "The pages caracole writes and serves")
 - Test: `tests/test_library_card.py`
 
 **Interfaces:**
-- Consumes: the history contract above (lane 1's pushes carry no `caracoleMenu`).
-- Produces: under `matchMedia("(pointer: coarse)")`, opening ⋯ pushes `Object.assign({}, history.state, { caracoleMenu:
-  n })` (n a serial), same address; Back closes it and leaves the card open; closing it otherwise takes that entry
-  back; a mouse pushes nothing.
+- Consumes: the history contract above (lane 1's pushes carry no `caracoleMenu`); `body.search-mode` (1c.2);
+  tests/helpers/cards.py (1d.1).
+- Produces: under `matchMedia("(pointer: coarse)")`, opening ⋯ pushes `{ caracoleMenu: n }` (n a serial), plus
+  `search: (Number(history.state && history.state.search) || 0) + 1` while `body.search-mode` is on ("Where the lanes
+  meet" 1 and 2), never a spread of `history.state`, same address; Back closes it and leaves the card open; closing it
+  otherwise takes that entry back; a mouse pushes nothing.
 
 - [ ] **Step 1: Write the failing test** — on caracole serve's page, served by the `versions_served` fixture (⋯ holds
   Remove there), its card's ⋯ opened by a tap:
 
 ```python
-MORE = "document.querySelector('article.line[data-id=\"{id}\"] details.foot-more')"
+MORE = "document.querySelector('{card} details.foot-more')"  # the card wherever it is: cards.open_card's selector
 OURS = "Boolean(history.state && history.state.caracoleMenu)"
 
 
 @contextmanager
 def more_menu(conn, cfg, versions_served, tmp_path, *, touch=True):
     """The page in a Browser (a phone's, touch, or a laptop's), Hotel California's card open, then its ⋯; yields the
-    browser, the menu's expression, and history's length and address before the ⋯."""
+    browser, the menu's expression, and history's length and address before the ⋯. The card is found through
+    tests/helpers/cards.py: under its line on the phone, in #card-pane on the laptop."""
     base, _, _ = versions_served
     song = hotel(conn, cfg)
     with Browser(tmp_path / "chrome", width=390 if touch else 1280, height=844, mobile=touch) as b:
         b.open(base)
-        item = f'article.line[data-id="{song.id}"]'
-        b.click(item + " .line-more")
+        cards.install(b)
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
         before = (b.js("history.length"), b.js("location.href"))
-        b.click(item + " details.foot-more > summary")
-        menu = MORE.format(id=song.id)
+        b.click(card + " details.foot-more > summary")
+        menu = MORE.format(card=card)
         assert b.wait(f"{menu}.open")
         yield b, menu, before
 
@@ -3133,8 +3433,27 @@ def test_an_entry_pushed_as_the_menu_closes_stays_and_the_menus_is_skipped(conn,
 
 
 def test_with_a_mouse_the_more_menu_pushes_nothing(conn, cfg, versions_served, tmp_path):
-    with more_menu(conn, cfg, versions_served, tmp_path, touch=False) as (b, _, (length, _)):
+    with more_menu(conn, cfg, versions_served, tmp_path, touch=False) as (b, _, (length, _)):  # its card in the pane
         assert b.js("history.length") == length and b.js(OURS) is False
+
+
+def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_search(conn, cfg, versions_served,
+                                                                                    tmp_path):
+    # "Where the lanes meet" 1 and 2: pushed in search mode, the entry counts one step more than the one under it.
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(base)
+        cards.install(b)
+        b.click("#q")
+        b.type("hotel")  # search mode: one step, { search: 1 }
+        assert b.wait("document.body.classList.contains('search-mode') && history.state && history.state.search === 1")
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{OURS} && history.state.search === 2")
+        b.click("#leave")  # ← takes back both steps: search left, nothing of the menu's left behind
+        assert b.wait("!document.body.classList.contains('search-mode')")
+        assert b.js("history.state") is None and b.js(f"{MORE.format(card=card)}.open") is False
 
 
 def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn, cfg, tmp_path):
@@ -3152,8 +3471,8 @@ def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn,
         assert b.wait("!document.querySelector('#list details.foot-more').open") and b.js("window.errors") == 0
 ```
 
-- [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card.py -k more_menu`:
-  `history.length` unchanged on open.
+- [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_library_card.py -k "more_menu or
+  menus_entry"`: `history.length` unchanged on open.
 - [ ] **Step 3: Implement** — the algorithm the tests leave open:
 
 ```js
@@ -3166,17 +3485,22 @@ addEventListener("popstate", () => {
   if (!shown && history.state && history.state[MENU]) history.back();  // a closed menu's entry: skip it
 });
 // in foot, on "toggle":
-//   open && matchMedia("(pointer: coarse)").matches: n = ++menus; try { history.pushState(Object.assign({},
-//     history.state, { [MENU]: n }), ""); shown = { more, n }; } catch (err) { /* no entry: it opens all the same */ }
+//   open && matchMedia("(pointer: coarse)").matches: n = ++menus; const entry = { [MENU]: n };
+//     if (document.body.classList.contains("search-mode"))  // one step more, never a copy of history.state's
+//       entry.search = (Number(history.state && history.state.search) || 0) + 1;
+//     try { history.pushState(entry, ""); shown = { more, n }; } catch (err) { /* no entry: it opens all the same */ }
 //   closed && shown && shown.more === more: const n = shown.n; shown = null;
 //     setTimeout(() => { if (ours(n)) history.back(); }, 0);  // after the tap's own handlers: one that pushed keeps its entry
 ```
 
+  docs/usage.md (on a touch screen Back closes the ⋯ menu) and AGENTS.md's line (the `caracoleMenu` entry, its
+  `search` in search mode, never a spread of `history.state`).
+
 - [ ] **Step 4: Run it and see it pass** — the same command, then `nix develop -c pytest -q tests/test_library_card.py
-  -k "remove or foot"`.
+  -k "remove or foot"` and `nix develop -c pytest -q tests/test_library_search_mode.py`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.js tests/test_library_card.py
-  tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(library): on a touch screen Back closes a
-  card's ⋯ menu"`.
+  tests/conformance/vectors/web/library_page.json docs/usage.md AGENTS.md`; `git commit -m "feat(library): on a touch
+  screen Back closes a card's ⋯ menu"`.
 
 #### Task 3b.6: A calmer card
 
@@ -3185,25 +3509,26 @@ addEventListener("popstate", () => {
 - Test: `tests/test_library_card.py`
 
 **Interfaces:**
-- Consumes: lane 1f's four corner radii, as base.css tokens if lane 1f has merged (else the values below, which lane 1f
-  is asked to take: see the cross-lane points).
+- Consumes: lane 1f's four corner radii, written as base.css's tokens with their values as fallbacks
+  (`var(--radius-s, 4px)`, `var(--radius-m, 8px)`, `var(--radius-l, 12px)`, `var(--radius-pill, 999px)`: "Where the
+  lanes meet" 4), so they hold before and after 1f merges.
 - Produces: no outline around a tile (its fill keeps its shape) nor an accent edge around the drawer (an edge of
   `--border`); the tile's name and a part's heading at 600; every radius in the card one of 4 px (marks), 8 px
-  (buttons, chips, a play chip), 12 px (tiles, the drawer, a play tile), 999 px (pills).
+  (buttons, chips, a play chip), 12 px (tiles, the drawer, a play tile), 999 px (pills), each as its token.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 CALM = """
-openCard("Hotel California");
+const line = openCard("Hotel California"), card = cardOf(line);  // the card wherever it is (1d.1): the pane at 1280
 drawerOf("Hotel California", "sheet");
-const line = lineOf("Hotel California");
 // card.css's own: base.css's .btn and code are lane 1f's (and the radii it gives them).
-const parts = Array.from(line.querySelectorAll(".line-plays, .line-plays *, .tiles, .tiles *, .card-sites *, "
-  + ".progressions *, .find-elsewhere *, .foot, .foot *")).filter((n) => !n.closest(".btn, code"));
-note("calm", { tile: getComputedStyle(line.querySelector(".tile")).borderTopStyle,
-  drawer: getComputedStyle(line.querySelector(".drawer")).borderTopColor,
-  weights: [".tile-name", ".drawer-what"].map((s) => getComputedStyle(line.querySelector(s)).fontWeight),
+const parts = [...line.querySelectorAll(".line-plays, .line-plays *"),
+  ...card.querySelectorAll(".tiles, .tiles *, .card-sites *, .progressions *, .find-elsewhere *, .foot, .foot *")]
+  .filter((n) => !n.closest(".btn, code"));
+note("calm", { tile: getComputedStyle(card.querySelector(".tile")).borderTopStyle,
+  drawer: getComputedStyle(card.querySelector(".drawer")).borderTopColor,
+  weights: [".tile-name", ".drawer-what"].map((s) => getComputedStyle(card.querySelector(s)).fontWeight),
   radii: [...new Set(parts.map((n) => getComputedStyle(n).borderTopLeftRadius))].sort() });
 """
 
@@ -3220,9 +3545,10 @@ def test_the_card_is_calm(conn, cfg, tmp_path):
   border is "solid", 650, radii "11px", "10px", "9px", "7px".
 - [ ] **Step 3: Implement** — `.tile { border: 0; }` (`.tile.auto` keeps its colour on its icon), `.drawer { border:
   1px solid var(--border); }`, the stack's layers with no edge, `font-weight: 600` on `.tile-name`, `.drawer-what`,
-  `.vrow .ver`; the radii as listed (`.tile-open` 12 px, the inner 11 px ones gone with the borders; `.tile-ico` and
-  `.drawer-close` 8 px; a site's mark in the card, `.tile-source .source`, `.drawer-head .source`, and `.play .marks >
-  .source`, 4 px, where rows.css's `.source.letters` gives 5).
+  `.vrow .ver`; the radii as listed, each as its token with its value for fallback (`.tile-open` `var(--radius-l,
+  12px)`, the inner 11 px ones gone with the borders; `.tile-ico` and `.drawer-close` `var(--radius-m, 8px)`; a
+  site's mark in the card, `.tile-source .source`, `.drawer-head .source`, and `.play .marks > .source`,
+  `var(--radius-s, 4px)`, where rows.css's `.source.letters` gives 5).
 - [ ] **Step 4: Run it and see it pass** — the same command, then `nix develop -c pytest -q tests/test_library_card.py
   -k "reads or touch"` (contrast and targets after the change).
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/card.css tests/test_library_card.py
@@ -3231,22 +3557,37 @@ def test_the_card_is_calm(conn, cfg, tmp_path):
 
 #### Task 3b.7: Merge 3b
 
-- [ ] **Step 1: Docs** — docs/usage.md, the card's paragraphs (from "Then what you play from it, a tile each"): a tile
-  is one row (its name and version, `Ver 3 · ★ 4.86 (408) · in use`, the marks of where it came from, a chevron); the
-  chevron opens its drawer under it: its downloads first (the sheet's PDF, PDF Traditional, Text, ChordPro and its
-  exports; a Guitar Pro file's; the lyrics' Text and Timed; each score's format), then a part a source of its versions,
-  as the chips' drawers were; a rating with its votes, "New" for a version nobody rated; a UG version's note names what
-  differs ("Acoustic"); on a touch screen Back closes the ⋯ menu. The Lyrics tile's "From Megalobiz" (lines 1943,
-  1969) is its source's link on the tile's row. AGENTS.md, "index.html's assets": "a tile for each thing to play
-  from, every one alike, one row, its chevron opening its drawer under it (its downloads, then a part a source of its
-  versions), which reads the page's data alone, never a request"; under megalobiz, "the card's Lyrics tile" stays
-  true; the history contract (`caracoleMenu`) in a line of its own under "The pages caracole writes and serves".
-- [ ] **Step 2: The gates** — as 3a.4's step 2.
-- [ ] **Step 3: Look at it** — a card on the laptop (in place at 1000 px, in lane 1d's pane at 1440 px if it has
-  merged) and on the phone: a long card (Hotel California's), each drawer, ⋯ then Back in the app.
-- [ ] **Step 4: Commit and merge** — `git add docs/usage.md AGENTS.md`; `git commit -m "docs: the card's tiles, their
-  drawers and ratings"`; rebase onto `main` if lane 1d merged first (its card order and lazy build call these parts
-  unchanged); `git checkout main && git merge --no-ff feat/library-card`.
+- [ ] **Step 1: Docs, checked** (written by 3b.1 to 3b.5) — docs/usage.md, the card's paragraphs (from "Then what you
+  play from it, a tile each"): a tile is one row (its name and version, `Ver 3 · ★ 4.86 (408) · in use`, the marks of
+  where it came from, a chevron); the chevron opens its drawer under it: its downloads first (the sheet's PDF, PDF
+  Traditional, Text, ChordPro and its exports; a Guitar Pro file's; the lyrics' Text and Timed; each score's format),
+  then a part a source of its versions, as the chips' drawers were; a rating with its votes, "New" for a version
+  nobody rated; a UG version's note names what differs ("Acoustic"); on a touch screen Back closes the ⋯ menu. The
+  Lyrics tile's "From Megalobiz" (lines 1943, 1969) is its source's link on the tile's row. AGENTS.md, "index.html's
+  assets": "a tile for each thing to play from, every one alike, one row, its chevron opening its drawer under it
+  (its downloads, then a part a source of its versions), which reads the page's data alone, never a request"; under
+  megalobiz, "the card's Lyrics tile" stays true; the history contract (`caracoleMenu`) in a line of its own under
+  "The pages caracole writes and serves". A gap goes into a `docs:` commit here.
+- [ ] **Step 2: The gates** — as 3a.4's step 2: `nix develop -c pytest -q` (whole suite); `CARACOLE_CORPUS=write nix
+  develop -c pytest -q -n 0 tests/test_conformance_*.py` twice, then `nix develop -c pytest -q -n 0
+  tests/test_conformance_*.py` passes in check mode; `nix develop ./android -c gradle -p android test`;
+  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py` (the corpus moved); `nix flake
+  check`.
+- [ ] **Step 3: Look at it** — a card on the laptop (in place at 1000 px, in lane 1d's pane at 1440 px) and on the
+  phone: a long card (Hotel California's), each drawer, ⋯ then Back in the app.
+- [ ] **Step 4: The radius skip list** — only if 1f, lane 2 and lane 4 have all merged, this merge is the last of 1f,
+  lane 2, 3b and lane 4: `tests/test_page_calm.py`'s `OTHER_LANES = ()` and `test_the_library_page_has_four_corner_radii`
+  passes with it (commit `test(library): the four radii across the whole page, no lane left out`); else the list
+  stays, for the last of them to remove.
+- [ ] **Step 5: The README's screenshots** — only if lanes 1 (1f), 2 and 4 have all merged (lane 3 the last of the
+  four): retake them: `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python
+  docs/screenshots/make.py`; for each picture, `git show HEAD:docs/screenshots/<name>.png > old.png` (outside the
+  repository) and `compare -metric AE old.png docs/screenshots/<name>.png null:` (ImageMagick, through
+  `omnibin-shell` if it isn't on PATH): `git restore` those with 0 differing pixels, keep the others; commit `docs: the
+  README's screenshots of the redesigned page`. Else they wait for the last lane.
+- [ ] **Step 6: Merge** — rebase onto `main` if anything merged since (1d's card order and lazy build call these
+  parts unchanged); `git checkout main && git merge --no-ff feat/library-card-insides`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
@@ -3257,8 +3598,19 @@ Branch `feat/songbooks-play` from `main`: `git worktree add ../caracole-songbook
 #### Task 4.1: A Play on each songbook's line, its phone page at its first song
 
 **Files:**
-- Modify: `src/caracole/library_assets/songbooks.js` (`playOf(b)`, new; `drawList` puts it in each line's `li`)
-- Modify: `src/caracole/library_assets/songbooks.css` (`.book-lines > li`, `.book-play`)
+- Modify: `src/caracole/library_assets/songbooks.js` (`playOf(b)`, new; `drawList` puts it in each line's `li`; line
+  89's `history.replaceState(null, "", "#" + params.toString())` passes `history.state`, "Where the lanes meet" 9)
+- Modify: `src/caracole/library_assets/songbooks.css` (`.book-lines > li`, `.book-play`; every `border-radius` one of
+  the four as a token with its fallback, by 1f.1's mapping, `.pickbar`'s and `.selecting .pick`'s too, which select.js
+  builds outside `#songbooks`: 12 px `var(--radius-l, 12px)`, 10 and 9 px `var(--radius-m, 8px)` (a corner set such
+  as `9px 9px 0 0` with its token), 8 px `var(--radius-m, 8px)`, 6 px `var(--radius-s, 4px)`, 999 px
+  `var(--radius-pill, 999px)`; and, once Task 1b.1 has merged, the one-artist view's leftovers deleted, "Where the
+  lanes meet" 10: `.selecting [data-picker] .filter-mark` and `.selecting [data-picker] .artist-only` out of their
+  selector list, and the dead `by` column of `.selecting .line` at ≥ 720 px, which a grouped line no longer has; if
+  1b.1 merges after this lane, Task 4.3's rebase deletes them)
+- Modify: `docs/usage.md` ("The Songbooks tab": each songbook's line has **Play**, its phone page at its first song
+  with a sheet), `AGENTS.md` ("The Songbooks tab": each songbook's Play on its line, songbooks.js `playOf`: its
+  `songbook.html` at `#song-N`, N the first set entry with a sheet, `set[].href`, as book.js opens a song)
 - Test: `tests/test_songbooks_tab.py`
 
 **Interfaces:**
@@ -3300,6 +3652,9 @@ def test_each_songbook_has_a_play_that_opens_its_phone_page_at_its_first_song(se
             box = page.js("(() => { const r = document.querySelector('#songbooks a.book-play').getBoundingClientRect();"
                           " return [r.width, r.height]; })()")
             assert min(box) >= 43.5, box
+        radii = page.js("[...new Set([...document.querySelectorAll('#songbooks *')].filter((n) => n.checkVisibility())"
+                        ".map((n) => getComputedStyle(n).borderTopLeftRadius))]")
+        assert set(radii) <= {"0px", "4px", "8px", "12px", "999px"}, radii  # the four radii ("Where the lanes meet" 4)
         page.click('#songbooks li[data-book="Campfire"] a.book-play')
         assert page.wait("location.pathname === '/_songbooks/Campfire/songbook.html'")
         assert page.wait("document.documentElement.dataset.view === 'song'")
@@ -3322,14 +3677,15 @@ def test_the_file_pages_play_opens_the_songbook_viewer_too(conn, cfg, library, t
   `.book-lines > li > .book-line { flex: 1 1 auto; min-width: 0; }`, `.book-play { flex: none; gap: 6px; margin:
   0 8px; }`, its glyph 14 px in the accent; the current line's tint and edge on the `li`
   (`.book-lines > li:has(> .book-line[aria-current="true"])`) so the Play sits on it; under `(pointer: coarse)`
-  `.book-play { min-width: 44px; min-height: 44px; }`.
+  `.book-play { min-width: 44px; min-height: 44px; }`. The radii to the tokens above; songbooks.js's line 89 passes
+  `history.state`; the one-artist view's leftovers deleted if 1b.1 has merged (else 4.3's); the docs above.
 - [ ] **Step 4: Run it and see it pass** — the same command, then `nix develop -c pytest -q tests/test_songbooks_tab.py
   -k "lists_each or touch_contrast"` (the lines' meta and the tab's targets and contrast).
 - [ ] **Step 5: Commit** — corpus regenerated (`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0
   tests/test_conformance_*.py`, twice); `git add src/caracole/library_assets/songbooks.js
   src/caracole/library_assets/songbooks.css tests/test_songbooks_tab.py
-  tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(songbooks): Play on each songbook, its phone
-  page at its first song"`.
+  tests/conformance/vectors/web/library_page.json docs/usage.md AGENTS.md`; `git commit -m "feat(songbooks): Play on
+  each songbook, its phone page at its first song"`.
 
 #### Task 4.2: The same Play in the opened songbook's head
 
@@ -3338,6 +3694,8 @@ On a phone the opened songbook takes the screen, its list hidden: the Play comes
 **Files:**
 - Modify: `src/caracole/library_assets/songbooks.js` (`draw`: the head's Play, from `playOf(b)`)
 - Modify: `src/caracole/library_assets/songbooks.css` (`.book-head .book-play`)
+- Modify: `docs/usage.md` ("The Songbooks tab": "…and so has the songbook opened"; none before caracole has made it,
+  or while none of its songs has a sheet), `AGENTS.md` ("The Songbooks tab": the Play in its head too)
 - Test: `tests/test_songbooks_tab.py`
 
 **Interfaces:**
@@ -3363,41 +3721,63 @@ def test_the_opened_songbook_has_its_play_in_its_head(serve, cfg, library, tmp_p
 - [ ] **Step 2: Run it and see it fail** — `nix develop -c pytest -q tests/test_songbooks_tab.py -k in_its_head`:
   `querySelector(...)` is null.
 - [ ] **Step 3: Implement** — in `draw`, after `showTitle`: drop the head's `.book-play`, append `playOf(b)` when there
-  is one. `.book-head .book-play { margin-left: auto; align-self: center; }`.
+  is one. `.book-head .book-play { margin-left: auto; align-self: center; }`. The docs above.
 - [ ] **Step 4: Run it and see it pass** — the same command, then `nix develop -c pytest -q tests/test_songbooks_tab.py`.
 - [ ] **Step 5: Commit** — corpus regenerated; `git add src/caracole/library_assets/songbooks.js
   src/caracole/library_assets/songbooks.css tests/test_songbooks_tab.py
-  tests/conformance/vectors/web/library_page.json`; `git commit -m "feat(songbooks): the opened songbook's Play in its
-  head"`.
+  tests/conformance/vectors/web/library_page.json docs/usage.md AGENTS.md`; `git commit -m "feat(songbooks): the opened
+  songbook's Play in its head"`.
 
 #### Task 4.3: Merge lane 4
 
-- [ ] **Step 1: Docs** — docs/usage.md, "The Songbooks tab": "Each songbook's line has **Play**, and so has the
-  songbook opened: its phone page (`songbook.html`) at its first song with a sheet (`#song-2` when the first has none
-  yet); none before caracole has made it, or while none of its songs has a sheet." AGENTS.md, "The Songbooks tab":
-  "each songbook's Play, on its line and in its head (songbooks.js `playOf`): its `songbook.html` at `#song-N`, N the
-  first set entry with a sheet (`set[].href`), as book.js opens a song".
-- [ ] **Step 2: The gates** — as 3a.4's step 2 (SongbooksOnDeviceTest, on the device step if the owner runs it, still
-  clicks `.book-files a[href$="songbook.html"]`, which this lane leaves).
-- [ ] **Step 3: Look at it** — the tab on the laptop and on the phone's app (its Songbooks tab's data is
+- [ ] **Step 1: Docs, checked** (written by 4.1 and 4.2) — docs/usage.md, "The Songbooks tab": "Each songbook's line
+  has **Play**, and so has the songbook opened: its phone page (`songbook.html`) at its first song with a sheet
+  (`#song-2` when the first has none yet); none before caracole has made it, or while none of its songs has a sheet."
+  AGENTS.md, "The Songbooks tab": "each songbook's Play, on its line and in its head (songbooks.js `playOf`): its
+  `songbook.html` at `#song-N`, N the first set entry with a sheet (`set[].href`), as book.js opens a song". A gap
+  goes into a `docs:` commit here.
+- [ ] **Step 2: Rebase** onto `main`; if Task 1b.1 merged after 4.1 was written, delete songbooks.css's one-artist
+  view leftovers here ("Where the lanes meet" 10: `.selecting [data-picker] .filter-mark`, `.selecting [data-picker]
+  .artist-only` and the dead `by` column of `.selecting .line` at ≥ 720 px), corpus regenerated, commit
+  `fix(songbooks): no rules left for the funnel the list no longer has`.
+- [ ] **Step 3: The gates** — as 3a.4's step 2: `nix develop -c pytest -q` (whole suite); `CARACOLE_CORPUS=write nix
+  develop -c pytest -q -n 0 tests/test_conformance_*.py` twice, then `nix develop -c pytest -q -n 0
+  tests/test_conformance_*.py` passes in check mode; `nix develop ./android -c gradle -p android test`
+  (SongbooksOnDeviceTest, on the device step if the owner runs it, still clicks `.book-files
+  a[href$="songbook.html"]`, which this lane leaves); `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0
+  tests/test_android_e2e.py` (the corpus moved); `nix flake check`.
+- [ ] **Step 4: Look at it** — the tab on the laptop and on the phone's app (its Songbooks tab's data is
   `SongbookSection.kt`'s, the same shape): Play, then Back to the tab.
-- [ ] **Step 4: Commit and merge** — `git add docs/usage.md AGENTS.md`; `git commit -m "docs: the Songbooks tab's
-  Play"`; `git checkout main && git merge --no-ff feat/songbooks-play`.
+- [ ] **Step 5: The radius skip list** — only if 1f, lane 2 and 3b have all merged, this merge is the last of 1f, lane
+  2, 3b and lane 4: `tests/test_page_calm.py`'s `OTHER_LANES = ()` and `test_the_library_page_has_four_corner_radii`
+  passes with it (commit `test(library): the four radii across the whole page, no lane left out`); else the list
+  stays, for the last of them to remove.
+- [ ] **Step 6: The README's screenshots** — only if lanes 1 (1f), 2 and 3 (3b) have all merged (lane 4 the last of
+  the four): retake them: `nix shell nixpkgs#poppler-utils nixpkgs#oxipng -c nix develop -c python
+  docs/screenshots/make.py`; for each picture, `git show HEAD:docs/screenshots/<name>.png > old.png` (outside the
+  repository) and `compare -metric AE old.png docs/screenshots/<name>.png null:` (ImageMagick, through
+  `omnibin-shell` if it isn't on PATH): `git restore` those with 0 differing pixels, keep the others; commit `docs: the
+  README's screenshots of the redesigned page`. Else they wait for the last lane.
+- [ ] **Step 7: Merge** — `git checkout main && git merge --no-ff feat/songbooks-play`, then push main:
+  `GH_TOKEN="$(gh auth token --user Danielhp95)" git push origin main`.
 
 ---
 
 ### Cross-lane points, for the plan's owner to settle with lane 1's planner
 
-1. **The seam both ways (3a.1).** Lane 3 moves card.css's opened-line box (`.line:not(.hit):has(> .line-more…)`, its
-   `+ .line`, `.line:not(.hit) > .line-panel`) into rows.css, and library.css's `.foot` and rows.css's `.line-panel
-   .foot` into card.css, besides the `.play` rules and filter.css's lit rule. Lane 1d needs the box rules to draw the
-   selected line differently when its card is in the pane; the lit rule must cover the chip's glyph and site word.
-   Lane 1 should not re-add `.play`/`.foot` rules (test_library_assets.py fails if it does).
-2. **Room for chips on a laptop's line** (lane 1b/1d): the chips are 100–150 px each; lane 1 sizes the title's column
-   and `.line-title > .line-plays`.
+1. **The seam both ways (3a.1)**, settled by "Where the lanes meet" 3. card.css keeps the opened-line box
+   (`.line:not(.hit):has(> .line-more…)`, its `+ .line`, `.line:not(.hit) > .line-panel`), which 3b.4 keys to
+   `.line-panel.song-card` and `:not(.selected)` for lane 1d's pane; library.css's `.foot` and rows.css's `.line-panel
+   .foot` move into card.css, besides the `.play` rules and filter.css's lit rule; the lit rule must cover the chip's
+   glyph and site word. Lane 1 should not re-add `.play`/`.foot` rules (test_library_assets.py fails if it does), but
+   for its placement rules (a selector ending `.line-title > .line-plays`, rows.css and library.css) and its
+   `#card-pane …` rules (library.css).
+2. **Room for chips on a laptop's line** (lane 1b/1d), settled by "Where the lanes meet" 12: the chips are 100–150 px
+   each; Task 1d.6 sizes the title's column and lets `.line-title > .line-plays` wrap below the title.
 3. **The history contract** (3b.5): lane 1's pushes never copy `caracoleMenu`, and its popstate handlers act on their
-   own members only.
-4. **Four radii** (3b.6): this plan uses 4, 8, 12 and 999 px in the card and the play buttons; lane 1f should adopt
-   those (as tokens) or tell lane 3 its values before 3b.6.
+   own members only; the menu's entry is `{ caracoleMenu: n }`, with `search: n + 1` in search mode, never a spread of
+   `history.state` ("Where the lanes meet" 1 and 2).
+4. **Four radii** (3b.6), settled by "Where the lanes meet" 4: this plan uses 4, 8, 12 and 999 px in the card and the
+   play buttons, written as 1f's tokens with those values as fallbacks.
 5. **Phone line height** (lane 1b): a play tile is 48 px tall, so a line that holds one is at least 48 px plus its
    padding.
