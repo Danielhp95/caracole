@@ -3,7 +3,6 @@ package io.github.danielhp95.caracole.core.lookup.sites
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
-import io.github.danielhp95.caracole.core.http.ProviderBlocked
 import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.lookup.Asked
@@ -22,10 +21,12 @@ import java.io.File
  *
  * A link caracole knows already (its tab's song, or its artist's page read), one of a type caracole keeps nothing of,
  * and one UG answered 404 for are said with no request ([UgLinks.knownLine]). A cooldown, a block, a spent budget and
- * an error say so: the envelope (`CommandContext.asking`) records a block and an error, as the computer's command does;
- * a provider's error is the link's failure too, remembered for an hour (kv `ug:link-failed`), in which the page doesn't
- * send it by itself again. With the tab known, a block or an error on its artist's page is UG's still, recorded as the
- * computer records it, never the link's failure; a read that went forgets the link's failure. Its last line starts with
+ * an error say so: the envelope (`CommandContext.asking`, InteractiveAsk) records a block, and tells it once
+ * (Alerts.blocked, as every lookup's on the phone), and an error, as the computer's command records them; a provider's
+ * error is the link's failure too, remembered for an hour (kv `ug:link-failed`), in which the page doesn't send it by
+ * itself again. A tab's artist page is asked apart (UgLinks.readLists), so that with the tab known a block or an error
+ * there is the envelope's to record and tell too, UG's still, never the link's failure; a read that went forgets the
+ * link's failure. Its last line starts with
  * what UG answered, which caracole serve's request line shows (web/status.py): "Read: ", "Not found: " or "Not read: "
  * (nothing changed).
  *
@@ -58,7 +59,10 @@ object UgLinkCommands {
         }
         if (was.state == "spent") return end("$NOT_READ${was.why}. Ask again later.")
         val asked = c.asking.ask(UgLinks.PROVIDER) { client ->
-            UgLinks.read(c.db, client, c.now, block, link) { name, state, detail -> stage(name, state, detail) }
+            UgLinks.readPage(c.db, client, c.now, link, ::stage).also { done ->
+                // an artist link's lists are its read: a block, a spent budget or an error of them is the read's
+                if (link.kind == UgLink.ARTIST) UgLinks.readLists(c.db, client, c.now, block, done, ::stage)
+            }
         }
         val p = config.provider(UgLinks.PROVIDER)
         val done: LinkRead = when (asked) {
@@ -78,17 +82,24 @@ object UgLinkCommands {
                 return end("${NOT_READ}UG failed (${asked.error.message}). Try again later.")
             }
         }
-        // The tab known, its artist's page stopped: a block or an error is UG's still, never the link's failure.
-        when (val stopped = done.stopped) {
-            is ProviderBlocked -> Health.recordBlock(c.db, UgLinks.PROVIDER, c.now, stopped.message.orEmpty())
-            is ProviderError -> Health.recordError(c.db, UgLinks.PROVIDER, c.now, stopped.message.orEmpty())
-            is BudgetExhausted, null -> {
-                val sent = c.asking.requests[UgLinks.PROVIDER] ?: 0
-                if (Health.answeredAny(c.db, Pace.lookupRunId(c.now), UgLinks.PROVIDER, sent)) {
-                    Health.recordOk(c.db, UgLinks.PROVIDER, c.now)
-                }
+        // The tab known, its artist's page asked apart: a block (recorded, and told once: Alerts.blocked) or an error
+        // (recorded) is the envelope's to record, UG's still, never the link's failure: the read's stopped.
+        if (link.kind == UgLink.TAB && done.page != null) {
+            when (val lists = c.asking.ask(UgLinks.PROVIDER) { client ->
+                UgLinks.readLists(c.db, client, c.now, block, done, ::stage)
+            }) {
+                is Asked.Done -> {}
+                is Asked.Blocked -> done.stopped = lists.error
+                is Asked.Failed -> done.stopped = lists.error
+                // a spent budget, or (once the tab's page answered, never) a provider that can't be asked now
+                is Asked.Spent, is Asked.Off, is Asked.Cooling -> done.stopped = BudgetExhausted(UgLinks.PROVIDER)
             }
-            else -> {}
+        }
+        if (done.stopped !is ProviderError) {
+            val sent = c.asking.requests[UgLinks.PROVIDER] ?: 0
+            if (Health.answeredAny(c.db, Pace.lookupRunId(c.now), UgLinks.PROVIDER, sent)) {
+                Health.recordOk(c.db, UgLinks.PROVIDER, c.now)
+            }
         }
         val line = UgLinks.said(done)
         if (!line.startsWith(NOT_READ)) UgLinks.forgetFailure(c.db, link.url, c.now)

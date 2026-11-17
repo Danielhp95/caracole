@@ -57,10 +57,10 @@ data class LinkKnown(val link: UgLink, val state: String, val why: String = "", 
                      val keys: Pair<String, String>? = null, val page: String? = null, val readAt: String? = null,
                      val artist: String = "", val artistKey: String? = null, val tabs: Int = 0)
 
-/** ug/link.LinkRead: what reading a link's page came to ([UgLinks.read]): a tab's page ([tab]), the artist page
- * learned or given ([page]), its lists ([listing]) and the tabs caracole holds of it ([tabs]), what stopped its read
- * with the tab known ([stopped]: a spent budget, a block, an error) and when caracole asks again for a tab page that
- * won't parse ([until]). */
+/** ug/link.LinkRead: what reading a link's page came to ([UgLinks.readPage], [UgLinks.readLists]): a tab's page
+ * ([tab]), the artist page learned or given ([page]), its lists ([listing]) and the tabs caracole holds of it
+ * ([tabs]), what stopped its read with the tab known ([stopped]: a spent budget, a block, an error) and when caracole
+ * asks again for a tab page that won't parse ([until]). */
 class LinkRead(val link: UgLink, val url: String) {
     var tab: TabRead? = null
     var page: String? = null
@@ -75,20 +75,20 @@ class LinkRead(val link: UgLink, val url: String) {
 
 /**
  * ug/link.py on the phone: a UG link pasted into the library page's search box: what caracole knows of its page
- * ([known], with no request and no lock: the database and the HTTP cache alone), and its page read now ([read],
- * `caracole ug --link`'s, an interactive lookup's), and what that came to in the words the command ends with ([said],
- * [knownLine]).
+ * ([known], with no request and no lock: the database and the HTTP cache alone), and its page read now (`read`,
+ * `caracole ug --link`'s, an interactive lookup's: [readPage] and [readLists]), and what that came to in the words
+ * the command ends with ([said], [knownLine]).
  *
  * - [known]'s `state`: `found` (a tab's song is known: its `ug_index` row, its `ug_artist_tabs` row, or its page in
  *   the cache; an artist's page read), `auto` (not yet, and a read may go now), `cooling` (UG's cooldown), `spent`
  *   (the hour's lookups), `failed` (this link's read failed within the hour, kv [FAILED_KEY], or its tab page won't
  *   parse, kv `ug:unreadable:<tab id>`), `other` (a tab of a type caracole keeps nothing of, said with no request
  *   where its slug names its type, else once read; or a page robots.txt closes) and `gone` (its cached 404).
- * - [read]: a tab link's page by ug/fetch.py's rules for a page (Pages.readTabPage), its artist's page learned as the
- *   fetch learns it (kv `ug:artist_url:<key>`) and read as the fetch reads one (ArtistPages.readArtistPage, of no
- *   song's: the chords list, then the tabs list, every page kept for searches); an artist link's lists alone. A budget
- *   spent, a block or an error after a tab's page is no failure of the link: the tab is known, its artist's page
- *   waits.
+ * - read ([readPage], then [readLists]): a tab link's page by ug/fetch.py's rules for a page (Pages.readTabPage), its
+ *   artist's page learned as the fetch learns it (kv `ug:artist_url:<key>`) and read as the fetch reads one
+ *   (ArtistPages.readArtistPage, of no song's: the chords list, then the tabs list, every page kept for searches); an
+ *   artist link's lists alone. A budget spent, a block or an error after a tab's page is no failure of the link: the
+ *   tab is known, its artist's page waits.
  */
 object UgLinks {
     const val PROVIDER = "ug"
@@ -330,51 +330,53 @@ object UgLinks {
     // --- the page read now -------------------------------------------------------------------------------------
 
     /**
-     * read: the link's page read now through [client] at [now] (the object's docstring), [stage] told how each of its
-     * stages (`tab`, `artist`) starts and ends; [block] the tabs you `[block]`ed. A block, a spent budget or an error
-     * before anything was read propagates; one during an artist page read after a tab's page is the read's
-     * [LinkRead.stopped].
+     * read's page: a tab link's page read now through [client] at [now], by the fetch's rules, and the artist page it
+     * links to learned (its [LinkRead.page]); an artist link's page named. [stage] is told how each of its stages
+     * (`tab`, `artist`) starts and ends. A block, a spent budget or an error propagates. ug/link.py's `read` is this,
+     * then [readLists] when [LinkRead.page] names a page: the phone asks the two through the envelope apart, so that a
+     * block, a spent budget or an error of a tab's artist page is the read's [LinkRead.stopped] (UgLinkCommands).
      */
-    fun read(db: Db, client: Client, now: Instant, block: Set<Long>, link: UgLink,
-             stage: (name: String, state: String, detail: String) -> Unit): LinkRead {
+    fun readPage(db: Db, client: Client, now: Instant, link: UgLink,
+                 stage: (name: String, state: String, detail: String) -> Unit): LinkRead {
         val done = LinkRead(link, pageUrl(db, link))
-        if (link.kind == UgLink.TAB) {
-            val tabId = link.tabId!!
-            stage("tab", "running", "asking Ultimate Guitar")
-            val tab = Pages.readTabPage(db, client, now, tabId, done.url)
-            done.tab = tab
-            if (tab.said == TabRead.WAITS || tab.said == TabRead.UNREADABLE) done.until = unreadableUntil(db, tabId)
-            val page = tab.page
-            if (page == null || page.tab.kind == null) return done
-            stage("tab", "done", named(page))
-            done.page = Pages.learnArtistUrl(db, page) ?: return done
-        } else {
+        if (link.kind != UgLink.TAB) {
             done.page = link.url
-        }
-        stage("artist", "running", "asking Ultimate Guitar")
-        val reading = ListReading(db, client, now, UgFetch.ARTIST_PAGE_MAX_AGE, ARTIST_PAGES_PER_KIND, block)
-        val listing = try {
-            ArtistPages.readArtistPage(reading, done.page!!, ArtistRoute.ARTIST_PAGE_KINDS, forms = null)
-        } catch (e: Exception) {
-            if (link.kind != UgLink.TAB || !stops(e)) throw e
-            done.stopped = e
             return done
         }
+        val tabId = link.tabId!!
+        stage("tab", "running", "asking Ultimate Guitar")
+        val tab = Pages.readTabPage(db, client, now, tabId, done.url)
+        done.tab = tab
+        if (tab.said == TabRead.WAITS || tab.said == TabRead.UNREADABLE) done.until = unreadableUntil(db, tabId)
+        val page = tab.page
+        if (page == null || page.tab.kind == null) return done
+        stage("tab", "done", named(page))
+        done.page = Pages.learnArtistUrl(db, page)
+        return done
+    }
+
+    /**
+     * read's lists: the lists of the artist page [done] names read now through [client] at [now] (ArtistPages
+     * .readArtistPage, of no song's: the chords list, then the tabs list, each whole, every page kept for searches),
+     * the tabs you `[block]`ed never counted; UG's 404 for it forgets what caracole kept of it. A block, a spent budget
+     * or an error propagates, what was read before it kept.
+     */
+    fun readLists(db: Db, client: Client, now: Instant, block: Set<Long>, done: LinkRead,
+                  stage: (name: String, state: String, detail: String) -> Unit) {
+        val base = done.page!!
+        stage("artist", "running", "asking Ultimate Guitar")
+        val reading = ListReading(db, client, now, UgFetch.ARTIST_PAGE_MAX_AGE, ARTIST_PAGES_PER_KIND, block)
+        val listing = ArtistPages.readArtistPage(reading, base, ArtistRoute.ARTIST_PAGE_KINDS, forms = null)
         done.listing = listing
         if (listing.gone) {
-            pageGone(db, done.page!!)
+            pageGone(db, base)
         } else {
-            done.tabs = ListedTabs.pageArtist(db, done.page!!)?.tabs ?: 0
+            done.tabs = ListedTabs.pageArtist(db, base)?.tabs ?: 0
         }
-        return done
     }
 
     /** FetchContext's artist_pages_per_kind, the default a link's read reads at. */
     private const val ARTIST_PAGES_PER_KIND = 3
-
-    /** What stops an artist page's read with the tab known: a spent budget, or a provider's error (a block too). */
-    fun stops(e: Exception): Boolean =
-        e is io.github.danielhp95.caracole.core.http.BudgetExhausted || e is io.github.danielhp95.caracole.core.http.ProviderError
 
     private fun named(page: UgTabPage): String {
         val v = page.tab

@@ -1676,13 +1676,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     its artist's lists read whole, `ArtistPages.readArtistPage` of no song's over a `ListReading`), `said`,
     `knownLine`, kv `ug:link-failed` (one of OwnRecords' records that gate a request);
   - `caracole ug --link` is core/lookup/sites/`UgLinkCommands` (commands/ug.py), run by server/lookups'
-    `UgLinkRunner` in a CommandContext, the envelope recording a block or an error of the tab's page and the command
-    those of its artist's page, as Python records them;
+    `UgLinkRunner` in a CommandContext; it asks a tab's page and its artist's lists apart (`UgLinks.readPage`,
+    `readLists`), so the envelope records a block or an error of either and tells a block once, as every lookup's on
+    the phone (the computer's command tells none), one of the artist's page the read's `stopped`, never the link's
+    failure;
   - server/routes' `UgLinkRoutes`, web/ug_link_routes.py: `GET /api/ug/link` and `POST /ug/link` (a job of no song's
     under `JobCommands.UG_LINK`, among `INDEX_READS`, its stages `tab` and `artist`, an artist's link the second
     alone); `/api/search` gives a pasted link no hint, no unseen and no LaCuerda gate (Found's `isLink`);
   - tests/test_conformance_ug_link.py writes vectors/web/ug_link.jsonl (read_link's shapes, both routes over each
-    scene, the library's kept files made from their rows) and vectors/lookup/commands_ug_link.jsonl (scenario
+    scene, its library folder among its records) and vectors/lookup/commands_ug_link.jsonl (scenario
     records, each page stored noted for the next push): `UgLinkReplay`, area `ug-link`.
 
 ##### The Requests tab on the phone
