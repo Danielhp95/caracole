@@ -157,11 +157,13 @@ class World:
                     p.stop()
             return lines
 
+        held = self.cache()  # what an earlier run of this world left in the cache, which the record carries
         with _clock():
             made = record(self.conn, self.cfg.library_dir, fn="caracole.commands.ug._read", case=case, call=call,
                           kw={"link": link, "progress": progress}, now=NOW,
                           clients={"ug": {"budget": budget, "delay": [0.0, 0.0]}},
-                          answers={f"GET {u}": a for u, a in answers.items()}, cache_dir=self.cfg.cache_dir)
+                          answers={f"GET {u}": a for u, a in answers.items()},
+                          cache={"ug": held} if held else None, cache_dir=self.cfg.cache_dir)
         done = made.get("out") or made["after"]
         made["answers"] = {r: a for r, a in made["answers"].items() if r in done["requests"]}  # what was asked alone
         made["agent"] = DEFAULT_USER_AGENT
