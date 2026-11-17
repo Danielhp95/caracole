@@ -505,7 +505,6 @@ LINE_TARGETS = """
   const targets = (line) => ({
     controls: qa("a, button, summary, select, input").filter((n) => line.contains(n) && !n.closest(".pick")
       && n.checkVisibility()).map((n) => n.className),
-    funnel: line.querySelector(".filter-mark").checkVisibility(),
     taps: [line.querySelector("h3"), line.querySelector(".line-status .badge"), line.querySelector(".line-title")]
       .map((n) => landsOn(line, n)),
   });
@@ -554,7 +553,7 @@ def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands
     for title in ("Hysteria", "Crep", "Karma Police"):
         assert shown[title]["controls"] == [], (title, shown[title])
     for title, seen in shown.items():
-        assert seen["taps"] == ["line", "line", "line"] and not seen["funnel"], (title, seen)
+        assert seen["taps"] == ["line", "line", "line"], (title, seen)
     assert out["hidden"] == [False, False]
     assert out["after"] == out["before"]  # out of the mode, all back
 

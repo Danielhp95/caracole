@@ -16,22 +16,12 @@
 .source.glyph { font-size: 12px; font-weight: 600; }
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
-/* An artist's name that shows that artist's songs alone: a button, the name and a filter's mark (a funnel),
-   so that it shows it is one without a pointer to hover it. */
+/* An artist's name that searches for them: a button, the name alone, underlined under the pointer. */
 button.artist { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0;
   background: none; color: var(--muted); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
 .artist-name { min-width: 0; overflow-wrap: anywhere; }
 button.artist:hover { color: var(--text); }
 button.artist:hover .artist-name { text-decoration: underline; text-underline-offset: 2px; }
-.filter-mark { flex: none; width: .7em; height: .75em; background: currentColor; opacity: .8;
-  clip-path: polygon(0 0, 100% 0, 60% 48%, 60% 90%, 40% 100%, 40% 48%); }
-/* Served, the name searches for the artist, and the funnel is a button of its own beside it. */
-.artist-pair { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
-.artist-pair > button.artist { overflow: hidden; }
-button.artist-only { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 24px;
-  min-height: 24px; margin: 0; padding: 0 5px; border: 0; border-radius: 6px; background: none; color: var(--muted);
-  font: inherit; cursor: pointer; }
-button.artist-only:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--text); }
 /* A title that opens the sheet: the heading as it was, underlined under the pointer. */
 .title-link { display: block; width: fit-content; max-width: 100%; color: inherit; text-decoration: none; }
 .title-link:hover > h2 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -206,7 +196,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .line-action .btn, .line-busy { min-height: 44px; }
   .line-action .btn.line-fetch { width: 44px; min-height: 44px; }
   .line-more { height: 44px; }
-  button.artist, button.artist-only { min-width: 44px; min-height: 44px; }
+  button.artist { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
 /* Under a search box, what each site found (rows.js countMarks): a pill a site, its own mark (an icon in its colours,

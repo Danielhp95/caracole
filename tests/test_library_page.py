@@ -1505,7 +1505,6 @@ HEADER_LOOK = """
   const title = document.querySelector("#list section.artist .line-title h3");
   document.body.setAttribute("data-look", JSON.stringify({
     name: [parseFloat(css(name).fontSize), css(name).color],
-    mark: css(head.querySelector(".filter-mark")).backgroundColor,
     counts: [parseFloat(css(counts).fontSize), css(counts).color],
     title: parseFloat(css(title).fontSize),
     tokens: Object.fromEntries(["--artist", "--text", "--accent", "--muted"].map((t) => [t, token(t)])),
@@ -1517,8 +1516,8 @@ HEADER_LOOK = """
 @in_chromium
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own(conn, cfg, tmp_path, scheme):
-    # The header the list and the served search results share: the name in --artist, a second accent, its funnel
-    # with it; the counts beside it small and muted.
+    # The header the list and the served search results share: the name in --artist, a second accent; the counts
+    # beside it small and muted.
     from html import unescape
 
     from caracole.library_page import WebControls
@@ -1531,87 +1530,70 @@ def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_ow
     tokens = look["tokens"]
     assert tokens["--artist"] not in (tokens["--text"], tokens["--accent"], tokens["--muted"]), tokens
     size, colour = look["name"]
-    assert colour == tokens["--artist"] and look["mark"] == colour, look
+    assert colour == tokens["--artist"], look
     assert size >= 1.1 * look["title"], look
     assert look["counts"][0] < size and look["counts"][1] == tokens["--muted"], look
 
 
-# Clicks Queen's name over their songs, then notes the titles shown and the chip.
-ARTIST_CLICK = """
-(() => {
-  document.querySelector('#list section.artist[data-artist="queen"] h2 button.artist').click();
-  const titles = Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent);
-  const chip = document.getElementById("artist");
-  document.body.setAttribute("data-after", JSON.stringify({titles, chip: chip.hidden ? null : chip.textContent,
-    q: document.getElementById("q").value, hash: location.hash}));
-  chip.click();
-  document.body.setAttribute("data-cleared", String(document.querySelectorAll("#list article").length));
-})();
-"""
-
-
 @in_chromium
-def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(conn, cfg, tmp_path):
-    import html as html_module
-
-    add_song(conn, "Queen", "Bohemian Rhapsody")
-    add_song(conn, "Queen", "Don't Stop Me Now")
-    add_song(conn, "ABBA", "Dancing Queen")
-    add_song(conn, "Queens of the Stone Age", "No One Knows")
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ARTIST_CLICK))
-    dom = dump_dom(path, tmp_path)
-    after = json.loads(html_module.unescape(re.search(r'data-after="([^"]*)"', dom).group(1)))
-    assert sorted(after["titles"]) == ["Bohemian Rhapsody", "Don't Stop Me Now"], after
-    assert after["chip"] == "by Queen" and after["q"] == "" and "artist=queen" in after["hash"]
-    assert re.search(r'data-cleared="4"', dom)  # the chip takes the filter off
-    # From a file, which can't search the sites, the name is the funnel's: no name that searches, no funnel apart.
-    assert "artist-search" not in listing(dom) and "artist-only" not in listing(dom)
-
-    # The address keeps the filter, as it keeps the search.
-    plain = write_library_page(cfg.library_dir, page(conn, cfg))
-    shown = listing(dump_dom(plain, tmp_path, "#artist=queen"))
-    assert shown.count("<article") == 2 and "Dancing Queen" not in shown
-    # A search that only another artist's songs answer says the filter is on, and offers to take it off.
-    shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
-    assert "No songs of Queen match “dancing”" in shown and "Show all 1 match" in shown
-    assert "caracole search" not in shown
+def test_from_a_file_an_artists_name_puts_them_in_the_box_and_searches_your_songs(conn, cfg, driven):
+    # From a file, which can't search the sites, an artist's name does what it does served but for the sites: their
+    # name in the box, searched as typing it would (ABBA's "Dancing Queen" too), a step of the browser's history. No
+    # funnel, and no one-artist view.
+    for artist, title in (("Queen", "Bohemian Rhapsody"), ("Queen", "Don't Stop Me Now"), ("ABBA", "Dancing Queen"),
+                          ("Queens of the Stone Age", "No One Knows")):
+        add_song(conn, artist, title)
+    driven.open(write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    n = driven.js("history.length")
+    driven.click('#list section.artist[data-artist="queen"] h2 button.artist')
+    assert driven.wait("document.getElementById('q').value === 'Queen'")
+    assert driven.js("location.hash") == "#q=Queen" and driven.js("history.length") == n + 1
+    assert {"Bohemian Rhapsody", "Don't Stop Me Now"} <= set(driven.js(SHOWN_TITLES))  # and what else "Queen" finds
+    assert "Dancing Queen" in driven.js(SHOWN_TITLES)
+    assert driven.js("document.querySelector('#artist, .artist-only, .filter-mark, .artist-pair') === null")
+    assert driven.js("document.activeElement.id") == "q"
+    driven.js("history.back()")  # the step before the search
+    assert driven.wait("document.getElementById('q').value === ''")
+    assert driven.wait(f"{SHOWN_TITLES}.length === 4"), driven.js(SHOWN_TITLES)
 
 
-# What the page shows once its script ran: the titles, the artist's chip, the box and the address.
+# What the page shows once its script ran: the titles, the box and the address.
 SHOWN_NOW = """
 document.body.setAttribute("data-now", JSON.stringify({
   titles: Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent),
-  chip: document.getElementById("artist").hidden ? null : document.getElementById("artist").textContent,
   q: document.getElementById("q").value, hash: location.hash,
   results: !document.getElementById("results").hidden}));
 """
 
 
 @in_chromium
-@pytest.mark.parametrize("by,titles,chip,hash", [
-    ("Queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),
-    ("queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),  # however it is written
-    ("宋冬野", ["斑马，斑马"], "by 宋冬野", "#artist=song-dong-ye"),
+@pytest.mark.parametrize("address,q", [
+    ("#by=Queen", "Queen"), ("#by=queen", "queen"), ("#by=%E5%AE%8B%E5%86%AC%E9%87%8E", "宋冬野"),
+    ("#artist=queen", "Queen"), ("#artist=song-dong-ye", "宋冬野"),  # an address the one-artist view wrote once
 ])
-def test_from_a_file_an_artist_a_sheet_links_to_shows_their_songs_alone(conn, cfg, tmp_path, by, titles, chip, hash):
-    # A sheet viewer's artist line (#by= and their name): from a file, which can't search the sites, and in the Android
-    # app's copy, what the name over their songs does here, the funnel, never every song with the word (ABBA's "Dancing
-    # Queen"); the address then says it as the funnel writes it, in place of the link's.
+def test_from_a_file_an_artist_a_sheet_links_to_is_searched_for_in_your_songs(conn, cfg, tmp_path, address, q):
+    # A sheet viewer's artist line (#by= and their name), from a file and in the Android app's copy, which can't
+    # search the sites: what the name over their songs does here, their name in the box, as typed; the address then
+    # says it as the box writes it, in place of the link's.
     import html as html_module
+    from urllib.parse import urlencode
 
     for artist, title in (("Queen", "Bohemian Rhapsody"), ("Queen", "Don't Stop Me Now"), ("ABBA", "Dancing Queen"),
                           ("Queens of the Stone Age", "No One Knows"), ("宋冬野", "斑马，斑马")):
         add_song(conn, artist, title)
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
-    dom = dump_dom(path, tmp_path, "#by=" + quote(by, safe=""))
+    dom = dump_dom(path, tmp_path, address)
     now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
-    assert now == {"titles": titles, "chip": chip, "q": "", "hash": hash, "results": False}, now
+    assert now["q"] == q and now["hash"] == "#" + urlencode({"q": q}) and now["results"] is False, now
+    theirs = ["斑马，斑马"] if q == "宋冬野" else ["Bohemian Rhapsody", "Don't Stop Me Now"]
+    assert set(theirs) <= set(now["titles"]), now
 
 
 @in_chromium
 def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_sheet(conn, cfg, driven):
     # The viewer and the library page as files, as the synced folder and the Android app's copy have them: the artist's
-    # name under the title opens the library page on their songs alone; Back is the sheet again, where it was.
+    # name under the title opens the library page searching your songs for them, as their name there does; Back is
+    # the sheet again, where it was.
     from helpers.rendered import rendered_song
 
     song = rendered_song(conn, cfg, "Queen", "Bohemian Rhapsody")
@@ -1621,9 +1603,9 @@ def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_s
     assert driven.wait("document.documentElement.dataset.ready === '1'")
     driven.click(".head .artist a")
     assert driven.wait("location.pathname.endsWith('/index.html') && document.readyState === 'complete'")
-    assert driven.wait(f"{SHOWN_TITLES}.join() === 'Bohemian Rhapsody'"), driven.js(SHOWN_TITLES)
-    assert driven.js("document.getElementById('artist').textContent") == "by Queen"
-    assert driven.js("location.hash") == "#artist=queen"
+    assert driven.wait("document.getElementById('q').value === 'Queen'")
+    assert driven.wait(f"{SHOWN_TITLES}.includes('Bohemian Rhapsody')"), driven.js(SHOWN_TITLES)
+    assert driven.js("location.hash") == "#q=Queen"
     assert driven.js("performance.getEntriesByType('resource').length") == 0  # nothing asked of anyone
     driven.js("history.back()")
     assert driven.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
@@ -1640,7 +1622,7 @@ def test_from_a_file_an_artist_with_no_song_of_yours_is_searched_for_in_your_son
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
     dom = dump_dom(path, tmp_path, "#by=" + quote("Guns N' Roses", safe=""))
     now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
-    assert now == {"titles": [], "chip": None, "q": "Guns N' Roses", "hash": "#q=Guns+N%27+Roses", "results": False}
+    assert now == {"titles": [], "q": "Guns N' Roses", "hash": "#q=Guns+N%27+Roses", "results": False}
     assert "<code>caracole search 'Guns N'\\'' Roses'</code>" in html_module.unescape(listing(dom))
 
 
@@ -2573,19 +2555,20 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
 
 
 @in_chromium
-def test_an_artists_name_shows_it_is_a_filter_over_their_songs_and_on_a_line_alone(conn, cfg, tmp_path):
+def test_an_artists_name_is_a_button_that_searches_for_them(conn, cfg, tmp_path):
     filed_library(conn, cfg)
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     grouped = listing(dump_dom(path, tmp_path))
     head = re.search(r'<section class="artist" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     flat = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Creep")  # no group over it: its own
+    # The name alone, in the band and on a line no band is over, as served: its title says what it does, and nothing
+    # beside it filters.
+    button = ('<button class="artist artist-search{}" type="button" title="Search Radiohead">'
+              '<span class="artist-name">Radiohead</span></button>')
+    assert button.format("") in head.group(1), head.group(1)
+    assert button.format(" line-by") in flat, flat
     for shown in (head.group(1), flat):
-        who = re.search(r'<button class="artist[^"]*" type="button" title="Radiohead\'s songs">(.*?)</button>',
-                        shown)
-        assert who, shown
-        # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
-        assert who.group(1) == ('<span class="artist-name">Radiohead</span>'
-                                '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
+        assert "filter-mark" not in shown and "artist-only" not in shown and "artist-pair" not in shown, shown
 
 
 # --- touch and edges: a thumb's targets, and fields an eye can find ------------------------------------
@@ -2919,7 +2902,7 @@ def test_a_lines_menu_opens_and_closes_and_its_artists_name_shows_their_songs(co
     notes = json.loads(html_module.unescape(re.search(r'data-notes="([^"]*)"', dom).group(1)))
     assert notes["opened"] == {"expanded": "true", "hidden": False, "tiles": ["Chord sheet", "Guitar tab", "Lyrics"]}, notes
     assert notes["closed"] == {"expanded": "false", "hidden": True}, notes
-    assert notes["artist"]["hash"] == "#artist=radiohead", notes
+    assert notes["artist"]["hash"] == "#q=Radiohead", notes  # their name searched for
     assert sorted(notes["artist"]["titles"]) == ["Creep", "Lucky"], notes
 
 
@@ -3700,9 +3683,9 @@ def test_on_a_phone_the_tags_wrap_under_the_buttons_and_nothing_scrolls_sideways
         song = add_song(conn, artist, title)
         update_song(conn, song.id, status="found" if n else "wanted", review=bool(n == 2))
     served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
-    phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&artist=radiohead")
+    phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&inst=harmonica")
     tools = phone_page.js(f"{TOOLS}.map((c) => Math.round(c.getBoundingClientRect().bottom))")
-    tag = phone_page.js("document.getElementById('artist').getBoundingClientRect().top")
+    tag = phone_page.js("document.querySelector('#tags .tag').getBoundingClientRect().top")
     assert len(tools) == 2 and tag >= max(tools), (tools, tag)
     assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
     assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= document.querySelector('.toolbar').clientWidth")
@@ -4026,16 +4009,14 @@ def test_filters_key_sort_and_letters_work_on_the_lines(conn, cfg, tmp_path):
         return found
 
     assert titles_in(shown("")) == ["Dancing Queen", "Bohemian Rhapsody", "Don't Stop Me Now", "Creep"]  # by artist
-    assert titles_in(shown("#artist=queen")) == ["Bohemian Rhapsody", "Don't Stop Me Now"]
     assert titles_in(shown("#key=G")) == ["Creep"]
     assert titles_in(shown("#show=wanted")) == ["Creep"]
     assert titles_in(shown("#q=dancing")) == ["Dancing Queen"]
-    assert "Queen · yours 2" in re.sub(r"<[^>]+>", "", shown("#artist=queen"))
-    # Sorted by title or by when they came, the lines stand alone, each with its artist (a filter, as a header's is).
+    # Sorted by title or by when they came, the lines stand alone, each with its artist (a search, as a header's is).
     by_title = shown("#sort=title")
     assert titles_in(by_title) == ["Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
-    assert 'class="artist"' not in by_title.replace('class="artist line-by"', "")  # no artist's group
-    assert re.search(r'<button class="artist line-by"[^>]*><span class="artist-name">ABBA</span>',
+    assert 'class="artist"' not in by_title  # no artist's group
+    assert re.search(r'<button class="artist artist-search line-by"[^>]*><span class="artist-name">ABBA</span>',
                      line_of(by_title, "Dancing Queen"))
     assert titles_in(shown("#sort=recent")) == ["Creep", "Dancing Queen", "Don't Stop Me Now", "Bohemian Rhapsody"]
     # Whatever the search or a filter leaves out, an artist's header counts every song of theirs you have.

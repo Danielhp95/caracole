@@ -19,7 +19,6 @@
   const sort = byId("sort");
   const count = byId("count");
   const jump = byId("jump");
-  const artistChip = byId("artist");  // the artist's filter: a tag of the toolbar's
   // The toolbar's Filter, and the panel it opens (body.html): the songs' Status, what they have something for, their Key.
   const toolbar = document.querySelector(".toolbar");
   const filterButton = byId("filter");
@@ -320,11 +319,12 @@
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
-  const rowKit = caracoleRows(ICONS);
-  const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, fetchIcon, many,
-    shortDate, indexLine, titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound,
-    notesLine, countMarks, countsSaid } = rowKit;
+  // ROWS_SCRIPT's, which the lookup page shares (a site's row's artist searches for them, as a line's name does); and
+  // a song's card (card.js), drawn with them.
+  const rowKit = caracoleRows(ICONS, { searchArtist: (name) => searchFor(name) });
+  const { sourceMark, glyph, link, resultRow, artistSearch, button, fetchIcon, many, shortDate, indexLine, titleLine,
+    readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine, countMarks,
+    countsSaid } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
@@ -1075,7 +1075,6 @@
     return box;
   };
 
-  let setArtist = () => {};
   let searchFor = () => {};
   let setProg = () => {};
   // The line over the list while it shows a progression's songs alone: "Songs with I–V–vi–IV, the pop progression ·
@@ -1328,11 +1327,7 @@
       badges: status ? [status] : [],
       action,
       more,
-      onArtist: () => {
-        setArtist(String(s.sortArtist || ""));
-        window.scrollTo(0, 0);
-      },
-      onSearch: server ? () => searchFor(String(s.artist)) : null,  // served, the name searches; the funnel filters
+      onSearch: () => searchFor(String(s.artist)),  // the name searches for them, served or from a file
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
     // Its title opens its card as its chevron does, a tap's convenience (the chevron is the keyboard's); never one of
@@ -1363,17 +1358,15 @@
   // An artist's group: a header that names them and counts the songs of theirs you have, "Soda Stereo · you have
   // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), and, while the served page searches
   // the sites, the songs each site's index lists of theirs, "· UG 96 · LaCuerda 140 · Guitar Pro 12" (``counts.ug``,
-  // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. Served,
-  // the name searches for them (searchFor; not a group that names no artist, ``artist.search`` false: MuseScore's), and,
-  // once you have songs of theirs, the funnel beside it shows those alone (``artist.filter``, their sortArtist, else
-  // ``artist.key``); from a file, which can't search the sites, the name is the funnel's. An artist a search may have
-  // meant (``artist.meant``, a typo's "Did you mean") says so to a screen reader, and their songs on the site that
-  // names them come first in the counts (``counts.theirs``: "7 songs on UG").
+  // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. The
+  // name searches for them, served or from a file (searchFor; not a group that names no artist, ``artist.search``
+  // false: MuseScore's). An artist a search may have meant (``artist.meant``, a typo's "Did you mean") says so to a
+  // screen reader, and their songs on the site that names them come first in the counts (``counts.theirs``: "7 songs
+  // on UG").
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
     const name = String(a.name || "");
-    const filter = String(own.call(a, "filter") ? a.filter : a.key || "");
     const c = counts && typeof counts === "object" ? counts : {};
     const mine = Number(c.mine) || 0;
     const section = el("section", a.meant ? "artist meant" : "artist");
@@ -1383,17 +1376,9 @@
     groupSerial += 1;
     heading.id = "artist-" + groupSerial;
     section.setAttribute("aria-labelledby", heading.id);
-    const only = () => {
-      setArtist(filter);
-      window.scrollTo(0, 0);
-    };
     if (a.meant) heading.appendChild(el("span", "visually-hidden", "Did you mean "));
-    if (server && name && a.search !== false) {
-      heading.appendChild(artistSearch(name, () => searchFor(name)));
-      if (filter && mine) heading.appendChild(artistOnly(name, only));
-    } else {
-      heading.appendChild(filter && mine ? artistFilter(name, name, only) : el("span", "artist-name", name));
-    }
+    heading.appendChild(name && a.search !== false ? artistSearch(name, () => searchFor(name))
+      : el("span", "artist-name", name));
     const said = [c.theirs ? String(c.theirs) : "", mine ? "yours " + mine : "",
       Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
       Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
@@ -1410,32 +1395,24 @@
   // For lists the page doesn't make itself (the served page's type-ahead): the same rows and marks.
   window.caracole = Object.freeze({ resultRow, sourceMark, icons: ICONS });
 
-  // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
-  // ("Queen" also finds "Dancing Queen").
   // mode, tonic: the songs in a mode, on a tonic (its pitch class, "9" for A), or both, in one key.
   // inst: the songs that have something for any of these (INSTRUMENTS, comma-separated), in the panel's order.
   // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
   // searches them, on Enter.
   // prog: the songs that play a progression alone, by its key (#prog=, from under a song's chevron, a viewer's Harmony
   // panel or the served search).
-  const state = { q: "", show: "all", sort: "artist", artist: "", mode: "", tonic: "", inst: "", prog: "", all: false };
+  const state = { q: "", show: "all", sort: "artist", mode: "", tonic: "", inst: "", prog: "", all: false };
+  // The name of the artist whose key (their sortArtist) is ``key``, as your songs write it; "" for none of yours.
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
   };
-  // The key of the artist named ``name`` (their sortArtist): the songs' artist as written, else as fold reads it.
-  const artistKey = (name) => {
-    const s = songs.find((song) => String(song.artist) === name) ||
-      songs.find((song) => fold(String(song.artist)) === fold(name));
-    return s ? String(s.sortArtist || "") : "";
-  };
   // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
   const addressed = () => {
-    const at = { q: "", show: "all", sort: "artist", artist: "", mode: "", tonic: "", inst: "", prog: "", all: false };
+    const at = { q: "", show: "all", sort: "artist", mode: "", tonic: "", inst: "", prog: "", all: false };
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       at.q = params.get("q") || "";
-      if (artistName(params.get("artist") || "")) at.artist = params.get("artist");
       if (own.call(SHOWS, params.get("show"))) at.show = params.get("show");
       if (SORTS.indexOf(params.get("sort")) >= 0) at.sort = params.get("sort");
       // key: an exact key, as the Key menu wrote it once, in any spelling the library has; else a mode, a tonic.
@@ -1450,20 +1427,16 @@
       at.inst = instList(String(params.get("inst") || "").split(","));
       at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
       at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
-      // by: an artist's name, as a sheet viewer's artist line links here (viewer/page.py artist_line), for what
-      // pressing their name here does: served, the search for them (searchFor's, which asks no site); from a file and
-      // in the Android app's copy, which can't search the sites, their songs alone (the funnel's), else the songs the
-      // name finds. Read once: the page then writes its own address for it (``cameBy``, below).
+      // by: an artist's name, as a sheet viewer's artist line links here (viewer/page.py artist_line); artist: an
+      // artist's key (their sortArtist), as the one-artist view wrote it once (a bookmark, a link kept). Each is what
+      // pressing their name here does, served or from a file and in the Android app's copy: the search for them
+      // (searchFor's: their name in the box; served, the sites' indexes too, which asks no site). Read once: the page
+      // then writes its own address for it (``cameBy``, below).
       const by = normal(params.get("by") || "");
-      if (by && !at.q && !at.artist && !at.prog) {
-        if (server) {
-          at.q = by;
-          at.all = searchesAsYouType(by);
-        } else if (artistKey(by)) {
-          at.artist = artistKey(by);
-        } else {
-          at.q = by;
-        }
+      const named = artistName(params.get("artist") || "");
+      if ((by || named) && !at.q && !at.prog) {
+        at.q = by || named;
+        at.all = searchesAsYouType(at.q);
       }
     } catch (err) {
       // A malformed address: the defaults.
@@ -1486,21 +1459,19 @@
   // The key chosen in words: "A minor" (both), "a minor key" (the mode), "E major or minor" (the tonic).
   const keySaid = () => (state.mode && state.tonic ? keyNamed(Number(state.tonic), state.mode)
     : state.mode ? "a " + state.mode + " key" : tonicName(Number(state.tonic), "") + " major or minor");
-  // The filters the songs list keeps to, the search aside: the panel's and the artist's. Clear (the toolbar's), Clear
-  // all (the panel's) and an empty list's Show all let every one go; the search stays.
-  const filtered = () => filtersOn() > 0 || Boolean(state.artist);
+  // The filters the songs list keeps to, the search aside: the panel's. Clear (the toolbar's), Clear all (the
+  // panel's) and an empty list's Show all let every one go; the search stays.
+  const filtered = () => filtersOn() > 0;
   const clearFilters = () => {
     state.show = "all";
     state.inst = "";
     state.mode = "";
     state.tonic = "";
-    state.artist = "";
   };
-  // Them in words, for an empty list: "wanted songs of Eagles with a harmonica tab in B minor", "songs needing review".
+  // Them in words, for an empty list: "wanted songs with a harmonica tab in B minor", "songs needing review".
   const STATUS_SAID = { found: "found songs", wanted: "wanted songs" };
   const filtersSaid = () => {
     const words = [label(STATUS_SAID, state.show) || "songs"];
-    if (state.artist) words.push("of " + artistName(state.artist));
     if (state.inst) words.push("with " + instsChosen().map((x) => INST_SAID[x]).join(" or "));
     if (keyChosen()) words.push("in " + keySaid());
     if (state.show === "review") words.push("needs review");
@@ -1525,7 +1496,6 @@
     if (state.q) params.set("q", state.q);
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
-    if (state.artist) params.set("artist", state.artist);
     // An exact key, as the address had it before (the library's commonest spelling); else its mode and its tonic.
     if (state.mode && state.tonic && keyGroups.has(state.tonic + " " + state.mode)) {
       params.set("key", keyGroups.get(state.tonic + " " + state.mode).value);
@@ -1572,8 +1542,7 @@
     ? "auto" : "smooth");
 
   // How many of the songs the search and filters match each option of the panel would show; a line drawn again
-  // changes it. matchingNow: the songs the search, the artist's filter and the progression leave, the panel's
-  // filters aside.
+  // changes it. matchingNow: the songs the search and the progression leave, the panel's filters aside.
   let matchingNow = [];
   let shownNow = [];
   const keyFits = (i) => (!state.mode || modeOf(i) === state.mode) && (!state.tonic || pitchOf(i) === Number(state.tonic));
@@ -1654,9 +1623,7 @@
   const render = () => {
     const query = parseQuery(state.q);
     const fits = typedMatch(query);
-    matchingNow = ORDERS[state.sort].filter((i) =>
-      (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-      (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
+    matchingNow = ORDERS[state.sort].filter((i) => (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
     tallyChips();
     const matching = matchingNow.filter((i) => keyFits(i) && instFits(i));
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
@@ -1774,8 +1741,8 @@
   // How many songs the search and the progression find, the filters aside: an empty list's Show all brings them.
   const loose = (fits) => order.filter((i) => counted(songs[i]) && (!state.prog || playsProg(songs[i], state.prog)) &&
     fits(i)).length;
-  // The filters on, as tags before Filter: the status, each instrument (its glyph), the key, the artist (#artist,
-  // body.html's), each a button that lets it go, then Clear. Drawn again only when they change.
+  // The filters on, as tags before Filter: the status, each instrument (its glyph), the key, each a button that lets
+  // it go, then Clear. Drawn again only when they change.
   const tags = byId("tags");
   const clearTags = byId("clear-filters");
   const tag = (text, drop, glyphName) => {
@@ -1812,16 +1779,11 @@
     if (keyChosen()) on.push([state.mode && state.tonic ? keyNamed(Number(state.tonic), state.mode)
       : state.mode ? (state.mode === "major" ? "Major" : "Minor") : tonicName(Number(state.tonic), ""),
     () => { state.mode = ""; state.tonic = ""; }]);
-    const drawn = JSON.stringify([on.map((t) => t[0]), state.artist]);
+    const drawn = JSON.stringify(on.map((t) => t[0]));
     if (drawn === tagsDrawn) return;
     tagsDrawn = drawn;
     for (const old of tags.querySelectorAll(".tag[data-filter]")) old.remove();
-    for (const [text, drop, glyphName] of on) artistChip.before(tag(text, drop, glyphName));
-    const who = artistName(state.artist);
-    artistChip.hidden = !state.artist;
-    artistChip.replaceChildren(...(state.artist ? [el("span", null, "by " + who), cross()] : []));
-    artistChip.setAttribute("aria-label", state.artist ? "Remove the filter: by " + who : "");
-    artistChip.title = state.artist ? "Show every artist, not only " + who : "";
+    for (const [text, drop, glyphName] of on) clearTags.before(tag(text, drop, glyphName));
     clearTags.hidden = !filtered();
     tags.hidden = !filtered();
   };
@@ -1851,14 +1813,11 @@
     render();
     save();
   };
-  setArtist = (key) => {
-    state.artist = key;
-    setQuery("");
-  };
-  // An artist's name pressed, served (a header's, a line's): the search for them, as typing their name runs it (your
-  // songs that match, then the sites', their group first, as /api/search leads with an artist it is given whole),
-  // sent at once, which asks no site: the indexes alone. The focus goes to the box, from which Enter goes on to the
-  // first result and Escape back to your songs; the query before it is a step back in the browser's history (Back).
+  // An artist's name pressed (a header's, a line's, a site's row's): the search for them, as typing their name runs
+  // it: your songs that match; served, then the sites', their group first, as /api/search leads with an artist it is
+  // given whole, sent at once, which asks no site: the indexes alone. The focus goes to the box, from which Enter goes
+  // on to the first result and Escape back to your songs; the query before it is a step back in the browser's
+  // history (Back).
   searchFor = (name) => {
     const q = String(name || "").trim();
     if (!q) return;
@@ -1884,8 +1843,8 @@
     window.scrollTo(0, 0);
     input.focus({ preventScroll: true });
   };
-  // Back (or Forward) to a step of the list's: the list as the address has it, its query, its results, its artist,
-  // show, sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
+  // Back (or Forward) to a step of the list's: the list as the address has it, its query, its results, its show,
+  // sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
   // A link to the page's own address goes there the same way (the Requests tab's Request by name, #q=…), and one to a
   // song's line (its Open in the library, #song=ID) brings that line into view, as when the page loads with it.
   window.addEventListener("popstate", () => {
@@ -1903,7 +1862,6 @@
       render();
     }
   });
-  artistChip.addEventListener("click", () => letGo(artistChip, () => { state.artist = ""; }));
   setProg = (key) => {
     state.prog = key;
     setQuery("");
@@ -2632,22 +2590,21 @@
     });
   };
 
-  // Of your songs, those the filters show (the Filter panel's and the artist's), in the list as in the results (the
-  // sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which hides
-  // the toolbar: "Your songs here: wanted · by Soda Stereo · with a harmonica tab · in A minor", or nothing when they
-  // show every song.
-  const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-    keyFits(i) && (!state.prog || playsProg(songs[i], state.prog)) && instFits(i) && SHOWS[state.show](songs[i]);
+  // Of your songs, those the Filter panel's filters show, in the list as in the results (the sites' songs are what
+  // the sites have, whatever they show); and that in words, for the results' head, which hides the toolbar: "Your
+  // songs here: wanted · with a harmonica tab · in A minor", or nothing when they show every song.
+  const kept = (i) => keyFits(i) && (!state.prog || playsProg(songs[i], state.prog)) && instFits(i) &&
+    SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
   const keptSaid = () => {
-    const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
+    const parts = [label(SHOW_WORD, state.show),
       state.inst ? "with " + instsChosen().map((x) => INST_SAID[x]).join(" or ") : "",
       keyChosen() ? "in " + keySaid() : "",
       state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
     return parts.length ? "Yours here: " + parts.join(" · ") : "";
   };
-  // Show all of yours: every status, instrument, key, artist and progression, here and in the list; the focus to the
-  // box, as the button goes with its note.
+  // Show all of yours: every status, instrument, key and progression, here and in the list; the focus to the box, as
+  // the button goes with its note.
   const keptNote = el("p", "filtered");
   keptNote.append(el("span"), button("Show all of yours", "small", () => {
     clearFilters();
@@ -2655,7 +2612,7 @@
     render();
     save();
     input.focus();
-  }, "Show all of yours: every status, instrument, key, artist and progression"));
+  }, "Show all of yours: every status, instrument, key and progression"));
   keptNote.hidden = true;
   // A progression typed or named (/api/search's ``progression``: "vi IV I V", "andalusian"): how many of your songs
   // play it, and Show them, the list of those songs alone (#prog=). The first few are among the results already.
@@ -2709,7 +2666,7 @@
     for (const i of shown) at(artistKeyOf(songs[i])).mine.push(i);
     if (model) for (const key of model.order) at(key).model = model.groups.get(key);
     const yours = new Map();  // how many songs of each artist you have, the songs the search leaves out too
-    const named = new Map();  // a song of each artist you have, which names them and filters by them
+    const named = new Map();  // a song of each artist you have, which names them
     for (const s of songs.concat(Array.from(arrived.values())).filter(counted)) {
       yours.set(artistKeyOf(s), (yours.get(artistKeyOf(s)) || 0) + 1);
       if (!named.has(artistKeyOf(s))) named.set(artistKeyOf(s), s);
@@ -2737,8 +2694,7 @@
       const lc = (g.model && g.model.lacuerda) || {};
       const ht = (g.model && g.model.harptabs) || {};
       const meant = (g.model && g.model.meant) || null;  // an artist it may have meant: their songs counted till listed
-      const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name,
-        filter: you ? you.sortArtist : "", meant: Boolean(meant) },
+      const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name, meant: Boolean(meant) },
         [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
           gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs,
           theirs: meant && !g.model.ug && !g.model.lacuerda && !g.model.harptabs && Number(meant.songs)
@@ -4066,11 +4022,13 @@
   }
   summarize();
   render();
-  // Come from a sheet's artist line (#by=): the address the page writes for what it shows, in place of the link's, with
-  // no step of its own, so Back goes to the sheet and a reload or a bookmark keeps the search, or the artist's songs.
+  // Come from a sheet's artist line (#by=), or an address of the one-artist view's (#artist=): the address the page
+  // writes for what it shows, in place of the link's, with no step of its own, so Back goes to the sheet and a reload
+  // or a bookmark keeps the search.
   let cameBy = false;
   try {
-    cameBy = new URLSearchParams(location.hash.slice(1)).has("by");
+    const params = new URLSearchParams(location.hash.slice(1));
+    cameBy = params.has("by") || params.has("artist");
   } catch (err) {
     // A malformed address: nothing to write again.
   }

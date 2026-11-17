@@ -417,7 +417,7 @@ def test_counts_follow_the_other_filters_and_the_search(shelf, laptop):
     laptop.open(shelf.as_uri() + "#q=dylan&inst=harmonica")
     assert laptop.js(status) == ["All 2", "Found 2", "Wanted 0", "Review 0"]
     assert laptop.js(counts) == {"sheet": "2", "guitar": "0", "ukulele": "0", "harmonica": "2", "score": "0"}
-    laptop.open(shelf.as_uri() + "#artist=eagles")
+    laptop.open(shelf.as_uri() + "#q=eagles")
     assert laptop.js(counts) == {"sheet": "1", "guitar": "1", "ukulele": "0", "harmonica": "1", "score": "1"}
 
 
@@ -540,23 +540,23 @@ TAGS = """[...document.querySelectorAll('#tags > *')].filter((t) => t.checkVisib
 
 
 def test_each_active_filter_is_a_removable_tag(shelf, laptop):
-    laptop.open(shelf.as_uri() + "#show=found&inst=harmonica,guitar&key=Bm&artist=eagles")
+    laptop.open(shelf.as_uri() + "#show=found&inst=harmonica,guitar&key=Bm")
     tags = laptop.js(TAGS)
-    assert [t["text"] for t in tags] == ["Found", "Guitar tab", "Harmonica", "B minor", "by Eagles", "Clear"], tags
-    assert [t["glyph"] for t in tags[:5]] == [None, "glyph glyph-guitar", "glyph glyph-harmonica", None, None]
-    assert all(t["x"] for t in tags[:5]) and not tags[5]["x"]
-    assert tags[2]["said"] == "Remove the filter: Harmonica" and tags[4]["id"] == "artist"
+    assert [t["text"] for t in tags] == ["Found", "Guitar tab", "Harmonica", "B minor", "Clear"], tags
+    assert [t["glyph"] for t in tags[:4]] == [None, "glyph glyph-guitar", "glyph glyph-harmonica", None]
+    assert all(t["x"] for t in tags[:4]) and not tags[4]["x"]
+    assert tags[2]["said"] == "Remove the filter: Harmonica" and not any(t["id"] for t in tags[:4])
     left = laptop.js(f"{FILTER}.getBoundingClientRect().left")
     assert all(t["right"] < left and t["top"] == tags[0]["top"] for t in tags), (tags, left)  # before Filter, a line
     assert laptop.js(TITLES) == ["Hotel California"]
-    assert laptop.js(f"{FILTER}.textContent.trim().replace(/\\s+/g, ' ')") == "Filter 4"  # the artist's is no panel's
+    assert laptop.js(f"{FILTER}.textContent.trim().replace(/\\s+/g, ' ')") == "Filter 4"
     laptop.click("#tags .tag:nth-child(3)")  # Harmonica's ×: it goes, the focus to the tag after it
     assert laptop.wait("!location.hash.includes('harmonica')")
-    assert [t["text"] for t in laptop.js(TAGS)] == ["Found", "Guitar tab", "B minor", "by Eagles", "Clear"]
+    assert [t["text"] for t in laptop.js(TAGS)] == ["Found", "Guitar tab", "B minor", "Clear"]
     assert laptop.js("document.activeElement.textContent.trim()") == "B minor"
     laptop.press("Enter")  # the key's: B minor goes, mode and tonic both
     assert laptop.wait("!location.hash.includes('key=')")
-    assert [t["text"] for t in laptop.js(TAGS)] == ["Found", "Guitar tab", "by Eagles", "Clear"]
+    assert [t["text"] for t in laptop.js(TAGS)] == ["Found", "Guitar tab", "Clear"]
     # A mode alone, a tonic alone.
     laptop.open(shelf.as_uri() + "#mode=minor")
     assert [t["text"] for t in laptop.js(TAGS)] == ["Minor", "Clear"]
@@ -570,7 +570,7 @@ def test_clear_lets_every_filter_go_but_the_search(shelf, laptop):
     from urllib.parse import parse_qs
 
     for clear in ("#clear-filters", "#clear-all"):  # the toolbar's Clear, and the panel's Clear all
-        laptop.open(shelf.as_uri() + "#q=dylan&show=wanted&inst=harmonica&mode=major&artist=bob-dylan")
+        laptop.open(shelf.as_uri() + "#q=dylan&show=wanted&inst=harmonica&mode=major")
         assert laptop.js(TITLES) == []
         if clear == "#clear-all":
             laptop.click("#filter")
@@ -581,18 +581,6 @@ def test_clear_lets_every_filter_go_but_the_search(shelf, laptop):
         assert laptop.js("document.getElementById('q').value") == "dylan"
         assert laptop.js(TAGS) == [] and laptop.js(f"{FILTER}.textContent.trim()") == "Filter"
     assert laptop.js(f"{PANEL}.open")  # Clear all leaves the panel open, the list behind it showing all
-
-
-def test_the_artist_filter_is_a_tag(shelf, laptop):
-    laptop.open(shelf.as_uri())
-    laptop.click("#list section.artist[data-artist] h2 button.artist")  # Bob Dylan's name: their songs alone
-    assert laptop.wait(f"{TITLES}.length === 2")
-    [tag, clear] = laptop.js(TAGS)
-    assert (tag["id"], tag["text"], tag["x"], clear["text"]) == ("artist", "by Bob Dylan", True, "Clear"), tag
-    assert tag["said"] == "Remove the filter: by Bob Dylan"  # its words in its name, as every tag's
-    assert laptop.js(f"{FILTER}.textContent.trim()") == "Filter"  # no filter of the panel's
-    laptop.click("#artist")
-    assert laptop.wait(f"{TITLES}.length === 9") and laptop.js(TAGS) == []
 
 
 def test_the_panel_shows_only_what_applies(conn, cfg, laptop):
@@ -612,8 +600,8 @@ def test_the_panel_shows_only_what_applies(conn, cfg, laptop):
 
 def test_no_match_names_every_filter_and_show_all_clears_them(shelf, laptop):
     empty = "[...document.querySelectorAll('#list > p.empty, #list > button')].map((n) => n.textContent)"
-    laptop.open(shelf.as_uri() + "#q=hotel&show=wanted&inst=harmonica,score&key=Bm&artist=eagles")
-    assert laptop.js(empty) == ["No wanted songs of Eagles with harmonica tab or score in B minor match “hotel”.",
+    laptop.open(shelf.as_uri() + "#q=hotel&show=wanted&inst=harmonica,score&key=Bm")
+    assert laptop.js(empty) == ["No wanted songs with harmonica tab or score in B minor match “hotel”.",
                                 "Show all 1 match"]
     laptop.click("#list > button")
     assert laptop.wait(f"JSON.stringify({TITLES}) === '[\"Hotel California\"]'"), laptop.js(TITLES)

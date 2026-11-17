@@ -831,14 +831,15 @@ It is rows.js's, shared by both pages:
 - A hit's name there and on the lookup page presses its Fetch (or Add again), disabled while that button is (rows.js
   `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
 - **An artist's name**:
-  - Served, an artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
-    `searchFor`, a step of the browser's history; lookup_page.py `searchArtist`), which asks no site, and the funnel
-    beside it (rows.js `artistOnly`) shows your songs of theirs alone.
-  - From a file the name is the funnel's (`artistFilter`).
+  - An artist's name (a header's, a line's, a site's row's, a lookup row's) searches for them as typing it would,
+    served or from a file (library.js `searchFor`, a step of the browser's history, which rows.js's
+    `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js `artistOf(name, onSearch,
+    cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's songs alone.
   - A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`) is a plain link to
-    `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, then
-    writes its own address in its place (Back is the sheet).
-  - Your songs there keep to the Filter panel's filters and the artist's tag (`kept`), as the list's do.
+    `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, as it
+    reads `#artist=<key>`, the one-artist view's address once, then writes its own address in its place (`cameBy`:
+    Back is the sheet).
+  - Your songs there keep to the Filter panel's filters (`kept`), as the list's do.
 
 ##### Songs gone, and the page's tabs
 
