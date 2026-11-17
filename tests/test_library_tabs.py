@@ -12,6 +12,7 @@ from helpers.browser import CHROMIUM_MARKS
 
 from caracole.library_page import WebControls, build_library_page, write_library_page
 from caracole.overrides import Overrides
+from caracole.songbook import make_songbook, songbooks_file
 
 from conftest import add_song
 
@@ -160,3 +161,54 @@ def test_library_pressed_twice_before_back_is_heard_takes_one_step_back(conn, cf
         assert page.js(f"[history.length, {MARKED}, location.hash]") == [n + 1, False, ""]
         page.js("history.forward()")  # the step out of it is still the one after
         assert page.wait(f"{CURRENT} === 'sites'") and page.js("window.before") is True
+
+
+def test_forward_to_the_step_out_of_library_and_library_pressed_is_back_again(conn, cfg, tmp_path):
+    url = library(conn, cfg)
+    with browser.Browser(tmp_path / "chrome") as page:
+        page.open(url)
+        n = page.js("history.length")
+        page.click("#tab-sites")
+        assert page.wait(f"{CURRENT} === 'sites'")
+        page.js("history.back()")
+        assert page.wait(f"{CURRENT} === 'library'")
+        page.js("history.forward()")  # the step out of the library again, by Forward
+        assert page.wait(f"{CURRENT} === 'sites'") and page.js(MARKED) is True
+        page.js("window.before = true")
+        page.click("#tab-library")  # Back, as from the step taken by hand: no Library entry twice
+        assert page.wait(f"window.before === true && {CURRENT} === 'library'")  # this document still
+        assert page.js(f"[history.length, {MARKED}, location.hash]") == [n + 1, False, ""]
+        page.js("history.forward()")  # and the step is still after it
+        assert page.wait(f"{CURRENT} === 'sites'") and page.js("window.before") is True
+        page.click("#tab-library")
+        assert page.wait(f"window.before === true && {CURRENT} === 'library'")
+        # Back once more is never a dead press on a second Library entry: nothing of the page's is left before it.
+        page.js("setTimeout(() => history.back(), 0)")
+        assert page.wait("window.before === undefined && document.readyState === 'complete'")
+
+
+def test_a_songbook_opened_keeps_the_step_out_of_library(conn, cfg, tmp_path):
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Radiohead - Creep"])
+    url = library(conn, cfg)
+    with browser.Browser(tmp_path / "chrome") as page:
+        page.open(url)
+        page.click("#tab-songbooks")
+        assert page.wait(f"{CURRENT} === 'songbooks'") and page.js(MARKED) is True
+        page.click('#songbooks .book-line[data-book="Campfire"]')  # songbooks.js writes book= in place
+        assert page.wait("location.hash.includes('book=Campfire')")
+        assert page.js("history.state && history.state.tab") == 1
+
+
+def test_where_the_browser_refuses_back_the_library_tab_shows_the_library_all_the_same(conn, cfg, tmp_path):
+    url = library(conn, cfg)
+    with browser.Browser(tmp_path / "chrome") as page:
+        page.open(url)
+        page.click("#tab-sites")
+        assert page.wait(f"{CURRENT} === 'sites'")
+        page.js("window.errors = []; addEventListener('error', (e) => errors.push(String(e.message)));"
+                "history.back = () => { throw new DOMException('denied', 'SecurityError'); }")
+        page.click("#tab-library")  # no Back on its way: the tab changes in place
+        assert page.wait(f"{CURRENT} === 'library'") and page.js("[location.hash, errors]") == ["", []]
+        page.click("#tab-sites")  # and the next press isn't held for a Back that never came
+        page.click("#tab-library")
+        assert page.wait(f"{CURRENT} === 'library'")

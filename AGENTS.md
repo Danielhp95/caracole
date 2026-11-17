@@ -860,14 +860,13 @@ It is rows.js's, shared by both pages:
   right (sync.css), a phone's one row, each tab 48 px, scrolling sideways when five don't fit (test_library_tabs.py, test_sync_sheet.py, test_requests_tab.py).
 - **Back** returns to Library from any other tab: leaving Library is one entry of tabs.js's own, `{ tab: 1 }` (with
   `search: (Number(history.state && history.state.search) || 0) + 1` beside it while `body.search-mode` is on),
-  remembered as `fromLibrary`; between the other tabs each replaces the one before; the Library tab (clicked, or
-  reached with the tablist's keys) while `fromLibrary` is `history.back()` and nothing else (pressed again before
-  popstate, the same Back), its focus given back once popstate shows it. An address that names a tab (the page's
-  first, Back, Forward) shows it with no step, and a `pushState` that throws changes the tab in place
-  (test_library_tabs.py).
-  - Every `history.replaceState` of library.js, tabs.js and sync.js passes `history.state`, never `null`, so an
-    entry's marker survives the page's own address writes; songbooks.js's passes `null`, so tabs.js puts the entry's
-    state back once each tab's script has heard "caracole:tab".
+  remembered as `fromLibrary` (popstate sets it again from that marker, so Forward to the step makes Library Back
+  again); between the other tabs each replaces the one before; the Library tab (clicked, or reached with the
+  tablist's keys) while `fromLibrary` is `history.back()` and nothing else (pressed again before popstate, the same
+  Back), its focus given back once popstate shows it. An address that names a tab (the page's first, Back, Forward)
+  shows it with no step, and a `pushState` that throws changes the tab in place (test_library_tabs.py).
+  - Every `history.replaceState` of library.js, tabs.js, songbooks.js and sync.js passes `history.state`, never
+    `null`, so an entry's marker survives the page's own address writes.
 
 ##### The Sync tab and its sheet
 

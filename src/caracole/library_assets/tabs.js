@@ -87,17 +87,7 @@
       if (box.left < row.left) list.scrollLeft += box.left - row.left;
       else if (box.right > row.right) list.scrollLeft += box.right - row.right;
     }
-    // A tab's script may write the address in place as it hears the tab shown: the entry keeps its state all the
-    // same (songbooks.js's own address writes pass none).
-    const kept = history.state;
     document.dispatchEvent(new CustomEvent("caracole:tab", { detail: { name: to, from, words: opts.words || null } }));
-    if (kept !== null && history.state === null) {
-      try {
-        history.replaceState(kept, "", location.href);
-      } catch (err) {
-        // Some browsers refuse this for local files: the page works the same.
-      }
-    }
   };
   // The library's tab while the step out of it is there: that step taken back, and nothing else (popstate shows it).
   // Pressed again before Back is heard (a double click), it is the same Back: a second would leave the page.
@@ -110,7 +100,12 @@
     if (!fromLibrary || current === first) return false;
     backing = true;
     refocus = Boolean(focus);
-    history.back();
+    try {
+      history.back();
+    } catch (err) {
+      backing = false;  // no Back on its way: the next press may ask again
+      return false;
+    }
     return true;
   };
   for (const tab of tabs) {
@@ -142,13 +137,15 @@
     e.preventDefault();
     show(params.get("tab"), { words: params });
   });
+  // Back or Forward: the address's tab, and whether this entry is the step out of the library (its own marker, so
+  // Forward to it makes the library's tab Back again).
   window.addEventListener("popstate", () => {
-    fromLibrary = false;
     backing = false;
     const focus = refocus;
     refocus = false;
     const params = words(location.hash);
     if (named(params) !== current) show(named(params), { words: params, pop: true, focus });
+    fromLibrary = named(params) !== first && Boolean(history.state && history.state.tab);
   });
   window.caracoleTabs = Object.freeze({
     show,
