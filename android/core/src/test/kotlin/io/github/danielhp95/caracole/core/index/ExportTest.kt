@@ -43,8 +43,9 @@ class ExportTest {
             phone.writeBlocking { Fixtures.load(it, "index/fixtures/reads-before.jsonl") }
             val exported = phone.writeBlocking { IndexExport.export(it, export, pages, "2026-11-03T12:00:00Z") }
             assertEquals(listOf("ug", "lacuerda", "harptabs"), exported.sites)
-            assertEquals(mapOf("ug_index" to 0, "ug_artist_tabs" to 2, "lacuerda_index" to 2, "harptabs_index" to 0,
-                               "harptabs_artists" to 1, "harptabs_artist_tabs" to 1), exported.rows)
+            // UG's artist directory comes empty: a lookup reads no listing (index_transfer.PAGES).
+            assertEquals(mapOf("ug_index" to 0, "ug_artist_tabs" to 2, "ug_directory" to 0, "lacuerda_index" to 2,
+                               "harptabs_index" to 0, "harptabs_artists" to 1, "harptabs_artist_tabs" to 1), exported.rows)
             // The writer is left with its own database alone.
             assertEquals(listOf("main"), phone.writeBlocking { db ->
                 db.query("PRAGMA database_list") { it.text(1)!! }.filter { it != "temp" }

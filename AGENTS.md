@@ -1729,6 +1729,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_ug_link.py writes vectors/web/ug_link.jsonl (read_link's shapes, both routes over each
     scene, its library folder among its records) and vectors/lookup/commands_ug_link.jsonl (scenario
     records, each page stored noted for the next push): `UgLinkReplay`, area `ug-link`.
+- UG's artist directory (ug-directory), the computer's bulk work: the phone reads no listing and makes no pass, and
+  takes `ug_directory` (schema 16) with UG's index at a merge.
+  - core.index's `Merge` takes it as `_plan_directory` does: a row seen later its listing columns, a page read later
+    its read columns, a letter's round of kv `ug:directory:letters` where it got further, no row removed; under a
+    sync's clock (`notAfter`) a time the file gives after it is never newer. `newest` reads its seen, read and rounds'
+    times. core.ug's `UgDirectory` is its keys (`formsText`, `artistKeyOf`, `ensureCurrentKeys`, kv
+    `ug:directory:keys`, made current after a ug merge); OwnRecords keeps `ug:directory:` as an index's progress.
+  - core.search's `Search.directoryArtists` (`DirectoryHit`) is search.py's `directory_artists`, and Found's
+    `ug_directory` `/api/search`'s (`UgLinks.known`'s state of each artist's page, with no request; none of the
+    index's hint or unseen beside it); its Read their page on UG posts `/ug/link` with the row's `url`, `UgLinkRoutes`'
+    read of that artist page.
+  - vectors/index/ (`IndexReplay`, area `index`), vectors/search/index.jsonl (`SearchReplay`) and
+    vectors/web/api_search.jsonl (`WebReplay`).
 
 ##### The Requests tab on the phone
 

@@ -48,6 +48,21 @@ data class ArtistHit(
     )
 }
 
+/**
+ * An artist UG's artist directory names (`ug_directory`) whose page caracole hasn't read, and whom the offline index
+ * can't show: an artist the sitemaps list by bare ids alone ("Song Dongye (宋冬野)"). [artist] is UG's name, [url]
+ * their page (what Read their page on UG reads: `POST /ug/link`), [tabs] UG's count of every type, [artistKey] the key
+ * their tabs are filed under once read (/api/artist's), [score] as [ArtistHit]'s.
+ */
+data class DirectoryHit(
+    val artistId: Long, val artist: String, val url: String, val tabs: Long, val artistKey: String, val score: Double,
+) {
+    fun toJson(): JsonObject = obj(
+        "artist_id" to artistId, "artist" to artist, "url" to url, "tabs" to tabs, "artist_key" to artistKey,
+        "score" to score,
+    )
+}
+
 /** What find_index found. */
 data class IndexFound(
     val artists: List<ArtistHit> = emptyList(), val songs: List<IndexHit> = emptyList(), val lead: String? = null,
@@ -148,6 +163,7 @@ object SearchLimits {
     const val SONG_ROWS = 8
     const val SITE_ROWS = 5
     const val SITE_ROWS_READ = 2000
+    const val DIRECTORY_ROWS_READ = 2000
     const val PART = 90.0
     const val WORD_LETTERS = 3
     const val WORD_ARTISTS = 300
@@ -190,5 +206,6 @@ private fun json(value: Any?): JsonElement = when (value) {
     is SiteArtist -> value.toJson()
     is Suggestion -> value.toJson()
     is RemovedHit -> value.toJson()
+    is DirectoryHit -> value.toJson()
     else -> throw IllegalArgumentException("no JSON form for ${value::class.simpleName}")
 }

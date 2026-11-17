@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.search.internal.ug.PyKeys
 import io.github.danielhp95.caracole.core.search.internal.ug.ScoredRows
 import io.github.danielhp95.caracole.core.search.internal.ug.UgHits
 import io.github.danielhp95.caracole.core.search.internal.ug.Yours
+import io.github.danielhp95.caracole.core.ug.UgDirectory
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -99,6 +100,58 @@ object Search {
         val page = groups.subList(from, minOf(from.toLong() + maxOf(limit, 0).toLong(), groups.size.toLong()).toInt())
         val yours = Yours(db)
         return page.mapNotNull { (score, base, _) -> UgHits.indexHit(db, artistKey, base, score, via, yours) } to groups.size
+    }
+
+    /**
+     * directory_artists: the artists of UG's artist directory (UgDirectory) the query names whole (an artist reading
+     * of [SearchLimits.STRONG] or more, on any form of UG's name: "宋冬野", "Song Dongye" and "song dong ye" name "Song
+     * Dongye (宋冬野)"), whose page caracole hasn't read and whom the offline index has no row of: an artist row of their
+     * own, its button the read of their page. Never one of [shown], the artist keys an index's artist row names
+     * already, nor one whose page caracole read (their songs show as any read artist's do). Most tabs first among
+     * equals, then the most popular. It reads the directory alone: no site is asked anything.
+     */
+    fun directoryArtists(db: Db, q: String, limit: Int = SearchLimits.ARTIST_ROWS,
+                         shown: Collection<String> = emptyList()): List<DirectoryHit> {
+        val patterns = Queries.patterns(Normalize.nameWords(q))
+        if (patterns.isEmpty()) return emptyList()
+        val queries = Queries.of(q)
+        val skip = HashSet(shown)
+        val numbered = patterns.indices.map { "forms LIKE ?${it + 1}" }
+        val rows = db.query(
+            "SELECT artist_id, name, slug, tabs, artist_key, place, forms FROM ug_directory " +
+                "WHERE ${numbered.joinToString(" OR ")} " +
+                "ORDER BY ${numbered.joinToString(" + ") { "($it)" }} DESC, tabs DESC, artist_id " +
+                "LIMIT ${SearchLimits.DIRECTORY_ROWS_READ}",
+            *patterns.toTypedArray(),
+        ) { DirectoryRow(it.long(0)!!, it.text(1)!!, it.text(2)!!, it.long(3)!!, it.text(4)!!, it.long(5)!!, it.text(6)!!) }
+        val found = ArrayList<Pair<DirectoryRow, Double>>()
+        for (row in rows) {
+            if (row.artistKey in skip || UgHits.noOnes(row.artistKey)) continue
+            val forms = Py.split(row.forms)
+            var score = 0.0
+            for (query in queries) {
+                val ascii = ScoredRows.isAscii(query.text)
+                for (f in forms) if (ScoredRows.isAscii(f) == ascii) score = maxOf(score, query.name(f.replace("-", " ")))
+            }
+            if (score < SearchLimits.STRONG) continue
+            if (db.one("SELECT 1 FROM ug_artist_tabs WHERE page = ? LIMIT 1", row.url) { true } != null) continue  // read
+            if (db.one("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", row.artistKey) { true } != null) continue
+            found.add(row to score)
+        }
+        // (-score, -tabs, place, artist_id), as Python sorts the tuples: the ids differ, so no hit is compared.
+        val order = Comparator<Pair<DirectoryRow, Double>> { a, b -> PyKeys.compare(b.second, a.second) }
+            .thenComparator { a, b -> b.first.tabs.compareTo(a.first.tabs) }
+            .thenComparator { a, b -> a.first.place.compareTo(b.first.place) }
+            .thenComparator { a, b -> a.first.artistId.compareTo(b.first.artistId) }
+        return found.sortedWith(order).take(maxOf(limit, 0)).map { (row, score) ->
+            DirectoryHit(row.artistId, row.name, row.url, row.tabs, row.artistKey, Py.round(score, 1))
+        }
+    }
+
+    /** A row of `ug_directory` the prefilter read; [url] its page, as directory.page_address writes it. */
+    private class DirectoryRow(val artistId: Long, val name: String, val slug: String, val tabs: Long,
+                               val artistKey: String, val place: Long, val forms: String) {
+        val url: String get() = UgDirectory.pageAddress(artistId, slug)
     }
 
     /** listed_names: a song only an artist page names, named as a search names it (IndexHit's `artist` and `title`):

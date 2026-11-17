@@ -5,8 +5,10 @@ import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sites.SiteKeys
 import io.github.danielhp95.caracole.core.ug.ArtistTabs
+import io.github.danielhp95.caracole.core.ug.UgDirectory
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -30,6 +32,8 @@ internal object Merge {
     const val UG_BUILT = "ug:index:built_at"
     const val UG_REFRESHED = "ug:index:refreshed_at"
     const val UG_TAB_KEYS = "ug:artist_tabs:keys"
+    const val UG_DIR_LETTERS = UgDirectory.LETTERS_KEY
+    const val UG_DIR_KEYS = UgDirectory.KEYS_KEY
     const val LC_PAGES = "lacuerda:index:pages"
     const val LC_COMPLETE = "lacuerda:index:complete_at"
     const val LC_KEYS = "lacuerda:index:keys"
@@ -105,8 +109,12 @@ internal object Merge {
 
     /** The SQL condition that a file's `t.read_at` is no later than [Plan.notAfter] (always, with none), and its
      * argument: stored times are ISO 8601 UTC to the second, compared as text as the merge compares them. */
-    private fun Plan.readNoLater(): Pair<String, Array<Any?>> =
-        if (notAfter == null) "" to emptyArray() else " AND t.read_at <= ?" to arrayOf(Stamps.stamp(notAfter))
+    private fun Plan.readNoLater(): Pair<String, Array<Any?>> = noLater("t.read_at")
+
+    /** The SQL condition that a file's [column] (a stored time) is no later than [Plan.notAfter] (always, with none),
+     * and its argument. */
+    private fun Plan.noLater(column: String): Pair<String, Array<Any?>> =
+        if (notAfter == null) "" to emptyArray() else " AND $column <= ?" to arrayOf(Stamps.stamp(notAfter))
 
     private fun seen(entry: JsonElement?, stamp: String): JsonElement? = (entry as? JsonObject)?.get(stamp)
 
@@ -258,6 +266,7 @@ internal object Merge {
             ArtistTabs.refile(c, pages)
         }
         if (tabs != 0) keysAgain(db, plan, UG_TAB_KEYS)
+        planDirectory(db, plan)
         // The index's state: refreshed at the later time, built once either was, and listed as the later read saw it.
         fun seen(schema: String) = listOfNotNull(Stamps.parse(kv(db, schema, UG_REFRESHED)),
                                                  Stamps.parse(kv(db, schema, UG_BUILT))).maxOrNull()
@@ -273,6 +282,93 @@ internal object Merge {
         val built = kv(db, THEIRS, UG_BUILT)
         if (built != null && kv(db, "main", UG_BUILT) == null) {
             plan.kv[UG_BUILT] = built
+        }
+    }
+
+    /**
+     * _plan_directory: UG's artist directory (UgDirectory): a row the file saw later in a listing (`seen_at`), or one
+     * the database lacks, takes the file's listing columns; a page the file read later (`read_at`) its read columns;
+     * and a listing's round, the file's where it got further ([round]), never back. A listing never removes an artist,
+     * so neither does a merge. The read columns are taken first: a row the file saw later takes its listing columns
+     * alone. With [Plan.notAfter], a time the file gives after it is never later than the database's: a row it saw
+     * then is left, a new row it read then comes as never read, and a round it began or ended then is left.
+     */
+    private fun planDirectory(db: Db, plan: Plan) {
+        val (seenNoLater, seenArgs) = plan.noLater("t.seen_at")
+        val (readNoLater, readArgs) = plan.noLater("t.read_at")
+        val seen = "FROM $THEIRS.ug_directory t LEFT JOIN main.ug_directory m ON m.artist_id = t.artist_id " +
+            "WHERE (m.artist_id IS NULL OR t.seen_at > m.seen_at)$seenNoLater"
+        val read = "FROM $THEIRS.ug_directory t JOIN main.ug_directory m ON m.artist_id = t.artist_id " +
+            "WHERE t.read_at > m.read_at$readNoLater"
+        val seenN = db.one("SELECT COUNT(*) $seen", *seenArgs) { it.long(0)!! }!!.toInt()
+        val readN = db.one("SELECT COUNT(*) $read", *readArgs) { it.long(0)!! }!!.toInt()
+        plan.take("artist page read of its directory", readN) { c ->
+            c.execute(
+                "UPDATE main.ug_directory AS m SET read_at = t.read_at, read_tabs = t.read_tabs, " +
+                    "read_updated = t.read_updated FROM $THEIRS.ug_directory AS t " +
+                    "WHERE t.artist_id = m.artist_id AND t.read_at > m.read_at$readNoLater", *readArgs,
+            )
+        }
+        plan.take("artist of its directory", seenN) { c ->
+            val cols = columns(c, "main", "ug_directory")
+            // A new row's read, under the clock: one the file says it made later comes as never read.
+            val read = if (plan.notAfter == null) emptyMap() else mapOf(
+                "read_at" to "CASE WHEN t.read_at <= ?1 THEN t.read_at ELSE '' END",
+                "read_tabs" to "CASE WHEN t.read_at <= ?1 THEN t.read_tabs ELSE 0 END",
+                "read_updated" to "CASE WHEN t.read_at <= ?1 THEN t.read_updated ELSE '' END",
+            )
+            val picked = cols.joinToString(", ") { read[it] ?: "t.$it" }
+            val bound = if (plan.notAfter == null) "" else " AND t.seen_at <= ?1"
+            c.execute(
+                "INSERT INTO main.ug_directory (${cols.joinToString(", ")}) SELECT $picked FROM " +
+                    "$THEIRS.ug_directory t WHERE true$bound ON CONFLICT (artist_id) DO UPDATE SET " +
+                    DIRECTORY_LISTED.joinToString(", ") { "$it = excluded.$it" } +
+                    " WHERE excluded.seen_at > ug_directory.seen_at", *seenArgs,
+            )
+        }
+        if (seenN != 0) keysAgain(db, plan, UG_DIR_KEYS)
+        val mine = records(db, "main", UG_DIR_LETTERS)
+        val theirs = records(db, THEIRS, UG_DIR_LETTERS)
+        val moved = theirs.entries.filter { (letter, entry) ->
+            entry is JsonObject && plan.onTheClock(entry) && compareRounds(round(entry), round(mine[letter])) > 0
+        }.map { it.key }.sortedWith(Py.CODE_POINT_ORDER)
+        if (moved.isNotEmpty()) {
+            val merged = LinkedHashMap(mine)
+            for (letter in moved) merged[letter] = theirs.getValue(letter)
+            val sorted = merged.entries.sortedWith(compareBy(Py.CODE_POINT_ORDER) { it.key })
+                .associateTo(LinkedHashMap()) { it.key to it.value }
+            plan.kv[UG_DIR_LETTERS] = PyJson.dumps(pyLoaded(JsonObject(sorted)))  // json.dumps, ensure_ascii=False
+        }
+    }
+
+    /** _plan_directory's listing columns: those a row the file saw later takes. */
+    private val DIRECTORY_LISTED =
+        listOf("name", "slug", "letter", "place", "tabs", "updated_at", "artist_key", "forms", "seen_at")
+
+    /** A listing's round as a merge compares two (_round): its last whole read, then its round's start (a time
+     * missing, not text or unreadable earlier than any: 0001-01-01's), then its next page (an int as json.loads reads
+     * one, else 0). */
+    private class Round(val done: Long, val started: Long, val next: BigInteger)
+
+    private fun round(entry: JsonElement?): Round {
+        val o = entry as? JsonObject ?: JsonObject(emptyMap())
+        fun time(key: String): Long =
+            (o[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { Stamps.parse(it.content) } ?: 0L
+        val page = o["next"] as? JsonPrimitive
+        val next = if (page != null && !page.isString && INTEGER.matches(page.content)) BigInteger(page.content)
+        else BigInteger.ZERO
+        return Round(time("done"), time("started"), next)
+    }
+
+    private fun compareRounds(a: Round, b: Round): Int =
+        compareValuesBy(a, b, { it.done }, { it.started }, { it.next })
+
+    /** Whether a round's times are none of them after the plan's clock ([Plan.notAfter]): always, with none. */
+    private fun Plan.onTheClock(entry: JsonObject): Boolean {
+        val bound = notAfter ?: return true
+        return listOf("done", "started").none { key ->
+            val at = (entry[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { Stamps.parse(it.content) }
+            at != null && at > bound
         }
     }
 
@@ -293,7 +389,10 @@ internal object Merge {
     /** _current_keys: each index's keys made current, as its next read would make them. */
     private fun currentKeys(db: Db, site: String) {
         when (site) {
-            "ug" -> ArtistTabs.ensureCurrentKeys(db)
+            "ug" -> {
+                ArtistTabs.ensureCurrentKeys(db)
+                UgDirectory.ensureCurrentKeys(db)
+            }
             "lacuerda" -> LaCuerda.ensureCurrentKeys(db)
             "harptabs" -> SiteKeys.harptabsEnsureCurrentKeys(db)
             "gametabs" -> SiteKeys.gametabsEnsureCurrentKeys(db)

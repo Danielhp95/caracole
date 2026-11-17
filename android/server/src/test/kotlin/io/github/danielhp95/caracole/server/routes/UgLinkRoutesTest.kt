@@ -161,6 +161,42 @@ class UgLinkRoutesTest {
         assertEquals(0, phone.queue.snapshot().size)
     }
 
+    /** UG's artist directory, as a merge of the computer's index brings it: a search finds an artist it names whose
+     * page caracole hasn't read, and their row's Read their page on UG (rows.js readArtistPage: POST /ug/link with
+     * the row's `url`) is the link's read of that artist page, bare or slugged. */
+    @Test fun `an artist the directory names is a search's row whose address the link reads`() {
+        phone.parts.database.writeBlocking { db ->
+            for ((id, name, slug, key) in listOf(listOf("7001", "Joaquín Sabina", "", "joaquin-sabina"),
+                                                 listOf("7006", "Los Rodríguez", "los_rodriguez", "los-rodriguez"))) {
+                db.execute("INSERT INTO ug_directory (artist_id, name, slug, letter, place, tabs, updated_at, artist_key, " +
+                               "forms, seen_at) VALUES (?, ?, ?, ?, 0, 230, '', ?, ?, '2026-11-03T10:00:00Z')",
+                           id.toLong(), name, slug, key.take(1), key, "$key ${key.replace("-", "")}")
+            }
+        }
+        for ((query, url) in listOf("joaquin sabina" to "https://www.ultimate-guitar.com/artist/7001",
+                                    "Los Rodríguez" to "https://www.ultimate-guitar.com/artist/los_rodriguez_7006")) {
+            val answer = handle(
+                "GET", "/api/search?q=${URLEncoder.encode(query, Charsets.UTF_8)}&box=b",
+                mapOf("sec-fetch-site" to "same-origin", "accept" to "application/json", TestApp.TOKEN_HEADER to TestApp.CSRF),
+            ).json.jsonObject
+            val rows = answer.getValue("ug_directory").jsonArray
+            assertEquals(1, rows.size, "$answer")
+            val row = rows[0].jsonObject
+            assertEquals(url, row.getValue("url").jsonPrimitive.content)
+            assertEquals("auto", row.getValue("state").jsonPrimitive.content)
+            assertEquals(4, row.getValue("requests").jsonPrimitive.int)  // a list a kind, then one each further 100 tabs
+            assertEquals(JsonNull, answer["hint"])  // an artist the listings name is no artist the index can't see
+            assertEquals(JsonNull, answer["unseen"])
+            assertEquals(JsonPrimitive("auto"), known(url)["state"])
+            val read = post(url)
+            assertEquals(202, read.status, read.json.toString())
+            val job = done(read.json.jsonObject.getValue("job").jsonPrimitive.int)
+            assertEquals(JobCommands.UG_LINK + url, job.key)
+            assertEquals(listOf(listOf("ug", "--link=$url", "--progress")), job.steps.map { it.args })
+            assertEquals(listOf("artist"), job.stages.map { it.name })
+        }
+    }
+
     @Test fun `an artist link's job has the artist page's stage alone`() {
         val url = "https://www.ultimate-guitar.com/artist/634073"
         assertEquals(JsonPrimitive("auto"), known(url)["state"])

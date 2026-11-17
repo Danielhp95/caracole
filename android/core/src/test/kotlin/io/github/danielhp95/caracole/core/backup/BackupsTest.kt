@@ -443,7 +443,8 @@ class BackupsTest {
         for (key in listOf("provider:ug", "http:last_request:ug", "sync:id", "sync:base:abc", "phone:settings",
                            "lacuerda:search:x", "lacuerda:search-failed", "gtptabs:unusable:12", "ug:artist_url:x",
                            "ug:pasted_tab:1", "ug:unreadable:1", "ug:index:built_at", "ug:sitemaps",
-                           "lacuerda:index:pages", "harptabs:artists:keys", "phone:read:ug", "phone:pushed:ug")) {
+                           "lacuerda:index:pages", "harptabs:artists:keys", "phone:read:ug", "phone:pushed:ug",
+                           "ug:directory:letters", "ug:directory:keys")) {
             assertTrue(OwnRecords.isOwn(key), key)
         }
         for (key in listOf("songs:key_version", "wanted:first_seen:x", "render:1:phone", "render:files:1",

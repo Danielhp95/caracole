@@ -34,8 +34,11 @@ import java.io.File
  *   database never read, replaces its tabs and its row; UG's artist pages' tabs a row at a time, where the file's read
  *   is later, then filed again (ArtistTabs.refile);
  * - with no time to tell (an artist page of LaCuerda's; the songs its search answered), only what the database lacks;
+ * - UG's artist directory (`ug_directory`) a row at a time: the listing's columns of a row the file saw later
+ *   (`seen_at`), or one the database lacks; the read's of a page it read later (`read_at`); never a row removed;
  * - a progress record moves on, never back: `complete_at` and UG's refresh to the later time, UG's index built once
- *   the file's was, the listing of UG's sitemaps the later refresh's.
+ *   the file's was, the listing of UG's sitemaps the later refresh's, a directory listing's round where the file's got
+ *   further (its last whole read, its start, its next page).
  *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
  * the first change; once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
@@ -128,12 +131,18 @@ object IndexTransfer {
             if (it.text(1) == "text") it.text(0) else null
         }
         fun kv(key: String) = Merge.kv(db, "main", key)
+        // The directory's latest listing seen and page read: SQLite's MAX of each, a text alone (Python's isinstance).
+        val directory = db.one(
+            "SELECT MAX(seen_at), typeof(MAX(seen_at)), MAX(read_at), typeof(MAX(read_at)) FROM main.ug_directory",
+        ) { listOf(if (it.text(1) == "text") it.text(0) else null, if (it.text(3) == "text") it.text(2) else null) }
+            .orEmpty()
         fun siteIndex(provider: String) =
             recorded(Merge.sitemapsKey(provider), "checked_at") + kv(Merge.completeKey(provider))
 
         val times: Map<String, List<String?>> = linkedMapOf(
             "ug" to recorded(Merge.UG_SITEMAPS, "indexed_at") + readAt("ug_artist_tabs") +
-                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)),
+                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)) + directory +
+                recorded(Merge.UG_DIR_LETTERS, "done") + recorded(Merge.UG_DIR_LETTERS, "started"),
             "lacuerda" to recorded(Merge.LC_PAGES, "checked_at") + kv(Merge.LC_COMPLETE),
             "gtptabs" to siteIndex("gtptabs"),
             "musescore" to siteIndex("musescore"),

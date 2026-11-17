@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.search.Query
 import io.github.danielhp95.caracole.core.search.Reading
 import io.github.danielhp95.caracole.core.search.Readings
 import io.github.danielhp95.caracole.core.search.Search
+import io.github.danielhp95.caracole.core.search.SearchLimits
 import io.github.danielhp95.caracole.core.search.SiteArtist
 import io.github.danielhp95.caracole.core.search.SiteHit
 import io.github.danielhp95.caracole.core.search.Suggest
@@ -91,8 +92,10 @@ object SearchReplay : AreaReplay {
     const val INDEX_ARTIST = "caracole.search.index_artist"
     const val ARTIST_SONGS = "caracole.search.artist_songs"
     const val NO_ONES = "caracole.search.no_ones"
+    const val DIRECTORY_ARTISTS = "caracole.search.directory_artists"
     val LIBRARY_FNS = setOf(SEARCH_LIBRARY, SEARCH_REMOVED, LIBRARY_BY_ARTIST)
-    val INDEX_FNS = setOf(FIND_INDEX, FOUND, BARE_ID_HINT, BARE_ID_UNSEEN, INDEX_ARTIST, ARTIST_SONGS, NO_ONES)
+    val INDEX_FNS = setOf(FIND_INDEX, FOUND, BARE_ID_HINT, BARE_ID_UNSEEN, DIRECTORY_ARTISTS, INDEX_ARTIST,
+                          ARTIST_SONGS, NO_ONES)
 
     const val SUGGEST_ARTISTS = "caracole.search.suggest_artists"
     const val SUGGEST_TITLES = "caracole.search.suggest_titles"
@@ -231,7 +234,8 @@ object SearchReplay : AreaReplay {
         }
     }
 
-    /** index.jsonl: find_index, found, the bare-id hint, index_artist, artist_songs and no_ones over each fixture. */
+    /** index.jsonl: find_index, found, the bare-id hint, directory_artists, index_artist, artist_songs and no_ones
+     * over each fixture. */
     fun index(misses: Misses) = vector(INDEX, INDEX_FNS, misses) { db, r ->
         val q = r.args[0].jsonPrimitive.content
         if (r.fn == NO_ONES) return@vector JsonPrimitive(Search.noOnes(q))
@@ -242,6 +246,9 @@ object SearchReplay : AreaReplay {
             FOUND -> Search.found(Search.searchLibrary(db, q, 5), Search.findIndex(db, q)).toJson()
             BARE_ID_HINT -> Search.bareIdHint(q, hits(), r.string("artist"))?.let { JsonPrimitive(it) } ?: JsonNull
             BARE_ID_UNSEEN -> Search.bareIdUnseen(q, hits()) ?: JsonNull
+            DIRECTORY_ARTISTS -> JsonArray(Search.directoryArtists(
+                db, q, r.int("limit") ?: SearchLimits.ARTIST_ROWS, r.kw["shown"]?.let { strings(it) } ?: emptyList(),
+            ).map { it.toJson() })
             INDEX_ARTIST -> Search.indexArtist(db, q)?.toJson() ?: JsonNull
             ARTIST_SONGS -> Search.artistSongs(db, q, r.int("limit") ?: 50, r.int("offset") ?: 0, r.string("title"))
                 .let { (hits, n) -> JsonArray(listOf(JsonArray(hits.map { it.toJson() }), JsonPrimitive(n))) }

@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.core.index
 
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Dumps
@@ -46,8 +49,8 @@ class IndexTransferTest {
             database.writeBlocking { it.kvSet("lacuerda:index:keys", "1"); IndexTransfer.seedFresh(it) }
             assertEquals("1", database.read { it.kvGet("lacuerda:index:keys") })
         }
-        assertEquals(setOf("ug:artist_tabs:keys", "lacuerda:index:keys", "harptabs:index:keys", "harptabs:artists:keys",
-                           "gametabs:games:keys"), freshKv().keys)
+        assertEquals(setOf("ug:artist_tabs:keys", "ug:directory:keys", "lacuerda:index:keys", "harptabs:index:keys",
+                           "harptabs:artists:keys", "gametabs:games:keys"), freshKv().keys)
     }
 
     @Test fun aFreshPhoneSeededMergesAnExportAndReKeysNothing() {
@@ -66,8 +69,8 @@ class IndexTransferTest {
             for ((key, value) in freshKv()) assertEquals(value, kv[key], key)
             val stale = after.filter { "\"stale-key\"" in it }
                 .map { Json.parseToJsonElement(it).jsonObject.getValue("table").jsonPrimitive.content }
-            assertEquals(setOf("ug_artist_tabs", "lacuerda_index", "harptabs_index", "harptabs_artist_tabs",
-                               "gametabs_game_tabs"), stale.toSet())
+            assertEquals(setOf("ug_artist_tabs", "ug_directory", "lacuerda_index", "harptabs_index",
+                               "harptabs_artist_tabs", "gametabs_game_tabs"), stale.toSet())
         }
     }
 
@@ -138,5 +141,43 @@ class IndexTransferTest {
                          "\"f\": [0.1, -0.0, NaN, 1e+16]}",
                      PyJson.dumps(Merge.pyLoaded(Canonical.parse(text))))
         assertEquals(JsonArray(listOf(JsonPrimitive("x"))), Merge.pyLoaded(JsonArray(listOf(JsonPrimitive("x")))))
+    }
+
+    /** The phone's clock bound (merge's `notAfter`, a sync's): of UG's artist directory, a row the file says it saw
+     * later is left, a new row it says it read later comes as never read, and a listing's round it says it began or
+     * ended later is left; a merge with no bound (Python's) takes them all after. */
+    @Test fun aDirectoryTheFileDatesInTheFutureIsNeverNewerThanTheClock() {
+        val export = export("full-export")
+        val c = BundledSQLiteDriver().open(export.path)
+        try {
+            c.execSQL("UPDATE ug_directory SET seen_at = '2999-01-01T00:00:00Z' WHERE artist_id = 274")
+            c.execSQL("UPDATE ug_directory SET read_at = '2999-01-01T00:00:00Z' WHERE artist_id = 13472")
+            c.execSQL("UPDATE kv SET value = replace(value, '2026-10-28T03:30:00Z', '2999-01-01T00:00:00Z') " +
+                          "WHERE key = 'ug:directory:letters'")
+        } finally {
+            c.close()
+        }
+        fun rows(db: Db) =
+            db.query("SELECT artist_id, read_at, read_tabs FROM ug_directory ORDER BY artist_id") {
+                Triple(it.long(0)!!, it.text(1)!!, it.long(2)!!)
+            }
+        fun letters(db: Db) =
+            Canonical.parse(db.kvGet("ug:directory:letters")!!).jsonObject.keys
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { IndexTransfer.seedFresh(it) }
+            val bound = Stamps.parse(now)!!
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export, now, listOf("ug"), notAfter = bound) }
+            assertEquals(3, merged.sites.getValue("ug")["artist of its directory"])
+            database.read { db ->
+                assertEquals(listOf(Triple(90L, "", 0L), Triple(13472L, "", 0L), Triple(634073L, "", 0L)), rows(db))
+                assertEquals(setOf("0-9", "t"), letters(db))
+            }
+            database.writeBlocking { IndexTransfer.merge(it, export, now, listOf("ug")) }
+            database.read { db ->
+                assertEquals(listOf(Triple(90L, "", 0L), Triple(274L, "", 0L), Triple(13472L, "2999-01-01T00:00:00Z", 411L),
+                                    Triple(634073L, "", 0L)), rows(db))
+                assertEquals(setOf("0-9", "s", "t"), letters(db))
+            }
+        }
     }
 }

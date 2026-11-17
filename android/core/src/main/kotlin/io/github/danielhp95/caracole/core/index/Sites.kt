@@ -7,8 +7,9 @@ internal class Site(val name: String, val title: String, val tables: List<String
 /** index_transfer.SITES, in caracole's order. */
 internal object Sites {
     val ALL: List<Site> = listOf(
-        Site("ug", "Ultimate Guitar", listOf("ug_index", "ug_artist_tabs"),
-             listOf(Merge.UG_SITEMAPS, Merge.UG_LISTED, Merge.UG_BUILT, Merge.UG_REFRESHED, Merge.UG_TAB_KEYS)),
+        Site("ug", "Ultimate Guitar", listOf("ug_index", "ug_artist_tabs", "ug_directory"),
+             listOf(Merge.UG_SITEMAPS, Merge.UG_LISTED, Merge.UG_BUILT, Merge.UG_REFRESHED, Merge.UG_TAB_KEYS,
+                    Merge.UG_DIR_LETTERS, Merge.UG_DIR_KEYS)),
         Site("lacuerda", "LaCuerda", listOf("lacuerda_index"),
              listOf(Merge.LC_PAGES, Merge.LC_COMPLETE, Merge.LC_KEYS)),
         Site("gtptabs", "gtptabs.com", listOf("gtptabs_index"), sitemaps("gtptabs")),

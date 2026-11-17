@@ -162,7 +162,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
 
-    val search: SearchRoutes = SearchRoutes(deps.database, cards, searchesLacuerda = deps.searchesLacuerda)
+    val search: SearchRoutes = SearchRoutes(deps.database, cards, searchesLacuerda = deps.searchesLacuerda,
+                                            cacheDir = File(deps.stateDir, "cache"))
 
     private val engine = SyncEngine(
         deps.database, store, deps.stateDir,

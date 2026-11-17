@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.server.routes.search
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.ug.UgLinks
 import io.github.danielhp95.caracole.core.ug.UgUrls
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
@@ -9,6 +10,7 @@ import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
 import io.github.danielhp95.caracole.core.lacuerda.SearchGate
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
+import io.github.danielhp95.caracole.core.search.DirectoryHit
 import io.github.danielhp95.caracole.core.search.IndexFound
 import io.github.danielhp95.caracole.core.search.LaCuerdaUnlisted
 import io.github.danielhp95.caracole.core.search.IndexHit
@@ -25,6 +27,7 @@ import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 import java.time.Instant
 
 /** search_routes.LIBRARY_HITS, INDEX_HITS, SITE_HITS: your songs, the index's songs and each site's a search gives. */
@@ -36,14 +39,14 @@ internal const val SITE_HITS = 5
  * What the offline indexes answer a query (search_routes.IndexAnswers), kept a while ([AnswerCache]): Ultimate
  * Guitar's (`find_index`'s, its songs and artists as JSON, the hint and what the pages say of an artist it may not
  * see), gtptabs.com's and MuseScore's pages, harptabs.com's and LaCuerda's artists and songs, gametabs.net's tracks,
- * and the artists and songs spelled close to the query ([close]: null until looked for, once a song of yours doesn't
- * make it moot).
+ * the artists UG's artist directory names whose page caracole hasn't read ([directory]), and the artists and songs
+ * spelled close to the query ([close]: null until looked for, once a song of yours doesn't make it moot).
  */
 internal class IndexAnswers(
     val indexFound: IndexFound, val index: List<JsonObject>, val artists: List<JsonObject>, val hint: String?,
     val unseen: JsonObject?, val gtptabs: List<SiteHit>, val musescore: List<SiteHit>,
     val harpArtists: List<SiteArtist>, val harptabs: List<SiteHit>, val lcArtists: List<SiteArtist>,
-    val lacuerda: List<SiteHit>, val gametabs: List<SiteHit>,
+    val lacuerda: List<SiteHit>, val gametabs: List<SiteHit>, val directory: List<DirectoryHit> = emptyList(),
 ) {
     @Volatile var close: List<Suggestion>? = null
 }
@@ -55,13 +58,16 @@ internal class IndexAnswers(
  * sent for it (`lacuerda_search`: LaCuerdaSearch.gate under [config] at [now], with its `why` when it failed lately;
  * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers). What the phone can't answer is
  * null: `youtube` (the phone runs no yt-dlp); `progression` is the records' (Progressions, lane library-cards's
- * wiring). [check] is called between two of its queries, and throws to stop it ([Superseded]).
+ * wiring). The artists UG's artist directory names whose page caracole hasn't read (`ug_directory`) each say whether
+ * Read their page on UG may go now, UgLinks.known's state under [config] at [now], the phone's HTTP cache in
+ * [cacheDir] (`stateDir/cache`) read with no request. [check] is called between two of its queries, and throws to stop
+ * it ([Superseded]).
  */
 internal class Found(
     private val db: Db, private val enabled: Set<String>, private val cards: SongCards, private val forms: SongForms,
     private val answers: AnswerCache<IndexAnswers>, private val check: () -> Unit,
     private val config: PhoneConfig = PhoneConfig.DEFAULTS, private val searchesLacuerda: Boolean = false,
-    private val now: Instant = Instant.EPOCH,
+    private val now: Instant = Instant.EPOCH, private val cacheDir: File = File("cache"),
 ) {
     fun answer(q: String): JsonObject {
         val mine = Search.searchLibrary(db, q, LIBRARY_HITS)
@@ -104,6 +110,9 @@ internal class Found(
         // gametabs.net's tracks of games, the game as the artist, each with its tabs
         val gametabs = rows.gametabs(kept.gametabs)
         val lacuerda = rows.lacuerda(kept.lacuerda)
+        // the artists UG's listings name whose page caracole hasn't read: Read their page on UG (POST /ug/link)
+        val directory = kept.directory.map { directoryJson(it) }
+        check()
         val lacuerdaArtists = kept.lcArtists.map { a ->
             rows.lacuerdaArtist(a) with obj("gtptabs" to rows.gtptabsSongs(a.artist))
         }
@@ -125,8 +134,8 @@ internal class Found(
             // the artist and the title the query names, which the request form is filled in with; null for none
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
             "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
-            "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to unlisted, "lacuerda_leads" to leads,
-            "lacuerda_search" to gate, "youtube" to null, "suggest" to suggest,
+            "ug_directory" to directory, "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to unlisted,
+            "lacuerda_leads" to leads, "lacuerda_search" to gate, "youtube" to null, "suggest" to suggest,
             "skipped" to skipped.map { it.json() }, "partial" to partial.map { it.json() },
             "looked" to looked.looked(skipped, partial),
         )
@@ -156,13 +165,36 @@ internal class Found(
             (said.why?.let { obj("why" to it) } ?: obj())
     }
 
+    /** search_routes._directory_json: an artist of UG's artist directory, as the pages draw them: their name, their
+     * page (`url`, what `POST /ug/link` reads), UG's count of their tabs, the requests reading their page takes at most
+     * (`requests`: a list a kind, then one more each further 100 tabs, within a lookup's), their group on the library
+     * page (`group_key`), the key /api/artist lists their songs by once read (`artist_key`), and whether the read may go
+     * now (`state`, `why`: UgLinks.known's, with no request). */
+    private fun directoryJson(d: DirectoryHit): JsonObject {
+        val link = UgUrls.readLink(d.url)
+        val was = if (link != null) UgLinks.known(config, db, cacheDir, link, now) else null
+        val lookup = config.provider("ug").lookupRequests.toLong()
+        val requests = maxOf(1L, minOf(lookup, 2L + Math.floorDiv(d.tabs, 100L)))
+        return obj(
+            "artist_id" to d.artistId, "artist" to d.artist, "url" to d.url, "tabs" to d.tabs, "score" to d.score,
+            "artist_key" to d.artistKey, "group_key" to groupKey(d.artist), "requests" to requests,
+            "state" to (was?.state ?: "other"), "why" to (was?.why ?: ""),
+        )
+    }
+
     /** search_routes._index_answers: those kept, [AnswerCache.SECONDS] old at most, else made now and kept, none of a
-     * site [leftOut] (nor of gametabs.net while it is turned off). */
+     * site [leftOut] (nor of gametabs.net while it is turned off). The artists UG's listings name whose page caracole
+     * hasn't read (Search.directoryArtists), never one of the index's artist rows: one such artist is no artist the
+     * index can't see, so a search that finds one gives no hint and no `unseen`. */
     private fun indexAnswers(q: String, leftOut: Set<String>): IndexAnswers {
         answers.get(q)?.let { return it }
         val since = answers.era
         val ug = indexHits(q)
         check()
+        val directory = Search.directoryArtists(db, q, shown = ug.found.artists.map { it.artistKey })
+        check()
+        val hint = if (directory.isEmpty()) ug.hint else null
+        val unseen = if (directory.isEmpty()) ug.unseen else null
         val gtptabs = if ("gtptabs" !in leftOut) SiteSearch.searchGtptabs(db, q, SITE_HITS) else emptyList()
         check()
         val musescore = if ("musescore" !in leftOut) SiteSearch.searchMusescore(db, q, SITE_HITS) else emptyList()
@@ -175,8 +207,8 @@ internal class Found(
         check()
         val gametabs = if ("gametabs" in enabled) SiteSearch.searchGametabs(db, q, SITE_HITS) else emptyList()
         check()
-        return IndexAnswers(ug.found, ug.index, ug.artists, ug.hint, ug.unseen, gtptabs, musescore, harpArtists, harptabs,
-                            lcArtists, lacuerda, gametabs).also { answers.put(q, it, since) }
+        return IndexAnswers(ug.found, ug.index, ug.artists, hint, unseen, gtptabs, musescore, harpArtists, harptabs,
+                            lcArtists, lacuerda, gametabs, directory).also { answers.put(q, it, since) }
     }
 
     private class UgHits(val found: IndexFound, val index: List<JsonObject>, val artists: List<JsonObject>,

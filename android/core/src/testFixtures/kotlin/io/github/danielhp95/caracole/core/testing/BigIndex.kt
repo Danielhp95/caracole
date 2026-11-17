@@ -47,6 +47,14 @@ class BigIndex(val rows: Int, val seed: Int = 7) {
                     "song_key TEXT NOT NULL, artist_forms TEXT NOT NULL, title_forms TEXT NOT NULL, " +
                     "forms TEXT NOT NULL, read_at TEXT NOT NULL, PRIMARY KEY (page, tab_id))",
             )
+            // UG's artist directory (schema 16), empty: this index's artists come of its sitemaps alone.
+            c.execSQL(
+                "CREATE TABLE ug_directory (artist_id INTEGER PRIMARY KEY, name TEXT NOT NULL, " +
+                    "slug TEXT NOT NULL DEFAULT '', letter TEXT NOT NULL, place INTEGER NOT NULL DEFAULT 0, " +
+                    "tabs INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT '', artist_key TEXT NOT NULL, " +
+                    "forms TEXT NOT NULL, seen_at TEXT NOT NULL, read_at TEXT NOT NULL DEFAULT '', " +
+                    "read_tabs INTEGER NOT NULL DEFAULT 0, read_updated TEXT NOT NULL DEFAULT '')",
+            )
             c.prepare(
                 "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
                     "VALUES (?, ?, ?, ?, 'big', '2026-10-28T03:30:00Z', ?)",
