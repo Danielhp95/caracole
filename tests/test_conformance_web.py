@@ -526,6 +526,7 @@ def phone_kind(job: _Job) -> str:
                          (_songbooks.KEY, "songbook"), (_jobs.LACUERDA_SEARCH, "lacuerda-search"),
                          (_jobs.LACUERDA_ARTIST, "lacuerda-artist"), (_jobs.HARPTABS_ARTIST, "harptabs-artist"),
                          (_jobs.YOUTUBE_SEARCH, "youtube-search"), (_jobs.YOUTUBE_SHEET, "youtube"),
+                         (_jobs.UG_LINK, "ug-link"),
                          (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync"), ("import:", "sync")):
         if key.startswith(prefix):
             return kind
@@ -767,6 +768,18 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
                     _jobs.harptabs_artist_steps("/artist/bob-dylan", "Bob Dylan")),
          ["Read: harptabs' page of Bob Dylan lists 30 tabs.",
           "Not read: harptabs failed (harptabs: 500: x). Try again later."]),
+        # A UG link pasted into the library page's search box: a tab's page and its artist's, or an artist's page.
+        (queued_job("Read tab 4180894 on Ultimate Guitar", _jobs.UG_LINK + "https://tabs.ultimate-guitar.com/tab/4180894",
+                    _jobs.ug_link_steps("https://tabs.ultimate-guitar.com/tab/4180894"),
+                    display="A tab on Ultimate Guitar"),
+         ["Read: 斑马 斑马 Banma Banma Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.",
+          "Not found: UG answers 404 for https://tabs.ultimate-guitar.com/tab/4180894.",
+          "Not read: UG turned us back (ug: 403: x); no asks until 2026-11-04 11:30 UTC."]),
+        (queued_job("Read an artist's page on Ultimate Guitar",
+                    _jobs.UG_LINK + "https://www.ultimate-guitar.com/artist/634073",
+                    _jobs.ug_link_steps("https://www.ultimate-guitar.com/artist/634073"),
+                    display="An artist on Ultimate Guitar"),
+         ["Read: UG's page of Song Dongye (宋冬野) lists 8 tabs."]),
     ]
     for job, endings in reads:
         kind = phone_kind(job)
@@ -1067,7 +1080,7 @@ def test_job_views_kinds_jsonl_is_what_the_views_say_of_every_kind_caracole_serv
     records = view_kind_records(monkeypatch)
     kinds = {r["job"]["kind"] for r in records}
     assert {"song", "versions", "lacuerda-artist", "lacuerda-search", "harptabs-artist", "songbook", "review",
-            "harmonica", "export", "remove", "youtube", "youtube-search"} <= kinds
+            "harmonica", "export", "remove", "youtube", "youtube-search", "ug-link"} <= kinds
     assert {r["out"]["kind"] for r in records} >= {"song", "remove", "export", "songbook", "peer-pull"}
     every = {"queued", "running", "done", "failed", "cancelled", "interrupted"}
     for kind in kinds | {"sync", "peer-push", "index-merge"}:  # every kind in every state

@@ -19,7 +19,8 @@
                           name, songs, group, and their ``artist_key``, LaCuerda ``slug`` or harptabs.com
                           ``path``, for /api/artist; a song's ``title``, its row on each site, ``song``, and
                           your song's row, ``library``, for a song of yours); and whether LaCuerda's own
-                          search may be sent for the query (``lacuerda_search``)
+                          search may be sent for the query (``lacuerda_search``), never for a link pasted (a UG
+                          page's or a YouTube video's: no ``unseen``, ``hint``, ``lacuerda_search`` or ``youtube``)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
@@ -389,9 +390,13 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     # LaCuerda's group leads: Ultimate Guitar's artist a word names (Javier Calamaro, beside LaCuerda's Andrés
     # Calamaro) is no lead, and Enter opens LaCuerda's artist.
     lead = "song" if leads and answer.lead == "artist" else answer.lead
-    youtube = _youtube_suggestion(app, conn, q, mine, kept.index_found, kept.lc_artists, kept.lacuerda)
+    # A link pasted (a UG page's, a YouTube video's) is no query: no site's search is sent for it, nor a hint given.
+    linked = is_link(q)
+    youtube = None if linked else _youtube_suggestion(app, conn, q, mine, kept.index_found, kept.lc_artists,
+                                                      kept.lacuerda)
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
-            "best": _best_json(answer.best), "hint": kept.hint, "progression": progression, "unseen": kept.unseen,
+            "best": _best_json(answer.best), "hint": None if linked else kept.hint, "progression": progression,
+            "unseen": None if linked else kept.unseen,
             # the artist and the title the query names, which the request form is filled in with; None for none
             "names": _names_json(conn, q, songs, youtube),
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
@@ -411,11 +416,20 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, kept.index_found, kept.lc_artists, kept.lacuerda),
             "lacuerda_leads": leads,
             "lacuerda_search": (_lacuerda_search_gate(app, conn, q, kept.lc_artists, kept.lacuerda, mine)
-                                if app.searches_lacuerda else None),
+                                if app.searches_lacuerda and not linked else None),
             # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
             "youtube": youtube,
             "suggest": [_suggestion_json(app, conn, s, songs) for s in close],
             "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial)}
+
+
+def is_link(q: str) -> bool:
+    """Whether a query is a link pasted, a UG page's (ug_urls.read_link) or a YouTube video's
+    (youtube_urls.video_id_from_url): the library page shows its own panel for one, and sends no search for it."""
+    from caracole.ug_urls import read_link
+    from caracole.youtube_urls import video_id_from_url
+
+    return read_link(q) is not None or video_id_from_url(q) is not None
 
 
 @dataclass

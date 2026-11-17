@@ -2438,6 +2438,13 @@ def index_song(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
     return _index_hit(conn, artist_key, song_key, score)
 
 
+def listed_names(conn: sqlite3.Connection, artist: str, title: str) -> tuple[str, str]:
+    """A song only an artist page names, named as a search names it (``IndexHit``'s ``artist`` and ``title``): its
+    artist as your songs name them (``_Yours``), its title by its original name ("斑马斑马"); a pasted UG link's
+    names (ug/link.py)."""
+    return _Yours(conn).artist(artist), _original_title(title)
+
+
 def index_artist(conn: sqlite3.Connection, artist_key: str) -> ArtistHit | None:
     """One artist of the index as ``find_index`` gives it (score 100): its songs and tabs counted, its most
     tabbed songs and its name as UG writes it. None when the index has no tab of theirs."""

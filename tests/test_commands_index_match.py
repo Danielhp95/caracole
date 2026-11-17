@@ -623,8 +623,10 @@ def test_cli_match_without_songs(tmp_path):
 
 @pytest.mark.slow
 def test_registering_the_commands_imports_neither_the_matcher_nor_the_index():
+    # ug_urls.py, the standard library alone, is overrides.py's reading of UG's addresses: no part of the index.
     code = ("import sys; import caracole.cli; "
-            "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'caracole.match', 'caracole.ug'))))")
+            "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'caracole.match', 'caracole.ug.')) "
+            "or m == 'caracole.ug'))")
     src = Path(__file__).resolve().parents[1] / "src"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})

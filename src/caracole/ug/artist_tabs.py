@@ -291,6 +291,25 @@ def unindexed_songs(conn: sqlite3.Connection, artist_key: str) -> dict[str, int]
     return {song_key: n for song_key, n in rows}
 
 
+def listed_tab(conn: sqlite3.Connection, tab_id: int) -> ListedTab | None:
+    """A tab as the artist page that listed it last names it (its latest read, the first page by address on a tie);
+    None when no page caracole read lists it."""
+    row = conn.execute(f"{_SELECT} WHERE tab_id = ? ORDER BY read_at DESC, page LIMIT 1", (tab_id,)).fetchone()
+    return _listed(row) if row is not None else None
+
+
+def page_artist(conn: sqlite3.Connection, page: str) -> tuple[str, str, int, str] | None:
+    """An artist page as caracole read it: UG's name of its artist, the key its tabs are filed under (those most of
+    them are), how many tabs it lists, and its latest read; None when caracole holds none of its tabs."""
+    row = conn.execute("SELECT artist, artist_key, COUNT(*) FROM ug_artist_tabs WHERE page = ? GROUP BY artist, "
+                       "artist_key ORDER BY COUNT(*) DESC, artist, artist_key LIMIT 1", (page,)).fetchone()
+    if row is None:
+        return None
+    tabs, read_at = conn.execute("SELECT COUNT(*), MAX(read_at) FROM ug_artist_tabs WHERE page = ?",
+                                 (page,)).fetchone()
+    return row[0], row[1], tabs, read_at
+
+
 def artist_page(conn: sqlite3.Connection, artist_key: str) -> str | None:
     """The artist page that lists most of an artist's tabs, as filed; None when none does."""
     row = conn.execute("SELECT page FROM ug_artist_tabs WHERE artist_key = ? GROUP BY page "

@@ -45,7 +45,8 @@ ran. So a job of other commands reads the same way:
   lacuerda --search`` ends with ("Searched: …", "Found already: …", "Nothing
   found: …", or "Not searched: …"); while it runs, "Searching LaCuerda…"; and a
   harptabs.com artist page's read (``jobs.HARPTABS_ARTIST``), as a LaCuerda
-  one's, in the words ``caracole harptabs --artist`` ends with. An add of a
+  one's, in the words ``caracole harptabs --artist`` ends with, and a UG link's
+  read (``jobs.UG_LINK``) in those ``caracole ug --link`` ends with. An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
   A sheet from a YouTube video (``jobs.YOUTUBE_SHEET``) says Ready once its
   chords stage made the sheet (an auto sheet of an earlier video is none of
@@ -117,6 +118,8 @@ STAGE_LINES = {
     "chords": "Working out the chords",
     "video": "Searching YouTube",  # caracole youtube --search's (jobs.YOUTUBE_SEARCH_STAGES)
     "thumbnail": "Getting the thumbnail",
+    "tab": "Reading the tab page on UG",  # caracole ug --link's (jobs.UG_LINK_STAGES)
+    "artist": "Reading the artist's page on UG",
     "compare": "Comparing books",  # caracole peer sync --progress's (jobs.PEER_SYNC_STAGES), and the phone's sync's
     "take": "Taking their entries",
     "give": "Sharing our entries",
@@ -301,9 +304,9 @@ def song_line(line: Line) -> Line:
 
 
 def _artist_read(steps: list[Step], details: str) -> Line:
-    """A LaCuerda artist page's read, or a query of its search, or a harptabs.com artist page's read, over: the
-    sentence ``caracole lacuerda --artist`` (or ``--search``, or ``caracole harptabs --artist``) ends with
-    (commands/lyrics.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
+    """A LaCuerda artist page's read, or a query of its search, or a harptabs.com artist page's read, or a UG link's,
+    over: the sentence ``caracole lacuerda --artist`` (or ``--search``, ``caracole harptabs --artist``, ``caracole ug
+    --link``) ends with (commands/lyrics.py, commands/ug.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
     "Found already: …" are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or
     song, and "Not read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any
     other ending, "Done"."""
