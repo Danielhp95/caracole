@@ -182,18 +182,19 @@ def data_objects() -> dict[str, dict[str, Any]]:
 # phone's, the sheet alone; "tab", caracole serve's, the Sync tab, its panel and the sheet, which the phone never
 # serves; None, neither).
 CASES = (
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 0}),  # the phone's, smallest: its page whole
-    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 0}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 2}),
-    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 2}),
-    ("chinese", {"csrf": CSRF, "badge": None, "sync": "sheet", "active": 2}),
-    ("chinese", {"csrf": CSRF, "badge": None, "sync": "tab", "active": 2}),
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 0, "in_app": True}),  # the phone's, smallest: its page whole
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 0, "in_app": False}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": None, "active": 2, "in_app": True}),
+    ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 2, "in_app": True}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": "sheet", "active": 2, "in_app": False}),
+    ("chinese", {"csrf": CSRF, "badge": None, "sync": "tab", "active": 2, "in_app": False}),
 )
 
 
 def phone_page(data: dict[str, Any], controls: dict[str, Any]) -> str:
     """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served)."""
-    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+    served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"],
+                         in_app=controls["in_app"])
     return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
 
 
@@ -289,7 +290,7 @@ def library_page_json(conn, cfg) -> str:
     cases = []
     for n, (name, controls) in enumerate(CASES):
         page = phone_page(objects[name], controls)
-        cases.append({"name": f"{name}, sync {controls['sync']}, badge {controls['badge']}",
+        cases.append({"name": f"{name}, sync {controls['sync']}, badge {controls['badge']}, app {controls['in_app']}",
                       "data": objects[name], "controls": controls,
                       "sha256": hashlib.sha256(page.encode("utf-8")).hexdigest(),
                       **({"page": page} if n == 0 else {})})
@@ -431,7 +432,8 @@ def test_the_phones_page_has_the_requests_tab_counting_the_requests_that_wait_or
     # member counts them.
     objects = data_objects()
     for name, controls in CASES:
-        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"])
+        served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"],
+                         in_app=controls["in_app"])
         page = phone_page(objects[name], controls)
         tab, panel = library_page._requests_tab(served), library_page._requests_panel(served)
         assert page.count(tab) == page.count(panel) == 1
@@ -462,6 +464,7 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
     assert {controls["sync"] for _, controls in CASES} == {None, "sheet", "tab"}
     assert CASES[0][1]["sync"] == "sheet"  # the page kept whole is the phone's
     assert {controls["badge"] for _, controls in CASES} == {"Phone", None}
+    assert {controls["in_app"] for _, controls in CASES} == {True, False} and CASES[0][1]["in_app"] is True
 
 
 def test_the_server_member_is_build_library_pages(conn, cfg):
@@ -544,7 +547,7 @@ def test_the_phones_own_data_shapes_draw_with_no_script_error(conn, cfg, tmp_pat
     # library.js, card.js and songbooks.js read every field through listOf() and defaults; this shows it, on the
     # shapes no computer's page has.
     data = phone_shaped_data(conn, cfg)
-    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync, "active": 0})
+    html = phone_page(data, {"csrf": CSRF, "badge": "Phone", "sync": sync, "active": 0, "in_app": True})
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     html = html.replace(csp, csp.replace("script-src ", f"script-src {_sha(CATCH)} {_sha(PROBE)} "))
     html = html.replace("<head>", f"<head>\n<script>{CATCH}</script>", 1)

@@ -86,7 +86,7 @@
     params.delete("book");
     if (onBooks() && state.book) params.set("book", state.book);
     try {
-      history.replaceState(null, "", "#" + params.toString());
+      history.replaceState(history.state, "", "#" + params.toString());
     } catch (err) {
       // Some browsers refuse this for local files: the page works the same.
     }

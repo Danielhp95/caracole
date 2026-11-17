@@ -204,11 +204,11 @@ def look(html: str, tmp_path, size, scheme="light") -> dict:
     return attribute_of(dom, "data-look")
 
 
-def library_page(conn, cfg, badge=None) -> str:
+def library_page(conn, cfg, badge=None, sync=None) -> str:
     for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
         add_song(conn, artist, title)
     return build_library_page(conn, named(cfg, "Tabs"), Overrides(), NOW,
-                              controls=WebControls(csrf="tok", active=1, badge=badge))
+                              controls=WebControls(csrf="tok", active=1, badge=badge, sync=sync))
 
 
 @in_chromium
@@ -225,18 +225,18 @@ def test_on_a_desktop_the_name_follows_caracole_on_the_bar_and_the_badge_after_i
 
 @in_chromium
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_on_a_phone_the_badge_shows_under_the_bar_and_the_usual_library_keeps_one_bar(conn, cfg, tmp_path, scheme):
-    usual = look(library_page(conn, cfg), tmp_path, (390, 844), scheme)
-    assert usual["fits"] and usual["badge"] is None and usual["name"] is None, usual  # the name is in the title
-    assert usual["first"] < 240, usual
-    badged = look(build_library_page(conn, named(cfg, "Tabs"), Overrides(), NOW,
-                                     controls=WebControls(csrf="tok", active=1, badge=SCRATCH)), tmp_path, (390, 844),
-                  scheme)
-    assert badged["fits"] and badged["badge"] and badged["name"], badged
-    assert badged["badge"][1] >= badged["tabs"][1] + badged["tabs"][3] - 4, badged  # a line of its own, under the tabs
-    assert badged["badge"][0] + badged["badge"][2] <= 390 - 16, badged
+@pytest.mark.parametrize("size", [(390, 844), (320, 640)])
+@pytest.mark.parametrize("sync", [None, "tab"])
+def test_on_a_phone_the_badge_is_a_pill_in_the_tab_row_and_the_usual_library_shows_none(
+        conn, cfg, tmp_path, scheme, size, sync):
+    usual = look(library_page(conn, cfg, sync=sync), tmp_path, size, scheme)
+    assert usual["fits"] and usual["badge"] is None and usual["name"] is None, usual
+    badged = look(library_page(conn, cfg, SCRATCH, sync=sync), tmp_path, size, scheme)
+    mid = badged["badge"][1] + badged["badge"][3] / 2
+    assert badged["tabs"][1] <= mid <= badged["tabs"][1] + badged["tabs"][3], badged  # in the tab row
+    assert badged["badge"][3] <= 22 and badged["name"] is None and badged["fits"], badged  # a pill; the name in the title
+    assert badged["first"] <= usual["first"] + 1, badged  # no row of its own
     assert badged["colour"] != badged["background"], badged
-    assert badged["first"] < 280, badged  # a line more, and no more
 
 
 @in_chromium
@@ -247,3 +247,13 @@ def test_a_page_of_caracole_serves_own_shows_the_badge_at_any_width(badged, tmp_
     assert seen["fits"] and seen["badge"], seen
     if size[0] > 500:
         assert seen["name"], seen
+
+
+def test_the_apps_page_draws_no_name_row_and_its_title_still_names_the_library(conn, cfg):
+    # The Android app's own bar says "Phone · caracole · Tabs": its page draws no row for it.
+    from caracole.library_page import assemble_page
+    app = WebControls(csrf="tok", badge="Phone", in_app=True)
+    html = assemble_page({"songs": []}, app, problem=None, library_name="Tabs")
+    assert 'class="libname"' not in html
+    assert "<title>Phone · caracole · Tabs</title>" in html
+    assert WebControls(csrf="tok").in_app is False  # caracole serve never sets it

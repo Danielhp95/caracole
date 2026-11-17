@@ -339,6 +339,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
+            inApp = true,
         )
     }
 

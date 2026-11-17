@@ -397,7 +397,8 @@ class WebControls:
     beside the library's name and first in the title; the file never has one. ``sync``: how it syncs with another
     caracole (sync.js): ``"tab"``, caracole serve's, the Sync tab last, after Requests, with its panel and the sync's
     sheet (sync-tab.html, sync-panel.html and sync-sheet.html, put in as they are); ``"sheet"``, the sheet alone, as
-    the phone's page has it (the app's sync button opens it); None, neither.
+    the phone's page has it (the app's sync button opens it); None, neither. ``in_app``: the page is the Android
+    app's, whose own bar names the library, so the page draws no library-name row (the title still names it).
     """
 
     csrf: str
@@ -410,6 +411,7 @@ class WebControls:
     guitar: bool = False
     badge: str | None = None
     sync: str | None = None
+    in_app: bool = False
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -468,7 +470,7 @@ def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, prob
     return (
         _HEAD.replace("__CSP__", csp).replace("__ICON__", shown.icon()).replace("__STYLE__", _PAGE_STYLE)
         .replace("__TITLE__", html_text.escape(shown.title()))
-        + _BODY.replace("__MARK__", page_mark()).replace("__LIBRARY__", shown.markup("p"))
+        + _BODY.replace("__MARK__", page_mark()).replace("__LIBRARY__", "" if controls is not None and controls.in_app else shown.markup("p"))
         .replace("__TABSYNC__", _sync_tab(controls)).replace("__TABREQUESTS__", _requests_tab(controls))
         .replace("__SYNC__", _sync_panel(controls))
         .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem))

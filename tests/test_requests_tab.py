@@ -590,7 +590,9 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
         # The five tabs on one line, inside the page; and so they stay with a count of two digits.
         five = noted(dom, "data-five")
         for tabs in (shown["tabs"], five["tabs"]):
-            assert len({top for *_, top in tabs}) == 1 and tabs[-1][2] <= shown["edge"], (tabs, shown["edge"])
+            assert len({top for *_, top in tabs}) == 1, tabs
+            if width > 500:  # on a phone the row scrolls sideways when five don't fit (library-1a.2)
+                assert tabs[-1][2] <= shown["edge"], (tabs, shown["edge"])
             assert all(a[2] <= b[1] for a, b in zip(tabs, tabs[1:])), tabs
         assert five["wide"] <= shown["page"], five
 
@@ -680,7 +682,8 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             assert page.js("document.querySelector('#req-3 .req-output').open") is True  # as you left it
             # A link to another tab of the page (a request line's Details) stays on the page; one to the library's own
             # words (Request by name) shows the library, searched.
-            page.click("#tab-library")
+            page.click("#tab-library")  # the step out of the library taken back: shown once Back is
+            assert page.wait("window.caracoleTabs.current() === 'library'")
             page.js("(() => { const a = document.createElement('a'); a.id = 'to-4'; a.href = '/#tab=requests&job=4';"
                     " a.textContent = 'Details'; document.getElementById('list').prepend(a); window.here = 1; })()")
             page.click("#to-4")
@@ -699,8 +702,8 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             page.press("ArrowLeft")
             assert page.js("[document.activeElement.id, document.querySelector('[aria-selected=true]').id]") == [
                 "tab-sync", "tab-sync"]
-            page.press("Home")
-            assert page.js("document.activeElement.id") == "tab-library"
+            page.press("Home")  # the step out of the library taken back, the focus on its tab once Back shows it
+            assert page.wait("document.activeElement.id === 'tab-library'")
             page.press("ArrowRight")
             assert page.js("[document.activeElement.id, location.hash]") == ["tab-songbooks", "#q=Creep&tab=songbooks"]
             # Opened at a request (job=N, where the server sends a form back), its output is open and in view.

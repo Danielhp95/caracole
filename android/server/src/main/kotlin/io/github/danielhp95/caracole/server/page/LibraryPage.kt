@@ -21,7 +21,7 @@ data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
     val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
-    val guitar: Boolean = false,
+    val guitar: Boolean = false, val inApp: Boolean = false,
 )
 
 /**
@@ -51,7 +51,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         val sync = controls.sync
         return assets.template("head.html").replace("__CSP__", csp).replace("__ICON__", shown.icon())
             .replace("__STYLE__", assets.styles).replace("__TITLE__", PyText.escape(shown.title())) +
-            assets.template("body.html").replace("__MARK__", PageIcon.mark).replace("__LIBRARY__", shown.markup("p"))
+            assets.template("body.html").replace("__MARK__", PageIcon.mark).replace("__LIBRARY__", if (controls.inApp) "" else shown.markup("p"))
                 .replace("__TABSYNC__", "")
                 .replace("__TABREQUESTS__", requests.tab(controls.active))
                 .replace("__SYNC__", if (sync) assets.template("sync-sheet.html") else "")

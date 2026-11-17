@@ -2464,15 +2464,19 @@ songbooks from their next render); caracole serve answers a browser's own
 well within the first screen, on a phone too: caracole's logo and name, then
 the library's (caracole.toml's `name`, one line of 80 characters at most, else
 the library folder's name: "Tabs"), which the browser tab's title says too
-("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title, and a badge a small pill in the tab row; in the
+Android app no name row at all, its own bar names the library),
 the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
 tab](#the-sites-tab)) and, served, **Journal**, the last (see Journal, under
 [caracole serve](#caracole-serve)), Songbooks and the Journal counting what they
 hold (songbooks; requests that wait or run), the address remembering which
 (`#tab=songbooks`, `#tab=sites`, `#tab=requests`), and at the end the number of songs
-wanted or ignored when there are any. On a phone the tabs fit beside the mark,
-four of them too. Under it the search
+wanted or ignored when there are any. Back from Songbooks, Sites, Journal or Share returns to
+Library, the list as you left it, the other tabs replacing one another (going from one to
+another is no step of Back), and pressing Library is that same step back. On a phone each tab is a thumb's 48 px tall and the
+row of tabs scrolls sideways when they don't fit beside the mark, the chosen one
+kept in view. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
 **Filter** and **Sort** beside it, icons alone on a phone. The filters on come
 under it, each a tag
@@ -3998,8 +4002,8 @@ Every page it serves names the library it shows, after caracole's name in its
 header and in the browser tab's title ("caracole · Tabs", "Look up · caracole ·
 Tabs"), as `index.html` does. A server of a library that isn't your usual one
 says so on every page it writes itself, with a badge beside the name, first in
-each title ("Scratch library · caracole · test-lib") and on a line of its own
-under the header on a phone, and the tab's logo on the badge's amber, so that
+each title ("Scratch library · caracole · test-lib") and, on a phone in a
+browser, as a small pill in the row of tabs, before them, and the tab's logo on the badge's amber, so that
 its pages are never taken for your library's. It prints the badge when it
 starts. How it knows:
 

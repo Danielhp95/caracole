@@ -9,6 +9,12 @@
 // (or none: the library). Every script that draws a tab hears it shown ("caracole:tab": its name, the one before,
 // and the words of the address that asked for it, as requests.js reads job=N), and may show one itself
 // (window.caracoleTabs.show).
+// Back: leaving the library for another tab is a step of the browser's history, an entry of this script's own
+// ({ tab: 1 }, with search mode's count beside it while body.search-mode is on: one more of its steps), so Back
+// returns to the library; between the other tabs each replaces the one before, and the library's tab pressed (or
+// reached with the keys) while that step is there takes it back (history.back()) rather than adding another. An
+// address that names a tab, as the page opens or with Back or Forward, shows it with no step; a browser that refuses
+// the step (a local file's) changes the tab all the same. Every address written in place keeps the entry's state.
 (() => {
   "use strict";
   const list = document.querySelector(".masthead .tabs[role=tablist]");
@@ -28,17 +34,35 @@
   };
   const named = (params) => (names.indexOf(params.get("tab")) >= 0 ? params.get("tab") : first);
   let current = "";
-  const save = () => {
+  let fromLibrary = false;  // the step this script took out of the library is the one before this entry
+  let refocus = false;  // the library's tab takes the focus once Back shows it (its keys asked for it)
+  // ``how``: "push", a step out of the library (an entry of this script's own, marked ``tab``); else in place.
+  const save = (how) => {
     const params = words(location.hash);
     params.delete("tab");
     if (current !== first) params.set("tab", current);
+    const url = "#" + params.toString();
+    if (how === "push") {
+      const entry = { tab: 1 };
+      if (document.body.classList.contains("search-mode")) {
+        entry.search = (Number(history.state && history.state.search) || 0) + 1;
+      }
+      try {
+        history.pushState(entry, "", url);
+        fromLibrary = true;
+        return;
+      } catch (err) {
+        // A browser that refuses the step (a local file's): the tab changes in place, with none to go back to.
+      }
+    }
     try {
-      history.replaceState(null, "", "#" + params.toString());
+      history.replaceState(history.state, "", url);
     } catch (err) {
       // Some browsers refuse this for local files: the page works the same.
     }
   };
-  // ``options``: ``focus``, the tab takes the focus (its keys); ``words``, the address that asked for it.
+  // ``options``: ``focus``, the tab takes the focus (its keys); ``words``, the address that asked for it; ``pop``,
+  // Back or Forward showed it, and ``load``, the page opened at it: no step either way.
   const show = (name, options) => {
     const opts = options || {};
     const to = names.indexOf(name) >= 0 ? name : first;
@@ -52,11 +76,44 @@
     document.body.dataset.tab = to;
     const from = current;
     current = to;
-    save();
-    if (opts.focus) tabs[names.indexOf(to)].focus();
+    save(from === first && to !== first && !opts.pop && !opts.load ? "push" : "replace");
+    if (to === first) fromLibrary = false;  // back in the library however it came: no step of it to take back
+    if (opts.focus) tabs[names.indexOf(to)].focus({ preventScroll: true });
+    // A row that scrolls sideways shows the chosen tab whole (the row alone: scrollIntoView would move the page).
+    const chosen = tabs[names.indexOf(to)];
+    if (list.scrollWidth > list.clientWidth) {
+      const row = list.getBoundingClientRect();
+      const box = chosen.getBoundingClientRect();
+      if (box.left < row.left) list.scrollLeft += box.left - row.left;
+      else if (box.right > row.right) list.scrollLeft += box.right - row.right;
+    }
     document.dispatchEvent(new CustomEvent("caracole:tab", { detail: { name: to, from, words: opts.words || null } }));
   };
-  for (const tab of tabs) tab.addEventListener("click", () => show(nameOf(tab)));
+  // The library's tab while the step out of it is there: that step taken back, and nothing else (popstate shows it).
+  // Pressed again before Back is heard (a double click), it is the same Back: a second would leave the page.
+  let backing = false;
+  const back = (focus) => {
+    if (backing) {
+      refocus = refocus || Boolean(focus);
+      return true;
+    }
+    if (!fromLibrary || current === first) return false;
+    backing = true;
+    refocus = Boolean(focus);
+    try {
+      history.back();
+    } catch (err) {
+      backing = false;  // no Back on its way: the next press may ask again
+      return false;
+    }
+    return true;
+  };
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => {
+      if (nameOf(tab) === first && back(false)) return;
+      show(nameOf(tab));
+    });
+  }
   list.addEventListener("keydown", (e) => {
     const at = tabs.indexOf(document.activeElement);
     if (at < 0) return;
@@ -65,6 +122,7 @@
       ? tabs.length - 1 : -1;
     if (to < 0) return;
     e.preventDefault();
+    if (names[to] === first && back(true)) return;
     show(names[to], { focus: true });
   });
   // A link to this very page that names a tab: that tab, the page staying where it is (a link to open in another
@@ -79,14 +137,20 @@
     e.preventDefault();
     show(params.get("tab"), { words: params });
   });
+  // Back or Forward: the address's tab, and whether this entry is the step out of the library (its own marker, so
+  // Forward to it makes the library's tab Back again).
   window.addEventListener("popstate", () => {
+    backing = false;
+    const focus = refocus;
+    refocus = false;
     const params = words(location.hash);
-    if (named(params) !== current) show(named(params), { words: params });
+    if (named(params) !== current) show(named(params), { words: params, pop: true, focus });
+    fromLibrary = named(params) !== first && Boolean(history.state && history.state.tab);
   });
   window.caracoleTabs = Object.freeze({
     show,
     current: () => current,
     names: names.slice(),
   });
-  show(named(words(location.hash)), { words: words(location.hash) });
+  show(named(words(location.hash)), { words: words(location.hash), load: true });
 })();

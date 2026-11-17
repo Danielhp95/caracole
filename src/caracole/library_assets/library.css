@@ -14,17 +14,30 @@
 .masthead.lib { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr);
   grid-template-areas: "app name tabs sum"; align-items: center; gap: 4px 14px; padding: 12px 0 0; }
 .masthead.lib .app { grid-area: app; display: flex; align-items: center; gap: 7px; margin: 0; font-size: 1.05rem; }
-/* The library's name, and a badge for one that isn't the usual library (base.css's .libname): on a phone, the badge
-   and the name a line of their own under the tabs, and with no badge, the name in the tab's title alone. */
+/* The library's name, and a badge for one that isn't the usual library (base.css's .libname): on a phone, the badge a
+   small pill in the tab row, before the tabs, its name left to the tab's title; with no badge, the name in the tab's
+   title alone. */
 .masthead.lib .libname { grid-area: name; }
 @media (max-width: 719px) {
+  .masthead.lib { grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "app name tabs" "sum sum sum";
+    gap: 4px 8px; }
   .masthead.lib .libname { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap; }
-  .masthead.lib:has(.scratch) { grid-template-areas: "app tabs" "name name" "sum sum"; }
   .masthead.lib .libname:has(.scratch) { position: static; justify-self: start; width: auto; height: auto; margin: 0;
     padding-left: 0; border-left: 0; overflow: visible; clip: auto; }
+  .masthead.lib .libname:has(.scratch) .name { position: absolute; width: 1px; height: 1px; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .masthead.lib .libname .scratch { font-size: .62rem; padding: 0 6px; line-height: 1.6; }
 }
 .masthead.lib .tabs { grid-area: tabs; min-width: 0; margin: 0; border-bottom: 0; }
+/* On a phone each tab is a thumb's (library-screens.css, 48 px) and a row too wide for the page scrolls sideways by
+   itself, never the page (tabs.js keeps the chosen tab in its view). */
+@media (max-width: 719px) {
+  .masthead.lib .tabs { gap: 0; overflow: auto hidden; overscroll-behavior-x: contain; scrollbar-width: none;
+    padding-bottom: 1px; }  /* room for the chosen tab's line, which hangs 1px below the row */
+  .masthead.lib .tabs::-webkit-scrollbar { display: none; }
+  .masthead.lib .tab { padding: 0 10px; font-size: .9rem; gap: 4px; }
+}
 .masthead.lib .summary { grid-area: sum; justify-self: end; gap: 8px; margin: 0; }
 .masthead.lib .summary:empty { display: none; }
 /* The page's tabs, in the masthead (tabs.js): each shows its panel; a count beside its name (songbooks, requests that
