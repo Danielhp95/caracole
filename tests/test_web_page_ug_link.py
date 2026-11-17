@@ -270,3 +270,34 @@ def test_the_panel_names_the_tab_as_soon_as_its_page_is_read_before_its_artists_
         assert not artist_page.is_set() and ug.requests == [FOUND]  # its artist's chords list still waits
     finally:
         artist_page.set()
+
+
+def test_a_song_of_yours_whose_sheet_is_the_tab_says_so_with_open_and_offers_no_fetch(cfg, live, ug, browser):
+    from conftest import add_song
+    from helpers.ug_pages import song_dongye_chords
+
+    from caracole.library import keep_file
+    from caracole.ug import artist_tabs
+    from caracole.ug.page import read_versions
+    from caracole.versions import upsert_version
+
+    conn = db.connect(cfg.db_path)
+    try:  # 宋冬野's chords list read by a nightly fetch, and 斑马斑马's sheet that tab
+        tabs = read_versions({"other_tabs": song_dongye_chords()}, "other_tabs", url=SONG_DONGYE_URL)
+        artist_tabs.store(conn, SONG_DONGYE_URL, "Song Dongye (宋冬野)", tabs, read_at="2026-11-01T03:30:00Z")
+        song = add_song(conn, "宋冬野", "斑马斑马")
+        version = upsert_version(conn, provider="ug", tab_id="4180894", song_id=song.id, slot="sheet", kind="chords",
+                                 rating=4.8, votes=120, version=1, label=None, url=FOUND, raw={},
+                                 now="2026-11-01T03:30:00Z")
+        keep_file(conn, cfg.library_dir, song=song, version_id=version, name="sheet.txt", data=b"[ch]C[/ch]\n", rank=1)
+        conn.commit()
+    finally:
+        conn.close()
+    base, posted, runner = live
+    browser.open(base)
+    paste(browser, FOUND)
+    assert browser.wait(f"{PANEL} !== null && {NOTE}.textContent.startsWith('In your logbook')")
+    assert browser.js(f"{NOTE}.textContent") == "In your logbook as 宋冬野 - 斑马斑马: this version is its sheet. Open"
+    assert browser.js(f"{NOTE}.querySelector('a').getAttribute('href')")
+    assert browser.js(f"{PANEL}.querySelector('form').hidden") is True
+    assert posted == [] and ug.requests == []  # known: nothing read
