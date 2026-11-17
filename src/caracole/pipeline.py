@@ -1,6 +1,6 @@
 """The nightly ``caracole run`` (plan §6).
 
-Steps, in order: sync → icons → index → match → lyrics → megalobiz → azlyrics → fetch → lacuerda →
+Steps, in order: sync → icons → index → ug-directory → match → lyrics → megalobiz → azlyrics → fetch → lacuerda →
 scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo → backup. Each step runs
 even if an earlier one failed, so the to-do page is always rewritten; the backup alone, a whole copy of the
 database (backup.py), waits for a run no step of which failed.
@@ -79,15 +79,20 @@ clock = time.monotonic  # what the run's duration is measured with; tests replac
 
 @dataclass
 class Services:
+    """A run's clients, one a provider (``clients``), the ntfy notifier, and UG's artist directory's own client
+    (``directory``: ``_common.directory_client``, several requests in flight at once, a budget of its own; None for a
+    run that reads no directory)."""
+
     clients: Mapping[str, Any]
     notifier: Notifier
+    directory: Any = None
 
     def client(self, provider: str) -> Client:
         return self.clients[provider]
 
     def close(self) -> None:
         """Close every client that can be closed; a polite client holds caracole's lock until then."""
-        for client in self.clients.values():
+        for client in [*self.clients.values(), self.directory]:
             close = getattr(client, "close", None)
             if close is not None:
                 close()
@@ -235,6 +240,37 @@ def _index(ctx: StepContext) -> StepResult:
     return StepResult(title="Index refresh",
                       done=_counted(_n(new, "new tab"), _n(dirty, "song", "to fetch again")),
                       status=f"{new} new tabs, {dirty} songs to refetch")
+
+
+def _directory(ctx: StepContext) -> StepResult:
+    """UG's artist directory (ug/directory.py): the listings due, then the bare artists' pages due, with the
+    directory's own client and budget, so that match and the fetch see what it found."""
+    from caracole.ug.bands import LETTERS
+    from caracole.ug.directory import directory_pass, index_state
+
+    from caracole.ug.index import index_count
+
+    title = "UG's artist directory"
+    client = ctx.services.directory
+    if client is None:
+        return StepResult(status="skipped: no client for it this run")
+    if index_count(ctx.conn) == 0:  # the index step says what to do: build it once, then the directory follows
+        return StepResult(status="skipped: the index is empty; run `caracole index build` once")
+    s = directory_pass(ctx.conn, client, ctx.now, overrides=ctx.overrides, library_dir=ctx.cfg.library_dir)
+    state = index_state(ctx.conn)
+    result = StepResult(
+        title=title,
+        done=_counted(_n(s.pages, "listing page", "read"), _n(s.new, "new artist"), _n(s.read, "artist page", "read")),
+        status=(f"{plural(s.pages, 'listing page')}, {plural(s.artists, 'artist')} ({s.new} new), "
+                f"{plural(s.read, 'bare artist page')} read, {plural(s.errors, 'error')}; {state.artists:,} artists, "
+                f"{state.letters_read} of {len(LETTERS)} listings read whole, {state.read:,} of {state.bare:,} bare "
+                "pages read" + (" (budget spent)" if s.budget_exhausted else "")),
+    )
+    if s.errors:
+        record_error(ctx.conn, "ug", ctx.now, f"{plural(s.errors, 'page')} of UG's directory couldn't be read")
+        result.problems.append(Problem(f"{plural(s.errors, 'page')} of UG's artist directory couldn't be read this "
+                                       "run; each is asked for again on the next run, and the log says why."))
+    return result
 
 
 def _match(ctx: StepContext) -> StepResult:
@@ -629,6 +665,8 @@ def default_steps() -> list[Step]:
         Step("sync", _sync),
         Step("icons", _icons),
         Step("index", _index, provider="ug"),
+        # Before match and the fetch, so that both find the artists UG's listings name (ug/directory.py).
+        Step("ug-directory", _directory, provider="ug"),
         Step("match", _match),
         Step("lyrics", _lyrics, provider="lrclib"),
         # Right after LRCLIB: timed lyrics for the songs it left without, before the fetch scores sheets by them.
@@ -663,35 +701,47 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
     ``make_youtube``): each holds caracole's lock until it is closed, and its first
     request keeps the pause after the provider's last one, whichever caracole sent it.
     """
-    from caracole.commands._common import make_client, make_youtube, transport_for
+    from caracole.commands._common import directory_client, make_client, make_youtube, transport_for
     from caracole.youtube_fetch import route_problem
 
     clients: dict[str, Any] = {}
+    directory = None
     try:
         for p in PROVIDERS:
             if cfg.provider(p).enabled:
                 clients[p] = make_client(cfg, conn, p, run_id)
         if route_problem(cfg) is None:
             clients["youtube"] = make_youtube(cfg, conn, run_id)
+        directory = directory_client(cfg, conn, run_id)
     except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
         for client in clients.values():
             client.close()
         raise
     notifier = Notifier(cfg.ntfy.url, transport=transport_for("ntfy"))
-    return Services(clients=clients, notifier=notifier)
+    return Services(clients=clients, notifier=notifier, directory=directory)
 
 
 def _requests(services: Services) -> dict[str, int]:
-    return {p: int(getattr(c, "requests_made", 0)) for p, c in services.clients.items()}
+    """Each provider's requests this run: UG's directory's (its own client's) with UG's."""
+    made = {p: int(getattr(c, "requests_made", 0)) for p, c in services.clients.items()}
+    directory = int(getattr(services.directory, "requests_made", 0) or 0)
+    if directory:
+        made["ug"] = made.get("ug", 0) + directory
+    return made
 
 
 def _budgets(services: Services) -> dict[str, int]:
-    """Each client's request budget for the run, when it has one (a ``PoliteClient``'s policy, not ``NO_BUDGET``)."""
+    """Each client's request budget for the run, when it has one (a ``PoliteClient``'s policy, not ``NO_BUDGET``):
+    UG's with its directory's, once that sent any."""
     budgets = {}
     for p, c in services.clients.items():
         budget = getattr(getattr(c, "policy", None), "budget", None)
         if isinstance(budget, int) and budget != NO_BUDGET:
             budgets[p] = budget
+    d = services.directory
+    budget = getattr(getattr(d, "policy", None), "budget", None)
+    if isinstance(budget, int) and getattr(d, "requests_made", 0):
+        budgets["ug"] = budgets.get("ug", 0) + budget
     return budgets
 
 

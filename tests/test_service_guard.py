@@ -93,7 +93,7 @@ def invoke(*args: str):
 
 
 BUILDS = [("run",), ("index", "build"), ("index", "refresh"), ("gtptabs",), ("musescore",), ("harptabs", "--index"),
-          ("gametabs", "--index"), ("lacuerda", "--index")]
+          ("gametabs", "--index"), ("lacuerda", "--index"), ("ug", "--directory")]
 
 
 @pytest.mark.parametrize("words", BUILDS, ids=lambda w: " ".join(w))

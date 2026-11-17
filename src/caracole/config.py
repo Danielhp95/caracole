@@ -141,6 +141,19 @@ _RANK_RANGES = {
 
 
 @dataclass(frozen=True)
+class DirectoryPolicy:
+    """How UG's artist directory is read (ug/directory.py, ``[ug_directory]``): its letter listings, then every bare
+    artist's page, ``concurrency`` requests in flight at once, a random pause from ``delay`` before each, and
+    ``budget`` requests a run, of its own beside UG's. The owner's choice of 2026-11-17 ("Ignore the politeness for
+    this"): the whole read in about an hour, some 20,000 requests at about five a second, where every other UG request
+    goes one at a time, 2.5–5 s apart, 60 a night. Politeness, so never a setting the phone takes (politeness.py)."""
+
+    concurrency: int = 6
+    delay: tuple[float, float] = (0.0, 0.0)
+    budget: int = 25_000
+
+
+@dataclass(frozen=True)
 class NtfyConfig:
     url: str | None = None  # the topic's URL, posted to as it is; None: no alerts
 
@@ -175,6 +188,7 @@ class Config:
     providers: Mapping[str, ProviderPolicy] = field(default_factory=lambda: dict(DEFAULT_PROVIDERS))
     match: MatchPolicy = field(default_factory=MatchPolicy)
     rank: RankPolicy = field(default_factory=RankPolicy)
+    ug_directory: DirectoryPolicy = field(default_factory=DirectoryPolicy)
     ntfy: NtfyConfig = field(default_factory=NtfyConfig)
     autochords: AutochordsConfig = field(default_factory=AutochordsConfig)
 
@@ -196,10 +210,12 @@ _TOP_KEYS = {
     "name", "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
     "user_agent", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
-    "providers", "match", "rank", "ntfy", "autochords",
+    "providers", "match", "rank", "ug_directory", "ntfy", "autochords",
 }
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url"}
+_DIRECTORY_KEYS = {"concurrency", "delay", "budget"}
+DIRECTORY_CONCURRENCY_MAX = 32  # requests in flight at once that [ug_directory].concurrency may ask, at most
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
 
 
@@ -331,6 +347,18 @@ def _count(value: Any, where: str) -> int:
     return value
 
 
+def _directory(table: Mapping[str, Any]) -> DirectoryPolicy:
+    """``[ug_directory]``: its concurrency (1 to ``DIRECTORY_CONCURRENCY_MAX``), its delay and its budget."""
+    where = "[ug_directory]"
+    _check_keys(table, _DIRECTORY_KEYS, where)
+    base = DirectoryPolicy()
+    concurrency = int(_number(table.get("concurrency", base.concurrency), f"{where}.concurrency", 1,
+                              DIRECTORY_CONCURRENCY_MAX, True))
+    delay = _delay(table["delay"], where) if "delay" in table else base.delay
+    return DirectoryPolicy(concurrency=concurrency, delay=delay,
+                           budget=_count(table.get("budget", base.budget), f"{where}.budget"))
+
+
 def _default_config_path(paths: _Paths) -> Path | None:
     xdg = paths.env.get("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else paths.home / ".config"
@@ -405,6 +433,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             f"[match].review ({match.review:g}) must not be above [match].accept ({match.accept:g})"
         )
     rank = RankPolicy(**_numbers(_table(data, "rank"), _RANK_RANGES, "[rank]"))
+    ug_directory = _directory(_table(data, "ug_directory"))
 
     ntfy_t = _table(data, "ntfy")
     _check_keys(ntfy_t, _NTFY_KEYS, "[ntfy]")
@@ -445,6 +474,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         providers=providers,
         match=match,
         rank=rank,
+        ug_directory=ug_directory,
         ntfy=ntfy,
         autochords=autochords,
     )

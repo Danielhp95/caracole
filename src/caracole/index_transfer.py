@@ -99,15 +99,16 @@ def _sites() -> dict[str, Site]:
         lacuerda_index,
         musescore_fetch,
     )
-    from caracole.ug import artist_tabs
+    from caracole.ug import artist_tabs, directory
     from caracole.ug import index as ug
 
     def sitemaps(site: Any) -> tuple[str, str]:
         return site.sitemaps_key, site.complete_key
 
     return {s.name: s for s in (
-        Site("ug", "Ultimate Guitar", ("ug_index", "ug_artist_tabs"),
-             (ug.SITEMAPS_KEY, ug.LISTED_KEY, ug.BUILT_KEY, ug.REFRESHED_KEY, artist_tabs.KEYS_KEY)),
+        Site("ug", "Ultimate Guitar", ("ug_index", "ug_artist_tabs", "ug_directory"),
+             (ug.SITEMAPS_KEY, ug.LISTED_KEY, ug.BUILT_KEY, ug.REFRESHED_KEY, artist_tabs.KEYS_KEY,
+              directory.LETTERS_KEY, directory.KEYS_KEY)),
         Site("lacuerda", "LaCuerda", ("lacuerda_index",),
              (lacuerda_index.PAGES_KEY, lacuerda_index.COMPLETE_KEY, lacuerda_index.KEYS_KEY)),
         Site("gtptabs", "gtptabs.com", ("gtptabs_index",), sitemaps(gtptabs_fetch.SITE)),
@@ -148,7 +149,9 @@ PAGES: dict[str, Pages] = _pages()
 
 
 _PLURALS = {"tab of its artist pages": "tabs of its artist pages",
-            "row of its search's answers": "rows of its search's answers"}
+            "row of its search's answers": "rows of its search's answers",
+            "artist of its directory": "artists of its directory",
+            "artist page read of its directory": "artist pages read of its directory"}
 
 
 def counted(n: int, noun: str) -> str:
@@ -700,6 +703,7 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
     plan.take("tab of its artist pages", tabs, take_tabs)
     if tabs:
         _keys_again(conn, plan, artist_tabs.KEYS_KEY)
+    _plan_directory(conn, plan)
     # The index's state: refreshed at the later time, built once either was, and listed as the later read saw it.
     mine_seen = max(filter(None, map(stamps.parse, (_kv(conn, "main", ug.REFRESHED_KEY),
                                                     _kv(conn, "main", ug.BUILT_KEY)))), default=None)
@@ -715,6 +719,65 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
     if built is not None and _kv(conn, "main", ug.BUILT_KEY) is None:
         plan.kv[ug.BUILT_KEY] = built
         plan.records.append("the index built whole")
+
+
+def _round(entry: Any) -> tuple[Any, ...]:
+    """How far a listing's round of UG's artist directory has got, to compare two: its last whole read, then its
+    round's start, then its next page (ug/directory.py ``LetterState``); a time missing or unreadable is earlier than
+    any."""
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    entry = entry if isinstance(entry, dict) else {}
+    earliest = _dt.min.replace(tzinfo=UTC)
+
+    def when(key: str) -> Any:
+        value = entry.get(key)
+        return (stamps.parse(value) if isinstance(value, str) else None) or earliest
+
+    page = entry.get("next")
+    return when("done"), when("started"), page if isinstance(page, int) and not isinstance(page, bool) else 0
+
+
+def _plan_directory(conn: sqlite3.Connection, plan: _Plan) -> None:
+    """UG's artist directory (ug/directory.py): a row the file saw later in a listing (``seen_at``), or one the
+    database lacks, takes the file's listing columns; a page the file read later (``read_at``) its read columns; and a
+    listing's round, the file's where it got further (``_round``), never back. A listing never removes an artist, so
+    neither does a merge."""
+    from caracole.ug import directory
+
+    listed = ("name", "slug", "letter", "place", "tabs", "updated_at", "artist_key", "forms", "seen_at")
+    seen = (f"FROM {THEIRS}.ug_directory t LEFT JOIN main.ug_directory m ON m.artist_id = t.artist_id "
+            "WHERE m.artist_id IS NULL OR t.seen_at > m.seen_at")
+    read = (f"FROM {THEIRS}.ug_directory t JOIN main.ug_directory m ON m.artist_id = t.artist_id "
+            "WHERE t.read_at > m.read_at")
+    seen_n = conn.execute(f"SELECT COUNT(*) {seen}").fetchone()[0]
+    read_n = conn.execute(f"SELECT COUNT(*) {read}").fetchone()[0]
+
+    def take_seen(c: sqlite3.Connection) -> None:
+        cols = _columns(c, "main", "ug_directory")
+        c.execute(f"INSERT INTO main.ug_directory ({', '.join(cols)}) SELECT {', '.join(cols)} FROM "
+                  f"{THEIRS}.ug_directory WHERE true ON CONFLICT (artist_id) DO UPDATE SET "
+                  + ", ".join(f"{col} = excluded.{col}" for col in listed)
+                  + " WHERE excluded.seen_at > ug_directory.seen_at")
+
+    def take_read(c: sqlite3.Connection) -> None:
+        c.execute(f"UPDATE main.ug_directory AS m SET read_at = t.read_at, read_tabs = t.read_tabs, "
+                  f"read_updated = t.read_updated FROM {THEIRS}.ug_directory AS t "
+                  "WHERE t.artist_id = m.artist_id AND t.read_at > m.read_at")
+
+    # The read columns first: a row the file saw later takes its listing columns alone.
+    plan.take("artist page read of its directory", read_n, take_read)
+    plan.take("artist of its directory", seen_n, take_seen)
+    if seen_n:
+        _keys_again(conn, plan, directory.KEYS_KEY)
+    mine, theirs = _records(conn, "main", directory.LETTERS_KEY), _records(conn, THEIRS, directory.LETTERS_KEY)
+    moved = sorted(letter for letter, entry in theirs.items()
+                   if isinstance(entry, dict) and _round(entry) > _round(mine.get(letter)))
+    if moved:
+        plan.kv[directory.LETTERS_KEY] = json.dumps({k: v for k, v in sorted({**mine, **{n: theirs[n] for n in moved}}
+                                                                              .items())}, ensure_ascii=False)
+        plan.records.append("its directory's listings")
 
 
 # --- the newest read -----------------------------------------------------------------------------------------------
@@ -742,9 +805,13 @@ def newest(conn: sqlite3.Connection) -> dict[str, str]:
     def site_index(site: Any) -> list[Any]:
         return [*recorded(site.sitemaps_key, "checked_at"), _kv(conn, "main", site.complete_key)]
 
+    from caracole.ug import directory
+
     times = {
         "ug": [*recorded(ug.SITEMAPS_KEY, "indexed_at"), *read_at("ug_artist_tabs"),
-               _kv(conn, "main", ug.REFRESHED_KEY), _kv(conn, "main", ug.BUILT_KEY)],
+               _kv(conn, "main", ug.REFRESHED_KEY), _kv(conn, "main", ug.BUILT_KEY),
+               *conn.execute("SELECT MAX(seen_at), MAX(read_at) FROM main.ug_directory").fetchone(),
+               *recorded(directory.LETTERS_KEY, "done"), *recorded(directory.LETTERS_KEY, "started")],
         "lacuerda": [*recorded(lacuerda_index.PAGES_KEY, "checked_at"), _kv(conn, "main", lacuerda_index.COMPLETE_KEY)],
         "gtptabs": site_index(gtptabs_fetch.SITE),
         "musescore": site_index(musescore_fetch.SITE),
@@ -796,9 +863,10 @@ def _apply(conn: sqlite3.Connection, plan: _Plan) -> SiteMerge:
 def _current_keys(conn: sqlite3.Connection, name: str) -> None:
     """Each index's keys made current, as its next read would make them (and whole, its keys record let go)."""
     if name == "ug":
-        from caracole.ug import artist_tabs
+        from caracole.ug import artist_tabs, directory
 
         artist_tabs.ensure_current_keys(conn)
+        directory.ensure_current_keys(conn)
     elif name == "lacuerda":
         from caracole import lacuerda_index
 

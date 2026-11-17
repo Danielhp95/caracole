@@ -46,7 +46,7 @@ REGENERATE = "CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_con
 
 # The base tables a fixture holds, parents first; then the phone's (when they exist) and kv.
 FIXTURE_TABLES = (
-    "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "lacuerda_index",
+    "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "ug_directory", "lacuerda_index",
     "gtptabs_index", "musescore_index", "harptabs_index", "harptabs_artists", "harptabs_artist_tabs",
     "gametabs_index", "gametabs_games", "gametabs_game_tabs",
 )

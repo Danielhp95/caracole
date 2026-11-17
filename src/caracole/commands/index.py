@@ -184,16 +184,19 @@ def _refresh(cfg: Config) -> None:
 
 
 def _stats(cfg: Config) -> None:
-    """The UG index's counts, then how far harptabs.com's artist index and gametabs.net's game index have got, once
-    their sitemaps are read."""
+    """The UG index's counts, then how far UG's artist directory, harptabs.com's artist index and gametabs.net's game
+    index have got, once begun."""
     from caracole.gametabs_index import index_state as game_state
     from caracole.harptabs_index import index_state
+    from caracole.ug.bands import LETTERS
+    from caracole.ug.directory import index_state as directory_state
     from caracole.ug.index import index_stats
 
     with closing(open_db(cfg)) as conn:
         s = index_stats(conn)
         harp = index_state(conn)
         game = game_state(conn)
+        directory = directory_state(conn)
     if not s["rows"]:
         typer.echo("The index is empty: run `caracole index build`.")
     else:
@@ -203,6 +206,13 @@ def _stats(cfg: Config) -> None:
         typer.echo(f"Sitemaps indexed: {s['sitemaps']}")
         typer.echo(f"Newest tab id: {s['newest_tab_id']}")
         typer.echo(f"Built: {s['built_at'] or 'never'}; refreshed: {s['refreshed_at'] or 'never'}")
+    if directory.artists or any(state.started for state in directory.letters.values()):
+        # How far its listings and its bare artists' pages have got; a round's artists seen against UG's own count.
+        rest = ("" if directory.complete and directory.read >= directory.bare
+                else "; caracole ug --directory reads the rest")
+        typer.echo(f"UG's artist directory: {directory.artists:,} of about {directory.counted:,} artists, "
+                   f"{directory.letters_read} of {len(LETTERS)} listings read whole; {directory.read:,} of "
+                   f"{directory.bare:,} bare artists' pages read{rest}.")
     if harp.artists:
         rest = "" if harp.complete else "; caracole harptabs --index reads the rest"
         typer.echo(f"harptabs.com: {harp.read:,} of {harp.artists:,} artist pages read, "

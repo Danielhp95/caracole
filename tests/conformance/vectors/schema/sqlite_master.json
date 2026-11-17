@@ -272,6 +272,24 @@
    "type": "index"
   },
   {
+   "name": "ug_directory_bare",
+   "sql": "CREATE INDEX ug_directory_bare ON ug_directory(slug, tabs)",
+   "tbl_name": "ug_directory",
+   "type": "index"
+  },
+  {
+   "name": "ug_directory_key",
+   "sql": "CREATE INDEX ug_directory_key ON ug_directory(artist_key)",
+   "tbl_name": "ug_directory",
+   "type": "index"
+  },
+  {
+   "name": "ug_directory_letter",
+   "sql": "CREATE INDEX ug_directory_letter ON ug_directory(letter, seen_at)",
+   "tbl_name": "ug_directory",
+   "type": "index"
+  },
+  {
    "name": "ug_index_artist",
    "sql": "CREATE INDEX ug_index_artist ON ug_index(artist_key, song_key)",
    "tbl_name": "ug_index",
@@ -422,6 +440,12 @@
    "type": "table"
   },
   {
+   "name": "ug_directory",
+   "sql": "CREATE TABLE ug_directory (\n  artist_id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  slug TEXT NOT NULL DEFAULT '',\n  letter TEXT NOT NULL,\n  place INTEGER NOT NULL DEFAULT 0,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  updated_at TEXT NOT NULL DEFAULT '',\n  artist_key TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  seen_at TEXT NOT NULL,\n  read_at TEXT NOT NULL DEFAULT '',\n  read_tabs INTEGER NOT NULL DEFAULT 0,\n  read_updated TEXT NOT NULL DEFAULT ''\n)",
+   "tbl_name": "ug_directory",
+   "type": "table"
+  },
+  {
    "name": "ug_index",
    "sql": "CREATE TABLE ug_index (\n  tab_id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  type TEXT NOT NULL,\n  sitemap TEXT NOT NULL,\n  first_seen TEXT NOT NULL,\n  path TEXT NOT NULL DEFAULT ''\n)",
    "tbl_name": "ug_index",
@@ -512,6 +536,24 @@
    "type": "trigger"
   },
   {
+   "name": "ug_directory_artist_added",
+   "sql": "CREATE TRIGGER ug_directory_artist_added AFTER INSERT ON ug_directory BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND",
+   "tbl_name": "ug_directory",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_directory_artist_changed",
+   "sql": "CREATE TRIGGER ug_directory_artist_changed AFTER UPDATE OF artist_key ON ug_directory\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\n  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);\nEND",
+   "tbl_name": "ug_directory",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_directory_artist_gone",
+   "sql": "CREATE TRIGGER ug_directory_artist_gone AFTER DELETE ON ug_directory\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\nAND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND",
+   "tbl_name": "ug_directory",
+   "type": "trigger"
+  },
+  {
    "name": "ug_index_artist_added",
    "sql": "CREATE TRIGGER ug_index_artist_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND",
    "tbl_name": "ug_index",
@@ -519,13 +561,13 @@
   },
   {
    "name": "ug_index_artist_changed",
-   "sql": "CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);\nEND",
+   "sql": "CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\n  AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key);\nEND",
    "tbl_name": "ug_index",
    "type": "trigger"
   },
   {
    "name": "ug_index_artist_gone",
-   "sql": "CREATE TRIGGER ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND",
+   "sql": "CREATE TRIGGER ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key)\nAND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND",
    "tbl_name": "ug_index",
    "type": "trigger"
   },

@@ -162,6 +162,10 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, now
     if not artist_is_known(conn, song, overrides) or pasted_page_problem(conn, song, overrides) is not None:
         steps = {c.get("step") for c in song.match_candidates or []}
         spelt = f" and {artist} is spelt right" if "typo_artist" in steps else ""
+        if _listed_whole(conn) and pasted_page_problem(conn, song, overrides) is None:
+            return (f"{head}. UG's artist listings, read whole, name no {artist}: if none is the song you "
+                    f"want{spelt}, UG has no page of theirs by that name, and an `[artist_url]` still takes one you "
+                    "find.")
         if _leads_elsewhere(song):  # not under Artists to find while these candidates stand
             return (f"{head}. If none is the song you want{spelt}, dismiss them all (below): UG may list {artist} "
                     "only by bare ids, and the to-do page then lists them under Artists to find.")
@@ -311,7 +315,22 @@ def _partial_sheets(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int
     return items
 
 
+def _listed_whole(conn: sqlite3.Connection) -> bool:
+    """Whether UG's artist directory has read every listing whole (ug/directory.py): an artist it lacks is on none."""
+    from caracole.ug.directory import index_state
+
+    return index_state(conn).complete
+
+
 def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides) -> tuple[list[str], int]:
+    """The artists whose UG page caracole can't find, to look for by hand: none once UG's artist directory has read
+    every listing whole (ug/directory.py), and meanwhile only those whose listing it hasn't read whole yet (a name in
+    Latin letters under its first letter; any other name until every listing is read)."""
+    from caracole.ug.directory import index_state, letter_of
+
+    state = index_state(conn)
+    if state.complete:
+        return [], 0
     wanted: dict[str, list[Song]] = {}
     pasted: dict[str, tuple[str, str]] = {}  # artist -> (the tab page under [artist_url], what is wrong with it)
     for s in songs:
@@ -327,6 +346,9 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
             continue
         if _leads_elsewhere(s):
             continue
+        letter = letter_of(s.artist)
+        if problem is None and letter != "0-9" and state.letter_read(letter):
+            continue  # its listing, read whole, names no artist of that name: nothing to find
         wanted.setdefault(s.artist, []).append(s)
         if problem is not None:
             pasted.setdefault(s.artist, problem)

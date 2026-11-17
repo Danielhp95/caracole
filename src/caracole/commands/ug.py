@@ -1,4 +1,5 @@
-"""``caracole ug --link URL``: an Ultimate Guitar page pasted into the library page's search box, read now.
+"""``caracole ug --link URL``: an Ultimate Guitar page pasted into the library page's search box, read now; and
+``caracole ug --directory``: UG's artist directory read (ug/directory.py), bulk work at the pace the owner chose for it.
 
 A tab's page (``/tab/{id}`` or a slugged one), then its artist's page, whose lists the fetch reads too, or an artist's
 page alone (``/artist/…``): an interactive lookup, at the lookup pace (as ``caracole harptabs --artist`` asks: a
@@ -35,22 +36,98 @@ def register(app: typer.Typer) -> None:
     @app.command("ug")
     def ug_cmd(
         ctx: typer.Context,
-        link: str = typer.Option(
-            ..., "--link", metavar="URL",
+        link: str | None = typer.Option(
+            None, "--link", metavar="URL",
             help="An Ultimate Guitar page to read now, at the lookup pace: a tab's page (then its artist's page) or an "
                  "artist's page, their tabs kept for searches.",
+        ),
+        directory: bool = typer.Option(
+            False, "--directory",
+            help="Instead, read UG's artist directory: its letter listings, then the page of every artist they name "
+                 "by a bare address, several requests at once (\\[ug_directory]), going on where the last pass "
+                 "stopped.",
+        ),
+        budget: int | None = typer.Option(
+            None, "--budget", metavar="N", min=0,
+            help="With --directory: the requests it may send (default \\[ug_directory].budget).",
         ),
         progress: bool = typer.Option(
             False, "--progress", help="A JSON line per stage (the tab page, the artist page), for caracole serve.",
         ),
     ) -> None:
-        """Read an Ultimate Guitar page pasted into the library page now: a tab and its artist's page."""
+        """Read an Ultimate Guitar page pasted into the library page now (--link), or UG's artist directory
+        (--directory)."""
         from caracole.ug_urls import read_link
 
+        if directory == (link is not None):
+            _common.fail("give --link URL (a page now) or --directory (UG's artist directory), one of them", 2)
+        if budget is not None and not directory:
+            _common.fail("--budget goes with --directory", 2)
+        if directory:
+            _directory(load_cfg(ctx, builds_index="ug --directory"), budget)
+            return
         found = read_link(link)
         if found is None:
             _common.fail(f"--link: not an Ultimate Guitar tab's or artist's page: {link!r}", 2)
         _read(load_cfg(ctx), found, progress=progress)
+
+
+def _directory(cfg: Config, budget: int | None) -> None:
+    """``--directory``: a pass of UG's artist directory (ug/directory.py), at its own pace and budget, then what it
+    read and how far the directory has got. A cooldown or a block says so and exits 0, as the nightly run's steps
+    do; a block records UG's cooldown (the fetch and lookups cool too) and sends one alert."""
+    from contextlib import closing
+
+    from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
+    from caracole.http import ProviderBlocked
+    from caracole.logs import plural
+    from caracole.stamps import shown
+    from caracole.ug.directory import PROVIDER, directory_pass, index_state
+
+    overrides = load_ovr(cfg)
+    with exclusive(cfg, "ug --directory"), closing(open_db(cfg)) as conn:
+        now = utcnow()
+        if is_cooling(conn, PROVIDER, now):
+            typer.echo(f"Ultimate Guitar is cooling down after a block until "
+                       f"{shown(get_state(conn, PROVIDER).cooldown_until)}; caracole won't ask it before then.")
+            return
+        run_id = _common.run_id_for(now)
+        client = _common.directory_client(cfg, conn, run_id, budget=budget)
+        try:
+            stats = directory_pass(conn, client, now, overrides=overrides, library_dir=cfg.library_dir)
+        except ProviderBlocked as e:
+            state = record_block(conn, PROVIDER, now, str(e))
+            message = (f"{e}\nNo more requests to Ultimate Guitar until {shown(state.cooldown_until)} "
+                       f"(block #{state.strikes}). Nothing was marked missing.")
+            _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
+            typer.echo(f"Ultimate Guitar blocked caracole: {message}")
+            _say_state(index_state(conn))
+            return
+        finally:
+            client.close()
+        if stats.errors:
+            record_error(conn, PROVIDER, now, f"{plural(stats.errors, 'page')} of UG's directory couldn't be read")
+        if answered_any(conn, run_id, PROVIDER, client.requests_made):
+            record_ok(conn, PROVIDER, now)
+        done = f"; read whole: {', '.join(stats.letters_done)}" if stats.letters_done else ""
+        typer.echo(f"UG's listings: {plural(stats.pages, 'page')} read, {plural(stats.artists, 'artist')} "
+                   f"({stats.new:,} new){done}.")
+        gone = f", {stats.gone} gone" if stats.gone else ""
+        typer.echo(f"Bare artists' pages: {plural(stats.read, 'page')} read{gone}.")
+        if stats.errors:
+            typer.echo(f"{plural(stats.errors, 'page')} couldn't be read; each is asked for again on the next pass, "
+                       "and the log says why.")
+        if stats.budget_exhausted:
+            typer.echo(f"The budget of {plural(client.policy.budget, 'request')} is spent: the next pass goes on "
+                       "where this one stopped.")
+        _say_state(index_state(conn))
+
+
+def _say_state(state) -> None:
+    from caracole.ug.bands import LETTERS
+
+    typer.echo(f"The directory: {state.artists:,} of about {state.counted:,} artists, {state.letters_read} of "
+               f"{len(LETTERS)} listings read whole; {state.read:,} of {state.bare:,} bare artists' pages read.")
 
 
 def _read(cfg: Config, link, *, progress: bool) -> None:

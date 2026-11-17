@@ -29,7 +29,10 @@ import logging
 import os
 import random
 import re
+import threading
 import time
+from collections import deque
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -641,8 +644,12 @@ class PoliteClient:
 
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""
-        import httpx
+        self._claim(url, request)
+        return self._transmit(url, request)
 
+    def _claim(self, url: str, request: httpx.Request) -> None:
+        """What a request must clear before it is sent: no block this run, the breaker closed, the budget, then the
+        pause; the request counted. ``ParallelClient`` clears one at a time, under its lock."""
         if self._blocked is not None:
             raise ProviderBlocked(self.provider, url, self._blocked.status, "blocked earlier this run")
         if self._unavailable:
@@ -656,6 +663,12 @@ class PoliteClient:
         self._pause(str(request.url))
         self.requests_made += 1
         self._last_request = self._clock()
+
+    def _transmit(self, url: str, request: httpx.Request) -> httpx.Response:
+        """A request ``_claim`` cleared, sent: a connection that fails before any byte is sent tried again while the
+        client's patience lasts, the answer logged, a block raised."""
+        import httpx
+
         while True:
             sent = perf_counter()
             try:
@@ -746,6 +759,116 @@ class PoliteClient:
         meta = {"url": url, "status": status, "headers": dict(headers), "fetched_at": stamp}
         _replace(self._paths(key)[1], json.dumps(meta, ensure_ascii=False).encode("utf-8"))
         return stamp
+
+
+class ParallelClient(PoliteClient):
+    """``PoliteClient``'s rules with several requests in flight at once: one provider's client for a pass the owner
+    chose to read quicker than one request at a time (UG's artist directory, ug/directory.py: "Ignore the politeness
+    for this", 2026-11-17).
+
+    Every rule is ``PoliteClient``'s own, none copied: the cache first, robots.txt, the budget, the pause, a block
+    (after one, nothing more is sent), the breaker, redirects one checked hop at a time, every request an event. Its
+    workers (``workers`` threads, ``get_many``) clear each request one at a time (``_claim``, under a lock: the budget
+    counted and the pause kept between two requests begun, so a ``policy.delay`` of [0, 0] sends them as quickly as
+    the site answers), then send it each alone. The events a worker makes are held (``on_event`` is never called in a
+    worker's thread, as it writes the database) and handed to ``on_event`` in the caller's thread by ``drain``, which
+    ``get_many`` calls before each answer it yields. A plain ``get`` works as a ``PoliteClient``'s, in the caller's
+    thread, its events drained the same way."""
+
+    def __init__(self, *args: Any, workers: int = 1, on_event: Callable[[Event], None] | None = None,
+                 **kwargs: Any):
+        self._held: list[Event] = []
+        self._held_lock = threading.Lock()
+        self._deliver = on_event
+        super().__init__(*args, on_event=self._hold, **kwargs)
+        self.workers = max(1, int(workers))
+        self._lock = threading.RLock()
+        self._owner = threading.get_ident()  # the thread events are drained in: the one that made the client
+
+    def _hold(self, event: Event) -> None:
+        with self._held_lock:
+            self._held.append(event)
+
+    def drain(self) -> None:
+        """Hand the events held since the last drain to ``on_event``, in this thread (the one that made the client), in
+        the order they came."""
+        with self._held_lock:
+            events, self._held = self._held, []
+        if self._deliver is not None:
+            for event in events:
+                self._deliver(event)
+
+    def get(self, url: str, **kwargs: Any) -> Response:
+        try:
+            return super().get(url, **kwargs)
+        finally:
+            if threading.get_ident() == self._owner:
+                self.drain()
+
+    def _claim(self, url: str, request: httpx.Request) -> None:
+        with self._lock:
+            super()._claim(url, request)
+
+    def _fail(self, url: str, status: int | None, message: str) -> None:
+        with self._lock:
+            super()._fail(url, status, message)
+
+    def get_many(self, urls: Sequence[str | tuple[str, Mapping[str, Any]]],
+                 **get: Any) -> Iterator[tuple[str, Response | BaseException]]:
+        """Each of ``urls`` (each once) asked as ``get`` asks it (``get``'s keywords: ``accept``, ``max_age``…, and a
+        URL's own, given as a pair of it and them), up to ``workers`` in flight at once, each answer yielded in the order
+        asked with what ``get`` returned or raised (a ``ProviderError``, ``BudgetExhausted``), the events drained
+        before each.
+
+        After a block, no more is begun: those in flight end as the block left them (asked before it, or refused
+        after it with no request). Once the generator ends, however it ends (the caller stops at a block or a spent
+        budget, an exception, Ctrl-C), nothing not begun is sent, and the requests in flight are waited for, so that
+        no worker outlives it."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        if self._blocked is not None:  # nothing is sent after a block
+            raise ProviderBlocked(self.provider, None, self._blocked.status,
+                                  f"blocked earlier this run ({self._blocked.message or self._blocked})")
+        asked: dict[str, Mapping[str, Any]] = {}
+        for item in urls:
+            url, own = (item, {}) if isinstance(item, str) else item
+            asked.setdefault(url, {**get, **own})
+        todo = iter(list(asked.items()))
+        pending: deque[tuple[str, Any]] = deque()
+        blocked = False
+
+        def one(url: str, kwargs: Mapping[str, Any]) -> Response | BaseException:
+            try:
+                return super(ParallelClient, self).get(url, **kwargs)
+            except (ProviderError, BudgetExhausted) as e:
+                return e
+
+        pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix=f"{self.provider}-get")
+
+        def begin() -> bool:
+            if blocked or self._blocked is not None:
+                return False
+            item = next(todo, None)
+            if item is None:
+                return False
+            pending.append((item[0], pool.submit(one, *item)))
+            return True
+
+        try:
+            while len(pending) < self.workers and begin():
+                pass
+            while pending:
+                url, future = pending.popleft()
+                answer = future.result()
+                self.drain()
+                blocked = blocked or isinstance(answer, ProviderBlocked)
+                begin()
+                yield url, answer
+        finally:
+            for _, future in pending:
+                future.cancel()
+            pool.shutdown(wait=True, cancel_futures=True)
+            self.drain()
 
 
 class CachedAnswers:

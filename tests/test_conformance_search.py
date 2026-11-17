@@ -9,7 +9,8 @@ every stamp caracole would write as now made ``STAMP``, then dumped (``dump_fixt
 against the fixture replayed into a fresh database (``replay_fixture``), never the one it was built in:
 
 - ``ug``: Ultimate Guitar's index read either way (test_search.py's ``EITHER``, the catch-alls, the artist pages read
-  of 宋冬野 and Soda Stereo), your songs (one matched, one in review, one ignored, one under a placeholder artist)
+  of 宋冬野 and Soda Stereo), its artist directory (ug/directory.py: 宋冬野 read, namesakes, bare artists unread),
+  your songs (one matched, one in review, one ignored, one under a placeholder artist)
   and the songs you removed;
 - ``by_word``: artists by a word of their name, the well-known ones and their namesakes, close spellings, and
   LaCuerda's artists beside them;
@@ -42,7 +43,8 @@ so ``LibraryHit.song`` is the song's key). A record whose ``fn`` is a compositio
 - library.jsonl: ``search_library``, ``search_removed``; ``library_by_artist`` of the fixture's songs
   (``songs.list_songs``).
 - index.jsonl: ``find_index``; ``found``: ``found(search_library(conn, q, 5), find_index(conn, q))``, as
-  /api/search puts them together; ``artist_songs``, ``index_artist`` (of the fixture's artist keys, ``sampled``: of
+  /api/search puts them together; ``directory_artists`` (UG's artist directory's artists the query names whose page
+  caracole hasn't read: /api/search's ``ug_directory``); ``artist_songs``, ``index_artist`` (of the fixture's artist keys, ``sampled``: of
   keys alike but for a number, the first three and the last); ``bare_id_hint`` and ``bare_id_unseen`` of
   ``find_index(conn, q)``'s songs then its artists (no overrides.toml); ``no_ones``.
 - suggest.jsonl: ``suggest_artists``, ``suggest_titles``; ``suggestions`` of ``find_index(conn, q)``, and, with
@@ -194,6 +196,17 @@ def build_ug(conn, library: Path) -> None:
     update_song(conn, made["TLC - Creep"].id, status="ignored")
     _removed(conn, ("宋冬野", "安和桥"), ("Plain Jane", "Nothing"), ("Radiohead", "Karma Police"),
              ("Eagles", "Hotel California"), ("Song Dongye", "南方姑娘"))
+    # UG's artist directory (ug/directory.py): 宋冬野, whose page is read (their songs the index's artist rows'); a
+    # namesake in Latin letters; artists with bare addresses whose pages aren't read; one the index has (Radiohead).
+    import test_index_transfer as tt
+
+    at = datetime(2026, 11, 3, 10, 0, tzinfo=UTC)
+    tt.directory_page(conn, "s", 1, 1, [(634073, SONG_DONGYE, "", 42), (88, "Song Dongye", "song_dongye", 3),
+                                        (99, "Soda Stereo", "soda_stereo", 120)], at)
+    tt.directory_page(conn, "j", 1, 1, [(7001, "Joaquín Sabina", "", 230), (7002, "Joaquín", "", 2)], at)
+    tt.directory_page(conn, "0-9", 1, 1, [(13472, "Кино", "", 411), (7003, "Édith Piaf", "", 60)], at)
+    tt.directory_page(conn, "m", 1, 1, [(7004, "Maná", "", 300), (7005, "Mana", "mana", 4)], at)
+    tt.directory_page(conn, "r", 1, 1, [(39, "Radiohead", "radiohead", 1100)], at)
 
 
 def build_by_word(conn, library: Path) -> None:
@@ -645,6 +658,13 @@ def index_records(corpus: Corpus) -> list[dict]:
                     out.append(record("caracole.search.bare_id_hint", name, [q], {"artist": artist},
                                       lambda: search.bare_id_hint(q, [*(f := search.find_index(conn, q)).songs,
                                                                       *f.artists], artist=artist)))
+            for q in queries(name):
+                out.append(record("caracole.search.directory_artists", name, [q], {},
+                                  lambda: search.directory_artists(conn, q)))
+            for q in ("宋冬野", "song dongye", "joaquin sabina", "Кино", "maná", "mana", "radiohead", "édith piaf"):
+                for kw in ({"limit": 1}, {"shown": ["joaquin-sabina", "mana"]}):
+                    out.append(record("caracole.search.directory_artists", name, [q], kw,
+                                      lambda: search.directory_artists(conn, q, **kw)))
             for key in _artist_keys(conn):
                 out.append(record("caracole.search.index_artist", name, [key], {},
                                   lambda: search.index_artist(conn, key)))

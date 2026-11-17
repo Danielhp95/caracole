@@ -147,7 +147,7 @@
 {"args":["banma"],"fixture":"ug","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Anju Panta","hits":[{"artist":"Anju Panta","artist_key":"anju-panta","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"banma-phulyo","title":"Banma Phulyo","url":"https://tabs.ultimate-guitar.com/tab/anju-panta/banma-phulyo-chords-20071","via":"title","votes":0}],"key":"anju-panta","score":100.0,"songs":1,"source":"ug","title":"Banma Phulyo"}]}
 {"args":["banma"],"fixture":"ug","fn":"caracole.search.suggestions","kw":{},"out":[]}
 {"args":["banma"],"fixture":"ug","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
-{"args":["song dongye"],"fixture":"ug","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"Song Dongye","hits":[],"key":"song-dongye","score":100.0,"songs":1,"source":"ug","title":""}]}
+{"args":["song dongye"],"fixture":"ug","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"宋冬野","hits":[],"key":"song-dongye-宋冬野","score":100.0,"songs":6,"source":"ug","title":""},{"artist":"Song Dongye","hits":[],"key":"song-dongye","score":100.0,"songs":1,"source":"ug","title":""}]}
 {"args":["song dongye"],"fixture":"ug","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
 {"args":["song dongye"],"fixture":"ug","fn":"caracole.search.suggestions","kw":{},"out":[]}
 {"args":["song dongye"],"fixture":"ug","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
