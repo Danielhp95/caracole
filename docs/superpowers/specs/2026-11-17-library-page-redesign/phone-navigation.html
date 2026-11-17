@@ -1,0 +1,142 @@
+<style>
+  .cx { --bg:#151312; --surface:#1d1a18; --raised:#26221f; --band:#211d1b; --line:#2b2724; --text:#ece6e2; --muted:#a89f9a; --accent:#f0895c; --appbar:#5a2412;
+        font: 15px/1.35 system-ui, "Adwaita Sans", Roboto, sans-serif; }
+  .cx-grid { display:grid; grid-template-columns: repeat(auto-fill, 372px); gap: 18px; align-items:start; }
+  .cx-phone { width:340px; height:640px; color:var(--text); background:var(--bg); border-radius:22px; border:6px solid #000; overflow:hidden; position:relative; display:flex; flex-direction:column; }
+  .cx-status { height:22px; background:#2a1d17; font-size:11px; color:#d9cfc9; display:flex; align-items:center; padding:0 14px; flex:none; }
+  .cx-appbar { height:52px; background:var(--appbar); color:#fff; display:flex; align-items:center; gap:10px; padding:0 8px 0 14px; flex:none; }
+  .cx-appbar b { flex:1; font-weight:600; font-size:15.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cx-appbar span { width:28px; text-align:center; font-size:18px; }
+  .cx-tabs { display:flex; gap:2px; padding:0 6px; border-bottom:1px solid var(--line); flex:none; overflow:hidden; }
+  .cx-tab { padding:12px 10px 10px; font-size:14.5px; color:var(--muted); font-weight:600; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+  .cx-tab.on { color:var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .cx-n { font-size:11px; background:var(--raised); color:var(--muted); border-radius:999px; padding:0 6px; line-height:17px; }
+  .cx-namerow { display:flex; align-items:center; gap:8px; padding:6px 14px; font-size:14px; color:var(--muted); flex:none; }
+  .cx-pill { font-size:10px; font-weight:800; letter-spacing:.08em; color:#f3c66b; background:#3a2d12; border:1px dashed #f3c66b; border-radius:999px; padding:1px 8px; }
+  .cx-top { padding:10px 12px 8px; display:flex; gap:8px; flex:none; }
+  .cx-search { flex:1; height:38px; border-radius:10px; background:var(--surface); color:var(--muted); display:flex; align-items:center; padding:0 12px; font-size:14px; }
+  .cx-btn { width:38px; height:38px; border-radius:10px; background:var(--surface); display:grid; place-items:center; color:var(--muted); font-size:15px; }
+  .cx-list { flex:1; overflow:hidden; }
+  .cx-head { height:34px; display:flex; align-items:center; padding:0 14px; color:var(--accent); font-weight:700; font-size:14.5px; background:var(--band); }
+  .cx-count { margin-left:auto; color:var(--muted); font-size:12.5px; font-weight:600; }
+  .cx-row { display:flex; align-items:center; gap:7px; padding:0 10px 0 14px; border-bottom:1px solid var(--line); height:53px; }
+  .cx-row.two { height:64px; }
+  .cx-name { flex:1; min-width:0; }
+  .cx-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cx-over { color:var(--accent); font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .cx-key { font-size:12.5px; font-weight:700; color:var(--muted); min-width:28px; text-align:center; flex:none; }
+  .cx-chev { color:var(--muted); flex:none; font-size:13px; }
+  .t-tile { position:relative; width:36px; height:36px; border-radius:9px; background:var(--surface); border:1px solid var(--line); display:grid; place-items:center; flex:none; }
+  .t-badge { position:absolute; right:-4px; bottom:-5px; font-size:8px; font-weight:800; color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:3px; padding:0 2px; line-height:10px; }
+  .cx svg.i { width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:1.8; }
+  .cx-bottom { height:64px; background:#1b1816; border-top:1px solid var(--line); display:flex; flex:none; }
+  .cx-bitem { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:12px; color:var(--muted); font-weight:600; }
+  .cx-bitem i { font-style:normal; width:56px; height:28px; border-radius:999px; display:grid; place-items:center; font-size:15px; }
+  .cx-bitem.on { color:var(--text); } .cx-bitem.on i { background:#4a2a1c; color:var(--accent); }
+  .cx-menu { position:absolute; right:10px; top:76px; width:170px; background:#2a2522; border-radius:8px; box-shadow:0 8px 24px #0009; padding:6px 0; font-size:14px; z-index:2; }
+  .cx-menu div { padding:9px 14px; } .cx-menu .sep { height:1px; padding:0; background:var(--line); margin:4px 0; }
+  .cx-dim { position:absolute; inset:0; background:#0006; z-index:1; }
+  .cx-caption h3 { margin:10px 2px 2px; } .cx-caption p { margin:0 2px; font-size:13px; }
+</style>
+
+<h2>D1 · How should you move between Library, Songbooks, Sites and Journal on the phone?</h2>
+<p class="subtitle">Shown inside the Android app, under its own top bar (sync ⟳ and ⋮). In the app Share is the bar's sync button, so the page has four destinations. Pick one.</p>
+
+<div class="cx">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="n-sheet" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M11 17.5a1.6 1.6 0 1 1-1.6-1.6c.9 0 1.6.7 1.6 1.6V11l4 -1"/></symbol>
+  <symbol id="n-gp" viewBox="0 0 24 24"><path d="M14 10l6-6m-2-1l3 3"/><path d="M10.5 9.5a4 4 0 0 0-5.6 1.2c-.6 1-.2 1.8-1 2.6-1.6 1.6-.6 4.4 1.6 5.8 1.6 1 3.9 1.4 5.4-.1.8-.8 1.6-.4 2.6-1a4 4 0 0 0 1.2-5.6z"/><circle cx="9.5" cy="14.5" r="1.4"/></symbol>
+</svg>
+
+<div class="cx-grid">
+
+  <!-- TODAY -->
+  <div>
+    <div class="cx-phone">
+      <div class="cx-status">9:41</div>
+      <div class="cx-appbar"><b>Phone · caracole · Tabs</b><span>⟳</span><span>⋮</span></div>
+      <div class="cx-tabs"><span class="cx-tab on">Library</span><span class="cx-tab">Songbooks <span class="cx-n">1</span></span><span class="cx-tab">Sites</span><span class="cx-tab">Journal</span></div>
+      <div class="cx-namerow">Tabs <span class="cx-pill">PHONE</span></div>
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div><div class="cx-btn">⚟</div><div class="cx-btn">⇅</div></div>
+      <div class="cx-list">
+        <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#n-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      </div>
+    </div>
+    <div class="cx-caption"><h3>Today</h3><p>Tabs at the top, then a row for the library's name with its PHONE badge, which repeats the app bar right above it.</p></div>
+  </div>
+
+  <!-- A -->
+  <div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-status">9:41</div>
+      <div class="cx-appbar"><b>Phone · caracole · Tabs</b><span>⟳</span><span>⋮</span></div>
+      <div class="cx-tabs"><span class="cx-tab on" style="padding-left:10.5px;padding-right:10.5px;padding-top:14px;padding-bottom:12px">Library</span><span class="cx-tab" style="padding-left:10.5px;padding-right:10.5px;padding-top:14px;padding-bottom:12px">Songbooks <span class="cx-n">1</span></span><span class="cx-tab" style="padding-left:10.5px;padding-right:10.5px;padding-top:14px;padding-bottom:12px">Sites</span><span class="cx-tab" style="padding-left:10.5px;padding-right:10.5px;padding-top:14px;padding-bottom:12px">Journal</span></div>
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div><div class="cx-btn">⚟</div><div class="cx-btn">⇅</div></div>
+      <div class="cx-list">
+        <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#n-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">LC</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      </div>
+    </div>
+    <div class="cx-caption"><h3>A · Top tabs, tightened</h3><p>The same four tabs with wider tap areas, the name row gone (the app bar already says it). Back from Sites or Journal returns to Library. In a phone browser the row scrolls sideways if it doesn't fit.</p></div>
+  </div>
+
+  <!-- B -->
+  <div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-status">9:41</div>
+      <div class="cx-appbar"><b>Phone · caracole · Tabs</b><span>⟳</span><span>⋮</span></div>
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div><div class="cx-btn">⚟</div><div class="cx-btn">⇅</div></div>
+      <div class="cx-list">
+        <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#n-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      </div>
+      <div class="cx-bottom"><div class="cx-bitem on"><i>♪</i>Library</div><div class="cx-bitem"><i>▤</i>Songbooks</div><div class="cx-bitem"><i>⋯</i>More</div></div>
+    </div>
+    <div class="cx-caption"><h3>B · A bottom bar</h3><p>Library, Songbooks and More (Sites, Journal) at the bottom, as Spotify and UG's app do. It hides while you type, since the keyboard would push it up. The laptop keeps its tabs: two layouts to maintain.</p></div>
+  </div>
+
+  <!-- C -->
+  <div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-status">9:41</div>
+      <div class="cx-appbar"><b>Phone · caracole · Tabs</b><span>⟳</span><span>⋮</span></div>
+      <div class="cx-dim"></div>
+      <div class="cx-menu"><div>Sites</div><div>Journal · 1 running</div><div class="sep"></div><div>Settings</div><div>Backups</div></div>
+      <div class="cx-tabs"><span class="cx-tab on" style="padding-left:14px;padding-right:14px">Library</span><span class="cx-tab" style="padding-left:14px;padding-right:14px">Songbooks <span class="cx-n">1</span></span></div>
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div><div class="cx-btn">⚟</div><div class="cx-btn">⇅</div></div>
+      <div class="cx-list">
+        <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#n-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+        <div class="cx-row"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="t-tile"><svg class="i"><use href="#n-sheet"/></svg><span class="t-badge">UG</span></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      </div>
+    </div>
+    <div class="cx-caption"><h3>C · Two tabs, the rest in ⋮</h3><p>Only Library and Songbooks as tabs; Sites and Journal move into the app bar's ⋮ menu (shown open). Calmest, but the Journal's running count is hidden until you open the menu.</p></div>
+  </div>
+
+</div>
+</div>

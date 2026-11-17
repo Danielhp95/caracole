@@ -1,0 +1,174 @@
+<style>
+  .cx { --bg:#151312; --surface:#1d1a18; --raised:#26221f; --band:#211d1b; --line:#2b2724; --text:#ece6e2; --muted:#a89f9a; --accent:#f0895c;
+        font: 15px/1.35 system-ui, "Adwaita Sans", Roboto, sans-serif; }
+  .cx-opt { display:grid; grid-template-columns: 352px 1fr; gap:18px; align-items:start; margin-bottom:26px; padding:14px; }
+  .cx-phone { width:340px; color:var(--text); background:var(--bg); border-radius:18px; border:6px solid #000; overflow:hidden; }
+  .cx-lap { max-width:760px; color:var(--text); background:var(--bg); border-radius:10px; border:1px solid #000; overflow:hidden; padding:6px 0; }
+  .cx-head { height:34px; display:flex; align-items:center; padding:0 14px; color:var(--accent); font-weight:700; font-size:14.5px; background:var(--band); }
+  .cx-count { margin-left:auto; color:var(--muted); font-size:12.5px; font-weight:600; }
+  .cx-row { display:flex; align-items:center; gap:7px; padding:0 10px 0 14px; border-bottom:1px solid var(--line); }
+  .cx-phone .cx-row { height:53px; } .cx-phone .cx-row.two { height:64px; }
+  .cx-lap .cx-row { height:40px; } .cx-lap .cx-head { height:30px; font-size:14px; }
+  .cx-name { flex:1; min-width:0; }
+  .cx-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cx-over { color:var(--accent); font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .cx-key { font-size:12.5px; font-weight:700; color:var(--muted); min-width:28px; text-align:center; flex:none; }
+  .cx-chev { color:var(--muted); flex:none; font-size:13px; }
+  .cx svg.i { width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:1.8; flex:none; }
+  /* today: a tile with a tiny badge in its corner */
+  .t-tile { position:relative; width:36px; height:36px; border-radius:9px; background:var(--surface); border:1px solid var(--line); display:grid; place-items:center; flex:none; }
+  .cx-lap .t-tile { width:30px; height:30px; }
+  .t-badge { position:absolute; right:-4px; bottom:-5px; font-size:6px; font-weight:800; color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:3px; padding:0 2px; line-height:9px; }
+  /* A: icon alone */
+  .a-tile { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .a-tile:hover { background:var(--surface); }
+  .cx-lap .a-tile { width:32px; height:32px; }
+  /* B: icon and the source as a word */
+  .b-btn { display:inline-flex; align-items:center; gap:4px; height:36px; padding:0 8px 0 6px; border-radius:9px; background:var(--surface); flex:none; }
+  .cx-lap .b-btn { height:28px; }
+  .b-src { font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.02em; }
+  /* C: chip by kind and source */
+  .c-chip { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 9px 0 7px; border-radius:8px; background:var(--surface); flex:none; font-size:12.5px; font-weight:600; white-space:nowrap; }
+  .c-chip .b-src { font-weight:600; }
+  .cx-phone .c-chip { height:32px; font-size:12px; padding:0 7px 0 5px; }
+  /* D: kind in words, no source */
+  .d-chip { display:inline-flex; align-items:center; height:30px; padding:0 10px; border-radius:999px; border:1px solid #4a403a; color:var(--text); font-size:12.5px; font-weight:600; flex:none; white-space:nowrap; }
+  .cx-phone .d-chip { height:32px; padding:0 9px; font-size:12px; }
+  .cx-cap h3 { margin:0 0 4px; } .cx-cap p { margin:0 0 6px; font-size:13px; max-width:760px; }
+  .cx-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin:0 0 4px; }
+</style>
+
+<h2>D4 · What should a song line's play buttons show?</h2>
+<p class="subtitle">Each option shows the phone (left) and the laptop (right), with your A1 rows. Today's buttons carry a 6 px site badge on their corner. Pick one, or one for the phone and another for the laptop.</p>
+
+<div class="cx">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="s-sheet" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M11 17.5a1.6 1.6 0 1 1-1.6-1.6c.9 0 1.6.7 1.6 1.6V11l4 -1"/></symbol>
+  <symbol id="s-tab" viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h7"/></symbol>
+  <symbol id="s-gp" viewBox="0 0 24 24"><path d="M14 10l6-6m-2-1l3 3"/><path d="M10.5 9.5a4 4 0 0 0-5.6 1.2c-.6 1-.2 1.8-1 2.6-1.6 1.6-.6 4.4 1.6 5.8 1.6 1 3.9 1.4 5.4-.1.8-.8 1.6-.4 2.6-1a4 4 0 0 0 1.2-5.6z"/><circle cx="9.5" cy="14.5" r="1.4"/></symbol>
+  <symbol id="s-harp" viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="2"/><path d="M6 11v2M9 11v2M12 11v2M15 11v2M18 11v2"/></symbol>
+</svg>
+
+<!-- TODAY -->
+<div class="cx-opt">
+  <div>
+    <p class="cx-label">Phone</p>
+    <div class="cx-phone">
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-harp"/></svg><span class="t-badge">HT</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-tab"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">LC</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+  </div>
+  <div>
+    <p class="cx-label">Laptop</p>
+    <div class="cx-lap">
+      <div class="cx-row"><div class="cx-name"><div class="cx-title"><span class="cx-over">Eagles</span>&nbsp; Hotel California</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-harp"/></svg><span class="t-badge">HT</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="t-tile"><svg class="i"><use href="#s-sheet"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-tab"/></svg><span class="t-badge">UG</span></span><span class="t-tile"><svg class="i"><use href="#s-gp"/></svg><span class="t-badge">GT</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+    <div class="cx-cap" style="margin-top:10px"><h3>Today</h3><p>A tile per thing to play, with a 6 px site badge on its corner: under every guideline's minimum, and it overhangs the row on the phone.</p></div>
+  </div>
+</div>
+
+<!-- A -->
+<div class="cx-opt option" data-choice="a" onclick="toggleSelect(this)">
+  <div>
+    <div class="cx-phone">
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-harp"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-gp"/></svg></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-tab"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-gp"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="cx-lap">
+      <div class="cx-row"><div class="cx-name"><div class="cx-title"><span class="cx-over">Eagles</span>&nbsp; Hotel California</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-harp"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-gp"/></svg></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="a-tile"><svg class="i"><use href="#s-sheet"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-tab"/></svg></span><span class="a-tile"><svg class="i"><use href="#s-gp"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+    <div class="cx-cap" style="margin-top:10px"><h3>A · Icons alone</h3><p>One plain icon per thing to play, no tile and no site. The site shows only in the open card. Quietest; you learn four icons.</p></div>
+  </div>
+</div>
+
+<!-- B -->
+<div class="cx-opt option" data-choice="b" onclick="toggleSelect(this)">
+  <div>
+    <div class="cx-phone">
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-harp"/></svg><span class="b-src">HT</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-gp"/></svg><span class="b-src">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-tab"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-gp"/></svg><span class="b-src">GT</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">LC</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="cx-lap">
+      <div class="cx-row"><div class="cx-name"><div class="cx-title"><span class="cx-over">Eagles</span>&nbsp; Hotel California</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-harp"/></svg><span class="b-src">HT</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-gp"/></svg><span class="b-src">GT</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="b-btn"><svg class="i"><use href="#s-sheet"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-tab"/></svg><span class="b-src">UG</span></span><span class="b-btn"><svg class="i"><use href="#s-gp"/></svg><span class="b-src">GT</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+    <div class="cx-cap" style="margin-top:10px"><h3>B · Icon and the site in letters</h3><p>The site's letters (UG, GT, HT, LC) as readable 11.5 px text beside the icon, never on top of it. Same information as today, legible. Takes more of the line on a phone with three things to play.</p></div>
+  </div>
+</div>
+
+<!-- C -->
+<div class="cx-opt option" data-choice="c" onclick="toggleSelect(this)">
+  <div>
+    <div class="cx-phone">
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords</span><span class="c-chip"><svg class="i"><use href="#s-harp"/></svg>Harp</span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords</span><span class="c-chip"><svg class="i"><use href="#s-gp"/></svg>GP</span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords</span><span class="c-chip"><svg class="i"><use href="#s-tab"/></svg>Tab</span><span class="c-chip"><svg class="i"><use href="#s-gp"/></svg>GP</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords</span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="cx-lap">
+      <div class="cx-row"><div class="cx-name"><div class="cx-title"><span class="cx-over">Eagles</span>&nbsp; Hotel California</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords <span class="b-src">· UG</span></span><span class="c-chip"><svg class="i"><use href="#s-harp"/></svg>Harmonica <span class="b-src">· harptabs</span></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords <span class="b-src">· UG</span></span><span class="c-chip"><svg class="i"><use href="#s-gp"/></svg>Guitar Pro <span class="b-src">· gtptabs</span></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="c-chip"><svg class="i"><use href="#s-sheet"/></svg>Chords <span class="b-src">· UG</span></span><span class="c-chip"><svg class="i"><use href="#s-tab"/></svg>Tab <span class="b-src">· UG</span></span><span class="c-chip"><svg class="i"><use href="#s-gp"/></svg>Guitar Pro <span class="b-src">· gtptabs</span></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+    <div class="cx-cap" style="margin-top:10px"><h3>C · Labelled chips</h3><p>Each button names what it is ("Chords · UG", "Guitar Pro · gtptabs") on the laptop. On the phone only the kind fits, and with three chips the key is pushed off the line (as on Creep).</p></div>
+  </div>
+</div>
+
+<!-- D -->
+<div class="cx-opt option" data-choice="d" onclick="toggleSelect(this)">
+  <div>
+    <div class="cx-phone">
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="d-chip">Chords</span><span class="d-chip">Harp</span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="d-chip">Chords</span><span class="d-chip">GP</span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="d-chip">Chords</span><span class="d-chip">Tab</span><span class="d-chip">GP</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row two"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="d-chip">Chords</span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="cx-lap">
+      <div class="cx-row"><div class="cx-name"><div class="cx-title"><span class="cx-over">Eagles</span>&nbsp; Hotel California</div></div><span class="d-chip">Chords</span><span class="d-chip">Harmonica</span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="d-chip">Chords</span><span class="d-chip">Guitar Pro</span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="d-chip">Chords</span><span class="d-chip">Tab</span><span class="d-chip">Guitar Pro</span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+    </div>
+    <div class="cx-cap" style="margin-top:10px"><h3>D · Words alone, like UG's type badges</h3><p>The kind in words, no icon and no site (the site shows in the open card). Reads at a glance; wide, and three of them crowd the phone's line.</p></div>
+  </div>
+</div>
+
+</div>

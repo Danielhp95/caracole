@@ -1,0 +1,95 @@
+<style>
+  .cx { --bg:#151312; --surface:#1d1a18; --band:#211d1b; --line:#2b2724; --text:#ece6e2; --muted:#a89f9a; --accent:#f0895c;
+        font: 15px/1.35 system-ui, "Adwaita Sans", Roboto, sans-serif; }
+  .cx-grid { display:grid; grid-template-columns: repeat(auto-fill, 372px); gap: 18px; align-items:start; }
+  .cx-phone { width:340px; color:var(--text); background:var(--bg); border-radius:22px; border:6px solid #000; height:560px; overflow:hidden; position:relative; }
+  .cx-top { padding:10px 12px 8px; }
+  .cx-search { height:36px; border-radius:10px; background:var(--surface); color:var(--muted); display:flex; align-items:center; padding:0 12px; font-size:14px; }
+  .cx-head { display:flex; align-items:center; gap:8px; padding:0 14px; color:var(--accent); font-weight:700; background:var(--band); }
+  .cx-head.h44 { height:44px; font-size:16px; }
+  .cx-head.h34 { height:34px; font-size:14.5px; }
+  .cx-head.h26 { height:26px; font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; background:transparent; border-bottom:1px solid var(--line); padding-top:6px; align-items:flex-end; padding-bottom:4px; }
+  .cx-funnel { width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:2; opacity:.8; }
+  .cx-count { margin-left:auto; color:var(--muted); font-size:12.5px; font-weight:600; letter-spacing:0; }
+  .cx-row { display:flex; align-items:center; gap:8px; padding:0 10px 0 14px; border-bottom:1px solid var(--line); }
+  .cx-row.r53 { height:53px; } .cx-row.r64 { height:64px; } .cx-row.r68 { height:68px; }
+  .cx-name { flex:1; min-width:0; }
+  .cx-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cx-over { color:var(--accent); font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; display:flex; align-items:center; gap:5px; }
+  .cx-play { width:36px; height:36px; border-radius:9px; background:var(--surface); display:grid; place-items:center; flex:none; }
+  .cx-play svg { width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:1.8; }
+  .cx-key { font-size:12.5px; font-weight:700; color:var(--muted); min-width:28px; text-align:center; flex:none; }
+  .cx-chev { color:var(--muted); flex:none; font-size:13px; }
+  .cx-caption h3 { margin:10px 2px 2px; } .cx-caption p { margin:0 2px; font-size:13px; }
+  .cx-fit { position:absolute; right:10px; bottom:10px; background:#000c; color:#fff; font-size:12px; padding:3px 8px; border-radius:999px; }
+  .cx-note { margin-top:18px; max-width:760px; font-size:14px; }
+</style>
+
+<h2>D2 · A, with slimmer artist rows and no filter icon</h2>
+<p class="subtitle">Left: A as first shown. Middle and right: two heights for an artist's row. The filter icon is gone everywhere. Pick a height.</p>
+
+<div class="cx">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="cy-sheet" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M11 17.5a1.6 1.6 0 1 1-1.6-1.6c.9 0 1.6.7 1.6 1.6V11l4 -1"/></symbol>
+  <symbol id="cy-guitar" viewBox="0 0 24 24"><path d="M14 10l6-6m-2-1l3 3"/><path d="M10.5 9.5a4 4 0 0 0-5.6 1.2c-.6 1-.2 1.8-1 2.6-1.6 1.6-.6 4.4 1.6 5.8 1.6 1 3.9 1.4 5.4-.1.8-.8 1.6-.4 2.6-1a4 4 0 0 0 1.2-5.6z"/><circle cx="9.5" cy="14.5" r="1.4"/></symbol>
+  <symbol id="cy-f" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></symbol>
+</svg>
+
+<div class="cx-grid">
+
+  <div>
+    <div class="cx-phone">
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div></div>
+      <div class="cx-row r68"><div class="cx-name"><div class="cx-over">Eagles <svg class="cx-funnel"><use href="#cy-f"/></svg></div><div class="cx-title">Hotel California</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r68"><div class="cx-name"><div class="cx-over">Fito &amp; Fitipaldis <svg class="cx-funnel"><use href="#cy-f"/></svg></div><div class="cx-title">Por la boca vive el pez</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">D</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h44">Oasis <svg class="cx-funnel"><use href="#cy-f"/></svg><span class="cx-count">2</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-play"><svg><use href="#cy-guitar"/></svg></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h44">Radiohead <svg class="cx-funnel"><use href="#cy-f"/></svg><span class="cx-count">3</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      <span class="cx-fit">7 songs fit</span>
+    </div>
+    <div class="cx-caption"><h3>A as first shown</h3><p>Artist rows 44 px, a filter icon on every artist.</p></div>
+  </div>
+
+  <div class="option" data-choice="a1" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Fito &amp; Fitipaldis</div><div class="cx-title">Por la boca vive el pez</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">D</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h34">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-play"><svg><use href="#cy-guitar"/></svg></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h34">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <span class="cx-fit">7½ songs fit</span>
+    </div>
+    <div class="cx-caption"><h3>A1 · A thin band, 34 px</h3><p>The artist's name in its band at a normal size, the song count on the right. Folded lines 64 px.</p></div>
+  </div>
+
+  <div class="option" data-choice="a2" onclick="toggleSelect(this)" style="display:block">
+    <div class="cx-phone">
+      <div class="cx-top"><div class="cx-search">Search 9 songs</div></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Eagles</div><div class="cx-title">Hotel California</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Fito &amp; Fitipaldis</div><div class="cx-title">Por la boca vive el pez</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">D</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h26">Oasis<span class="cx-count">2</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Don't Look Back in Anger</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">C</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Wonderwall</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-play"><svg><use href="#cy-guitar"/></svg></span><span class="cx-key">F#m</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-head h26">Radiohead<span class="cx-count">3</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Creep</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">Karma Police</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">Am</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r53"><div class="cx-name"><div class="cx-title">No Surprises</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">F</span><span class="cx-chev">⌄</span></div>
+      <div class="cx-row r64"><div class="cx-name"><div class="cx-over">Silvio Rodríguez</div><div class="cx-title">Ojalá</div></div><span class="cx-play"><svg><use href="#cy-sheet"/></svg></span><span class="cx-key">G</span><span class="cx-chev">⌄</span></div>
+      <span class="cx-fit">8 songs fit</span>
+    </div>
+    <div class="cx-caption"><h3>A2 · A small label, 26 px</h3><p>The artist's name as a small capital label with no band, like the folded lines' overline, so both shapes read alike.</p></div>
+  </div>
+
+</div>
+<p class="cx-note">Without the filter icon, showing only one artist's songs moves to tapping the artist's name, whether in its row or in a folded line's overline. Today that tap searches for the artist instead.</p>
+</div>
