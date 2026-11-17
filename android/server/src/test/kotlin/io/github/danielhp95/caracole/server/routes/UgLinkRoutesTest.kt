@@ -115,6 +115,26 @@ class UgLinkRoutesTest {
         assertTrue(phone.parts.database.read { it.kvGet(UgLinks.FAILED_KEY) }!!.contains(banma))
     }
 
+    /** The panel sends the text pasted as it is (any address `read_link` reads), and its Fetch this version posts the
+     * server's `url`, a bare `/tab/{id}` here, as the lookup's `tab` (rows.js getIt: POST /lookup). */
+    @Test fun `the pasted text is taken as given, and the link's address is a tab a lookup takes`() {
+        val pasted = "  tabs.ultimate-guitar.com/tab/4180894?ref=share\u3000"
+        assertEquals(banma, known(pasted).getValue("url").jsonPrimitive.content)
+        val read = post(pasted)
+        assertEquals(202, read.status, read.json.toString())
+        done(read.json.jsonObject.getValue("job").jsonPrimitive.int)
+        val lookup = handle(
+            "POST", "/lookup",
+            mapOf("sec-fetch-site" to "same-origin", "origin" to "http://${TestApp.HOST}",
+                  "content-type" to "application/x-www-form-urlencoded", "accept" to "application/json"),
+            TestApp.form(listOf("csrf" to TestApp.CSRF, "artist" to "宋冬野", "title" to "斑马斑马", "tab" to banma)),
+        )
+        assertEquals(202, lookup.status, lookup.json.toString())
+        val job = done(lookup.json.jsonObject.getValue("job").jsonPrimitive.int)
+        assertEquals(listOf(listOf("get", "--progress", "--tab=$banma", "--", "宋冬野", "斑马斑马")), job.steps.map { it.args })
+        assertEquals(Job.DONE, job.state, job.output.toString())
+    }
+
     @Test fun `a tab the index lists is found, its song the hit, and nothing is read`() {
         phone.parts.database.writeBlocking { db ->
             db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +

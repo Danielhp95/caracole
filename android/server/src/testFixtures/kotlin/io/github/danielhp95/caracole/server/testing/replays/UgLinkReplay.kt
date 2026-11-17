@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.server.testing.replays
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.health.EventLog
 import io.github.danielhp95.caracole.core.index.Reads
@@ -61,7 +60,8 @@ import java.util.zip.GZIPOutputStream
  * has the shapes), area `ug-link`:
  *
  * - vectors/web/ug_link.jsonl: `read_link` over every shape (UgUrls.readLink); then each scene's fixture loaded into a
- *   database of its own, its UG answers into the phone's HTTP cache, and each `GET /api/ug/link` and `POST /ug/link`
+ *   database and a library folder of its own (its kept files among its records), its UG answers into the phone's HTTP
+ *   cache, and each `GET /api/ug/link` and `POST /ug/link`
  *   asked of the phone's UgLinkRoutes at the vectors' time over it, the post to a fresh queue that runs nothing: its
  *   answer (status and JSON) or its refusal, and the job it queued (title, key, commands, display, stages);
  * - vectors/lookup/commands_ug_link.jsonl: `caracole ug --link`, UgLinkCommands through lane lookup's InteractiveAsk
@@ -124,7 +124,6 @@ object UgLinkReplay : AreaReplay {
                     database.writeBlocking { db ->
                         Fixtures.loadRecords(db, fixture.getValue("records").jsonArray.map { it.jsonObject }, library,
                                              scene)
-                        keptFiles(db, library)
                     }
                     seedCache(File(state, "cache"), fixture.getValue("cache").jsonObject)
                     for (r in asked) {
@@ -192,17 +191,6 @@ object UgLinkReplay : AreaReplay {
                           SongPages.NONE, SongbookPages.NONE, Alerts.NONE, Pacing.REAL, searchesLacuerda = false)
     }
 
-    /** The files a fixture's `files` rows name, made in the library as they were kept (their contents no answer
-     * reads: a sheet's link is to a file there). */
-    private fun keptFiles(db: Db, library: File) {
-        for (path in db.query("SELECT path FROM files ORDER BY id") { it.text(0)!! }) {
-            val file = File(library, path)
-            if (file.exists()) continue
-            file.parentFile.mkdirs()
-            file.writeText("")
-        }
-    }
-
     /** The record's cache, `{"GET <url>": {status, fetched_at, headers, body}}`, written as http.py writes UG's: the
      * body gzip'd, the meta as json.dumps writes it. */
     private fun seedCache(cacheDir: File, cache: JsonObject) {
@@ -232,15 +220,16 @@ object UgLinkReplay : AreaReplay {
 
     // --- the command --------------------------------------------------------------------------------------------------
 
-    /** `caracole ug --link`, each record a world of its own. */
-    fun commands(misses: Misses) {
+    /** `caracole ug --link`, each record a world of its own; [told], when given, each case's blocks the phone told
+     * (Alerts.blocked: the computer's command sends none, the phone's lookups tell one). */
+    fun commands(misses: Misses, told: MutableMap<String, Int>? = null) {
         val all = records(COMMANDS)
         misses.check(all.size > 10) { "commands_ug_link.jsonl holds ${all.size} records" }
         for (r in all) {
             val now = Instant.parse(text(r["now"]))
             Scenarios.replay(r, misses, eventLog = { db, run -> EventLog(db, run) { now } }) { w ->
                 try {
-                    run(w, r)
+                    run(w, r, alerts(told, text(r["case"])))
                 } finally {
                     checked(misses, r, w)
                 }
@@ -248,11 +237,20 @@ object UgLinkReplay : AreaReplay {
         }
     }
 
-    private fun run(w: ScenarioWorld, r: JsonObject): JsonArray {
+    /** An Alerts that counts the blocks told under [case] in [told]; none with no [told]. */
+    private fun alerts(told: MutableMap<String, Int>?, case: String): Alerts = if (told == null) Alerts.NONE else object : Alerts {
+        override fun blocked(provider: String, until: Instant?, message: String) {
+            told[case] = (told[case] ?: 0) + 1
+        }
+
+        override fun failed(title: String, line: String) {}
+    }
+
+    private fun run(w: ScenarioWorld, r: JsonObject, alerts: Alerts): JsonArray {
         val kw = r.getValue("kw").jsonObject
         val link = UgUrls.readLink(text(kw["link"])) ?: throw AssertionError("${r["case"]}: no UG link")
         val lines = ArrayList<String>()
-        val ask = asking(w)
+        val ask = asking(w, alerts)
         val c = object : CommandContext {
             override val db = w.db
             override val asking = ask
@@ -287,12 +285,12 @@ object UgLinkReplay : AreaReplay {
 
     /** A lookup's envelope in a scenario: lane lookup's InteractiveAsk, at the lookup's run and the phone's settings
      * now, its clients the record's own, so that nothing but the record's answers is sent. */
-    private fun asking(w: ScenarioWorld): InteractiveAsk {
+    private fun asking(w: ScenarioWorld, alerts: Alerts): InteractiveAsk {
         val config = PhoneConfig.read(w.db)
         val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { w.now.epochSecond.toDouble() },
                             monotonic = { 0.0 }, clock = { w.now })
         return InteractiveAsk(Clients(config, w.cacheDir, { RefusingTransport }, pacing), w.db, Pace.lookupRunId(w.now),
-                              w.now, config = config, make = { provider, _ -> w.clients.getValue(provider) })
+                              w.now, alerts, config, make = { provider, _ -> w.clients.getValue(provider) })
     }
 
     /** The vectors' time, test_conformance_ug_link.NOW. */

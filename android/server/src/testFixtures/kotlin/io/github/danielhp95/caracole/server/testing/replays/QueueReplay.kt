@@ -97,6 +97,7 @@ object QueueReplay : AreaReplay {
                 "lacuerda_artist_steps" -> JobCommands.lacuerdaArtistSteps(a[0], a[1])
                 "lacuerda_search_steps" -> JobCommands.lacuerdaSearchSteps(a[0], b("auto", false))
                 "harptabs_artist_steps" -> JobCommands.harptabsArtistSteps(a[0], a[1])
+                "ug_link_steps" -> JobCommands.ugLinkSteps(a[0])
                 else -> throw IllegalArgumentException("no builder ${r.fn}")
             })
         }
@@ -285,7 +286,7 @@ object QueueReplay : AreaReplay {
             val scope = CoroutineScope(coroutineContext + SupervisorJob(coroutineContext[kotlinx.coroutines.Job]))
             val replay = Queue(misses, note, scope, file)
             val words = listOf("add", "fetch", "get", "harptabs", "index", "lacuerda", "match", "peer", "remove",
-                               "render", "review", "songbook", "versions", "youtube")
+                               "render", "review", "songbook", "ug", "versions", "youtube")
             replay.queue = JobQueue(scope, kw.getValue("limit").jsonPrimitive.int, kw.getValue("keep").jsonPrimitive.int,
                                     clock, Commands(words.associateWith { replay.runner }),
                                     file?.let { JobHistory(it, clock = clock) })
