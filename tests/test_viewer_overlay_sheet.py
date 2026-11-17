@@ -283,17 +283,19 @@ def test_with_the_half_sheet_open_the_song_scrolls_by_itself_above_it_and_ends_a
     assert running[1]  # the pill rides above the sheet
 
 
-def test_the_settings_open_over_the_sheet_and_it_comes_back_once_they_close(tmp_path):
+def test_on_a_phone_the_settings_take_the_sheets_place(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, SONG)) as b:
         open_sheet(b)
         touch(b, "#more")
         assert b.wait("!document.getElementById('panel').hidden")
-        under = sheet(b)
+        assert b.wait(CLOSED)
+        instead = sheet(b)
         b.press("Escape")
         assert b.wait("document.getElementById('panel').hidden")
-        back = sheet(b)
-    assert under["open"] and not under["visible"]  # the one opened last shows, as the settings and the card do
-    assert back["visible"] and back["at"] == "half"
+        after = sheet(b)
+    assert not instead["open"] and instead["expanded"] == "false"  # one layer at a time, as the settings and the card
+    assert not after["open"] and after["at"] is None  # closed for good: it doesn't come back as they close
+    assert after["focus"] == "Settings"  # on ⋯, which opened them
 
 
 # --- the bar and the sheet at a phone's widths --------------------------------------------------------------------

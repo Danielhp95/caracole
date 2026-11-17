@@ -963,14 +963,15 @@ def test_escape_closes_the_one_on_top_and_the_focus_goes_back_to_its_opener(tmp_
         b.press("Escape")
         card_closed = look(b)
         on_chord = b.js("document.activeElement === window.picked")
-        b.press("Escape")  # the settings, from the chord: the focus stays where you are
+        b.press("Escape")  # the settings (a desktop's), from the chord: the focus stays where you are
         all_closed = look(b)
         stayed = b.js("document.activeElement === window.picked")
     assert settings["panel"] and settings["focus"] == "panel-title"
-    assert both["card"] and both["panel"] and both["focus"] == "card-name" and both["cardSeen"]
-    # On a phone the card covers the settings, out of sight and of the focus's way; side by side on a desktop.
-    assert both["panelSeen"] is (size is DESKTOP)
-    assert card_closed["card"] is None and card_closed["panelSeen"] and on_chord
+    assert both["card"] and both["focus"] == "card-name" and both["cardSeen"]
+    # On a phone the card takes the settings' place, one layer at a time; side by side on a desktop.
+    assert (both["panel"] is not None) is (size is DESKTOP) and both["panelSeen"] is (size is DESKTOP)
+    assert card_closed["card"] is None and on_chord
+    assert card_closed["panelSeen"] is (size is DESKTOP)  # on a phone nothing under it
     assert all_closed["panel"] is None and stayed
 
 

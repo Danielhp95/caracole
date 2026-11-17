@@ -623,6 +623,9 @@ def harmony_at_200_bpm(b: Browser) -> None:
 
 
 PLAY = "document.querySelectorAll('#harmony .prog-play')[%d].click()"
+CHORD = "document.querySelector('#sheet .c[data-c=\"%d\"]').click()"
+OPEN_HARMONY = "document.getElementById('more').click(); document.getElementById('harmony-open').click()"
+LAPTOP = {"width": 1280, "height": 800, "mobile": False}
 
 
 @in_chromium
@@ -697,12 +700,34 @@ def test_closing_the_panel_stops_every_sound_and_leaves_no_timer(tmp_path):
         assert b.wait("log.context.state === 'suspended'", 8)  # silent, it lets the device's audio sleep
         assert strum_timers(b) == []
 
-        # A chord's strum, ringing when the panel closes, stops with it.
-        tapped(b, "document.getElementById('more').click(); document.getElementById('harmony-open').click()")
-        tapped(b, "document.querySelector('#sheet .c[data-c=\"1\"]').click()")
+    # A chord's strum, ringing when the panel closes, stops with it: on a laptop, where the chord's card opens beside
+    # the panel (on a phone it takes the panel's place, before the chord sounds: the test after this one).
+    with scheduled(tmp_path, SECTIONS, **LAPTOP) as b:
+        tapped(b, OPEN_HARMONY)
+        tapped(b, CHORD % 1)
         assert b.wait("log.context.state === 'running' && document.documentElement.dataset.heard === %s" % json.dumps(G_OPEN))
         t = tapped(b, "document.querySelector('#harmony [data-close]').click(); log.context.currentTime")
         silent_after(b, t)
+
+
+@in_chromium
+def test_on_a_phone_a_chord_tapped_with_a_progression_playing_takes_the_panels_place_and_sounds_alone(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)
+        assert b.wait("notesNow().length >= 15")
+        _, t = when_ahead(b, CHORD % 1)  # G, its card in the panel's place: one layer at a time
+        assert b.js("[document.getElementById('harmony').hidden, document.getElementById('card').hidden]") == [True, False]
+        assert b.wait("document.documentElement.dataset.heard === %s" % json.dumps(G_OPEN))
+        mark, notes = b.js("[log.mark, notesNow()]")
+        time.sleep(0.5)
+        assert len(b.js("notesNow()")) == len(notes)  # nothing more of the progression is scheduled
+    for note in notes[:mark]:  # the progression's, stopped as the panel closed
+        if note["when"] > t + 0.01:
+            assert not sounds(note), (t, note)
+        else:
+            assert ends(note) <= t + FADE + 1e-6, (t, note)
+    assert notes[mark:] and all(sounds(note) for note in notes[mark:])  # the chord's own strum
 
 
 @in_chromium
@@ -752,13 +777,10 @@ def woken(b: Browser) -> None:
          " await new Promise((done) => setTimeout(done, 50)); })()")
 
 
-CHORD = "document.querySelector('#sheet .c[data-c=\"%d\"]').click()"
-OPEN_HARMONY = "document.getElementById('more').click(); document.getElementById('harmony-open').click()"
-
-
 @in_chromium
 def test_while_the_context_wakes_only_what_was_asked_last_sounds(tmp_path):
-    with scheduled(tmp_path, SECTIONS) as b:
+    # On a laptop, where a chord's card opens beside the Harmony panel: on a phone it takes the panel's place.
+    with scheduled(tmp_path, SECTIONS, **LAPTOP) as b:
         tapped(b, OPEN_HARMONY)
         tapped(b, CHORD % 0)  # C: the context made, running at once
         assert b.wait("log.context !== null && log.context.state === 'running' && notesNow().length === 5")

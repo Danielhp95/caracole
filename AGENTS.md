@@ -1018,6 +1018,22 @@ It is rows.js's, shared by both pages:
   - each page opens with it closed, ▶ leaves it at half, the rail's Hide and Chord necks don't touch it;
   - and below 440 px (a phone, the owner's choice) the neck takes the guitar's place in the bar, the strip then ⋯'s
     All chord shapes (test_viewer_overlay_sheet.py, test_viewer_bar.py).
+- **Layers and Back**: layers.js (`window.caracoleLayers`, inlined on every viewer page before its own script) keeps
+  a page's layers in the browser's history, one entry each while it is open, marked `history.state.caracoleLayer`
+  (its depth, from 1), so Back closes the one on top and leaves the page only once none is open:
+  - viewer.js's stack (`layers`, `{el, opener, nested}`, the last on top; `open`, `close`, `closeAll`, `topLayer`)
+    says how many are open after each change (`restack()`: `layerHistory.sync(layers.length)`); a Back that takes k
+    entries off closes the k on top and writes the page's address again (`save()`), and a layer the page closes itself
+    (Escape, ×) takes its entry off with the address it wrote meanwhile (layers.js carries it down);
+  - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
+    depth through what the page writes into its address;
+  - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
+    leaving it open); from 900 px the rails (the settings, Harmony, the versions) one at a time, a card beside them;
+    `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
+  - `history.scrollRestoration` is `manual` from a layer's entry on, so a step down leaves the song scrolled where it
+    is, and `auto` again once the page is back at its own entry, for a reload;
+  - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
+    and Back leaves the page (test_viewer_layers.py).
 - **The rail is sized** by viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding,
   text and targets alike.
 - **Settings kept for every page at once**:

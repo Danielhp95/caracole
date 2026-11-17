@@ -396,7 +396,8 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
             tab.eval("[...document.querySelectorAll('#modes .chip')].find((b) => "
                      "b.firstChild.textContent === 'Minor').click()")
             assert tab.eval("location.hash") == "#t=2&mode=aeolian"
-            assert tab.eval("history.length") == entries  # replaced, not an entry per tap
+            # Replaced, not an entry per tap: the one entry more is the settings' own (a layer, which Back closes).
+            assert tab.eval("history.length") == entries + 1
             tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
             tab.wait_for(afresh)
             assert tab.eval(chord) == "Am" and tab.eval(key) == "Key Am · +2"

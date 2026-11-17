@@ -15,8 +15,15 @@
   //                    history.go(-k) for k fewer. A Back that takes k entries off calls back(k): the page closes its
   //                    k top layers and calls sync again (then nothing to do). Forward onto a layer's entry, or the
   //                    page loaded at one (a reload, Back from a page a layer's link opened), goes back to the entry
-  //                    of what is open. A pushState or a go that throws (a browser's history refused on file:) turns
-  //                    it off for good: the layers still open and close, and Back leaves the page.
+  //                    of what is open. A go the page asked for (k layers closed, or the page loaded at a layer's
+  //                    entry) takes the page's address down with it to the entry it comes to (history.replaceState), so
+  //                    what the page wrote there while a layer was open (a key changed with the settings open) stays;
+  //                    after a Back the page writes its own (back(k)). A step down to an entry under a layer leaves the
+  //                    page scrolled where it is: history.scrollRestoration is "manual" from the first layer's entry on
+  //                    (the song scrolled under a layer stays where it is as the layer closes), "auto" again once the
+  //                    page is back at its own entry (a reload restores the place). A pushState or a go that throws (a
+  //                    browser's history refused on file:) turns it off for good: the layers still open and close, and
+  //                    Back leaves the page.
   //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
@@ -26,22 +33,62 @@
 
   const layerHistory = (back) => {
     // pushed: the depth of the entry the tab is at, as the page last heard; wanted: the layers open; pending: a go
-    // of ours on its way, until its popstate; queued: a settle due at the task's end; off: the history refused us.
-    let pushed = depthOf(history.state), wanted = 0, pending = false, queued = false, off = false;
-    const settle = () => {
+    // of ours on its way, until its popstate; queued: a settle due at the task's end; off: the history refused us;
+    // carry: the page's address as a go of ours left it, for the entry the go comes to.
+    let pushed = depthOf(history.state), wanted = 0, pending = false, queued = false, off = false, carry = null;
+    const scrolls = (mode) => {
+      try {
+        history.scrollRestoration = mode;
+      } catch (err) { /* a browser without it: as it scrolls */ }
+    };
+    // ``carrying``: a go the page asked for (a layer closed, or the page loaded at a layer's entry) takes its address
+    // down with it; a Forward's takes none, its entry's address older than the one it goes back to.
+    const settle = (carrying = true) => {
       queued = false;
       if (off || pending || wanted === pushed) return;
       try {
-        if (wanted > pushed) for (; pushed < wanted; pushed++) history.pushState({ caracoleLayer: pushed + 1 }, "");
-        else { pending = true; history.go(wanted - pushed); }
-      } catch (err) { off = true; pending = false; }
+        if (wanted > pushed) {
+          scrolls("manual");  // a step down to the entry under a layer leaves the page scrolled where it is
+          for (; pushed < wanted; pushed++) history.pushState({ caracoleLayer: pushed + 1 }, "");
+        } else {
+          carry = carrying ? location.href : null;
+          pending = true;
+          history.go(wanted - pushed);
+        }
+      } catch (err) {
+        off = true;
+        pending = false;
+        carry = null;
+        scrolls("auto");
+      }
+    };
+    // Down at the page's own entry, a task after the step (which scrolled nothing): a reload restores the place.
+    const landed = () => {
+      if (pushed === 0) setTimeout(() => { if (pushed === 0) scrolls("auto"); }, 0);
     };
     addEventListener("popstate", (e) => {
       const depth = depthOf(e.state);
-      if (pending) pending = false;  // our own go, arrived
-      else if (depth < pushed) { const k = pushed - depth; pushed = depth; back(k); return settle(); }
+      let ours = false;
+      if (pending) {  // our own go, arrived: the page's address with it
+        pending = false;
+        ours = true;
+        if (carry !== null && carry !== location.href) {
+          try {
+            history.replaceState(history.state, "", carry);
+          } catch (err) { /* an address the page can't change */ }
+        }
+        carry = null;
+      } else if (depth < pushed) {
+        const k = pushed - depth;
+        pushed = depth;
+        back(k);
+        settle();
+        landed();
+        return;
+      }
       pushed = depth;  // a Forward onto a layer's entry, or our go: back to what is open
-      settle();
+      settle(ours);
+      landed();
     });
     settle();  // a page loaded at a layer's entry, with none open yet
     return Object.freeze({

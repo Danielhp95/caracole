@@ -256,7 +256,7 @@
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
-        history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
+        history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
       }
     } catch (err) { /* an address the page can't change */ }
     exportLink();
@@ -1184,10 +1184,10 @@
   // up. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row show it
   // or hide it (state.necks), the three always in step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
-  // screen (sheetAt), docked there as the settings are (a layer: the one opened last shows), the song readable and
-  // scrollable above it and its end coming up above it; its handle takes it to the whole screen and back, and ✕,
-  // Escape or the neck again closes it, the focus back on the neck. Each page opens with it closed; the rail's Hide and
-  // Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on the tab it was on.
+  // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
+  // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
+  // and ✕, Escape, Back or the neck again close it, the focus back on the neck. Each page opens with it closed; the
+  // rail's Hide and Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
   const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
@@ -1331,7 +1331,7 @@
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (sheetButton) {
-    // The neck: the sheet up, on top of the settings or a card it was under, or closed where you see it.
+    // The neck: the sheet up (on a phone in the place of the settings or a card), or closed where you see it.
     sheetButton.addEventListener("click", () => {
       if (sheetAt !== null && inSight(necksEl)) {
         close(necksEl);
@@ -1705,25 +1705,40 @@
   // --- the settings and a chord's card: beside the song, never over it ------------------------------
   // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
   // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
-  // the bar, the one opened last over the other, and the song scrolls under it; from 900 px wide
+  // the bar, one at a time (opening one closes the one open), and the song scrolls under it; from 900 px wide
   // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
   // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
   // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
-  // at the foot up to 1199 px, the focus on its tab shown as it opens.
+  // at the foot up to 1199 px, the focus on its tab shown as it opens. Each one open is an entry of the browser's
+  // history (layers.js): Back, a phone's or the app's, closes the one on top as Escape does, and leaves the page only
+  // once none is open.
   const pageEl = document.querySelector(".page");
   const wide = window.matchMedia("(min-width: 900px)");
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const layers = [];  // the open ones, the last on top: {el, opener}
+  const layers = [];  // the open ones, the last on top: {el, opener, nested}
   const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
   const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
   const landing = (which) => (which === necksEl ? rail.landing() : which.querySelector("h2"));
+  // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
+  const DOCKED = [panel, card, harmony, vList, necksEl].filter(Boolean);
+  const dockedTop = () => {
+    for (let i = layers.length - 1; i >= 0; i--) if (DOCKED.indexOf(layers[i].el) >= 0) return layers[i].el;
+    return null;
+  };
+  // A Back takes k layers' entries off: the k on top close, and the entry it came to, written before what changed
+  // since (a key changed with the settings open), gets the page's address again (a layer the page closes itself takes
+  // its address down with it: layers.js).
+  const layerHistory = window.caracoleLayers ? window.caracoleLayers.history((k) => {
+    for (let i = 0; i < k && layers.length; i++) close(topLayer());
+    save();
+  }) : { sync() {} };
   // On a phone the page leaves room under the song for the one docked at its foot, so the end of
   // the song comes up above it, and the pill rides above it (--dock: its height). The bar is out of
   // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
   // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   function dock() {
-    const there = !wide.matches ? topLayer() : sheetAt !== null && !railWide.matches ? necksEl : null;
+    const there = !wide.matches ? dockedTop() : sheetAt !== null && !railWide.matches ? necksEl : null;
     const away = moving() && !there;
     if (bar.hidden !== away) {
       bar.hidden = away;
@@ -1765,12 +1780,20 @@
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
     dock();
+    layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
-  const open = (which, opener) => {
+  // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
+  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the versions) are one
+  // at a time, a card beside them.
+  const open = (which, opener, nested = false) => {
     const at = layers.findIndex((layer) => layer.el === which);
     if (at >= 0) layers.splice(at, 1);  // open already: on top again
-    if (rails.indexOf(which) >= 0) for (const other of rails) if (other !== which) close(other);
-    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null });
+    if (!wide.matches && !nested) {
+      for (const layer of layers.slice().reverse()) close(layer.el);
+    } else if (rails.indexOf(which) >= 0) {
+      for (const other of rails) if (other !== which) close(other);
+    }
+    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null, nested });
     showSizes(false);
     if (which === necksEl) drawNecks();  // drawn as the sheet, sheetAt set
     else which.hidden = false;
@@ -1828,7 +1851,7 @@
     }
     if (layers.length) close(topLayer());
   });
-  // ⋯ closes the settings where you see them, and brings them up from under a card on a phone.
+  // ⋯ closes the settings where you see them, and opens them otherwise (on a phone in the place of the one open).
   // The settings and the Harmony panel take one place: either opens in the other's.
   more.addEventListener("click", () => {
     if (inSight(panel)) {
@@ -2815,9 +2838,7 @@
       reveal.y = y;
       return;
     }
-    if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
-        || !harmony.hidden || (vList && !vList.hidden) || sheetAt !== null
-        || keyboardIn(bar)) {
+    if (!reveal.touched || performance.now() < reveal.quiet || layers.length > 0 || !sizes.hidden || keyboardIn(bar)) {
       reveal.y = y;
       return;
     }
