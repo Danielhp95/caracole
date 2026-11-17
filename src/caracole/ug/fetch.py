@@ -67,7 +67,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlsplit
 
 from rapidfuzz import fuzz
 
@@ -97,7 +97,7 @@ from caracole.library import (
 from caracole.lyrics import song_lyrics
 from caracole.match import ARTIST_PAGE, REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
-from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
+from caracole.overrides import Overrides, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.sheet_versions import PREFIX as VERSION_PREFIX
 from caracole.sheet_versions import (
@@ -113,7 +113,7 @@ from caracole.sheet_versions import (
 )
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug import artist_tabs as listed_tabs  # ug.lookup.artist_tabs is another thing
-from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
+from caracole.ug.artist import UGArtistPage, artist_page_of, artist_page_url, parse_artist_page
 from caracole.ug.lookup import (
     IndexTab,
     artist_known,
@@ -406,14 +406,14 @@ def _tab_page_url(url: str) -> bool:
     return _on_tab_host(url) and not _closed(url)
 
 
-def _wanted(run: _SongRun, v: UGVersion) -> bool:
+def _wanted(ctx: FetchContext, v: UGVersion) -> bool:
     """A kind caracole uses (never Official, which UG marks public too), public and not blocked."""
-    return v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
+    return v.kind is not None and v.access == "public" and v.tab_id not in ctx.overrides.block
 
 
-def _usable(run: _SongRun, v: UGVersion) -> bool:
+def _usable(ctx: FetchContext, v: UGVersion) -> bool:
     """A version caracole wants, at a tab page it may read."""
-    return _wanted(run, v) and _tab_page_url(v.url)
+    return _wanted(ctx, v) and _tab_page_url(v.url)
 
 
 def _links_a_tab_page(v: UGVersion) -> bool:
@@ -422,7 +422,7 @@ def _links_a_tab_page(v: UGVersion) -> bool:
     return _tab_page_url(v.url) or (_on_tab_host(v.url) and _slugged_url(v.url, v.tab_id))
 
 
-def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None:
+def _check_links(ctx: FetchContext, versions: Iterable[UGVersion], url: str) -> None:
     """Raise ``PageParseError`` when a page lists versions caracole wants and not one links to a tab page.
 
     Some links go elsewhere (robots.txt closes /tab/download); all of them
@@ -430,7 +430,7 @@ def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None
     "no versions". Versions at their own slugged pages, which robots.txt
     closes, are no change of shape: only versions caracole may not use.
     """
-    wanted = [v for v in versions if _wanted(run, v)]
+    wanted = [v for v in versions if _wanted(ctx, v)]
     if wanted and not any(_links_a_tab_page(v) for v in wanted):
         raise PageParseError(PROVIDER, url, None, "no version on the page links to a tab page")
 
@@ -451,7 +451,7 @@ def _record(run: _SongRun, versions: Iterable[UGVersion], *, fresh: bool) -> Non
     adds versions the song doesn't have yet.
     """
     for v in versions:
-        if _usable(run, v) and (fresh or not _known(run, v.tab_id)):
+        if _usable(run.ctx, v) and (fresh or not _known(run, v.tab_id)):
             _upsert(run, v)
 
 
@@ -465,7 +465,7 @@ def _record_page(run: _SongRun, page: UGTabPage, url: str, *, fresh: bool) -> No
     if group is None:
         return
     tab, *listed = [v for v in (page.tab, *page.versions) if v.kind in group]
-    _check_links(run, [tab, *listed], url)
+    _check_links(run.ctx, [tab, *listed], url)
     _record(run, (tab if _tab_page_url(tab.url) else replace(tab, url=url), *listed), fresh=fresh)
 
 
@@ -492,17 +492,6 @@ def _mark_gone(run: _SongRun, tab_id: int, url: str, kind: str | None) -> None:
     mark_gone(run.conn, version_id)
 
 
-def _artist_page_base(url: str | None) -> str | None:
-    """The UG artist page a link of UG's points to (``https://www.ultimate-guitar.com/artist/<name>_<id>``
-    or ``…/artist/<id>``, ``overrides.artist_page_address``), else None. A relative link is UG's own."""
-    if not url:
-        return None
-    try:
-        return artist_page_address(urljoin(WWW + "/", url.strip()))
-    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
-        return None
-
-
 def _a_pair(name: str) -> bool:
     """Whether the artist UG names ``name`` features another ("Ma Di (feat. 宋冬野)"): UG may give such a
     pair a page of its own, which lists neither artist's other songs."""
@@ -522,7 +511,7 @@ def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[
 
     A pair's page is filed under the pair's own name alone: under either artist's, it would stand in
     for that artist's own page (``_same_artist``)."""
-    url = _artist_page_base(page.artist_url)
+    url = artist_page_of(page.artist_url)
     if url is not None:
         name = page.tab.artist_name
         own = [slug_key(name)] if _a_pair(name) else name_forms(name)
@@ -536,40 +525,83 @@ def _unreadable_key(tab_id: int) -> str:
     return f"ug:unreadable:{tab_id}"
 
 
-def _waits(run: _SongRun, tab_id: int) -> bool:
+def unreadable_until(conn: sqlite3.Connection, tab_id: int) -> str | None:
+    """When caracole asks for the tab's page again, which proved unreadable (kv ``ug:unreadable:<tab id>``); None
+    when it didn't."""
+    record = kv_get_json(conn, _unreadable_key(tab_id))
+    until = record.get("until") if isinstance(record, dict) else None
+    return until if isinstance(until, str) and until else None
+
+
+def _waits(ctx: FetchContext, tab_id: int) -> bool:
     """Whether the tab's page proved unreadable and isn't due to be asked for again yet."""
-    record = kv_get_json(run.conn, _unreadable_key(tab_id))
     try:
-        return run.ctx.now < _parse_iso(record["until"])
-    except (TypeError, KeyError, ValueError):
+        return ctx.now < _parse_iso(unreadable_until(ctx.conn, tab_id) or "")
+    except ValueError:
         return False
 
 
-def _note_unreadable(run: _SongRun, tab_id: int, error: UnreadablePage) -> None:
+def _note_unreadable(ctx: FetchContext, tab_id: int, error: UnreadablePage) -> None:
     """Note when to ask for the tab's page again, which won't parse even fetched again: after a week, then
     after twice as long each time it still won't (``UNREADABLE_RETRY``)."""
-    record = kv_get_json(run.conn, _unreadable_key(tab_id))
+    record = kv_get_json(ctx.conn, _unreadable_key(tab_id))
     strikes = int(record.get("strikes", 0) if isinstance(record, dict) else 0) + 1
-    until = run.ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
-    kv_set_json(run.conn, _unreadable_key(tab_id), {"until": _iso(until), "strikes": strikes, "error": str(error)})
+    until = ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
+    kv_set_json(ctx.conn, _unreadable_key(tab_id), {"until": _iso(until), "strikes": strikes, "error": str(error)})
     log.warning("UG tab %s can't be read (%s); asked for again after %s", tab_id, error, _iso(until))
 
 
 def _unreadable(run: _SongRun, tab_id: int, kind: str | None, error: UnreadablePage | None = None) -> None:
-    """No page for the tab this run; with ``error``, note when to ask for it again.
+    """No page for the tab this run; with ``error`` (noted already: ``read_tab_page``), the request that fetched it
+    again counted.
 
     The tab is never taken for gone: the song goes on with its other versions,
     and stays dirty to read this one once it is due.
     """
     if error is not None:
         run.fetched[kind or "?"] += 1  # the request that fetched it again
-        _note_unreadable(run, tab_id, error)
     run.pages[tab_id] = None
     run.unreadable.add(tab_id)
 
 
+@dataclass(frozen=True)
+class TabRead:
+    """A tab page read by the fetch's rules (``read_tab_page``): what came of it (``said``), the page (``page``,
+    ``said`` "read"), whether UG was asked for it now (``fresh``), and the error of one that won't parse."""
+
+    said: str  # "read", "gone" (UG answered 404), "closed", "redirected", "waits" or "unreadable"
+    page: UGTabPage | None = None
+    fresh: bool = False
+    error: UnreadablePage | None = None
+
+
+def read_tab_page(ctx: FetchContext, tab_id: int, url: str) -> TabRead:
+    """A tab page by the fetch's rules, of no song's: from the cache, else from UG (``_get_page``: a cached copy that
+    won't parse asked for once more).
+
+    "closed": robots.txt closes ``url``, never asked for. "waits": it proved unreadable and isn't due again
+    (``UNREADABLE_RETRY``), not asked for. "unreadable": it won't parse even fetched again, noted (kv
+    ``ug:unreadable:<tab id>``). "redirected": UG sent it where robots.txt closes (``RobotsClosed``). "gone": UG
+    answered 404. "read": the page. Once read or gone, the tab is readable again. A block, a spent budget or another
+    error propagates."""
+    if _closed(url):
+        return TabRead("closed")
+    if _waits(ctx, tab_id):
+        return TabRead("waits")
+    try:
+        page, fresh = _get_page(ctx.client, url, parse_tab_page)
+    except UnreadablePage as e:
+        _note_unreadable(ctx, tab_id, e)
+        return TabRead("unreadable", error=e)
+    except RobotsClosed:
+        return TabRead("redirected", fresh=True)
+    kv_delete(ctx.conn, _unreadable_key(tab_id))
+    return TabRead("read" if page is not None else "gone", page, fresh)
+
+
 def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
-    """A tab page of this song, read once per run; None when UG says it's gone, or it can't be read.
+    """A tab page of this song, read once per run (``read_tab_page``); None when UG says it's gone, or it can't be
+    read.
 
     ``kind`` (the index's type) lets a deleted tab that was never rated be
     remembered as gone. Every page also teaches caracole its artist's UG page,
@@ -581,22 +613,18 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    if _closed(url):
+    read = read_tab_page(run.ctx, tab_id, url)
+    if read.said == "closed":
         return None
-    if _waits(run, tab_id):
-        _unreadable(run, tab_id, kind)
+    if read.said in ("waits", "unreadable"):
+        _unreadable(run, tab_id, kind, read.error)
         return None
-    try:
-        page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
-    except UnreadablePage as e:
-        _unreadable(run, tab_id, kind, e)
-        return None
-    except RobotsClosed:
+    if read.said == "redirected":
         run.fetched[kind or "?"] += 1  # the request UG answered with the redirect
         run.pages[tab_id] = None
         run.closed.add(tab_id)
         return None
-    kv_delete(run.conn, _unreadable_key(tab_id))
+    page, fresh = read.page, read.fresh
     run.pages[tab_id] = page
     if fresh:
         run.fetched[(page.tab.kind if page is not None else None) or kind or "?"] += 1
@@ -685,7 +713,7 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
         url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
         page = _page(run, tab_id, url, kind)
-        if page is None or not _wanted(run, page.tab):  # read at a tab page, wherever its own link goes
+        if page is None or not _wanted(run.ctx, page.tab):  # read at a tab page, wherever its own link goes
             continue
         groups.setdefault(_GROUP_OF[page.tab.kind], []).append(page.tab.tab_id)
     return groups
@@ -1224,7 +1252,7 @@ def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
         return
     key, url = entry
     tab_id = pasted_tab_id(url)
-    if tab_id is None or _pasted_record(run.conn, url) is not None or _waits(run, tab_id):
+    if tab_id is None or _pasted_record(run.conn, url) is not None or _waits(run.ctx, tab_id):
         return
     target = url if _slugged_url(url, tab_id) else tab_url_for(run.conn, tab_id)
     artist, problem = None, PASTE_CLOSED  # unless read: robots.txt closes it, or where UG sends it
@@ -1234,7 +1262,7 @@ def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
         except RobotsClosed:
             page = None
         except UnreadablePage as e:
-            _note_unreadable(run, tab_id, e)
+            _note_unreadable(run.ctx, tab_id, e)
             return
         else:
             kv_delete(run.conn, _unreadable_key(tab_id))
@@ -1268,8 +1296,9 @@ def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
     return None
 
 
-def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[list[_Hit], bool, UGArtistPage | None]:
-    """The song's entries in the artist's list of one kind.
+def _read_list(ctx: FetchContext, base: str, kind: str,
+               forms: list[str]) -> tuple[list[_Hit], bool, UGArtistPage | None]:
+    """A song's entries in the artist's list of one kind, the song's title by its ``forms``; with none, the list whole.
 
     Returns the hits, whether the list was read far enough (False when this
     run's page cap stopped it), and the list's first page (None when UG
@@ -1282,7 +1311,6 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     list read to its end, an empty one (404) included, is every tab of its kind
     the artist's page has (``keep_only``): one UG took down goes.
     """
-    ctx = run.ctx
     hits: list[_Hit] = []
     first: UGArtistPage | None = None
     fetched, number, last = 0, 1, 1
@@ -1310,8 +1338,8 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         first = first or page
         last = max(last, page.pages)
         listed = [t for t in page.tabs if t.kind == kind]
-        _check_links(run, listed, url)
-        kept += listed_tabs.store(run.conn, base, page.name, listed, read_at=read_at)
+        _check_links(ctx, listed, url)
+        kept += listed_tabs.store(ctx.conn, base, page.name, listed, read_at=read_at)
         found = [h for t in listed if (h := _title_hit(t, forms, fresh)) is not None]
         hits += found
         if hits and not (found and found[-1].tab is listed[-1]):
@@ -1321,31 +1349,30 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     else:
         whole = True
     if whole and oldest is not None:
-        listed_tabs.keep_only(run.conn, base, kind, kept, read_at=oldest)
+        listed_tabs.keep_only(ctx.conn, base, kind, kept, read_at=oldest)
     return hits, True, first
 
 
-def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
+def _offered_kinds(ctx: FetchContext, base: str) -> set[str] | None:
     """The kinds of list the artist page offers, read from its unfiltered first page; None when it's
     gone, and none when robots.txt closes it (or the page redirects to where it does)."""
     url = artist_page_url(base)
     if _closed(url):
         return set()
     try:
-        page, resp = _read_page(run.ctx.client, url, parse_artist_page,
-                                max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+        page, resp = _read_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age, now=ctx.now)
     except RobotsClosed:
         return set()
     if page is None:
         return None
     # Every kind, mixed: kept for searches, and never all of a kind's tabs (a filtered list is).
-    listed_tabs.store(run.conn, base, page.name, page.tabs, read_at=resp.fetched_at or _iso(run.ctx.now))
+    listed_tabs.store(ctx.conn, base, page.name, page.tabs, read_at=resp.fetched_at or _iso(ctx.now))
     return set(page.filters) or set(ARTIST_PAGE_KINDS)
 
 
 @dataclass
-class _Listing:
-    """What an artist's UG page lists for one song."""
+class Listing:
+    """What an artist's UG page lists for one song (``read_artist_page``), or of every song."""
 
     hits: list[_Hit] = field(default_factory=list)
     name: str = ""  # the artist's name, as UG writes it
@@ -1353,19 +1380,22 @@ class _Listing:
     gone: bool = False  # UG answered 404 for the artist page itself
 
 
-def _read_artist_page(run: _SongRun, base: str, kinds: tuple[str, ...], forms: list[str]) -> _Listing:
-    """The song's entries in the artist's lists of these kinds, read in order.
+def read_artist_page(ctx: FetchContext, base: str, kinds: tuple[str, ...] = ARTIST_PAGE_KINDS,
+                     forms: Sequence[str] = ()) -> Listing:
+    """A song's entries in the artist's lists of these kinds, read in order, its title by its ``forms``; with none,
+    of no song's: every list read whole (``_read_list``, ``artist_pages_per_kind`` pages a kind at most). Every page
+    read is kept for searches.
 
     The first list read tells, from its filter bar, which of the other lists
     the artist has; the rest are skipped. An empty list may answer 404, so the
     unfiltered artist page tells then, and a 404 there too means it is gone.
     """
-    listing = _Listing()
+    listing = Listing()
     offered: set[str] | None = None
     for kind in kinds:
         if offered is not None and kind not in offered:
             continue
-        found, complete, first = _read_list(run, base, kind, forms)
+        found, complete, first = _read_list(ctx, base, kind, list(forms))
         if not complete:
             listing.complete = False
             return listing
@@ -1374,7 +1404,7 @@ def _read_artist_page(run: _SongRun, base: str, kinds: tuple[str, ...], forms: l
             if offered is None and first.filters:
                 offered = set(first.filters)
         elif offered is None:
-            offered = _offered_kinds(run, base)
+            offered = _offered_kinds(ctx, base)
             if offered is None:
                 listing.gone = True
                 return listing
@@ -1415,7 +1445,7 @@ def _usable_hits(run: _SongRun, hits: list[_Hit], artist_name: str) -> list[_Hit
     """
     rejected = run.ctx.overrides.reject.get(run.song.key, frozenset())
     allowed = [h for h in hits if _listed_keys(run, h.tab, artist_name) not in rejected]
-    return [h for h in _best_title(allowed) if _usable(run, h.tab)]
+    return [h for h in _best_title(allowed) if _usable(run.ctx, h.tab)]
 
 
 def _record_hits(run: _SongRun, hits: list[_Hit]) -> None:
@@ -1459,7 +1489,7 @@ def _artist_page_route(run: _SongRun) -> bool:
         if _paste_problem(run.conn, keys, run.ctx.overrides) is not None:
             return False
         return _not_on_artist_page(run)
-    listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, name_forms(clean_title(run.song.title)))
+    listing = read_artist_page(run.ctx, base, ARTIST_PAGE_KINDS, name_forms(clean_title(run.song.title)))
     if not listing.complete:
         return False
     if listing.gone:
@@ -1549,7 +1579,7 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
     base = (_known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_from_own_tabs(run, own, keys)
             or _learn_artist_page(run, keys))
     if base is not None:
-        listing = _read_artist_page(run, base, kinds, _matched_title_forms(run.song))
+        listing = read_artist_page(run.ctx, base, kinds, _matched_title_forms(run.song))
         if not listing.complete:
             return False
         if listing.gone:

@@ -1248,7 +1248,7 @@ run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
-lacuerda --artist`, `caracole harptabs --artist`) sends none: it says so where you asked. A run, a command
+lacuerda --artist`, `caracole harptabs --artist`, `caracole ug --link`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
 site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
@@ -1524,6 +1524,25 @@ and cache.
   empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
   nothing changed. It can't go with `--index` (exit 2). An artist's Read their
   page on the pages `caracole serve` serves runs it.
+- **`caracole ug --link URL`** reads an Ultimate Guitar page into caracole's
+  index now: a tab's page (`https://tabs.ultimate-guitar.com/tab/4180894`, or a
+  slugged one, as an address bar shows it), then the artist's page it links to,
+  or an artist's page alone (`…/artist/634073`, its `?filter=` dropped). The
+  artist's chords and tabs lists are read as a fetch reads them (100 tabs a page,
+  30 days from the cache) and kept for searches, so a search finds every song
+  of theirs, those UG's sitemaps name by a bare `/tab/{id}` alone among them
+  (宋冬野's, every one). It asks at the lookup pace, within a lookup's budgets,
+  usually three requests. A page caracole knows already, one UG answered 404
+  for, and a tab of a type caracole keeps nothing of (a Guitar Pro file, a bass
+  tab…) are said with no request. Its last line: `Read: 斑马 斑马 Banma Banma
+  Zebra Zebra by Song Dongye (宋冬野), chords; their page lists 8 tabs.`,
+  `Not found: UG answers 404 for URL.`, or `Not read: …` for a cooldown, a
+  block, a spent budget or an error, all of which exit 0, nothing changed; a
+  budget spent after the tab's page leaves the artist's page for the next
+  lookup, the tab read. A read that failed isn't sent by the library page by
+  itself again for an hour; by hand it is. `--progress` writes a JSON line a
+  stage. A text that is no UG page's exits 2. The library page runs it for a UG
+  link pasted into its box (Browse and search, below).
 - **`caracole gametabs`** keeps a text tab of game music from gametabs.net for
   each song that has none, newest songs first. It reads gametabs.net's sitemaps
   (an index and six children; `sitemap_static`, the site's own pages, is never

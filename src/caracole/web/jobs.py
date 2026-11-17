@@ -34,7 +34,9 @@ version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole y
 time a song. A video suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
-``YOUTUBE_SEARCH`` and ``video:<id>``). A push another caracole sent is taken by ``caracole peer take --progress``
+``YOUTUBE_SEARCH`` and ``video:<id>``). A UG link pasted into that box is read by ``caracole ug --link --progress``
+(``ug_link_steps``), a job of no song's (``UG_LINK`` and the page's address, among ``INDEX_READS``), whose stages are
+``UG_LINK_STAGES`` (an artist's link, the second alone). A push another caracole sent is taken by ``caracole peer take --progress``
 (peer_routes.py), and a sync with another caracole is ``caracole peer sync --progress``: their JSON lines are their
 stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``; an import's of a file staged here, ``caracole peer import
 --progress``, commands/peer.py's ``PEER_IMPORT_STAGES``), each unit taken, given or left (``Job.units``) and, at the
@@ -393,10 +395,12 @@ def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ..
 LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's key, the query's key after it
 HARPTABS_ARTIST = "harptabs-artist:"  # a harptabs.com artist page's read: its job's key, the page's path after it
 YOUTUBE_SEARCH = "youtube-search:"  # a video suggested for a search: its job's key, the query's key after it
+UG_LINK = "ug-link:"  # a UG link pasted into the library page's search box, read: its job's key, its page's address after
 # what a site's index reads, and a search's suggestion: jobs of no song's
-INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH)
+INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK)
 SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
 YOUTUBE_SEARCH_STAGES = (("video", "Search YouTube"), ("thumbnail", "Thumbnail"))  # ``caracole youtube --search``'s
+UG_LINK_STAGES = (("tab", "Tab page"), ("artist", "Artist page"))  # ``caracole ug --link --progress``'s; an artist's: the second
 
 
 def lacuerda_search_steps(query: str, *, auto: bool) -> list[tuple[str, tuple[str, ...]]]:
@@ -415,6 +419,23 @@ def youtube_video_steps(video_id: str) -> list[tuple[str, tuple[str, ...]]]:
     """A video pasted into the library page's search box, its title, channel and length read for its song's name:
     ``caracole youtube --video --progress``, one yt-dlp run with no download, and its thumbnail (youtube_search.py)."""
     return [("Reading the video", ("youtube", f"--video={video_id}", "--progress"))]
+
+
+def ug_link_steps(url: str) -> list[tuple[str, tuple[str, ...]]]:
+    """A UG link pasted into the library page's search box, its page read now: ``caracole ug --link --progress``, a
+    tab's page and its artist's lists, or an artist's lists, at the lookup pace (ug/link.py). ``url`` is the page's
+    address as caracole asks for it (ug_urls.read_link's)."""
+    return [("Reading the page on Ultimate Guitar", ("ug", f"--link={url}", "--progress"))]
+
+
+def _ug_link_stages(args: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    """A step's stages when it reads a UG link (``caracole ug --link``): a tab's both, an artist's its lists alone."""
+    from caracole.ug_urls import read_link
+
+    if args[:1] != ("ug",):
+        return ()
+    link = next((read_link(a.removeprefix("--link=")) for a in args if a.startswith("--link=")), None)
+    return () if link is None else UG_LINK_STAGES if link.kind == "tab" else UG_LINK_STAGES[1:]
 
 
 def harptabs_artist_steps(path: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
@@ -479,8 +500,9 @@ def _afresh(stages: Sequence[Stage]) -> None:
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
-    (youtube_sheet.py's ``STAGES``), and a sync's with another caracole (``PEER_TAKE_STAGES``,
-    ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``); none for other commands."""
+    (youtube_sheet.py's ``STAGES``), a sync's with another caracole (``PEER_TAKE_STAGES``,
+    ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``), and a UG link's read (``UG_LINK_STAGES``); none for other
+    commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}
@@ -499,6 +521,7 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         names.update((name, label) for name, label in SHEET_STAGES if name not in names)
     for step in steps:
         names.update((name, label) for name, label in _peer_stages(step.args) if name not in names)
+        names.update((name, label) for name, label in _ug_link_stages(step.args) if name not in names)
     return [Stage(name, label) for name, label in names.items()]
 
 

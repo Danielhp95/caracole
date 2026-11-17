@@ -24,11 +24,7 @@ from helpers.ug_pages import (
     BANMA_UG,
     DONG_XIAOJIE_LINES,
     SONG_DONGYE_URL,
-    make_tab_page_html,
-    song_dongye_chords,
-    song_dongye_page_html,
-    song_dongye_sheet,
-    song_dongye_tab,
+    FakeUG,
 )
 
 from caracole import lacuerda_index
@@ -49,34 +45,8 @@ FOUND = f"{TAB}4180894"  # the page the user found on UG
 CHORDS = artist_page_url(SONG_DONGYE_URL, kind="chords")  # read live: …/artist/634073?filter=chords
 TABS = artist_page_url(SONG_DONGYE_URL, kind="tabs")
 STEPS = ("sync", "match", "lyrics", "fetch", "lacuerda", "todo")
-NOT_FOUND = "<!DOCTYPE html><html><head><title>Oops! We couldn't find that page.</title></head></html>"
 BANMA = "宋冬野/斑马斑马"
 DONG = "宋冬野/董小姐"
-
-
-class FakeUG:
-    """Ultimate Guitar as it answered for 宋冬野 on 2026-10-19; UG's 404 page for anything else."""
-
-    def __init__(self):
-        self.requests: list[str] = []
-        tabs = song_dongye_chords(t4180894=(4.8, 120), t4689017=(4.6, 40), t3016223=(4.7, 90), t3204647=(4.1, 9))
-        self.pages = {
-            CHORDS: song_dongye_page_html(tabs),
-            TABS: song_dongye_page_html([song_dongye_tab(5000001, "安和桥 Anhe Bridge", type="Tabs")]),
-        }
-        by_id = {t["id"]: t for t in tabs}
-        for tab_id, other, lines in ((4180894, 4689017, BANMA_TRADITIONAL_LINES),
-                                     (4689017, 4180894, BANMA_TRADITIONAL_LINES),
-                                     (3016223, 3204647, DONG_XIAOJIE_LINES),
-                                     (3204647, 3016223, DONG_XIAOJIE_LINES)):
-            # A tab page lists the song's other version of its type, never itself.
-            self.pages[f"{TAB}{tab_id}"] = make_tab_page_html(by_id[tab_id], [by_id[other]],
-                                                              content=song_dongye_sheet(lines))
-
-    def handler(self, request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        self.requests.append(url)
-        return httpx.Response(200, text=self.pages[url]) if url in self.pages else httpx.Response(404, text=NOT_FOUND)
 
 
 class FakeLRCLIB:

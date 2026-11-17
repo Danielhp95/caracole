@@ -19,9 +19,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 
 from caracole.ug.page import PageParseError, UGVersion, json_int, read_page_data, read_versions
+from caracole.ug_urls import artist_page_address
 
 WWW = "https://www.ultimate-guitar.com"
 
@@ -107,3 +108,15 @@ def artist_page_url(base_url: str, *, kind: str | None = None, page: int = 1) ->
         query.append(("page", str(page)))
     parts = urlsplit(base_url)
     return urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), urlencode(query), ""))
+
+
+def artist_page_of(url: str | None) -> str | None:
+    """The UG artist page a link of UG's points to (``https://www.ultimate-guitar.com/artist/<name>_<id>``
+    or ``…/artist/<id>``, ``ug_urls.artist_page_address``), else None: a tab page's ``artist_url``, which is how
+    caracole learns an artist's page. A relative link is UG's own."""
+    if not url:
+        return None
+    try:
+        return artist_page_address(urljoin(WWW + "/", url.strip()))
+    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
+        return None
