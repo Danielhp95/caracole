@@ -177,9 +177,10 @@ The owner chose 2.
   (or runs of 30–50 folded lines), never on single lines; one inline SVG sprite for the icons (`<use>`).
 - No layout reads across many lines. Measured before and after on a synthetic library of 2,000 songs, on a phone.
 
-### Songbooks (lane 4)
+### Songbooks (lane 4): removed
 
-- A Play button on each songbook in the Songbooks tab that opens its songbook viewer at its first song.
+- Removed by the owner on 2026-11-17, before it merged ("Remove the songbooks lane. I realized I don't need it"):
+  no Play button on a songbook, and the Songbooks tab (songbooks.js, songbooks.css) stays as it is today.
 
 ## Where it applies
 
@@ -198,7 +199,7 @@ corpus regenerated, gradle), in stages where it has them.
 | 1 · The list page | library.js (all but lane 2's functions below), tabs.js, select.js, rows.js (all but the play buttons), body.html, head.html, base.css, library.css, filter.css, rows.css (all but the play buttons), sync.css, library-screens.css, sites.css, picker.css, library_page.py and the app flag (Python and its Kotlin LibraryPage) | 1a navigation and Back; 1b the phone list (bands, folding, no funnel or one-artist view, tap targets); 1c search; 1d the card's order on a phone, its sticky head, building it on first open, and the laptop's list-and-pane layout; 1e long lists; 1f the calmer page |
 | 2 · Progress | web/outcome.py, web/status.py if needed, steps.css, requests.js, requests.css, the Kotlin ports and their vectors, and in library.js the functions that draw a request's progress on a line (`showLine`'s steps, `drawSteps`, `progressIn`) | one |
 | 3 · The card and play buttons | card.js, card.css, and the play buttons' rules (moved from rows.css into card.css in this lane's first commit) | 3a play buttons (phone badge and hit areas, laptop chips); 3b the card's insides (ratings and votes, "New", downloads inside each tile's drawer) |
-| 4 · Songbooks | songbooks.js, songbooks.css | one |
+| 4 · Songbooks (removed by the owner, 2026-11-17) | songbooks.js, songbooks.css | none |
 
 **The meeting points** (my call on who owns what): library.js is lane 1's but for lane 2's three functions; lane 3
 keeps card.js's entry point (`caracoleCard`) and the parts it hands library.js, which lane 1 orders and places (in the

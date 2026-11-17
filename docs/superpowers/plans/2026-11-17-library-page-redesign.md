@@ -123,6 +123,18 @@ otherwise, this section wins.
     sites' marks; with a mouse, its kind and its site in words".
 12. **Room on a laptop's line for chips** (100–150 px each): Task 1d.6 sizes the title column and lets
     `.line-title > .line-plays` wrap below the title rather than push the key off the line.
+13. **Lane 4 is removed** (the owner, 2026-11-17: "Remove the songbooks lane. I realized I don't need it"; the
+    spec's Songbooks section says so). Tasks 4.1–4.3 are not built and no lane changes songbooks.js; wherever this
+    plan names lane 4 or Task 4.3 (the merge tasks, "the last of 1f, lane 2, 3b and lane 4", the screenshots), read
+    it without them. In their place:
+    - rule 4: songbooks.css keeps its radii; 1f's radius test keeps `#songbooks` in its skip list for good, and the
+      last of 1f, lane 2 and 3b to merge cuts the skip list to `("#songbooks",)` rather than emptying it;
+    - rule 9: songbooks.js's `replaceState(null, …)` stays (its entries are never search entries: harmless);
+    - rule 10: Task 1b.1 deletes songbooks.css's one-artist leftovers itself (the `.selecting` rules naming
+      `.filter-mark` or `.artist-only`, and the `by` column at ≥ 720 px), a named crossing, as the task that makes
+      them dead;
+    - lane 2's meeting point with songbooks.js (`showLine` keeps its signature) still holds: songbooks.js calls it
+      as today.
 
 **Merge order.** Lane 1's stages in order (1a, 1b, 1c, 1d, 1e, 1f), each from `main` after the one before merged.
 Lanes 2, 3a and 4 any time. Lane 3b after 1d (its container queries and `song-card` keys depend on it). Whoever
