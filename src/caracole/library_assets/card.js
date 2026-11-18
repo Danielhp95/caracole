@@ -155,6 +155,7 @@ const caracoleCard = (icons, rows) => {
       const share = lyricsShare(x.complete, x.coverage);
       const note = [];
       if (x.gone) note.push("gone from UG");
+      if (typeof x.label === "string" && x.label) note.push(x.label.charAt(0).toUpperCase() + x.label.slice(1));
       if (share) note.push(share);
       if (x.note) note.push(String(x.note));
       if (x.chosen) note.push(v.pinned ? "your choice" : "our pick");

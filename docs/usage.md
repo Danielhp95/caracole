@@ -2607,7 +2607,7 @@ Guitar**'s: how many versions the site has and how many caracole keeps (`13
 versions on the site · 3 kept in your library`), then each kept version in rank
 order, with UG's version number, its rating and votes, how much of the lyrics
 it has (`Every line of the lyrics`, `80% of the lyrics`, in green when caracole
-counts it whole), the tabber's note, and caracole's pick or your choice: **In
+counts it whole), first what differs where UG names it (`Acoustic`, `Intro`), the tabber's note, and caracole's pick or your choice: **In
 use** on the one the title opens, **Open** on each, its own viewer page,
 `version-<tab>.html` (served by caracole serve as a sheet viewer is, while it
 holds what caracole wrote), or its text, `version-<tab>.txt`, until render has

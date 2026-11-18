@@ -263,6 +263,16 @@ def test_a_version_with_no_rating_is_new(conn, cfg, tmp_path):
                                                                          "stars": ["New"]}
 
 
+def test_a_ug_version_is_named_by_what_differs(conn, cfg, tmp_path):
+    song = hotel(conn, cfg)
+    conn.execute("UPDATE versions SET label = 'acoustic' WHERE song_id = ? AND tab_id = '46191'", (song.id,))
+    script = 'chipOf("Hotel California", "ug").click();\nnote("drawer", noteDrawer("Hotel California"));'
+    rows = attribute_of(run(conn, cfg, tmp_path, script), "data-drawer")["rows"]
+    assert [(r["ver"], r["note"]) for r in rows] == [("Ver 3", "All the lyrics · our pick"),
+                                                     ("Ver 4", "Acoustic · 80% of the lyrics"),
+                                                     ("Ver 5", "50% of the lyrics")]
+
+
 def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tmp_path):
     from helpers.cli_lines import parsed
 
