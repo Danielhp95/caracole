@@ -185,7 +185,9 @@ RESETS = """(() => { const q = (s) => document.querySelector(s);
   return {t: shown(q('#reset-t')), capo: shown(q('#reset-capo')),
           tMarked: q('#up').closest('.stepper').classList.contains('changed'),
           capoMarked: q('#capo-up').closest('.stepper').classList.contains('changed')}; })()"""
-SHIFT = "document.getElementById('shift').textContent"
+# The settings' Transpose: the key, over the word the bar's key says under it ("capo 2 · +1", "key").
+SHIFT = "document.querySelector('#shift .d').textContent"
+SHIFT_SAID = "[...document.getElementById('shift').children].map((e) => e.textContent)"
 
 
 def mode(b: Browser, name: str) -> None:
@@ -249,7 +251,27 @@ def test_transpose_reset_goes_back_to_the_pdfs_transposition(tmp_path):
         zero = [b.js(SHIFT), b.js(RESETS)["t"]]  # the sheet as written, which the PDF isn't
         b.click("#reset-t")
         back = [b.js(SHIFT), b.js(RESETS)["t"]]
-    assert pdf == ["+2", False] and zero == ["0", True] and back == ["+2", False]
+    # G shapes with the sheet's capo 2: the capo, then how far the PDF moved them
+    assert pdf == ["capo 2 · +2", False] and zero == ["capo 2", True] and back == ["capo 2 · +2", False]
+
+
+@in_chromium
+def test_the_settings_say_the_transposition_as_the_bar_does(tmp_path):
+    from test_viewer_bar import MINOR  # in Cm, with no capo
+
+    with viewer(tmp_path, written(tmp_path, MINOR) + "#t=2") as b:
+        b.click("#more")
+        moved = b.js(SHIFT_SAID)
+        b.click("#capo-up")
+        b.click("#capo-up")
+        capo = b.js(SHIFT_SAID)  # the capo plays it: the chords as written
+        bar = b.js("[document.querySelector('#key-now .k').textContent, "
+                   "document.querySelector('#key-now .d').textContent]")
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs") + "#t=2") as b:
+        b.click("#more")
+        keyless = b.js(SHIFT_SAID)
+    assert moved == ["Dm", "+2"] and capo == ["Cm", "capo 2"] and bar == capo
+    assert keyless == ["+2", ""]  # no key to name: the semitones alone
 
 
 @in_chromium
@@ -538,7 +560,7 @@ def test_reset_everything_is_last_and_quiet(tmp_path):
         b.click("#reset-all")
         after = [b.js(SHIFT), b.js("location.hash"), b.js(HEAD)[1]]
     assert seen == {"last": True, "centred": True, "quiet": True, "ruled": True}
-    assert after == ["0", "", "E Major · Guitar"]
+    assert after == ["key", "", "E Major · Guitar"]
 
 
 @in_chromium
@@ -1270,7 +1292,7 @@ def test_reset_all_goes_back_to_the_version_just_made_yours(tmp_path):
         b.click("#ask-mine")  # the song's own version is two up now
         b.js("document.getElementById('t-up').click()")  # three up
         b.click("#reset-all")
-        after = b.js("document.getElementById('shift').textContent")
+        after = b.js(SHIFT)
         b.click("#more")
         b.click("#export")
         asked = b.js(ASKED)

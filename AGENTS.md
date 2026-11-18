@@ -1309,6 +1309,10 @@ It is rows.js's, shared by both pages:
     `GLYPH_OF`, card.js's glyph of each kind, which
     `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and card.js: a
     library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
+- **What moved**: viewer.js's `moved()`, how far the chords shown moved from the sheet as written by your hand (the
+  shapes' move on an instrument that takes a capo, so a sheet's capo taken off is "no capo · +2"; the transposition
+  alone on one that takes none), is the one count the bar's word under its key (`changes()`, `keyShort`), the
+  settings' Transpose and the header's Key say (test_viewer_bar.py, test_viewer_header.py).
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;

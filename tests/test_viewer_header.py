@@ -22,6 +22,7 @@ from test_viewer_instruments_page import choose
 UG_CHO = (Path(__file__).parent / "fixtures" / "chordpro" / "ug_sheet.cho").read_text(encoding="utf-8")  # G, capo 2
 # The facts as the page shows them: each line's name and its value's text.
 ROWS = "[...document.querySelectorAll('#facts .fact')].map((r) => [r.dataset.fact, r.querySelector('dd').textContent])"
+SAYS = "document.querySelector('#key-now .d').textContent"  # what the bar says changed, under its key
 
 
 def test_the_title_block_opens_with_a_back_arrow_alone():
@@ -127,15 +128,17 @@ def test_the_facts_follow_the_capo_and_the_transposition(tmp_path):
         b.click("#more")
         b.click("#capo-down")
         b.click("#capo-down")
-        off = b.js(ROWS)
+        off = [b.js(ROWS), b.js(SAYS)]
         b.click("#up")
-        moved = b.js(ROWS)
+        moved = [b.js(ROWS), b.js(SAYS)]
         bold = b.js("document.querySelector('#facts [data-fact=key] dd b').textContent")
     assert first == [["tuning", "E A D G B E"], ["capo", "2"], ["key", "G shapes · sounds A · key from the tab"]]
-    # No capo: the key the song sounds in, alone, and the Capo line says none.
-    assert off == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "A · from the tab"]]
-    # Moved: the key it sounds in now, how far it moved after it.
-    assert moved == [["tuning", "E A D G B E"], ["capo", "none"], ["key", f"{up} (+1) · from the tab"]]
+    # No capo: the key the song sounds in, alone, and the Capo line says none; the chords you see moved two frets up
+    # (A for G), which the Key line says as the bar does.
+    assert off == [[["tuning", "E A D G B E"], ["capo", "none"], ["key", "A (+2) · from the tab"]], "no capo · +2"]
+    # Moved: the key it sounds in now, how far the chords moved after it.
+    assert moved == [[["tuning", "E A D G B E"], ["capo", "none"], ["key", f"{up} (+3) · from the tab"]],
+                     "no capo · +3"]
     assert bold == up
 
 
@@ -235,5 +238,6 @@ def test_a_songbook_song_draws_its_facts_too(tmp_path):
     # Its [transpose]: two up, as the bar says it.
     assert second == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "Bm (+2) · from the tab"]]
     assert first == [["tuning", "E A D G B E"], ["capo", "2"], ["key", "G shapes · sounds A · key from the sheet"]]
+    # A fret lower, the chords you see a semitone up from the sheet's G, as the bar's "capo 1 · +1"
     assert lower == [["tuning", "E A D G B E"], ["capo", "1"],
-                     ["key", f"{shapes} shapes · sounds A · key from the sheet"]]
+                     ["key", f"{shapes} shapes · sounds A (+1) · key from the sheet"]]

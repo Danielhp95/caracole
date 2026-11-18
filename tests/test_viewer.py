@@ -645,7 +645,8 @@ def test_a_capo_shows_the_shapes_to_play(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&capo=3")  # Bb shapes; capo 3: A shapes
     assert chord_texts(dom)["0"] == "A"
     assert "<dt>Capo</dt><dd>3</dd>" in dom
-    assert '<dd><b>A</b> shapes · sounds <b>C</b> (+3) · <span class="from">key from the sheet</span></dd>' in dom
+    # The chords you see two up from the sheet's G: the move is theirs, as the bar's "capo 3 · +2"
+    assert '<dd><b>A</b> shapes · sounds <b>C</b> (+2) · <span class="from">key from the sheet</span></dd>' in dom
 
 
 @in_chromium
@@ -657,7 +658,8 @@ def test_a_capo_may_come_off(tmp_path):
     """.replace("FACTS", FACTS), "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
     chips, chord, facts = out
     assert chips == ["No capoG shapes", "Capo 3E shapes"]
-    assert chord == "G" and facts == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "G (−2) · from the sheet"]]
+    # The chords as written again (G shapes, no capo, sounding G): nothing moved them
+    assert chord == "G" and facts == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "G · from the sheet"]]
 
 
 @in_chromium
@@ -680,9 +682,10 @@ def test_every_song_has_a_capo_to_move(tmp_path):
       out = [shown, offered, off, four, look()];
     """.replace("FACTS", FACTS))
     assert shown and offered == 0
-    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0",
-                   [["tuning", "E A D G B E"], ["capo", "none"], ["key", "F#m · guessed from the chords"]]]
-    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "natural minor"]
+    # The chords you see moved as the capo did, two frets either way
+    assert off == ["F#m7", "Key F#m · no capo · +2", "0", "#capo=0",
+                   [["tuning", "E A D G B E"], ["capo", "none"], ["key", "F#m (+2) · guessed from the chords"]]]
+    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m · −2", "4", "#capo=4", "natural minor"]
     assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
 
 
@@ -696,7 +699,8 @@ def test_a_sheet_with_no_key_moves_its_capo_too(tmp_path):
     """.replace("FACTS", FACTS))
     # No key: no Key line, the Capo line alone says the capo.
     assert before == [[["tuning", "E A D G B E"], ["capo", "1"]], "Transpose · capo 1"]
-    assert after == [[["tuning", "E A D G B E"], ["capo", "none"]], "Transpose · no capo", "#capo=0"]
+    # The capo off: the chords you see a fret up, as the bar says it (no key to name).
+    assert after == [[["tuning", "E A D G B E"], ["capo", "none"]], "Transpose +1 · no capo", "#capo=0"]
 
 
 def phone_tab(browser, url: str, width: int = 390, height: int = 844):
@@ -1042,7 +1046,7 @@ def test_a_capo_stays_on_its_fret_when_the_song_is_transposed(tmp_path):
       q("#up").click();
       out = [q('#sheet .c[data-c="0"]').textContent, q("#key-full").textContent, location.hash];
     """, "#t=3&capo=3")  # A shapes with the capo on fret 3, sounding C
-    assert out == ["Bb", "Bb shapes · capo 3 · sounds Db · +4", "#t=4&capo=3"]
+    assert out == ["Bb", "Bb shapes · capo 3 · sounds Db · +3", "#t=4&capo=3"]  # the chords three up from G
 
 
 @in_chromium

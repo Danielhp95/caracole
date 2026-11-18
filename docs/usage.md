@@ -3252,8 +3252,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the title names it); **Capo**, none or its fret, as set now; and **Key**,
   how the song is played. With a capo, the Key line names the key of the
   shapes you play and the key the song sounds in: "Em shapes · sounds F#m".
-  With none, the key alone: "Em". Transposed, the key it sounds in says how
-  far it moved: "F#m (+2)". Each says where the key came from. A sheet of
+  With none, the key alone: "Em". Moved, the key it sounds in says how far
+  the chords you see moved from the sheet as written, as the bar does:
+  "F#m (+2)" two up, "A (+2)" for a sheet's capo 2 taken off (its G shapes
+  played as A). Each says where the key came from. A sheet of
   words alone has no facts, so none says its capo either (its PDF's line does).
   The piano, the harmonica, the flute and the recorder take no capo and have
   no strings: no Tuning or Capo line, and the Key line names the key the song
@@ -3370,11 +3372,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the neck's place, after the key (both above). − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
-  between them in short: "Em" over "shapes · capo 2" (or "key" with no
-  capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
-  narrow for all of it, and "capo 2" over "+1" on the narrowest; a key too
-  long for its room ("Ab mixolydian") is a little smaller, and cut short
-  only where even that is too long. A screen reader
+  between them in short and, under it, what changed the chords you see from
+  the sheet as written: the capo that plays them ("Em" over "capo 2"), then
+  how far they moved ("+1", "capo 2 · +1"; a sheet's capo taken off moves
+  them up as many frets, "no capo · +2"), else "key". Once you move them or
+  the capo, that word is in the accent. On the piano, the harmonica and the
+  winds, which take no capo, the sheet's capo is folded in: the key the song
+  sounds in, over "key" until you transpose. On the narrowest screen "capo
+  2" sits over "+1"; a key too long for its room ("Ab mixolydian") is a
+  little smaller, and cut short only where even that is too long. A screen reader
   hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
   neck** opens the overlay as a sheet on a phone or a tablet (above). The
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
@@ -3434,7 +3440,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   dimmed or out of reach. A chord's card opened with them takes their place
   on a phone, and sits by its chord beside them on a wider screen, where
   Escape or Back closes the card first, then the settings; each gives the
-  focus back to what opened it. Among them, side by side: **Transpose**, as − and + do, with the semitones counted; ↺ Reset, by it
+  focus back to what opened it. Among them, side by side: **Transpose**, as − and + do, its value said as the bar's
+  key says it, the key over the same word ("Dm" over "+2", "Cm" over "capo 2", "Em" over "key"; for a song with no
+  key, the semitones alone, "+2"); ↺ Reset, by it
   while it differs, goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. A song with a version
   of its own (`[version]`, Make this my version) starts in it, key, capo, mode,

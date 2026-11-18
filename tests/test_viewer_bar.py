@@ -137,30 +137,37 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
 # --- what it says ------------------------------------------------------------------------------------
 
 
+# Under the key, what changed the chords you see from the sheet as written: the capo that plays them ("capo 2", or
+# "no capo" for a sheet's capo taken off), then how far they moved ("+2"), else "key". The word is in the accent
+# (``changed``) once you moved them or the capo; a screen reader hears the key line whole.
 @in_chromium
 @pytest.mark.parametrize(
-    ("cho", "fragment", "main", "sub", "full"),
-    [(UG_CHO, "", "G", "shapes · capo 2", "G shapes · capo 2 · sounds A"),
-     (WALL, "", "Em", "shapes · capo 2", "Em shapes · capo 2 · sounds F#m"),
-     (MINOR, "", "Cm", "key", "Key Cm"),
-     (MINOR, "#t=3", "D#m", "key · +3", "Key D#m · +3"),
-     (UG_CHO, "#capo=0", "A", "key · no capo", "Key A · no capo"),
-     (UG_CHO, "#mode=mixolydian&t=1", "Ab mixolydian", "shapes · capo 2 · +1",
+    ("cho", "fragment", "main", "sub", "changed", "full"),
+    [(UG_CHO, "", "G", "capo 2", False, "G shapes · capo 2 · sounds A"),
+     (WALL, "", "Em", "capo 2", False, "Em shapes · capo 2 · sounds F#m"),
+     (MINOR, "", "Cm", "key", False, "Key Cm"),
+     (MINOR, "#t=3", "D#m", "+3", True, "Key D#m · +3"),
+     (MINOR, "#t=2&capo=2", "Cm", "capo 2", True, "Cm shapes · capo 2 · sounds Dm"),  # the capo plays it: no move
+     (UG_CHO, "#capo=0", "A", "no capo · +2", True, "Key A · no capo · +2"),  # the chords two frets up
+     (UG_CHO, "#mode=mixolydian&t=1", "Ab mixolydian", "capo 2 · +1", True,
       "Ab mixolydian shapes · capo 2 · sounds Bb mixolydian · +1"),
-     (NO_KEY, "", "Transpose", "capo 1", "Transpose · capo 1")],
-    ids=["capo", "capo-on-open-shapes", "no-capo", "transposed", "capo-off", "mode", "no-key"],
+     (UG_CHO, "#inst=piano", "A", "key", False, "Key A"),  # the capo folded in: no move of yours
+     (NO_KEY, "", "Transpose", "capo 1", False, "Transpose · capo 1")],
+    ids=["capo", "capo-on-open-shapes", "no-capo", "transposed", "capo-plays-it", "capo-off", "mode", "piano",
+         "no-key"],
 )
-def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_path, cho, fragment, main, sub, full):
+def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_path, cho, fragment, main, sub,
+                                                                             changed, full):
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True)
     page.write_text(build_viewer(cho), encoding="utf-8")
     dom = browser.dump_dom(page.as_uri() + fragment, (390, 844), hide_scrollbars=True)  # a phone's, over the page
     assert re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)  # there once the script ran
     found = re.search(r'<output class="now" id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
-                      r'<span class="d" aria-hidden="true">([^<]*)</span><span class="vh" id="key-full">([^<]*)</span>',
-                      dom)
+                      r'<span class="d( changed)?" aria-hidden="true">([^<]*)</span>'
+                      r'<span class="vh" id="key-full">([^<]*)</span>', dom)
     assert found, "no key in the bar"
-    assert found.groups() == (main, sub, full)
+    assert (found.group(1), found.group(3), bool(found.group(2)), found.group(4)) == (main, sub, changed, full)
 
 
 @in_chromium
@@ -189,9 +196,9 @@ def test_minus_and_plus_transpose_a_semitone_at_a_time(tmp_path):
         b.click("#t-down")
         down = bar(b)
     assert (before["main"], before["chord"], before["hash"]) == ("G", "G", "")
-    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "shapes · capo 2 · +1", "Ab", "#t=1")
+    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "capo 2 · +1", "Ab", "#t=1")
     assert up["full"] == "Ab shapes · capo 2 · sounds Bb · +1"
-    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "shapes · capo 2 · −1"
+    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "capo 2 · −1"
     assert not up["panel"] and not down["panel"] and up["where"] == down["where"] == "shown"  # nothing opened
 
 
@@ -464,22 +471,18 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         tools = ["t-down", "t-up", "necks-toggle"] if width >= 1200 else ["t-down", "t-up", "necks-open"]
         assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
-        if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1"), with no
-            # guitar beside the neck to take its room
-            assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
-            assert m["size"] == 16, (width, m)
-        elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole; the key a little smaller
-            assert m["main"] and 12 <= m["size"] < 16, (width, m)
-            assert m["sub"] and m["said"] == ["capo 2 · +1"], (width, m)
-        else:  # with no room for both on one line, the capo over the transposition, each whole
-            assert m["sub"] and m["said"] == ["capo 2", "+1"], (width, m)
+        # The longest key in short, whole ("Ab mixolydian" over "capo 2 · +1"), with no guitar beside the neck to take
+        # its room; narrower, the key a little smaller (on the narrowest cut short); and where one line has no room
+        # for what changed, the capo over the transposition, each whole (as measured at each width).
+        assert m["sub"] and m["said"] == (["capo 2", "+1"] if width < 360 else ["capo 2 · +1"]), (width, m)
+        if width >= 360:
+            assert m["main"] and ((m["size"] == 16) if width >= 390 else (12 <= m["size"] < 16)), (width, m)
         assert clear, width
 
 
 @in_chromium
 def test_the_key_under_it_is_never_cut_short_by_a_fraction_of_a_pixel(tmp_path):
-    # At 360 px "shapes · capo 2" is a fraction of a pixel wider than its room, which scrollWidth rounds away:
-    # without "shapes", whole, rather than "shapes · capo…".
+    # Measured to the fraction of a pixel, which scrollWidth rounds away: at 360 px "capo 2" whole, never "capo…".
     with viewer(tmp_path, written(tmp_path, UG_CHO), width=360, height=740) as b:
         seen = b.js("""(() => { const d = document.querySelector('#key-now .d'), text = document.createRange();
           text.selectNodeContents(d);

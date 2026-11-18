@@ -24,7 +24,7 @@ pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
 
 DESKTOP = {"width": 1280, "height": 800, "mobile": False}
 READY = "document.documentElement.dataset.ready === '1'"
-SAID = "[location.hash.split('=')[0], document.getElementById('shift').textContent]"
+SAID = "[location.hash.split('=')[0], document.querySelector('#shift .d').textContent]"  # the settings' word
 
 
 def _songbook(tmp_path, songs) -> str:
@@ -159,7 +159,7 @@ def test_back_closes_a_songs_layer_and_stays_on_the_song(tmp_path, where):
             back(b)
             assert b.wait("document.getElementById('panel').hidden")
             time.sleep(0.5)
-            seen = b.js("[window.marker, document.getElementById('shift').textContent, location.hash]")
+            seen = b.js("[window.marker, document.querySelector('#shift .d').textContent, location.hash]")
     assert seen[0] == 1, seen
     assert seen[1] == "+1" and "t=1" in seen[2], seen
 

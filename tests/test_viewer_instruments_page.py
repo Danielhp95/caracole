@@ -169,8 +169,8 @@ def test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back(tmp_path
     assert guitar[0] == [["tuning", "E A D G B E"], ["capo", "2"],
                          ["key", "Em shapes · sounds F#m · key from the sheet"]]
     assert guitar[1] == ["Em", "C", "G", "D"]
-    assert moved[0] == [["tuning", "E A D G B E"], ["capo", "3"],
-                        ["key", "D#m shapes · sounds F#m · key from the sheet"]]
+    assert moved[0] == [["tuning", "E A D G B E"], ["capo", "3"],  # the chords you see a semitone down
+                        ["key", "D#m shapes · sounds F#m (−1) · key from the sheet"]]
     assert moved[1] == ["D#m", "B", "F#", "C#"]
     # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row in the settings
     # nor line in the header, and no Tuning line: the piano has no strings.
