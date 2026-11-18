@@ -404,6 +404,17 @@ def test_a_focused_lines_ring_shows_on_all_four_sides(big, tmp_path):
 
 # --- the laptop's buttons placed before the frame is painted ------------------------------------------------------
 
+# Before the page's scripts: the list beside the pane narrowed to 520 px (a stylesheet the document adopts, which the
+# page's policy doesn't govern), so that a line's two or three icon tiles don't fit beside its title and its artist and
+# go under its title, as six beside a long name do in the list's own 760 px (test_library_card_place.py): the long
+# list then holds lines placePlays puts under their title, on the screen and far down.
+NARROW = r"""(() => {
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync("@media (min-width: 1200px) { "
+    + ".lib-cols { grid-template-columns: minmax(0, 520px) minmax(400px, 1fr); } }");
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+})();"""
+
 # Before the page's scripts: each draw of the list (``drawn``, the frame it came in), and each line its buttons were
 # put under its title for (``under``: the frame, and whether the line was on the screen then).
 PLACED_LATE = r"""(() => {
@@ -434,7 +445,8 @@ def _placed_late(log):
 def test_lines_on_the_screen_are_placed_before_their_first_frame(big, tmp_path):
     # From 1200 px, the lines a draw of the list puts on the screen have their buttons where they go in the frame that
     # first shows them, at the page's load and after a search alike; their runs, on the screen, are laid out for it.
-    b = _open(tmp_path, big.replace("index.html", "index.html#sort=title"), LAPTOP, before=PLACED_LATE)
+    # The list narrowed (NARROW), so that some of them go under their title.
+    b = _open(tmp_path, big.replace("index.html", "index.html#sort=title"), LAPTOP, before=NARROW + PLACED_LATE)
     try:
         b.js(FRAMES)
         log = b.js("window.__placed")
@@ -542,8 +554,8 @@ LAST_RUN = r"""(() => {
 def test_a_line_far_down_is_placed_once_its_run_shows_and_no_skipped_run_is_laid_out(big, tmp_path):
     # From 1200 px a folded or flat line's buttons go under its title where they don't fit beside it (placePlays):
     # measured for the lines on the screen alone, never by laying out a run the browser skips; a line far down is
-    # placed as its run comes on the screen.
-    b = _open(tmp_path, big, LAPTOP, before=FORCED)
+    # placed as its run comes on the screen. The list narrowed (NARROW), so that some of them go under their title.
+    b = _open(tmp_path, big, LAPTOP, before=NARROW + FORCED)
     try:
         _sort(b, "title")  # flat lines, in runs
         assert b.js("window.__forced") == []
