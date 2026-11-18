@@ -26,6 +26,7 @@ def test_defaults(tmp_path):
     assert cfg.providers["lrclib"] == ProviderPolicy(budget=200, delay=(0.25, 0.5))
     assert cfg.providers["lacuerda"] == ProviderPolicy(budget=30, delay=(2.5, 5.0))
     assert cfg.providers["gametabs"] == ProviderPolicy(budget=20, delay=(0.25, 0.25))
+    assert cfg.providers["ireal"] == ProviderPolicy(budget=20, delay=(2.5, 5.0))
     assert cfg.match == MatchPolicy(accept=90, margin=8, review=75, artist_gate=90)
     assert cfg.rank == RankPolicy(
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
@@ -444,12 +445,12 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
         "ug": ((2.5, 5.0), lookup), "lrclib": ((0.25, 0.5), lookup), "megalobiz": ((0.5, 1.0), (0.5, 0.75)),
         "azlyrics": (none, none), "lacuerda": ((2.5, 5.0), lookup), "gtptabs": ((2.5, 5.0), lookup),
         "musescore": ((2.5, 5.0), lookup), "harptabs": ((2.5, 5.0), lookup), "gametabs": ((0.25, 0.25), lookup),
-        "youtube": ((3.75, 7.5), lookup), "ytimg": (none, none),
+        "ireal": ((2.5, 5.0), lookup), "youtube": ((3.75, 7.5), lookup), "ytimg": (none, none),
         "itunes": (none, lookup), "spotify": (none, lookup), "tidal": (none, lookup), "youtube-oembed": (none, lookup),
     }
     assert {name: p.budget for name, p in cfg.providers.items()} == {
         "ug": 60, "lrclib": 200, "megalobiz": 60, "azlyrics": NO_BUDGET, "lacuerda": 30, "gtptabs": 20,
-        "musescore": 10, "harptabs": 20, "gametabs": 20, "youtube": 6, "ytimg": 20,
+        "musescore": 10, "harptabs": 20, "gametabs": 20, "ireal": 20, "youtube": 6, "ytimg": 20,
         "itunes": 0, "spotify": 0, "tidal": 0, "youtube-oembed": 0,
     }
     assert {(p.lookup_requests, p.lookup_per_hour) for name, p in cfg.providers.items()
@@ -472,6 +473,14 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
 def test_an_interactive_pace_of_the_wrong_kind_is_a_config_error(tmp_path, toml, where):
     with pytest.raises(ConfigError, match=rf"\[providers\.ug\]\.{where} must be"):
         load(tmp_path, f"[providers.ug]\n{toml}\n")
+
+
+def test_irealpros_forum_is_a_switchable_provider_at_the_bulk_pace(tmp_path):
+    from caracole.config import SWITCHABLE
+
+    assert "ireal" in SWITCHABLE
+    p = write(tmp_path, "[providers.ireal]\nenabled = false\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("ireal").enabled is False
 
 
 def test_youtubes_image_host_is_a_switchable_provider_with_no_pause(tmp_path):

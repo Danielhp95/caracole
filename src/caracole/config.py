@@ -79,6 +79,10 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # Text tabs of game music, kept for your wanted songs alone (gametabs.py): its sitemaps, a song's candidate pages,
     # then its game pages, four requests a second.
     "gametabs": ProviderPolicy(budget=20, delay=(0.25, 0.25)),
+    # Chord charts of jazz standards from iReal Pro's forum, kept as the sheet of a song the sheet sites left with none
+    # (ireal.py): its sitemaps once in 30 days, a song's candidate threads (three at most), then its playlist threads.
+    # No Crawl-delay asked; the bulk pace of the other sites.
+    "ireal": ProviderPolicy(budget=20, delay=(2.5, 5.0)),
     # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
     # each a search or a download, so six are three songs a night. A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.
@@ -101,8 +105,8 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
 SHARE_PROVIDERS = ("itunes", "spotify", "tidal", "youtube-oembed")
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg",
-                        *SHARE_PROVIDERS})
+SWITCHABLE = frozenset({"megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "ireal", "youtube",
+                        "ytimg", *SHARE_PROVIDERS})
 
 
 @dataclass(frozen=True)
