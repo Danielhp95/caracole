@@ -9,11 +9,13 @@ A small server from the standard library (``http.server``), in these parts:
   the kinds caracole keeps there; and the pages caracole wrote there (the
   sheet viewers, a kept version's among them, and the songbooks' pages), only
   while each is still as written.
-- jobs.py: the queue. A request runs the ``caracole`` command line in a child
-  process, one command at a time: ``caracole add``, then, to fetch the song
-  now, ``match``, ``fetch --song`` and ``render``; a pick of a review's
-  candidate is ``caracole review --song``. Each takes caracole's lock
-  and keeps the pause after the last request any caracole sent, as it does
+- jobs.py: the queue and the lookups' lane. A request runs the ``caracole``
+  command line in child processes: the queue's one request at a time (``caracole
+  add``, a review's pick, ``caracole remove``, a sheet from a YouTube video...),
+  and beside it up to three of the lane's (``caracole get``, a pasted UG link,
+  LaCuerda's search, an artist's page), which start at once unless their song
+  has a job in the queue and take turns with caracole's lock. Each takes the
+  lock and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
 - history.py: the requests kept across a restart, ``state_dir/requests.jsonl``,
   the queue's own file: a line a request each time it changes, read back when

@@ -609,11 +609,12 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
       work). Interrupted meanwhile, it takes the lock back all the same: it is never left without it.
     - What the owner asked for now (``exclusive(..., interactive=True)``: a queue job such as ``fetch --song``,
       a YouTube search or sheet) hands it to the lane's lookups alone (``lane_tickets``): another caracole asked
-      for now waits for its end. It takes the gate only if it is free, never waiting for it: held, it is the bulk
-      work that let this one in, in its own handoff. It waits with a ticket of its own, written before it lets go,
-      to take the lock back once the lane is empty (``_away_announced``), so the bulk work that let it in, waiting
-      too, gives it back at its next pause rather than keeping it to its end. Interrupted as it waits, it holds
-      nothing: its ticket goes, and no record is written.
+      for now usually waits for its end, though one waiting as this one is away may take the lock first once the
+      lane is empty, tickets outside the lane keeping no order. It takes the gate only if it is free, never
+      waiting for it: held, it is the bulk work that let this one in, in its own handoff. It waits with a ticket
+      of its own, written before it lets go, to take the lock back once the lane is empty (``_away_announced``),
+      so the bulk work that let it in, waiting too, gives it back at its next pause rather than keeping it to its
+      end. Interrupted as it waits, it holds nothing: its ticket goes, and no record is written.
 
     Either way, the lock's record (which caracole holds it) is written back and a handoff counted (``handoffs()``).
     Without the gate's file, nothing is handed over.

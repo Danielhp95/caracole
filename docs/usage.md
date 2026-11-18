@@ -1982,7 +1982,9 @@ What you ask for now waits as a lookup does and says the same, so that a lookup
 `--sheet` and `--none` too), `youtube --search` and `youtube --video`. Holding the
 lock, such a command lets a lookup go first there (a yt-dlp pause, a YouTube
 sheet before its models, `fetch --song`'s pauses), and gets the lock back once
-the lookups are done; another command asked for now waits for its end.
+the lookups are done; another command asked for now usually waits for its end
+(one that waits while the lookups have the lock, such as a `caracole remove`
+from a terminal, may take it first once they are done).
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
