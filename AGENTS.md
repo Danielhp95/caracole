@@ -834,9 +834,10 @@ It is rows.js's, shared by both pages:
 - `drawCountMarks(list, data, yours, found)`: the row drawn, hidden when it has no mark, fitted; the one call both
   pages make for it (library.js `drawCounts`, lookup_page.py `showCounts`).
 - `countsSaid`: the counts in words ("Nothing in your songs or the sites' indexes" when every one is 0), then a site
-  that blocks caracole or is off ("MuseScore turned us back"), row or no row, so no state is the tooltip's alone; the
-  line's live region and the box's description, a screen reader's alone once the marks said it, and where no mark
-  shows (every count 0) the row takes no room (`.counts-row.counted`).
+  that blocks caracole ("MuseScore turned us back"), row or no row, so a block is never the tooltip's alone (a site
+  turned off, the owner's choice, the rest's words alone); the line's live region and the box's description, a
+  screen reader's alone once the marks said it, and where no mark shows (every count 0) the row takes no room
+  (`.counts-row.counted`).
 - `nothingFound`: a query that found nothing on the sites:
   - a line of the list under a quiet band, "Not on the sites", the query, Request where a song's Open is, the one
     Request then, no marks of its own (and no row under the box unless some of yours match);

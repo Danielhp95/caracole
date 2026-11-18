@@ -1464,7 +1464,8 @@ def test_a_site_turned_off_or_empty_is_named_in_the_rest(cfg, live, browser):
     assert [lines[0] for lines in tooltip(marks[-1][4])[:-1]] == [
         "0 on gtptabs.com · index empty", "0 on LaCuerda · index empty", "0 on MuseScore · index empty",
         "0 on harptabs.com · index empty"]
-    assert browser.js(STATUS) == "1 on Ultimate Guitar · gametabs.net is off"
+    # A site turned off is the owner's own choice: the rest's words say it, the words under the box don't.
+    assert browser.js(STATUS) == "1 on Ultimate Guitar"
 
 
 def everywhere(cfg):

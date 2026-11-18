@@ -4238,9 +4238,9 @@ the library, sent as they are: they carry no badge.
   comes, the counts that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5
   on gametabs.net"; "Nothing in your songs or the sites' indexes" when they all
   are, "1 of your songs · nothing in the sites' indexes" when yours alone
-  aren't), then a site that blocks caracole or is turned off, row or no row
-  ("… · MuseScore turned us back", "… · gametabs.net is off"). A mark is no
-  button. While the next query's answer comes the row
+  aren't), then a site that blocks caracole, row or no row ("… · MuseScore
+  turned us back"); one you turned off is said only in the rest's mark. A mark
+  is no button. While the next query's answer comes the row
   dims, and what follows an answer (an artist's songs listed by "+ N more", an
   error) is said in words after the marks. Nothing under the results says it
   again: only Ask LaCuerda, and "Why isn't it found?", when they apply.

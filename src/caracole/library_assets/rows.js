@@ -1106,7 +1106,7 @@ const caracoleRows = (icons, does) => {
   // No row at all when every count is 0 (the list's line says so). A mark is no control: its name for a screen reader
   // says it all ("7 on LaCuerda · index in part, up to C"), its tooltip that and its detail, which is its description
   // too. drawCountMarks draws the row for both pages; countsSaid says the counts in words, those that aren't 0, and a
-  // site that blocks caracole or is off, for the line a screen reader hears as the answer comes.
+  // site that blocks caracole, for the line a screen reader hears as the answer comes.
   const STATES = ["done", "partial", "empty", "blocked", "off"];
   const SEARCHED = ["done", "partial", "empty"];
   const stateOf = (s) => (STATES.indexOf(s.state) >= 0 ? s.state : "off");
@@ -1269,17 +1269,16 @@ const caracoleRows = (icons, does) => {
   };
   // The same in words, the sites that found something alone: "1 of your songs · 7 on Ultimate Guitar · 5 on
   // gametabs.net", or "Nothing in your songs or the sites' indexes" ("1 of your songs · nothing in the sites'
-  // indexes"); then a site that wasn't searched, and why, whether or not a row shows ("… · MuseScore turned us back",
-  // "… · gametabs.net is off").
+  // indexes"); then a site that blocks caracole, whether or not a row shows ("… · MuseScore turned us back"). One
+  // turned off, the owner's own choice, goes unsaid here: the rest's words and its tooltip say it.
   const countsSaid = (data, yours, found) => {
     const d = data && typeof data === "object" ? data : {};
     const mine = Number(yours) > 0 ? [yoursSaid(yours)] : [];
     const at = foundAt(d, found);
     const sites = at.filter((x) => x.n > 0).map((x) => number(x.n) + " on " + siteName(x.s));
-    const unsearched = at.filter((x) => x.state === "blocked" || x.state === "off")
-      .map((x) => siteName(x.s) + (x.state === "blocked" ? " turned us back" : " is off"));
+    const blocked = at.filter((x) => x.state === "blocked").map((x) => siteName(x.s) + " turned us back");
     return mine.concat(sites.length ? sites
-      : [mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"], unsearched)
+      : [mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"], blocked)
       .join(" · ");
   };
   // Why the query may name an artist the Ultimate Guitar index can't see (``unseen``), folded: what to paste into
