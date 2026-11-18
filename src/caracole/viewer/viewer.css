@@ -520,6 +520,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
    the next moves nothing under it. */
 .ui-head h2 { display: flex; align-items: center; min-height: 2.4em; margin: 0; font-size: 1.15rem; line-height: 1.2; }
 .panel .ui-head { padding-bottom: 6px; }  /* the second line clear of the line under it */
+/* The versions list's head kept at its top as its rows scroll (it opens scrolled to this page's row), its × within
+   reach: over the list's padding above it, and its sides, so that no row shows round it. */
+#version-list .ui-head { position: sticky; z-index: 1; top: -6px; margin: -6px -16px 0; padding: 6px 16px;
+  background: var(--surface); }
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
@@ -835,8 +839,10 @@ a.ver-main .ver-name { color: var(--accent); }
 }
 /* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
    popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. So is
-   the versions list, a popover under its line (layers.js placeUnder: 6 px under #ver-now, at its left), beside
-   the rail and moving nothing, its rows scrolling within it past 60 % of the window. */
+   the versions list, a popover under its line (layers.js placeUnder: 6 px under #ver-now, at its left, within the
+   window less the rails, --pop-room), beside the rail and moving nothing, its rows scrolling within it past 60 % of
+   the window, or past the bar's top where that comes first (--pop-y: its top in the window as it was placed), so its
+   last row is always within reach. */
 @media screen and (min-width: 900px) {
   .sheet-ui:not(.top) { visibility: visible; }
   .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
@@ -858,9 +864,11 @@ a.ver-main .ver-name { color: var(--accent); }
   .card[data-kind="keys"] .shape { grid-template-columns: 106px 106px; }
   .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
   /* The list is a .panel too (its head's room): its rail's edges, padding and shadow are the card's here. */
-  #version-list { position: absolute; top: var(--pop-top); left: var(--pop-left); right: auto; bottom: auto;
-    width: min(380px, calc(100vw - 32px)); max-height: 60vh; padding: 6px 16px 14px; border: 1px solid var(--border);
-    border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+  #version-list { position: absolute; top: var(--pop-top, 0px); left: var(--pop-left, 0px); right: auto; bottom: auto;
+    width: min(380px, calc(100vw - 32px), var(--pop-room, 380px));
+    max-height: max(9rem, min(60vh, calc(100vh - var(--foot) - var(--pop-y, 0px) - 8px)));
+    max-height: max(9rem, min(60dvh, calc(100dvh - var(--foot) - var(--pop-y, 0px) - 8px)));
+    padding: 6px 16px 14px; border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
 }
 @media print {
   .bar, .pill, .handle, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }

@@ -25,7 +25,7 @@ import pytest
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.version_pages import CHO, EVERY_KIND, KINDS, UG, WONDERWALL, entry, folder
+from helpers.version_pages import CHO, EVERY_KIND, KINDS, UG, WONDERWALL, entry, folder, with_versions
 from helpers.viewer_pages import back, entries, viewer
 
 from caracole import render
@@ -670,6 +670,134 @@ def test_on_a_laptop_the_list_is_a_popover_under_the_line(tmp_path):
     assert 6 <= beside["under"] <= 8 and abs(beside["from"]) <= 1 and beside["panel"] == "open"
     assert beside["right"] <= 1280 - 360 and at == (3, 4)  # the page, the settings, the list
     assert after == [False, "open", "false"]
+
+
+# A song of a few lines, so that a window 500 px tall shows it whole and the page doesn't scroll: the popover's own
+# scroll is the one way to its last row.
+SHORT_CHO = "{title: Synthetic Test Song}\n{artist: The Placeholders}\n{key: G}\n[G]Tiny test [D]words\n"
+# The list's last row and its head's close button, where they are and what is hit at the close button's middle.
+ENDS = """(() => {
+  const list = document.querySelector('#version-list'), rows = list.querySelectorAll('.ver');
+  const last = rows[rows.length - 1].getBoundingClientRect(), x = list.querySelector('[data-close]');
+  const r = x.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return {last: last.bottom, x: r.top, hit: Boolean(hit) && x.contains(hit), scrolled: list.scrollTop,
+          end: list.scrollHeight - list.clientHeight};
+})()"""
+
+
+def short_song(tmp_path: Path) -> Path:
+    """sheet.html of SHORT_CHO under Artist/Title/, with every version and every kind."""
+    where = tmp_path / "Artist" / "Title"
+    where.mkdir(parents=True, exist_ok=True)
+    path = where / "sheet.html"
+    path.write_text(with_versions(build_viewer(SHORT_CHO), WONDERWALL, "sheet.html", EVERY_KIND), encoding="utf-8")
+    return path
+
+
+@in_chromium
+def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_stays_in_sight(tmp_path):
+    # 1280 × 500: the bar (over the popover) would hide the list's last rows, and a short song gives the page no
+    # scroll to bring them up: the popover ends above the bar, its own scroll reaching its last row, and its head, with
+    # its ×, stays at its top as it scrolls.
+    with viewer(tmp_path, short_song(tmp_path).as_uri(), **{**DESKTOP, "height": 500}) as b:
+        open_list(b)
+        box = b.js(PLACED)
+        page_scrolls = b.js("document.documentElement.scrollHeight > innerHeight")
+        b.js("document.querySelector('#version-list').scrollTop = 1e6")
+        assert b.wait("document.querySelector('#version-list').scrollTop > 0")
+        end = b.js(ENDS)
+        b.js("document.querySelector('#version-list [data-close]').click()")
+        assert b.wait("document.querySelector('#version-list').hidden")
+    # At the line's left: the line measured as it is once the popover is placed (unplaced, at the document's end, it
+    # would give the page a scrollbar for a moment and shift the page's column under it)
+    assert box["position"] == "absolute" and 6 <= box["under"] <= 8 and abs(box["from"]) <= 1, box
+    assert box["bottom"] <= box["barTop"], box  # above the bar
+    assert not page_scrolls  # the page has no more to show: the list's own scroll does
+    assert end["scrolled"] == end["end"] > 0  # the list scrolled to its end
+    assert end["last"] <= box["bottom"] and end["last"] <= box["barTop"]  # its last row in sight, above the bar
+    assert end["hit"] and box["top"] <= end["x"] <= box["top"] + 8  # the head kept at its top, its × pressable
+
+
+@in_chromium
+def test_the_popover_keeps_within_the_window_less_the_rails(tmp_path):
+    # From 900 px wide the popover is under its line, at its left, and within the window less the rails beside the
+    # song (the rail of necks on the left, the settings' on the right): 8 px from either, as wide as fits there.
+    pages = folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    found = {}
+    with viewer(tmp_path, pages["sheet.html"].as_uri(), **DESKTOP) as b:
+        # The line at the right of a page the whole window wide, the rail of necks on the left
+        b.js("document.querySelector('.page').style.maxWidth = 'none'")
+        b.js("document.querySelector('#versions').style.justifyContent = 'flex-end'")
+        b.js("document.querySelector('#ver-now').style.maxWidth = '120px'")
+        open_list(b)
+        found["right"] = b.js(PLACED) | {"rail": b.js("document.querySelector('#necks').getBoundingClientRect().right")}
+        b.press("Escape")
+        assert b.wait("document.querySelector('#version-list').hidden")
+        # A page narrower than the popover, at the right, beside the settings' rail at 960 px: never over the rail
+        b.send("Emulation.setDeviceMetricsOverride", width=960, height=800, deviceScaleFactor=1, mobile=False)
+        assert b.wait("innerWidth === 960")
+        b.js("Object.assign(document.querySelector('.page').style, {maxWidth: '300px', marginRight: '0'})")
+        b.click("#more")
+        assert b.wait("!document.querySelector('#panel').hidden")
+        open_list(b)
+        found["rail"] = b.js(PLACED)
+        # A rail that leaves less room than the popover's 380 px: the popover as wide as the room
+        b.js("document.documentElement.style.setProperty('--rail', '600px')")
+        b.click("#more")  # the settings closed and opened again: the list placed again beside the wider rail
+        assert b.wait("document.querySelector('#panel').hidden")
+        b.click("#more")
+        assert b.wait("!document.querySelector('#panel').hidden")
+        found["room"] = b.js(PLACED) | {"window": b.js("document.documentElement.clientWidth")}  # less its scrollbar
+    right = found["right"]
+    assert right["left"] >= right["rail"] + 8 and right["right"] <= 1280 - 8 and right["width"] == 380
+    assert right["from"] < 0  # pulled in from the line's left, which would run it off the window
+    rail = found["rail"]
+    assert rail["panel"] == "open" and rail["left"] >= 8 and rail["right"] <= 960 - 360 - 8 and rail["width"] == 380
+    room = found["room"]
+    assert room["left"] >= 8 and room["right"] <= room["window"] - 600 - 8 and room["width"] == room["window"] - 600 - 16
+
+
+@in_chromium
+def test_on_a_laptop_escape_closes_the_list_and_the_focus_goes_back_to_its_line(tmp_path):
+    pages = folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    with viewer(tmp_path, pages["sheet.html"].as_uri(), **DESKTOP) as b:
+        b.js("document.querySelector('#ver-now').focus()")
+        b.press("Enter")
+        assert b.wait("!document.querySelector('#version-list').hidden")
+        opened = b.js("document.activeElement.id")
+        b.press("Escape")
+        assert b.wait("document.querySelector('#version-list').hidden")
+        focus = b.js("document.activeElement.id")
+        expanded = b.js("document.querySelector('#ver-now').getAttribute('aria-expanded')")
+        depth = history_at(b, (1, 3))
+    assert opened == "version-list-title" and focus == "ver-now" and expanded == "false"
+    assert depth == (1, 3)  # its entry stepped off
+
+
+@in_chromium
+def test_the_list_open_across_900_px_docks_and_floats_again_with_one_entry(tmp_path):
+    # Narrowed below 900 px with the list open, it docks on the bar, a sheet from the bottom; widened again, the
+    # popover under its line: the same one layer, its one entry, all along; Back closes it.
+    pages = folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    with viewer(tmp_path, pages["sheet.html"].as_uri(), **DESKTOP) as b:
+        open_list(b)
+        wide = b.js(PLACED)
+        at_wide = history_at(b, (2, 3))
+        b.send("Emulation.setDeviceMetricsOverride", width=800, height=800, deviceScaleFactor=1, mobile=False)
+        assert b.wait("innerWidth === 800 && document.documentElement.dataset.dock === 'version-list'")
+        narrow = b.js(PLACED)
+        at_narrow = history_at(b, (2, 3))
+        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=800, deviceScaleFactor=1, mobile=False)
+        assert b.wait("innerWidth === 1280 && !document.documentElement.dataset.dock")
+        again = b.js(PLACED)
+        at_again = history_at(b, (2, 3))
+        back(b)
+        assert b.wait("document.querySelector('#version-list').hidden")
+        after = history_at(b, (1, 3))
+    assert wide["position"] == "absolute" and 6 <= wide["under"] <= 8
+    assert narrow["position"] == "fixed" and abs(narrow["bottom"] - narrow["barTop"]) <= 1 and narrow["depth"] == 1
+    assert again["position"] == "absolute" and 6 <= again["under"] <= 8 and abs(again["from"]) <= 1
+    assert again["depth"] == 1 and at_wide == at_narrow == at_again == (2, 3) and after == (1, 3)
 
 
 def test_the_fixture_has_the_shape_render_writes():

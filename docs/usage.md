@@ -3170,7 +3170,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the settings' Guitar Pro row does. On a phone the list comes up from the
   bottom, over the bar, where the settings do; from 900 px wide it opens
   under the line, beside the settings or the Harmony panel, the song staying
-  where it is, and scrolls with the page. A kept version opens from it, in
+  where it is, never over a rail, and scrolls with the page; it ends above
+  the bar, its rows scrolling within it, and its heading and × stay at its
+  top as they scroll, on a phone too. A kept version opens from it, in
   the same tab, at the same text size and scroll speed (the key, the capo
   and the rest are each sheet's own), and so does a harmonica tab's page;
   one gone from UG is listed and opens nothing. Served by `caracole serve`,

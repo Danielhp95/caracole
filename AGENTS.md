@@ -1051,8 +1051,12 @@ It is rows.js's, shared by both pages:
   - The list's place: on a phone a sheet from the bottom, docked on the bar as the settings are (one of `DOCKED`);
     from 900 px a popover under the line, never a rail (no `data-panel`: the song's column stays), beside the settings
     or Harmony: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
-    `--pop-left`, 6 px under the line's box, at its left, kept 8 px inside `.page`'s box, in the page's coordinates,
-    so it scrolls with the page), which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
+    `--pop-left`, 6 px under the line's box, at its left, in the page's coordinates, so it scrolls with the page),
+    which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
+  - The popover keeps 8 px within the window less the rails (the room body's padding leaves them: `data-necks`,
+    `data-panel`), as wide as fits there (`--pop-room`), and ends above the bar (`--pop-y`, its top in the window as
+    placed, in viewer.css's `max-height` with `--foot`), so its own scroll reaches its last row on a short window;
+    its head (its ×) is sticky at every width (test_viewer_versions.py's short window, rails and resize tests).
   - The list is a group a kind (`#kind-groups`, `section.kind-group[data-kind]`, `h3.kind-head`): Chords first
     (`#ver-acts`, `#ver-items`: every version UG has, or the chord sheet alone), then each other kind in the card's
     order, a row each named as the card names it, a tap from the list: a harmonica tab's page with `carry`, a Guitar
