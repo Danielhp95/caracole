@@ -12,9 +12,10 @@ file, and none of it loads anything from the network.
   (square and 50 % besides); a stylesheet writes no other (test_page_calm.py).
 - picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
-- steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): on index.html the Requests tab's
-  running request (requests.js), and a song's line, or a search result's row, while its lookup runs (library.js),
-  the same markup.
+- steps.css (``STEPS_STYLE``): a request's steps (web/outcome.py's) on index.html: a song's line, or a search
+  result's row, a bar of them while its lookup runs, frozen under the line once it ended otherwise than Ready, and
+  the list of them (library.js ``stepList``, a line a step) under the song's open card and in the Requests tab, the
+  running request's and every finished one's (requests.js), the same markup.
 - rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines, the marks
   of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
   with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
