@@ -1098,7 +1098,10 @@
   const sheetEl = $("sheet");
   const fit = () => {
     sheetEl.classList.add("tight");
-    for (const y of sheetEl.querySelectorAll(".s > .y")) y.style.minWidth = "";
+    for (const y of sheetEl.querySelectorAll(".s > .y")) {
+      y.style.minWidth = "";
+      y.classList.remove("ext");
+    }
     const space = parseFloat(getComputedStyle(sheetEl).fontSize) * 0.45;
     for (const line of sheetEl.querySelectorAll(".l")) {
       const kids = Array.from(line.querySelectorAll(".s, .w"));  // its columns, a word's group's (.word) among them
@@ -1119,7 +1122,14 @@
         }
         let width = room < need ? box.width + need - room : 0;
         if (box.left + chord > right + 0.5) width = Math.max(width, chord);  // past the edge: on to the next row
-        if (width) col.lastElementChild.style.minWidth = Math.ceil(width) + "px";
+        if (width) {
+          col.lastElementChild.style.minWidth = Math.ceil(width) + "px";
+          // The gap opened inside a word ("wo[G][D]rd"): a leader fills it, so the word reads as one.
+          const after = kids[k + 1];
+          if (after && after.parentElement === col.parentElement && col.parentElement.classList.contains("word")) {
+            col.lastElementChild.classList.add("ext");
+          }
+        }
       });
     }
   };

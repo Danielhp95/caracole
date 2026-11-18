@@ -124,3 +124,39 @@ def test_with_pinyin_a_word_a_chord_falls_inside_keeps_the_readings_room(tmp_pat
         laid = b.js(LAID_OUT)
         assert b.js("document.querySelectorAll('#sheet .l.py .word').length") == 2
     assert laid["wrong"] == [], laid  # each chord over its syllable, a row's chords at one height
+
+
+# The first column's text of each chord that fit() widened: whether it is marked as an extender, and its width.
+EXT = """[...document.querySelectorAll('#sheet .s > .y')].map((y) => ({ext: y.classList.contains('ext'),
+  widened: y.style.minWidth !== '', text: y.textContent, ruby: y.querySelector('ruby') !== null}))"""
+
+
+def test_a_gap_fit_opens_inside_a_word_is_marked_an_extender_and_a_gap_between_words_is_not(tmp_path):
+    cho = ("{title: T}\n{artist: A}\n{key: C}\n{comment: Verse}\n"
+           "[Cmaj7sus4]a [Dmaj7sus4]b [Am]wo[G][D]rd\n")
+    with open_viewer(tmp_path, written(tmp_path, cho), width=390, height=844) as b:
+        ys = b.js(EXT)
+        wo = next(k for k, y in enumerate(ys) if y["text"] == "wo")
+        assert ys[wo + 1]["widened"] is True and ys[wo + 1]["ext"] is True, ys  # G's, before D in the same word
+        assert ys[0]["widened"] is True and ys[0]["ext"] is False, ys  # "a": a widened column outside a word
+        assert ys[wo]["ext"] is ys[wo]["widened"], ys  # "wo" too, when Am's column was widened for G
+        b.click("#t-up")
+        assert b.wait("document.querySelector('#sheet .s .c').textContent !== 'Cmaj7sus4'")
+        again = b.js(EXT)
+        wo = next(k for k, y in enumerate(again) if y["text"] == "wo")
+        assert [k for k, y in enumerate(again) if y["ext"]] and again[wo + 1]["ext"] is True, again
+        assert all(y["widened"] and wo <= k <= wo + 1 for k, y in enumerate(again) if y["ext"]), again
+        b.click("#t-down")
+        assert b.wait("document.querySelector('#sheet .s .c').textContent === 'Cmaj7sus4'")
+        assert [y["ext"] for y in b.js(EXT)] == [y["ext"] for y in ys]  # fit() re-marks after each change
+
+
+def test_with_pinyin_no_leader_is_drawn_under_a_readings_ruby(tmp_path):
+    cho = "{title: 合成}\n{artist: 示例}\n{key: C}\n{comment: Verse}\n[C]你好 Al[Gmaj7sus4][Dmaj7sus4]a [Am]世界\n"
+    with open_viewer(tmp_path, written(tmp_path, cho) + "#py=1", width=390, height=844) as b:
+        assert b.wait("document.querySelector('#sheet ruby.py') !== null")
+        leaders = b.js("""[...document.querySelectorAll('#sheet .y.ext')].map((y) =>
+          [y.querySelector('ruby') !== null, getComputedStyle(y, '::after').borderBottomWidth])""")
+        assert leaders, "a gap opened inside the word"
+        assert all(width == "0px" for ruby, width in leaders), leaders  # none drawn, ext or not
+        assert b.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
