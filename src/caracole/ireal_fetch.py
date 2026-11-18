@@ -223,6 +223,16 @@ def ireal_sheets(
 # --- which songs ----------------------------------------------------------------------------------------------------
 
 
+def wants_a_chart(conn: sqlite3.Connection, library_dir: Path, now: datetime, overrides: Overrides | None,
+                  song: Song) -> bool:
+    """Whether ``ireal_sheets`` would ask about the song now: it is one to try, with a pick or a candidate; no
+    request, and nothing written but the charts' keys made current (a lookup asks first, and makes no client
+    otherwise)."""
+    ensure_current_keys(conn)
+    return _to_try(conn, Path(library_dir), stamps.utc(now), overrides, song) and bool(
+        _pick(overrides, song) or candidates(conn, song))
+
+
 def _pick(overrides: Overrides | None, song: Song) -> IRealPick | None:
     """The chart you picked for the song (``[ireal]``), or None."""
     return overrides.ireal.get(song.key) if overrides is not None else None

@@ -154,6 +154,7 @@ def test_a_thread_read_stores_its_charts_in_place_of_those_it_gave_before(conn, 
 
 
 def test_new_keys_make_the_charts_title_keys_again_with_no_request(conn, tmp_path):
+    assert ensure_current_keys(conn) == 0 and kv_get(conn, "ireal:charts:keys") is None  # no chart: nothing written
     site = FakeIReal()
     run(site, conn, tmp_path, first=1)
     conn.execute("UPDATE ireal_charts SET title_key = 'old' WHERE title = 'Misty'")

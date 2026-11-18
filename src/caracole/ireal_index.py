@@ -121,10 +121,11 @@ def store_gone(conn: sqlite3.Connection, path: str, now: datetime) -> None:
 
 
 def ensure_current_keys(conn: sqlite3.Connection) -> int:
-    """Make every chart's title key again from its title after a change to caracole's keys, once; no request.
-    Returns how many rows changed."""
+    """Make every chart's title key again from its title after a change to caracole's keys, once; no request, and
+    nothing written while the index holds no chart (a lookup on a phone, say, whose index is empty). Returns how many
+    rows changed."""
     version = str(normalize.KEY_VERSION)
-    if kv_get(conn, KEYS_KEY) == version:
+    if kv_get(conn, KEYS_KEY) == version or conn.execute("SELECT 1 FROM ireal_charts LIMIT 1").fetchone() is None:
         return 0
     changed = 0
     with savepoint(conn, "ireal_chart_keys"):

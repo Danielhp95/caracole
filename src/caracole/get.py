@@ -129,6 +129,7 @@ GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a 
 HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
 IREAL_KEPT = "chart kept from iReal Pro"  # the ireal stage's detail for a chart kept as the sheet
+IREAL_NOT_ASKED = "no sheet wanted, or iReal Pro's forum has no chart of this title"  # its detail for nothing to ask
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 # The words of a caracole with no ChordPro, no wanted.txt and no index.html to write (the phone's: android/): its
@@ -871,8 +872,11 @@ class _Lookup:
         return "your LaCuerda pick comes tonight"
 
     def ireal(self) -> tuple[str, str] | str:
-        from caracole.ireal_fetch import ireal_sheets
+        from caracole.ireal_fetch import ireal_sheets, wants_a_chart
         from caracole.songs import get_song
+
+        if not wants_a_chart(self.conn, self.cfg.library_dir, self.now, self.overrides, self.song):
+            return "skipped", IREAL_NOT_ASKED  # asked nothing, and no client made: most songs have a sheet
 
         def ask(client) -> tuple[str, str] | str:
             s = ireal_sheets(self.conn, client, self.cfg.library_dir, self.cfg.rank, self.now,
@@ -885,7 +889,7 @@ class _Lookup:
             if s.shared:
                 raise s.shared[0]
             if not s.tried:
-                return "skipped", "no sheet wanted, or iReal Pro's forum has no chart of this title"
+                return "skipped", IREAL_NOT_ASKED
             return IREAL_KEPT if s.kept else "no chart there of this title"
 
         out = self.asking("ireal", ask)

@@ -1530,3 +1530,4 @@ def test_a_lookup_of_a_song_with_a_sheet_asks_irealpro_nothing(cfg, conn, sites)
 
     assert progress.states()["ireal"] == "skipped" and not [u for u in sites.requests if "irealpro" in u]
     assert result.details["ireal"] == "no sheet wanted, or iReal Pro's forum has no chart of this title"
+    assert "ireal" not in result.requests  # nothing to ask: no client made
