@@ -11,7 +11,7 @@ from html import unescape
 
 import pytest
 from helpers.browser import in_chromium
-from helpers.targets import TOKEN_PROBE, noted, noting
+from helpers.targets import FOLDED_LINE, TOKEN_PROBE, noted, noting
 from test_library_page import dump_dom, put, with_script
 
 from caracole.library_page import WebControls, build_library_page, write_library_page
@@ -99,7 +99,7 @@ def test_a_one_song_artist_folds_into_its_line_under_their_name_as_an_overline(c
     assert shown and text == "Eagles" and case == "uppercase" and 11 <= size_ <= 12 and weight >= 700, f
     assert spacing > 0 and colour == tokens["--artist"], f
     if touch:
-        assert bottom <= f["h3top"] + 1 and 60 <= f["line"] <= 68 and height >= 24, f  # above the title; 64 px
+        assert bottom <= f["h3top"] + 1 and FOLDED_LINE[0] <= f["line"] <= FOLDED_LINE[1] and height >= 24, f  # above the title; 64 px
     assert f["oasis"] == [False, False] and f["outline"] == [2, 3], f  # a band; an h2 an artist, an h3 a song
 
 
@@ -122,9 +122,9 @@ def test_a_sorted_list_folds_every_line_its_artist_above_its_title(conn, cfg, tm
     lines = drawn(conn, cfg, tmp_path, FLAT, size, touch, "#sort=" + sort)
     assert len(lines) == 4, lines
     for shown, text, case, by_bottom, h3_top, height, by_left, h3_right in lines:
-        assert shown and text, lines
+        assert shown and text and case == "uppercase", lines  # at 1280 too: the overline's type is not media-limited
         if touch:  # over the title, the line about 64 px
-            assert case == "uppercase" and by_bottom <= h3_top + 1 and 60 <= height <= 68, lines
+            assert by_bottom <= h3_top + 1 and FOLDED_LINE[0] <= height <= FOLDED_LINE[1], lines
         else:  # in its own column
             assert by_left > h3_right, lines
 
@@ -188,7 +188,7 @@ def test_long_and_chinese_names_are_cut_short_never_wrapped_into_the_buttons(con
         if line["folded"]:  # the overline, one line, cut short before the button too
             by = line["by"]
             assert by and by["height"] <= 26 and by["right"] <= line["plays"] + 0.5, (title, line)
-            assert 60 <= line["line"] <= 68, (title, line)
+            assert FOLDED_LINE[0] <= line["line"] <= FOLDED_LINE[1], (title, line)
         else:
             assert line["by"] is None, (title, line)
     assert lines["Under the Bridge"]["by"]["cut"], lines["Under the Bridge"]

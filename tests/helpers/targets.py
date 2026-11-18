@@ -36,6 +36,8 @@ const said = (node) => String(node.getAttribute("aria-label") || node.textConten
   .replace(/\s+/g, " ").slice(0, 32);
 """
 
+# A folded line on a touch screen: about 64 px, between these.
+FOLDED_LINE = (60, 68)
 ARTIST_NAMES = ".artist-title button.artist, section.artist.folded .line-by"
 
 # A JavaScript function ``token(name)``: what a CSS custom property of base.css resolves to, as a computed colour.

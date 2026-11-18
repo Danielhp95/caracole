@@ -2720,7 +2720,10 @@ ROWS = """
   document.body.setAttribute("data-layout", JSON.stringify({
     artists: lines.map((l) => (name(l) ? Math.round(box(name(l)).width) : null)),
     whole: lines.map((l) => (name(l) ? name(l).scrollWidth : null)),
-    lines: lines.map(rows), page: window.innerWidth, scroll: document.documentElement.scrollWidth,
+    lines: lines.map(rows), heights: lines.map((l) => box(l).height),
+    above: lines.map((l) => { const by = l.querySelector(".line-by"), h = l.querySelector("h3");
+      return box(by).bottom <= box(h).top + 1; }),
+    page: window.innerWidth, scroll: document.documentElement.scrollWidth,
   }));
 })();
 """
@@ -2819,6 +2822,9 @@ def test_a_phones_title_sorted_line_has_its_artist_above_its_title_and_its_statu
         assert phone["artists"][short] >= phone["whole"][short] > 30, phone
     assert phone["artists"][florence_line] > 40, phone
     # Two rows, the artist over the title; the buttons span both, their middle a third "row" of the count.
+    from helpers.targets import FOLDED_LINE
+
+    assert all(phone["above"]) and max(phone["heights"]) <= FOLDED_LINE[1], phone
     assert max(phone["lines"]) <= 3 and phone["scroll"] <= phone["page"], phone
     # The auto sheet's line says so by its button, as a badge would.
     dancing = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Dancing Queen")
@@ -3817,7 +3823,7 @@ def busy_library(conn, cfg):
 
 @in_chromium
 def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_lines_a_song(conn, cfg, tmp_path):
-    from helpers.targets import noted, noting
+    from helpers.targets import FOLDED_LINE, noted, noting
 
     busy_library(conn, cfg)
     script = noting("data-lines", LINES) + noting("data-view", IN_VIEW)
@@ -3844,7 +3850,7 @@ def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_
     # Sorted by title, every line is folded, its artist over its title: each says its own, whole or 40 px of it at the
     # least, in two rows (the buttons span both, their middle a third "row" of the count), 68 px at most.
     flat = noted(dump_dom(path, tmp_path, "#sort=title", size="390,844"), "data-lines")
-    assert max(flat["rows"]) <= 3 and max(flat["heights"]) <= 68 and flat["scroll"] <= flat["page"], flat
+    assert max(flat["rows"]) <= 3 and max(flat["heights"]) <= FOLDED_LINE[1] and flat["scroll"] <= flat["page"], flat
     assert all(shown >= min(whole, 40) for shown, whole in zip(flat["artists"], flat["whole"])), flat
     tablet = noted(dump_dom(path, tmp_path, size="1280,800", touch=True), "data-lines")
     assert set(tablet["rows"]) == {1}, tablet  # one line each, as with a mouse
