@@ -459,3 +459,14 @@ def test_a_harmonica_tabs_rows_keep_their_spacing(tmp_path):
         margin = b.js("""(() => { const l = document.querySelector('.harp-tab .l + .l');
           return parseFloat(getComputedStyle(l).marginTop) / parseFloat(getComputedStyle(l).fontSize); })()""")
     assert abs(margin - 0.12) <= 0.01, margin
+
+
+def test_the_harmonica_pages_corner_buttons_reach_the_screens_edge(tmp_path):
+    hit = """((x, y) => { const e = document.elementFromPoint(x, y);
+      return e && e.closest('button') ? e.closest('button').id : null; })"""
+    with opened(tmp_path, written(tmp_path, tab("588_hotel-california"))) as b:
+        corners = b.js(f"[{hit}(0, innerHeight - 1), {hit}(innerWidth - 1, innerHeight - 1)]")
+        sizes = b.js("[...document.querySelectorAll('#bar button')].filter((e) => e.getClientRects().length)"
+                     ".map((e) => [e.id, e.getBoundingClientRect().width, e.getBoundingClientRect().height])")
+    assert corners == ["h-down", "scroll"]
+    assert all(w >= 48 and h >= 48 for _, w, h in sizes), sizes

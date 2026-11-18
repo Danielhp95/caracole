@@ -418,8 +418,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    padding and its line (--foot). It slides away as you scroll down (.away) and back as you scroll up;
    while the song scrolls by itself it is out of the way, back when it pauses, under the pill. From 1200 px it is a
    toolbar under the song's title instead (below, after the room it leaves at the foot). */
-.bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
-  padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+.bar { --bar-l: max(8px, env(safe-area-inset-left)); --bar-r: max(8px, env(safe-area-inset-right));
+  position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
+  padding: 4px var(--bar-r) calc(4px + env(safe-area-inset-bottom)) var(--bar-l);
   border-top: 1px solid var(--border); background: var(--surface); color: var(--text);
   box-shadow: 0 -2px 12px rgb(0 0 0 / .06); transition: transform .2s ease; }
 .bar.away { transform: translateY(calc(100% + 14px)); }  /* its shadow out of sight too */
@@ -485,10 +486,29 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {
-  .bar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
+  .bar { --bar-l: max(4px, env(safe-area-inset-left)); --bar-r: max(4px, env(safe-area-inset-right)); }
   .bar-in { gap: 0; }
   .keys { margin-right: 2px; }
   .now, .bar button.now { padding: 0; }
+}
+/* A finger's 48 px: the bar's and the pill's buttons (a minimum: the tools stay 54 px tall and --foot 63 px). Under
+   380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px phone's key 24 px. */
+@media (pointer: coarse) {
+  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 48px; min-height: 48px; }
+  .pill .ring { width: 48px; height: 48px; }
+}
+@media (pointer: coarse) and (max-width: 379.98px) {
+  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 44px; }
+  .pill .ring { width: 44px; }
+}
+/* Where the bar spans the screen (a phone's, under 744 px), its corner buttons take taps up to the screen's edges:
+   − at the left, the last tool (More, or the harmonica page's Scroll) at the right, down to the screen's foot. */
+@media (pointer: coarse) and (max-width: 743.98px) {
+  #t-down, #h-down, #more, .bar-in > #scroll:last-child { position: relative; }
+  #t-down::after, #h-down::after { content: ""; position: absolute; top: 0; right: 0;
+    bottom: calc(-4px - env(safe-area-inset-bottom)); left: calc(-1 * var(--bar-l)); }
+  #more::after, .bar-in > #scroll:last-child::after { content: ""; position: absolute; top: 0; left: 0;
+    bottom: calc(-4px - env(safe-area-inset-bottom)); right: calc(-1 * var(--bar-r)); }
 }
 .bar #size[aria-expanded="true"] { background: var(--raised); }
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
@@ -559,6 +579,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    chord and the versions list one under its line (below). */
 :root { --foot: calc(63px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
 html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
+@media (pointer: coarse) { html[data-pill] { --pill: 68px; } }  /* a finger's 48 px buttons: 56 px and the gap */
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
   max-height: 45dvh; margin: 0 auto; padding: 6px 16px 14px; overflow-y: auto; overscroll-behavior: contain;
   border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--surface);

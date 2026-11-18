@@ -3385,7 +3385,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   two rails (the necks and the settings or the key list) on a window too
   narrow for every word, the tools show their icons alone. Tab reaches it
   right after the title. Narrower than 1200 px it is the bar at the foot
-  again. − and +
+  again. On a touch screen every button of the bar and of the scrolling pill
+  is a finger's 48 px (44 px wide on a phone under 380 px, where six of 48
+  would leave the key no room), and on a phone the bar's two corner buttons,
+  − at the left and More at the right (the harmonica page's Scroll), take
+  taps up to the screen's edges. − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short and, under it, what changed the chords you see from

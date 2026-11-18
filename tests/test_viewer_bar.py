@@ -513,17 +513,64 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
             clear = b.js(end)
         assert 60 <= m["height"] <= 66 and m["bottom"] == height, (width, m)  # 10 px taller, for the words
         assert m["left"] == 0 and m["right"] == m["client"] and m["page"] <= width, (width, m)
-        assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
+        assert m["smallest"] >= (48 if mobile and width >= 380 else 44) and m["row"], (width, m)  # one row, a finger's target
         # After the key the neck, the overlay's sheet up or down (from 1200 px, the rail's toggle in its place)
         assert m["ids"] == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
         # The longest key in short, whole ("Ab mixolydian" over "capo 2 · +1"), with no guitar beside the neck to take
-        # its room; narrower, the key a little smaller (on the narrowest cut short); and where one line has no room
+        # its room; narrower (390 and under, as the buttons grow to 48 px), the key may be a little smaller (on the narrowest cut short); and where one line has no room
         # for what changed, the capo over the transposition, each whole (as measured at each width).
         assert m["sub"] and m["said"] == (["capo 2", "+1"] if width < 360 else ["capo 2 · +1"]), (width, m)
         if width >= 360:
-            assert m["main"] and ((m["size"] == 16) if width >= 390 else (12 <= m["size"] < 16)), (width, m)
+            assert m["main"] and ((m["size"] == 16) if width >= 440 else (12 <= m["size"] <= 16)), (width, m)
         assert clear, width
+
+
+@in_chromium
+@pytest.mark.parametrize(("width", "height", "wide"), [(390, 844, 48), (430, 932, 48), (768, 1024, 48),
+                                                       (360, 740, 44), (320, 640, 44)])
+def test_on_a_touch_screen_every_bar_and_pill_button_is_a_fingers_48_px(tmp_path, width, height, wide):
+    # Tall 48 always; wide 48 from 380 px, where six of them leave the key room, else 44 (the owner was told).
+    measure = """(() => {
+      const shown = [...document.querySelectorAll('#bar button, #pill button')].filter((e) => e.getClientRects().length);
+      return {coarse: matchMedia('(pointer: coarse)').matches, page: document.documentElement.scrollWidth,
+              boxes: shown.map((e) => { const r = e.getBoundingClientRect(); return [e.id || e.className, r.width, r.height]; }),
+              key: document.querySelector('#key-now').getBoundingClientRect().width,
+              tools: [...document.querySelectorAll("#bar .tool")].filter((e) => e.getClientRects().length).map((e) => e.getBoundingClientRect().height)};
+    })()"""
+    with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"F{width}"), width=width, height=height) as b:
+        b.click("#scroll")
+        b.click("#go")  # counting down, then paused: the bar and the pill both shown
+        b.click("#go")
+        assert b.wait("!document.querySelector('#pill').hidden && document.querySelector('#bar').getBoundingClientRect().height > 0", 2)
+        m = b.js(measure)
+    assert m["coarse"] and m["page"] <= width, m
+    assert any(box[0] == "go" for box in m["boxes"]) and len(m["boxes"]) >= 9, m
+    for name, w, h in m["boxes"]:
+        assert h >= 48 and w >= wide, (name, w, h, m)
+    assert m["key"] >= wide, m
+    assert all(round(h) == 54 for h in m["tools"]), m
+
+
+@in_chromium
+def test_with_a_mouse_they_stay_44_px(tmp_path):
+    with viewer(tmp_path, written(tmp_path, UG_CHO, name="Mouse"), width=1100, height=800, mobile=False) as b:
+        coarse = b.js("matchMedia('(pointer: coarse)').matches")
+        sizes = b.js("[...document.querySelectorAll('#bar button')].filter((e) => e.getClientRects().length)"
+                     ".map((e) => e.getBoundingClientRect().width)")
+    assert coarse is False and min(sizes) == 44, sizes
+
+
+HIT = """((x, y) => { const e = document.elementFromPoint(x, y);
+  return e && e.closest('button') ? e.closest('button').id : null; })"""
+
+
+@in_chromium
+def test_the_corner_buttons_reach_the_screens_edge(tmp_path):
+    with viewer(tmp_path) as b:  # 390 × 844, coarse
+        corners = b.js(f"[{HIT}(0, innerHeight - 1), {HIT}(innerWidth - 1, innerHeight - 1)]")
+        inner = b.js(f"{HIT}(innerWidth / 2, innerHeight - 30)")
+    assert corners == ["t-down", "more"] and inner != "more"
 
 
 @in_chromium
