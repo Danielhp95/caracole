@@ -11,7 +11,8 @@ did. ``--ug`` and ``--tab`` record the Ultimate Guitar song or tab you picked
 (``[match]``, ``[pin]``), ``--lacuerda`` the LaCuerda song or version
 (``[lacuerda]``), whose sheet is then the one kept, ``--harptabs`` the
 harptabs.com tab (``[harptabs]``), kept as a harmonica tab of the song, and
-``--gametabs`` the gametabs.net tab (``[gametabs]``), kept as a tab of game music.
+``--gametabs`` the gametabs.net tab (``[gametabs]``), kept as a tab of game music, and ``--ireal`` the
+chart of iReal Pro's forum (``[ireal]``), kept as the song's sheet.
 ``--progress`` adds a JSON line per event, which caracole serve reads
 (``get.read_progress_line``). A block or a spent budget
 exits 0, as in every command; a song caracole won't look up (ignored, or one
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 _SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics", "audio": "Audio",
           "chords": "Chords",  # caracole youtube --sheet's (youtube_sheet.py), said the same way
           "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "harptabs": "harptabs.com", "gametabs": "gametabs.net",
-          "pages": "Pages",
+          "ireal": "iReal Pro", "pages": "Pages",
           "songbooks": "Songbooks"}
 _SONG_SHAPE = 'a song as "Artist - Title", or as ARTIST TITLE'
 
@@ -65,6 +66,10 @@ def register(app: typer.Typer) -> None:
         gametabs: str | None = typer.Option(None, "--gametabs", metavar="URL",
                                             help="The gametabs.net tab (its page's address) to keep as a tab of game "
                                                  "music of the song; recorded under \\[gametabs] in overrides.toml."),
+        ireal: str | None = typer.Option(None, "--ireal", metavar="URL",
+                                         help="The chart of iReal Pro's forum (its thread's address, with its post's "
+                                              "#post-N for one of several) to keep as the song's sheet; recorded "
+                                              "under \\[ireal] in overrides.toml."),
         show: bool = typer.Option(False, "--print", help="Print the sheet itself as soon as it is kept."),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
         songbooks: bool = typer.Option(True, "--songbooks/--no-songbooks",
@@ -72,11 +77,11 @@ def register(app: typer.Typer) -> None:
                                             "--no-songbooks leaves them, for a job that makes them once."),
     ) -> None:
         """Look one song up now: its sheet first, in seconds, then its lyrics, PDF and the rest."""
-        _check_pick(ug, tab, lacuerda, harptabs, gametabs)
+        _check_pick(ug, tab, lacuerda, harptabs, gametabs, ireal)
         duration_ms = _duration(duration)
         cfg = load_cfg(ctx)
         artist, title = _artist_title(cfg, song)
-        _get(cfg, artist, title, album, duration_ms, ug, tab, lacuerda, harptabs, gametabs, show=show,
+        _get(cfg, artist, title, album, duration_ms, ug, tab, lacuerda, harptabs, gametabs, ireal, show=show,
              progress=progress, songbooks=songbooks)
 
 
@@ -96,11 +101,12 @@ def _artist_title(cfg: Config, words: list[str]) -> tuple[str, str]:
 
 
 def _check_pick(ug: str | None, tab: str | None, lacuerda: str | None = None, harptabs: str | None = None,
-                gametabs: str | None = None) -> None:
+                gametabs: str | None = None, ireal: str | None = None) -> None:
     from caracole.overrides import (
         OverridesError,
         gametabs_pick_from_url,
         harptabs_pick_from_url,
+        ireal_pick_from_url,
         lacuerda_pick_from_url,
         tab_id_from_url,
     )
@@ -129,6 +135,11 @@ def _check_pick(ug: str | None, tab: str | None, lacuerda: str | None = None, ha
             gametabs_pick_from_url(gametabs)
         except OverridesError as e:
             fail(f"--gametabs: {e}", 2)
+    if ireal is not None:
+        try:
+            ireal_pick_from_url(ireal)
+        except OverridesError as e:
+            fail(f"--ireal: {e}", 2)
 
 
 def _duration(text: str | None) -> int | None:
@@ -146,13 +157,13 @@ def _duration(text: str | None) -> int | None:
 
 
 def _get(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None, ug: str | None,
-         tab: str | None, lacuerda: str | None = None, harptabs: str | None = None, gametabs: str | None = None, *,
-         show: bool, progress: bool,
+         tab: str | None, lacuerda: str | None = None, harptabs: str | None = None, gametabs: str | None = None,
+         ireal: str | None = None, *, show: bool, progress: bool,
          songbooks: bool = True) -> None:
     from caracole.get import LookupRequest, look_up
 
     request = LookupRequest(artist, title, album=album, duration_ms=duration_ms, ug=ug, tab=tab, lacuerda=lacuerda,
-                            harptabs=harptabs, gametabs=gametabs, songbooks=songbooks)
+                            harptabs=harptabs, gametabs=gametabs, ireal=ireal, songbooks=songbooks)
     reporter = _Lines(cfg.library_dir, show=show, json_lines=progress)
     result = look_up(cfg, request, reporter)
     reporter.flush()

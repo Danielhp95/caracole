@@ -184,10 +184,11 @@ def _refresh(cfg: Config) -> None:
 
 
 def _stats(cfg: Config) -> None:
-    """The UG index's counts, then how far UG's artist directory, harptabs.com's artist index and gametabs.net's game
-    index have got, once begun."""
+    """The UG index's counts, then how far UG's artist directory, harptabs.com's artist index, gametabs.net's game
+    index and iReal Pro's forum's index have got, once begun."""
     from caracole.gametabs_index import index_state as game_state
     from caracole.harptabs_index import index_state
+    from caracole.ireal_index import index_state as ireal_state
     from caracole.ug.bands import LETTERS
     from caracole.ug.directory import index_state as directory_state
     from caracole.ug.index import index_stats
@@ -196,6 +197,7 @@ def _stats(cfg: Config) -> None:
         s = index_stats(conn)
         harp = index_state(conn)
         game = game_state(conn)
+        ireal = ireal_state(conn)
         directory = directory_state(conn)
     if not s["rows"]:
         typer.echo("The index is empty: run `caracole index build`.")
@@ -221,6 +223,11 @@ def _stats(cfg: Config) -> None:
         rest = "" if game.complete else "; caracole gametabs --index reads the rest"
         typer.echo(f"gametabs.net: {game.read:,} of {game.pages:,} game pages read, "
                    f"{game.tabs:,} tab{'' if game.tabs == 1 else 's'}{rest}.")
+    if ireal.threads or ireal.read:
+        rest = "" if ireal.complete else "; caracole ireal --index reads the rest"
+        typer.echo(f"iReal Pro's forum: {ireal.threads:,} thread{'' if ireal.threads == 1 else 's'}, "
+                   f"{ireal.playlists_read:,} of {ireal.playlists:,} "
+                   f"playlists read, {ireal.charts:,} chart{'' if ireal.charts == 1 else 's'}{rest}.")
 
 
 # --- caracole index export and merge -------------------------------------------------------------

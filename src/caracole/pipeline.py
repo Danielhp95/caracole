@@ -1,12 +1,13 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → icons → index → ug-directory → match → lyrics → megalobiz → azlyrics → fetch → lacuerda →
-scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo → backup. Each step runs
+ireal → scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo → backup. Each step runs
 even if an earlier one failed, so the to-do page is always rewritten; the backup alone, a whole copy of the
 database (backup.py), waits for a run no step of which failed.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are megalobiz, azlyrics, gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
+  the run once it blocks. So are megalobiz, azlyrics, ireal, gtptabs, harptabs, gametabs, musescore and youtube when
+  caracole.toml
   turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
   and sends one ntfy message; it is expected behaviour, not a failed run.
 - The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
@@ -415,6 +416,47 @@ def _lacuerda(ctx: StepContext) -> StepResult:
     return result
 
 
+def _ireal(ctx: StepContext) -> StepResult:
+    """iReal Pro's forum's charts as the sheet of the songs Ultimate Guitar and LaCuerda left with none
+    (ireal_fetch.py): the sitemaps and the curated playlist first, so that the songs meet its 1,460 standards from the
+    cache, then the songs, then the forum's other playlists with what they leave of the budget (ireal_index.py); only
+    once the library has a song, so that an empty one asks no site."""
+    from caracole.ireal_fetch import IRealStats, ireal_sheets
+    from caracole.ireal_index import PlaylistStats, index_state, playlist_pass
+
+    client = ctx.services.client("ireal")
+    wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
+    first = playlist_pass(ctx.conn, client, ctx.now, first=1) if wanted else PlaylistStats()
+    s = (ireal_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now, overrides=ctx.overrides,
+                      refresh_index=False) if wanted and not first.budget_exhausted else IRealStats())
+    rest = (playlist_pass(ctx.conn, client, ctx.now, refresh_index=False)
+            if wanted and not first.budget_exhausted and not s.budget_exhausted else PlaylistStats())
+    state = index_state(ctx.conn)
+    read = first.read + rest.read
+    index = f"{plural(first.sitemaps, 'sitemap')} indexed, " if first.sitemaps else ""
+    playlists = (f"; playlists: {plural(read, 'page')} read, {state.playlists_read:,} of "
+                 f"{plural(state.playlists, 'playlist')}" if read or first.errors or rest.errors else "")
+    result = _provider_result(
+        ctx, "ireal", errors=s.errors, error=f"{plural(s.errors, 'error')} this run",
+        spent=first.budget_exhausted or s.budget_exhausted or rest.budget_exhausted,
+        status=(f"{index}{s.tried} tried, {plural(s.kept, 'chart')} kept, {s.missing} not on iReal Pro's forum, "
+                f"{plural(s.errors, 'error')}{playlists}"),
+        failures=s.failures, title="iReal Pro's forum",
+        done=_counted(_n(s.kept, "chart", "kept"), _n(s.missing, "song", "not there"), _n(read, "playlist", "read")),
+        retry="{songs} will be looked for on iReal Pro's forum again on the next run",
+    )
+    result.problems += [shared_folder(e) for e in s.shared]
+    if first.sitemap_error:
+        result.problems.append(Problem("iReal Pro's forum's sitemaps couldn't be read this run; they are asked for "
+                                       "again on the next run, and the log says why."))
+    pages = first.errors - first.sitemap_error + rest.errors
+    if pages:
+        record_error(ctx.conn, "ireal", ctx.now, f"{plural(pages, 'playlist page')} couldn't be read this run")
+        result.problems.append(Problem(f"{plural(pages, 'playlist page')} of iReal Pro's forum couldn't be read this "
+                                       "run; they are asked for again on the next run, and the log says why."))
+    return result
+
+
 def _gtptabs(ctx: StepContext) -> StepResult:
     from caracole.gtptabs_fetch import gtptabs_files
 
@@ -675,6 +717,8 @@ def default_steps() -> list[Step]:
         Step("azlyrics", _azlyrics, provider="azlyrics"),
         Step("fetch", _fetch, provider="ug"),
         Step("lacuerda", _lacuerda, provider="lacuerda"),
+        # After the sheet sites: a jazz standard's chart for a song they left with no sheet, before YouTube's audio.
+        Step("ireal", _ireal, provider="ireal"),
         Step("scan", _scan),
         # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
         Step("gtptabs", _gtptabs, provider="gtptabs"),

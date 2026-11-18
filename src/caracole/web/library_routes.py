@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 TEXT_LIMIT = 500  # a request's one text, ``q``, in characters
-PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600, "gametabs": 600}
+PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600, "gametabs": 600, "ireal": 600}
 
 
 ROUTES = (
@@ -231,6 +231,22 @@ def gametabs_field(form: dict[str, str]) -> str | None:
         return gametabs_pick_from_url(value).url
     except OverridesError as e:
         raise Refused(400, "Not a pick", f"Not a gametabs tab: {e}") from e
+
+
+def ireal_field(form: dict[str, str]) -> str | None:
+    """A form's ``ireal``, the chart of iReal Pro's forum picked, written as caracole writes it; None for none;
+    Refused for one that is no thread's page."""
+    from caracole.overrides import OverridesError, ireal_pick_from_url
+
+    value = form.get("ireal", "").strip()
+    if not value:
+        return None
+    if len(value) > PICK_LIMITS["ireal"]:
+        raise Refused(400, "Too long", f"The ireal pick is too long: {PICK_LIMITS['ireal']} characters at most.")
+    try:
+        return ireal_pick_from_url(value).url
+    except OverridesError as e:
+        raise Refused(400, "Not a pick", f"Not an iReal Pro chart: {e}") from e
 
 
 def lacuerda_field(form: dict[str, str]) -> str | None:

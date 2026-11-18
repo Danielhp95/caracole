@@ -100,7 +100,7 @@ LOOKUP_STEPS = (
     ("Sheet", ("sheet",)),
     ("PDF", ("pdf",)),
     ("Lyrics", ("lyrics",)),
-    ("Extras", ("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")),
+    ("Extras", ("ug", "lacuerda", "ireal", "gtptabs", "harptabs", "gametabs")),
     ("Songbooks", ("songbooks",)),
 )
 # A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the chords, the PDF.
@@ -129,7 +129,7 @@ _ASKS = {said: tag(provider) for provider, said in SHEET_FROM.items()}  # a runn
 _WHAT = {"sheet": ("the sheet", "waits"), "lyrics": ("the lyrics", "wait"),
          "ug": ("its other versions and tab", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
          "gtptabs": ("the Guitar Pro file", "waits"), "harptabs": ("the harmonica tab", "waits"),
-         "gametabs": ("the game music tab", "waits")}
+         "gametabs": ("the game music tab", "waits"), "ireal": ("iReal Pro's chart", "waits")}
 # How get.py words them (``_Lookup.asking``, ``_usable``).
 _FAILED = re.compile(r"^(?P<site>.+?) failed \((?P<why>.*)\); tried again tonight$")
 _STATUS = re.compile(r"^[\w.-]+: (\d{3})(?::|$)")  # http.ProviderError: "provider: status: url: message"

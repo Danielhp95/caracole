@@ -175,9 +175,9 @@ def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
     assert report.requests == {"ug": 7, "lrclib": 3, "megalobiz": 0, "azlyrics": 0, "lacuerda": 0, "gtptabs": 0, "musescore": 0,
-                               "harptabs": 0, "gametabs": 0}
+                               "harptabs": 0, "gametabs": 0, "ireal": 0}
     assert ("Requests: Ultimate Guitar 7, LRCLIB 3, Megalobiz 0, AZLyrics 0, LaCuerda 0, gtptabs.com 0, MuseScore 0, "
-            "harptabs.com 0, gametabs.net 0."
+            "harptabs.com 0, gametabs.net 0, iReal Pro's forum 0."
             in report.summary().splitlines())
 
 
@@ -256,13 +256,13 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "icons", "index", "ug-directory", "match", "lyrics", "megalobiz", "azlyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
-        "gametabs", "musescore", "youtube", "render", "todo", "backup",
+        "sync", "icons", "index", "ug-directory", "match", "lyrics", "megalobiz", "azlyrics", "fetch", "lacuerda", "ireal",
+        "scan", "gtptabs", "harptabs", "gametabs", "musescore", "youtube", "render", "todo", "backup",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
     assert providers["harptabs"] == "harptabs" and providers["gametabs"] == "gametabs"
-    assert providers["ug-directory"] == "ug"
+    assert providers["ug-directory"] == "ug" and providers["ireal"] == "ireal"
 
 
 def gtptabs_context(conn, cfg, client=None, overrides=None):
@@ -369,7 +369,8 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "musescore", "harptabs", "gametabs"}
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "musescore", "harptabs", "gametabs",
+                                     "ireal"}
     finally:
         made.close()
     steps = [s for s in default_steps() if s.name == "gtptabs"]
@@ -383,7 +384,7 @@ def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
     made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
     try:
         assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore", "harptabs",
-                                     "gametabs"}
+                                     "gametabs", "ireal"}
     finally:
         made.close()
 
@@ -491,6 +492,58 @@ def test_a_gametabs_block_cools_it_down_and_marks_no_song(conn, cfg):
     assert is_cooling(conn, "gametabs", NOW + timedelta(hours=25))
     assert kv_get_json(conn, f"gametabs:checked:{song.id}") is None
     assert site.requests[-1] == "https://gametabs.net/tabs/hollow-knight/resting-grounds"  # nothing after the block
+
+
+def test_an_ireal_block_cools_it_down_and_marks_no_song(conn, cfg):
+    from conftest import add_song
+    from helpers.ireal_site import BASE, THAD_JONES, FakeIReal
+
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Thad Jones", "Groove Merchant")
+    site = FakeIReal()
+    site.page(THAD_JONES, "Too Many Requests", status=429)
+    out = Outbox()
+    svc = Services(clients={"ireal": site.client(cfg.cache_dir, now=NOW)}, notifier=out.notifier())
+    steps = [s for s in default_steps() if s.name == "ireal"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["ireal"] and report.steps["ireal"].startswith("blocked")
+    assert is_cooling(conn, "ireal", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"ireal:checked:{song.id}") is None
+    assert site.requests[-1] == f"{BASE}/{THAD_JONES}"  # nothing after the block
+    assert any("iReal Pro's forum blocked" in str(sent) for sent in out.sent)
+
+
+def test_the_ireal_step_reads_the_curated_playlist_then_its_songs_then_the_other_playlists(conn, cfg):
+    from conftest import add_song
+    from helpers.ireal_site import BASE, JAZZ_1460, JAZZ_FORUM, FakeIReal
+
+    from caracole.pipeline import default_steps
+
+    add_song(conn, "Erroll Garner", "Misty")
+    site = FakeIReal()
+    svc = Services(clients={"ireal": site.client(cfg.cache_dir, budget=10, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "ireal"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    # The sitemaps (7 requests), the curated playlist, whose Misty is Garner's (from the cache, no request more), then
+    # the forum's page and one more playlist, the budget spent.
+    assert site.requests[7:] == [f"{BASE}/{JAZZ_1460}", f"{BASE}/{JAZZ_FORUM}",
+                                 f"{BASE}/threads/fusion-and-smooth-jazz.210/"]
+    assert report.steps["ireal"] == ("6 sitemaps indexed, 1 tried, 1 chart kept, 0 not on iReal Pro's forum, 0 errors; "
+                                     "playlists: 2 pages read, 2 of 7 playlists (budget spent)")
+    assert "iReal Pro's forum: 1 chart kept, 2 playlists read." in report.summary().splitlines()
+
+
+def test_the_ireal_step_asks_nothing_for_an_empty_library(conn, cfg):
+    from helpers.ireal_site import FakeIReal
+
+    from caracole.pipeline import default_steps
+
+    site = FakeIReal()
+    svc = Services(clients={"ireal": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "ireal"]
+    run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert site.requests == []
 
 
 def test_megalobiz_follows_lrclib_and_gives_a_song_it_missed_timed_lyrics(conn, cfg):
@@ -1149,7 +1202,7 @@ def todo_step():
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     # The page is written before the run ends; a first run must not say "never" after 80 good requests.
     run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, megalobiz=6, lacuerda=5, gtptabs=3,
-                                                   musescore=2, harptabs=1, gametabs=4),
+                                                   musescore=2, harptabs=1, gametabs=4, ireal=2),
                  steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
@@ -1159,6 +1212,7 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     assert "| harptabs | OK | 2026-10-18 03:30 UTC |  | 1 |" in page
     assert "| gametabs | OK | 2026-10-18 03:30 UTC |  | 4 |" in page
+    assert "| ireal | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     rows = [line for line in page.split("## Provider health", 1)[1].splitlines() if line.startswith("| ")]
     # Every provider this run asked; YouTube and its image host, which need auto-chords and its models, are off here,
     # never used.
@@ -1275,7 +1329,7 @@ def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn
     lock = ycfg.state_dir / _common.LOCK_NAME
     try:
         assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore", "harptabs",
-                                     "gametabs", "youtube"}
+                                     "gametabs", "ireal", "youtube"}
         assert made.clients["youtube"].policy.budget == 6
         assert lock in _common._held
     finally:

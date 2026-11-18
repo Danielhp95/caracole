@@ -163,6 +163,7 @@ from caracole.web.library_routes import (
     PICK_LIMITS,
     gametabs_field,
     harptabs_field,
+    ireal_field,
     lacuerda_field,
     named_form,
     wanted_line,
@@ -252,6 +253,7 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
     lacuerda = lacuerda_field(form)
     harptabs = harptabs_field(form)
     gametabs = gametabs_field(form)
+    ireal = ireal_field(form)
     found = _library_song(app, form, ug)
     if found is not None:  # the song as your library has it: no second song, and no new source for it
         artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
@@ -262,7 +264,7 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
         display = f"{artist} - {title}"
     steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
                          ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda, harptabs=harptabs,
-                         gametabs=gametabs)
+                         gametabs=gametabs, ireal=ireal)
     request = {"title": f"Fetch {artist} - {title}", "song_key": key, "steps": steps, "fetching": True,
                "note": note, "display": display}
     full = (f"{note} The queue is full: not fetched now. Tonight's run looks for it, or ask again "
