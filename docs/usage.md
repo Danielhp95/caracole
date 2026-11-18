@@ -327,10 +327,16 @@ of your own songs alone, for you, never a mirror of the site.
 **Chord charts of jazz standards** come from iReal Pro's forum (forums.irealpro.com), where the users of the iReal
 Pro app post charts, one song a thread or a playlist of many, its "Jazz 1460 Standards" thread among them (1,460
 standards, curated by its moderators). They are for the songs Ultimate Guitar and LaCuerda left without a sheet:
-for each, caracole matches its title (and only its title: standards are filed by composer, and your line may name a
-singer) against the charts of the thread pages it read, the curated playlist's first, from the cache with no request,
-and against the threads its sitemaps name for that title (`groove-merchant-thad-jones`), three pages at most; each
-chart of the title is a version, and the best, the song's sheet: one whose composer is your line's artist (iReal Pro
+for each, caracole looks for a chart titled as it is that is its own: one whose composer is your line's artist (iReal
+Pro writes "Jones Thad"), or in a thread named for the title and your line's artist
+(`groove-merchant-thad-jones` for `Thad Jones - Groove Merchant`), or one of the jazz playlists caracole reads (the
+Jazz 1460 Standards and the jazz forum's playlist threads), where the title alone is enough: standards are filed by
+composer, and your line may name a singer (`Bill Evans - Autumn Leaves` gets Kosma's standard). A title alone
+elsewhere is another song of that name as often as not, so `Ren - Patience` gets no Guns N' Roses chart and `Count
+Basie - Groove Merchant` none (a chart you pick, `[ireal]`, is yours whoever wrote it). It reads the charts of the
+thread pages it read first, the curated playlist's among them, from the cache with no request, then the threads its
+sitemaps name for your song (the title and your artist, else the title alone), three pages at most; each chart of the
+song is a version, and the best, the song's sheet: one whose composer is your line's artist (iReal Pro
 writes "Jones Thad"), then the curated playlist's, then a thread named for its composer, then the oldest thread, its
 latest post (a repost is most often a correction). The chart is kept as `sheet.txt` and `sheet.json`, its bars four a
 line between bar lines, which the sheet's page draws as cells, its sections, endings and coda as labels, the tune's
@@ -657,7 +663,7 @@ In order:
    Between LaCuerda and gtptabs.com, **iReal Pro's forum**, for a song still
    without a sheet (a jazz standard, say): the chart you picked (`--ireal URL`,
    its thread's address, with `#post-N` for one post's, recorded under
-   `[ireal]`), else the best of its title (see [Chord charts of jazz
+   `[ireal]`), else the best of its own (see [Chord charts of jazz
    standards](#configuration)), kept as the song's sheet, whose PDF the pages
    make.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
@@ -1680,10 +1686,11 @@ and cache.
   sheet alone among them), newest songs first, as the run's ireal step does: its
   sitemaps (an index and six children, its threads by their slugs,
   `/threads/groove-merchant-thad-jones.9518/`) when it never read them, or last
-  did 30 days ago, and the Jazz 1460 Standards, then each song whose title a
-  chart caracole read has, or a thread's slug begins with (see [Chord charts of
-  jazz standards](#configuration)). It never uses the forum's search. A song
-  none of whose candidates holds a chart of its title is asked about again
+  did 30 days ago, and the Jazz 1460 Standards, then each song a chart caracole
+  read is of, or a thread's slug is named for (its title and its artist, or its
+  title alone; see [Chord charts of jazz standards](#configuration)). It never
+  uses the forum's search. A song none of whose candidates holds its chart is
+  asked about again
   after 30 days (and a thread read is no candidate again); a song with an error,
   next run. It prints `iReal Pro's forum: 2 tried, 1 chart kept, 1 not on iReal
   Pro's forum, 0 errors`, after `Index: 6 sitemaps read.` and `Index: the Jazz

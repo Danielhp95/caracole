@@ -6,15 +6,20 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
    again after 30 days, and at once after a change to caracole's keys. Each is asked for with its validators.
 2. **Which songs.** Not ignored; with no human sheet kept (Ultimate Guitar's, LaCuerda's: iReal Pro's forum comes
    after them, for the songs they left with none, a song with an auto sheet alone among them); not asked about in the
-   last 30 days (kv ``ireal:checked:<song id>``); and with a candidate (never a request): a chart titled as the song
-   in a thread page caracole read (a playlist's, ireal_index.py), or a thread whose slug begins with the song's title
-   (``ireal.begins_with``: "groove-merchant-thad-jones" for "Groove Merchant"). A song whose kept chart the library
-   lost (deleted on a synced device) is asked about again whatever the date, and its chart written again.
-3. **The candidates**, ``CANDIDATES`` pages at most: those caracole read that hold a chart of the title, from the
-   cache with no request, then the threads named for the title, a slug that names one of the song's artists after the
-   title first, then the oldest. Once a chart whose composer is one of the song's artists is in hand
-   (``composer_fits``), no thread more is asked for. Each page read goes into the index (``read_thread``). Every chart
-   of the title is a version (provider ``ireal``, kind ``chords``, its tab id ``<thread>/<post>/<place>``, its address
+   last 30 days (kv ``ireal:checked:<song id>``); and with a candidate (never a request): a chart of the song in a
+   thread page caracole read, or a thread whose slug is the song's title and one of its artists' names
+   ("groove-merchant-thad-jones" for "Thad Jones - Groove Merchant", ``ireal.begins_with``), or its title alone. A
+   chart is the song's only when it is titled as the song is and one of its artists is its composer or the name its
+   thread's slug gives after the title (``composer_fits``, ``names_an_artist``), or it comes from one of the jazz
+   playlists caracole reads (the Jazz 1460 Standards and the jazz forum's playlist threads), where its title alone is
+   enough, the standards' case ("Bill Evans - Autumn Leaves"); the owner's ruling of 2026-11-18, after titles alone
+   gave "Ren - Patience" Guns N' Roses' chart. A song whose kept chart the library lost (deleted on a synced device) is
+   asked about again whatever the date, and its chart written again.
+3. **The candidates**, ``CANDIDATES`` pages at most: those caracole read that hold a chart of the song, from the
+   cache with no request, then the threads named for it, a slug that names one of the song's artists after the title
+   first, then the title alone, the oldest first; never a slug that names someone else. Once a chart whose composer is
+   one of the song's artists is in hand (``composer_fits``), no thread more is asked for. Each page read goes into the
+   index (``read_thread``). Every chart of the song is a version (provider ``ireal``, kind ``chords``, its tab id ``<thread>/<post>/<place>``, its address
    the thread's at the post), and the best is the song's sheet (``best``): a composer who is one of the song's artists
    (iReal Pro writes the composer last name first: "Jones Thad", ``ireal.composer_words``), then the curated playlist's
    (the Jazz 1460 Standards), then a thread whose slug names the composer, then the oldest thread, and in a thread the
@@ -27,13 +32,13 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
    complete one. info.json is rewritten.
 
 **Your pick.** A chart you picked (``[ireal]`` in overrides.toml: ``caracole get --ireal``, the library page's Fetch
-on an iReal Pro row) is read in place of the candidates, its thread's page alone: the post's chart (one of the song's
-title, else its one chart), or the thread's chart of the title (else its one chart), kept in place of any sheet but one
+on an iReal Pro row) is read in place of the candidates, its thread's page alone, whoever its composer is: the post's
+chart (one of the song's title, else its one chart), or the thread's chart of the title (else its one chart), kept in place of any sheet but one
 you pinned on Ultimate Guitar or picked on LaCuerda, until it is the one kept (kv ``ireal:checked:<song id>:pick``, the
 chart asked for).
 
 Only songs in wanted.txt are looked up (and a lookup's song): never a thread for a song nobody asked for, never a
-mirror of the forum. Errors are never misses: only candidates that all answered, none holding a chart of the title (or
+mirror of the forum. Errors are never misses: only candidates that all answered, none holding a chart of the song (or
 each gone, 404), make the song a miss, asked about again after 30 days. A block propagates, and a spent budget ends the
 pass. Any other provider error, a page that won't parse even fetched again included, leaves the song for the next run.
 """
@@ -73,7 +78,7 @@ from caracole.ireal import (
     sitemap_child,
     title_key,
 )
-from caracole.ireal_index import ensure_current_keys, read_thread
+from caracole.ireal_index import ensure_current_keys, playlists, read_thread
 from caracole.library import (
     SharedFolder,
     drop_file,
@@ -285,19 +290,24 @@ def _to_try(conn: sqlite3.Connection, library_dir: Path, now: datetime, override
 
 def candidates(conn: sqlite3.Connection, song: Song) -> list[str]:
     """The thread pages to read for the song, in turn, ``CANDIDATES`` at most; never a request: those caracole read that
-    hold a chart of its title, their best chart first (``best``), then the threads whose slug begins with its title,
-    a slug that names one of its artists after the title first, then the oldest."""
+    hold a chart of its title that is the song's (``matches``), their best chart first (``best``), then the threads
+    whose slug is its title and a name of one of its artists after it, or its title alone (whose chart may be by one of
+    them), the first before, then the oldest. A slug that names someone else after the title is never read: its
+    chart is another song of that name ("open-arms-journey" for "Jorge Rivera-Herrans - Open Arms")."""
     key = title_key(song.title)
     if not key:
         return []
+    curated = set(playlists(conn))
     known: dict[str, tuple] = {}
     for page, thread, post, place, composer in conn.execute(
             "SELECT c.page, t.thread, c.post, c.place, c.composer FROM ireal_charts c "
             "JOIN ireal_threads t ON t.path = c.page WHERE c.title_key = ?", (key,)):
-        order = _order(song, page, thread, post, place, composer, _slug_rest(conn, page, key))
+        rest = _slug_rest(conn, page, key)
+        if not _matching(song, page, composer, rest, curated):
+            continue
+        order = _order(song, page, thread, post, place, composer, rest)
         known[page] = min(known.get(page, order), order)
     pages = [page for page, _ in sorted(known.items(), key=lambda p: p[1])]
-    artists = [_words(a) for a in song.artists or [song.artist]]
     unread = []
     for path, thread, slug in conn.execute(
             "SELECT i.path, i.thread, i.key FROM ireal_index i LEFT JOIN ireal_threads t ON t.path = i.path "
@@ -305,7 +315,9 @@ def candidates(conn: sqlite3.Connection, song: Song) -> list[str]:
         if path in known or not begins_with(slug, key):
             continue
         rest = set(slug[len(key):].strip("-").split("-")) - {""}
-        unread.append((not any(a and a <= rest for a in artists), thread, path))
+        named = names_an_artist(song, rest)
+        if named or not rest:
+            unread.append((not named, thread, path))
     return [*pages, *(path for *_, path in sorted(unread))][:CANDIDATES]
 
 
@@ -313,11 +325,26 @@ def _words(name: str) -> frozenset[str]:
     return frozenset(w for w in slug_key(name).split("-") if w)
 
 
-def composer_fits(song: Song, composer: str) -> bool:
-    """Whether a chart's composer is one of the song's artists: every word of the artist's name among the composer's
-    (iReal Pro writes it last name first, "Jones Thad"; "Jobim Antonio-Carlos" is Antonio Carlos Jobim's)."""
-    theirs = composer_words(composer)
+def names_an_artist(song: Song, words: Collection[str]) -> bool:
+    """Whether some words name one of the song's artists: every word of the artist's name among them, in whatever
+    order (iReal Pro writes a composer last name first, "Jones Thad"; a thread's slug names one after the title)."""
+    theirs = set(words)
     return bool(theirs) and any(mine and mine <= theirs for mine in map(_words, song.artists or [song.artist]))
+
+
+def composer_fits(song: Song, composer: str) -> bool:
+    """Whether a chart's composer is one of the song's artists (``names_an_artist``: "Jobim Antonio-Carlos" is Antonio
+    Carlos Jobim's)."""
+    return names_an_artist(song, composer_words(composer))
+
+
+def _matching(song: Song, page: str, composer: str, rest: set[str], curated: set[str]) -> bool:
+    """Whether a chart titled as the song is the song's: one of its artists is the chart's composer or the name its
+    thread's slug gives after the title, or the chart is one of the jazz playlists caracole reads (``curated``: the
+    Jazz 1460 Standards and the jazz forum's playlist threads, ireal_index.py ``playlists``), where the title alone
+    is enough: "Bill Evans - Autumn Leaves" is Kosma's standard. A title alone elsewhere is another song of that name
+    as often as not ("Ren - Patience" is no Guns N' Roses song)."""
+    return page in curated or composer_fits(song, composer) or names_an_artist(song, rest)
 
 
 def _slug_rest(conn: sqlite3.Connection, page: str, key: str) -> set[str]:
@@ -368,13 +395,16 @@ def _page(run: _Pass, path: str) -> ThreadPage | None:
         return None
 
 
-def _charts_of(page: ThreadPage, key: str, pick: IRealPick | None) -> list[Chart]:
-    """The charts of a page that are the song's: titled as it is; for a pick, its post's (or the thread's) one chart
-    whatever its title, when it holds no chart of the title."""
+def _charts_of(conn: sqlite3.Connection, song: Song, page: ThreadPage, key: str, pick: IRealPick | None) -> list[Chart]:
+    """The charts of a page that are the song's: titled as it is, and its own (``_matching``); for a pick, any of the
+    title, and else its post's (or the thread's) one chart whatever its title."""
     every = [Chart(page.path, page.thread, post.post, place, tune) for post, place, tune in page.charts()
              if tune.chart() and (pick is None or pick.post is None or post.post == pick.post)]
     titled = [c for c in every if title_key(c.tune.title) == key]
-    return titled or (every if pick is not None and len(every) == 1 else [])
+    if pick is not None:
+        return titled or (every if len(every) == 1 else [])
+    curated, rest = set(playlists(conn)), _slug_rest(conn, page.path, key)
+    return [c for c in titled if _matching(song, c.page, c.tune.composer, rest, curated)]
 
 
 def _look_up(run: _Pass, song: Song, pick: IRealPick | None = None) -> str | SharedFolder:
@@ -387,7 +417,7 @@ def _look_up(run: _Pass, song: Song, pick: IRealPick | None = None) -> str | Sha
             break  # a chart by one of its artists is in hand: none of another thread is better
         page = _page(run, path)
         if page is not None:
-            found += _charts_of(page, key, pick)
+            found += _charts_of(run.conn, song, page, key, pick)
     kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}", run.stamp)
     if pick is not None:
         kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}{PICKED}", pick.url)

@@ -192,10 +192,17 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - Its songs: no human sheet kept (after UG and LaCuerda; one with an auto sheet alone among them), not asked in 30
     days (kv `ireal:checked:`), a candidate in the index (never a request); a kept chart the library lost written
     again.
-  - `candidates`: the pages read that hold a chart of the title (the cache's, no request), then the threads named for
-    it, a slug naming the song's artist first, then the oldest, `CANDIDATES` (3) pages at most; none more once a
-    chart whose composer is the song's artist is in hand (`composer_fits`).
-  - Every chart of the title a version (provider `ireal`, kind `chords`, tab id `<thread>/<post>/<place>`); the best
+  - A chart is the song's (`_matching`) only when it is titled as the song is and one of its artists is the chart's
+    composer or the name its thread's slug gives after the title (`composer_fits`, `names_an_artist`, words in any
+    order: "Jones Thad"), or it comes from a curated jazz playlist (the Jazz 1460 Standards and the jazz forum's
+    playlist threads, `ireal_index.playlists`), where the title alone is enough ("Bill Evans - Autumn Leaves"); an
+    `[ireal]` pick always counts. The owner's ruling of 2026-11-18, after a title alone gave "Ren - Patience" Guns N'
+    Roses' chart and "Jorge Rivera-Herrans - Open Arms" Journey's (test_ireal_fetch.py `NAMESAKES`).
+  - `candidates`: the pages read that hold a chart of the song (the cache's, no request), then the threads whose slug
+    names one of the song's artists after the title, then those of the title alone, the oldest first, never one that
+    names someone else, `CANDIDATES` (3) pages at most; none more once a chart whose composer is the song's artist is
+    in hand.
+  - Every chart of the song a version (provider `ireal`, kind `chords`, tab id `<thread>/<post>/<place>`); the best
     (`best`: the artist's composer, the curated playlist's, a thread naming its composer, the oldest thread, its
     latest post) the sheet, `sheet.txt` and `sheet.json` (its `tune` as the link gave it), its version's
     `tonality_name` the tune's key; its coverage scored as any sheet's, so UG's or LaCuerda's sheet with words replaces
