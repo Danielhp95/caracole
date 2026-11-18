@@ -331,7 +331,7 @@ def test_a_harmonica_page_goes_full_screen_by_a_double_tap(tmp_path):
         assert b.wait(FULL)
         state = b.js(HARP)
         assert (state["bar"], state["facts"], state["necks"], state["handle"]) == ("none", "none", True, True)
-        assert b.js("getComputedStyle(document.querySelector('.why') || document.body).display") in ("none", "block")
+        assert b.js("[...document.querySelectorAll('.why')].every((e) => getComputedStyle(e).display === 'none')") is True
         assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
         click_at(b, 1350, 400)  # a double tap in full screen does nothing
         click_at(b, 1350, 400)
@@ -387,3 +387,40 @@ def test_a_tab_shown_as_written_has_the_handle_too(tmp_path):
         assert b.js(HARP)["bar"] == "none"
         b.press("Escape")
         assert b.wait(NOT_FULL)
+
+
+@in_chromium
+def test_a_harmonica_page_goes_full_screen_by_a_double_tap_on_a_phone(tmp_path):
+    from test_viewer_harptab_browser import opened, with_sheet
+
+    with opened(tmp_path, with_sheet(tmp_path), **PHONE) as b:
+        base = entries(b)
+        # Below the tab's last row, in the page's left padding: a finger's reach holds no hole there (a touch at the
+        # padding beside a row lands on the hole within reach, which is no margin).
+        y = b.js("document.getElementById('sheet').getBoundingClientRect().bottom + 100")
+        assert y < 844
+        double_tap(b, 4, y)
+        assert b.wait(FULL)
+        assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
+        state = b.js(HARP)
+        assert (state["bar"], state["necks"], state["handle"]) == ("none", True, True)
+        back(b)
+        assert b.wait(NOT_FULL)
+        assert b.js(BAR_SHOWN) is True
+
+
+@in_chromium
+def test_a_double_click_on_a_hole_a_row_play_button_or_the_legend_is_no_full_screen(tmp_path):
+    from test_viewer_harptab_browser import opened, with_sheet
+
+    with opened(tmp_path, with_sheet(tmp_path), width=1400, height=900, mobile=False) as b:
+        for selector in ("#sheet .h", "#sheet .rp", ".legend", ".why"):
+            if not b.js(f"!!document.querySelector({selector!r})"):
+                assert selector != "#sheet .h" and selector != "#sheet .rp"
+                continue
+            where = b.js(f"(() => {{ const r = document.querySelector({selector!r}).getBoundingClientRect(); "
+                         "return [r.left + 3, r.top + r.height / 2]; })()")
+            click_at(b, *where)
+            click_at(b, *where)
+            time.sleep(0.5)
+            assert b.js(NOT_FULL) is True, selector
