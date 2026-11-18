@@ -26,6 +26,8 @@ removal, review, fetch or PDF, YouTube's search, what caracole serve queues) wai
 a lookup does, so that a lookup queued behind it never waits behind the whole run.
 Lookups take the lock in a lane of their own (``exclusive(..., lane=True)``, a shared
 flock of ``caracole.lock.lane``): while one is there, no other caracole takes the lock.
+They take turns at it (``pass_turn``): before each request but a client's first, and
+between two stages, one lets the next in the lane have it, and takes it back in turn.
 """
 
 from __future__ import annotations
@@ -387,16 +389,23 @@ def _wait_lane_empty(cfg: Config) -> None:
         os.close(fd)
 
 
-def _announce(cfg: Config, what: str, *, lane: bool = False) -> Path:
+def _announce(cfg: Config, what: str, *, lane: bool = False, again: Path | None = None) -> Path:
     """Say that a lookup waits for the lock: a file named after this process, which goes once it has it.
     A lane ticket (``lane``) is named by when it was made first, ``lane.<time.time_ns(), 20 digits>.<pid>``
     (``.<n>`` after it on a clash), so the lane's tickets sort oldest first (``lane_tickets``); any other is
-    ``<pid>.<n>``."""
+    ``<pid>.<n>``. ``again``: a ticket deleted from under its lookup, made again under its own name while that
+    name is free, so a lane ticket keeps its place in the lane."""
     folder = cfg.state_dir / WAITING_DIR
     folder.mkdir(mode=0o700, exist_ok=True)
     stem = f"{LANE_TICKET}{time.time_ns():020d}.{os.getpid()}" if lane else str(os.getpid())
-    for n in range(1000):
-        ticket = folder / (stem if lane and n == 0 else f"{stem}.{n}")
+
+    def names() -> Iterator[Path]:
+        if again is not None:
+            yield folder / again.name
+        for n in range(1000):
+            yield folder / (stem if lane and n == 0 else f"{stem}.{n}")
+
+    for ticket in names():
         try:
             fd = os.open(ticket, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError:
@@ -437,8 +446,8 @@ def _wait_announced(cfg: Config, what: str, fd: int, *, lane: bool = False, tick
                 beat = now
                 try:
                     os.utime(ticket)
-                except FileNotFoundError:  # deleted from under it: announce it again
-                    ticket = _announce(cfg, what, lane=lane)
+                except FileNotFoundError:  # deleted from under it: announced again, in its place in the lane
+                    ticket = _announce(cfg, what, lane=lane, again=ticket)
     finally:
         ticket.unlink(missing_ok=True)
 
@@ -503,7 +512,8 @@ def lane_tickets(cfg: Config) -> list[Path]:
 
 
 def handoffs() -> int:
-    """How many times this process handed caracole's lock to a waiting lookup (``hand_over``)."""
+    """How many times this process handed caracole's lock to a waiting lookup (``hand_over``), or passed it to the
+    next lookup in the lane (``pass_turn``), and took it back."""
     return _handoffs
 
 
@@ -520,6 +530,46 @@ def overrides_since(cfg: Config, overrides: Overrides, handed: int) -> Overrides
         logging.getLogger(__name__).info("overrides.toml couldn't be read again (%s); going on with what was "
                                          "read before.", e)
         return overrides
+
+
+def pass_turn(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
+    """Let the next lookup in the lane have caracole's lock now, and take it back in turn; True when one did.
+
+    Only a lane process calls it, holding the lock, at a turn point, in no transaction: before a request but its
+    client's first, and between two stages. With nothing held it is False before it reads anything of ``cfg``;
+    False too outside the lane (bulk work, and what the owner asked for now, hand over: ``hand_over``), in a
+    transaction (``conn``), or with no lane ticket waiting (``lane_tickets``). Else it writes a lane ticket of its
+    own, the newest, so behind every lookup waiting in the lane; lets go of the lock, its depth kept and the lane's
+    flock still held, so that nobody outside the lane takes it meanwhile; waits by that ticket until it heads the
+    lane and has the lock again (``_wait_announced``); writes its record back; and counts a handoff
+    (``handoffs()``), so whatever reads again after a handoff reads again after a turn. Interrupted as it waits
+    (Ctrl-C, serve's stop), it holds nothing: its ticket goes, and no record is written."""
+    global _handoffs
+    if not _held:
+        return False
+    path = cfg.state_dir / LOCK_NAME
+    held = _held.get(path)
+    if held is None or path not in _lane or (conn is not None and conn.in_transaction) or not lane_tickets(cfg):
+        return False
+    fd, _ = held
+    record = os.pread(fd, 256, 0)
+    what = record.decode("utf-8", "replace").strip().partition(" ")[2]
+    try:
+        ticket = _announce(cfg, what, lane=True)
+    except OSError as e:
+        logging.getLogger(__name__).info("No turn: no ticket can be written in %s: %s.", WAITING_DIR, _reason(e))
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        _wait_announced(cfg, what, fd, lane=True, ticket=ticket)
+    except BaseException:
+        ticket.unlink(missing_ok=True)  # holding nothing, or about to: no record written
+        raise
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, record, 0)
+    _handoffs += 1
+    logging.getLogger(__name__).debug("Passed caracole's lock to the next lookup in the lane, and took it back.")
+    return True
 
 
 def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:

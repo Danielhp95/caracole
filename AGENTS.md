@@ -3249,7 +3249,14 @@ picks one).
     go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
   - their tickets named `lane.<time.time_ns(), 20 digits>.<pid>` (`LANE_TICKET`), taken oldest first, a ticket
     trying for the lock only at the head of the lane (`lane_tickets`: a dead one dropped at once, a stale one passed
-    over);
+    over), one deleted from under its lookup made again under its own name, in its place;
+  - their turns (`pass_turn`): a lane process holding the lock, at a turn point (a lane client's pause before each
+    request but its first, and between two of a lookup's stages), in no transaction, when a lane ticket waits,
+    writes its own (the newest), lets go, takes the lock back when its ticket heads the lane, writes its record back
+    and counts a handoff (`handoffs()`), so whatever reads again after a handoff reads again after a turn; killed or
+    interrupted as it waits, it leaves no ticket and writes no record, and the next in the lane takes the lock;
+  - two lookups of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never
+    runs two jobs of a song): accepted (the spec's part 3);
   - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for
     it to empty, holding nothing (`_lane_empty`, `_wait_lane_empty`; asked now, announced, polling); a lock its
     process holds already is taken again of the outer one's kind;
