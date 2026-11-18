@@ -17,7 +17,9 @@ file, and none of it loads anything from the network.
   of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
   with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
   and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
-  rows.js before its own script.
+  rows.js before its own script. Both draw the count row under their box with its ``drawCountMarks``: yours, the
+  sites that found something (named in full from 720 px while the row fits on one line, ``fitCounts``), then the
+  rest in one quiet mark, "0 on N more"; no row when every count is 0.
 - card.css and card.js (``caracoleCard``): a song of yours opened on index.html, a card under its line (library.js
   ``lineFor`` puts its parts in the line's panel): what you play from it as tiles, each source's versions of each as
   chips that open one drawer under the row of tiles that holds its tile, its progressions, where else to find it, and
@@ -31,6 +33,13 @@ file, and none of it loads anything from the network.
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
   Filter and Sort) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
   from 720 px, a sheet from the bottom on a phone), which library.js fills and opens.
+  library.js's search mode (``body.search-mode``, with body.html's ``#leave``, the ← at the box's left): on as the
+  box takes the focus or while it holds a query, a blur leaving it on, until the ←, Back or Escape in the empty
+  box; entering it from the empty box is an entry of the browser's history (``{ search: 1 }``) and each artist's
+  name pressed in it one more (``{ search: n + 1 }``), all of which the ← takes back at once; × clears the box and
+  keeps the search. Recently opened: the box empty and focused shows up to five songs whose link on a line was last
+  followed (``#recent``, ``rememberOpened``, ``drawRecent``; localStorage ``caracole-library-recent``, a refusal
+  leaving it empty), newest first, a song removed since left out; a press on one keeps the box's focus.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds

@@ -724,6 +724,24 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 
 ##### Searching from the pages
 
+- **Search mode** (library.js `searchMode`, `enterSearch`, `leaveSearch`, `backFromSearch`): `body.search-mode` is on
+  as the box takes the focus, or while it holds a query (`render`), served or from a file, at every width, with the ←
+  at the box's left (body.html's `#leave`, "Back to your songs", the one control so named: no row over the results
+  says it); a blur leaves it on. It ends with the ← (`backFromSearch`), Back, or Escape in the empty box, and nothing
+  else (`leaveSearch`: the box empty, the sites' results closed, the focus out, the address written in place); × clears
+  the box and keeps the focus in it, still searching (test_library_search_mode.py).
+  - Entering it from the empty box pushes one entry, `{ search: 1 }` (none when the entry is search's already: a
+    reload, Forward); `searchFor` pushes `{ search: n + 1 }`; the ← is `history.go(-n)` (`leaving`, so popstate then
+    leaves it whatever query was under its steps), else, with no steps, `leaveSearch` in place; popstate to an entry
+    with no `search` marker and no query ends it.
+- **The page's history**, every script of the library page's
+  (docs/superpowers/plans/2026-11-17-library-page-redesign.md, "Where the lanes meet" 1):
+  - every `history.replaceState` passes `history.state`, never `null`;
+  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`), and
+    any entry pushed while `body.search-mode` is on also carries `search: (Number(history.state &&
+    history.state.search) || 0) + 1`, never `search` spread from `history.state`;
+  - a `popstate` handler acts on its own marker alone, and a `pushState` that throws falls back quietly (the change
+    made in place, with no step).
 - **Enter in a search box never spends a request on a guess**:
   - on the lookup page it acts only on `/api/search`'s `best` (or opens the leading artist's songs);
   - on the library page, whose served bar searches `/api/search` as you type (which asks no site), it only moves the
@@ -803,14 +821,28 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 It is rows.js's, shared by both pages:
 
 - `countMarks`: under the box, in the bar kept at the top, what each site found:
-  - your songs' count by the page's logo, then a mark of `looked`'s and a count a site, its songs as the lines show
-    them (`foundOn`; the library page's, library.js `foundNow`, with those "+ N more" listed since);
-  - 0 quieter, a state in a colour and a glyph, never a colour alone, no control.
-- `countsSaid`: the counts in words, the line's live region and the box's description, a screen reader's alone while
-  the marks show: library.js `drawCounts`, lookup_page.py `showCounts`.
+  - your songs' count by the page's logo, then a mark of `looked`'s and a count for each site that found something, in
+    `looked`'s order, its songs as the lines show them (`foundOn`; the library page's, library.js `foundNow`, with those
+    "+ N more" listed since), its name in full (`.count-name`, from 720 px), a state in a colour and a glyph, never a
+    colour alone, no control;
+  - then one quiet mark for every other site, whatever its state (a blocked or turned-off one is searched nowhere: its
+    0 is one of them), `li.count-mark.rest`, "0 on N more", each one's name and state for a screen reader
+    (`siteSaid`), its `countSaid` line and detail in its tooltip;
+  - none at all, `[]`, when every count is 0, yours too.
+- `fitCounts`: the names only while the row fits on one line, else the list is `short`, fitted again as the list or
+  its row resizes (a `ResizeObserver` a list, its fit in the next frame).
+- `drawCountMarks(list, data, yours, found)`: the row drawn, hidden when it has no mark, fitted; the one call both
+  pages make for it (library.js `drawCounts`, lookup_page.py `showCounts`).
+- `countsSaid`: the counts in words ("Nothing in your songs or the sites' indexes" when every one is 0), then a site
+  that blocks caracole ("MuseScore turned us back"), row or no row, so a block is never the tooltip's alone (a site
+  turned off, the owner's choice, the rest's words alone); the line's live region and the box's description, a
+  screen reader's alone once the marks said it, and where no mark shows (every count 0) the row takes no room
+  (`.counts-row.counted`).
 - `nothingFound`: a query that found nothing on the sites:
-  - a line of the list under a quiet band, "Not on the sites", the query, Request where a song's Open is, the one
-    Request then, and no Back to your songs, its marks the row under the box's;
+  - a line of the list under a quiet band that says where it looked ("Nothing for “q” in your songs or the sites' indexes", or
+    "… in the sites' indexes" alone when `does.yours`, the songs of yours the search shows, is above 0; the card is
+    made again when that number changes), the query as the line's title, Request (`.miss-request`, the one filled
+    button) after it, under it on a phone, the one Request then, no marks of its own (and no row under the box unless some of yours match);
   - under its chevron Ask LaCuerda and `unseen` folded.
 - `notesLine`: those two under results.
 - On the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are, before
@@ -844,9 +876,10 @@ It is rows.js's, shared by both pages:
   `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
 - **An artist's name**:
   - An artist's name (a header's, a line's, a site's row's, a lookup row's) searches for them as typing it would,
-    served or from a file (library.js `searchFor`, a step of the browser's history, which rows.js's
-    `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js `artistOf(name, onSearch,
-    cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's songs alone.
+    served or from a file (library.js `searchFor`, a step of the browser's history, search's `{ search: n + 1 }`,
+    which rows.js's `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js
+    `artistOf(name, onSearch, cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's
+    songs alone.
   - A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`) is a plain link to
     `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, as it
     reads `#artist=<key>`, the one-artist view's address once, then writes its own address in its place (`cameBy`:

@@ -199,19 +199,22 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   button.artist { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
-/* Under a search box, what each site found (rows.js countMarks): a pill a site, its own mark (an icon in its colours,
-   else its letters) and its count, in the text's colour where it found some; quieter where it found none, the pill
-   unfilled, the icon grey, the count muted. Its state in a glyph as well as a colour: amber and a pie with a slice cut
-   in part, red and a ban blocked, "off" on a dashed edge turned off, a dashed edge where its index is empty yet. Your
-   songs first, by the page's logo. The row wraps a pill at a time on a narrow screen. A mark is no control: its
-   tooltip says why. While the next answer comes the row is dimmed (.busy), and while the marks show, the words beside
-   them (the counts said, "Searching the sites…") are a screen reader's alone (.counted). */
+/* Under a search box, what each site found (rows.js countMarks): your songs first, by the page's logo, then a pill a
+   site that found something, its own mark (an icon in its colours, else its letters), its name in full from 720 px
+   while every pill fits on one line (rows.js fitCounts: else the list is .short, the marks alone, as on a phone), and
+   its count, in the text's colour. Its state in a glyph as well as a colour: amber and a pie with a slice cut in part,
+   a dashed edge where its index is empty yet. Then the rest in one quiet pill, "0 on 4 more", unfilled, muted, as your
+   0 is: their states in its tooltip. The row wraps a pill at a time on a narrow screen. A mark is no control: its
+   tooltip says why. While the next answer comes the row is dimmed (.busy), and once the marks said it (.counted), the
+   words beside them (the counts said) are a screen reader's alone; with no mark (every count 0), the row takes no
+   room at all. */
 .counts-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
 .counts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 0; padding: 0;
   list-style: none; }
 .counts-row.busy > .counts { opacity: .5; }
-.counts-row.counted > .counts:not([hidden]) ~ * { position: absolute; width: 1px; height: 1px; min-height: 0;
+.counts-row.counted > .counts ~ * { position: absolute; width: 1px; height: 1px; min-height: 0;
   margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.counts-row.counted:has(> .counts[hidden]) { min-height: 0; margin: 0; }
 .count-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 22px; padding: 0 6px 0 3px;
   border-radius: 6px; background: var(--raised); color: var(--text); font-size: .8rem; font-weight: 700;
   line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
@@ -220,22 +223,25 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   font-size: 9px; }
 .count-mark .yours-mark { flex: none; width: auto; height: 15px; color: var(--text); }
 .count-mark svg.glyph { flex: none; width: 12px; height: 12px; stroke-width: 2.6; }
+.count-name { display: none; font-weight: 600; }
+@media (min-width: 720px) {
+  .counts:not(.short) .count-name { display: inline; }
+}
+.count-mark.rest { padding: 0 7px; }
 .count-mark[data-n="0"] { background: transparent; color: var(--muted); font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--border); }
-.count-mark[data-n="0"] img.source, .count-mark[data-n="0"] .yours-mark { filter: grayscale(1); opacity: .6; }
+.count-mark[data-n="0"] .yours-mark { filter: grayscale(1); opacity: .6; }
 .count-mark[data-n="0"] .source.letters { color: var(--muted); }
 .count-mark[data-state="empty"] { box-shadow: none; outline: 1px dashed var(--border-strong); outline-offset: -1px; }
 .count-mark[data-state="partial"] { background: var(--wanted-bg); color: var(--wanted);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wanted) 45%, transparent); }
-.count-mark[data-state="blocked"] { background: var(--failed-bg); color: var(--failed); padding-right: 5px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--failed) 45%, transparent); }
-.count-mark[data-state="blocked"] img.source { filter: grayscale(1); opacity: .6; }
-.count-mark[data-state="off"] { background: transparent; color: var(--muted); font-weight: 600; box-shadow: none;
-  outline: 1px dashed var(--border-strong); outline-offset: -1px; }
-.count-mark[data-state="off"] img.source { filter: grayscale(1); opacity: .45; }
-.count-mark[data-state="off"] .source.letters { color: var(--muted); }
 /* A search that found nothing on the sites (nothingFound): a line of the list, its query in its quotes, quiet. */
-.line.miss h3, .row.miss .row-title { color: var(--muted); font-style: italic; font-weight: 500; }
+#results .line.miss:not(.have) h3, .line.miss h3, #results .row.miss.hit:not(.have):not(.artist-hit) .row-title, .row.miss .row-title { color: var(--text); font-style: normal; font-weight: 600; }
+.miss-request.btn, .line-action .btn.miss-request { background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); border-radius: var(--radius-m, 8px); }
+.line.miss { grid-template-columns: minmax(0, 1fr) var(--line-more); grid-template-areas: "title more" "act act"; }
+.line.miss .line-action, .row.miss .row-action { justify-self: start; }
+.row.miss { grid-template-columns: minmax(0, 1fr) var(--row-more); grid-template-areas: "title more" "act act"; }
 .miss-more .actions { align-items: center; gap: 8px 16px; }
 .miss-more .why-unseen { margin: 0; }
 .miss-more .why-unseen[open] { flex: 1 1 100%; }
@@ -252,7 +258,10 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .notes-line .why-unseen { flex: 1 1 100%; margin: 0; }
 .notes-line .read-outcome { flex: 1 1 100%; margin: 0; }
 @media (min-width: 720px) {
-  .line.miss { grid-template-columns: minmax(0, 1fr) 7.5rem var(--line-more); grid-template-areas: "title act more"; }
+  .line.miss { grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr) var(--line-more);
+    grid-template-areas: "title act . more"; }
+  .row.miss { grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr) var(--row-more);
+    grid-template-areas: "title act . more"; }
 }
 /* LaCuerda's own search, a line under the results: what it does now, or its button. */
 .lacuerda-search { margin: 14px 0 0; }

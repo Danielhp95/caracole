@@ -83,6 +83,19 @@
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 .clear { position: absolute; top: 1px; right: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+/* Searching (body.search-mode): the ← at the box's left that leaves the search, the text typed after it. */
+.leave { position: absolute; top: 1px; left: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--muted); font-size: 1.25rem; line-height: 1; cursor: pointer; }
+.field:has(> .leave:not([hidden])) input { padding-left: 44px; }
+/* On a phone, search takes the screen: the logo and tabs slide away (--mast-h measured by searchMode before the class
+   goes on), hidden once gone so no tab is reachable behind the bar. */
+@media (max-width: 719px) {
+  body.search-mode .masthead.lib { margin-top: calc(-1 * var(--mast-h, 0px)); visibility: hidden; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .masthead.lib { transition: margin-top .2s ease, visibility 0s linear 0s; }
+  body.search-mode .masthead.lib { transition: margin-top .2s ease, visibility 0s linear .2s; }
+}
 .bar-row { display: flex; align-items: center; gap: 8px; }
 .bar-row .field { flex: 1; min-width: 0; }
 /* One line, its height kept: what typing and Enter do, or how the search of the sites goes. */
@@ -94,6 +107,19 @@
 .bar-said { min-height: 22px; margin: 6px 2px 0; }
 .bar-said:has(> .counts[hidden]):has(> .bar-status:empty) { min-height: 0; margin: 0; }
 .bar-said > .bar-status { flex: 1 1 12rem; margin: 0; }
+/* The songs opened last, under the empty box while it has the focus: a line a song, its title then its artist. */
+.recent { margin: 8px 2px 0; }
+.recent[hidden] { display: none; }
+.recent-head { margin: 0 0 2px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; }
+.recent-list { margin: 0; padding: 0; list-style: none; }
+.recent-song { display: flex; align-items: baseline; gap: 8px; min-height: 32px; padding: 4px 0; color: inherit;
+  text-decoration: none; }
+.recent-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; }
+.recent-artist { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: .85rem; }
+@media (pointer: coarse) { .recent-song { min-height: 44px; align-items: center; } }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 /* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */
