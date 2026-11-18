@@ -1890,6 +1890,7 @@
     }
     render();
     save();
+    drawRecent();
   };
   // An artist's name pressed (a header's, a line's, a site's row's): the search for them, as typing their name runs
   // it: your songs that match; served, then the sites', their group first, as /api/search leads with an artist it is
@@ -1985,6 +1986,62 @@
     setQuery("");
     input.focus();
   });
+  // Recently opened: the songs whose link on a line was last followed, kept in this browser's storage (a refusal
+  // leaves the page as it is, listing none), shown under the empty box while it has the focus.
+  const RECENT = "caracole-library-recent";
+  const RECENT_MAX = 5;
+  const readRecent = () => {
+    try {
+      const kept = JSON.parse(localStorage.getItem(RECENT));
+      return Array.isArray(kept) ? kept.filter((e) => e && typeof e === "object" && typeof e.identity === "string"
+        && typeof e.href === "string") : [];
+    } catch (err) {
+      return [];
+    }
+  };
+  const rememberOpened = (line, link) => {
+    const song = songs[byIndex.get(Number(line.dataset.id))];
+    if (!song || !song.identity) return;
+    const entry = { identity: String(song.identity), href: link.getAttribute("href") || "",
+      said: link.getAttribute("aria-label") || link.textContent };
+    const kept = [entry].concat(readRecent().filter((e) => e.identity !== entry.identity)).slice(0, RECENT_MAX);
+    try {
+      localStorage.setItem(RECENT, JSON.stringify(kept));
+    } catch (err) { /* no storage: nothing remembered */ }
+  };
+  const recent = byId("recent");
+  const recentList = byId("recent-list");
+  const drawRecent = () => {
+    const mine = document.activeElement === input || recent.contains(document.activeElement);
+    const here = byId("library-view").checkVisibility();
+    const byIdentity = new Map(songs.filter(counted).map((s) => [String(s.identity), s]));
+    const items = mine && !input.value && here ? readRecent().filter((e) => byIdentity.has(e.identity)) : [];
+    recentList.replaceChildren();
+    for (const e of items) {
+      const s = byIdentity.get(e.identity);
+      const a = el("a", "recent-song");
+      a.href = rowKit.safeHref(e.href, false);
+      a.title = e.said;
+      a.appendChild(el("span", "recent-title", shownName(s, s.title)));
+      a.appendChild(el("span", "recent-artist", shownName(s, s.artist)));
+      const li = el("li");
+      li.appendChild(a);
+      recentList.appendChild(li);
+    }
+    recent.hidden = !items.length;
+  };
+  // A tap on a recent song keeps the box's focus (and the keyboard); the link opens it as the line's own does.
+  recent.addEventListener("mousedown", (e) => e.preventDefault());
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest && e.target.closest("a[href]:not([download]):not([target=_blank])");
+    const line = link && link.closest("article.line[data-id]");
+    if (line) rememberOpened(line, link);
+  });
+  input.addEventListener("input", drawRecent);
+  input.addEventListener("blur", () => setTimeout(drawRecent, 0));  // a Tab to a recent song's link keeps the list
+  recent.addEventListener("focusout", () => setTimeout(drawRecent, 0));
+  document.addEventListener("caracole:tab", drawRecent);
+  input.addEventListener("focus", drawRecent);
   input.addEventListener("focus", enterSearch);
   // A finger dragging the results puts the keyboard away (a touch in the bar does not); search mode stays on.
   document.addEventListener("touchmove", (e) => {

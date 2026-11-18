@@ -2739,7 +2739,10 @@ keyboard away. Focusing the empty box is one step of the browser's history;
 typing adds none, and an artist's name pressed while you search is one more,
 which Back takes back one at a time and the ← all at once. The × at the box's
 right clears the text and keeps the focus in the box: you are still
-searching. Escape in the empty box leaves the search as the ← does. A tap
+searching. Escape in the empty box leaves the search as the ← does. The
+empty box, focused, lists the songs you opened last (up to five, newest first,
+title then artist: "Recently opened"), kept in this browser; a tap opens the
+song and keeps the box's focus; typing hides the list. A tap
 elsewhere leaves the box but not the search, its ← still there. There is no
 Back to your songs row over the results. On a phone the logo and tabs
 slide away while you search, so the box and its results take the screen, and

@@ -282,7 +282,8 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
 
 
 def bar_of(html):
-    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\n</div>', html, re.S)
+    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\s*'
+                      r'(?:<section class="recent".*?</section>\s*)?</div>', html, re.S)
     assert found, html[:3000]
     return found.group(0)
 

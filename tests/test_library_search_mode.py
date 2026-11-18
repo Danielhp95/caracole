@@ -325,3 +325,100 @@ def test_a_touch_in_the_bar_keeps_the_keyboard_and_a_wheel_on_a_laptop_keeps_the
     x, y = browser.js(f"(() => {{ const r = {FIRST_RESULT}.getBoundingClientRect(); return [r.x + 20, r.y + 10]; }})()")
     browser.send("Input.dispatchMouseEvent", type="mouseWheel", x=x, y=y, deltaX=0, deltaY=150)
     assert browser.js("document.activeElement.id") == "q"
+
+
+# --- recently opened songs in the empty box ---------------------------------------------------------------------
+
+RECENT = "[...document.querySelectorAll('#recent a')].map((a) => [a.querySelector('.recent-title').textContent, a.getAttribute('href')])"
+RECENT_SHOWN = "document.getElementById('recent').checkVisibility()"
+STAY = "document.addEventListener('click', (e) => e.preventDefault())"  # the play opens nothing during the test
+NO_STORAGE = """Object.defineProperty(window, 'localStorage', {configurable: true,
+  get() { throw new DOMException('The document is sandboxed', 'SecurityError'); }});"""
+SIX = ["Creep", "Karma Police", "Airbag", "Lucky", "Paranoid Android", "No Surprises"]
+
+
+def six_songs(conn, cfg):
+    from caracole.library import song_dir
+    from caracole.songs import update_song
+
+    for title in SIX:
+        song = add_song(conn, "Radiohead", title)
+        folder = song_dir(cfg.library_dir, song)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "sheet.html").write_bytes(b"x")
+        update_song(conn, song.id, status="found")
+    return write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW)).as_uri()
+
+
+def open_song(page, title):
+    page.js(f"[...document.querySelectorAll('article.line')].find((l) => l.textContent.includes({title!r}))"
+            ".querySelector('.line-plays a').click()")
+
+
+@pytest.fixture
+def six_page(conn, cfg, tmp_path):
+    page = opened(tmp_path, six_songs(conn, cfg), width=390, height=844, mobile=True)
+    yield page
+    page.close()
+
+
+def test_the_focused_empty_box_lists_the_songs_opened_last_newest_first(six_page):
+    url = six_page.js("location.href")
+    six_page.js(STAY)
+    for title in SIX + [SIX[0]]:
+        open_song(six_page, title)
+    six_page.open(url)  # a reload: kept in this browser's storage
+    six_page.js(f"{BOX}.focus()")
+    assert six_page.wait(RECENT_SHOWN)
+    shown = six_page.js(RECENT)
+    assert [s[0] for s in shown] == ["Creep", "No Surprises", "Paranoid Android", "Lucky", "Airbag"]
+    assert all(s[1].endswith("sheet.html") for s in shown) and len(shown) == 5
+    six_page.type("c")  # typed: gone
+    assert six_page.wait(f"!{RECENT_SHOWN}")
+
+
+def test_a_recent_song_opens_what_it_opened_before_and_keeps_the_boxs_focus(six_page):
+    six_page.js(STAY)
+    open_song(six_page, "Airbag")
+    six_page.js("document.addEventListener('click', (e) => { window.went = e.target.closest('a')?.getAttribute('href') "
+                "}, true)")
+    six_page.js(f"{BOX}.focus()")
+    assert six_page.wait(RECENT_SHOWN)
+    six_page.js("window.down = !document.querySelector('#recent a').dispatchEvent("
+                "new MouseEvent('mousedown', {bubbles: true, cancelable: true}))")
+    assert six_page.js("down") is True  # the press is cancelled, so the box keeps its focus
+    six_page.js("document.querySelector('#recent a').click()")
+    assert six_page.js("went").endswith("sheet.html")
+
+
+def test_a_song_removed_since_is_not_among_them(six_page):
+    six_page.js(STAY)
+    open_song(six_page, "Airbag")
+    open_song(six_page, "Lucky")
+    six_page.js("localStorage.setItem('caracole-library-recent', JSON.stringify("
+                "[...JSON.parse(localStorage.getItem('caracole-library-recent')), "
+                "{identity: 'nobody/gone', href: 'x/sheet.html', said: 'Gone'}]))")
+    six_page.js(f"{BOX}.focus()")
+    assert six_page.wait(RECENT_SHOWN)
+    assert [s[0] for s in six_page.js(RECENT)] == ["Lucky", "Airbag"]
+
+
+def test_with_no_storage_the_box_works_and_lists_nothing(conn, cfg, tmp_path):
+    url = six_songs(conn, cfg)
+    try:
+        page = Browser(tmp_path / "chrome", width=390, height=844, mobile=True)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    try:
+        page.send("Page.addScriptToEvaluateOnNewDocument", source=NO_STORAGE
+                  + "window.errors = []; addEventListener('error', (e) => errors.push(String(e.message)));")
+        page.open(url)
+        page.js(STAY)
+        open_song(page, "Airbag")
+        page.js(f"{BOX}.focus()")
+        assert page.wait(MODE)
+        assert page.js(RECENT_SHOWN) is False and page.js("errors") == []
+        page.type("creep")
+        assert page.wait("location.hash === '#q=creep'")
+    finally:
+        page.close()

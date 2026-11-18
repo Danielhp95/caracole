@@ -107,6 +107,19 @@
 .bar-said { min-height: 22px; margin: 6px 2px 0; }
 .bar-said:has(> .counts[hidden]):has(> .bar-status:empty) { min-height: 0; margin: 0; }
 .bar-said > .bar-status { flex: 1 1 12rem; margin: 0; }
+/* The songs opened last, under the empty box while it has the focus: a line a song, its title then its artist. */
+.recent { margin: 8px 2px 0; }
+.recent[hidden] { display: none; }
+.recent-head { margin: 0 0 2px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; }
+.recent-list { margin: 0; padding: 0; list-style: none; }
+.recent-song { display: flex; align-items: baseline; gap: 8px; min-height: 32px; padding: 4px 0; color: inherit;
+  text-decoration: none; }
+.recent-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; }
+.recent-artist { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: .85rem; }
+@media (pointer: coarse) { .recent-song { min-height: 44px; align-items: center; } }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 /* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */

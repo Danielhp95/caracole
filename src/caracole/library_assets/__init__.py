@@ -37,7 +37,9 @@ file, and none of it loads anything from the network.
   box takes the focus or while it holds a query, a blur leaving it on, until the ←, Back or Escape in the empty
   box; entering it from the empty box is an entry of the browser's history (``{ search: 1 }``) and each artist's
   name pressed in it one more (``{ search: n + 1 }``), all of which the ← takes back at once; × clears the box and
-  keeps the search.
+  keeps the search. Recently opened: the box empty and focused shows up to five songs whose link on a line was last
+  followed (``#recent``, ``rememberOpened``, ``drawRecent``; localStorage ``caracole-library-recent``, a refusal
+  leaving it empty), newest first, a song removed since left out; a press on one keeps the box's focus.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds
