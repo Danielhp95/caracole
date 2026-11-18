@@ -503,6 +503,20 @@ def test_render_real_chordpro_binary(tmp_path):
 
 @pytest.mark.chordpro
 @real_chordpro
+def test_render_real_prints_a_lines_bars_as_written(tmp_path):
+    cho = write_chordpro("[Intro]\n[ch]Am[/ch]  [ch]C[/ch] | [ch]G[/ch]  [ch]Em[/ch] |", tmp_path / "sheet.cho",
+                         title="T", artist="A")
+    printed = tmp_path / "printed.cho"
+    printed.write_text(printed_text(cho.read_text(encoding="utf-8"), key=Key(9, "aeolian"), capo=None),
+                       encoding="utf-8")
+    render_pdf(printed, tmp_path / "sheet.pdf", chordpro_bin=CHORDPRO)
+    page = pdf_pages(tmp_path / "sheet.pdf")[0]
+    y = next(y for _, y, text in page if text.strip() == "|")
+    assert [text.strip() for _, _, text in sorted(s for s in page if s[1] == y)] == ["Am", "C", "|", "G", "Em", "|"]
+
+
+@pytest.mark.chordpro
+@real_chordpro
 def test_render_real_prints_the_tuning_under_the_title_in_place_of_key_and_capo(tmp_path):
     # A sheet's PDF text says its key line and the tuning its notes name in {subtitle}
     # (pdf_text.py), which the style prints; a song a half step down never reads as in standard tuning.

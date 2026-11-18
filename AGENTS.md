@@ -224,7 +224,8 @@ sitemaps list by bare ids alone, and the fetch their page.
 
 #### render
 
-- **chordpro.py**: UG markup to ChordPro.
+- **chordpro.py**: UG markup to ChordPro; a chord-only line keeps its bar lines, as `[*|]` marks (`sheet.BAR`, which
+  the page reads).
 - **render.py**: PDFs.
   - **Chinese sheets**: a Chinese sheet's (`page.written_script`) in Simplified characters, and in Traditional ones
     beside it, `songs.TRADITIONAL_PDFS` (`sheet (Traditional).pdf`, `sheet (auto, Traditional).pdf`).

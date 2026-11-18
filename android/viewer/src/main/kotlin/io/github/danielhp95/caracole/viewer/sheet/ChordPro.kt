@@ -34,6 +34,7 @@ object ChordPro {
     private val BRACKETS by lazy { SheetData.translation(C.strings("_BRACKETS")) }
     private val ESCAPED_BACKSLASH by lazy { C.text("_ESCAPED_BACKSLASH") }
     private val AUTO_MARKER by lazy { SheetData.sheet.text("AUTO_MARKER") }
+    private val BAR by lazy { SheetData.sheet.pattern("BAR") }
     private val ENTITY by lazy { SheetData.ugPage.pattern("_ENTITY") }
     private val LOOKALIKES by lazy { SheetData.translation(SheetData.render.strings("_LATIN_LOOKALIKES")) }
 
@@ -129,8 +130,9 @@ object ChordPro {
      * each chord at its column; a chord line with no lyric line under it a chord-only line; `[Verse 1]`
      * `{comment: Verse 1}`; a `[tab]` block holding staff lines, or a run of staff lines outside one,
      * `{start_of_tab}` … `{end_of_tab}`, kept verbatim; solfège chords letter names; repeat marks annotations
-     * (`[*x2]`); text ChordPro would misread escaped. The header carries the title, the artist, the key and capo when
-     * given, and an "auto-generated, unverified" comment for an auto-chords sheet.
+     * (`[*x2]`), and so the bar lines on a chord-only line (`[*|]`); text ChordPro would misread escaped. The header
+     * carries the title, the artist, the key and capo when given, and an "auto-generated, unverified" comment for an
+     * auto-chords sheet.
      */
     fun toChordPro(markup: String, title: String, artist: String, key: String? = null, capo: Int? = null,
                    auto: Boolean = false): String = document(markup, title, artist, key, capo?.toString(), auto)
@@ -266,7 +268,7 @@ object ChordPro {
         return label to rest
     }
 
-    private fun chordOnly(line: String): String = chordItems(line).joinToString(" ") { it.second }
+    private fun chordOnly(line: String): String = chordItems(line, bars = true).joinToString(" ") { it.second }
 
     /** One chord or mark of a chord line: where it starts in its text with the tags removed (a UTF-16 offset), where
      * it ends, and its ChordPro token. */
@@ -280,8 +282,10 @@ object ChordPro {
         }
     }
 
-    /** _chord_items: the chords and marks of a chord line, as (display column, ChordPro token), in order. */
-    private fun chordItems(chordLine: String): List<Pair<Int, String>> {
+    /** _chord_items: the chords and marks of a chord line, as (display column, ChordPro token), in order; with
+     * [bars], its bar lines too, each a mark as written (`[*|]`, sheet.BAR), as a chord-only line keeps them. Over a
+     * lyric line they are left out, as they would split its words. */
+    private fun chordItems(chordLine: String, bars: Boolean = false): List<Pair<Int, String>> {
         val line = tagForgotten(PyRe.sub(TAB_MARK, chordLine) { "" })
         val plain = StringBuilder()
         val spans = ArrayList<Span>()
@@ -301,6 +305,13 @@ object ChordPro {
             val at = m.range.first
             if (spans.none { it.start <= at && at < it.end }) {
                 spans += Span(at, m.range.last + 1, "[*${Py.strip(m.value)}]")
+            }
+        }
+        if (bars) {
+            for (m in PyRe.finditer(BAR, text)) {
+                val start = m.range.first
+                val end = m.range.last + 1
+                if (spans.none { it.start < end && start < it.end }) spans += Span(start, end, "[*${m.value}]")
             }
         }
         val columns = columnsByOffset(text)

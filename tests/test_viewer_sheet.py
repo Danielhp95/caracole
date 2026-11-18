@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
+from caracole.viewer.sheet import BAR, Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 
@@ -44,7 +44,12 @@ def test_a_lyric_line_is_split_at_its_chords():
 def test_a_line_of_chords_alone_is_a_chord_row_with_its_marks():
     sheet = parse_sheet(fixture("ug_sheet.cho"))
     assert sheet.sections[0].lines == [ChordRow([0, 1, 2, 3, "x2"])]
-    assert sheet.sections[4].lines == [ChordRow([0, 1, 3, "(x4)"])]
+    assert sheet.sections[4].lines == [ChordRow([0, "|", 1, "|", 3, "(x4)"])]
+
+
+def test_a_bar_line_is_a_mark_that_bar_reads():
+    assert [t for t in ("|", "||", "|:", ":|", ":||:", ":", "x2", "(x4)", "N.C.") if BAR.fullmatch(t)] == [
+        "|", "||", "|:", ":|", ":||:"]
 
 
 def test_a_mark_in_a_sung_line_stays_a_mark():

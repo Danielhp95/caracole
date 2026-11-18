@@ -441,6 +441,11 @@ def test_a_chord_wraps_by_the_name_chordpro_displays():
     assert line_heights([define, line], shape) == [0.0, 2 * (shape.chords + shape.lyrics)]
 
 
+def test_a_line_of_bars_is_one_row_of_chords():
+    shape = layout()
+    assert line_heights(["[Am] [C] [*|] [G] [Em] [*|]"], shape) == [shape.chords]
+
+
 # --- on another instrument ---------------------------------------------------------------------------
 
 def on(inst: str | None, cho: str = UG_CHO, *, diagrams: bool = True, **v) -> str:

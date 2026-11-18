@@ -28,6 +28,10 @@
    "_CAPO": {
     "pattern": "(?i)\\bcapo\\b\\D{0,6}(\\d+)",
     "ignorecase": false
+   },
+   "BAR": {
+    "pattern": "[|:]*\\|[|:]*",
+    "ignorecase": false
    }
   },
   "_ESCAPED_BACKSLASH": "\\u005c",

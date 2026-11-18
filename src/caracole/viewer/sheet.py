@@ -75,6 +75,9 @@ _TOKEN = re.compile(r"\[([^\]]*)\]")
 _FRET = re.compile(r"[0-9]+")  # ASCII digits: str.isdigit takes "²", which int() refuses
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n|副歌")
 _ESCAPED_BACKSLASH = "\\" + "u005c"
+# A bar line ("|", "||", "|:", ":|"), the one rule for it: chordpro.py writes each of a chord-only line's as a mark
+# in its place ("[*|]"), and a ChordRow item that fullmatches it is a bar line, which ``bars`` reads.
+BAR = re.compile(r"[|:]*\|[|:]*")
 COMMENTS = {"comment", "c", "comment_italic", "ci", "comment_box", "cb", "highlight"}  # a section's name
 
 

@@ -13,8 +13,8 @@ members in its order, a set as a sorted array) and its compiled patterns under `
 text, "ignorecase": bool}}`` (``.pattern``, as Python writes it; no flag but IGNORECASE, which core.py.PyRegex reads
 as a leading ``(?i)``, true only for a pattern that doesn't start with its own ``(?i)``):
 
-- ``sheet``: ``_DIRECTIVE``, ``_TOKEN``, ``_FRET``, ``_CHORUS``, ``_TUNING_NAME``, ``_TUNING_LABEL``, ``_CAPO``;
-  ``_ESCAPED_BACKSLASH``, ``COMMENTS``, ``_STANDARD`` and autochords.merge's ``AUTO_MARKER``;
+- ``sheet``: ``_DIRECTIVE``, ``_TOKEN``, ``_FRET``, ``_CHORUS``, ``_TUNING_NAME``, ``_TUNING_LABEL``, ``_CAPO``,
+  ``BAR``; ``_ESCAPED_BACKSLASH``, ``COMMENTS``, ``_STANDARD`` and autochords.merge's ``AUTO_MARKER``;
 - ``page``: ``_SOURCES`` and ``_OF_THE_SHAPES``;
 - ``chordpro``: ``_CHORD``, ``_TAB_MARK``, ``_SECTION``, ``_MARK``, ``_CHORD_LINE_REST``, ``_STAFF``,
   ``_SOLFEGE``, ``_LEAD_GAP``, ``_WORD``, ``_MARKUP_START``, ``_DECODED_BACKSLASH``, ``_DIRECTIVE_LIKE``;
@@ -222,7 +222,7 @@ def constants() -> dict:
     return {
         "sheet": {
             "patterns": _patterns(sheet, ("_DIRECTIVE", "_TOKEN", "_FRET", "_CHORUS", "_TUNING_NAME", "_TUNING_LABEL",
-                                          "_CAPO")),
+                                          "_CAPO", "BAR")),
             "_ESCAPED_BACKSLASH": sheet._ESCAPED_BACKSLASH,
             "COMMENTS": sorted(sheet.COMMENTS),
             "_STANDARD": sorted(sheet._STANDARD),

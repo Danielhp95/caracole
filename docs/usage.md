@@ -1686,8 +1686,9 @@ and cache.
   leaves it out); a tuning they name ("half step
   down", "Drop D", "Eb standard") or give after a "Tuning:" label ("Tuning:
   DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
-  the song, bold rust chords over the lyrics, and section names in small rust
-  capitals (no band). The title is large, the page a clean two columns, and a
+  the song, bold rust chords over the lyrics (a line of chords alone that
+  writes bars prints them as written, "Am C | G Em |"), and section names in
+  small rust capitals (no band). The title is large, the page a clean two columns, and a
   songbook's songs are set the same way: in Adwaita Sans with the packages, the
   title, the chords and the section names bold, a repeat mark italic, a tab in
   Adwaita Mono (see [Fonts in the PDFs](#fonts-in-the-pdfs)). chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
