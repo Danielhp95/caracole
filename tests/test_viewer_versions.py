@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.version_pages import CHO, KINDS, UG, WONDERWALL, entry, folder
+from helpers.version_pages import CHO, EVERY_KIND, KINDS, UG, WONDERWALL, entry, folder
 from helpers.viewer_pages import viewer
 
 from caracole import render
@@ -68,6 +68,22 @@ DRAWN = """[...document.querySelectorAll('#kinds .kind')].map((k) => {
                                    'aria-hidden'].map((a) => [a, svg.getAttribute(a)])),
           painted: getComputedStyle(svg).fill, size: [r.width, r.height]};
 })"""
+
+
+# The list's groups, a kind each: its kind, its heading's words (its name and its count) and each row's name, address,
+# the name it downloads under and whether it is this page.
+GROUPS = """[...document.querySelectorAll('#kind-groups .kind-group')].map((g) =>
+  [g.dataset.kind, g.querySelector('.kind-head').textContent, [...g.querySelectorAll('.ver-main')].map((m) =>
+    [m.textContent, m.getAttribute('href'), m.getAttribute('download'), m.getAttribute('aria-current')])])"""
+# How the list's own parts are drawn: each heading's glyph, the tick before this page's row, where the actions sit.
+PARTS = """(() => {
+  const glyph = (svg) => svg && (svg.getAttribute('class').match(/glyph-(\\w+)/) || [])[1];
+  const mine = document.querySelector('#version-list [aria-current]');
+  return {heads: [...document.querySelectorAll('#kind-groups .kind-head')].map((h) => glyph(h.querySelector('svg'))),
+          tick: mine && mine.firstElementChild.tagName === 'svg' ? glyph(mine.firstElementChild) : null,
+          acts: Boolean(document.querySelector('#kind-groups > .kind-group:first-child > #ver-acts + ol#ver-items')),
+          title: document.querySelector('#version-list-title').textContent};
+})()"""
 
 
 def seen(b: Browser) -> dict:
@@ -326,7 +342,8 @@ def test_the_kind_icons_are_the_library_cards_drawings(tmp_path):
         b.open(path.as_uri())
         assert b.wait("document.documentElement.dataset.result !== undefined")
         result = json.loads(b.js("document.documentElement.dataset.result"))
-    assert sorted(name for name, *_ in result["glyphs"]) == ["guitar", "harmonica", "score", "sheet", "ukulele"]
+    # the card's five, and the tick before this page's row in the list
+    assert sorted(name for name, *_ in result["glyphs"]) == ["check", "guitar", "harmonica", "score", "sheet", "ukulele"]
     for name, mine, theirs in result["glyphs"]:
         assert mine == theirs, f"kinds.js's {name} glyph is not rows.js's: copy rows.js's into kinds.js's GLYPHS"
     assert [kind for kind, *_ in result["drawn"]] == ["sheet", *render._KINDS]
@@ -335,7 +352,7 @@ def test_the_kind_icons_are_the_library_cards_drawings(tmp_path):
     card = card_glyphs()
     for kind in ("sheet", "ukulele", *render._KINDS):
         assert result["glyphOf"][kind] == card[kind], kind  # tab and gametab the guitar's, as on the card
-    assert set(result["glyphOf"].values()) == {name for name, *_ in result["glyphs"]}
+    assert set(result["glyphOf"].values()) == {name for name, *_ in result["glyphs"]} - {"check"}
     assert result["frozen"]
     for word in ("innerHTML", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function"):
         assert word not in page._kinds(), word
@@ -346,7 +363,9 @@ def test_the_kind_icons_are_the_library_cards_drawings(tmp_path):
 
 @in_chromium
 def test_the_list_shows_every_version_and_opens_the_kept_ones(tmp_path):
-    pages = folder(tmp_path, WONDERWALL)
+    versions = deepcopy(WONDERWALL)
+    versions["list"][3].update(rating=None, votes=None)  # UG hasn't rated it yet
+    pages = folder(tmp_path, versions)
     with viewer(tmp_path, pages["version-39144.html"].as_uri()) as b:
         open_list(b)
         shown = seen(b)
@@ -354,13 +373,90 @@ def test_the_list_shows_every_version_and_opens_the_kept_ones(tmp_path):
         b.click("#ver-items > li:first-child .ver-main")
         assert b.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
     rows = shown["rows"]
-    assert shown["title"] == "13 versions on UG" and len(rows) == 13 and focus == "version-list-title"
-    assert rows[0]["link"] == "sheet.html" and "Ver 3" in rows[0]["text"] and "4.86★ (408)" in rows[0]["text"]
+    assert shown["title"] == "Versions" and len(rows) == 13 and focus == "version-list-title"
+    assert rows[0]["link"] == "sheet.html" and "Ver 3" in rows[0]["text"] and "★ 4.86 (408)" in rows[0]["text"]
     assert "the one" in rows[0]["text"] and "the version that oasis play on Wembley 2008" in rows[0]["text"]
     assert rows[1]["link"] is None and rows[1]["current"] == "page" and "this page" in rows[1]["text"]
+    assert "★ 4.85 (12,629)" in rows[1]["text"]
     assert rows[2]["link"] == "version-2161290.html" and "kept" in rows[2]["text"] and "acoustic" in rows[2]["text"]
-    assert rows[3]["link"] is None and "kept" not in rows[3]["text"] and "Ver 4" in rows[3]["text"]
+    assert rows[3]["link"] is None and "kept" not in rows[3]["text"] and rows[3]["text"].startswith("Ver 4 · New")
     assert "capo 2, easy chords" in rows[4]["text"]
+
+
+@in_chromium
+def test_the_list_groups_every_kind_in_the_cards_order(tmp_path):
+    # Chords, today's versions, then a group for each other kind the song keeps, the library card's, in its order: each
+    # row named as the card names it, a tap from the list. From a file, a Guitar Pro file is the file itself, saved
+    # under the song's name; a harmonica tab opens its page, with the reader's choices for the screen.
+    pages = folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri(), **DESKTOP) as b:
+        groups = b.js(GROUPS)
+        parts = b.js(PARTS)
+        rows = seen(b)["rows"]
+        b.click("#necks-toggle")  # the rail of necks hidden: the harmonica tab's page opens without it too
+        assert b.wait("location.hash.includes('necks=0')")
+        later = b.js(GROUPS)
+    assert [kind for kind, *_ in groups] == ["sheet", "guitar", "tab", "harmonica", "gametab", "score"]
+    assert [head for _, head, _ in groups] == ["Chords13", "Guitar Pro2", "Guitar tab1", "Harmonica1", "Game music1",
+                                               "Score2"]
+    assert parts == {"heads": ["sheet", "guitar", "guitar", "harmonica", "guitar", "score"], "tick": "check",
+                     "acts": True, "title": "Versions"}
+    chords = groups[0][2]
+    assert len(chords) == len(rows) == 13  # today's rows, #ver-items' own
+    assert chords[1][1:] == [None, None, "page"] and chords[1][0].startswith("Ver 1 · ★ 4.85 (12,629)")
+    assert chords[0][1] == "sheet.html" and chords[2][1] == "version-2161290.html"
+    assert {kind: items for kind, _, items in groups[1:]} == {
+        "guitar": [["Guitar Pro 1 · gtptabs", "guitar-1.gp5", "Artist - Title.gp5", None],
+                   ["Power Tab 2", "guitar-2.ptb", "Artist - Title (2).ptb", None]],
+        "tab": [["Guitar tab · UG", "tab.txt", None, None]],
+        "harmonica": [["Harmonica tab 1 · harptabs", "harmonica-1.html", None, None]],
+        "gametab": [["Game music tab 1 · gametabs", "gametab-1.txt", None, None]],
+        "score": [["Score 1 (MuseScore)", "score-1.mscz", "Artist - Title.mscz", None],
+                  ["Score 1 (PDF)", "score-1.pdf", None, None]]}
+    assert later[3][2] == [["Harmonica tab 1 · harptabs", "harmonica-1.html#necks=0", None, None]]
+    assert later[1][2] == groups[1][2]  # a file is the file, whatever the screen
+
+
+@in_chromium
+def test_served_guitar_pro_opens_in_the_browser_and_versions_keep_through_caracole_serve(tmp_path):
+    # Served, a Guitar Pro file caracole serve draws opens its Guitar Pro page (/guitar?file=…, "in the browser"), as
+    # the settings' row does; a Power Tab file is still a download; Keep is caracole serve's /versions page, as ever.
+    folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    with served(tmp_path) as root, viewer(tmp_path, root + "/Artist/Title/sheet.html") as b:
+        groups = {kind: items for kind, _, items in b.js(GROUPS)}
+        keep = seen(b)["rows"][3]["actions"]
+    assert groups["guitar"] == [
+        ["Guitar Pro 1 · gtptabs · in the browser", "/guitar?file=Artist%2FTitle%2Fguitar-1.gp5", None, None],
+        ["Power Tab 2", "guitar-2.ptb", "Artist - Title (2).ptb", None]]
+    assert groups["harmonica"] == [["Harmonica tab 1 · harptabs", "harmonica-1.html", None, None]]
+    assert groups["score"][0][1:3] == ["score-1.mscz", "Artist - Title.mscz"]
+    assert keep == [["Keep", "/versions?sheet=Artist%2FTitle%2Fsheet.html&tab=504&do=keep"]]
+
+
+@in_chromium
+def test_a_song_with_no_versions_lists_its_sheet_and_its_other_kinds(tmp_path):
+    # UG lists no chords version of the song: its Chords group is its chord sheet alone, a row, then its other kinds.
+    # On the sheet's page that row is this page's; on another page of the song (a harmonica tab's, say) it opens the
+    # sheet, and that page's own row is ticked in its group.
+    pages = folder(tmp_path, None, kinds=EVERY_KIND, pages=("sheet.html", "harmonica-1.html"))
+    shown = {}
+    for name in pages:
+        with viewer(tmp_path, pages[name].as_uri() + "#fs=24") as b:
+            open_list(b)
+            shown[name] = [b.js(GROUPS), b.js(PARTS)]
+    ukulele = folder(tmp_path / "ukulele", None, kinds={**EVERY_KIND, "sheet": "ukulele"})
+    with viewer(tmp_path / "ukulele", ukulele["sheet.html"].as_uri()) as b:
+        uke = b.js(GROUPS)
+    sheet, parts = shown["sheet.html"]
+    assert [head for _, head, _ in sheet] == ["Chords1", "Guitar Pro2", "Guitar tab1", "Harmonica1", "Game music1",
+                                              "Score2"]
+    assert sheet[0] == ["sheet", "Chords1", [["Chord sheet · this page", None, None, "page"]]]
+    assert parts["tick"] == "check" and parts["acts"] and parts["title"] == "Versions"
+    assert sheet[3][2] == [["Harmonica tab 1 · harptabs", "harmonica-1.html#fs=24", None, None]]
+    harp, parts = shown["harmonica-1.html"]
+    assert harp[0][2] == [["Chord sheet", "sheet.html#fs=24", None, None]]
+    assert harp[3][2] == [["Harmonica tab 1 · harptabs · this page", None, None, "page"]] and parts["tick"] == "check"
+    assert uke[0] == ["ukulele", "Ukulele chords1", [["Ukulele chords · this page", None, None, "page"]]]
 
 
 @in_chromium

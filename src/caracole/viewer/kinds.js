@@ -10,7 +10,7 @@
   //   GLYPHS           the library card's drawings of what a song holds (library_assets/rows.js GLYPHS, copied: the
   //                    sheet pages don't inline rows.js; test_viewer_versions.py fails once the two differ), each the
   //                    paths of a stroke in the text's colour on a 24-unit grid: sheet, ukulele, guitar, harmonica,
-  //                    score.
+  //                    score; and rows.js's check, the tick before this page's row in the list.
   //   GLYPH_OF         each kind's glyph, as library_assets/card.js's things draw it (copied, held by the same test):
   //                    the chord sheet's "sheet", UG's Ukulele Chords' "ukulele", a text tab's and a game music tab's
   //                    the guitar's.
@@ -25,9 +25,16 @@
   //                    sheet; carry(page), the address of another page of the song from this one, with what the reader
   //                    chose for the screen (the text size, the scroll speed, the rail of necks...); open(el, opener)
   //                    and close(el), the page's layers (the list is one); inSight(el), whether a layer is in sight.
-  //                    Returns { links(), place() }: links() writes each link to a version again, with what carry
-  //                    gives now (the page calls it as the reader's choices change); place() puts the list where it
-  //                    goes (the page's stylesheet does today: at the foot on a phone, a rail from 900 px).
+  //                    Returns { links(), place() }: links() writes each link to another page of the song again,
+  //                    with what carry gives now (the page calls it as the reader's choices change); place() puts
+  //                    the list where it goes (the page's stylesheet does today: at the foot on a phone, a rail from
+  //                    900 px).
+  //
+  // The list (page.py _VERSION_LIST's #kind-groups) is a group a kind, section.kind-group[data-kind], each headed by
+  // h3.kind-head (its glyph, its name, how many) over an ol.vers of li.ver rows, each row's .ver-main a link where it
+  // opens something and none for this page's own, ticked and aria-current="page": Chords first (#ver-acts, what to do
+  // with this page's version, then #ver-items, every version UG has, or the chord sheet alone where it lists none),
+  // then each other kind the song keeps, in the card's order, each row named as the card names it.
 
   const own = Object.prototype.hasOwnProperty;
   const SVG = "http://www.w3.org/2000/svg";
@@ -50,6 +57,8 @@
     // two notes beamed together, as a score writes them
     score: frozen(["M9 18V6l11-2.5v12", "M9 9.5l11-2.5", "M4 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
       "M15 15.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0"]),
+    // a tick: this page's row in the list
+    check: frozen(["M5 12.5l4.5 4.5L19 7.5"]),
   });
   // card.js's, kind for kind.
   const GLYPH_OF = Object.freeze({ sheet: "sheet", ukulele: "ukulele", guitar: "guitar", tab: "guitar",
@@ -71,8 +80,12 @@
     }
     return svg;
   };
-  // The chord sheet's kinds and the line's first word, its group's name.
+  // The chord sheet's kinds and the line's first word, its group's name; and its row, where UG lists no version of it.
   const SHEETS = { sheet: "Chords", ukulele: "Ukulele chords" };
+  const SHEET_ROWS = { sheet: "Chord sheet", ukulele: "Ukulele chords" };
+  // Each other kind's group in the list, by its name.
+  const NAMES = { guitar: "Guitar Pro", tab: "Guitar tab", harmonica: "Harmonica", gametab: "Game music",
+    score: "Score" };
   // Each kind in words, one and more, for what names the icons: "13 chord versions, 2 Guitar Pro files".
   const WORDS = { sheet: ["chord version", "chord versions"], ukulele: ["ukulele chord version", "ukulele chord versions"],
     guitar: ["Guitar Pro file", "Guitar Pro files"], tab: ["guitar tab", "guitar tabs"],
@@ -103,7 +116,8 @@
   const attach = (o) => {
     const $ = (id) => document.getElementById(id);
     const box = $("versions"), vList = $("version-list"), now = $("ver-now"), line = $("ver-line"), icons = $("kinds");
-    if (!o || typeof o !== "object" || !box || !vList || !now || !line || !icons) return null;
+    const groupsBox = $("kind-groups");
+    if (!o || typeof o !== "object" || !box || !vList || !now || !line || !icons || !groupsBox) return null;
     const data = o.data && typeof o.data === "object" ? o.data : {};
     const here = typeof o.here === "string" ? o.here : "";
     const served = Boolean(o.served);
@@ -116,7 +130,7 @@
     // reader's choices for the screen along (carry: the key and the rest are this sheet's chords'); one not kept is
     // kept by caracole serve's /versions page, which reads it on UG now, or, from a file, links to UG's page and
     // shows the command that keeps it, with Copy; a version gone from UG opens nothing. Make this the one, and Back
-    // to our pick (while your [pin] chooses the sheet), the same way.
+    // to our pick (while your [pin] chooses the sheet), the same way. Each rated "★ 4.86 (408)", or "New".
     const vSource = data.versions && typeof data.versions === "object" ? data.versions : {};
     const vRows = (Array.isArray(vSource.list) ? vSource.list : [])
       .filter((v) => v && typeof v === "object" && typeof v.tab === "string")
@@ -127,11 +141,8 @@
       : vRows.find((v) => v.page === here && v.chosen) || vRows.find((v) => v.page === here) || null;
     const vOne = vChosen || !own.call(OTHERS, vSource.sheet) ? null : OTHERS[vSource.sheet];
     const vTotal = Number.isInteger(vSource.total) && vSource.total >= vRows.length ? vSource.total : vRows.length;
-    const vCount = (n) => n + (n === 1 ? " version" : " versions");
     const vName = (v) => (Number.isInteger(v.number) ? "Ver " + v.number : "No. " + v.rank);
-    const vRating = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) ? ""
-      : v.rating.toFixed(2) + "★" + (Number.isInteger(v.votes) ? " (" + v.votes.toLocaleString("en-US") + ")" : ""));
-    // The line's: "★ 4.86 (408)", or "New" for a version with no rating yet.
+    // The line's and the list's: "★ 4.86 (408)", or "New" for a version with no rating yet.
     const stars = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) ? "New"
       : "★ " + v.rating.toFixed(2) + (Number.isInteger(v.votes) ? " (" + v.votes.toLocaleString("en-US") + ")" : ""));
 
@@ -185,7 +196,7 @@
       }
     };
 
-    // --- the list of every version ------------------------------------------------------------------------------
+    // --- the list: a group a kind, Chords first --------------------------------------------------------------------
     // Served, a link to caracole serve's page that asks for it; from a file, a button that shows the command.
     const vCommand = (where, what, tab) => {
       for (const old of vList.querySelectorAll(".vcmd")) old.remove();
@@ -216,13 +227,24 @@
       }
       place.appendChild(control);
     };
-    // A version in the list: its name, its rating, what it is (the one, kept, this page, gone) and the
-    // tabber's note, a link to its page when it opens; under it, what you can do with it.
-    const vItem = (title, rating, tags, note, page, current) => {
+    // A row of the list: its name, its rating, what it is (the one, kept, this page, gone; a Guitar Pro file "in the
+    // browser") and the tabber's note; a link where it opens (``to``: another page of the song by its name, which
+    // links() addresses with carry; or a file, {href, download}), none for this page's own, which a tick marks; under
+    // it, what you can do with it.
+    const vItem = (title, rating, tags, note, to, current) => {
       const li = make("li", "ver");
-      const main = make(page && !current ? "a" : "div", "ver-main");
-      if (page && !current) main.dataset.page = page;
-      if (current) main.setAttribute("aria-current", "page");
+      const opens = Boolean(to) && !current;
+      const main = make(opens ? "a" : "div", "ver-main");
+      if (opens && typeof to === "string") {
+        main.dataset.page = to;
+      } else if (opens) {
+        main.setAttribute("href", to.href);
+        if (to.download) main.setAttribute("download", to.download);
+      }
+      if (current) {
+        main.setAttribute("aria-current", "page");
+        main.appendChild(glyph("check"));
+      }
       main.appendChild(make("span", "ver-name", title));
       if (rating) main.append(apart(), make("span", "ver-rate", rating));
       const said = tags.concat(current ? ["this page"] : []).filter(Boolean);
@@ -239,11 +261,40 @@
       li.append(main, acts);
       return [li, acts];
     };
-    const drawList = () => {
-      if (!vRows.length) return;
-      $("version-list-title").textContent = vCount(vTotal) + " on UG";
-      const acts = $("ver-acts");
-      acts.textContent = "";
+    // A kind's group: its heading, the kind's glyph, its name and how many, as the line's icon counts it.
+    const group = (kind, name, n) => {
+      const section = make("section", "kind-group");
+      section.dataset.kind = kind;
+      const head = make("h3", "kind-head");
+      head.append(glyph(GLYPH_OF[kind]), make("span", "", name), make("span", "n", String(n)));
+      section.appendChild(head);
+      groupsBox.appendChild(section);
+      return section;
+    };
+    // The song's folder in the library, for caracole serve's Guitar Pro page; none for a page of no sheet.
+    const folder = sheetPath ? sheetPath.split("/").slice(0, -1).join("/") : null;
+    // Where another kind's row goes: a harmonica tab's page, in this tab, with the reader's choices for the screen;
+    // served, a Guitar Pro file caracole serve draws, its Guitar Pro page (/guitar?file=…, "in the browser", as the
+    // settings' row); any other file the file itself, a Guitar Pro or Power Tab file and a score but a PDF saved under
+    // the song's name (``download``), a text tab, a game music tab and a score's PDF opened.
+    const itemTo = (kind, item) => {
+      if (kind === "harmonica" && typeof item.page === "string" && item.page) return item.page;
+      if (kind === "guitar" && served && item.browser === true && folder !== null) {
+        return { href: "/guitar?file=" + encodeURIComponent(folder + "/" + item.name), browser: true };
+      }
+      const saved = (kind === "guitar" || kind === "score") && typeof item.download === "string" ? item.download : "";
+      return { href: encodeURIComponent(item.name), download: saved };
+    };
+    const drawGroups = () => {
+      groupsBox.textContent = "";
+      // Chords: what to do with this page's version (#ver-acts), then every version UG has (#ver-items), or, where it
+      // lists none of the sheet the title opens, the chord sheet alone first.
+      const chords = group(sheetKind || "sheet", SHEETS[sheetKind] || SHEETS.sheet, vRows.length ? vTotal : 1);
+      const acts = make("div", "row vrow");
+      acts.id = "ver-acts";
+      const items = make("ol", "vers");
+      items.id = "ver-items";
+      chords.append(acts, items);
       if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make this the one", "choose", vHere.tab, true);
       // While a [pin] of yours chooses the sheet (the data's ``pinned``, the pin caracole versions --clear takes
       // out); on a page whose data has no ``pinned`` (written before it), while your choice isn't caracole's first.
@@ -251,11 +302,13 @@
       const pinned = typeof vSource.pinned === "boolean" ? vSource.pinned : Boolean(vChosen && pick && pick !== vChosen);
       if (pinned) vAction(acts, "Back to our pick", "clear", null, false);
       acts.hidden = acts.children.length === 0;
-      const items = $("ver-items");
-      items.textContent = "";
+      const listed = new Set(vRows.map((v) => v.page).concat(vOne ? [vOne.page] : []));
+      if (sheetKind && kinds && typeof kinds.page === "string" && kinds.page && !listed.has(kinds.page)) {
+        items.appendChild(vItem(SHEET_ROWS[sheetKind], "", [], null, kinds.page, kinds.page === here)[0]);
+      }
       if (vOne) items.appendChild(vItem(vOne.label, "", ["the one"], null, vOne.page, !vHere && vOne.page === here)[0]);
       for (const v of vRows) {
-        const [li, todo] = vItem(vName(v) + (v.label ? " · " + v.label : ""), vRating(v),
+        const [li, todo] = vItem(vName(v) + (v.label ? " · " + v.label : ""), stars(v),
           [v.chosen ? "the one" : v.page ? "kept" : "", v.gone ? "gone from UG" : ""],
           typeof v.note === "string" ? v.note : "", v.page && !v.gone ? v.page : null, v === vHere);
         if (!v.page && !v.gone) {
@@ -269,14 +322,27 @@
         todo.hidden = todo.children.length === 0;
         items.appendChild(li);
       }
+      if (!items.children.length) chords.remove();  // no sheet and no version: a page of another kind's
+      // Then each other kind the song keeps, a row a file or a page, named as the card names it.
+      for (const g of groups) {
+        const list = make("ol", "vers");
+        for (const item of g.items) {
+          const to = itemTo(g.kind, item);
+          const [li, todo] = vItem(typeof item.label === "string" && item.label ? item.label : item.name, "",
+            [to.browser ? "in the browser" : ""], null, to, typeof to === "string" && to === here);
+          todo.hidden = true;
+          list.appendChild(li);
+        }
+        group(g.kind, NAMES[g.kind], g.items.length).appendChild(list);
+      }
     };
-    // Each link to a version again, with the reader's choices as they are now.
+    // Each link to another page of the song again, with the reader's choices as they are now.
     const links = () => {
       for (const link of vList.querySelectorAll("a[data-page]")) link.setAttribute("href", carry(link.dataset.page));
     };
 
     drawLine();
-    drawList();
+    drawGroups();
     links();
     now.addEventListener("click", () => {
       if (typeof o.inSight === "function" && o.inSight(vList)) {

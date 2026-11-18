@@ -3154,13 +3154,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   with how many: the chord sheet's count is its versions on UG, "13", the
   same as "of 13". The line shows where UG lists a version of the song, or
   the song keeps something more than the page: none for a sheet alone. On a
-  narrow screen the icons go under the line. Tap the line for the list
-  of every version UG has, in rank order: rating, votes, which is the one,
-  which are kept, which is this page, and the first lines of the tabber's
-  note. It sits where the settings do (at the foot on a phone, a rail beside
-  the song from 900 px wide, in their place). A kept version opens from it,
-  in the same tab, at the same text size and scroll speed (the key, the capo
-  and the rest are each sheet's own);
+  narrow screen the icons go under the line. Tap the line for the list,
+  a group a kind with its icon and how many, in the library card's order.
+  **Chords** first: every version UG has, in rank order, its rating and votes
+  ("★ 4.86 (408)", or "New"), which is the one, which are kept, which is this
+  page (ticked), and the first lines of the tabber's note; a song UG lists
+  no version of has its chord sheet alone there ("Chord sheet", or "Ukulele
+  chords"). Then a group for each other kind the song keeps, a row a file,
+  named as the library card names it ("Guitar Pro 1 · gtptabs", "Harmonica
+  tab 1 · harptabs", "Score 1 (PDF)"): a harmonica tab opens its page, a text
+  tab, a game music tab or a score's PDF the file itself, and a Guitar Pro
+  or Power Tab file, or a score in another format, is saved under the song's
+  name; served by `caracole serve`, a Guitar Pro file it can draw opens "in
+  the browser" (see [Guitar Pro files in the browser](#caracole-serve)), as
+  the settings' Guitar Pro row does. The list sits where the settings do (at
+  the foot on a phone, a rail beside the song from 900 px wide, in their
+  place). A kept version opens from it, in the same tab, at the same text
+  size and scroll speed (the key, the capo and the rest are each sheet's
+  own), and so does a harmonica tab's page;
   one gone from UG is listed and opens nothing. Served by `caracole serve`,
   **Keep** on a version not kept, **Make this the one** on a kept
   version's page, and **Back to our pick** while a `[pin]` of yours
@@ -3424,14 +3435,14 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   mode and the chord names change the chords alone. The choice is the
   reader's, not a song's, as the rail of necks' is: the browser keeps it once
   for every sheet and songbook, and the address keeps `py=1` while it is on,
-  for a page served by `caracole serve`, where the browser keeps nothing: ‹
-  and › to another version keep it, and in a songbook so does every step to
-  another song (served, a sheet opened afresh from the library page starts
-  without it, as with the rail). Printed from the browser, the page prints
-  what it shows, readings and all; the PDFs (the sheet's, an export's, a
-  songbook's) have none. Copied, the lyrics leave the readings out. A sheet
-  without chords has no settings, so no Pinyin row, but shows the readings
-  when another page turned them on.
+  for a page served by `caracole serve`, where the browser keeps nothing: a
+  link to another version in the version list keeps it, and in a songbook
+  so does every step to another song (served, a sheet opened afresh from the
+  library page starts without it, as with the rail). Printed from the
+  browser, the page prints what it shows, readings and all; the PDFs (the
+  sheet's, an export's, a songbook's) have none. Copied, the lyrics leave the
+  readings out. A sheet without chords has no settings, so no Pinyin row, but
+  shows the readings when another page turned them on.
 - **Guitar Pro tab ↗**, in the settings of a song with a Guitar Pro file (not a
   Power Tab one), a row a file: served by caracole serve, it opens the file
   drawn and played "in the browser" (see

@@ -12,24 +12,13 @@ from caracole.versions import upsert_version
 
 from conftest import add_song
 from helpers.ug_pages import version_dict
+from helpers.version_pages import EVERY_KIND as KINDS
 from test_render_all import auto_sheet
 from test_render_harmonica import FETCHED, data_of, keep_sheet, keep_tab, render
 from test_render_versions import keep_text, sheet, ug_version
 from test_viewer_harpfit import a_tab
 
 VERSION_TAB = 39144
-
-KINDS = {"sheet": "sheet", "page": "sheet.html", "groups": [
-    {"kind": "guitar", "items": [
-        {"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True, "download": "Artist - Title.gp5"},
-        {"name": "guitar-2.ptb", "label": "Power Tab 2", "browser": False, "download": "Artist - Title (2).ptb"}]},
-    {"kind": "tab", "items": [{"name": "tab.txt", "label": "Guitar tab · UG"}]},
-    {"kind": "harmonica", "items": [{"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs",
-                                     "page": "harmonica-1.html"}]},
-    {"kind": "gametab", "items": [{"name": "gametab-1.txt", "label": "Game music tab 1 · gametabs"}]},
-    # by N, then in SCORE_EXTENSIONS' order, as the card lists a score's formats
-    {"kind": "score", "items": [{"name": "score-1.mscz", "label": "Score 1 (MuseScore)", "download": "Artist - Title.mscz"},
-                                {"name": "score-1.pdf", "label": "Score 1 (PDF)"}]}]}
 
 
 def keep(conn, cfg, song, name: str, data: bytes, *, provider: str, kind: str, tab_id: str, slot: str = "guitar",

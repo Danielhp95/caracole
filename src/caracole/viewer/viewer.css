@@ -675,12 +675,17 @@ a.link[hidden] { display: none; }
 .hint:empty { display: none; }
 .center { text-align: center; }
 a.btn { display: inline-flex; align-items: center; text-decoration: none; }
-/* The list of versions: a row each, in rank order, the one this page is shaded; what to do with one under it. */
+/* The list: a group a kind, its heading the kind's glyph, its name and how many; in each a row each, in rank order,
+   this page's shaded and ticked; what to do with one under it. */
+.kind-group + .kind-group { margin-top: 10px; }
+.kind-head { display: flex; align-items: center; gap: 6px; margin: 4px 0; color: var(--muted); font-size: .75rem;
+  font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .vers { margin: 0; padding: 0; list-style: none; }
 .ver { display: flex; flex-wrap: wrap; align-items: center; padding: 2px 0; border-top: 1px solid var(--border); }
 .ver-main { flex: 1 1 9em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: 44px; padding: 10px 8px;
   border-radius: 10px; color: var(--text); text-decoration: none; }
 .ver-main[aria-current] { background: var(--raised); }
+.ver-main > .glyph-check { flex: none; align-self: center; color: var(--accent); }
 .ver-name { font-weight: 650; }
 a.ver-main .ver-name { color: var(--accent); }
 .ver-rate { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }

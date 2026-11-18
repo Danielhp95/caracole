@@ -11,7 +11,8 @@ two kept beside it, then ten that aren't, one of them gone from UG. ``entry`` ma
 puts the data into a page ``build_viewer`` made, as ``folder`` does into each page, each entry's ``this`` saying
 whether it is that page's (a page none is, LaCuerda's sheet's or an auto sheet's, has every ``this`` false), and with
 ``kinds`` what else the song keeps to play from (render.py ``_kinds_data``'s shape): ``KINDS``, two Guitar Pro files
-and a harmonica tab beside its chord sheet.
+and a harmonica tab beside its chord sheet; ``EVERY_KIND``, every kind a song can keep, as render.py writes them for one
+that keeps them all.
 """
 
 from __future__ import annotations
@@ -61,6 +62,27 @@ KINDS: dict[str, Any] = {
             {"name": "guitar-2.ptb", "label": "Power Tab 2", "browser": False, "download": "Artist - Title (2).ptb"}]},
         {"kind": "harmonica", "items": [
             {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"}]},
+    ],
+}
+
+# Every kind a song can keep beside its chord sheet, as render.py's _kinds_data writes them for a song that keeps them
+# all (test_render_kinds.py renders it): two Guitar Pro files, UG's text tab, a harmonica tab, a game music tab and a
+# score in two formats, each group in the card's order.
+EVERY_KIND: dict[str, Any] = {
+    "sheet": "sheet",
+    "page": "sheet.html",
+    "groups": [
+        {"kind": "guitar", "items": [
+            {"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True, "download": "Artist - Title.gp5"},
+            {"name": "guitar-2.ptb", "label": "Power Tab 2", "browser": False, "download": "Artist - Title (2).ptb"}]},
+        {"kind": "tab", "items": [{"name": "tab.txt", "label": "Guitar tab · UG"}]},
+        {"kind": "harmonica", "items": [
+            {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"}]},
+        {"kind": "gametab", "items": [{"name": "gametab-1.txt", "label": "Game music tab 1 · gametabs"}]},
+        # by N, then in SCORE_EXTENSIONS' order, as the card lists a score's formats
+        {"kind": "score", "items": [
+            {"name": "score-1.mscz", "label": "Score 1 (MuseScore)", "download": "Artist - Title.mscz"},
+            {"name": "score-1.pdf", "label": "Score 1 (PDF)"}]},
     ],
 }
 

@@ -1048,9 +1048,15 @@ It is rows.js's, shared by both pages:
   `_kinds_data`), the version line under the artist ("Chords · Ver 3 of 13 · ★ 4.86 (408)") with an icon a kind the
   song keeps and how many, and the list it opens, a rail like the settings and never beside them; no ‹ ›, the list
   opens each kept version (test_viewer_versions.py); the songbook has neither.
-  - Its icons are the library card's: `GLYPHS`, rows.js's drawings copied, and `GLYPH_OF`, card.js's glyph of each
-    kind, which `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and
-    card.js: a library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
+  - The list is a group a kind (`#kind-groups`, `section.kind-group[data-kind]`, `h3.kind-head`): Chords first
+    (`#ver-acts`, `#ver-items`: every version UG has, or the chord sheet alone), then each other kind in the card's
+    order, a row each named as the card names it, a tap from the list: a harmonica tab's page with `carry`, a Guitar
+    Pro file caracole serve draws its `/guitar?file=` page (served alone), any other file the file itself; this page's
+    own row ticked, `aria-current`, no link. The settings keep their Guitar Pro row beside the list's group.
+  - Its icons are the library card's: `GLYPHS`, rows.js's drawings copied (with its `check`, the tick), and
+    `GLYPH_OF`, card.js's glyph of each kind, which
+    `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and card.js: a
+    library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;

@@ -1063,9 +1063,11 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 
 # A sheet viewer's version line (its data's ``versions`` and ``kinds``), under the artist, hidden until kinds.js fills
 # it in: which of the song's versions this page is, its kind first and its rating last ("Chords · Ver 3 of 13 · ★ 4.86
-# (408)"), then an icon for each kind of thing the song keeps to play from, with how many of it; it opens the list of
-# every version UG has, a dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where
-# it takes the settings' place). The songbook has neither: its songs have no versions.
+# (408)"), then an icon for each kind of thing the song keeps to play from, with how many of it; it opens the list, a
+# dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where it takes the settings'
+# place): a group a kind in #kind-groups, which kinds.js draws, Chords first (every version UG has, with #ver-acts and
+# #ver-items), then each other kind the song keeps, in the library card's order. The songbook has neither: its songs
+# have no versions.
 _VERSIONS = """<div class="versions" id="versions" hidden>
 <button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg><span class="kinds" id="kinds"></span></button>
 </div>
@@ -1074,8 +1076,7 @@ _VERSIONS = """<div class="versions" id="versions" hidden>
 _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidden role="dialog" aria-labelledby="version-list-title">
 <header class="ui-head"><h2 id="version-list-title" tabindex="-1">Versions</h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
-<div class="row vrow" id="ver-acts" hidden></div>
-<ol class="vers" id="ver-items"></ol>
+<div id="kind-groups"></div>
 </section>
 """
 
