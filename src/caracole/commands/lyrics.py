@@ -672,8 +672,10 @@ def _ireal(cfg: Config) -> None:
         from caracole.ireal_fetch import IRealStats
 
         wanted = any(s.status != "ignored" and s.key not in overrides.ignore for s in list_songs(conn))
+        handed = _common.handoffs()  # a lookup may go first in the playlist's pauses: the sheets read overrides again
         first = playlist_pass(conn, client, now, first=1) if wanted else PlaylistStats()
-        sheets = (ireal_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides, refresh_index=False,
+        sheets = (ireal_sheets(conn, client, cfg.library_dir, cfg.rank, now,
+                               overrides=_common.overrides_since(cfg, overrides, handed), refresh_index=False,
                                reload_overrides=lambda: load_overrides(cfg.overrides_file))
                   if not first.budget_exhausted else IRealStats(budget_exhausted=True))
         return first, sheets

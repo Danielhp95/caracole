@@ -41,7 +41,7 @@ def test_a_standards_chart_is_a_line_under_its_composer_whose_get_it_keeps_it_as
     assert queue.snapshot() == []  # a search asks no site
     browser.js(f"{line}.querySelector('.line-action button').click()")
     args = posted(queue)
-    assert args[:3] == ("get", "--progress", f"--ireal={THREAD}jazz-1460-standards.12753/#post-31492")
+    assert args[:3] == ("get", "--progress", f"--ireal={THREAD}jazz-1460-standards.12753/post-31492")
     assert args[-2:] == ("Erroll Garner", "Misty")
 
 
@@ -61,7 +61,7 @@ def test_a_line_whose_fetch_keeps_the_chart_is_irealpros_beside_a_guitar_pro_fil
     assert browser.wait(f"Boolean({line})")
     assert "Guitar Pro file" in browser.js(f"{line}.textContent")
     browser.js(f"{line}.querySelector('.line-action button').click()")
-    assert posted(queue)[:3] == ("get", "--progress", f"--ireal={THREAD}jazz-1460-standards.12753/#post-31492")
+    assert posted(queue)[:3] == ("get", "--progress", f"--ireal={THREAD}jazz-1460-standards.12753/post-31492")
 
 
 def test_the_lookup_page_lists_irealpros_charts_last(cfg, live, browser):  # noqa: F811
@@ -73,5 +73,5 @@ def test_the_lookup_page_lists_irealpros_charts_last(cfg, live, browser):  # noq
     assert "2 charts" in browser.js(f"{IR_ROWS}[0].textContent")
     browser.js(f"{IR_ROWS}[0].querySelector('.row-action button').click()")
     args = posted(queue)
-    assert f"--ireal={THREAD}groove-merchant-thad-jones.9518/#post-38106" in args
+    assert f"--ireal={THREAD}groove-merchant-thad-jones.9518/post-38106" in args
     assert args[-2:] == ("Thad Jones", "Groove Merchant")

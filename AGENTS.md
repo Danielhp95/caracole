@@ -207,9 +207,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     need the composer as any thread does; an `[ireal]` pick always counts. The rulings of 2026-11-18, after a title
     alone gave "Ren - Patience" Guns N' Roses' chart and "Jorge Rivera-Herrans - Open Arms" Journey's
     (test_ireal_fetch.py `NAMESAKES`).
-  - A song's artists are each artist whole and each one a line names among several, between " / ", " & ", ", ",
-    " and ", " with ", " feat. " or " ft. " (any case), each by its `normalize.name_forms` (`artist_names`): "Thad
-    Jones / Count Basie" and "Thad Jones & Mel Lewis" are Thad Jones's too.
+  - A song's artists (`artist_names`, the re-review's ruling of 2026-11-18): each artist whole, by its
+    `normalize.name_forms`; and each one a line names among several, between " / ", " & ", ", ", " and ", " with ",
+    " feat. " or " ft. " (any case), a whole name when it is two words or more ("Thad Jones / Count Basie", "Thad Jones &
+    Mel Lewis"), a surname alone when it is one, meeting a composer's first word as iReal Pro writes them, last name
+    first (`composer_surnames`), or a slug's last word, never a suffix (jr, sr, ii, iii, iv): "Simon & Garfunkel" is
+    Paul Simon's, "Sam & Dave" no Dave Brubeck's, "Harry Connick, Jr." no Grover Washington Jr.'s; "Hall & Oates" is
+    Jim Hall's, and "Crosby, Stills, Nash & Young" Victor Young's, a title and a surname both matching (accepted).
   - `candidates`: the pages read that hold a chart of the song (the cache's, no request), then the threads whose slug
     names one of the song's artists after the title, then those of the title alone, the oldest first, never one that
     names someone else, `CANDIDATES` (3) pages at most; none more once a chart whose composer is the song's artist is
@@ -222,7 +226,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `tonality_name` the tune's key; its coverage scored as any sheet's, so UG's or LaCuerda's sheet with words replaces
     it (`versions.replaces_sheet`), unless `[ireal]` picked it (ug/fetch.py `_sheet_slot`, lacuerda_fetch.py
     `_charted`).
-  - `[ireal]`: a chart you picked (a thread, `#post-N` its post, a later page's `…/page-K#post-N` that post), kept in
+  - `[ireal]`: a chart you picked (a thread, `#post-N` its post, a later page's `…/page-K#post-N` that post; written
+    as the post's own address, `…/post-N`, `IRealPick.url`, Picks.kt alike, as a later page's chart links), kept in
     place of any sheet but a UG `[pin]` or a `[lacuerda]` pick; a post its thread's first page doesn't hold is found
     by asking its own address, which the forum redirects to its page (`_post_page`, each hop a request), read out of
     the index; a later page's address alone names no chart (overrides.py, Addresses.kt).

@@ -1519,7 +1519,7 @@ def test_a_lookup_with_the_chart_you_picked_on_irealpro_records_the_pick(cfg, co
     result, progress = look_up(cfg, sites=sites, artist="Thad Jones", title="Groove Merchant", ireal=picked)
 
     assert result.details["sheet"] == "chart kept from iReal Pro"
-    assert f"[ireal] {picked}" in result.details["song"]
+    assert f"[ireal] {BASE}/{THAD_JONES}post-23346" in result.details["song"]  # the post's own address
     assert load_overrides(cfg.overrides_file).ireal == {
         "thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 23346)}
 

@@ -308,7 +308,7 @@ def test_a_chart_you_picked_is_kept_in_place_of_another_sites_sheet_and_the_best
 
     assert run(site, conn, tmp_path, overrides=overrides).kept == 1
     assert kept(conn, song)["sheet.txt"].tab_id == "9518/23346/1"
-    assert kv_get(conn, f"ireal:checked:{song.id}:pick") == f"{BASE}/{THAD_JONES}#post-23346"
+    assert kv_get(conn, f"ireal:checked:{song.id}:pick") == f"{BASE}/{THAD_JONES}post-23346"
     site.requests.clear()
     assert run(site, conn, tmp_path, NOW + timedelta(hours=1), overrides=overrides).tried == 0  # kept: asked no more
     # Another pick is asked for at once, whatever the date.
@@ -457,6 +457,8 @@ def test_a_pick_of_a_post_on_a_later_page_asks_the_posts_address_and_reads_its_p
     stats = run(site, conn, tmp_path, overrides=picked)
 
     assert stats.kept == 1 and kept(conn, song)["sheet.txt"].tab_id == "9518/99001/1"
+    # Its address is the post's own, which lands on its page, never the first page's with its anchor.
+    assert kept(conn, song)["sheet.txt"].url == f"{BASE}/threads/groove-merchant-thad-jones.9518/post-99001"
     assert site.requests[len(SITEMAPS):] == [
         f"{BASE}/{THAD_JONES}", f"{BASE}/threads/groove-merchant-thad-jones.9518/post-99001", f"{BASE}/{later}"]
     # The index keeps first pages alone.
@@ -513,4 +515,71 @@ def test_a_song_a_lookup_changed_in_its_own_turn_is_left_as_the_lookup_left_it(c
     finally:
         client.close()
     assert (stats.kept, stats.missing) == (0, 0) and kept(conn, song) == {}
+    assert kv_get(conn, f"ireal:checked:{song.id}") is None
+
+
+# --- the re-review of 2026-11-18: a one-word part of a line is a surname alone ----------------------------------------
+
+
+def careful(site: FakeIReal, path: str, composer: str) -> None:
+    """A thread named for "Careful" and a composer, holding his chart of it: no playlist."""
+    site.threads(path)
+    site.page(path, thread_page("Careful", [(5, [link([("Careful", composer, "Medium Swing", "C",
+                                                         "[T44C7   |F7   |C7   Z ")])])], path=path))
+
+
+@pytest.mark.parametrize("artist, path, composer", [
+    ("Sam & Dave", "threads/careful-dave-brubeck.777/", "Brubeck Dave"),  # Dave a first name
+    ("Harry Connick, Jr.", "threads/careful-grover-washington-jr.779/", "Washington Grover Jr."),  # Jr. no artist
+    ("Peter, Paul and Mary", "threads/careful-paul-desmond.780/", "Desmond Paul"),
+    ("Sonny & Cher", "threads/careful-sonny-rollins.781/", "Rollins Sonny"),
+])
+def test_a_one_word_part_of_a_line_is_a_surname_alone_never_a_namesakes_first_name(conn, tmp_path, artist, path,
+                                                                                    composer):
+    song = add_song(conn, artist, "Careful")
+    site = FakeIReal()
+    careful(site, path, composer)
+    stats = run(site, conn, tmp_path)
+    assert candidates(conn, song) == []  # the sitemaps read: the thread is in the index, never a candidate
+    assert stats.kept == 0 and kept(conn, song) == {}
+    assert f"{BASE}/{path}" not in site.requests  # no request spent on it
+    client = site.client(tmp_path / "cache")
+    try:  # read anyway (for a search), its chart is still none of the song's
+        from caracole.ireal_index import read_thread
+
+        read_thread(conn, client, path, NOW)
+    finally:
+        client.close()
+    assert candidates(conn, song) == []
+
+
+@pytest.mark.parametrize("artist, path, composer", [
+    ("Hall & Oates", "threads/careful-jim-hall.778/", "Hall Jim"),
+    ("Crosby, Stills, Nash & Young", "threads/careful-victor-young.782/", "Young Victor"),
+])
+def test_a_one_word_part_that_is_the_composers_surname_counts_both_the_title_and_the_surname_matching(
+        conn, tmp_path, artist, path, composer):
+    # Accepted by the ruling: a surname of the line's and the title both match, so the chart is kept.
+    song = add_song(conn, artist, "Careful")
+    site = FakeIReal()
+    careful(site, path, composer)
+    assert run(site, conn, tmp_path).kept == 1 and kept(conn, song)["sheet.txt"].raw["composer"] == composer
+    assert f"{BASE}/{path}" in site.requests
+
+
+def test_a_duo_named_by_its_surnames_is_each_of_them(conn, tmp_path):
+    song = add_song(conn, "Simon & Garfunkel", "Careful")
+    site = FakeIReal()
+    careful(site, "threads/careful-paul-simon.783/", "Simon Paul")
+    assert run(site, conn, tmp_path).kept == 1 and kept(conn, song)["sheet.txt"].raw["composer"] == "Simon Paul"
+
+
+def test_a_post_whose_address_leads_to_a_page_without_it_is_an_error_never_a_miss(conn, tmp_path):
+    song = add_song(conn, "Count Basie", "Groove Merchant")
+    site = FakeIReal()
+    site.redirect("threads/groove-merchant-thad-jones.9518/post-99003", RICHARDSON)  # elsewhere than its thread's page
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518, 99003)})
+    stats = run(site, conn, tmp_path, overrides=picked)
+    assert (stats.kept, stats.missing, stats.errors) == (0, 0, 1)
+    assert "holds no such post" in str(stats.failures[0][1])
     assert kv_get(conn, f"ireal:checked:{song.id}") is None

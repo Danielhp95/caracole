@@ -336,7 +336,9 @@ Guns N' Roses chart and `Count Basie - Groove Merchant` none, and the jazz forum
 exercises, fusion, gypsy jazz…) need the composer as any thread does (a chart you pick, `[ireal]`, is yours whoever
 wrote it). A line that names several artists is each of them: `Thad Jones / Count Basie - Groove Merchant` and `Thad
 Jones & Mel Lewis - Groove Merchant` get Thad Jones's chart (between " / ", " & ", ", ", " and ", " with ", " feat. "
-or " ft. "). A chart that won't read (no chord in it, or its link cut short) is passed over, and only when every chart
+or " ft. "), and an artist of one word among them is a surname alone (iReal Pro writes the composer last name
+first): `Simon & Garfunkel` meets Paul Simon's chart, but `Sam & Dave` never Dave Brubeck's, nor `Harry Connick, Jr.`
+Grover Washington Jr.'s; `Hall & Oates` does meet Jim Hall's of a title of theirs. A chart that won't read (no chord in it, or its link cut short) is passed over, and only when every chart
 that would be your song's won't is the song left for the next night, as after any error. It reads the charts of the
 thread pages it read first, the curated playlist's among them, from the cache with no request, then the threads its
 sitemaps name for your song (the title and your artist, else the title alone), three pages at most; each chart of the
@@ -5670,7 +5672,7 @@ tab_ids = [1601668]
 "Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
 
 [ireal]        # the iReal Pro forum's chart a song's sheet comes from
-"Thad Jones - Groove Merchant" = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
+"Thad Jones - Groove Merchant" = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"
 
 [harmonica]    # how a song's harmonica tab is read, whatever caracole guesses
 "Cowboy Bebop - Spokey Dokey" = {"harmonica-1.txt" = "letters"}
@@ -5850,7 +5852,9 @@ tab_ids = [1601668]
   the chart as the song's sheet, in place of any but a tab you pinned on Ultimate
   Guitar or a sheet you picked on LaCuerda, and no other site's sheet replaces it.
   A chart you name is asked for at once. Fetch on an iReal Pro row of caracole
-  serve's search, and `caracole get --ireal`, write it.
+  serve's search, and `caracole get --ireal`, write it, a post's chart as the
+  post's own address (`…/post-38106`), which lands on whichever page holds it; a
+  chart kept from a later page links there too.
 - **`[harmonica]`** says how each of a song's harmonica tabs is read, by its
   file's name (`harmonica-1.txt`): a notation (`"signs"`, harptabs.com's own;
   `"brackets"`; `"letters"`; `"signs after"`; `"barrett"`), `"legend"` (the

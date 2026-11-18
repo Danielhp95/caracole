@@ -243,8 +243,9 @@ class IRealPick:
 
     @property
     def url(self) -> str:
-        """Its thread's page, and its post's anchor: as caracole writes the pick."""
-        return f"{IREAL_BASE}/{self.path}" + (f"#post-{self.post}" if self.post is not None else "")
+        """Its thread's page, or its post's own address (``…/post-N``), which the forum sends to whichever page holds
+        it: as caracole writes the pick."""
+        return f"{IREAL_BASE}/{self.path}" + (f"post-{self.post}" if self.post is not None else "")
 
     def holds(self, tab_id: str) -> bool:
         """Whether a chart, by its tab id (``thread/post/place``, as ireal_fetch.py records it), is the one picked:

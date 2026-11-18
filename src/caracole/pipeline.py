@@ -427,6 +427,7 @@ def _ireal(ctx: StepContext) -> StepResult:
     client = ctx.services.client("ireal")
     wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
     first = playlist_pass(ctx.conn, client, ctx.now, first=1) if wanted else PlaylistStats()
+    ctx.read_overrides_again()  # a lookup may have gone first in the playlist's pauses
     s = (ireal_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now, overrides=ctx.overrides,
                       refresh_index=False, reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file))
          if wanted and not first.budget_exhausted else IRealStats())

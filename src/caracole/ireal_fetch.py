@@ -14,8 +14,9 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
    Standards, the moderators' playlist, where its title alone is enough, the standards' case ("Bill Evans - Autumn
    Leaves"): the owner's rulings of 2026-11-18, after titles alone gave "Ren - Patience" Guns N' Roses' chart (the jazz
    forum's other playlists, of practice exercises, fusion or gypsy jazz, need the composer as any thread does). A line
-   that names several artists ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis") is each of them too
-   (``artist_names``). A song whose kept chart the library lost (deleted on a synced device) is asked about again
+   that names several artists ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis") is each of them too, a one-word
+   one a surname alone ("Simon & Garfunkel" is Paul Simon's, "Sam & Dave" no Dave Brubeck's: ``artist_names``). A song
+   whose kept chart the library lost (deleted on a synced device) is asked about again
    whatever the date, and its chart written again.
 3. **The candidates**, ``CANDIDATES`` pages at most: those caracole read that hold a chart of the song, from the
    cache with no request, then the threads named for it, a slug that names one of the song's artists after the title
@@ -74,6 +75,7 @@ from caracole.http import (
     ProviderBlocked,
     ProviderError,
     ProviderUnavailable,
+    Response,
     RobotsClosed,
     read_once_more,
 )
@@ -104,7 +106,7 @@ from caracole.library import (
     write_info,
 )
 from caracole.lyrics import song_lyrics
-from caracole.normalize import name_forms
+from caracole.normalize import fold, name_forms
 from caracole.overrides import IRealPick, Overrides, OverridesError
 from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.site_index import Site
@@ -135,6 +137,8 @@ KEPT, MISSING, PASSED = "kept", "missing", "passed"  # PASSED: a lookup that wen
 _ACCEPT = (200, 404)
 # What a line writes between the artists it names, as the ruling of 2026-11-18 lists them.
 _BETWEEN_ARTISTS = re.compile(r" (?:/|&|and|with|feat\.|ft\.) |, ", re.IGNORECASE)
+_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv"})  # never an artist of a line on its own ("Harry Connick, Jr.")
+_COMPOSERS = re.compile(r" - |, | ?/ ?| & | and ", re.IGNORECASE)  # between the composers of one chart
 
 # The forum's sitemaps, as site_index.py reads them into ireal_index: its numbered children, the threads of each.
 SITE = Site(
@@ -169,6 +173,7 @@ class Chart:
     post: int
     place: int
     tune: Tune
+    later: bool = False  # on a later page of its thread than the first
 
     @property
     def tab_id(self) -> str:
@@ -176,7 +181,9 @@ class Chart:
 
     @property
     def url(self) -> str:
-        return f"{page_url(self.page)}#post-{self.post}"
+        """Its address: the first page's at its post, or for a later page's, its post's own (``…/post-N``), which the
+        forum sends to its page."""
+        return f"{page_url(self.page)}post-{self.post}" if self.later else f"{page_url(self.page)}#post-{self.post}"
 
 
 def ireal_sheets(
@@ -212,7 +219,9 @@ def ireal_sheets(
                and _to_try(conn, library_dir, now, overrides, s)]
     if not wanting:
         return stats
-    lookups = _Lookups(client, overrides, reload_overrides)  # before the sitemaps: a lookup may go first in their pauses
+    # From before the sitemaps this pass reads (when it reads them): a lookup may go first in any of its pauses. A
+    # caller that read pages before it reads overrides.toml again first, as the run's step does after the playlist.
+    lookups = _Lookups(client, overrides, reload_overrides)
 
     def read() -> None:
         stats.sitemaps += 1
@@ -375,67 +384,99 @@ def candidates(conn: sqlite3.Connection, song: Song) -> list[str]:
             "WHERE t.path IS NULL AND (i.key = ? OR (i.key >= ? AND i.key < ?))", (key, f"{key}-", f"{key}.")):
         if path in known or not begins_with(slug, key):
             continue
-        rest = set(slug[len(key):].strip("-").split("-")) - {""}
-        named = names_an_artist(song, rest)
+        rest = tuple(w for w in slug[len(key):].split("-") if w)
+        named = names_an_artist(song, rest, rest[-1:])
         if named or not rest:
             unread.append((not named, thread, path))
     return [*pages, *(path for *_, path in sorted(unread))][:CANDIDATES]
 
 
-def artist_names(song: Song) -> tuple[frozenset[str], ...]:
-    """The names of the song's artists, each as the words of its forms (``normalize.name_forms``: a name caracole
-    didn't write meets yours by them): each artist whole, and each one of several a line names, between " / ", " & ",
-    ", ", " and ", " with ", " feat. " or " ft. " ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis")."""
+@dataclass(frozen=True)
+class ArtistNames:
+    """A song's artists as ``names_an_artist`` meets them: names whole (``whole``, the words of each), and surnames
+    alone (``surnames``)."""
+
+    whole: tuple[frozenset[str], ...]
+    surnames: frozenset[str]
+
+
+def artist_names(song: Song) -> ArtistNames:
+    """The names of the song's artists, each by the words of its forms (``normalize.name_forms``: a name caracole
+    didn't write meets yours by them), the ruling of 2026-11-18. Each artist is a name whole. One of several a line
+    names, between " / ", " & ", ", ", " and ", " with ", " feat. " or " ft. ", is a name whole too when it is two
+    words or more ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis"), and a surname alone when it is one ("Simon &
+    Garfunkel": Simon, Garfunkel), never a suffix ("Harry Connick, Jr."): a one-word part of a line ("Sam & Dave",
+    "Peter, Paul and Mary", "Sonny & Cher") is a first name as often as not."""
     return _names(tuple(song.artists or [song.artist]))
 
 
+def _words(form: str) -> frozenset[str]:
+    return frozenset(w for w in form.split("-") if w)
+
+
 @functools.lru_cache(maxsize=4096)
-def _names(artists: tuple[str, ...]) -> tuple[frozenset[str], ...]:
-    found: dict[frozenset[str], None] = {}
+def _names(artists: tuple[str, ...]) -> ArtistNames:
+    whole: dict[frozenset[str], None] = {}
+    surnames: set[str] = set()
     for artist in artists:
-        for part in (artist, *_BETWEEN_ARTISTS.split(artist)):
+        whole.update(dict.fromkeys(w for form in name_forms(artist) if (w := _words(form))))
+        parts = [p for p in _BETWEEN_ARTISTS.split(artist) if p.strip()]
+        if len(parts) < 2:
+            continue
+        for part in parts:
             for form in name_forms(part):
-                words = frozenset(w for w in form.split("-") if w)
-                if words:
-                    found[words] = None
-    return tuple(found)
+                words = _words(form)
+                if len(words) > 1:
+                    whole[words] = None
+                elif words and not words <= _SUFFIXES:
+                    surnames |= words
+    return ArtistNames(tuple(whole), frozenset(surnames))
 
 
-def names_an_artist(song: Song, words: Collection[str]) -> bool:
-    """Whether some words name one of the song's artists (``artist_names``): every word of an artist's name among
-    them, in whatever order (iReal Pro writes a composer last name first, "Jones Thad"; a thread's slug names one after
-    the title)."""
+def names_an_artist(song: Song, words: Collection[str], surnames: Collection[str] = ()) -> bool:
+    """Whether some words name one of the song's artists (``artist_names``): every word of an artist's whole name
+    among them, in whatever order (iReal Pro writes a composer last name first, "Jones Thad"; a thread's slug names one
+    after the title), or a surname alone of the line's among ``surnames``, theirs (a composer's first word, a slug's
+    last)."""
     theirs = set(words)
-    return bool(theirs) and any(mine <= theirs for mine in artist_names(song))
+    names = artist_names(song)
+    return bool(theirs) and (any(mine <= theirs for mine in names.whole) or not names.surnames.isdisjoint(surnames))
+
+
+def composer_surnames(composer: str) -> frozenset[str]:
+    """The surnames a chart's composer gives: the first word of each composer it names, as iReal Pro writes them,
+    last name first ("Simon Paul": simon; "Hancock Herbie - Wonder Stevie": hancock, wonder)."""
+    return frozenset(words[0] for c in _COMPOSERS.split(composer)
+                     if (words := [w for w in re.split(r"[^0-9a-z]+", fold(c)) if w]))
 
 
 def composer_fits(song: Song, composer: str) -> bool:
     """Whether a chart's composer is one of the song's artists (``names_an_artist``: "Jobim Antonio-Carlos" is Antonio
     Carlos Jobim's)."""
-    return names_an_artist(song, composer_words(composer))
+    return names_an_artist(song, composer_words(composer), composer_surnames(composer))
 
 
-def _matching(song: Song, page: str, composer: str, rest: set[str]) -> bool:
+def _matching(song: Song, page: str, composer: str, rest: tuple[str, ...]) -> bool:
     """Whether a chart titled as the song is the song's: one of its artists is the chart's composer or the name its
     thread's slug gives after the title, or the chart is the Jazz 1460 Standards' (``JAZZ_1460``, the moderators'
     playlist of standards), where the title alone is enough: "Bill Evans - Autumn Leaves" is Kosma's standard. A title
     alone elsewhere is another song of that name as often as not ("Ren - Patience" is no Guns N' Roses song), the
     jazz forum's other playlists (practice exercises, fusion, gypsy jazz…) among them."""
-    return page == JAZZ_1460 or composer_fits(song, composer) or names_an_artist(song, rest)
+    return page == JAZZ_1460 or composer_fits(song, composer) or names_an_artist(song, rest, rest[-1:])
 
 
-def _slug_rest(conn: sqlite3.Connection, page: str, key: str) -> set[str]:
-    """The words of a thread's slug after the title's, when its slug begins with it (a song's thread: its composer, as
-    the forum names it); none for another thread (a playlist's)."""
+def _slug_rest(conn: sqlite3.Connection, page: str, key: str) -> tuple[str, ...]:
+    """The words of a thread's slug after the title's, in order, when its slug begins with it (a song's thread: its
+    composer, as the forum names him, first name first); none for another thread (a playlist's)."""
     row = conn.execute("SELECT key FROM ireal_index WHERE path = ?", (page,)).fetchone()
     slug = row[0] if row is not None else ""
-    return set(slug[len(key):].strip("-").split("-")) - {""} if begins_with(slug, key) else set()
+    return tuple(w for w in slug[len(key):].split("-") if w) if begins_with(slug, key) else ()
 
 
-def _order(song: Song, page: str, thread: int, post: int, place: int, composer: str, rest: set[str]) -> tuple:
+def _order(song: Song, page: str, thread: int, post: int, place: int, composer: str, rest: tuple[str, ...]) -> tuple:
     """A chart's place among a song's (``best``): the lower, the better."""
-    return (not composer_fits(song, composer), page != JAZZ_1460, rest.isdisjoint(composer_words(composer)), thread,
-            -post, place)
+    return (not composer_fits(song, composer), page != JAZZ_1460, set(rest).isdisjoint(composer_words(composer)),
+            thread, -post, place)
 
 
 # --- one song -------------------------------------------------------------------------------------------------------
@@ -475,23 +516,33 @@ def _page(run: _Pass, path: str) -> ThreadPage | None:
 def _post_page(run: _Pass, pick: IRealPick) -> ThreadPage | None:
     """The page of the thread that holds the post picked, one the first page doesn't: its address asked, which the
     forum redirects to the post's page (each hop a request), and read, out of the index (which keeps first pages
-    alone); None when the post is gone (404), or its page is where robots.txt closes."""
+    alone); None when the post is gone (404), or its page is where robots.txt closes. A page that answered without the
+    post is ``IRealParseError``: the forum sends a post's address elsewhere than caracole knows, an error, never a
+    miss."""
     url = f"{page_url(pick.path)}post-{pick.post}"
+
+    def read(resp: Response) -> ThreadPage | None:
+        if resp.status == 404:
+            return None
+        page = parse_thread_page(resp.content, resp.url)
+        if all(post.post != pick.post for post in page.posts):
+            raise IRealParseError(f"the page the address of post {pick.post} led to holds no such post", url=resp.url)
+        return page
+
     try:
-        resp = run.client.get(url, accept=_ACCEPT)
-        return read_once_more(run.client, resp, url, lambda r: None if r.status == 404 else
-                              parse_thread_page(r.content, r.url), IRealParseError, fetched=run.fetched, accept=_ACCEPT)
+        return read_once_more(run.client, run.client.get(url, accept=_ACCEPT), url, read, IRealParseError,
+                              fetched=run.fetched, accept=_ACCEPT)
     except RobotsClosed as e:
         log.info("iReal Pro's forum: %s", e)
         return None
 
 
-def _charts_of(conn: sqlite3.Connection, song: Song, page: ThreadPage, key: str, pick: IRealPick | None,
-               ) -> tuple[list[Chart], list[IRealParseError]]:
+def _charts_of(conn: sqlite3.Connection, song: Song, page: ThreadPage, key: str, pick: IRealPick | None, *,
+               later: bool = False) -> tuple[list[Chart], list[IRealParseError]]:
     """The charts of a page that are the song's: titled as it is, and its own (``_matching``); for a pick, any of the
     title, and else its post's (or the thread's) one chart whatever its title. Each is read only once it is the
     song's: one that won't (``Tune.chart``) is passed over, logged, and given apart, its parse error."""
-    every = [Chart(page.path, page.thread, post.post, place, tune) for post, place, tune in page.charts()
+    every = [Chart(page.path, page.thread, post.post, place, tune, later) for post, place, tune in page.charts()
              if pick is None or pick.post is None or post.post == pick.post]
     titled = [c for c in every if title_key(c.tune.title) == key]
     if pick is not None:
@@ -530,7 +581,7 @@ def _look_up(run: _Pass, song: Song, pick: IRealPick | None = None, *,
             later = _post_page(run, pick)  # the post is on a later page of the thread
             pages += [later] if later is not None else []
         for each in pages:
-            readable, bad = _charts_of(run.conn, song, each, key, pick)
+            readable, bad = _charts_of(run.conn, song, each, key, pick, later=each is not page)
             found += readable
             unreadable += bad
     if still is not None and not still(song, pick):

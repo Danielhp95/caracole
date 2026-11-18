@@ -192,8 +192,8 @@ _SIGNS = (("-^", "mmaj"), ("^", "maj"), ("-", "m"), ("h", "m7b5"), ("o", "dim"),
 
 def chord_name(token: str) -> str:
     """A chord as iReal Pro writes it, named as sheets name it: "C^7" Cmaj7, "D-7" Dm7, "Bh7" Bm7b5, "Eo7" Edim7,
-    "C+" Caug, "C-^7" Cmmaj7, and a quality of the app's own between asterisks as any ("C*-^*" Cmmaj); its root, its
-    bass and the rest as written."""
+    "C+" Caug, "C-^7" and "C-^" Cmmaj7, and a quality of the app's own between asterisks as any ("C*-^*" Cmmaj7); its
+    root, its bass and the rest as written."""
     m = _CHORD.fullmatch(token)
     if m is None:
         return token

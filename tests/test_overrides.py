@@ -994,7 +994,8 @@ def test_ireal_names_the_chart_you_picked_there(tmp_path):
         "ella-fitzgerald/misty": IRealPick("jazz-1460-standards", 12753),
         "jerome-richardson/groove-merchant": IRealPick("groove-merchant-jerome-richardson", 14294, 48070)}
     pick = o.ireal["thad-jones/groove-merchant"]
-    assert pick.url == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
+    # Written as the post's own address, which the forum sends to whichever page of the thread holds it.
+    assert pick.url == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"
     assert pick.path == "threads/groove-merchant-thad-jones.9518/"
     assert pick.holds("9518/38106/1") and not pick.holds("9518/23346/1") and not pick.holds("14294/38106/1")
     assert o.ireal["ella-fitzgerald/misty"].holds("12753/31492/8")
@@ -1037,8 +1038,8 @@ def test_add_ireal_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
     text = p.read_text()
     assert text.startswith("# mine\n")
     assert ('"thad jones - groove merchant" = '
-            '"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"') in text
+            '"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"') in text
     o = load_overrides(p)
     assert o.ireal == {"thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 38106)}
     assert song_entries(o, "thad-jones/groove-merchant") == {
-        "ireal": "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"}
+        "ireal": "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"}

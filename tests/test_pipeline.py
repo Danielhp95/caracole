@@ -534,6 +534,33 @@ def test_the_ireal_step_reads_the_curated_playlist_then_its_songs_then_the_other
     assert "iReal Pro's forum: 1 chart kept, 2 playlists read." in report.summary().splitlines()
 
 
+def test_the_ireal_step_reads_a_pick_a_lookup_made_while_it_read_the_playlist(conn, cfg, monkeypatch):
+    from conftest import add_song
+    from helpers.ireal_site import BASE, JAZZ_1460, FakeIReal
+
+    from caracole.commands import _common
+    from caracole.library import kept_files
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Count Basie", "Groove Merchant")  # no candidate of its own: only a pick reads a chart
+    site = FakeIReal()
+    asked = site.handler
+
+    def handler(request):
+        if str(request.url) == f"{BASE}/{JAZZ_1460}":  # a lookup goes first in this pause, and picks a chart
+            cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+            cfg.overrides_file.write_text('[ireal]\n"Count Basie - Groove Merchant" = '
+                                          '"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/"\n',
+                                          encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return asked(request)
+
+    site.handler = handler
+    svc = Services(clients={"ireal": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    run_pipeline(cfg, conn=conn, services=svc, steps=[s for s in default_steps() if s.name == "ireal"], now=NOW)
+    assert [f.name for f in kept_files(conn, song.id)] == ["sheet.json", "sheet.txt"]
+
+
 def test_the_ireal_step_asks_nothing_for_an_empty_library(conn, cfg):
     from helpers.ireal_site import FakeIReal
 

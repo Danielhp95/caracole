@@ -90,6 +90,25 @@ def test_ireal_keeps_a_chart_as_the_sheet_and_says_what_it_did(tmp_path, sites):
     assert sites.ireal.requests == [*SITEMAPS, f"{BASE}/{JAZZ_1460}", f"{BASE}/{THAD_JONES}"]
 
 
+def test_ireal_reads_a_pick_a_lookup_made_while_it_read_the_playlist(tmp_path, sites, monkeypatch):
+    seed(tmp_path, "Count Basie")  # no candidate of its own: only a pick reads a chart
+    asked = sites.ireal.handler
+
+    def handler(request):
+        if str(request.url) == f"{BASE}/{JAZZ_1460}":  # a lookup goes first in this pause, and picks a chart
+            (tmp_path / "lib").mkdir(exist_ok=True)
+            (tmp_path / "lib" / "overrides.toml").write_text(
+                '[ireal]\n"Count Basie - Groove Merchant" = '
+                '"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/"\n', encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return asked(request)
+
+    sites.ireal.handler = handler
+    result = run(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "lib" / "Count Basie" / "Groove Merchant" / "sheet.txt").is_file()
+
+
 def test_ireal_with_no_song_asks_nothing(tmp_path, sites):
     result = run(tmp_path)
     assert result.exit_code == 0, result.output

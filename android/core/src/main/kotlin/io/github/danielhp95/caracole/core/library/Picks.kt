@@ -52,8 +52,9 @@ data class IRealPick(val slug: String, val thread: Long, val post: Long? = null)
     /** Its thread's page's path, as the forum's index keeps it (`threads/groove-merchant-thad-jones.9518/`). */
     val path: String get() = "threads/$slug.$thread/"
 
-    /** Its thread's page, and its post's anchor: as caracole writes the pick. */
-    val url: String get() = "${Addresses.IREAL_BASE}/$path" + (if (post != null) "#post-$post" else "")
+    /** Its thread's page, or its post's own address (`…/post-N`), which the forum sends to whichever page holds it:
+     *  as caracole writes the pick. */
+    val url: String get() = "${Addresses.IREAL_BASE}/$path" + (if (post != null) "post-$post" else "")
 
     /** Whether a chart, by its tab id (`thread/post/place`), is the one picked. */
     fun holds(tabId: String): Boolean {
