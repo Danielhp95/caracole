@@ -1038,8 +1038,10 @@ It is rows.js's, shared by both pages:
   12 px box (a band's, a row's) `--radius-l`. test_page_calm.py lists the elements shown with another
   (`helpers.targets.odd_radii`), in each tab, the Filter panel, a search, the Sync sheet and the tray, at 390 and 1280
   px, light and dark, but for card.css's (`.line-panel`, `.play`, lane 3b's, which brings its own to the tokens when it
-  merges: the test's `OTHER_LANES` then empties). steps.css, requests.css and songbooks.css, once lanes 2's and the
-  Songbooks tab's, are on the tokens too, by stage 1f.
+  merges: the test's `OTHER_LANES` then empties). steps.css and requests.css (lane 2's) were already on the tokens, with fallbacks
+  (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing; songbooks.css (the Songbooks tab's) it brought
+  to them. The test serves the page with a lookup running and one queued, a songbook and each tab, and asserts each
+  state drew what it names (it measures elements, never pseudo-elements).
 - **A long list** (stage 1e; library.js `render`, library.css `#list .cv`): what is off the screen isn't laid out.
   Each band group of `BIG_GROUP` (50) lines or fewer is a `.cv`, a larger one's lines in runs of `RUN` (40) inside its
   `.lines`, under its band; folded artists in a row, and a flat list's lines, in runs of 40 too (`div.run`, each a

@@ -240,7 +240,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 /* A search that found nothing on the sites (nothingFound): a line of the list, its query in its quotes, quiet. */
 #results .line.miss:not(.have) h3, .line.miss h3, #results .row.miss.hit:not(.have):not(.artist-hit) .row-title, .row.miss .row-title { color: var(--text); font-style: normal; font-weight: 600; }
 .miss-request.btn, .line-action .btn.miss-request { background: var(--accent); border-color: var(--accent);
-  color: var(--on-accent); border-radius: var(--radius-m, 8px); }
+  color: var(--on-accent); border-radius: var(--radius-m); }
 .line.miss { grid-template-columns: minmax(0, 1fr) var(--line-more); grid-template-areas: "title more" "act act"; }
 .line.miss .line-action, .row.miss .row-action { justify-self: start; }
 .row.miss { grid-template-columns: minmax(0, 1fr) var(--row-more); grid-template-areas: "title more" "act act"; }

@@ -155,7 +155,7 @@ def weak_edges(exempt: str = "") -> str:
 
 def odd_radii(skip: tuple[str, ...] = ()) -> str:
     """An expression: the elements rendered (a short path each) whose corner radius is none of 0, 4, 8, 12 px, a pill
-    (999 px) or a circle (50%), those inside an element ``skip`` (selectors) matches left out."""
+    (999 px) or a circle (50%); pseudo-elements are not measured; those inside an element ``skip`` (selectors) matches left out."""
     return _ODD_RADII.replace("__NAME__", _NAME) + f"({json.dumps(list(skip))})"
 
 
