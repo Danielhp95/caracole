@@ -23,7 +23,10 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   be asked about tonight. The sheet is readable from here on
   (``Progress.readable``). Running, the stage says which site it asks
   (``SHEET_FROM``), once it asks one and again when it turns to the other, for
-  caracole serve's line and its Sheet step.
+  caracole serve's line and its Sheet step. Without one from either, iReal Pro's
+  forum's chart, from the index the nightly run keeps, for a song it has one of
+  (ireal_fetch.py ``wants_a_chart``: no request and no client otherwise), or the
+  chart you picked, recorded under ``[ireal]``, asked first.
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
@@ -37,10 +40,6 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   of lookups keeps getting them.
 - ``lacuerda``: LaCuerda, for a Spanish song without a complete sheet; within
   ``SHEETS_SHARE`` too, once the song has a sheet.
-- ``ireal``: a chart from iReal Pro's forum as the sheet of a song the sheet sites
-  left with none (a jazz standard, say), from the index the nightly run keeps: the
-  song's candidate threads read at the lookup pace, the cache's first
-  (ireal_fetch.py), or the chart you picked, recorded under ``[ireal]``.
 - ``gtptabs``: a Guitar Pro file from gtptabs.com, from the index the nightly
   run keeps.
 - ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
@@ -104,7 +103,6 @@ STAGES = (
     ("lyrics", "Lyrics"),
     ("ug", "UG: versions scored, tab"),
     ("lacuerda", "LaCuerda"),
-    ("ireal", "Chart from iReal Pro"),
     ("gtptabs", "Guitar Pro file from gtptabs"),
     ("harptabs", "Harmonica tab from harptabs"),
     ("gametabs", "Game music tab from gametabs"),
@@ -121,15 +119,14 @@ _FIRST_SCORED = 1  # sheets fetched for it: the best rated
 SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
 # A running sheet stage's detail, once it asks a site: the site it asks now, which caracole serve's line follows
 # (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's, and its Sheet step ("Sheet LaCuerda").
-SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from UG"}
+SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from UG", "ireal": "from iReal Pro"}
 # How the match stage begins for a song the offline index lacks, which caracole serve's Match step reads
 # ("Match: not on UG").
 MATCH_NOT_FOUND = "not in UG's index"
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
 HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
-IREAL_KEPT = "chart kept from iReal Pro"  # the ireal stage's detail for a chart kept as the sheet
-IREAL_NOT_ASKED = "no sheet wanted, or iReal Pro's forum has no chart of this title"  # its detail for nothing to ask
+IREAL_KEPT = "chart kept from iReal Pro"  # the sheet stage's detail for iReal Pro's chart kept as the sheet
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 # The words of a caracole with no ChordPro, no wanted.txt and no index.html to write (the phone's: android/): its
@@ -661,6 +658,11 @@ class _Lookup:
 
     def sheet(self) -> tuple[str, str] | str:
         if self._picked() is None:
+            # The chart you picked on iReal Pro's forum is the sheet: asked first, Ultimate Guitar's only after it.
+            if self._chart_picked() is not None:
+                charted = self._ireal()
+                if charted is not None and self._holds_chart():
+                    return charted
             return self._sheet_from_ug()
         # Your pick on LaCuerda is the sheet; Ultimate Guitar's only when LaCuerda can't give it, and then the
         # stage says why not before what Ultimate Guitar gave.
@@ -694,6 +696,10 @@ class _Lookup:
         lc = self.lacuerda()
         if self._kept_sheet() is not None:
             return "done", lc[1] if isinstance(lc, tuple) else lc
+        # Nor from LaCuerda: iReal Pro's forum's chart, for a song its index has one of (asked nothing otherwise).
+        charted = self._ireal()
+        if charted is not None and self._kept_sheet() is not None:
+            return charted
         ug_state, ug_said = ug if isinstance(ug, tuple) else ("done", ug)
         return ("skipped" if ug_state == "done" else ug_state), ug_said
 
@@ -871,14 +877,18 @@ class _Lookup:
             return "your LaCuerda pick waits: asked this month already"
         return "your LaCuerda pick comes tonight"
 
-    def ireal(self) -> tuple[str, str] | str:
+    def _ireal(self) -> tuple[str, str] | None:
+        """iReal Pro's forum's chart as the sheet, for the sheet stage, which says what it came to once it kept one;
+        None when the song wants none or its index has no chart of the song (ireal_fetch.py ``wants_a_chart``): nothing
+        asked, no client made."""
         from caracole.ireal_fetch import ireal_sheets, wants_a_chart
         from caracole.songs import get_song
 
         if not wants_a_chart(self.conn, self.cfg.library_dir, self.now, self.overrides, self.song):
-            return "skipped", IREAL_NOT_ASKED  # asked nothing, and no client made: most songs have a sheet
+            return None
 
         def ask(client) -> tuple[str, str] | str:
+            self._sheet_from("ireal")
             s = ireal_sheets(self.conn, client, self.cfg.library_dir, self.cfg.rank, self.now,
                              overrides=self.overrides, only={self.song.id}, refresh_index=False)
             if s.budget_exhausted:
@@ -888,13 +898,23 @@ class _Lookup:
                 raise e
             if s.shared:
                 raise s.shared[0]
-            if not s.tried:
-                return "skipped", IREAL_NOT_ASKED
-            return IREAL_KEPT if s.kept else "no chart there of this title"
+            return ("done", IREAL_KEPT) if s.kept else ("skipped", "no chart of it on iReal Pro's forum")
 
         out = self.asking("ireal", ask)
         self.song = get_song(self.conn, self.song.id)
-        return out
+        return out if isinstance(out, tuple) else ("done", out)
+
+    def _chart_picked(self):
+        """The chart you picked for the song on iReal Pro's forum (``[ireal]``), or None."""
+        return self.overrides.ireal.get(self.song.key) if self.overrides is not None else None
+
+    def _holds_chart(self) -> bool:
+        """Whether the sheet kept is the chart you picked on iReal Pro's forum."""
+        from caracole.versions import get_version
+
+        kept, pick = self._kept_sheet(), self._chart_picked()
+        version = get_version(self.conn, kept.version_id) if kept is not None else None
+        return pick is not None and version is not None and version.provider == "ireal" and pick.holds(version.tab_id)
 
     def gtptabs(self) -> tuple[str, str] | str:
         from caracole.gtptabs_fetch import gtptabs_files
@@ -1022,7 +1042,7 @@ class _Lookup:
                     try:
                         for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
                                            ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
-                                           ("ireal", self.ireal), ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
+                                           ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
                                            ("gametabs", self.gametabs), ("pages", self.pages),
                                            ("songbooks", self.songbooks)):
                             self.stage(name, work)

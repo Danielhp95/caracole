@@ -87,6 +87,7 @@ internal object SongSites {
                 "musescore" -> if (musescore == true) state = HAVE else if (musescoreRead) state = NONE
                 "youtube" -> state = YOUTUBE[youtube] ?: continue
             }
+            if (site == "ireal" && state == UNASKED) continue  // asked only for a song the sheet sites left without one
             marks += JsonObject(linkedMapOf("source" to JsonPrimitive(site), "state" to JsonPrimitive(state),
                                             "said" to JsonPrimitive(said(site, state, looked, song))))
         }

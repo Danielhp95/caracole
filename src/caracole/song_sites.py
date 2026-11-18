@@ -14,7 +14,8 @@ Every site caracole asks that is on (``shown``), in one order (``ORDER``), is on
 
 Each with ``said``, its tooltip and its name for a screen reader: "harptabs.com: has it", "Ultimate Guitar: nothing for
 it (looked 2026-10-16)", "gtptabs.com: not asked yet". YouTube is a site only for a song on its route (with no human
-sheet, where auto-chords is): ``youtube`` names those.
+sheet, where auto-chords is): ``youtube`` names those. iReal Pro's forum, asked only for a song the sheet sites left
+without a sheet, is a mark once it was asked or gave the song's chart.
 """
 
 from __future__ import annotations
@@ -102,6 +103,8 @@ def song_sites(song: Song, sites: tuple[str, ...], *, origins: Mapping[str, str]
             if youtube not in _YOUTUBE:
                 continue
             state = _YOUTUBE[youtube]
+        if site == "ireal" and state == UNASKED:
+            continue  # asked only for a song the sheet sites left without a sheet: a mark once it was
         marks.append({"source": site, "state": state, "said": _said(site, state, looked, song)})
     return marks
 

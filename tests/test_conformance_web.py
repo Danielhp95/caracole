@@ -628,7 +628,7 @@ LRCLIB_DOWN = "LRCLIB failed (lrclib: network error: timed out); tried again ton
 LACUERDA_BLOCKED = "LaCuerda turned us back (lacuerda: 429: https://acordes.lacuerda.net/: slow down)"
 DONE_ALL = {"song": ("done", ""), "match": ("done", "accepted"), "sheet": ("done", "kept tab 85053"),
             "pdf": ("skipped", NO_PDF), "lyrics": ("done", "timed"), "ug": ("done", "2 more versions"),
-            "lacuerda": ("skipped", "not Spanish"), "ireal": ("skipped", ""), "gtptabs": ("done", "no file there"),
+            "lacuerda": ("skipped", "not Spanish"), "gtptabs": ("done", "no file there"),
             "harptabs": ("skipped", ""), "gametabs": ("skipped", ""), "pages": ("done", ""),
             "songbooks": ("done", "")}
 
@@ -1030,8 +1030,7 @@ def _action(action: _outcome.Action | None) -> dict | None:
 
 SITE_NAMES = {"sheet": ("Ultimate Guitar", "ug"), "lyrics": ("LRCLIB", "lrclib"), "ug": ("Ultimate Guitar", "ug"),
               "lacuerda": ("LaCuerda", "lacuerda"), "gtptabs": ("gtptabs.com", "gtptabs"),
-              "harptabs": ("harptabs.com", "harptabs"), "gametabs": ("gametabs.net", "gametabs"),
-              "ireal": ("iReal Pro's forum", "ireal")}
+              "harptabs": ("harptabs.com", "harptabs"), "gametabs": ("gametabs.net", "gametabs")}
 
 
 def reason_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | None, str | None]]:

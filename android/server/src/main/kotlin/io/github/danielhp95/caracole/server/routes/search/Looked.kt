@@ -96,21 +96,7 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
             })
         }
         looked.add(gametabs())
-        looked.add(ireal())
         return looked
-    }
-
-    /** search_routes._ireal_looked: turned off, empty before any thread page is read, else in part or whole by its
-     * playlists read. Its index is the computer's alone (no export or sync carries it), so the phone's is empty. */
-    private fun ireal(): JsonObject {
-        val name = "iReal Pro"
-        if ("ireal" !in enabled) return mark("ireal", name, "off", "$name: off", "iReal Pro's forum is off in caracole.toml.")
-        if (!holds("ireal_threads")) {
-            return mark("ireal", name, "empty", "$name: empty",
-                        "iReal Pro's forum's index is empty: tonight's run reads its playlists.")
-        }
-        return mark("ireal", name, "done", "$name ✓",
-                    "iReal Pro's forum: our copy of its playlists and the threads read, searched whole.")
     }
 
     /** search_routes._gametabs_looked: turned off, empty before its sitemaps are read, in part while its game pages

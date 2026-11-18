@@ -536,6 +536,7 @@ def sheet_record(conn: sqlite3.Connection, monkeypatch, case: str, picked: bool,
     lk._kept_sheet = lambda: state["kept"]
     lk._holds_pick = lambda: picked and state["kept"] == "lacuerda"
     lk._ug_ready = lambda: None
+    lk._ireal = lambda: None  # iReal Pro's forum: nothing to ask, as on the phone, which never asks it
     script = {"ug": ug, "lacuerda": lc}
 
     def answer(provider: str, how: str) -> Any:

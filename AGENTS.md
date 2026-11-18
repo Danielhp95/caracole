@@ -210,14 +210,18 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `_charted`).
   - `[ireal]`: a chart you picked (a thread, `#post-N` its post), kept in place of any sheet but a UG `[pin]` or a
     `[lacuerda]` pick.
-- Its step `ireal` (pipeline.py, after lacuerda), its lookup stage `ireal` (get.py, after lacuerda, `--ireal`), its
-  command `caracole ireal [--index] [--budget N]` (commands/lyrics.py), `search.search_ireal` (`/api/search`'s
-  `ireal`, its mark last in `looked`), its mark `IR`.
+- Its step `ireal` (pipeline.py, after lacuerda); in a lookup, the sheet stage's last resort (get.py `_ireal`: after
+  UG's and LaCuerda's, its pick `--ireal` first, "from iReal Pro" its running detail, `SHEET_FROM`), no stage of its
+  own; its command `caracole ireal [--index] [--budget N]` (commands/lyrics.py); `search.search_ireal`
+  (`/api/search`'s `ireal`, and its mark last in `looked`, both once its index holds a thread read,
+  search_routes.py `_ireal_read`); a card's site mark once it was asked or gave the chart (song_sites.py); its mark
+  `IR`.
 - Its index is the computer's alone: it isn't in `index_transfer.SITES`, so no export, merge or sync carries it, and
-  the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit. The
-  phone's lookup stage has nothing to ask (core/lookup/sites/IReal.kt, `IRealStage`, get.py's words for a song with no
-  candidate, no client made, as `ireal_fetch.wants_a_chart` makes none), its `/api/search` gives no chart, and its
-  mark among `looked` is off or empty (server/routes/search/Looked.kt).
+  the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit. A
+  lookup with nothing to ask there (`ireal_fetch.wants_a_chart`, no request, no client, no kv) says and writes nothing
+  of it, so the phone, whose lookup never asks it, answers alike; its search gives no `ireal`, as an empty index's.
+- What it adds to the conformance corpus is kept to a few KB (vectors/web's budget): nothing while its index is empty
+  or a song has nothing to ask there.
 
 #### harptabs
 

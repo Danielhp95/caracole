@@ -108,7 +108,6 @@ STAGE_LINES = {
     "lyrics": "Fetching lyrics",
     "ug": "Fetching from UG",
     "lacuerda": "Fetching from LaCuerda",
-    "ireal": "Fetching from iReal Pro",
     "gtptabs": "Fetching from gtptabs",
     "harptabs": "Fetching from harptabs",
     "gametabs": "Fetching from gametabs",

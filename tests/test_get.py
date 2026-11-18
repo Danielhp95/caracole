@@ -196,8 +196,8 @@ def test_the_sheet_is_readable_after_one_ug_request_and_the_rest_fills_in_after(
     first = next(e for e in progress.events if e[0] == "readable")
     assert first[1]["sheet"] == "Radiohead/Creep/sheet.txt"
     order = list(dict.fromkeys(e[1] for e in progress.events if e[0] == "stage" and e[2] == "running"))
-    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "ireal", "gtptabs", "harptabs",
-                     "gametabs", "pages", "songbooks"]
+    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "harptabs", "gametabs",
+                     "pages", "songbooks"]
     assert progress.events.index(first) < progress.events.index(("stage", "lyrics", "running"))
     # Then the lyrics, and with them the sheets are scored: 102 charts the whole song.
     assert "sheet 102" in (folder(cfg, "Radiohead", "Creep") / "sheet.txt").read_text(encoding="utf-8")
@@ -575,8 +575,8 @@ def test_a_lookup_passes_a_turn_before_each_stage_never_inside_one(cfg, conn, si
     result = run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Heard(sites), runner=FakeRunner(), now=NOW)
 
     assert result.sheet is not None
-    for name in ("match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "ireal", "gtptabs", "harptabs", "gametabs",
-                 "pages", "songbooks"):
+    for name in ("match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "harptabs", "gametabs", "pages",
+                 "songbooks"):
         assert heard[heard.index(("running", name)) - 1] == "turn", name
     assert heard.count("turn") > 11  # and before each request but a client's first
     assert not any(in_transaction for in_transaction in turns)
@@ -1499,12 +1499,13 @@ def test_a_lookup_of_a_standard_the_sheet_sites_lack_keeps_its_chart_from_irealp
 
     result, progress = look_up(cfg, sites=sites, artist="Thad Jones", title="Groove Merchant")
 
-    assert progress.states()["ireal"] == "done" and result.details["ireal"] == "chart kept from iReal Pro"
+    # The sheet stage: neither UG nor LaCuerda has it, so it asks iReal Pro's forum.
+    assert progress.states()["sheet"] == "done" and result.details["sheet"] == "chart kept from iReal Pro"
     assert [u for u in sites.requests if "irealpro" in u] == [f"{BASE}/{THAD_JONES}"]  # no sitemap: the night's
     here = folder(cfg, "Thad Jones", "Groove Merchant")
     assert "| [ch]Bb7[/ch] | [ch]Eb7[/ch]" in json.loads((here / "sheet.json").read_text(encoding="utf-8"))["content"]
-    assert result.sheet == here / "sheet.txt"  # readable once the stage kept it
-    assert (here / "sheet.pdf").is_file()  # the pages stage renders it
+    assert result.sheet == here / "sheet.txt"  # readable at once, before the lyrics are asked
+    assert (here / "sheet.pdf").is_file()
 
 
 def test_a_lookup_with_the_chart_you_picked_on_irealpro_records_the_pick(cfg, conn, sites):
@@ -1517,7 +1518,7 @@ def test_a_lookup_with_the_chart_you_picked_on_irealpro_records_the_pick(cfg, co
 
     result, progress = look_up(cfg, sites=sites, artist="Thad Jones", title="Groove Merchant", ireal=picked)
 
-    assert result.details["ireal"] == "chart kept from iReal Pro"
+    assert result.details["sheet"] == "chart kept from iReal Pro"
     assert f"[ireal] {picked}" in result.details["song"]
     assert load_overrides(cfg.overrides_file).ireal == {
         "thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 23346)}
@@ -1528,6 +1529,5 @@ def test_a_lookup_of_a_song_with_a_sheet_asks_irealpro_nothing(cfg, conn, sites)
 
     result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 
-    assert progress.states()["ireal"] == "skipped" and not [u for u in sites.requests if "irealpro" in u]
-    assert result.details["ireal"] == "no sheet wanted, or iReal Pro's forum has no chart of this title"
+    assert "ireal" not in progress.states() and not [u for u in sites.requests if "irealpro" in u]
     assert "ireal" not in result.requests  # nothing to ask: no client made

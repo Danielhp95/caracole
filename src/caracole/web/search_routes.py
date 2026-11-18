@@ -421,8 +421,6 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "harptabs_artists": [_harptabs_artist_json(app, conn, a, songs) for a in kept.harp_artists],
             # gametabs.net's tracks of games, the game as the artist, each with its tabs
             "gametabs": _gametabs_rows(app, conn, kept.gametabs, songs),
-            # iReal Pro's forum's charts, the composer as the artist: a lookup keeps one as the sheet
-            "ireal": _gtptabs_rows(app, conn, kept.ireal, songs, page=True),
             "lacuerda": _lacuerda_rows(app, conn, kept.lacuerda, songs),
             # the artists UG's listings name whose page caracole hasn't read: Read their page on UG (POST /ug/link)
             "ug_directory": [_directory_json(app, conn, d) for d in kept.directory],
@@ -435,7 +433,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
             "youtube": youtube,
             "suggest": [_suggestion_json(app, conn, s, songs) for s in close],
-            "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial)}
+            "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial),
+            # iReal Pro's forum's charts, the composer as the artist, once its index holds a thread read (never before:
+            # no member, as its mark among looked)
+            **({"ireal": _gtptabs_rows(app, conn, kept.ireal, songs, page=True)} if _ireal_read(conn) else {})}
 
 
 def is_link(q: str) -> bool:
@@ -840,7 +841,8 @@ def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]]
             state, label, detail = "empty", f"{name}: empty", f"{name}'s {why.removeprefix('its ')}."
         looked.append({"source": source, "name": name, "state": state, "label": label, "detail": detail})
     looked.append(_gametabs_looked(app, conn))
-    looked.append(_ireal_looked(app, conn))
+    if _ireal_read(conn):
+        looked.append(_ireal_looked(app, conn))
     return looked
 
 
@@ -866,10 +868,15 @@ def _gametabs_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
             "detail": f"{name}: our copy of its index, searched whole."}
 
 
+def _ireal_read(conn: sqlite3.Connection) -> bool:
+    """Whether iReal Pro's forum's index holds a thread page read: till then the answer has no ``ireal`` and no mark
+    of it among ``looked``, a fallback for the songs the sheet sites lack being no site a search is said to miss."""
+    return conn.execute("SELECT 1 FROM ireal_threads LIMIT 1").fetchone() is not None
+
+
 def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
-    """iReal Pro's forum's mark among ``looked``: turned off, its index empty before its playlists are read (its charts
-    are those of the thread pages caracole read), in part while some aren't (ireal_index.py, "1 of 7 playlists"),
-    else whole."""
+    """iReal Pro's forum's mark among ``looked``, once its index holds a thread read (``_ireal_read``): turned off, in
+    part while some of its playlists aren't read (ireal_index.py, "1 of 7 playlists"), else whole."""
     from caracole.ireal_index import index_state
 
     name = "iReal Pro"
@@ -877,9 +884,6 @@ def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
     if not app.cfg.provider("ireal").enabled:
         return {**mark, "state": "off", "label": f"{name}: off", "detail": "iReal Pro's forum is off in caracole.toml."}
     state = index_state(conn)
-    if not state.read:
-        return {**mark, "state": "empty", "label": f"{name}: empty",
-                "detail": "iReal Pro's forum's index is empty: tonight's run reads its playlists."}
     if not state.complete:
         return {**mark, "state": "partial",
                 "label": f"{name}: {state.playlists_read:,} of {state.playlists:,} playlists",

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 _SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics", "audio": "Audio",
           "chords": "Chords",  # caracole youtube --sheet's (youtube_sheet.py), said the same way
           "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "harptabs": "harptabs.com", "gametabs": "gametabs.net",
-          "ireal": "iReal Pro", "pages": "Pages",
+          "pages": "Pages",
           "songbooks": "Songbooks"}
 _SONG_SHAPE = 'a song as "Artist - Title", or as ARTIST TITLE'
 

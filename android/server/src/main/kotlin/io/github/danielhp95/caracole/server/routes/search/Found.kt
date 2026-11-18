@@ -133,9 +133,7 @@ internal class Found(
             "unseen" to (if (link) null else kept.unseen),
             // the artist and the title the query names, which the request form is filled in with; null for none
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
-            "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs,
-            // iReal Pro's forum's charts: its index is the computer's alone (search.search_ireal), none on the phone
-            "ireal" to JsonArray(emptyList()), "lacuerda" to lacuerda,
+            "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
             "ug_directory" to directory, "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to unlisted,
             "lacuerda_leads" to leads, "lacuerda_search" to gate, "youtube" to null, "suggest" to suggest,
             "skipped" to skipped.map { it.json() }, "partial" to partial.map { it.json() },

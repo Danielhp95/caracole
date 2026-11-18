@@ -56,7 +56,7 @@ object Outcomes {
     /** A lookup's steps (get.py's STAGES), each a name and the stages it stands for. */
     val LOOKUP_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Match" to listOf("match"), "Sheet" to listOf("sheet"), "PDF" to listOf("pdf"),
-        "Lyrics" to listOf("lyrics"), "Extras" to listOf("ug", "lacuerda", "ireal", "gtptabs", "harptabs", "gametabs"),
+        "Lyrics" to listOf("lyrics"), "Extras" to listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs"),
         "Songbooks" to listOf("songbooks"),
     )
 
@@ -98,14 +98,14 @@ object Outcomes {
     private const val GTPTABS_KEPT = "Guitar Pro file downloaded"  // get.py's
 
     /** A running sheet stage's site, by its words (get.py's SHEET_FROM, icons.tag). */
-    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from UG" to "UG")
+    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from UG" to "UG", "from iReal Pro" to "iReal")
 
     /** What a stage leaves for tonight's run when it ends in a wait or an error: its name, and its verb. */
     internal val WHAT = mapOf(
         "sheet" to ("the sheet" to "waits"), "lyrics" to ("the lyrics" to "wait"),
         "ug" to ("its other versions and tab" to "wait"), "lacuerda" to ("LaCuerda's sheet" to "waits"),
         "gtptabs" to ("the Guitar Pro file" to "waits"), "harptabs" to ("the harmonica tab" to "waits"),
-        "gametabs" to ("the game music tab" to "waits"), "ireal" to ("the iReal Pro chart" to "waits"),
+        "gametabs" to ("the game music tab" to "waits"),
     )
 
     // How get.py words them (_Lookup.asking, _usable), as outcome.py reads them.

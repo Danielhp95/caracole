@@ -2057,12 +2057,12 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
     lacuerda_index(conn, letters=("_num", "a", "b", "c"))
     record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
     looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
-    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net, iReal Pro: done, done, partial (the letters
-    # read whole run up to C), blocked, empty, empty, empty.
+    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net: done, done, partial (the letters read whole run
+    # up to C), blocked, empty, empty. iReal Pro's forum, its index holding no thread read, none.
     assert [(s["source"], s["state"], s["label"]) for s in looked] == [
         ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
         ("musescore", "blocked", "MuseScore turned us back"), ("harptabs", "empty", "harptabs.com: empty"),
-        ("gametabs", "empty", "gametabs.net: empty"), ("ireal", "empty", "iReal Pro: empty")]
+        ("gametabs", "empty", "gametabs.net: empty")]
     detail = {s["source"]: s["detail"] for s in looked}
     assert detail["lacuerda"] == ("LaCuerda's index is being read: 2 artists so far, with #, A–C read whole; "
                                   "tonight's run reads the rest.")
@@ -2086,8 +2086,7 @@ def test_the_search_says_a_site_whose_index_is_empty_is_empty(app, conn):
     looked = {s["source"]: (s["state"], s["label"]) for s in as_json(get(app, "/api/search?q=creep"))["looked"]}
     assert looked == {"ug": ("empty", "UG: empty"), "gtptabs": ("empty", "gtptabs.com: empty"),
                       "lacuerda": ("empty", "LaCuerda: empty"), "musescore": ("empty", "MuseScore: empty"),
-                      "harptabs": ("empty", "harptabs.com: empty"), "gametabs": ("empty", "gametabs.net: empty"),
-                      "ireal": ("empty", "iReal Pro: empty")}
+                      "harptabs": ("empty", "harptabs.com: empty"), "gametabs": ("empty", "gametabs.net: empty")}
 
 
 def test_the_search_says_how_far_gametabs_nets_index_has_got_a_mark_of_its_own_last(app, cfg, conn):
@@ -2102,8 +2101,8 @@ def test_the_search_says_how_far_gametabs_nets_index_has_got_a_mark_of_its_own_l
 
     def mark(on=app):
         looked = as_json(get(on, "/api/search?q=hollow+knight"))["looked"]
-        assert looked[-2]["source"] == "gametabs" and looked[-3]["source"] == "harptabs"
-        return {k: looked[-2][k] for k in ("name", "state", "label", "detail")}
+        assert looked[-1]["source"] == "gametabs" and looked[-2]["source"] == "harptabs"
+        return {k: looked[-1][k] for k in ("name", "state", "label", "detail")}
 
     assert mark() == {"name": "gametabs.net", "state": "empty", "label": "gametabs.net: empty",
                       "detail": "gametabs.net's index is empty: tonight's run reads its sitemaps."}
@@ -2146,7 +2145,8 @@ def test_the_search_gives_gametabs_nets_tracks_and_their_tabs_and_none_while_it_
 
 
 def test_the_search_says_how_far_irealpros_index_has_got_its_mark_last(app, cfg, conn):
-    # Empty before any playlist is read; in part while some aren't; whole once they are; off while it is turned off.
+    # Nothing at all before any thread is read (a fallback is no site a search misses); in part while some playlists
+    # aren't read; whole once they are; off while it is turned off.
     import dataclasses
 
     from test_search import ireal_index
@@ -2158,8 +2158,8 @@ def test_the_search_says_how_far_irealpros_index_has_got_its_mark_last(app, cfg,
         assert looked[-1]["source"] == "ireal" and looked[-2]["source"] == "gametabs"
         return {k: looked[-1][k] for k in ("name", "state", "label", "detail")}
 
-    assert mark() == {"name": "iReal Pro", "state": "empty", "label": "iReal Pro: empty",
-                      "detail": "iReal Pro's forum's index is empty: tonight's run reads its playlists."}
+    before = as_json(get(app, "/api/search?q=misty"))
+    assert "ireal" not in before and "ireal" not in [s["source"] for s in before["looked"]]
     ireal_index(conn)  # the curated playlist and a thread read; the jazz forum's page not yet
     assert mark() == {"name": "iReal Pro", "state": "partial", "label": "iReal Pro: 1 of 1 playlists",
                       "detail": "iReal Pro's forum's playlists are being read: 1 of 1 so far; caracole ireal --index "

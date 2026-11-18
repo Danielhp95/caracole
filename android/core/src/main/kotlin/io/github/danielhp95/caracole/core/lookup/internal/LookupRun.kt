@@ -97,7 +97,6 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
             stage("lyrics", ::lyrics)
             stage("ug") { site(lookup.stages.ug, ask.afterTheSheet) }
             stage("lacuerda") { lacuerda(lookup.stages.lacuerda) }
-            stage("ireal") { site(io.github.danielhp95.caracole.core.lookup.sites.IRealStage) }
             stage("gtptabs") { site(lookup.stages.gtptabs) }
             stage("harptabs") { site(lookup.stages.harptabs) }
             stage("gametabs") { site(lookup.stages.gametabs) }

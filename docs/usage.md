@@ -641,7 +641,11 @@ In order:
    a cooldown, `the Ultimate Guitar tab you pinned is kept over your LaCuerda
    pick`), then what Ultimate Guitar gave.
    Without one there, LaCuerda's, for a song LaCuerda would be asked about
-   tonight. From here on the sheet is readable.
+   tonight; without one from either, **iReal Pro's forum**'s chart, for a song
+   its index has one of (a jazz standard, say: see [Chord charts of jazz
+   standards](#configuration)), or the chart you picked (`--ireal URL`, its
+   thread's address, with `#post-N` for one post's, recorded under `[ireal]`),
+   asked first. From here on the sheet is readable.
 4. **The PDF**, as `caracole render` makes it, for this song alone: another
    song's failed PDF, or one waiting for a CJK font, isn't this one's.
 5. **The lyrics**, from LRCLIB.
@@ -660,12 +664,6 @@ In order:
    picked (`--gametabs URL`, its page's address, recorded under `[gametabs]`),
    else the most viewed of the title by the game or the composer your line
    names, kept as `gametab-N.txt` beside any the song has.
-   Between LaCuerda and gtptabs.com, **iReal Pro's forum**, for a song still
-   without a sheet (a jazz standard, say): the chart you picked (`--ireal URL`,
-   its thread's address, with `#post-N` for one post's, recorded under
-   `[ireal]`), else the best of its own (see [Chord charts of jazz
-   standards](#configuration)), kept as the song's sheet, whose PDF the pages
-   make.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, the page of each harmonica tab the song keeps (`harmonica-N.html`,
    for a song with no sheet too), and MuseScore's pages matched from its local index.

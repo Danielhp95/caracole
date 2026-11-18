@@ -54,7 +54,6 @@ object JobCommands {
         "lyrics" to "Lyrics",
         "ug" to "UG: versions scored, tab",
         "lacuerda" to "LaCuerda",
-        "ireal" to "Chart from iReal Pro",
         "gtptabs" to "Guitar Pro file from gtptabs",
         "harptabs" to "Harmonica tab from harptabs",
         "gametabs" to "Game music tab from gametabs",
