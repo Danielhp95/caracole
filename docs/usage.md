@@ -2189,6 +2189,10 @@ human sheet, an ignored one or one with a purchase linked, and one `[youtube]` s
 without a video given, and exits 1 then, as it does for a video YouTube won't give, audio
 auto-chords can't read, or a caracole that can't make chords of the audio (which it says before
 it asks anything); a block, a cooldown, a spent budget or a network error waits, and exits 0.
+A song another caracole took out of the book (or merged into a song of the same name) while a
+lookup had the lock, before the models, ends it there, a refusal that exits 1 with nothing more
+written: `No sheet made: Nick Cani - Vikingos veganos left the book while its sheet was made
+(removed, or merged into a song of the same name).`
 `--progress` adds a JSON line per stage, for caracole serve. A human sheet found later takes the
 auto sheet's place, as always.
 
