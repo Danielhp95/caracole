@@ -1096,6 +1096,7 @@
   // never reaches past the line's edge, which would widen the page: where the row has less room
   // left than the chord is wide, its column takes the chord's width, and goes on to the next row.
   const sheetEl = $("sheet");
+  const CHORD_SPACE = 0.45;  // em: the room a chord keeps after it, before the next one or the line's edge
   const fit = () => {
     sheetEl.classList.add("tight");
     for (const y of sheetEl.querySelectorAll(".s > .y")) {
@@ -1103,7 +1104,7 @@
       y.style.removeProperty("--ink");
       y.classList.remove("ext");
     }
-    const space = parseFloat(getComputedStyle(sheetEl).fontSize) * 0.45;
+    const space = parseFloat(getComputedStyle(sheetEl).fontSize) * CHORD_SPACE;
     for (const line of sheetEl.querySelectorAll(".l")) {
       const kids = Array.from(line.querySelectorAll(".s, .w"));  // its columns, a word's group's (.word) among them
       const right = line.getBoundingClientRect().right;
@@ -1138,30 +1139,78 @@
       });
     }
   };
-  // One column, or two side by side where viewer.css offers them (a wide screen), only for a song
-  // the window then shows whole: the song's end in the second column, and the sheet no taller than
-  // the window above the room the page keeps at its foot for the controls. Two columns are at the
-  // reader's own text size, each at least 24 em (viewer.css), never at a smaller size to fit; one
-  // column is 3 px larger.
+  // The song's widest line, in px, as it would run unwrapped: each line of its sections (sung, of chords, a row of
+  // bar cells) and each tab for a moment as wide as its content (viewer.css .measure), a chord past the end of its
+  // line's words with the room a chord keeps after it. The notes before the song (.pre) wrap, and count for none.
+  const widest = () => {
+    sheetEl.classList.add("measure");
+    const space = parseFloat(getComputedStyle(sheetEl).fontSize) * CHORD_SPACE;
+    let most = 0;
+    for (const row of sheetEl.querySelectorAll(".sec > .l, .sec > .tab")) {
+      const box = row.getBoundingClientRect();
+      let right = box.right;
+      for (const head of row.querySelectorAll(".s > .c, .s > .m")) {
+        right = Math.max(right, head.getBoundingClientRect().right + space);
+      }
+      most = Math.max(most, right - box.left);
+    }
+    sheetEl.classList.remove("measure");
+    return most;
+  };
+  // One column, or columns side by side where viewer.css offers them (a wide screen), only for a song the window
+  // then shows whole: the song's end in the last column, and the sheet no taller than the window above the room the
+  // page keeps at its foot for the controls. The fewest columns that do, from two up to as many as fit side by side
+  // (MOST_COLUMNS at most), each at least as wide as the song's widest line within COLUMN_EM: at least 16 em, so that
+  // a song of short lines makes no slivers, and never asked to be more than 24 em, so that a song of long lines reads
+  // as it did in two (the owner's narrower columns, D8), its long lines wrapping. The columns share the page's width
+  // (viewer.css): the room over widens each. At the reader's own text size, never a smaller one to fit; one column is
+  // 3 px larger, and so is a song no count shows whole.
+  const MOST_COLUMNS = 5;  // viewer.css lays out two to five
+  const COLUMN_EM = [16, 24];  // a column's least width, of a song of short lines and of long ones
+  // fit() in one column ``px`` wide: as in a column of that width, without laying the columns out again (and
+  // balancing them) for each chord it moves.
+  const fitIn = (px) => {
+    sheetEl.style.columnCount = "1";
+    sheetEl.style.width = px + "px";
+    fit();
+    sheetEl.style.width = "";
+    sheetEl.style.columnCount = "";
+  };
   const layout = () => {
     const y = window.scrollY;
+    let count = 1;
     doc.dataset.columns = "2";
-    if (getComputedStyle(sheetEl).columnCount !== "2") {  // not offered here
+    if (getComputedStyle(sheetEl).columnCount === "2") {  // offered here
+      // The page's width for columns, the song across it in one at the reader's own size: its lines measured there.
+      sheetEl.style.columnCount = "1";
+      fit();
+      const line = widest();
+      const width = sheetEl.getBoundingClientRect().width;
+      sheetEl.style.columnCount = "";
+      const em = parseFloat(getComputedStyle(sheetEl).fontSize);
+      const least = Math.min(COLUMN_EM[1] * em, Math.max(COLUMN_EM[0] * em, line));
+      const page = sheetEl.closest(".page") || document.body;
+      const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+      for (let n = 2; n <= MOST_COLUMNS; n++) {
+        doc.dataset.columns = String(n);
+        const gap = parseFloat(getComputedStyle(sheetEl).columnGap) || 0;
+        const column = (width - (n - 1) * gap) / n;
+        if (column < least - 0.5) break;  // n such columns don't fit side by side
+        if (line > column) fitIn(column);  // its long lines wrap in these: their chords fitted where they wrap
+        const box = sheetEl.getBoundingClientRect();
+        const end = sheetEl.lastElementChild && sheetEl.lastElementChild.lastElementChild;
+        const last = box.left + (n - 1) * (box.width + gap) / n;  // where the last column starts
+        if (end && end.getBoundingClientRect().left > last - gap / 2 && box.height <= room) {
+          count = n;
+          break;
+        }
+      }
+    }
+    if (count === 1) {
       doc.dataset.columns = "1";
       fit();
-      return;
     }
-    fit();
-    const box = sheetEl.getBoundingClientRect();
-    const end = sheetEl.lastElementChild && sheetEl.lastElementChild.lastElementChild;
-    const page = sheetEl.closest(".page") || document.body;
-    const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
-    const fits = Boolean(end) && end.getBoundingClientRect().left > box.left + box.width / 2 && box.height <= room;
-    if (!fits) {
-      doc.dataset.columns = "1";
-      fit();
-    }
-    // Two columns are shorter than one: measuring them may have moved the page. Back to where it was.
+    // Columns are shorter than one: measuring them may have moved the page. Back to where it was.
     if (window.scrollY !== y) window.scrollTo(0, y);
   };
   let fitting = 0;
@@ -1176,8 +1225,8 @@
     });
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layout(); fitKey(); }, () => {});
-  // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two
-  // columns; an open card goes with its chord.
+  // The tab's preamble opened or folded again (page.py): the song moves, and may take other columns,
+  // or none; an open card goes with its chord.
   for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", () => { layout(); place(); });
   // Printed, the notes print whole: where the stylesheet can't show a folded one's text (no
   // ::details-content), they open for the printout and fold again after it.
