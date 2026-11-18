@@ -157,6 +157,19 @@ def test_the_line_names_the_kind_the_version_and_its_rating(tmp_path):
 
 
 @in_chromium
+def test_a_tap_on_the_line_the_back_arrow_or_a_version_leaves_no_highlight(tmp_path):
+    # A phone's browser paints a tapped link or button blue until the next tap: the version line, the header's ‹ and
+    # a kept version's row take none, as the bar's buttons, the chords and the rail don't.
+    pages = folder(tmp_path, WONDERWALL, kinds=KINDS)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri(), **PHONE) as b:
+        open_list(b)
+        painted = b.js("['#ver-now', '.head .back', 'a.ver-main'].map((s) =>"
+                       " [s, getComputedStyle(document.querySelector(s)).webkitTapHighlightColor])")
+    assert painted == [["#ver-now", "rgba(0, 0, 0, 0)"], [".head .back", "rgba(0, 0, 0, 0)"],
+                       ["a.ver-main", "rgba(0, 0, 0, 0)"]]
+
+
+@in_chromium
 def test_one_version_and_one_kind_is_no_ver_1_of_1_and_one_icon(tmp_path):
     one = {"total": 1, "sheet": "ug",
            "list": [entry("1064463", 3, 4.86, 408, 1, kept=True, chosen=True, page="sheet.html")]}
