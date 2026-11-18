@@ -10,11 +10,13 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
    thread page caracole read, or a thread whose slug is the song's title and one of its artists' names
    ("groove-merchant-thad-jones" for "Thad Jones - Groove Merchant", ``ireal.begins_with``), or its title alone. A
    chart is the song's only when it is titled as the song is and one of its artists is its composer or the name its
-   thread's slug gives after the title (``composer_fits``, ``names_an_artist``), or it comes from one of the jazz
-   playlists caracole reads (the Jazz 1460 Standards and the jazz forum's playlist threads), where its title alone is
-   enough, the standards' case ("Bill Evans - Autumn Leaves"); the owner's ruling of 2026-11-18, after titles alone
-   gave "Ren - Patience" Guns N' Roses' chart. A song whose kept chart the library lost (deleted on a synced device) is
-   asked about again whatever the date, and its chart written again.
+   thread's slug gives after the title (``composer_fits``, ``names_an_artist``), or it comes from the Jazz 1460
+   Standards, the moderators' playlist, where its title alone is enough, the standards' case ("Bill Evans - Autumn
+   Leaves"): the owner's rulings of 2026-11-18, after titles alone gave "Ren - Patience" Guns N' Roses' chart (the jazz
+   forum's other playlists, of practice exercises, fusion or gypsy jazz, need the composer as any thread does). A line
+   that names several artists ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis") is each of them too
+   (``artist_names``). A song whose kept chart the library lost (deleted on a synced device) is asked about again
+   whatever the date, and its chart written again.
 3. **The candidates**, ``CANDIDATES`` pages at most: those caracole read that hold a chart of the song, from the
    cache with no request, then the threads named for it, a slug that names one of the song's artists after the title
    first, then the title alone, the oldest first; never a slug that names someone else. Once a chart whose composer is
@@ -23,7 +25,9 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
    the thread's at the post), and the best is the song's sheet (``best``): a composer who is one of the song's artists
    (iReal Pro writes the composer last name first: "Jones Thad", ``ireal.composer_words``), then the curated playlist's
    (the Jazz 1460 Standards), then a thread whose slug names the composer, then the oldest thread, and in a thread the
-   latest post (a repost is most often a correction: "the chart originally posted was missing the Coda").
+   latest post (a repost is most often a correction: "the chart originally posted was missing the Coda"). A chart that
+   won't read (``ireal.Tune.chart``: no chord in it, or garbled) is passed over, logged; when every chart that would be
+   the song's won't, the song's is that parse error, never a miss.
 4. **The sheet** is kept as ``sheet.txt`` and ``sheet.json`` (``content``: the chart in Ultimate Guitar's markup,
    ``ireal.Tune.chart``, its bars as a sheet's page draws them, with the tune as the link gave it), the slot's only
    pick; the version's ``tonality_name`` is the tune's key, which render.py writes as the sheet's. Its coverage of the
@@ -33,9 +37,15 @@ What the site looks like is in ireal.py, its index in ireal_index.py. A pass:
 
 **Your pick.** A chart you picked (``[ireal]`` in overrides.toml: ``caracole get --ireal``, the library page's Fetch
 on an iReal Pro row) is read in place of the candidates, its thread's page alone, whoever its composer is: the post's
-chart (one of the song's title, else its one chart), or the thread's chart of the title (else its one chart), kept in place of any sheet but one
-you pinned on Ultimate Guitar or picked on LaCuerda, until it is the one kept (kv ``ireal:checked:<song id>:pick``, the
-chart asked for).
+chart (one of the song's title, else its one chart), or the thread's chart of the title (else its one chart), kept in
+place of any sheet but one you pinned on Ultimate Guitar or picked on LaCuerda, until it is the one kept (kv
+``ireal:checked:<song id>:pick``, the chart asked for). A post the thread's first page doesn't hold is on a later one:
+its own address is asked (``threads/<slug>.<id>/post-<id>``, which the forum redirects to its page, each hop a
+request), and that page read for it, out of the index.
+
+A lookup the pass's client let go first may have picked a chart: overrides.toml is read again after a handoff
+(``reload_overrides``), before the next song, and a song whose turn a handoff came in is kept only while it still is
+one to try with the pick the turn read.
 
 Only songs in wanted.txt are looked up (and a lookup's song): never a thread for a song nobody asked for, never a
 mirror of the forum. Errors are never misses: only candidates that all answered, none holding a chart of the song (or
@@ -45,10 +55,12 @@ pass. Any other provider error, a page that won't parse even fetched again inclu
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
+import re
 import sqlite3
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -63,22 +75,25 @@ from caracole.http import (
     ProviderError,
     ProviderUnavailable,
     RobotsClosed,
+    read_once_more,
 )
 from caracole.ireal import (
     JAZZ_1460,
     PROVIDER,
     SITEMAP_URL,
     IndexRow,
+    IRealParseError,
     ThreadPage,
     Tune,
     begins_with,
     composer_words,
     page_url,
     parse_page_url,
+    parse_thread_page,
     sitemap_child,
     title_key,
 )
-from caracole.ireal_index import ensure_current_keys, playlists, read_thread
+from caracole.ireal_index import ensure_current_keys, read_thread
 from caracole.library import (
     SharedFolder,
     drop_file,
@@ -89,8 +104,8 @@ from caracole.library import (
     write_info,
 )
 from caracole.lyrics import song_lyrics
-from caracole.normalize import slug_key
-from caracole.overrides import IRealPick, Overrides
+from caracole.normalize import name_forms
+from caracole.overrides import IRealPick, Overrides, OverridesError
 from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.site_index import Site
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status
@@ -116,7 +131,10 @@ SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that
 CHECKED_PREFIX = "ireal:checked:"  # + song id: when its candidates last answered for it
 PICKED = ":pick"  # CHECKED_PREFIX + song id + this: the chart you picked that was asked for then
 
-KEPT, MISSING = "kept", "missing"
+KEPT, MISSING, PASSED = "kept", "missing", "passed"  # PASSED: a lookup that went first changed what the turn read
+_ACCEPT = (200, 404)
+# What a line writes between the artists it names, as the ruling of 2026-11-18 lists them.
+_BETWEEN_ARTISTS = re.compile(r" (?:/|&|and|with|feat\.|ft\.) |, ", re.IGNORECASE)
 
 # The forum's sitemaps, as site_index.py reads them into ireal_index: its numbered children, the threads of each.
 SITE = Site(
@@ -171,6 +189,7 @@ def ireal_sheets(
     overrides: Overrides | None = None,
     only: Collection[int] | None = None,
     refresh_index: bool = True,
+    reload_overrides: Callable[[], Overrides] | None = None,
 ) -> IRealStats:
     """Refresh the index when due, then keep a chart as the sheet of each song that needs one and has a candidate.
 
@@ -182,7 +201,8 @@ def ireal_sheets(
 
     A lookup (``caracole get``) passes ``only`` its song's id, and ``refresh_index=False``: the sitemaps are the nightly
     run's to read. A song that got a sheet meanwhile (from a lookup the nightly run let go first) is passed over when
-    its turn comes.
+    its turn comes, and after such a lookup overrides.toml is read again (``reload_overrides``; the copy read before
+    when it can't be).
     """
     stats = IRealStats()
     now = stamps.utc(now)
@@ -192,6 +212,7 @@ def ireal_sheets(
                and _to_try(conn, library_dir, now, overrides, s)]
     if not wanting:
         return stats
+    lookups = _Lookups(client, overrides, reload_overrides)  # before the sitemaps: a lookup may go first in their pauses
 
     def read() -> None:
         stats.sitemaps += 1
@@ -212,9 +233,25 @@ def ireal_sheets(
         stats.errors += 1
         log.warning("iReal Pro's forum's sitemaps: %s", e)
     run = _Pass(conn, client, library_dir, rank, now)
-    songs = (s for s in as_now(conn, wanting, lambda s: _to_try(conn, library_dir, now, overrides, s))
-             if _pick(overrides, s) or candidates(conn, s))
-    for song, outcome in each_song(songs, stats, lambda song: _look_up(run, song, _pick(overrides, song)),
+
+    def due(song: Song) -> bool:
+        lookups.look()
+        return _to_try(conn, library_dir, now, lookups.overrides, song)
+
+    def still(song: Song, pick: IRealPick | None) -> bool:
+        """After a turn a lookup went first in: the song still one to try, with the pick the turn read."""
+        if not lookups.look():
+            return True
+        try:
+            fresh = get_song(conn, song.id)
+        except KeyError:  # removed, or merged into another song, meanwhile
+            return False
+        return (fresh.key == song.key and _to_try(conn, library_dir, now, lookups.overrides, fresh)
+                and _pick(lookups.overrides, fresh) == pick)
+
+    songs = (s for s in as_now(conn, wanting, due) if _pick(lookups.overrides, s) or candidates(conn, s))
+    for song, outcome in each_song(songs, stats, lambda song: _look_up(run, song, _pick(lookups.overrides, song),
+                                                                       still=still),
                                    site="iReal Pro's forum", level=logging.WARNING):
         if isinstance(outcome, SharedFolder):
             log.info("%s", outcome)
@@ -223,6 +260,31 @@ def ireal_sheets(
         stats.kept += outcome == KEPT
         stats.missing += outcome == MISSING
     return stats
+
+
+class _Lookups:
+    """overrides.toml as the last lookup the pass's client let go first left it (commands/_common.py's clients count
+    their handoffs; another client, none), read again after each (``reload``; the copy read before when it can't be)."""
+
+    def __init__(self, client: Client, overrides: Overrides | None, reload: Callable[[], Overrides] | None):
+        self.client, self.overrides, self.reload = client, overrides, reload
+        self.seen = self._count()
+
+    def _count(self) -> int:
+        return int(getattr(self.client, "handoffs", 0) or 0)
+
+    def look(self) -> bool:
+        """Whether a lookup went first since the last look; overrides.toml is read again when one did."""
+        count = self._count()
+        if count == self.seen:
+            return False
+        self.seen = count
+        if self.reload is not None:
+            try:
+                self.overrides = self.reload()
+            except OverridesError as e:
+                log.info("overrides.toml couldn't be read again (%s); iReal Pro's forum goes on with what it read.", e)
+        return True
 
 
 # --- which songs ----------------------------------------------------------------------------------------------------
@@ -297,13 +359,12 @@ def candidates(conn: sqlite3.Connection, song: Song) -> list[str]:
     key = title_key(song.title)
     if not key:
         return []
-    curated = set(playlists(conn))
     known: dict[str, tuple] = {}
     for page, thread, post, place, composer in conn.execute(
             "SELECT c.page, t.thread, c.post, c.place, c.composer FROM ireal_charts c "
             "JOIN ireal_threads t ON t.path = c.page WHERE c.title_key = ?", (key,)):
         rest = _slug_rest(conn, page, key)
-        if not _matching(song, page, composer, rest, curated):
+        if not _matching(song, page, composer, rest):
             continue
         order = _order(song, page, thread, post, place, composer, rest)
         known[page] = min(known.get(page, order), order)
@@ -321,15 +382,31 @@ def candidates(conn: sqlite3.Connection, song: Song) -> list[str]:
     return [*pages, *(path for *_, path in sorted(unread))][:CANDIDATES]
 
 
-def _words(name: str) -> frozenset[str]:
-    return frozenset(w for w in slug_key(name).split("-") if w)
+def artist_names(song: Song) -> tuple[frozenset[str], ...]:
+    """The names of the song's artists, each as the words of its forms (``normalize.name_forms``: a name caracole
+    didn't write meets yours by them): each artist whole, and each one of several a line names, between " / ", " & ",
+    ", ", " and ", " with ", " feat. " or " ft. " ("Thad Jones / Count Basie", "Thad Jones & Mel Lewis")."""
+    return _names(tuple(song.artists or [song.artist]))
+
+
+@functools.lru_cache(maxsize=4096)
+def _names(artists: tuple[str, ...]) -> tuple[frozenset[str], ...]:
+    found: dict[frozenset[str], None] = {}
+    for artist in artists:
+        for part in (artist, *_BETWEEN_ARTISTS.split(artist)):
+            for form in name_forms(part):
+                words = frozenset(w for w in form.split("-") if w)
+                if words:
+                    found[words] = None
+    return tuple(found)
 
 
 def names_an_artist(song: Song, words: Collection[str]) -> bool:
-    """Whether some words name one of the song's artists: every word of the artist's name among them, in whatever
-    order (iReal Pro writes a composer last name first, "Jones Thad"; a thread's slug names one after the title)."""
+    """Whether some words name one of the song's artists (``artist_names``): every word of an artist's name among
+    them, in whatever order (iReal Pro writes a composer last name first, "Jones Thad"; a thread's slug names one after
+    the title)."""
     theirs = set(words)
-    return bool(theirs) and any(mine and mine <= theirs for mine in map(_words, song.artists or [song.artist]))
+    return bool(theirs) and any(mine <= theirs for mine in artist_names(song))
 
 
 def composer_fits(song: Song, composer: str) -> bool:
@@ -338,13 +415,13 @@ def composer_fits(song: Song, composer: str) -> bool:
     return names_an_artist(song, composer_words(composer))
 
 
-def _matching(song: Song, page: str, composer: str, rest: set[str], curated: set[str]) -> bool:
+def _matching(song: Song, page: str, composer: str, rest: set[str]) -> bool:
     """Whether a chart titled as the song is the song's: one of its artists is the chart's composer or the name its
-    thread's slug gives after the title, or the chart is one of the jazz playlists caracole reads (``curated``: the
-    Jazz 1460 Standards and the jazz forum's playlist threads, ireal_index.py ``playlists``), where the title alone
-    is enough: "Bill Evans - Autumn Leaves" is Kosma's standard. A title alone elsewhere is another song of that name
-    as often as not ("Ren - Patience" is no Guns N' Roses song)."""
-    return page in curated or composer_fits(song, composer) or names_an_artist(song, rest)
+    thread's slug gives after the title, or the chart is the Jazz 1460 Standards' (``JAZZ_1460``, the moderators'
+    playlist of standards), where the title alone is enough: "Bill Evans - Autumn Leaves" is Kosma's standard. A title
+    alone elsewhere is another song of that name as often as not ("Ren - Patience" is no Guns N' Roses song), the
+    jazz forum's other playlists (practice exercises, fusion, gypsy jazz…) among them."""
+    return page == JAZZ_1460 or composer_fits(song, composer) or names_an_artist(song, rest)
 
 
 def _slug_rest(conn: sqlite3.Connection, page: str, key: str) -> set[str]:
@@ -395,29 +472,71 @@ def _page(run: _Pass, path: str) -> ThreadPage | None:
         return None
 
 
-def _charts_of(conn: sqlite3.Connection, song: Song, page: ThreadPage, key: str, pick: IRealPick | None) -> list[Chart]:
+def _post_page(run: _Pass, pick: IRealPick) -> ThreadPage | None:
+    """The page of the thread that holds the post picked, one the first page doesn't: its address asked, which the
+    forum redirects to the post's page (each hop a request), and read, out of the index (which keeps first pages
+    alone); None when the post is gone (404), or its page is where robots.txt closes."""
+    url = f"{page_url(pick.path)}post-{pick.post}"
+    try:
+        resp = run.client.get(url, accept=_ACCEPT)
+        return read_once_more(run.client, resp, url, lambda r: None if r.status == 404 else
+                              parse_thread_page(r.content, r.url), IRealParseError, fetched=run.fetched, accept=_ACCEPT)
+    except RobotsClosed as e:
+        log.info("iReal Pro's forum: %s", e)
+        return None
+
+
+def _charts_of(conn: sqlite3.Connection, song: Song, page: ThreadPage, key: str, pick: IRealPick | None,
+               ) -> tuple[list[Chart], list[IRealParseError]]:
     """The charts of a page that are the song's: titled as it is, and its own (``_matching``); for a pick, any of the
-    title, and else its post's (or the thread's) one chart whatever its title."""
+    title, and else its post's (or the thread's) one chart whatever its title. Each is read only once it is the
+    song's: one that won't (``Tune.chart``) is passed over, logged, and given apart, its parse error."""
     every = [Chart(page.path, page.thread, post.post, place, tune) for post, place, tune in page.charts()
-             if tune.chart() and (pick is None or pick.post is None or post.post == pick.post)]
+             if pick is None or pick.post is None or post.post == pick.post]
     titled = [c for c in every if title_key(c.tune.title) == key]
     if pick is not None:
-        return titled or (every if len(every) == 1 else [])
-    curated, rest = set(playlists(conn)), _slug_rest(conn, page.path, key)
-    return [c for c in titled if _matching(song, c.page, c.tune.composer, rest, curated)]
+        ours = titled or (every if len(every) == 1 else [])
+    else:
+        rest = _slug_rest(conn, page.path, key)
+        ours = [c for c in titled if _matching(song, c.page, c.tune.composer, rest)]
+    readable, unreadable = [], []
+    for c in ours:
+        try:
+            c.tune.chart()
+        except IRealParseError as e:
+            log.info("iReal Pro's forum, %s: %s; passed over", c.url, e)
+            unreadable.append(IRealParseError(str(e.message or e), url=c.url))
+            continue
+        readable.append(c)
+    return readable, unreadable
 
 
-def _look_up(run: _Pass, song: Song, pick: IRealPick | None = None) -> str | SharedFolder:
-    """Read the song's candidates and keep its best chart: ``KEPT``; ``MISSING`` when none holds one. With ``pick``,
-    read that thread alone and keep its chart."""
+def _look_up(run: _Pass, song: Song, pick: IRealPick | None = None, *,
+             still: Callable[[Song, IRealPick | None], bool] | None = None) -> str | SharedFolder:
+    """Read the song's candidates and keep its best chart: ``KEPT``; ``MISSING`` when none holds one; ``PASSED`` when
+    a lookup that went first in the turn's pauses left the song otherwise (``still``), nothing recorded. With
+    ``pick``, read that thread alone (and the page of its post, when a later one holds it) and keep its chart.
+    ``IRealParseError`` when every chart that would be the song's won't read: never a miss."""
     key = title_key(song.title)
     found: list[Chart] = []
+    unreadable: list[IRealParseError] = []
     for path in ([pick.path] if pick is not None else candidates(run.conn, song)):
         if pick is None and any(composer_fits(song, c.tune.composer) for c in found):
             break  # a chart by one of its artists is in hand: none of another thread is better
         page = _page(run, path)
-        if page is not None:
-            found += _charts_of(run.conn, song, page, key, pick)
+        pages = [page] if page is not None else []
+        if (pick is not None and pick.post is not None and page is not None
+                and all(post.post != pick.post for post in page.posts)):
+            later = _post_page(run, pick)  # the post is on a later page of the thread
+            pages += [later] if later is not None else []
+        for each in pages:
+            readable, bad = _charts_of(run.conn, song, each, key, pick)
+            found += readable
+            unreadable += bad
+    if still is not None and not still(song, pick):
+        return PASSED
+    if not found and unreadable:
+        raise unreadable[0]
     kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}", run.stamp)
     if pick is not None:
         kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}{PICKED}", pick.url)

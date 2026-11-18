@@ -45,6 +45,25 @@ def test_a_standards_chart_is_a_line_under_its_composer_whose_get_it_keeps_it_as
     assert args[-2:] == ("Erroll Garner", "Misty")
 
 
+def test_a_line_whose_fetch_keeps_the_chart_is_irealpros_beside_a_guitar_pro_file(cfg, live, browser):  # noqa: F811
+    # Its source is the one its Fetch keeps: iReal Pro's chart, never gtptabs.com's file beside it.
+    from caracole.gtptabs import parse_page_url
+
+    base, queue, _ = live
+    ireal(cfg)
+    conn = db.connect(cfg.db_path)
+    conn.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
+                 "VALUES (?, ?, ?, ?, ?, '1')", tuple(parse_page_url("https://gtptabs.com/tabs/5/erroll-garner/misty.html")))
+    conn.commit()
+    conn.close()
+    search(browser, base, "misty")
+    line = f"{IR_ROWS}.find((h) => h.querySelector('h3').textContent === 'Misty')"
+    assert browser.wait(f"Boolean({line})")
+    assert "Guitar Pro file" in browser.js(f"{line}.textContent")
+    browser.js(f"{line}.querySelector('.line-action button').click()")
+    assert posted(queue)[:3] == ("get", "--progress", f"--ireal={THREAD}jazz-1460-standards.12753/#post-31492")
+
+
 def test_the_lookup_page_lists_irealpros_charts_last(cfg, live, browser):  # noqa: F811
     base, queue, _ = live
     ireal(cfg)

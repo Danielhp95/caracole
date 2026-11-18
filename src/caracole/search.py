@@ -1503,7 +1503,7 @@ def search_ireal(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -
     queries = _queries(query)
     if not patterns or not queries:
         return []
-    likes = " OR ".join("c.title_key LIKE ? OR c.composer LIKE ?" for _ in patterns)
+    likes = " OR ".join("c.title_key LIKE ? OR c.composer_key LIKE ?" for _ in patterns)  # both folded keys
     groups: dict[tuple[str, str], list[tuple]] = {}
     for page, thread, post, place, title, key, composer in conn.execute(
             f"SELECT c.page, t.thread, c.post, c.place, c.title, c.title_key, c.composer FROM ireal_charts c "

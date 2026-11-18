@@ -882,6 +882,7 @@ class _Lookup:
         None when the song wants none or its index has no chart of the song (ireal_fetch.py ``wants_a_chart``): nothing
         asked, no client made."""
         from caracole.ireal_fetch import ireal_sheets, wants_a_chart
+        from caracole.overrides import load_overrides
         from caracole.songs import get_song
 
         if not wants_a_chart(self.conn, self.cfg.library_dir, self.now, self.overrides, self.song):
@@ -890,7 +891,8 @@ class _Lookup:
         def ask(client) -> tuple[str, str] | str:
             self._sheet_from("ireal")
             s = ireal_sheets(self.conn, client, self.cfg.library_dir, self.cfg.rank, self.now,
-                             overrides=self.overrides, only={self.song.id}, refresh_index=False)
+                             overrides=self.overrides, only={self.song.id}, refresh_index=False,
+                             reload_overrides=lambda: load_overrides(self.cfg.overrides_file))
             if s.budget_exhausted:
                 raise BudgetExhausted("ireal")
             if s.failures:

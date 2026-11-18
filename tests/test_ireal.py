@@ -4,12 +4,13 @@ jazz forum's page read, from what the site answered on 18 November 2026."""
 from __future__ import annotations
 
 import pytest
-from helpers.ireal_site import BASE, fixture, link, thread_page
+from helpers.ireal_site import BASE, encode, fixture, link, thread_page
 
 from caracole.http import robots_disallows
 from caracole.ireal import (
     JAZZ_1460,
     IndexRow,
+    MAGIC,
     IRealParseError,
     Tune,
     begins_with,
@@ -206,8 +207,60 @@ def test_a_chart_in_another_time_says_so():
     assert tune.time == "3/4"
 
 
-def test_a_chart_with_no_chords_has_no_sheet():
-    assert Tune("Silence", "", "", "C", "[T44   |   Z", scheme="irealbook").chart() == ""
+def test_a_chart_with_no_chords_wont_read():
+    # No chord read is no chart: a parse error for the tune, never a song that has none.
+    for music in ("[T44   |   Z", "n   |n   Z", "", "<only words>"):
+        with pytest.raises(IRealParseError, match="no chord"):
+            Tune("Silence", "", "", "C", music or " ", scheme="irealbook").chart()
+
+
+@pytest.mark.parametrize("music", ["T4", "[T4", "C7 T4", "| T4", "T", "TT44", "N", "*", "<abc", "(C7", "W/C", "r|",
+                                   "1XGS*|58TyUBbfl911x7/[)S9F)B#^Y{F9[cGUY{]DZ}xXG2 DCc)Y3T7"])
+@pytest.mark.parametrize("scheme", ["irealb", "irealbook"])
+def test_any_music_reads_or_is_a_parse_error_never_another_error(music, scheme):
+    # "T4", a time of one digit at the music's end, once read past the end of the string (IndexError).
+    tune = Tune("X", "Y Z", "Swing", "C", (MAGIC + music) if scheme == "irealb" else music, scheme)
+    try:
+        tune.chart()
+        tune.time
+    except IRealParseError:
+        pass
+
+
+def test_a_time_of_one_digit_is_no_time():
+    tune = Tune("Cut", "", "", "C", MAGIC + "[T44C7 |F7   T4", scheme="irealb")
+    assert tune.time == "4/4" and "[ch]F7[/ch]" in tune.chart()
+    assert parse_link("irealb://t=c==s=k==" + MAGIC + "T4")[0].music == MAGIC + "T4"
+    with pytest.raises(IRealParseError):
+        parse_link("irealb://t=c==s=k==" + MAGIC + "T4")[0].chart()
+
+
+def test_a_tune_cut_short_inside_a_block_is_garbled_a_parse_error():
+    # A link cut short leaves its last block scrambled: what reads as no chord or mark is the sign.
+    music = "[*AT44" + "C^7   |A-7   |D-7   |G7   |" * 6 + "C^7   Z "
+    tune = Tune("Long", "Someone", "Swing", "C", encode(music))
+    body = tune.music[len(MAGIC):]
+    assert len(body) > 150 and "[ch]Cmaj7[/ch]" in tune.chart()  # the whole one reads
+    cut = Tune("Long", "Someone", "Swing", "C", MAGIC + body[:145])
+    with pytest.raises(IRealParseError, match="garbled"):
+        cut.chart()
+
+
+def test_an_empty_bar_holds_on_to_the_last_chord_before_it():
+    def bars(music):
+        return Tune("E", "", "", "C", music, scheme="irealbook").chart().splitlines()[2:]
+
+    assert bars("[T44Bb7 F7 |   |C7   Z") == [
+        "|| [ch]Bb7[/ch] [ch]F7[/ch] | [ch]F7[/ch] | [ch]C7[/ch] ||"]
+    # After a section's opening bar line, it opens the section, on the chord held on.
+    assert bars("[T44C7   |F7   ][*B   |G^7   Z") == [
+        "|| [ch]C7[/ch] | [ch]F7[/ch] ||", "[B]", "|| [ch]F7[/ch] | [ch]Gmaj7[/ch] ||"]
+    # Before a closing one, it ends the section; between a closing and an opening one is no bar.
+    assert bars("{C7   |   } [D-7   |   Z") == [
+        "|: [ch]C7[/ch] | [ch]C7[/ch] :|", "|| [ch]Dm7[/ch] | [ch]Dm7[/ch] ||"]
+    # The bar after two bars repeated is that repeat's second, and a later empty bar is a bar again.
+    assert bars("[T44C7   |F7   |r|   |G7   |   Z") == [
+        "|| [ch]C7[/ch] | [ch]F7[/ch] | [ch]C7[/ch] | [ch]F7[/ch] |", "| [ch]G7[/ch] | [ch]G7[/ch] ||"]
 
 
 def test_the_chart_is_a_sheet_the_viewer_draws_as_bars():
@@ -229,7 +282,8 @@ def test_the_chart_is_a_sheet_the_viewer_draws_as_bars():
     ("C", "C"), ("C^7", "Cmaj7"), ("C^", "Cmaj7"), ("D-7", "Dm7"), ("D-", "Dm"), ("Bh7", "Bm7b5"), ("Bh", "Bm7b5"),
     ("Eo7", "Edim7"), ("Eo", "Edim"), ("C+", "Caug"), ("C-^7", "Cmmaj7"), ("F#h9", "F#m9b5"), ("Ab-6", "Abm6"),
     ("G7b9", "G7b9"), ("C69", "C69"), ("D7sus", "D7sus"), ("Bb^7#11", "Bbmaj7#11"), ("Eb-7b5", "Ebm7b5"),
-    ("Bb/Ab", "Bb/Ab"), ("Eb-^9", "Ebmmaj9"), ("C13#11", "C13#11"), ("Co^7", "Cdimmaj7"),
+    ("Bb/Ab", "Bb/Ab"), ("Eb-^9", "Ebmmaj9"), ("C13#11", "C13#11"), ("Co^7", "Cdimmaj7"), ("C-^", "Cmmaj7"),
+    ("C*-^*", "Cmmaj7"), ("F*7b9*/A", "F7b9/A"),
 ])
 def test_a_chord_is_named_as_sheets_name_it(written, named):
     assert chord_name(written) == named

@@ -393,7 +393,7 @@
   },
   {
    "name": "ireal_charts",
-   "sql": "CREATE TABLE ireal_charts (\n  page TEXT NOT NULL,\n  post INTEGER NOT NULL,\n  place INTEGER NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  composer TEXT NOT NULL DEFAULT '',\n  style TEXT NOT NULL DEFAULT '',\n  key TEXT NOT NULL DEFAULT '',\n  playlist TEXT NOT NULL DEFAULT '',\n  PRIMARY KEY (page, post, place)\n)",
+   "sql": "CREATE TABLE ireal_charts (\n  page TEXT NOT NULL,\n  post INTEGER NOT NULL,\n  place INTEGER NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  composer TEXT NOT NULL DEFAULT '',\n  composer_key TEXT NOT NULL DEFAULT '',\n  style TEXT NOT NULL DEFAULT '',\n  key TEXT NOT NULL DEFAULT '',\n  playlist TEXT NOT NULL DEFAULT '',\n  PRIMARY KEY (page, post, place)\n)",
    "tbl_name": "ireal_charts",
    "type": "table"
   },

@@ -115,6 +115,10 @@ class FakeIReal:
     def page(self, path: str, body: str, status: int = 200) -> None:
         self.pages[f"{BASE}/{path}"] = (status, body, HTML)
 
+    def redirect(self, path: str, to: str, status: int = 301) -> None:
+        """``path`` answers a redirect to ``to``, as the forum sends a post's address to the page that holds it."""
+        self.pages[f"{BASE}/{path}"] = (status, "", {**HTML, "Location": f"{BASE}/{to}"})
+
     def threads(self, *paths: str) -> None:
         """The first child sitemap listing these threads alone."""
         self.pages[CHILDREN[0]] = (200, urlset(*paths), XML)

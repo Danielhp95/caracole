@@ -1002,6 +1002,17 @@ def test_ireal_names_the_chart_you_picked_there(tmp_path):
     assert Overrides().ireal == {}
 
 
+def test_a_later_page_of_a_thread_names_the_post_its_anchor_does_and_no_chart_alone():
+    # The post is found on whichever page holds it (ireal_fetch.py asks its own address): its pick is the post's.
+    from caracole.overrides import IRealPick, ireal_pick_from_url
+
+    assert ireal_pick_from_url("https://forums.irealpro.com/threads/misty.3861/page-3#post-99001") == IRealPick(
+        "misty", 3861, 99001)
+    with pytest.raises(OverridesError, match=r"a later page of it names no chart, its post's address does "
+                                             r"\(…/page-3#post-N\)"):
+        ireal_pick_from_url("https://forums.irealpro.com/threads/misty.3861/page-3")
+
+
 @pytest.mark.parametrize("value", [
     "https://forums.irealpro.com/forums/jazz.6/", "https://forums.irealpro.com/threads/misty.3861/page-2",
     "https://forums.irealpro.com/posts/38106/", "https://forums.irealpro.com/members/orrpa.8006/",

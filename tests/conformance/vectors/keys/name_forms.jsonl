@@ -183,6 +183,7 @@
 {"args":["ABC"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["abc"],"name_forms":["abc"],"original_part":"ABC"}}
 {"args":["AC/DC"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ac-dc"],"name_forms":["ac-dc"],"original_part":"AC/DC"}}
 {"args":["AC/DC — “Highway to Hell”"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ac-dc-highway-to-hell"],"name_forms":["ac-dc-highway-to-hell"],"original_part":"AC/DC — “Highway to Hell”"}}
+{"args":["ANTONIO"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["antonio"],"name_forms":["antonio"],"original_part":"ANTONIO"}}
 {"args":["Abuelos de la Nada"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["abuelos-de-la-nada"],"name_forms":["abuelos-de-la-nada"],"original_part":"Abuelos de la Nada"}}
 {"args":["Acoustic"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["acoustic"],"name_forms":["acoustic"],"original_part":"Acoustic"}}
 {"args":["Actraiser"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["actraiser"],"name_forms":["actraiser"],"original_part":"Actraiser"}}
@@ -251,6 +252,7 @@
 {"args":["Bomba Estereo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bomba-estereo"],"name_forms":["bomba-estereo"],"original_part":"Bomba Estereo"}}
 {"args":["Bomnal"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bomnal"],"name_forms":["bomnal"],"original_part":"Bomnal"}}
 {"args":["Bones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bones"],"name_forms":["bones"],"original_part":"Bones"}}
+{"args":["Bossa Nova"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bossa-nova"],"name_forms":["bossa-nova"],"original_part":"Bossa Nova"}}
 {"args":["Bà"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ba"],"name_forms":["ba"],"original_part":"Bà"}}
 {"args":["C"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["c"],"name_forms":["c"],"original_part":"C"}}
 {"args":["COMMIT"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["commit"],"name_forms":["commit"],"original_part":"COMMIT"}}
@@ -272,6 +274,8 @@
 {"args":["Como El Agua"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["como-el-agua"],"name_forms":["como-el-agua"],"original_part":"Como El Agua"}}
 {"args":["Corazón Serrano"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corazon-serrano"],"name_forms":["corazon-serrano"],"original_part":"Corazón Serrano"}}
 {"args":["Corazón de Tiza"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corazon-de-tiza"],"name_forms":["corazon-de-tiza"],"original_part":"Corazón de Tiza"}}
+{"args":["Corcovado"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corcovado"],"name_forms":["corcovado"],"original_part":"Corcovado"}}
+{"args":["Corcovado - Jobim"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corcovado-jobim"],"name_forms":["corcovado-jobim"],"original_part":"Corcovado - Jobim"}}
 {"args":["Creep"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep"],"name_forms":["creep"],"original_part":"Creep"}}
 {"args":["Creep (Acoustic)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep-acoustic","creep"],"name_forms":["creep-acoustic"],"original_part":"Creep (Acoustic)"}}
 {"args":["Creep - Acoustic"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep-acoustic"],"name_forms":["creep-acoustic"],"original_part":"Creep - Acoustic"}}
@@ -409,6 +413,7 @@
 {"args":["Joaquín"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin"],"name_forms":["joaquin"],"original_part":"Joaquín"}}
 {"args":["Joaquín Sabina"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina"],"name_forms":["joaquin-sabina"],"original_part":"Joaquín Sabina"}}
 {"args":["Joaquín Sabina 19 días y 500 noches"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina-19-dias-y-500-noches"],"name_forms":["joaquin-sabina-19-dias-y-500-noches"],"original_part":"Joaquín Sabina 19 días y 500 noches"}}
+{"args":["Jobim Antônio-Carlos"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jobim-antonio-carlos"],"name_forms":["jobim-antonio-carlos"],"original_part":"Jobim Antônio-Carlos"}}
 {"args":["Joey Yung"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joey-yung"],"name_forms":["joey-yung"],"original_part":"Joey Yung"}}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joey-yung-容祖儿-eason-chan-陈奕迅","joey-yung-rong-zu-er-eason-chan-chen-yi-xun"],"name_forms":["joey-yung-容祖儿-eason-chan-陈奕迅","joey-yung-rong-zu-er-eason-chan-chen-yi-xun"],"original_part":"Joey Yung (容祖儿) & Eason Chan (陈奕迅)"}}
 {"args":["Jóga"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joga"],"name_forms":["joga"],"original_part":"Jóga"}}
@@ -777,6 +782,7 @@
 {"args":["[LaCuerda]"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda"],"name_forms":["lacuerda"],"original_part":"[LaCuerda]"}}
 {"args":["[LaCuerda] Estopa - "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda-estopa","estopa"],"name_forms":["lacuerda-estopa"],"original_part":"[LaCuerda] Estopa -"}}
 {"args":["[LaCuerda] Estopa - Como Camarón"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda-estopa-como-camaron","estopa-como-camaron"],"name_forms":["lacuerda-estopa-como-camaron"],"original_part":"[LaCuerda] Estopa - Como Camarón"}}
+{"args":["[T44D9   |Ab7   Z "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["t44d9-ab7-z"],"name_forms":["t44d9-ab7-z"],"original_part":"[T44D9   |Ab7   Z"}}
 {"args":["[artist_url]"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url"],"name_forms":["artist-url"],"original_part":"[artist_url]"}}
 {"args":["[artist_url]\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url"],"name_forms":["artist-url"],"original_part":"[artist_url]"}}
 {"args":["[artist_url]\n\"Joaquín Sabina\" = \""],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url-joaquin-sabina","joaquin-sabina"],"name_forms":["artist-url-joaquin-sabina"],"original_part":"[artist_url]\n\"Joaquín Sabina\" = \""}}
@@ -848,8 +854,10 @@
 {"args":["andresito"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["andresito"],"name_forms":["andresito"],"original_part":"andresito"}}
 {"args":["anju-panta"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["anju-panta"],"name_forms":["anju-panta"],"original_part":"anju-panta"}}
 {"args":["anonymous"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["anonymous"],"name_forms":["anonymous"],"original_part":"anonymous"}}
+{"args":["antonio jobim"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["antonio-jobim"],"name_forms":["antonio-jobim"],"original_part":"antonio jobim"}}
 {"args":["antonio josé"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["antonio-jose"],"name_forms":["antonio-jose"],"original_part":"antonio josé"}}
 {"args":["antonio_jose"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["antonio-jose"],"name_forms":["antonio-jose"],"original_part":"antonio_jose"}}
+{"args":["antônio jobim"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["antonio-jobim"],"name_forms":["antonio-jobim"],"original_part":"antônio jobim"}}
 {"args":["aqui llega:../tabs/s/sabina/index.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["aqui-llega-tabs-s-sabina-index-html"],"name_forms":["aqui-llega-tabs-s-sabina-index-html"],"original_part":"aqui llega:../tabs/s/sabina/index.html"}}
 {"args":["args"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["args"],"name_forms":["args"],"original_part":"args"}}
 {"args":["armokto"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["armokto"],"name_forms":["armokto"],"original_part":"armokto"}}
@@ -1502,6 +1510,7 @@
 {"args":["the-who"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["who"],"name_forms":["who"],"original_part":"the-who"}}
 {"args":["thread_groove-merchant-thad-jones.9518.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thread-groove-merchant-thad-jones-9518-html"],"name_forms":["thread-groove-merchant-thad-jones-9518-html"],"original_part":"thread_groove-merchant-thad-jones.9518.html"}}
 {"args":["thread_jazz-1460-standards.12753.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thread-jazz-1460-standards-12753-html"],"name_forms":["thread-jazz-1460-standards-12753-html"],"original_part":"thread_jazz-1460-standards.12753.html"}}
+{"args":["threads/corcovado-antonio-carlos-jobim.501/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-corcovado-antonio-carlos-jobim-501"],"name_forms":["threads-corcovado-antonio-carlos-jobim-501"],"original_part":"threads/corcovado-antonio-carlos-jobim.501/"}}
 {"args":["threads/jazz-1460-standards.12753/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-jazz-1460-standards-12753"],"name_forms":["threads-jazz-1460-standards-12753"],"original_part":"threads/jazz-1460-standards.12753/"}}
 {"args":["thrill"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thrill"],"name_forms":["thrill"],"original_part":"thrill"}}
 {"args":["tinto"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tinto"],"name_forms":["tinto"],"original_part":"tinto"}}

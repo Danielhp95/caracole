@@ -523,6 +523,23 @@ def test_ireal_finds_a_chart_by_its_title_its_composer_named_first_name_first(co
     assert search_ireal(conn, "nothing like this") == []
 
 
+def test_ireal_finds_a_composer_by_his_name_written_with_or_without_its_accents(conn):
+    from datetime import UTC, datetime
+
+    from helpers.ireal_site import link, thread_page
+
+    from caracole.ireal import parse_thread_page
+    from caracole.ireal_index import store_thread_page
+    from caracole.search import search_ireal
+
+    path = "threads/corcovado-antonio-carlos-jobim.501/"
+    store_thread_page(conn, parse_thread_page(thread_page("Corcovado - Jobim", [(7, [link([
+        ("Corcovado", "Jobim Antônio-Carlos", "Bossa Nova", "C", "[T44D9   |Ab7   Z ")])])], path=path)),
+        datetime(2026, 11, 18, tzinfo=UTC))
+    for query in ("antonio jobim", "antônio jobim", "ANTONIO"):
+        assert [h.title for h in search_ireal(conn, query)] == ["Corcovado"], query
+
+
 def test_ireal_reads_the_charts_of_the_pages_read_alone(conn):
     from caracole.search import search_ireal
 

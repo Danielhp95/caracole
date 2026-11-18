@@ -771,8 +771,9 @@ const caracoleRows = (icons, does) => {
     if (held(mine)) line.classList.add("have");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
-    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs"
-      : ir ? "ireal" : "removed";
+    // The source its Fetch keeps first (``chosen``'s order), then the line's others.
+    line.dataset.source = ug ? "ug" : chords ? "lacuerda" : chart ? "ireal" : harp ? "harptabs" : game ? "gametabs"
+      : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs" : ir ? "ireal" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Fetch " + display + " again" : "Fetch " + display);
     return line;

@@ -660,6 +660,7 @@ def _ireal(cfg: Config) -> None:
     sheets, then print the counts."""
     from caracole.ireal_fetch import ireal_sheets
     from caracole.ireal_index import PlaylistStats, playlist_pass
+    from caracole.overrides import load_overrides
     from caracole.songs import list_songs
 
     if not cfg.provider("ireal").enabled:
@@ -672,7 +673,8 @@ def _ireal(cfg: Config) -> None:
 
         wanted = any(s.status != "ignored" and s.key not in overrides.ignore for s in list_songs(conn))
         first = playlist_pass(conn, client, now, first=1) if wanted else PlaylistStats()
-        sheets = (ireal_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides, refresh_index=False)
+        sheets = (ireal_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides, refresh_index=False,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
                   if not first.budget_exhausted else IRealStats(budget_exhausted=True))
         return first, sheets
 

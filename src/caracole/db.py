@@ -608,8 +608,9 @@ END;
 # id, its slug and the slug's key (ireal.slug_key_of), which a title's key begins (site_index.py fills it). ireal_threads:
 # each thread page caracole read, its title ('' for a page gone, 404), its forum's path, how many charts it held, and
 # when. ireal_charts: each chart those pages hold, by its page, its post's id and its place in the post (from 1), its
-# title as the chart writes it and that title's key (ireal.title_key), its composer (last name first), style and key
-# as the app writes them, and the playlist it came in ('' for a link of one tune).
+# title as the chart writes it and that title's key (ireal.title_key), its composer (last name first) and that name's
+# key (normalize.slug_key: a search's words, accents folded), style and key as the app writes them, and the playlist it
+# came in ('' for a link of one tune).
 _SCHEMA_V17 = """
 CREATE TABLE IF NOT EXISTS ireal_index (
   path TEXT PRIMARY KEY,
@@ -634,6 +635,7 @@ CREATE TABLE IF NOT EXISTS ireal_charts (
   title TEXT NOT NULL,
   title_key TEXT NOT NULL,
   composer TEXT NOT NULL DEFAULT '',
+  composer_key TEXT NOT NULL DEFAULT '',
   style TEXT NOT NULL DEFAULT '',
   key TEXT NOT NULL DEFAULT '',
   playlist TEXT NOT NULL DEFAULT '',

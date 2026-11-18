@@ -5,7 +5,9 @@ The sitemaps (ireal_fetch.py, ``ireal_index``) name every thread by its slug alo
 title's words, but a playlist's ("jazz-1460-standards") names none of its tunes. Each thread page caracole reads goes
 into ``ireal_threads`` and ``ireal_charts`` (db.py, schema 17): its title, its forum, and each chart its posts hold,
 with its title and composer, in place of those it gave before, in one transaction; a page that answers 404 keeps no
-chart, and its row says it is gone (no title). A song's fetch reads these first, from the cache, with no request.
+chart, and its row says it is gone (no title). A song's fetch reads these first, from the cache, with no request. A
+page's ``read_at`` is when the site answered it: a copy read from the cache is stored again only where the index lacks
+it, at the time it was fetched, so a song that reads a playlist from the cache never puts off its next read.
 
 **Reading the playlists** (``playlist_pass``): the sitemaps first, when due (site_index.py: once in 30 days), then the
 curated playlist, the Jazz 1460 Standards (``ireal.JAZZ_1460``), then the jazz forum's page (``ireal.PLAYLIST_FORUMS``),
@@ -29,7 +31,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from caracole import normalize, site_index, stamps
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
@@ -104,15 +106,15 @@ class IndexState:
 def store_thread_page(conn: sqlite3.Connection, page: ThreadPage, now: datetime) -> None:
     """A thread page's charts into the index, in place of those it gave before, in one transaction."""
     ensure_current_keys(conn)
-    rows = [(page.path, post.post, place, tune.title, title_key(tune.title), tune.composer, tune.style, tune.key,
-             tune.playlist) for post, place, tune in page.charts()]
+    rows = [(page.path, post.post, place, tune.title, title_key(tune.title), tune.composer,
+             normalize.slug_key(tune.composer), tune.style, tune.key, tune.playlist) for post, place, tune in page.charts()]
     with savepoint(conn, "ireal_thread_page"):
         conn.execute("DELETE FROM ireal_charts WHERE page = ?", (page.path,))
         conn.execute("INSERT OR REPLACE INTO ireal_threads (path, thread, title, forum, charts, read_at) "
                      "VALUES (?, ?, ?, ?, ?, ?)",
                      (page.path, page.thread, page.title, page.forum, len(rows), stamps.stamp(now)))
-        conn.executemany("INSERT OR REPLACE INTO ireal_charts (page, post, place, title, title_key, composer, style, "
-                         "key, playlist) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        conn.executemany("INSERT OR REPLACE INTO ireal_charts (page, post, place, title, title_key, composer, "
+                         "composer_key, style, key, playlist) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
 def store_gone(conn: sqlite3.Connection, path: str, now: datetime) -> None:
@@ -121,20 +123,20 @@ def store_gone(conn: sqlite3.Connection, path: str, now: datetime) -> None:
 
 
 def ensure_current_keys(conn: sqlite3.Connection) -> int:
-    """Make every chart's title key again from its title after a change to caracole's keys, once; no request, and
-    nothing written while the index holds no chart (a lookup on a phone, say, whose index is empty). Returns how many
-    rows changed."""
+    """Make every chart's title key and composer's key again from its title and composer after a change to caracole's
+    keys, once; no request, and nothing written while the index holds no chart (a lookup on a phone, say, whose index
+    is empty). Returns how many rows changed."""
     version = str(normalize.KEY_VERSION)
     if kv_get(conn, KEYS_KEY) == version or conn.execute("SELECT 1 FROM ireal_charts LIMIT 1").fetchone() is None:
         return 0
     changed = 0
     with savepoint(conn, "ireal_chart_keys"):
-        for page, post, place, title, old in conn.execute(
-                "SELECT page, post, place, title, title_key FROM ireal_charts").fetchall():
-            new = title_key(title)
-            if new != old:
-                conn.execute("UPDATE ireal_charts SET title_key = ? WHERE page = ? AND post = ? AND place = ?",
-                             (new, page, post, place))
+        for page, post, place, title, old, composer, old_composer in conn.execute(
+                "SELECT page, post, place, title, title_key, composer, composer_key FROM ireal_charts").fetchall():
+            new, new_composer = title_key(title), normalize.slug_key(composer)
+            if (new, new_composer) != (old, old_composer):
+                conn.execute("UPDATE ireal_charts SET title_key = ?, composer_key = ? WHERE page = ? AND post = ? AND "
+                             "place = ?", (new, new_composer, page, post, place))
                 changed += 1
         kv_set(conn, KEYS_KEY, version)
     return changed
@@ -169,16 +171,24 @@ def index_state(conn: sqlite3.Connection) -> IndexState:
 
 def read_thread(conn: sqlite3.Connection, client: Client, path: str, now: datetime, *,
                 fetched: set[str] | None = None, max_age: timedelta | None = MAX_AGE) -> ThreadPage | None:
-    """One thread page into the index now; None when the site no longer has it (404). Read once in ``max_age``: a copy
+    """One thread page, into the index; None when the site no longer has it (404). Read once in ``max_age``: a copy
     the cache holds from within it is read again, with no request (with None, the cache's copy, whenever it is from).
-    A cached copy that won't parse is asked for once more. Provider errors propagate; a spent budget is
-    ``BudgetExhausted``."""
+    A cached copy that won't parse is asked for once more. The index stores a fresh answer at ``now``; a copy from the
+    cache only where it lacks the page, at the time the copy was fetched (it held that copy already, stored when it
+    came: a 1,560-chart playlist isn't written again for one song's read). Provider errors propagate; a spent budget
+    is ``BudgetExhausted``."""
     url = page_url(path)
     resp = client.get(url, accept=_ACCEPT, max_age=max_age) if max_age is not None else client.get(url, accept=_ACCEPT)
     if max_age is not None and stale(resp, now, max_age):
         raise BudgetExhausted(PROVIDER)  # no answer for today: stop as the next request would have
-    page = read_once_more(client, resp, url, _thread, IRealParseError, fetched=fetched if fetched is not None else set(),
-                          accept=_ACCEPT)
+    seen = fetched if fetched is not None else set()
+    before = url in seen
+    page = read_once_more(client, resp, url, _thread, IRealParseError, fetched=seen, accept=_ACCEPT)
+    fresh = not resp.from_cache or (not before and url in seen)  # read_once_more asked for it past the cache
+    if not fresh:
+        if conn.execute("SELECT 1 FROM ireal_threads WHERE path = ?", (path,)).fetchone() is not None:
+            return page
+        now = stamps.parse(resp.fetched_at) or datetime(1970, 1, 1, tzinfo=UTC)  # unknown: as old as any
     if page is None:
         store_gone(conn, path, now)
     else:

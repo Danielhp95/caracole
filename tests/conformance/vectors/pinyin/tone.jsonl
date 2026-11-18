@@ -1641,6 +1641,8 @@
 {"args":["Joaquín","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","",""]}
 {"args":["Joaquín Sabina","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Joaquín Sabina"]}
 {"args":["Joaquín Sabina","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","",""]}
+{"args":["Jobim Antônio-Carlos","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Jobim Antônio-Carlos"]}
+{"args":["Jobim Antônio-Carlos","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","","","","","",""]}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["Joey Yung (","róng","zǔ","ér",") & Eason Chan (","chén","yì","xùn",")"]}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","róng","zǔ","ér","","","","","","","","","","","","","","","","","chén","yì","xùn",""]}
 {"args":["K歌之王","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["K","gē","zhī","wáng"]}
@@ -1717,6 +1719,8 @@
 {"args":["[harptabs] the beatles - yesterday · 2 tabs, key G","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
 {"args":["antonio josé","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["antonio josé"]}
 {"args":["antonio josé","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","",""]}
+{"args":["antônio jobim","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["antônio jobim"]}
+{"args":["antônio jobim","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","",""]}
 {"args":["caracole add \"宋冬野\" \"斑马斑马\"","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["caracole add \"","sòng","dōng","yě","\" \"","bān","mǎ","bān","mǎ","\""]}
 {"args":["caracole add \"宋冬野\" \"斑马斑马\"","empty_each"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["","","","","","","","","","","","","","","sòng","dōng","yě","","","","bān","mǎ","bān","mǎ",""]}
 {"args":["caracole lacuerda --artist \"El Barrio\" reads the page of “El Barrio” now","default"],"fn":"test_conformance_pinyin.lazy_tone","kw":{},"out":["caracole lacuerda --artist \"El Barrio\" reads the page of “El Barrio” now"]}

@@ -428,7 +428,8 @@ def _ireal(ctx: StepContext) -> StepResult:
     wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
     first = playlist_pass(ctx.conn, client, ctx.now, first=1) if wanted else PlaylistStats()
     s = (ireal_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now, overrides=ctx.overrides,
-                      refresh_index=False) if wanted and not first.budget_exhausted else IRealStats())
+                      refresh_index=False, reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file))
+         if wanted and not first.budget_exhausted else IRealStats())
     rest = (playlist_pass(ctx.conn, client, ctx.now, refresh_index=False)
             if wanted and not first.budget_exhausted and not s.budget_exhausted else PlaylistStats())
     state = index_state(ctx.conn)

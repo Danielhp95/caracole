@@ -8489,6 +8489,8 @@
 {"args":["Joaquín"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["Joaquín Sabina"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Joaquín Sabina"]}
 {"args":["Joaquín Sabina"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["Jobim Antônio-Carlos"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Jobim Antônio-Carlos"]}
+{"args":["Jobim Antônio-Carlos"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["Joey Yung (","rong","zu","er",") & Eason Chan (","chen","yi","xun",")"]}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":["rong","zu","er","chen","yi","xun"]}
 {"args":["K歌之王"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["K","ge","zhi","wang"]}
@@ -8565,6 +8567,8 @@
 {"args":["[harptabs] the beatles - yesterday · 2 tabs, key G"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["antonio josé"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["antonio josé"]}
 {"args":["antonio josé"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["antônio jobim"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["antônio jobim"]}
+{"args":["antônio jobim"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["caracole add \"宋冬野\" \"斑马斑马\""],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["caracole add \"","song","dong","ye","\" \"","ban","ma","ban","ma","\""]}
 {"args":["caracole add \"宋冬野\" \"斑马斑马\""],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":["song","dong","ye","ban","ma","ban","ma"]}
 {"args":["caracole lacuerda --artist \"El Barrio\" reads the page of “El Barrio” now"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["caracole lacuerda --artist \"El Barrio\" reads the page of “El Barrio” now"]}

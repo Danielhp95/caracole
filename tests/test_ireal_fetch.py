@@ -366,3 +366,151 @@ def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):
     finally:
         client.close()
     assert set(site.agents) == {"caracole/0.1 (personal tab library)"}
+
+
+# --- the review of 2026-11-18 ----------------------------------------------------------------------------------------
+
+
+def test_a_tune_that_wont_read_beside_good_ones_is_passed_over_and_the_songs_own_is_an_error_never_a_miss(conn,
+                                                                                                         tmp_path):
+    # "T4", a time of one digit at the music's end, once failed the whole step for every song the page was a
+    # candidate of; now a tune that won't read is passed over, and is an error only for the song it would be.
+    site = FakeIReal()
+    site.page(JAZZ_1460, thread_page("Jazz 1460 Standards", [(31492, [link([
+        ("Misty", "Garner Erroll", "Ballad", "Eb", "T4"),
+        ("Autumn Leaves", "Kosma Joseph", "Medium Swing", "G-", "[T44C-7 F7 |Bb^7   Z "),
+    ], playlist="Jazz 1460")])], path=JAZZ_1460))
+    read_playlist(site, conn, tmp_path)
+    leaves = add_song(conn, "Bill Evans", "Autumn Leaves")
+    misty = add_song(conn, "Ella Fitzgerald", "Misty")
+
+    stats = run(site, conn, tmp_path, NOW + timedelta(hours=1), refresh_index=False)
+
+    assert (stats.kept, stats.missing, stats.errors) == (1, 0, 1)
+    assert kept(conn, leaves)["sheet.txt"].raw["composer"] == "Kosma Joseph"
+    assert kept(conn, misty) == {} and [s.id for s, _ in stats.failures] == [misty.id]
+    assert "no chord" in str(stats.failures[0][1])
+    assert kv_get(conn, f"ireal:checked:{misty.id}") is None  # an error: asked about again at the next run
+
+
+def test_a_playlist_a_song_reads_from_the_cache_is_still_read_again_after_30_days(conn, tmp_path):
+    # The reviewer's sequence: the pass on day 0, Misty from the cache on day 20, the pass on day 35.
+    site = FakeIReal()
+    read_playlist(site, conn, tmp_path)
+    read_at = conn.execute("SELECT read_at FROM ireal_threads WHERE path = ?", (JAZZ_1460,)).fetchone()[0]
+    add_song(conn, "Ella Fitzgerald", "Misty")
+    assert run(site, conn, tmp_path, NOW + timedelta(days=20), refresh_index=False).kept == 1
+    assert conn.execute("SELECT read_at FROM ireal_threads WHERE path = ?", (JAZZ_1460,)).fetchone()[0] == read_at
+    site.requests.clear()
+    client = site.client(tmp_path / "cache", now=NOW + timedelta(days=35))
+    try:
+        stats = playlist_pass(conn, client, NOW + timedelta(days=35), first=1, refresh_index=False)
+    finally:
+        client.close()
+    assert stats.read == 1 and site.requests == [f"{BASE}/{JAZZ_1460}"]
+
+
+@pytest.mark.parametrize("artist", ["Thad Jones / Count Basie", "Thad Jones & Mel Lewis", "Count Basie and Thad Jones",
+                                    "Count Basie, Thad Jones", "Count Basie feat. Thad Jones",
+                                    "COUNT BASIE WITH THAD JONES"])
+def test_a_line_naming_several_artists_is_each_of_them(conn, tmp_path, artist):
+    song = add_song(conn, artist, "Groove Merchant")
+    site = FakeIReal()
+    assert run(site, conn, tmp_path).kept == 1
+    assert kept(conn, song)["sheet.txt"].tab_id.startswith("9518/")
+    assert site.requests[len(SITEMAPS)] == f"{BASE}/{THAD_JONES}"
+
+
+def test_the_jazz_forums_other_playlists_need_the_composer_as_any_thread_does(conn, tmp_path):
+    # Only the Jazz 1460 is the moderators' list of standards: a gypsy jazz playlist's Misty is no one's by its title.
+    gypsy = "threads/gypsy-jazz.215/"
+    site = FakeIReal()
+    site.page(gypsy, thread_page("Gypsy Jazz", [(5, [link([
+        ("Minor Swing", "Reinhardt Django", "Gypsy Jazz", "A-", "[T44A-6   |E7   Z "),
+        ("Misty", "Someone Else", "Ballad", "Eb", "[T44Eb^7   |Ab7   Z "),
+    ], playlist="Gypsy Jazz")])], path=gypsy))
+    client = site.client(tmp_path / "cache", budget=20)
+    try:
+        playlist_pass(conn, client, NOW)
+    finally:
+        client.close()
+    django = add_song(conn, "Django Reinhardt", "Minor Swing")
+    ella = add_song(conn, "Ella Fitzgerald", "Minor Swing")
+    misty = add_song(conn, "Sarah Vaughan", "Misty")
+
+    assert candidates(conn, django) == [gypsy] and candidates(conn, ella) == []
+    assert candidates(conn, misty) == [JAZZ_1460]  # the 1460's Misty, by its title alone; never the gypsy one
+    run(site, conn, tmp_path, NOW + timedelta(hours=1), refresh_index=False)
+    assert kept(conn, django)["sheet.txt"].tab_id == "215/5/1" and kept(conn, ella) == {}
+    assert kept(conn, misty)["sheet.txt"].tab_id.startswith("12753/")
+
+
+def test_a_pick_of_a_post_on_a_later_page_asks_the_posts_address_and_reads_its_page(conn, tmp_path):
+    later = "threads/groove-merchant-thad-jones.9518/page-2"
+    site = FakeIReal()
+    site.redirect("threads/groove-merchant-thad-jones.9518/post-99001", later)
+    site.page(later, thread_page("Groove Merchant - Thad Jones", [(99001, [link([
+        ("Groove Merchant", "Jones Thad", "Medium Swing", "Bb", "[T44Bb7   |Eb7   |Bb7   Z ")])])], path=later))
+    song = add_song(conn, "Count Basie", "Groove Merchant")
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518, 99001)})
+
+    stats = run(site, conn, tmp_path, overrides=picked)
+
+    assert stats.kept == 1 and kept(conn, song)["sheet.txt"].tab_id == "9518/99001/1"
+    assert site.requests[len(SITEMAPS):] == [
+        f"{BASE}/{THAD_JONES}", f"{BASE}/threads/groove-merchant-thad-jones.9518/post-99001", f"{BASE}/{later}"]
+    # The index keeps first pages alone.
+    assert conn.execute("SELECT COUNT(*) FROM ireal_charts WHERE post = 99001").fetchone()[0] == 0
+    assert kv_get(conn, f"ireal:checked:{song.id}:pick") == picked.ireal[song.key].url
+
+
+def test_a_pick_of_a_post_gone_is_a_miss_once_its_address_answered(conn, tmp_path):
+    song = add_song(conn, "Count Basie", "Groove Merchant")
+    site = FakeIReal()  # its post's address answers 404
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518, 99002)})
+    stats = run(site, conn, tmp_path, overrides=picked)
+    assert (stats.kept, stats.missing, stats.errors) == (0, 1, 0)
+    assert site.requests[-1] == f"{BASE}/threads/groove-merchant-thad-jones.9518/post-99002"
+
+
+class Handing:
+    """A client whose process lets a lookup go first after the requests ``after`` names (commands/_common.py's
+    clients count their handoffs in ``handoffs``)."""
+
+    def __init__(self, inner, after):
+        self.inner, self.after, self.handoffs = inner, after, 0
+
+    def get(self, url, **kw):
+        resp = self.inner.get(url, **kw)
+        self.handoffs += self.after(url)
+        return resp
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+def test_a_pick_a_lookup_made_while_the_pass_paused_is_read_before_the_next_song(conn, tmp_path):
+    song = add_song(conn, "Count Basie", "Groove Merchant")  # no candidate of its own: only a pick reads a chart
+    site = FakeIReal()
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518)})
+    client = Handing(site.client(tmp_path / "cache"), lambda url: url == SITEMAP)
+    try:
+        stats = ireal_sheets(conn, client, tmp_path / "library", RankPolicy(), NOW, overrides=Overrides(),
+                             reload_overrides=lambda: picked)
+    finally:
+        client.close()
+    assert stats.kept == 1 and kept(conn, song)["sheet.txt"].tab_id.startswith("9518/")
+
+
+def test_a_song_a_lookup_changed_in_its_own_turn_is_left_as_the_lookup_left_it(conn, tmp_path):
+    song = add_song(conn, "Thad Jones", "Groove Merchant")
+    site = FakeIReal()
+    ignored = Overrides(ignore=frozenset({song.key}))
+    client = Handing(site.client(tmp_path / "cache"), lambda url: url == f"{BASE}/{THAD_JONES}")
+    try:
+        stats = ireal_sheets(conn, client, tmp_path / "library", RankPolicy(), NOW, overrides=Overrides(),
+                             reload_overrides=lambda: ignored)
+    finally:
+        client.close()
+    assert (stats.kept, stats.missing) == (0, 0) and kept(conn, song) == {}
+    assert kv_get(conn, f"ireal:checked:{song.id}") is None

@@ -51,7 +51,8 @@ internal object Addresses {
     const val GAMETABS_BASE = "https://gametabs.net"
     private val IREAL_HOST by lazy { PyRegex.compile("forums\\.irealpro\\.com") }
     private val IREAL_PATH by lazy {
-        PyRegex.compile("/threads/([a-z0-9_-]{1,250})\\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11}))?/?")
+        PyRegex.compile(
+            "/threads/([a-z0-9_-]{1,250})\\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11})|/(page-[1-9][0-9]{0,5}))?/?")
     }
     private val IREAL_ANCHOR by lazy { PyRegex.compile("post-([1-9][0-9]{0,11})") }
     const val IREAL_BASE = "https://forums.irealpro.com"
@@ -213,6 +214,10 @@ internal object Addresses {
         }
         found ?: throw OverridesError("expected an iReal Pro forum's thread ($IREAL_PAGE_SHAPE), got ${PyValues.repr(url)}")
         val post = found.groupValues[3].ifEmpty { anchor?.groupValues?.get(1).orEmpty() }
+        if (found.groupValues[4].isNotEmpty() && post.isEmpty()) {
+            throw OverridesError("expected an iReal Pro forum's thread ($IREAL_PAGE_SHAPE), got ${PyValues.repr(url)}: " +
+                "a later page of it names no chart, its post's address does (…/${found.groupValues[4]}#post-N)")
+        }
         return IRealPick(found.groupValues[1], found.groupValues[2].toLong(), post.ifEmpty { null }?.toLong())
     }
 

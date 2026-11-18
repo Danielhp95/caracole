@@ -785,7 +785,7 @@ def test_a_version_16_database_gains_ireal_tables_and_keeps_its_rows(tmp_path):
     assert columns(path, "ireal_index")[0] == ["path", "thread", "slug", "key", "sitemap"]
     assert columns(path, "ireal_threads")[0] == ["path", "thread", "title", "forum", "charts", "read_at"]
     assert columns(path, "ireal_charts")[0] == [
-        "page", "post", "place", "title", "title_key", "composer", "style", "key", "playlist"]
+        "page", "post", "place", "title", "title_key", "composer", "composer_key", "style", "key", "playlist"]
     for table in ("ireal_index", "ireal_threads", "ireal_charts"):
         assert c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
     c.close()

@@ -611,7 +611,7 @@
    {
     "cid": 6,
     "dflt_value": "''",
-    "name": "style",
+    "name": "composer_key",
     "notnull": 1,
     "pk": 0,
     "type": "TEXT"
@@ -619,13 +619,21 @@
    {
     "cid": 7,
     "dflt_value": "''",
-    "name": "key",
+    "name": "style",
     "notnull": 1,
     "pk": 0,
     "type": "TEXT"
    },
    {
     "cid": 8,
+    "dflt_value": "''",
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 9,
     "dflt_value": "''",
     "name": "playlist",
     "notnull": 1,

@@ -4,8 +4,8 @@ forums.irealpro.com is the forum of iReal Pro, the app that plays a song's chord
 one song a thread or a playlist of many, as links the app opens (``irealb://…``). It is where jazz standards are
 charted, which Ultimate Guitar and LaCuerda chart badly or not at all, and its "Jazz 1460 Standards" thread holds a
 playlist of 1,460 of them, curated by the forum's moderators. caracole indexes its sitemaps' threads, reads the jazz
-forum's playlist threads (ireal_index.py), matches your songs to its charts by title, and keeps the best one as the
-song's sheet (ireal_fetch.py). What the site answered on 18 November 2026, asked with caracole's own user agent
+forum's playlist threads (ireal_index.py), matches your songs to its charts by title and composer (or the Jazz 1460's
+by title alone), and keeps the best one as the song's sheet (ireal_fetch.py). What the site answered on 18 November 2026, asked with caracole's own user agent
 (``config.DEFAULT_USER_AGENT``): robots.txt, the sitemap index and its six children, the jazz forum's first page and
 three thread pages, all 200, from Apache on Ubuntu (XenForo 2.3), no bot protection seen:
 
@@ -28,10 +28,12 @@ three thread pages, all 200, from Apache on Ubuntu (XenForo 2.3), no bot protect
   blocks of 50 characters as the open-source readers document (pyRealParser, ireal-reader: ``unscramble``), then
   ``XyQ`` stands for three spaces, ``LZ`` for " |" and ``Kcl`` for "| x". What it reads (``chart``): bar lines
   ``| [ ] { } Z``, sections ``*A``, the time ``T44``, endings ``N1``, ``x`` the bar before again, ``r`` the two bars
-  before, ``n`` no chord, ``Q`` coda, ``S`` segno, ``<…>`` a comment, chords such as ``C^7 D-7 G7b9 Bb/Ab``
-  (``chord_name``), and what only the app's layout reads (``Y``, ``s``, ``l``, ``p``, ``U``, ``f``, an alternative
-  chord in parentheses), which a sheet leaves out. The composer is written last name first, "Jones Thad"
-  (``composer_name``).
+  before, an empty bar the last chord before it held on, ``n`` no chord, ``Q`` coda, ``S`` segno, ``<…>`` a comment,
+  chords such as ``C^7 D-7 G7b9 Bb/Ab`` and the app's own ``C*-^*`` (``chord_name``), and what only the app's layout
+  reads (``Y``, ``s``, ``l``, ``p``, ``U``, ``f``, ``,``, an alternative chord in parentheses), which a sheet leaves out.
+  A tune none of whose music reads as a chord, or with more than ``UNREAD_MOST`` characters that read as nothing (a
+  link cut short inside a block leaves it scrambled), is ``IRealParseError``: the decoder raises nothing else, on any
+  input. The composer is written last name first, "Jones Thad" (``composer_name``).
 - **The jazz forum's page** (``parse_forum_page``, ``/forums/jazz.6/``) lists its threads, its playlists first,
   sticky: the Jazz 1460 Standards, its New 50 and individual songs, gypsy jazz, Dixieland, fusion, contemporary jazz.
 - **Its terms** (``/help/terms/``) say nothing of bots, scraping or reading; posters keep their copyright. No
@@ -61,9 +63,12 @@ MAGIC = "1r34LbKcu7"  # what an irealb:// tune's music starts with
 JAZZ_1460 = "threads/jazz-1460-standards.12753/"  # the moderators' playlist of 1,460 standards
 PLAYLIST_FORUMS = ("forums/jazz.6/",)  # the forums whose sticky threads are playlists caracole reads
 BARS_A_LINE = 4  # a sheet's line of a chart: four bars, as the app lays them out
+UNREAD_MOST = 3  # characters of a tune's music that read as nothing it may hold: past them, it is garbled
 
 _THREAD = re.compile(r"threads/([a-z0-9_-]{1,250})\.([1-9][0-9]{0,9})/")
 _PAGE = re.compile(rf"https://{re.escape(HOST)}/({_THREAD.pattern})")
+# A thread's page as its address or its canonical link names it: its first, a later one, or a post's address.
+_ANY_PAGE = re.compile(rf"https://{re.escape(HOST)}/({_THREAD.pattern})(?:page-[1-9][0-9]{{0,5}}|post-[1-9][0-9]{{0,11}})?")
 _FORUM = re.compile(r"forums/[a-z0-9_-]{1,200}\.[1-9][0-9]{0,9}/")
 _CHILD = re.compile(rf"https://{re.escape(HOST)}/(sitemap-[1-9][0-9]{{0,2}})\.xml")
 _SCHEMES = ("irealb", "irealbook")
@@ -181,23 +186,24 @@ def decoded(music: str, scheme: str = "irealb") -> str:
 # What a chord's quality is made of, after its root: a sign first (minor-major, major, minor, half-diminished,
 # diminished, augmented), then numbers, alterations, "alt", "add" and "sus" in any order.
 _QUALITY = r"(?:-\^|\^|-|h|o|\+)?(?:[0-9]+|alt|add[0-9]*|sus[0-9]*|[b#][0-9]+|\^[0-9]*)*"
-_CHORD = re.compile(rf"([A-GW][b#]?)({_QUALITY})(?:\*\*)?(?:/([A-G][b#]?))?")
+_CHORD = re.compile(rf"([A-GW][b#]?)({_QUALITY})(?:\*({_QUALITY})\*)?(?:/([A-G][b#]?))?")  # "C*-^*": the app's own
 _SIGNS = (("-^", "mmaj"), ("^", "maj"), ("-", "m"), ("h", "m7b5"), ("o", "dim"), ("+", "aug"))
 
 
 def chord_name(token: str) -> str:
     """A chord as iReal Pro writes it, named as sheets name it: "C^7" Cmaj7, "D-7" Dm7, "Bh7" Bm7b5, "Eo7" Edim7,
-    "C+" Caug, "C-^7" Cmmaj7; its root, its bass and the rest as written."""
+    "C+" Caug, "C-^7" Cmmaj7, and a quality of the app's own between asterisks as any ("C*-^*" Cmmaj); its root, its
+    bass and the rest as written."""
     m = _CHORD.fullmatch(token)
     if m is None:
         return token
-    root, quality, bass = m.groups()
-    return root + _quality(quality) + (f"/{bass}" if bass else "")
+    root, quality, own, bass = m.groups()
+    return root + _quality(quality + (own or "")) + (f"/{bass}" if bass else "")
 
 
 def _quality(quality: str) -> str:
-    if quality == "^":
-        return "maj7"
+    if quality in ("^", "-^"):
+        return {"^": "maj7", "-^": "mmaj7"}[quality]
     if quality in ("h", "h7"):
         return "m7b5"
     for sign, name in _SIGNS:
@@ -234,6 +240,8 @@ def _time(digits: str) -> str:
 
 
 _SECTIONS = {"i": "Intro", "v": "Verse"}
+_TIME = re.compile(r"T([0-9]{2})")  # a time signature: two digits, never one at the music's end
+_LAYOUT = frozenset(",lspYUf")  # what the app's layout alone reads: a sheet leaves it out
 
 
 @dataclass
@@ -266,6 +274,8 @@ class _Reader:
         self.last = "|"  # the last bar line read
         self.skip_empty = False  # the empty bar after an "r" is that repeat's second
         self.chord: str | None = None  # the last chord named, for a bass alone ("W/C")
+        self.chords = 0  # the chords read (no "N.C.")
+        self.unread = 0  # the characters that read as nothing: no mark, chord or layout
         self._read(music)
         self._close("")
 
@@ -288,8 +298,8 @@ class _Reader:
                 self.cur.label = _SECTIONS.get(nxt.lower(), nxt)
                 pos += 2
                 continue
-            if c == "T" and s[pos + 1:pos + 3].isdigit() and s[pos + 1:pos + 3].isascii():
-                time = _time(s[pos + 1:pos + 3])
+            if c == "T" and (t := _TIME.match(s, pos)) is not None:
+                time = _time(t.group(1))
                 if self.time is None:
                     self.time = time
                 elif time != self.now:
@@ -328,21 +338,30 @@ class _Reader:
                 self.cur.note("Segno")
             elif c == " ":
                 self.blank = True
+            elif c not in _LAYOUT:
+                self.unread += 1
             pos += 1
 
     def _chord(self, m: re.Match[str]) -> None:
-        root, _, bass = m.groups()
+        root, _, _, bass = m.groups()
         if root == "W":  # a bass alone, under the chord before it
             if self.chord is None or not bass:
+                self.unread += 1
                 return
             name = self.chord.partition("/")[0] + f"/{bass}"
         else:
             name = chord_name(m.group(0).replace("**", ""))
         self.chord = name
+        self.chords += 1
         self.cur.add(name)
         self.content = True
 
     def _bar_line(self, c: str) -> None:
+        # The bar after two bars repeated ("r") is that repeat's second: empty, it is no bar of its own.
+        second, self.skip_empty = self.skip_empty, False
+        if self._empty(c) and not second:
+            self.cur.chords = [(self.bars[-1].chords or ["N.C."])[-1]]  # the last chord before it, held on
+            self.content = True
         if c in "]}Z":
             self._close({"]": "||", "}": ":|", "Z": "||"}[c])
             self.cur.left = "|"
@@ -350,15 +369,16 @@ class _Reader:
             self._close("|")
             self.cur.left = {"[": "||", "{": "|:"}[c]
         else:
-            if not self.content and self.last == "|" and self.blank and self.bars:
-                if self.skip_empty:
-                    self.skip_empty = False
-                else:
-                    self.cur.chords = list(self.bars[-1].chords or [])
-                    self.content = True
             self._close("|")
         self.last = c
         self.blank = False
+
+    def _empty(self, c: str) -> bool:
+        """Whether the bar line ``c`` ends an empty bar: space alone since a bar line that opens one (``|``, ``[``,
+        ``{``), up to one that ends one (``|``, ``]``, ``}``, ``Z``), after a bar with a chord; never the space between
+        a bar line that closes a section and one that opens the next ("Z [")."""
+        return (not self.content and self.blank and self.last in "|[{" and c in "|]}Z" and bool(self.bars)
+                and bool(self.bars[-1].chords))
 
     def _close(self, right: str) -> None:
         """The bar being read ends at a bar line written ``right``: kept when it holds something, its repeats the bars
@@ -417,18 +437,32 @@ class Tune:
 
     @property
     def time(self) -> str:
-        """Its first time signature ("4/4", "3/4"), 4/4 when the music names none."""
-        return _Reader(decoded(self.music, self.scheme)).time or "4/4"
+        """Its first time signature ("4/4", "3/4"), 4/4 when the music names none; ``IRealParseError`` for music that
+        won't read (``chart``)."""
+        return self._read().time or "4/4"
+
+    def _read(self) -> _Reader:
+        """Its music read; ``IRealParseError`` when none of it reads as a chord, or more than ``UNREAD_MOST`` characters
+        read as nothing (a link cut short inside a block leaves its end scrambled), and the one error it raises."""
+        try:
+            reader = _Reader(decoded(self.music, self.scheme))
+        except (IndexError, KeyError, ValueError) as e:  # no input should, but the web's is anyone's to write
+            raise IRealParseError(f"the chart of “{self.title}” won't read: {e}") from e
+        if not reader.chords:
+            raise IRealParseError(f"no chord in the chart of “{self.title}”")
+        if reader.unread > UNREAD_MOST:
+            raise IRealParseError(f"the chart of “{self.title}” is garbled: {reader.unread} characters read as no "
+                                  f"chord or mark")
+        return reader
 
     def chart(self) -> str:
         """The chart as a sheet in Ultimate Guitar's markup, as render.py and the viewer read a sheet (chordpro.py): a
         line of who wrote it, in what style and time; then its bars, ``BARS_A_LINE`` a line, the chords of each in
         ``[ch]…[/ch]`` between bar lines, which a sheet's page draws as cells (viewer/sheet.py ``bars``), a double bar or a
         repeat's start beginning a line too; a section, an ending or the coda a ``[label]`` over the line it begins; and a line of what its marks say (a comment, "To
-        Coda", another time) under the line they are in, after a blank one. "" for a tune with no chord."""
-        reader = _Reader(decoded(self.music, self.scheme))
-        if not any(b.chords for b in reader.bars):
-            return ""
+        Coda", another time) under the line they are in, after a blank one. ``IRealParseError`` for a tune whose music
+        won't read as a chart (``_read``)."""
+        reader = self._read()
         head = " · ".join(p for p in (composer_name(self.composer), self.style, reader.time or "4/4") if p)
         out = [head, ""]
         lines: list[list[_Bar]] = []
@@ -523,9 +557,10 @@ def _quoted(node: LexborNode, top: LexborNode) -> bool:
 
 
 def _path_of(tree: LexborHTMLParser, url: str | None) -> str:
+    """The path of a thread's first page, from a page of it (its first, a later one)."""
     canonical = tree.css_first('link[rel="canonical"]')
     for address in ((canonical.attributes.get("href") or "") if canonical is not None else "", url or ""):
-        m = _PAGE.fullmatch(address.split("#", 1)[0])
+        m = _ANY_PAGE.fullmatch(address.split("#", 1)[0])
         if m:
             return m.group(1)
     return ""
@@ -533,7 +568,8 @@ def _path_of(tree: LexborHTMLParser, url: str | None) -> str:
 
 def parse_thread_page(html: str | bytes, url: str | None = None) -> ThreadPage:
     """A thread page's title, forum and posts, each with the tunes of its charts; ``IRealParseError`` for a page
-    without a title, a thread's address or a post (a page cut short, an error page)."""
+    without a title, a thread's address or a post (a page cut short, an error page). A later page of a thread reads
+    as its first does, its path the first's, its posts its own."""
     if isinstance(html, bytes):
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)

@@ -115,7 +115,8 @@ GAMETABS_PAGE_SHAPE = f"{GAMETABS_BASE}/tabs/<game>/<tab>"
 # iReal Pro's forum: a thread's first page, /threads/<slug>.<id>/, and a post of it as its anchor (#post-N) or its own
 # path (/threads/<slug>.<id>/post-N), as the forum links one (ireal.py).
 _IREAL_HOST = re.compile(r"forums\.irealpro\.com")
-_IREAL_PATH = re.compile(r"/threads/([a-z0-9_-]{1,250})\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11}))?/?")
+_IREAL_PATH = re.compile(
+    r"/threads/([a-z0-9_-]{1,250})\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11})|/(page-[1-9][0-9]{0,5}))?/?")
 _IREAL_ANCHOR = re.compile(r"post-([1-9][0-9]{0,11})")
 IREAL_BASE = "https://forums.irealpro.com"
 IREAL_PAGE_SHAPE = f"{IREAL_BASE}/threads/<slug>.<id>/"
@@ -255,7 +256,9 @@ class IRealPick:
 
 def ireal_pick_from_url(url: Any) -> IRealPick:
     """The chart of iReal Pro's forum a thread page's address names (``IRealPick``), written as an address bar shows
-    it: without ``https://``, a post's anchor or its own path, a query."""
+    it: without ``https://``, a post's anchor or its own path, a query; a later page's with its post's anchor
+    (``…/page-2#post-N``) is that post's, which ireal_fetch.py finds on whichever page holds it, and a later page's
+    alone names no chart."""
     text = url.strip() if isinstance(url, str) else ""
     if text and not _SCHEME.match(text):
         text = f"https://{text}"
@@ -270,6 +273,9 @@ def ireal_pick_from_url(url: Any) -> IRealPick:
     if found is None:
         raise OverridesError(f"expected an iReal Pro forum's thread ({IREAL_PAGE_SHAPE}), got {url!r}")
     post = found.group(3) or (anchor.group(1) if anchor else None)
+    if found.group(4) and not post:
+        raise OverridesError(f"expected an iReal Pro forum's thread ({IREAL_PAGE_SHAPE}), got {url!r}: a later page "
+                             f"of it names no chart, its post's address does (…/{found.group(4)}#post-N)")
     return IRealPick(found.group(1), int(found.group(2)), int(post) if post else None)
 
 
