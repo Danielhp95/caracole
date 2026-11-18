@@ -881,7 +881,8 @@ It is rows.js's, shared by both pages:
     (rows.js `indexLine`'s too, `onSearch`);
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
-    4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
+    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then its buttons,
+    the status, the action, the key and the chevron (the owner's order); Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
     folding every line;
   - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one

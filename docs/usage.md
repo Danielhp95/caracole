@@ -2553,15 +2553,16 @@ not before (Pick for one that needs review first, and Removing…
 while caracole removes it); and a chevron, which unfolds the song in place,
 turned while it is open. The title opens it too. A song you have has no
 button to fetch it again on its line: **Fetch again** is in its card. From
-720 px the line is one row of columns, the title and its buttons first, then
-the artist (sorted by title or by when added), the status, Fetch, the key
-and the chevron, so that the keys and the chevrons line up. Where each file
+720 px the line is one row of columns: the title, then its artist where the
+line shows one (an artist of one song, or sorted by title or by when added),
+its buttons, the status, Fetch, the key and the chevron, so that the keys and
+the chevrons line up. Where each file
 came from, each site's own icon says beside the file under the chevron too
 (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
 [Where each file came from](#where-each-file-came-from)).
 
-Its chevron opens the song in place, as a card over the list, which the
-chevron closes again. At its top, its key in words and where it came from ("Key
+Its chevron opens the song as a card, under its line (from 1200 px in the pane
+beside the list, below), which the chevron closes again. At its top, its key in words and where it came from ("Key
 A minor (from the tab)", "Key C major (guessed from the chords)", "(from the
 audio)"), its transposition, its lyrics' state and when it was added. Then what
 needs you: a review's candidates (below); where it stands on the YouTube route,
