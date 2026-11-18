@@ -2511,7 +2511,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
     digits each), so that it pins the members' order too; another lane's page records take that shape.
   - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
-    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    alone, under `@media screen`, both for the system's dark (`:root:not([data-theme="light"])`) and for Dark chosen (`:root[data-theme="dark"]`, written twice: test_viewer_theme.py), `@media print` sets `color-scheme: light` and `@page`
     the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
     Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
