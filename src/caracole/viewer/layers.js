@@ -34,6 +34,15 @@
   //                    word, a tab, the title, the facts, the notes, the credit, the foot) and every control. The
   //                    sheet viewer passes it as it is, the harmonica tab's page with its own elements added.
   //
+  //   SHORT            the media query of a short screen, a phone on its side: (max-height: 500px).
+  //   autoFull({ handle, idle, changed })
+  //                    the short screen's rule, written once for the pages: while SHORT matches, at start and as it
+  //                    changes, html's data-full is "auto" (the page in full screen of itself, "on" being the reader's
+  //                    own) and handle shown, when idle() says no layer is open, no data-full is set and the reader
+  //                    has not ended it; when it stops matching the "auto" is deleted and the handle hidden. changed()
+  //                    is called after either. It makes no history entry. Returns { end() }: ends an "auto" (the
+  //                    handle's tap, Escape, any layer opened) and keeps it ended until SHORT changes again.
+  //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
   // address.
@@ -131,5 +140,37 @@
     });
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, DOUBLE_MS, DOUBLE_PX, MARGIN_SKIP });
+  const SHORT = "(max-height: 500px)";
+  const autoFull = ({ handle, idle, changed }) => {
+    const doc = document.documentElement, mq = matchMedia(SHORT);
+    let slimmed = false;  // the reader ended it: no "auto" again until SHORT changes
+    const sync = (first) => {
+      if (mq.matches) {
+        if (!first) slimmed = false;
+        if (!idle() || doc.dataset.full || slimmed) return;
+        doc.dataset.full = "auto";
+        handle.hidden = false;
+      } else {
+        slimmed = false;
+        if (doc.dataset.full !== "auto") return;
+        delete doc.dataset.full;
+        handle.hidden = true;
+      }
+      changed();
+    };
+    mq.addEventListener("change", () => sync(false));
+    sync(true);
+    return Object.freeze({
+      end() {
+        slimmed = true;
+        if (doc.dataset.full !== "auto") return;
+        delete doc.dataset.full;
+        handle.hidden = true;
+        changed();
+      },
+    });
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, SHORT, DOUBLE_MS, DOUBLE_PX,
+    MARGIN_SKIP });
 })();

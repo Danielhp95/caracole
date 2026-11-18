@@ -19,7 +19,7 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.viewer_pages import back, click_at, double_tap, entries, key, spot, tap_at, viewer as open_viewer, written
+from helpers.viewer_pages import back, click_at, double_tap, entries, key, spot, tap, tap_at, viewer as open_viewer, written
 from test_viewer_instruments_page import IN_E, THREE
 from test_viewer_layers import until
 from test_viewer_panels import DESKTOP, LONG, PHONE, UG_CHO, chord
@@ -244,3 +244,57 @@ def test_a_songbook_song_goes_full_screen_and_its_arrows_still_change_songs(tmp_
         assert b.wait("!window.before && location.hash.startsWith('#song-2') && " + READY)
         assert b.js("document.querySelector('section.song:not([hidden]) h2.title').textContent") == "Two"
 
+
+
+SIDEWAYS = {"width": 844, "height": 390, "mobile": True}
+AUTO = "document.documentElement.dataset.full === 'auto'"
+BAR_SHOWN = "getComputedStyle(document.getElementById('bar')).display !== 'none'"
+
+
+@in_chromium
+def test_under_500_px_tall_the_controls_slim_by_themselves_and_a_tap_brings_them_back(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), **SIDEWAYS) as b:
+        assert b.wait(AUTO)
+        assert b.js(BAR_SHOWN) is False
+        assert entries(b) == (1, 2)  # no entry of its own
+        assert b.js("!document.getElementById('handle').hidden") is True
+        tap(b, "#handle")
+        assert b.wait(NOT_FULL)
+        assert b.js(BAR_SHOWN) is True
+        b.js("window.scrollTo(0, 400)")
+        b.js("window.scrollTo(0, 0)")
+        time.sleep(0.3)
+        assert b.js(NOT_FULL) is True  # not again
+        assert entries(b) == (1, 2)
+    with open_viewer(tmp_path, written(tmp_path, LONG), **PHONE) as b:
+        assert b.js(NOT_FULL) is True
+        for size in ({"width": 844, "height": 390}, {"width": 390, "height": 844}):
+            b.send("Emulation.setDeviceMetricsOverride", deviceScaleFactor=0, mobile=True, **size)
+            if size["height"] == 390:
+                assert b.wait(AUTO)
+            else:
+                assert b.wait(NOT_FULL)
+        b.send("Emulation.setDeviceMetricsOverride", deviceScaleFactor=0, mobile=True, width=844, height=390)
+        assert b.wait(AUTO)
+
+
+@in_chromium
+def test_escape_and_a_layer_opened_bring_them_back_too(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), **SIDEWAYS) as b:
+        assert b.wait(AUTO)
+        b.press("Escape")
+        assert b.wait(NOT_FULL)
+        assert b.js(BAR_SHOWN) is True
+    with open_viewer(tmp_path, written(tmp_path, LONG), **SIDEWAYS) as b:
+        assert b.wait(AUTO)
+        tap_at(b, *chord(b, "G")[:2])
+        assert b.wait("!document.getElementById('card').hidden")
+        assert b.js(NOT_FULL) is True
+        assert b.js(BAR_SHOWN) is True
+
+
+@in_chromium
+def test_501_px_tall_is_no_short_screen(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), width=844, height=501, mobile=True) as b:
+        time.sleep(0.3)
+        assert b.js(NOT_FULL) is True

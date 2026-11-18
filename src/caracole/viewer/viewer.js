@@ -1805,6 +1805,7 @@
   // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the versions) are one
   // at a time, a card beside them.
   const open = (which, opener, nested = false) => {
+    auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
     if (at >= 0) layers.splice(at, 1);  // open already: on top again
     if (!wide.matches && !nested) {
@@ -1878,6 +1879,7 @@
       return;
     }
     if (layers.length) close(topLayer());
+    else if (doc.dataset.full === "auto") auto.end();
   });
   // ⋯ closes the settings where you see them, and opens them otherwise (on a phone in the place of the one open).
   // The settings and the Harmony panel take one place: either opens in the other's.
@@ -1901,7 +1903,14 @@
     close(panel);
     open(handle, more);
   });
-  handle.addEventListener("click", () => close(handle));
+  handle.addEventListener("click", () => {
+    if (doc.dataset.full === "auto") auto.end();
+    else close(handle);
+  });
+  // A short screen (a phone on its side): full screen by itself, with no history entry (layers.js's autoFull).
+  const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
+    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); },
+  }) : { end() {} };
   if (window.caracoleLayers) {
     window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP, () => {
       if (!doc.dataset.full) open(handle, null);

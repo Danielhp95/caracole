@@ -3185,6 +3185,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   place, the controls back with it; from 900 px wide the card opens over it,
   and Back closes the card first. Hiding them stops no scrolling by itself,
   and the pill stays; in a songbook ← and → still go from song to song.
+  On its side (a screen under 501 px tall) a phone does it by itself when the
+  page opens or the phone turns: the handle, Escape or any layer you open
+  brings the controls back, and they stay until it turns again; this one is
+  no step of the history.
   Printed, the page is whole.
 - **The settings** (⋯), headed by what is set ("D Dorian · capo 2 · Guitar":
   the key of the shapes you play in the mode played, the capo, the instrument;
