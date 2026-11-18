@@ -1099,7 +1099,9 @@ It is rows.js's, shared by both pages:
     was read Python's words (test_viewer_harp.py, test_viewer_harptab_page.py, test_viewer_harptab_notation.py).
 - **A sheet's lines** (page.py `_line_html`): a chord-only line that writes bars (`sheet.BAR`) is a row of
   `span.barcell`s, each chord's beats from `sheet.bars` (`BEATS` a bar, shared evenly). It is still one
-  `p.l.chords`, so the data's `pinyin` keeps its lines.
+  `p.l.chords`, so the data's `pinyin` keeps its lines. A word a chord falls inside (`_glued`) is one `span.word`,
+  which wraps whole; a line's columns are `p.l .s, p.l .w`, nested or not (viewer.js `fit()`, viewer.css's pinyin
+  rules), never its children (test_viewer_lines.py).
 - **strum.js**, inlined before viewer.js (and in a songbook), is the one place a page makes sound:
   - a plucked-string synthesis into AudioBuffers, no sample, worklet or request;
   - an AudioContext only on a tap (`navigator.userActivation`), suspended when the page is hidden or silent, resumed

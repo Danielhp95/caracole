@@ -88,6 +88,41 @@ def test_chinese_words_wrap_by_character():
     assert '<span class="y">合</span></span><span class="w">成</span><span class="w">的</span>' in sheet
 
 
+def test_a_word_with_a_chord_inside_it_is_one_group_of_columns():
+    sheet = sheet_of(build_viewer("{title: T}\n{artist: A}\n[Am]To cast me off dis[E]courteously, [C]a[G]la[D]bama\n"))
+
+    def c(i: int, name: str) -> str:
+        return f'<b class="c" data-c="{i}" tabindex="0" role="button">{name}</b>'
+
+    assert (f'<span class="word"><span class="w">dis</span><span class="s">{c(1, "E")}'
+            '<span class="y">courteously, </span></span></span>') in sheet
+    assert (f'<span class="word"><span class="s">{c(2, "C")}<span class="y">a</span></span><span class="s">{c(3, "G")}'
+            f'<span class="y">la</span></span><span class="s">{c(4, "D")}<span class="y">bama</span></span></span>') in sheet
+    assert sheet.count('class="word"') == 2
+
+
+def test_two_chords_inside_a_word_glue_across_the_part_with_no_text():
+    sheet = sheet_of(build_viewer("{title: T}\n{artist: A}\n[Am]a wo[G][D]rd here\n"))
+    assert sheet.count('class="word"') == 1
+    word = sheet[sheet.index('<span class="word">'):]  # the group, then what follows it
+    assert (word.index('<span class="w">wo</span>') < word.index('data-c="1"') < word.index('data-c="2"')
+            < word.index('<span class="y">rd'))
+
+
+def test_a_chord_beside_a_chinese_character_glues_nothing():
+    zh = to_chordpro((FIXTURES / "zh_sheet.txt").read_text(encoding="utf-8"), title="斑马斑马", artist="宋冬野")
+    assert 'class="word"' not in sheet_of(build_viewer(zh))
+
+
+def test_a_chord_sits_inside_a_word_only_between_two_characters_neither_a_space_nor_a_wide_one():
+    from caracole.viewer.page import _glued
+
+    assert _glued("dis", "courteously") and _glued("la", "bama")
+    assert not _glued("courteously, ", "a") and not _glued("dis", " a") and not _glued("", "a") and not _glued("a", "")
+    assert not _glued("我", "们") and not _glued("a", "们") and not _glued("a　", "b")
+    assert not _glued("a", "\U00020000") and not _glued("\U00020000", "a")  # 𠀀, wide, past U+FFFF
+
+
 def test_what_the_sheet_says_is_text_never_markup():
     cho = "{title: Creep</script><b>x</b>}\n{artist: A & B}\n{comment: <i>Verse</i>}\n[G]<img src=x> \"words\"\n"
     html = build_viewer(cho)

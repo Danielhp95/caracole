@@ -517,6 +517,8 @@ EDGE_SHEETS = (
     "{title: Bars And Beats}\n{artist: The Placeholders}\n{key: Am}\n{comment: Intro}\n[*|:] [Am] [*|] [*|] [E] [*:|] [*x2]\n"
     "[*x2] [*|] [Am] [C] [G] [*|] [A] [B] [C] [D] [E]\n[Am] [*|] [*N.C.] [*|] [E]\n[*|] [*N.C.] [*|]\n"
     "{comment: Verse}\n[Am]Words [E]here\n",
+    "{title: Words Glued}\n{artist: The Placeholders}\n{key: C}\n{comment: Verse}\n"
+    "Ala[C]bama dis[E]courteously [C]a[G]la[D]bama wo[G][D]rd 我[C]们 in[*x2]side\n",
 )
 
 

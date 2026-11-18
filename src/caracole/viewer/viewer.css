@@ -159,7 +159,9 @@ dl.facts .from { color: var(--muted); }
 
 /* The sheet: each chord over the syllable it falls on. A chord and its first word make one
    column (.s); every other word is a column of its own (.w), so a narrow screen wraps a line
-   between words and never parts a chord from its syllable. A word with no chord keeps a chord's
+   between words and never parts a chord from its syllable; a word a chord falls inside is one
+   group of its columns (.word), so a row breaks before the word, never inside it, and inside it
+   only where it is wider than the line. A word with no chord keeps a chord's
    row over it (.w::before): a line in the chord's size, 1.25em at the size the page sets, and as
    tall as the chord however large the browser draws the text. An em length isn't: a browser
    that draws the text alone larger (an app's text zoom, a minimum font size) leaves it as the
@@ -177,6 +179,7 @@ dl.facts .from { color: var(--muted); }
 .y, .w { white-space: pre-wrap; }
 .y:empty::after { content: "\00a0"; }
 .w { display: inline-block; vertical-align: bottom; }
+.word { display: inline-flex; flex-wrap: wrap; align-items: flex-end; max-width: 100%; vertical-align: bottom; }
 .w::before, .tight .s::before { content: "\00a0"; display: block; font-size: .82em; line-height: calc(1.25 / .82); }
 .c { position: relative; color: var(--accent); font-weight: 700; border-radius: 4px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; }
@@ -327,9 +330,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   white-space: nowrap; }
 .sheet ruby.py > rt { display: block; padding: 0 .2em; color: var(--muted); font-size: .6em; font-weight: 400;
   line-height: 1.4; text-align: center; -webkit-user-select: none; user-select: none; }
-.l.py > .s > .y::before { content: "\00a0"; display: block; font-size: .6em; line-height: 1.4; }
-.l.py > .w::before { padding-bottom: calc(1lh * .6 * 1.4 / 1.25); }
-.l.py > .w > ruby.py > rt, .l.py > .s > .y > ruby.py > rt { margin-top: -1lh; }
+.l.py .s > .y::before { content: "\00a0"; display: block; font-size: .6em; line-height: 1.4; }
+.l.py .w::before { padding-bottom: calc(1lh * .6 * 1.4 / 1.25); }
+.l.py .w > ruby.py > rt, .l.py .s > .y > ruby.py > rt { margin-top: -1lh; }
 .l.chords { line-height: 1.6; }
 .l.chords .c { font-size: .92em; margin-right: .55em; }
 .m { color: var(--muted); font-style: italic; font-weight: 400; }

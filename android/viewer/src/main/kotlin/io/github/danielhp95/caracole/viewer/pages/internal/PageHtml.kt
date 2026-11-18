@@ -188,21 +188,31 @@ internal object PageHtml {
     }
 
     /** _line_html: a line of the sheet; a chord legend's line (sheet.is_legend) is a `legend`. A line of chords alone
-     * that writes bars, and is no legend, is a row of bar cells ([barsHtml]). */
+     * that writes bars, and is no legend, is a row of bar cells ([barsHtml]). A sung line is a column for each chord
+     * (`s`) and for each other word (`w`); a word a chord falls inside ([glued]) is one `span.word` of its columns. */
     fun lineHtml(line: Line, names: List<String>): String {
         val legend = if (Sheets.isLegend(line, names)) " legend" else ""
         if (line is ChordRow && legend.isEmpty()) Sheets.bars(line)?.let { return barsHtml(it, names) }
         return when (line) {
             is Lyrics -> {
-                val out = StringBuilder()
-                for ((head, text) in line.parts) {
+                val texts = line.parts.map { it.second }
+                val groups = ArrayList<ArrayList<String>>()  // the columns, a group a word
+                for ((k, part) in line.parts.withIndex()) {
+                    val (head, text) = part
                     val words = ArrayDeque(words(text))
                     if (head != null) {
                         val first = if (words.isNotEmpty()) escape(words.removeFirst()) else ""
-                        out.append("<span class=\"s\">").append(itemHtml(head, names))
-                            .append("<span class=\"y\">").append(first).append("</span></span>")
+                        val column = "<span class=\"s\">${itemHtml(head, names)}<span class=\"y\">$first</span></span>"
+                        // the nearest texts either side of the chord, through a part with no text ("wo[G][D]rd")
+                        val before = texts.subList(0, k).lastOrNull { it.isNotEmpty() } ?: ""
+                        val after = texts.subList(k, texts.size).firstOrNull { it.isNotEmpty() } ?: ""
+                        if (groups.isNotEmpty() && glued(before, after)) groups.last() += column
+                        else groups += arrayListOf(column)
                     }
-                    words.forEach { out.append("<span class=\"w\">").append(escape(it)).append("</span>") }
+                    words.forEach { groups += arrayListOf("<span class=\"w\">${escape(it)}</span>") }
+                }
+                val out = groups.joinToString("") {
+                    if (it.size == 1) it[0] else "<span class=\"word\">${it.joinToString("")}</span>"
                 }
                 "<p class=\"l$legend\">$out</p>"
             }
@@ -214,6 +224,14 @@ internal object PageHtml {
     }
 
     private fun wide(cp: Int): Boolean = PyUnicode.eastAsianWidth(cp).let { it == "W" || it == "F" }
+
+    /** _glued: whether a chord between [before] and [after], the nearest texts either side of it, sits inside a word:
+     * both are texts, and [words] would cut neither at the end of [before] nor at the start of [after] (no space and
+     * no wide character on either side), in code points. */
+    fun glued(before: String, after: String): Boolean {
+        if (before.isEmpty() || after.isEmpty()) return false
+        return listOf(before.codePointBefore(before.length), after.codePointAt(0)).none { PyUnicode.isSpace(it) || wide(it) }
+    }
 
     /** _words: [text] cut where a line may wrap: after each word's trailing spaces, and around each wide (CJK)
      * character, which wraps on its own. */

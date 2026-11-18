@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.viewer.sheet.ChordRow
 import io.github.danielhp95.caracole.viewer.sheet.Item
 import io.github.danielhp95.caracole.viewer.sheet.Lyrics
 import io.github.danielhp95.caracole.viewer.sheet.Section
+import io.github.danielhp95.caracole.viewer.sheet.Sheets
 import io.github.danielhp95.caracole.viewer.sheet.Text
 import io.github.danielhp95.caracole.viewer.testing.replays.PagesReplay
 import io.github.danielhp95.caracole.viewer.theory.Key
@@ -63,6 +64,33 @@ class SheetPageTest {
                 "</section>\n",
             SheetPage.sectionHtml(section, listOf("G")),
         )
+    }
+
+    @Test fun aWordWithAChordInsideItWrapsWhole() {
+        fun sung(line: String): String {
+            val sheet = Sheets.parse("{title: T}\n{artist: A}\n$line\n")
+            return sheet.sections.joinToString("") { SheetPage.sectionHtml(it, sheet.chords) }
+        }
+        fun c(i: Int, name: String) = "<b class=\"c\" data-c=\"$i\" tabindex=\"0\" role=\"button\">$name</b>"
+        val sheet = sung("[Am]To cast me off dis[E]courteously, [C]a[G]la[D]bama")
+        assertTrue("<span class=\"word\"><span class=\"w\">dis</span><span class=\"s\">${c(1, "E")}" +
+                       "<span class=\"y\">courteously, </span></span></span>" in sheet, sheet)
+        assertTrue("<span class=\"word\"><span class=\"s\">${c(2, "C")}<span class=\"y\">a</span></span>" +
+                       "<span class=\"s\">${c(3, "G")}<span class=\"y\">la</span></span><span class=\"s\">${c(4, "D")}" +
+                       "<span class=\"y\">bama</span></span></span>" in sheet, sheet)
+        assertEquals(2, sheet.split("class=\"word\"").size - 1)
+
+        val two = sung("[Am]a wo[G][D]rd here")
+        assertEquals(1, two.split("class=\"word\"").size - 1)
+        val word = two.substring(two.indexOf("<span class=\"word\">"))
+        val at = listOf("<span class=\"w\">wo</span>", "data-c=\"1\"", "data-c=\"2\"", "<span class=\"y\">rd").map(word::indexOf)
+        assertTrue(at.first() >= 0 && at == at.sorted(), two)
+
+        assertTrue(SheetPage.glued("dis", "courteously") && SheetPage.glued("la", "bama"))
+        assertTrue(!SheetPage.glued("courteously, ", "a") && !SheetPage.glued("dis", " a") && !SheetPage.glued("", "a"))
+        assertTrue(!SheetPage.glued("我", "们") && !SheetPage.glued("a", "们") && !SheetPage.glued("a\u3000", "b"))
+        // 𠀀 (U+20000) is wide, and one code point past U+FFFF, never its two surrogates
+        assertTrue(!SheetPage.glued("a", "\uD840\uDC00") && !SheetPage.glued("\uD840\uDC00", "a"))
     }
 
     @Test fun notesOfMoreThanTwoLinesFoldAfterTheirFirstTwo() {

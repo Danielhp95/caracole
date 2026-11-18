@@ -16,7 +16,8 @@ from test_viewer_pinyin import LONG, assert_aligned, chords
 
 LARGER = ["--blink-settings=minimumFontSize=40"]  # the lyrics' 18 px and the chords' 15 px drawn at 40 px
 PHONE = {"width": 390, "height": 844, "mobile": True}
-# Chords close together, which the viewer widens their columns for, and words with no chord between them.
+# Chords close together, which the viewer widens their columns for, words with no chord between them, and words a
+# chord falls inside (one group of columns, span.word).
 SONG = """{title: Close Chords}
 {artist: The Placeholders}
 {key: G}
@@ -24,6 +25,7 @@ SONG = """{title: Close Chords}
 [G]Tiny [D]test [Em]words [C]go here
 Made [Em]up only for a [C]parser [G]and [D]more
 [Cmaj7]A [G/B]b [Am7]c [D7sus4]d
+[G]Ala[D]bama dis[E]courteously
 """
 
 # What went wrong with the chords of the song's lines: one not over its syllable, one over its line, one running into
@@ -33,7 +35,7 @@ LAID_OUT = """(() => {
   [...document.querySelectorAll('#sheet section.sec > p.l')].forEach((line, n) => {
     const rows = new Map();
     let before = null;
-    for (const col of line.querySelectorAll(':scope > .s')) {
+    for (const col of line.querySelectorAll('.s')) {
       const name = col.querySelector(':scope > .c').textContent;
       const c = col.querySelector(':scope > .c').getBoundingClientRect();
       const y = col.querySelector(':scope > .y').getBoundingClientRect();

@@ -1,12 +1,14 @@
 """The sheet's lines on the page (page.py ``_line_html``, viewer.css), in Chromium: a line of chords alone that writes
 bars (``sheet.BAR``) is a row of bar cells (``span.barcell``), each with its chords and a dot (``.beat``) for each
 beat after a chord's first (``sheet.bars``: four a bar, shared evenly); the row wraps between cells, never inside one.
-A line of chords without bars is spaced evenly, as before."""
+A line of chords without bars is spaced evenly, as before. A word a chord falls inside ("dis[E]courteously") is one
+group of its columns (``span.word``), which wraps whole, and keeps the readings' room with Pinyin on."""
 
 from __future__ import annotations
 
 from helpers.browser import CHROMIUM_MARKS
 from helpers.viewer_pages import tap_at, viewer as open_viewer, written
+from test_viewer_text_size import LAID_OUT
 
 pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
 
@@ -60,3 +62,65 @@ def test_a_bar_cells_chords_transpose_and_open_their_card(tmp_path):
         assert b.js(first) == b.js(sung_chords)
         tap_at(b, *middle(b, "#sheet .l.bars .c"))
         assert b.wait("!document.getElementById('card').hidden")
+
+
+# The sung line's columns (``p.l .s, p.l .w``, in a ``span.word`` or not), each with its text (a ``.s``'s ``.y``'s),
+# its box and whether it is a chord's; the line's box; and whether the page scrolls sideways.
+COLUMNS = """(() => {
+  const line = document.querySelector('#sheet section.sec > p.l');
+  const box = (el) => { const r = el.getBoundingClientRect();
+    return {left: r.left, right: r.right, bottom: r.bottom, height: r.height}; };
+  return {line: box(line), sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          cols: [...line.querySelectorAll('.s, .w')].map((col) => Object.assign(box(col), {s: col.classList.contains('s'),
+            text: col.classList.contains('s') ? col.querySelector('.y').textContent : col.textContent}))};
+})()"""
+
+
+def sung(tmp_path, line: str, **size) -> dict:
+    """``COLUMNS`` of a sheet of the one sung ``line``, at 30 px, in a window of ``size``."""
+    cho = "{title: Greensleeves}\n{artist: Traditional}\n{key: Am}\n{comment: Verse}\n" + line + "\n"
+    with open_viewer(tmp_path, written(tmp_path, cho) + "#fs=30", **size) as b:
+        assert b.wait("getComputedStyle(document.querySelector('#sheet')).fontSize === '30px'")
+        return b.js(COLUMNS)
+
+
+def test_a_chord_inside_a_word_never_parts_the_word_across_rows(tmp_path):
+    seen = sung(tmp_path, "[Am]To cast me [E]off dis[E7]courteously", width=390, height=844)
+    cols = seen["cols"]
+    dis = next(c for c in cols if c["text"] == "dis")
+    rest = next(c for c in cols if c["s"] and c["text"] == "courteously")
+    assert abs(dis["bottom"] - rest["bottom"]) <= 1 and abs(dis["right"] - rest["left"]) <= 1, seen
+    assert abs(dis["left"] - seen["line"]["left"]) <= 1, seen  # the word starts its row, whole
+    assert seen["line"]["height"] >= 2 * dis["height"], seen  # the line wraps
+    assert seen["sideways"] is False, seen
+
+    seen = sung(tmp_path / "wo", "[Am]To cast me [E]off wo[G][D]rd", width=390, height=844)
+    cols = seen["cols"]
+    at = next(k for k, c in enumerate(cols) if c["text"] == "wo")
+    word = cols[at:at + 3]  # "wo", G's column with no text, D's over "rd"
+    assert word[1]["s"] and word[1]["text"] == "" and word[2]["s"] and word[2]["text"].startswith("rd"), seen
+    assert max(c["bottom"] for c in word) - min(c["bottom"] for c in word) <= 1, seen
+    assert all(abs(a["right"] - b["left"]) <= 1 for a, b in zip(word, word[1:])), seen
+    assert seen["sideways"] is False, seen
+
+
+def test_a_word_longer_than_the_line_wraps_inside_its_group_rather_than_widen_the_page(tmp_path):
+    seen = sung(tmp_path, "[G]Supercalifragilistic[D]expialidocious", width=320, height=640)
+    assert seen["sideways"] is False, seen
+
+
+def test_chords_close_together_inside_a_word_never_run_into_each_other(tmp_path):
+    cho = "{title: T}\n{artist: A}\n{key: C}\n{comment: Verse}\n[C]Sweet [Cmaj7]a[G/B]la[D7sus4]bama, [Am]home\n"
+    with open_viewer(tmp_path, written(tmp_path, cho), width=390, height=844) as b:
+        laid = b.js(LAID_OUT)  # fit() widens a column inside the group as anywhere: "a" for Cmaj7
+        assert b.js("document.querySelectorAll('#sheet .word').length") == 1
+    assert laid["wrong"] == [], laid
+
+
+def test_with_pinyin_a_word_a_chord_falls_inside_keeps_the_readings_room(tmp_path):
+    cho = "{title: 合成}\n{artist: 示例}\n{key: C}\n{comment: Verse}\n[C]你好 Ala[G]bama [Am]世界 dis[F]courteously\n"
+    with open_viewer(tmp_path, written(tmp_path, cho) + "#py=1", width=390, height=844) as b:
+        assert b.wait("document.querySelector('#sheet ruby.py') !== null")
+        laid = b.js(LAID_OUT)
+        assert b.js("document.querySelectorAll('#sheet .l.py .word').length") == 2
+    assert laid["wrong"] == [], laid  # each chord over its syllable, a row's chords at one height

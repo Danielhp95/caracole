@@ -1101,7 +1101,7 @@
     for (const y of sheetEl.querySelectorAll(".s > .y")) y.style.minWidth = "";
     const space = parseFloat(getComputedStyle(sheetEl).fontSize) * 0.45;
     for (const line of sheetEl.querySelectorAll(".l")) {
-      const kids = Array.from(line.children);
+      const kids = Array.from(line.querySelectorAll(".s, .w"));  // its columns, a word's group's (.word) among them
       const right = line.getBoundingClientRect().right;
       kids.forEach((col, k) => {
         if (!col.classList.contains("s")) return;

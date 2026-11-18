@@ -2972,7 +2972,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   never between a chord and its syllable, and a chord reaches over the words
   after it, so the lyrics read without gaps. A chord never reaches past the
   edge of the screen: at the end of a row with less room left than the chord
-  is wide, it goes on to the next row with its words.
+  is wide, it goes on to the next row with its words. A word with a chord
+  inside it ("dis·courteously") wraps whole, onto the next row.
 - **Bars**: an intro or a riff the tab writes in bars ("Am C | G Em |") is a
   row of bar cells, each with its chords and a dot for each beat after a
   chord's first. A bar has four beats, shared evenly. A line of chords

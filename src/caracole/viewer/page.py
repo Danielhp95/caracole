@@ -880,17 +880,30 @@ def _bars_html(found: Bars, names: list[str]) -> str:
 def _line_html(line, names: list[str]) -> str:
     """A line of the sheet as HTML: a chord legend's line (``sheet.is_legend``) is a ``legend``, whose chords
     viewer.js leaves as written, whatever the version. A line of chords alone that writes bars, and is no legend,
-    is a row of bar cells (``_bars_html``)."""
+    is a row of bar cells (``_bars_html``).
+
+    A sung line is a column for each chord (``s``: the chord over its first word) and for each other word (``w``),
+    where a narrow screen may wrap the line. A word a chord falls inside (``_glued``: "dis[E]courteously",
+    "[C]a[G]la[D]bama", "wo[G][D]rd") is one ``span.word`` of its columns, which wraps whole."""
     legend = " legend" if is_legend(line, names) else ""
     if isinstance(line, Lyrics):
-        out = []
-        for head, text in line.parts:
+        texts = [text for _, text in line.parts]
+        groups: list[list[str]] = []  # the columns, a group a word: one alone, or those a chord falls inside
+        for k, (head, text) in enumerate(line.parts):
             words = _words(text)
             if head is not None:
                 top = _chord_html(head, names) if isinstance(head, int) else _mark_html(head)
                 first = escape(words.pop(0)) if words else ""
-                out.append(f'<span class="s">{top}<span class="y">{first}</span></span>')
-            out += [f'<span class="w">{escape(w)}</span>' for w in words]
+                column = f'<span class="s">{top}<span class="y">{first}</span></span>'
+                # the nearest texts either side of the chord, through a part with no text ("wo[G][D]rd")
+                before = next((t for t in reversed(texts[:k]) if t), "")
+                after = next((t for t in texts[k:] if t), "")
+                if groups and _glued(before, after):
+                    groups[-1].append(column)
+                else:
+                    groups.append([column])
+            groups += [[f'<span class="w">{escape(w)}</span>'] for w in words]
+        out = (group[0] if len(group) == 1 else f'<span class="word">{"".join(group)}</span>' for group in groups)
         return f'<p class="l{legend}">{"".join(out)}</p>'
     if isinstance(line, ChordRow):
         if not legend and (found := bars(line)) is not None:
@@ -907,6 +920,13 @@ def _line_html(line, names: list[str]) -> str:
 
 def _wide(ch: str) -> bool:
     return unicodedata.east_asian_width(ch) in ("W", "F")
+
+
+def _glued(before: str, after: str) -> bool:
+    """Whether a chord between ``before`` and ``after``, the nearest texts either side of it, sits inside a word:
+    both are texts, and ``_words`` would cut neither at the end of ``before`` nor at the start of ``after`` (no space
+    and no wide character on either side)."""
+    return bool(before) and bool(after) and not any(ch.isspace() or _wide(ch) for ch in (before[-1], after[0]))
 
 
 def _words(text: str) -> list[str]:
