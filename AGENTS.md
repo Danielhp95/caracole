@@ -393,6 +393,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
+  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined
+    before viewer.js and harptab.js on every viewer page (no script guards it).
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -1463,11 +1465,17 @@ It is rows.js's, shared by both pages:
     - and the menu offers only what the page draws, an instrument of another kind once its script registers it
       (instruments.js documents that API);
     - test_viewer_instruments.py, test_viewer_instruments_page.py, test_viewer_sound.py.
-  - **A numeral's tooltip**: so, last, is the view of a numeral's tooltip (the chord's notes on a twelve-note circle,
+  - **A numeral's tooltip**: so is the view of a numeral's tooltip (the chord's notes on a twelve-note circle,
     or tiles over a keyboard: localStorage `caracole-viewer-tipview`, the circle with none):
     - it draws only what `tones` (with each note's pitch class) and `keyScale` give;
     - a chord's card opens it too, by its chord, with the chords' names alone (its Circle & keyboard, viewer.js
       `tipDraws`): test_viewer_numerals.py.
+  - **The theme**: so, last, is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
+    for Auto, the system's; viewer.css's palette on screen, paper light):
+    - localStorage `caracole-viewer-theme` (`auto`, `light`, `dark`), and `theme=` in the address while it isn't Auto,
+      which `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`);
+    - applied by screen.js before the page's own script, so a songbook's contents follow it too; Reset all leaves it;
+    - the library page is not affected (test_viewer_theme.py).
 
 #### `commands/`
 

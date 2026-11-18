@@ -24,7 +24,7 @@ from caracole.viewer.theory import MODES, Key, map_chord, parse_chord, spelling
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.viewer_pages import harmony_tab, tap_at, viewer as open_viewer, written
+from helpers.viewer_pages import NO_STORAGE, harmony_tab, tap_at, viewer as open_viewer, written
 
 IN_C = ("{title: In C}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
         "[C]Made up [G]words to [Am]sing a[F]long\n[C]made up [G]words to [Am]sing a[F]long\n\n"
@@ -655,11 +655,6 @@ def test_the_keyboard_stacks_the_notes_up_from_the_root(tmp_path):
     assert g7["view"] == "keys" and g7["first"] == 60  # the view chosen stays for the next numeral
     assert g7["board"] == [[67, "bass", False], [71, "on", False], [74, "on", False], [77, "on", True]]
     assert g7["tiles"][3] == ["F", "♭7", "off"] and g7["off"] == "F isn't in G major (it has F#)."
-
-
-# A page with no storage at all: localStorage refused, as in a server's sandbox.
-NO_STORAGE = """Object.defineProperty(window, 'localStorage', {configurable: true,
-  get() { throw new DOMException('The document is sandboxed', 'SecurityError'); }});"""
 
 
 @in_chromium

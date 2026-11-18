@@ -551,9 +551,15 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
     bottom: calc(-4px - env(safe-area-inset-bottom)); right: calc(-1 * var(--bar-r)); }
 }
 .bar #size[aria-expanded="true"] { background: var(--raised); }
+/* Its two rows: the text size, A− and A+ either side of it, and under it the theme (screen.js), Auto, Light or Dark,
+   in a segmented control as wide as the box. */
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border);
-  background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16); white-space: nowrap; }
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 3px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16);
+  white-space: nowrap; }
+.size-row { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.sizes .seg { border-radius: 11px; }
+.sizes .seg > button { width: auto; height: auto; min-width: 0; }
 .sizes output { min-width: 4.2em; text-align: center; font-size: .9rem; font-weight: 650;
   font-variant-numeric: tabular-nums; }
 .sizes button[aria-disabled="true"] { opacity: .35; cursor: default; }

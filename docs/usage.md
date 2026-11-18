@@ -3240,7 +3240,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook (a page you come back to, by a reload, Back or a tab restored, opens
   on the browser's choice whatever its old address says; so do the pinyin, the
-  Chinese characters and the instrument), and the address keeps `necks=0` too, for a page served by
+  Chinese characters, the instrument and the theme), and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: a link to another
   version in the version list keeps it, so do a harmonica tab's link in the
   Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
@@ -3416,7 +3416,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
   every screen; the bar has no button for it. **Aa** opens a small box
   over the bar (under the laptop's toolbar) with the text size and A− and
-  A+, nothing dimmed behind it; a tap anywhere else, or Escape, closes it.
+  A+, and under them the theme, **Auto**, **Light** or **Dark** (Auto is as
+  your system is; the choice is kept for every sheet, songbook and harmonica
+  tab's page, and a printed page is light whatever it is), nothing dimmed
+  behind it; a tap anywhere else, or Escape, closes it.
   **Scroll**, the arrow in a disc, scrolls the song by
   itself (below), ringed while it is on (counting down, scrolling or
   paused). **More** (⋯) opens the settings. Below 1200 px the bar slides
@@ -3708,7 +3711,7 @@ capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll spee
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
 (`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
 Traditional characters (`trad=1`, kept so too), the instrument
-(`inst=piano`, kept so too), and so the shape chosen for a
+(`inst=piano`, kept so too), the theme while it isn't Auto (`theme=dark`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or

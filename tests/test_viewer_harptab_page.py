@@ -47,7 +47,7 @@ def test_it_loads_nothing_and_allows_exactly_its_scripts_and_styles():
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)
     assert scripts == [(HERE / name).read_text("utf-8")
-                       for name in ("strum.js", "overlay.js", "layers.js", "kinds.js", "harptab.js")]
+                       for name in ("strum.js", "overlay.js", "layers.js", "kinds.js", "screen.js", "harptab.js")]
     assert styles == [(HERE / "viewer.css").read_text("utf-8"), (HERE / "harptab.css").read_text("utf-8")]
     policy = unescape(re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">', html).group(1))
     assert policy == (f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
@@ -262,8 +262,8 @@ def test_everything_it_was_given_is_escaped():
     html = page("4 5\n<b>la</b> & <script>\n", title="<i>Song</i>", artist="A & B")
     assert "<b>la</b>" not in html and "&lt;b&gt;la&lt;/b&gt;" in html
     assert "<h1>&lt;i&gt;Song&lt;/i&gt;</h1>" in html and "A &amp; B" in html
-    # data, strum.js, overlay.js, layers.js, kinds.js, harptab.js
-    assert page("4 5\n</script><script>x</script>\n").count("</script>") == 6
+    # data, strum.js, overlay.js, layers.js, kinds.js, screen.js, harptab.js
+    assert page("4 5\n</script><script>x</script>\n").count("</script>") == 7
 
 
 def test_the_pages_title():

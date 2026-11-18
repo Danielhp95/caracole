@@ -122,10 +122,20 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     assert ('<p class="vh" id="scroll-status" role="status"></p>\n'
             '<p class="vh" id="key-status" role="status"></p>') in html
     assert 'id="key-status"' not in controls and html.index('id="key-status"') > html.index('<div class="pill"')
-    # Aa opens the size, there with the size it shows; ⋯ the settings.
+    # Aa opens the size, there with the size it shows, and the theme under it; ⋯ the settings.
     assert re.search(r'id="size"[^>]*aria-expanded="false" aria-controls="sizes"', controls)
-    assert re.search(r'<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>', controls)
-    assert '<output id="fs-now">18 px</output>' in controls
+    assert ('<span class="sizes" id="sizes" hidden>\n'
+            '<span class="size-row" role="group" aria-label="Text size">\n'
+            '<button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>\n'
+            '<output id="fs-now">18 px</output>\n'
+            '<button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>\n'
+            '</span>\n'
+            '<span class="seg theme" id="theme" role="group" aria-label="Theme">\n'
+            '<button type="button" id="theme-auto" aria-pressed="true">Auto</button>\n'
+            '<button type="button" id="theme-light" aria-pressed="false">Light</button>\n'
+            '<button type="button" id="theme-dark" aria-pressed="false">Dark</button>\n'
+            '</span>\n'
+            '</span>\n') in controls
     assert re.search(r'id="more"[^>]*aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"', controls)
     # The neck opens the overlay's sheet, a dialog, below 1200 px (the script shows it there)
     assert re.search(r'id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
