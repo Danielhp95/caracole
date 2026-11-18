@@ -3089,7 +3089,7 @@ def test_a_card_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(co
     assert potato["badges"] == [] and potato["marks"] == [], potato
     assert [p["said"] for p in potato["plays"]] == ["Open the harmonica tab of Digging my potato, from harptabs"]
     sites = {source: (state, tip) for source, state, tip, _ in potato["sites"]}
-    assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"], sites
+    assert list(sites) == ["ug", "lacuerda", "ireal", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"], sites
     assert sites["harptabs"] == ("have", "harptabs: has it")
     assert sites["ug"] == ("none", "UG: not there · looked 16/10/26")
     assert sites["gtptabs"] == ("none", "gtptabs: not there · looked 13/10/26")
@@ -3329,7 +3329,7 @@ def test_every_mark_of_a_site_shows_whole_at_every_width(conn, cfg, tmp_path, si
     assert wide <= width, drawn["page"]
     lines = {line["title"]: line for line in drawn["lines"]}
     assert {title: len(line["marks"]) for title, line in lines.items()} == {
-        "Hotel California": 8, "Desperado": 8, "Digging my potato": 8, "Take It Easy": 5}, lines
+        "Hotel California": 9, "Desperado": 9, "Digging my potato": 9, "Take It Easy": 5}, lines
     for title, line in lines.items():
         cell = line["cell"]
         assert line["line"][0] - 0.5 <= cell[0] and cell[1] <= line["line"][1] + 0.5, (title, cell, line["line"])

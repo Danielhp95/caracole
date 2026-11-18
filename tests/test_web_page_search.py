@@ -1315,7 +1315,7 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
     assert browser.js(COUNTS) == [["library", "done", 1], ["gametabs", "partial", 5], ["rest", None, 0]]
     assert browser.js("document.querySelector('#bar-counts li[data-source=library] svg.yours-mark') !== null")
     # Its count beside each; a glyph for what its colour says too: in part (a ring not yet whole). The rest's words.
-    assert browser.js(COUNT_SHOWN) == [["1", []], ["5", ["part"]], ["0 on 5 more", []]]
+    assert browser.js(COUNT_SHOWN) == [["1", []], ["5", ["part"]], ["0 on 6 more", []]]
     # Each mark's name, for a screen reader: its count on its site, and how far its index has got; its detail in its
     # tooltip, after the name, and its description.
     words = browser.js(COUNT_WORDS)
@@ -1328,12 +1328,14 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
     # The rest: the sites at 0 in that order, a blocked one's among them, named for a screen reader, each one's count
     # and state in its tooltip.
     rest = browser.js(COUNT_MARKS)[-1]
-    assert rest[1:4] == ["0", "0 on 5 more",
-                         "0 on 5 more: Ultimate Guitar; gtptabs.com · index empty; LaCuerda · index in part, up to C; "
-                         "MuseScore · turned us back; harptabs.com · index in part, 2 of 3 artists"]
+    assert rest[1:4] == ["0", "0 on 6 more",
+                         "0 on 6 more: Ultimate Guitar; gtptabs.com · index empty; LaCuerda · index in part, up to C; "
+                         "MuseScore · turned us back; harptabs.com · index in part, 2 of 3 artists; iReal Pro · index "
+                         "empty"]
     assert [lines[0] for lines in tooltip(rest[4])] == [
         "0 on Ultimate Guitar", "0 on gtptabs.com · index empty", "0 on LaCuerda · index in part, up to C",
-        "0 on MuseScore · turned us back", "0 on harptabs.com · index in part, 2 of 3 artists"]
+        "0 on MuseScore · turned us back", "0 on harptabs.com · index in part, 2 of 3 artists",
+        "0 on iReal Pro · index empty"]
     assert tooltip(rest[4])[3][1] == "MuseScore turned us back: its index is empty."  # each one's detail too
     assert tooltip(rest[4])[4][1] == ("harptabs.com's artist pages are being read: 2 of 3 artists so far; caracole "
                                       "harptabs --index reads the rest.")
@@ -1447,14 +1449,14 @@ def test_the_row_shows_yours_then_the_sites_that_found_some_then_the_rest_in_one
     assert [m[0] for m in marks] == ["library", "ug", "gtptabs", "rest"]
     assert [m[1] for m in marks] == ["1", "1", "1", "0"]
     rest = marks[-1]
-    assert rest[1] == "0" and rest[2] == "0 on 4 more"
+    assert rest[1] == "0" and rest[2] == "0 on 5 more"
     # Each one's state in its words for a screen reader, in the order caracole searches them; its count, state and
     # detail in its tooltip.
-    assert rest[3] == ("0 on 4 more: LaCuerda · index in part, up to C; MuseScore · turned us back; harptabs.com · "
-                       "index empty; gametabs.net · index empty")
+    assert rest[3] == ("0 on 5 more: LaCuerda · index in part, up to C; MuseScore · turned us back; harptabs.com · "
+                       "index empty; gametabs.net · index empty; iReal Pro · index empty")
     assert [lines[0] for lines in tooltip(rest[4])] == [
         "0 on LaCuerda · index in part, up to C", "0 on MuseScore · turned us back", "0 on harptabs.com · index empty",
-        "0 on gametabs.net · index empty"]
+        "0 on gametabs.net · index empty", "0 on iReal Pro · index empty"]
     assert tooltip(rest[4])[1][1] == "MuseScore turned us back: its index is empty."
     assert "1 artist so far, with #, A–C read whole" in tooltip(rest[4])[0][1]
     # The words the box is described by say the block too.
@@ -1501,11 +1503,11 @@ def test_a_site_turned_off_or_empty_is_named_in_the_rest(cfg, live, browser):
     assert browser.wait(f"{answer_to('creep')} && {COUNTS_SHOWN}")
     marks = browser.js(COUNT_MARKS)
     assert [m[0] for m in marks] == ["library", "ug", "rest"]  # none of yours: your mark at 0
-    assert marks[0][1] == "0" and marks[-1][2] == "0 on 5 more"
-    assert marks[-1][3] == ("0 on 5 more: gtptabs.com · index empty; LaCuerda · index empty; MuseScore · index "
-                            "empty; harptabs.com · index empty; gametabs.net: off")
-    assert tooltip(marks[-1][4])[-1] == ["gametabs.net: off", "gametabs.net is off in caracole.toml."]
-    assert [lines[0] for lines in tooltip(marks[-1][4])[:-1]] == [
+    assert marks[0][1] == "0" and marks[-1][2] == "0 on 6 more"
+    assert marks[-1][3] == ("0 on 6 more: gtptabs.com · index empty; LaCuerda · index empty; MuseScore · index "
+                            "empty; harptabs.com · index empty; gametabs.net: off; iReal Pro · index empty")
+    assert tooltip(marks[-1][4])[-2] == ["gametabs.net: off", "gametabs.net is off in caracole.toml."]
+    assert [lines[0] for lines in tooltip(marks[-1][4])[:-2]] == [
         "0 on gtptabs.com · index empty", "0 on LaCuerda · index empty", "0 on MuseScore · index empty",
         "0 on harptabs.com · index empty"]
     # A site turned off is the owner's own choice: the rest's words say it, the words under the box don't.
@@ -1513,8 +1515,8 @@ def test_a_site_turned_off_or_empty_is_named_in_the_rest(cfg, live, browser):
 
 
 def everywhere(cfg):
-    """Piano Man on every site: UG's, gtptabs.com's, LaCuerda's, MuseScore's, harptabs.com's (Billy Joel's page read)
-    and gametabs.net's indexes, and in your library."""
+    """Piano Man on every site: UG's, gtptabs.com's, LaCuerda's, MuseScore's, harptabs.com's (Billy Joel's page read),
+    gametabs.net's and iReal Pro's forum's indexes, and in your library."""
     from caracole import lacuerda_index as li
     from caracole.gametabs import parse_page_url
     from caracole.lacuerda import LCSong
@@ -1527,6 +1529,17 @@ def everywhere(cfg):
     conn.execute("INSERT INTO gametabs_index (path, kind, game, slug, page, key, slug_key, sitemap) "
                  "VALUES (?, ?, ?, ?, ?, ?, ?, 'sitemap_1.xml')",
                  tuple(parse_page_url("https://gametabs.net/tabs/piano-game/piano-man")))
+    from datetime import UTC, datetime
+
+    from helpers.ireal_site import link, thread_page
+
+    from caracole.ireal import parse_thread_page
+    from caracole.ireal_index import store_thread_page
+
+    path = "threads/piano-man-billy-joel.77/"
+    store_thread_page(conn, parse_thread_page(thread_page("Piano Man - Billy Joel", [
+        (7, [link([("Piano Man", "Joel Billy", "Waltz", "C", "[T34C   |G/B   Z ")])])], path=path)),
+        datetime(2026, 11, 18, tzinfo=UTC))
     conn.commit()
     conn.close()
     library(cfg, ("Billy Joel", "Piano Man"))
@@ -1563,9 +1576,9 @@ def test_on_a_laptop_the_sites_are_named_in_full_where_the_row_fits_one_line(cfg
     # fitted again as the window narrows and widens.
     everywhere(cfg)
     search(browser, "piano man")
-    assert browser.wait(f"{answer_to('piano man')} && document.querySelectorAll('#bar-counts > li').length === 7")
+    assert browser.wait(f"{answer_to('piano man')} && document.querySelectorAll('#bar-counts > li').length === 8")
     assert [m[0] for m in browser.js(COUNT_MARKS)] == ["library", "ug", "gtptabs", "lacuerda", "musescore",
-                                                       "harptabs", "gametabs"]
+                                                       "harptabs", "gametabs", "ireal"]
     fits = (f"(() => {{ const r = {NAMED}; return r.lines === 1 && r.short === (r.namedLines > 1) && "
             "r.named !== r.short; })()")
     for width in (760, 1280, 760):
@@ -1665,8 +1678,8 @@ def test_the_lookup_page_says_what_each_site_found_as_the_library_page_does(cfg,
     assert browser.js(COUNTS) == [["library", "done", 1], ["gametabs", "partial", 5], ["rest", None, 0]]
     assert [w[0] for w in browser.js(COUNT_WORDS)][1] == "5 on gametabs.net · index in part, 2 of 7 games"
     assert browser.js(COUNT_MARKS)[-1][3] == (
-        "0 on 5 more: Ultimate Guitar; gtptabs.com · index empty; LaCuerda · index in part, up to C; MuseScore · "
-        "turned us back; harptabs.com · index in part, 2 of 3 artists")
+        "0 on 6 more: Ultimate Guitar; gtptabs.com · index empty; LaCuerda · index in part, up to C; MuseScore · "
+        "turned us back; harptabs.com · index in part, 2 of 3 artists; iReal Pro · index empty")
     place = browser.js("(() => { const c = document.getElementById('bar-counts').getBoundingClientRect(); return "
                        "[document.querySelector('.search').contains(document.getElementById('bar-counts')), "
                        "c.top >= document.getElementById('q').getBoundingClientRect().bottom, "

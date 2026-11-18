@@ -207,7 +207,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   command `caracole ireal [--index] [--budget N]` (commands/lyrics.py), `search.search_ireal` (`/api/search`'s
   `ireal`, its mark last in `looked`), its mark `IR`.
 - Its index is the computer's alone: it isn't in `index_transfer.SITES`, so no export, merge or sync carries it, and
-  the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit.
+  the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit. The
+  phone's lookup stage has nothing to ask (core/lookup/sites/IReal.kt, `IRealStage`, get.py's words for a song with no
+  candidate, no client made, as `ireal_fetch.wants_a_chart` makes none), its `/api/search` gives no chart, and its
+  mark among `looked` is off or empty (server/routes/search/Looked.kt).
 
 #### harptabs
 
