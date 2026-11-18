@@ -473,7 +473,8 @@ def pieces(html: str) -> list[Any]:
     """``html`` as its texts and the viewer/ files it inlines whole (``{"asset": name}``), in order."""
     style, script = page._assets()
     assets = [("viewer.css", style), ("strum.js", page._sound()), ("overlay.js", page._overlay()),
-              ("instruments.js", page._instruments()), ("winds.js", page._winds()), ("viewer.js", script)]
+              ("instruments.js", page._instruments()), ("winds.js", page._winds()), ("layers.js", page._layers()),
+              ("viewer.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

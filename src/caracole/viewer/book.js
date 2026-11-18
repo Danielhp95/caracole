@@ -44,7 +44,7 @@
     // so a reload opens this song with them. Replaced, so Back still leaves the page.
     if (current) {
       try {
-        history.replaceState(null, "", "#song-" + current.dataset.n);
+        history.replaceState(history.state, "", "#song-" + current.dataset.n);
       } catch (err) { /* an address the page can't change */ }
     }
   }
@@ -61,7 +61,7 @@
       const to = new URLSearchParams(location.hash.slice(1));
       if (to.get("player") === player) return;
       to.set("player", player);
-      history.replaceState(null, "", "#" + to.toString());
+      history.replaceState(history.state, "", "#" + to.toString());
     } catch (err) { /* an address the page can't change */ }
   };
 
@@ -190,14 +190,22 @@
     }
     if (!changed) return;
     try {
-      history.replaceState(null, "", "#" + to.toString());
+      history.replaceState(history.state, "", "#" + to.toString());
     } catch (err) { /* an address the page can't change */ }
   };
   // Each step loads the page again, so the viewer starts afresh on the song it shows.
+  // A change that names the same song (a layer closing, the viewer writing its settings) never reloads it.
+  const songOf = (url) => {
+    const at = url.indexOf("#");
+    const m = at < 0 ? null : /^song-(\d+)(?:=|&|$)/.exec(url.slice(at + 1));
+    return m ? m[1] : "";
+  };
   window.addEventListener("hashchange", (e) => {
     save();
     carryScreen(e.oldURL);
-    location.reload();
+    const same = songOf(e.oldURL);
+    // The contents (any fragment that names no song) load again whatever the change: "#contents" to no address.
+    if (!same || same !== songOf(e.newURL)) location.reload();
   });
   window.addEventListener("pagehide", save);
   document.addEventListener("visibilitychange", () => {

@@ -9,7 +9,8 @@ the mouse and the keyboard would: the bar's, the settings', the card's and the s
         tap(b, "#sheet .w")
 
 A finger is touch events (``Input.dispatchTouchEvent``): ``Input.synthesizeScrollGesture`` with a
-touch scrolls nothing in a headless Chromium.
+touch scrolls nothing in a headless Chromium. Back and Forward are the browser's own, through the tab's history
+(``back``, ``forward``; ``entries``, where it is in it), as its button and a phone's take them.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from caracole.viewer import build_viewer
 
-from helpers.browser import Browser
+from helpers.browser import Browser, BrowserError
 
 
 def written(tmp_path: Path, cho: str, name: str = "Title") -> str:
@@ -99,11 +100,70 @@ def click_at(b: Browser, x: float, y: float) -> None:
     time.sleep(0.05)
 
 
+def double_tap(b: Browser, x: float, y: float) -> None:
+    """Two taps at ``x``, ``y``, 80 ms apart: a double tap."""
+    tap_at(b, x, y)
+    time.sleep(0.03)  # tap_at rests 50 ms after its finger is lifted
+    tap_at(b, x, y)
+
+
+def entries(b: Browser) -> tuple[int, int]:
+    """The browser's own history of the tab: the entry it is at (``currentIndex``) and how many it has."""
+    found = b.send("Page.getNavigationHistory")
+    return found["currentIndex"], len(found["entries"])
+
+
+# What the protocol says of a step through the history once it is taken: in the document, or to another one.
+_MOVED = ("Page.navigatedWithinDocument", "Page.frameNavigated")
+# What the tab answers while it goes from one document to another in another process (a file's to about:blank).
+_BETWEEN = "Not attached to an active page"
+
+
+def _step(b: Browser, by: int, timeout: float = 10.0) -> None:
+    """The browser's own Back (``by`` −1) or Forward (+1) as its button takes it, to the entry before or after the one
+    it is at (``Page.navigateToHistoryEntry``), once taken: its ``currentIndex`` moved. A page that goes on from that
+    entry by itself at once (``history.go``) may be back at the index it left by then, which the step's own event
+    tells apart. Between two documents of two processes the tab answers nothing for a moment, which is no step yet."""
+    found = b.send("Page.getNavigationHistory")
+    at, seen = found["currentIndex"], len(b.events)
+    assert 0 <= at + by < len(found["entries"]), f"no entry {at + by} in a history of {len(found['entries'])}"
+    b.send("Page.navigateToHistoryEntry", entryId=found["entries"][at + by]["id"])
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            now = entries(b)[0]
+        except BrowserError as e:
+            if _BETWEEN not in str(e):
+                raise
+        else:
+            if now != at or any(event.get("method") in _MOVED for event in b.events[seen:]):
+                return
+        time.sleep(0.03)
+    raise AssertionError(f"the history stayed at entry {at}")
+
+
+def back(b: Browser) -> None:
+    """The browser's own Back, as its button (or a phone's) takes it: the entry before the one it is at."""
+    _step(b, -1)
+
+
+def forward(b: Browser) -> None:
+    """The browser's own Forward: the entry after the one it is at."""
+    _step(b, 1)
+
+
 def tap(b: Browser, selector: str) -> None:
     """A finger on the first element ``selector`` finds in view, without scrolling to it, with no chord
     within a finger's reach: Chrome hit-tests a touch over an area, and a word beside a chord's larger
     target would open the chord's card. On the element's last line of text, as a word's box reaches up
     into the row of chords; one of the sheet's clear of the bar and the pill, at the foot."""
+    x, y = spot(b, selector)
+    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
+    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+
+
+def spot(b: Browser, selector: str) -> list[float]:
+    """Where ``tap`` puts its finger on the first element ``selector`` finds in view: its ``x`` and ``y``."""
     clear = 120 if selector.startswith("#sheet") else 0
     box = b.js(f"""(() => {{
       const at = (r) => [r.x + r.width / 2, r.bottom - Math.min(8, r.height / 2)];
@@ -117,5 +177,4 @@ def tap(b: Browser, selector: str) -> None:
           return !(hit && hit.closest(".c")); }}); }});
       return el ? at(el.getBoundingClientRect()) : null; }})()""")
     assert box, f"nothing in view is {selector}"
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": box[0], "y": box[1]}])
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+    return box

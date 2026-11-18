@@ -132,7 +132,7 @@
       keep("necks", "0", !state.necks);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
-        history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
+        history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
       }
     } catch (err) { /* an address the page can't change */ }
     backToSheet();
@@ -270,11 +270,12 @@
       if (sheetAt === "full") pauseScroll();  // the tab out of sight
       drawRail();
     },
-    close: () => closeSheet(),
+    close: () => closeLayer("sheet"),
   }) : null;
   function drawRail() {
-    const can = Boolean(rail) && wide.matches, on = can && state.necks;
-    const phone = Boolean(rail) && !wide.matches && sheetAt !== null;
+    const full = Boolean(doc.dataset.full);  // full screen: the tab the whole width, no rail and no sheet
+    const can = Boolean(rail) && wide.matches, on = can && state.necks && !full;
+    const phone = Boolean(rail) && !wide.matches && sheetAt !== null && !full;
     necksButton.hidden = !can;
     necksButton.setAttribute("aria-pressed", on ? "true" : "false");
     sheetButton.hidden = !rail || wide.matches;
@@ -302,22 +303,21 @@
   // Open, the focus on its tab shown; closed, back on the neck when it was in the sheet. The bar stays under it.
   const openSheet = () => {
     if (sheetAt === null) sheetAt = "half";
-    showSizes(false);
     pauseScroll();
     bar.classList.remove("away");
     drawRail();
     const to = rail.landing();
     if (to) to.focus({ preventScroll: true });
   };
-  function closeSheet() {
+  function closeSheet(refocus = true) {
     if (sheetAt === null) return;
     const active = document.activeElement;
-    const mine = !active || active === document.body || aside.contains(active);
+    const mine = refocus && (!active || active === document.body || aside.contains(active));
     sheetAt = null;
     drawRail();
     if (mine) sheetButton.focus({ preventScroll: true });
   }
-  sheetButton.addEventListener("click", () => (sheetAt === null ? openSheet() : closeSheet()));
+  sheetButton.addEventListener("click", () => (sheetAt === null ? openLayer("sheet", sheetButton) : closeLayer("sheet")));
   window.addEventListener("resize", () => dockSheet());
   const showRail = (on) => {
     state.necks = on;
@@ -330,7 +330,12 @@
   // the rail's button was. Widened past it with the sheet open: the rail takes its place, on its tab.
   wide.addEventListener("change", () => {
     const had = aside.contains(document.activeElement);
-    if (wide.matches) sheetAt = null;
+    if (wide.matches) {
+      sheetAt = null;
+      const at = layers.findIndex((layer) => layer.name === "sheet");
+      if (at >= 0) layers.splice(at, 1);
+      layerHistory.sync(layers.length);
+    }
     drawRail();
     if (had && !aside.contains(document.activeElement)) {
       const first = Array.from($("bar").querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
@@ -416,22 +421,82 @@
     sizes.hidden = !on;
     sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
   };
-  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  // The layers: what the page opens over its tab (Aa, the overlay's sheet), each one entry of the browser's history
+  // while it is open (layers.js, as viewer.js), the last on top. Below 900 px one at a time; Aa gives way to the sheet
+  // at every width. A Back that takes k entries off closes the k on top.
+  const layers = [];  // {name: "sizes" | "sheet" | "full", opener}
+  const apart = window.matchMedia("(min-width: 900px)");
+  const layerHistory = window.caracoleLayers ? window.caracoleLayers.history((k) => {
+    for (let i = 0; i < k && layers.length; i++) closeLayer(layers[layers.length - 1].name);
+    save();
+  }) : { sync() {} };
+  function openLayer(name, opener) {
+    auto.end();  // a short screen's full screen of itself gives way to any layer
+    const at = layers.findIndex((layer) => layer.name === name);
+    if (at >= 0) layers.splice(at, 1);  // open already: on top again
+    for (const layer of layers.slice().reverse()) {
+      if (!apart.matches || name === "sheet") closeLayer(layer.name, false);
+    }
+    layers.push({ name, opener: opener instanceof Element ? opener : null });
+    if (name === "sheet") openSheet();
+    else if (name === "full") fullScreen(true);
+    else showSizes(true);
+    layerHistory.sync(layers.length);
+  }
+  // ``refocus``: the focus goes back where the layer came from, unless it is somewhere else of yours.
+  function closeLayer(name, refocus = true) {
+    const at = layers.findIndex((layer) => layer.name === name);
+    if (at < 0) return;
+    const opener = layers.splice(at, 1)[0].opener;
+    if (name === "sheet") closeSheet(refocus);
+    else {
+      if (name === "full") {
+        fullScreen(false);
+        if (refocus && opener && opener.isConnected) opener.focus({ preventScroll: true });
+      } else {
+        showSizes(false);
+        if (refocus) sizeButton.focus({ preventScroll: true });
+      }
+    }
+    layerHistory.sync(layers.length);
+  }
+  sizeButton.addEventListener("click", () => (sizes.hidden ? openLayer("sizes", sizeButton) : closeLayer("sizes")));
   document.addEventListener("pointerdown", (e) => {
-    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) closeLayer("sizes", false);
   }, true);
   $("size-box").addEventListener("focusout", (e) => {
-    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) closeLayer("sizes", false);
   });
-  // Escape: the size box first, then the overlay's sheet.
+  // Escape closes the layer on top.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !sizes.hidden) {
-      showSizes(false);
-      sizeButton.focus({ preventScroll: true });
-    } else if (e.key === "Escape" && sheetAt !== null) {
-      closeSheet();
-    }
+    if (e.key !== "Escape") return;
+    if (layers.length) closeLayer(layers[layers.length - 1].name);
+    else if (doc.dataset.full === "auto") auto.end();
   });
+  // --- full screen: the tab alone, the controls hidden for reading --------------------------------------------------
+  // A double tap beside the tab (layers.js's doubleTap: MARGIN_SKIP and this page's own elements) hides what is
+  // marked data-controls (the bar), the header's facts and the rail (drawRail), html[data-full] (viewer.css); a thin
+  // handle stays at the window's foot. A layer of the stack above: the handle, Escape or Back brings it all back. A
+  // short screen does it by itself, with no entry (layers.js's autoFull). Nothing here is the viewer's own copy.
+  const handle = $("handle");
+  const fullScreen = (on) => {
+    if (on) doc.dataset.full = "on";
+    else delete doc.dataset.full;
+    handle.hidden = !on;
+    drawRail();
+  };
+  handle.addEventListener("click", () => {
+    if (doc.dataset.full === "auto") auto.end();
+    else closeLayer("full");
+  });
+  const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
+    handle, idle: () => layers.length === 0, changed: drawRail,
+  }) : { end() {} };
+  if (window.caracoleLayers) {
+    window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP + ", .h, .rp, .legend, .why", () => {
+      if (!doc.dataset.full) openLayer("full", null);
+    });
+  }
   const setSize = (to) => {
     state.fs = Math.max(FS.min, Math.min(FS.max, to));
     render();
@@ -551,7 +616,7 @@
     drawRail();
   };
   $("scroll").addEventListener("click", () => {
-    showSizes(false);
+    closeLayer("sizes", false);
     halfSheet();
     countdown();
     go.focus({ preventScroll: true });

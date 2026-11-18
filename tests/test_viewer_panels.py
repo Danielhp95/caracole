@@ -511,6 +511,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
         b.click("#more")
         served_rows = b.js(PLACES)
     assert folded["rows"] == [
+        ["full-open", "Hide controls", "full screen", None, None],
         ["harmony-open", "Harmony", "progressions, scales", None, None],
         ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
         ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
@@ -520,10 +521,11 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
     assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
     assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
     assert [row[:3] for row in served_rows["rows"]] == [
+        ["full-open", "Hide controls", "full screen"],
         ["harmony-open", "Harmony", "progressions, scales"], ["", "Guitar Pro tab", "in the browser"],
         ["export", "Export PDF", "D Major"]]
-    assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
-    assert served_rows["rows"][2][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
+    assert served_rows["rows"][2][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
+    assert served_rows["rows"][3][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
 
 
 @in_chromium
@@ -963,14 +965,15 @@ def test_escape_closes_the_one_on_top_and_the_focus_goes_back_to_its_opener(tmp_
         b.press("Escape")
         card_closed = look(b)
         on_chord = b.js("document.activeElement === window.picked")
-        b.press("Escape")  # the settings, from the chord: the focus stays where you are
+        b.press("Escape")  # the settings (a desktop's), from the chord: the focus stays where you are
         all_closed = look(b)
         stayed = b.js("document.activeElement === window.picked")
     assert settings["panel"] and settings["focus"] == "panel-title"
-    assert both["card"] and both["panel"] and both["focus"] == "card-name" and both["cardSeen"]
-    # On a phone the card covers the settings, out of sight and of the focus's way; side by side on a desktop.
-    assert both["panelSeen"] is (size is DESKTOP)
-    assert card_closed["card"] is None and card_closed["panelSeen"] and on_chord
+    assert both["card"] and both["focus"] == "card-name" and both["cardSeen"]
+    # On a phone the card takes the settings' place, one layer at a time; side by side on a desktop.
+    assert (both["panel"] is not None) is (size is DESKTOP) and both["panelSeen"] is (size is DESKTOP)
+    assert card_closed["card"] is None and on_chord
+    assert card_closed["panelSeen"] is (size is DESKTOP)  # on a phone nothing under it
     assert all_closed["panel"] is None and stayed
 
 

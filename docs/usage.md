@@ -2933,7 +2933,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   under it (a chord tapped where the card comes up moves above it, with its
   words); from 900 px wide it opens next to the chord, and goes with it as
   the page scrolls. It keeps its size from one shape to the next. Tap another
-  chord and the card shows that one; × or Escape closes it. The shapes come
+  chord and the card shows that one; ×, Escape or Back closes it. The shapes come
   from [chords-db](https://github.com/tombatossals/chords-db) by David Rubert
   (MIT licence, whose notice is at the foot of every page); a chord it has no
   shape for shows the closest one, saying so. A shape the sheet gives comes
@@ -3011,11 +3011,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the screen, its tabs, circle, cards and slim bar as the rail has them; the
   song stays readable and scrollable above it, its end coming up above the
   sheet. A tap on the sheet's handle (the grip at its top, or anywhere
-  between its tabs and ✕) takes it to the whole screen and back; ✕, Escape
-  or the neck again closes it, and the focus goes back to the neck. Each
+  between its tabs and ✕) takes it to the whole screen and back; ✕, Escape,
+  Back or the neck again closes it, and the focus goes back to the neck. Each
   page opens with it closed, at half the screen. ▶ leaves it open, at half
-  the screen, the song scrolling above it and the pill above the sheet; the
-  settings or a chord's card open over it, and it is back once they close.
+  the screen, the song scrolling above it and the pill above the sheet; on a
+  phone the settings or a chord's card open in its place, closing it (one at a
+  time: Back and Escape, below).
   On a phone (below 440 px) the neck takes the guitar's place in the bar,
   so the key keeps its room, and **All chord shapes** in the settings shows
   the strip; wider, the guitar is beside the neck. The sheet is the screen's
@@ -3154,6 +3155,41 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
+- **Back and Escape**: the settings (or the Harmony panel in their place), a
+  chord's card, the necks' sheet, the versions list, Aa's text-size box and
+  Export PDF's question (served) are each one step of
+  the browser's history while they are open, so the browser's Back (a phone's
+  too) closes the one on top, as Escape and its × do (Aa's box closes on a tap
+  anywhere else too, and any other layer opening closes it; the question
+  opens over the settings and leaves them open), and leaves the sheet
+  only once none is open. One closed by Escape or × takes its step off again:
+  Back then leaves the page, as it would have with none opened. On a phone one
+  is open at a time: opening another (a chord's card with the settings open,
+  the settings over the necks' sheet) closes the one open. From 900 px wide
+  the card sits by its chord beside the settings, the Harmony panel or the
+  versions (one of those three at a time, in the rail), and Back closes the
+  one opened last first. What you change with one open (the key, the capo, a
+  shape) stays as it closes, in the address too, and the song stays where you
+  scrolled it under it. A page whose history the browser refuses opens and
+  closes them all the same, and Back leaves it. Full screen (below) is one of
+  them too.
+- **Full screen**: **Hide controls** (full screen ›), the first of the
+  settings' places to go, or a double tap beside the song (in its margins, or
+  beside a line's end, never on a word, a chord, the title or a control: two
+  taps or clicks within 350 ms and 30 px of each other), hides the bar, the key
+  line under the title and the rail of necks (and the necks' sheet), so the
+  song has the screen; a thin handle stays at the foot of the screen. A tap on
+  it, Escape or Back brings them back, the focus on ⋯ when Hide controls hid
+  them; a double tap while they are hidden does nothing. It is one step of the history, as the
+  layers above are: on a phone a chord's card opened in full screen takes its
+  place, the controls back with it; from 900 px wide the card opens over it,
+  and Back closes the card first. Hiding them stops no scrolling by itself,
+  and the pill stays; in a songbook ← and → still go from song to song.
+  On its side (a screen under 500 px tall) a phone does it by itself when the
+  page opens or the phone turns: the handle, Escape or any layer you open
+  brings the controls back, and they stay until it turns again; this one is
+  no step of the history.
+  Printed, the page is whole.
 - **The settings** (⋯), headed by what is set ("D Dorian · capo 2 · Guitar":
   the key of the shapes you play in the mode played, the capo, the instrument;
   "As written" or "Transposed +2" for a song whose key caracole can't tell),
@@ -3162,10 +3198,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   mode: on a phone they sit at the foot, above the bar, in at most 45 % of
   the screen, and the song scrolls under them; from 900 px wide they are a
   rail beside the song, which moves over for them. Nothing behind them is
-  dimmed or out of reach. A chord's card opened with them covers them on a
-  phone, and sits by its chord beside them on a wider screen; Escape closes
-  the card first, then the settings, and gives the focus back to what opened
-  each. Among them, side by side: **Transpose**, as − and + do, with the semitones counted; ↺ Reset, by it
+  dimmed or out of reach. A chord's card opened with them takes their place
+  on a phone, and sits by its chord beside them on a wider screen, where
+  Escape or Back closes the card first, then the settings; each gives the
+  focus back to what opened it. Among them, side by side: **Transpose**, as − and + do, with the semitones counted; ↺ Reset, by it
   while it differs, goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. A song with a version
   of its own (`[version]`, Make this my version) starts in it, key, capo, mode,
@@ -3240,8 +3276,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   whose Circle & keyboard opens this tooltip, with the chords' names alone too.
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
-- **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a
-  rule, near their foot) opens a panel in their place, docked at the
+- **Harmony ›** (in the settings, after Hide controls and with Guitar Pro tab
+  and Export PDF after a rule, near their foot) opens a panel in their place, docked at the
   foot on a phone and a rail on the right from 900 px wide: the key the
   numerals are read in and where it came from, the key's neck on a phone (on
   a laptop it heads the rail of necks), and each section's progression in
@@ -3494,6 +3530,13 @@ the library page link it, the tab's text beside it.
   little smaller); the neck, below 1200 px, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
   **Aa** the text size, and ▶ scrolls by itself, as in the viewer.
+- **Full screen**, as the viewer's: a double tap beside the tab (in its
+  margins, never on a hole, a word, a line's ▶, the legend or a control) hides
+  the bar, the facts, the "fit the sheet's chords" line and the rail, and a
+  thin handle stays at the foot; the handle, Escape or Back brings them back.
+  It is one step of the history, and a double tap while they are hidden does
+  nothing. On its side (a screen under 500 px tall) a phone does it by itself,
+  as the viewer does, with no step of the history. The page has no More panel.
 - **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
@@ -5107,7 +5150,10 @@ in `Library/_songbooks/<name>/`:
   itself, the artist's name that opens the library page on their songs), each
   song opening where the songbook plays it (on its instrument too) and keeping its
   own settings, its scroll
-  speed, text size and chosen shapes among them. Previous and Next name the
+  speed, text size and chosen shapes among them. What a song opens (the settings, a
+  chord's card) Back closes, and the songbook stays on that song with what you
+  changed there; only a step to another song loads the page again, and Back from
+  it returns to the song before. Previous and Next name the
   songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone
   Next has a row of its own, with room for the title. They, a swipe across the

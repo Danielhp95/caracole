@@ -16,7 +16,9 @@
   or a progression at a tempo, on the instrument chosen), only on a tap; instruments.js, inlined after
   it, draws a chord's box on any fretted instrument and a piano's keyboard, and is where another
   instrument's script registers its drawing (``window.caracoleInstruments``); winds.js, inlined after it,
-  registers the harmonica, the flute and the recorder, drawn from harp.py's and winds.py's tables;
+  registers the harmonica, the flute and the recorder, drawn from harp.py's and winds.py's tables; layers.js, inlined
+  on every viewer page before the page's own script, keeps a page's layers in the browser's history
+  (``window.caracoleLayers``: an entry a layer open, Back closing the one on top);
 - book.py builds ``songbook.html``, a songbook's songs in one page, from page.py's pieces, with
   book.js and book.css beside the viewer's own;
 - harptab_page.py builds ``harmonica-N.html``, a harmonica tab kept from harptabs.com as a page in the

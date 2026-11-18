@@ -635,7 +635,7 @@ def pieces(html: str) -> list[Any]:
     style, _ = page._assets()
     own_style, script = harptab_page._own_assets()
     assets = [("viewer.css", style), ("harptab.css", own_style), ("strum.js", page._sound()),
-              ("overlay.js", page._overlay()), ("harptab.js", script)]
+              ("overlay.js", page._overlay()), ("layers.js", page._layers()), ("harptab.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

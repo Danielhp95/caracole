@@ -21,8 +21,8 @@ they go to, a swipe or the arrow keys go from song to song, skipping the missing
 each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
-with the hashes of its six scripts (book.js, the viewer's strum.js, overlay.js, instruments.js, winds.js and
-viewer.js) and
+with the hashes of its seven scripts (book.js, the viewer's strum.js, overlay.js, instruments.js, winds.js,
+layers.js and viewer.js) and
 two stylesheets. A server serves it only while it is the page caracole wrote, with
 ``songbook_csp(page)``.
 """
@@ -44,6 +44,7 @@ from caracole.viewer.page import (
     LIBRARY_PAGE,
     _assets,
     _instruments,
+    _layers,
     _overlay,
     _winds,
     _sound,
@@ -101,7 +102,7 @@ def assets_version() -> str:
     return digest.hexdigest()
 
 
-# The header a server sends with a songbook's page caracole wrote: its own policy (its three scripts and
+# The header a server sends with a songbook's page caracole wrote: its own policy (its seven scripts and
 # two stylesheets, by their hashes) in a sandbox, as a sheet.html's (``page.viewer_csp``).
 songbook_csp = viewer_csp
 
@@ -151,7 +152,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         + _CONTROLS
     )
     return _page(f"{name} · songbook", body, styles=(style, book_style),
-                 scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), script))
+                 scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), _layers(), script))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str,

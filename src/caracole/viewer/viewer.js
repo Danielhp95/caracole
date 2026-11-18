@@ -256,7 +256,7 @@
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
-        history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
+        history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
       }
     } catch (err) { /* an address the page can't change */ }
     exportLink();
@@ -335,21 +335,32 @@
       $("ask-version").textContent = versionWords().filter(Boolean).join(", ");
       $("ask-just").setAttribute("href", href);
       $("ask-mine").setAttribute("href", href + "&mine=1");
-      ask.showModal();
+      open(ask, $("export"), true);
       $("ask-title").focus({ preventScroll: true });
     });
     ask.addEventListener("click", (e) => {
-      if (e.target === ask) ask.close();  // beside its box: the backdrop
+      if (e.target === ask) close(ask);  // beside its box: the backdrop
     });
-    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
+    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => close(ask));
     $("ask-mine").addEventListener("click", () => {
       madeMine = JSON.parse(JSON.stringify({ t: state.t, mode: state.mode, alt: state.alt, at: state.at,
         capo: state.capo }));
-      ask.close();
+      close(ask);
+    });
+    // However it closes (Escape, ×, Cancel, the backdrop, an answer), it leaves the stack and its entry goes.
+    ask.addEventListener("close", () => {
+      if (ask.open) return;  // the event of an earlier close, come after it opened again
+      const at = layers.findIndex((layer) => layer.el === ask);
+      const opener = at >= 0 ? layers.splice(at, 1)[0].opener : null;
+      restack();
+      const active = document.activeElement;
+      if (opener && opener.isConnected && (!active || active === document.body || ask.contains(active))) opener.focus({ preventScroll: true });
     });
     ask.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        e.stopPropagation();  // the dialog closes itself, and nothing under it
+        e.stopPropagation();  // it closes, and nothing under it
+        e.preventDefault();
+        close(ask);  // at once, the focus back on Export PDF
         return;
       }
       if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -848,6 +859,7 @@
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   const rails = [panel, harmony, vList].filter(Boolean);  // from 900 px wide, beside the song: one at a time
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
+  const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -1184,15 +1196,15 @@
   // up. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row show it
   // or hide it (state.necks), the three always in step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
-  // screen (sheetAt), docked there as the settings are (a layer: the one opened last shows), the song readable and
-  // scrollable above it and its end coming up above it; its handle takes it to the whole screen and back, and ✕,
-  // Escape or the neck again closes it, the focus back on the neck. Each page opens with it closed; the rail's Hide and
-  // Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on the tab it was on.
+  // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
+  // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
+  // and ✕, Escape, Back or the neck again close it, the focus back on the neck. Each page opens with it closed; the
+  // rail's Hide and Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
   const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
   const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
-  const railOn = () => railCan() && state.necks;
+  const railOn = () => railCan() && state.necks && !doc.dataset.full;  // full screen: the song the whole width
   const sheetCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && !railWide.matches;
   let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const shownAs = (name) => {  // the chords the sheet shows by this name, by index
@@ -1289,7 +1301,8 @@
     close: () => close(necksEl),
   }) : null;
   const drawNecks = () => {
-    const can = railCan(), on = railOn(), phone = sheetCan() && sheetAt !== null;
+    // Full screen hides the sheet, as it does the rail: open under it, it is back with the controls.
+    const can = railCan(), on = railOn(), phone = sheetCan() && sheetAt !== null && !doc.dataset.full;
     if (necksButton) {
       necksButton.hidden = !can;
       necksButton.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1331,7 +1344,7 @@
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (sheetButton) {
-    // The neck: the sheet up, on top of the settings or a card it was under, or closed where you see it.
+    // The neck: the sheet up (on a phone in the place of the settings or a card), or closed where you see it.
     sheetButton.addEventListener("click", () => {
       if (sheetAt !== null && inSight(necksEl)) {
         close(necksEl);
@@ -1705,25 +1718,42 @@
   // --- the settings and a chord's card: beside the song, never over it ------------------------------
   // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
   // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
-  // the bar, the one opened last over the other, and the song scrolls under it; from 900 px wide
+  // the bar, one at a time (opening one closes the one open), and the song scrolls under it; from 900 px wide
   // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
   // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
   // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
-  // at the foot up to 1199 px, the focus on its tab shown as it opens.
+  // at the foot up to 1199 px, the focus on its tab shown as it opens. Each one open is an entry of the browser's
+  // history (layers.js): Back, a phone's or the app's, closes the one on top as Escape does, and leaves the page only
+  // once none is open. Full screen is one too (below), its element the handle, which takes the focus as it opens.
   const pageEl = document.querySelector(".page");
   const wide = window.matchMedia("(min-width: 900px)");
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const layers = [];  // the open ones, the last on top: {el, opener}
+  const layers = [];  // the open ones, the last on top: {el, opener, nested}
   const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
   const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
-  const landing = (which) => (which === necksEl ? rail.landing() : which.querySelector("h2"));
+  const landing = (which) => (which === necksEl ? rail.landing()
+    : which === handle ? handle : which.querySelector("h2"));
+  // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
+  const DOCKED = [panel, card, harmony, vList, necksEl].filter(Boolean);
+  const dockedTop = () => {
+    for (let i = layers.length - 1; i >= 0; i--) if (DOCKED.indexOf(layers[i].el) >= 0) return layers[i].el;
+    return null;
+  };
+  // A Back takes k layers' entries off: the k on top close, and the entry it came to, written before what changed
+  // since (a key changed with the settings open), gets the page's address again (a layer the page closes itself takes
+  // its address down with it: layers.js).
+  const layerHistory = window.caracoleLayers ? window.caracoleLayers.history((k) => {
+    for (let i = 0; i < k && layers.length; i++) close(topLayer());
+    save();
+  }) : { sync() {} };
   // On a phone the page leaves room under the song for the one docked at its foot, so the end of
   // the song comes up above it, and the pill rides above it (--dock: its height). The bar is out of
   // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
   // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   function dock() {
-    const there = !wide.matches ? topLayer() : sheetAt !== null && !railWide.matches ? necksEl : null;
+    const there = !wide.matches ? dockedTop()
+      : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
     const away = moving() && !there;
     if (bar.hidden !== away) {
       bar.hidden = away;
@@ -1740,6 +1770,9 @@
       doc.style.removeProperty("--dock");
     }
   }
+  // The bar's top, or the window's foot while it is out of sight (away, hidden, or full screen's).
+  const barTop = () => (bar.hidden || bar.classList.contains("away") || doc.dataset.full ? window.innerHeight
+    : bar.getBoundingClientRect().top);
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
   // no room below, and across it, within the song's column. It is placed in the page, so it goes
   // with its chord as the page scrolls.
@@ -1748,7 +1781,7 @@
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
     const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
-    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    const floor = barTop();
     let top = a.bottom + gap;
     if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
     const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
@@ -1759,36 +1792,52 @@
     const rail = doc.dataset.panel;
     for (const which of [panel, card, harmony, vList, necksEl]) if (which) which.classList.toggle("top", which === topLayer());
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
     if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's, the versions'
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
     dock();
+    layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
-  const open = (which, opener) => {
+  // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
+  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the versions) are one
+  // at a time, a card beside them.
+  const open = (which, opener, nested = false) => {
+    auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
     if (at >= 0) layers.splice(at, 1);  // open already: on top again
-    if (rails.indexOf(which) >= 0) for (const other of rails) if (other !== which) close(other);
-    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null });
-    showSizes(false);
+    if (!wide.matches && !nested) {
+      for (const layer of layers.slice().reverse()) close(layer.el);
+    } else if (rails.indexOf(which) >= 0) {
+      for (const other of rails) if (other !== which) close(other);
+    }
+    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null, nested });
+    if (which !== sizes) close(sizes, false);  // Aa gives way to any other, at every width
     if (which === necksEl) drawNecks();  // drawn as the sheet, sheetAt set
+    else if (which === ask) ask.showModal();
+    else if (which === handle) fullScreen(true);
     else which.hidden = false;
     slide(false);  // the bar it sits on
     restack();
-    pauseScroll();
+    if (which !== handle) pauseScroll();  // full screen is for reading: a song scrolling by itself goes on
     const to = landing(which);
     if (to) to.focus({ preventScroll: true });
   };
-  const close = (which) => {
+  const close = (which, refocus = true) => {
     const at = layers.findIndex((layer) => layer.el === which);
     if (at < 0) return;
     const opener = layers.splice(at, 1)[0].opener;
     const active = document.activeElement;
-    const mine = !active || active === document.body || which.contains(active);
+    const mine = refocus && (!active || active === document.body || which.contains(active));
     if (which === necksEl) {
       sheetAt = null;
       drawNecks();
+    } else if (which === ask) {
+      ask.close();
+    } else if (which === handle) {
+      fullScreen(false);
     } else {
       which.hidden = true;
     }
@@ -1800,6 +1849,16 @@
     if (!to && opener && which === card) to = anchor();  // the strip drew its button anew
     if (!to && topLayer()) to = landing(topLayer());
     if (to) to.focus({ preventScroll: true });
+  };
+  // Full screen on or off (below): its handle, and the rail and the song's columns in the width it leaves.
+  const fullScreen = (on) => {
+    if (on) doc.dataset.full = "on";
+    else delete doc.dataset.full;
+    handle.hidden = !on;
+    drawNecks();
+    if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
+    layout();
+    if (!on) fitKey();  // the bar back: its key measured again
   };
   // Every one but ``keep``.
   const closeAll = (keep) => {
@@ -1819,16 +1878,10 @@
       hideTip();
       return;
     }
-    if (!sizes.hidden) {
-      // The size box first, and the focus back to Aa when it was in there.
-      const inside = $("size-box").contains(document.activeElement);
-      showSizes(false);
-      if (inside) sizeButton.focus({ preventScroll: true });
-      return;
-    }
     if (layers.length) close(topLayer());
+    else if (doc.dataset.full === "auto") auto.end();
   });
-  // ⋯ closes the settings where you see them, and brings them up from under a card on a phone.
+  // ⋯ closes the settings where you see them, and opens them otherwise (on a phone in the place of the one open).
   // The settings and the Harmony panel take one place: either opens in the other's.
   more.addEventListener("click", () => {
     if (inSight(panel)) {
@@ -1838,6 +1891,31 @@
     close(harmony);
     open(panel, more);
   });
+
+  // --- full screen: the song alone, the controls hidden for reading ----------------------------------------------
+  // The settings' Hide controls, or a double tap beside the song (layers.js's doubleTap: on none of the song's own
+  // elements nor a control, MARGIN_SKIP), hides every control marked data-controls (the bar), the header's facts and
+  // the rail of necks (railOn: the song takes the width), html[data-full] (viewer.css); a thin handle stays at the
+  // window's foot. It is a layer of the stack above: the handle, Escape or Back brings everything back, the focus on
+  // ⋯ when Hide controls hid them. On a phone a layer opened over it (a chord's card) takes its place, the controls
+  // back; from 900 px one opens over it. A double tap in full screen does nothing.
+  $("full-open").addEventListener("click", () => {
+    close(panel);
+    open(handle, more);
+  });
+  handle.addEventListener("click", () => {
+    if (doc.dataset.full === "auto") auto.end();
+    else close(handle);
+  });
+  // A short screen (a phone on its side): full screen by itself, with no history entry (layers.js's autoFull).
+  const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
+    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); },
+  }) : { end() {} };
+  if (window.caracoleLayers) {
+    window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP, () => {
+      if (!doc.dataset.full) open(handle, null);
+    });
+  }
 
   // In the focus order the card comes after its chord, wherever it is on the page: Tab from its last
   // control goes on to what follows the chord, and Shift+Tab from its first back to the chord.
@@ -2071,7 +2149,7 @@
     if (!tipOf || tip.hidden) return;
     const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
     const width = tip.offsetWidth, height = tip.offsetHeight, gap = 8;
-    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    const floor = barTop();
     let top = a.bottom + gap;
     if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
     const left = Math.max(gap, Math.min(a.left - 12, doc.clientWidth - gap - width));
@@ -2536,16 +2614,13 @@
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
   // anywhere else, or when the focus leaves it.
-  function showSizes(on) {
-    sizes.hidden = !on;
-    sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
-  }
-  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  // A layer (the stack above): Back closes it, and so does Escape, with the focus back on Aa when it was in the box.
+  sizeButton.addEventListener("click", () => (sizes.hidden ? open(sizes, sizeButton) : close(sizes)));
   document.addEventListener("pointerdown", (e) => {
-    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) close(sizes, false);
   }, true);
   $("size-box").addEventListener("focusout", (e) => {
-    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) close(sizes, false);
   });
 
   const sheet = $("sheet");
@@ -2758,7 +2833,7 @@
   $("scroll").addEventListener("click", () => {
     closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
     halfSheet();
-    showSizes(false);
+    close(sizes, false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
@@ -2796,7 +2871,7 @@
   }
   function slide(away) {
     bar.classList.toggle("away", away);
-    if (away) showSizes(false);
+    if (away) close(sizes, false);
   }
   const keyboardIn = (el) => {
     try {
@@ -2815,9 +2890,7 @@
       reveal.y = y;
       return;
     }
-    if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
-        || !harmony.hidden || (vList && !vList.hidden) || sheetAt !== null
-        || keyboardIn(bar)) {
+    if (!reveal.touched || performance.now() < reveal.quiet || layers.length > 0 || !sizes.hidden || keyboardIn(bar)) {
       reveal.y = y;
       return;
     }

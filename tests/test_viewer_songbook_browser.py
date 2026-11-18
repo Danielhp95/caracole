@@ -15,7 +15,7 @@ import pytest
 from caracole.viewer.book import BookSong, build_songbook, songbook_csp
 
 from helpers.browser import CHROMIUM_MARKS, Browser
-from helpers.viewer_pages import key, viewer as open_viewer
+from helpers.viewer_pages import back, key, viewer as open_viewer
 from test_viewer_instruments_page import IN_E, SETTINGS, SONG, THREE, choose
 from test_viewer_necks import reload, served, to_song
 from test_viewer_panels import SONG as PROG_SONG
@@ -136,3 +136,46 @@ def test_a_reload_on_a_song_on_its_own_instrument_keeps_the_players_for_the_song
             three = b.js(SETTINGS)
     assert two["chips"][1][1] == "true" and again["chips"][1][1] == "true"  # the ukulele, its own
     assert three["chips"][4][1] == "true", three["hash"]  # the piano: the player's
+
+
+@pytest.mark.parametrize("where", ["file", "sandbox"])
+def test_back_closes_a_songs_layer_and_stays_on_the_song(tmp_path, where):
+    """Back closes the settings a song opened and the songbook stays on that song, unreloaded, with the change made
+    there (in the sandbox the address alone keeps it)."""
+    songs = [BookSong("One", "Synthetic", cho=IN_E, id="aaaa"), BookSong("Two", "Synthetic", cho=THREE, id="bbbb")]
+    html = build_songbook("Campfire", songs)
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(html, encoding="utf-8")
+    with served({"/_songbooks/Campfire/songbook.html": (html, songbook_csp)}) if where == "sandbox" \
+            else nullcontext() as site:
+        page = site + "/_songbooks/Campfire/songbook.html" if site else path.as_uri()
+        with open_viewer(tmp_path, page + "#song-1", **DESKTOP) as b:
+            b.js("window.marker = 1")
+            b.click("#more")
+            assert b.wait("!document.getElementById('panel').hidden")
+            b.click("#up")
+            assert b.wait("location.hash.includes('t=1')")
+            back(b)
+            assert b.wait("document.getElementById('panel').hidden")
+            time.sleep(0.5)
+            seen = b.js("[window.marker, document.getElementById('shift').textContent, location.hash]")
+    assert seen[0] == 1, seen
+    assert seen[1] == "+1" and "t=1" in seen[2], seen
+
+
+def test_a_step_to_the_next_song_with_a_layer_open_then_back_returns_to_it(tmp_path):
+    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=IN_E, id="aaaa"),
+                                BookSong("Two", "Synthetic", cho=THREE, id="bbbb")])
+    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
+        b.click("#more")
+        assert b.wait("!document.getElementById('panel').hidden")
+        b.js("window.marker = 1")
+        b.click("a[rel=next]")
+        assert b.wait("window.marker === undefined && " + READY)
+        assert b.js("location.hash.startsWith('#song-2')")
+        back(b)
+        assert b.wait("location.hash.startsWith('#song-1') && " + READY)
+        time.sleep(0.5)
+        seen = b.js("[document.getElementById('panel').hidden, (history.state || {}).caracoleLayer || 0]")
+    assert seen == [True, 0], seen

@@ -24,8 +24,8 @@ object RenderBuild {
     /** viewer/'s files on the classpath, under caracole/viewer/ (src/caracole/viewer/'s `*.js`, `*.css`,
      * `voicings*.json` and `LICENSE-chords-db`). */
     val ASSETS: List<String> = listOf(
-        "LICENSE-chords-db", "book.css", "book.js", "harptab.css", "harptab.js", "instruments.js", "overlay.js",
-        "strum.js", "viewer.css", "viewer.js", "voicings-ukulele.json", "voicings.json", "winds.js",
+        "LICENSE-chords-db", "book.css", "book.js", "harptab.css", "harptab.js", "instruments.js", "layers.js",
+        "overlay.js", "strum.js", "viewer.css", "viewer.js", "voicings-ukulele.json", "voicings.json", "winds.js",
     )
 
     /** The folders of runtime data under caracole/ (tests/conformance/data/caracole/'s) the page builder reads whole:

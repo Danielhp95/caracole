@@ -131,7 +131,9 @@ internal object Pages {
         val origin = IntArray(2)
         var width = 0
         var height = 0
+        var focus = false
         scenario.onActivity {
+            focus = it.hasWindowFocus()
             val web = it.findViewById<WebView>(R.id.web)
             web.getLocationOnScreen(origin)
             width = web.width
@@ -139,6 +141,43 @@ internal object Pages {
         }
         val x = origin[0] + width / 2f
         val y = origin[1] + height / 2f
+        val down = SystemClock.uptimeMillis()
+        for ((action, at) in listOf(MotionEvent.ACTION_DOWN to down, MotionEvent.ACTION_UP to down + 50)) {
+            val event = MotionEvent.obtain(down, at, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+            check(instrumentation.uiAutomation.injectInputEvent(event, true)) { "the tap wasn't taken" }
+            event.recycle()
+        }
+        instrumentation.waitForIdleSync()
+    }
+
+    /**
+     * A touch down and up on [selector]'s box, found after it is scrolled to the middle of the screen: its CSS point
+     * turned to the screen's by the device pixels a CSS pixel is (the WebView's width over `innerWidth`) and the
+     * WebView's place on the screen, injected as [tapLink] injects its touch, so the page's handler runs with a user
+     * activation. The point is a quarter of the way in from the box's left edge, not its middle: a button at the
+     * screen's edge would be under the system's Back gesture there.
+     */
+    fun tapElement(scenario: ActivityScenario<MainActivity>, selector: String) {
+        val q = JSONObject.quote(selector)
+        evaluate(scenario, "(() => { const e = document.querySelector($q); if (e) e.scrollIntoView({block: 'center'}); return true; })()")
+        Thread.sleep(300)  // the scroll settled before the box is read
+        val box = JSONObject(evaluate(scenario, """(() => { const e = document.querySelector($q);
+            if (!e) return JSON.stringify({}); const r = e.getBoundingClientRect();
+            const x = r.left + r.width * 0.25, y = r.top + r.height * 0.4, at = document.elementFromPoint(x, y);
+            return JSON.stringify({x: x, y: y, w: window.innerWidth, hit: !!at && e.contains(at)}); })()""") as String)
+        check(box.has("x")) { "no element for $selector" }
+        check(box.getBoolean("hit")) { "$selector isn't what is at its own point: $box" }
+        val origin = IntArray(2)
+        var width = 0
+        scenario.onActivity {
+            val web = it.findViewById<WebView>(R.id.web)
+            web.getLocationOnScreen(origin)
+            width = web.width
+        }
+        val ratio = width / box.getDouble("w").toFloat()
+        val x = origin[0] + box.getDouble("x").toFloat() * ratio
+        val y = origin[1] + box.getDouble("y").toFloat() * ratio
+        Log.i(TAG, "tapElement $selector at ($x, $y), $ratio device px a CSS px")
         val down = SystemClock.uptimeMillis()
         for ((action, at) in listOf(MotionEvent.ACTION_DOWN to down, MotionEvent.ACTION_UP to down + 50)) {
             val event = MotionEvent.obtain(down, at, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }

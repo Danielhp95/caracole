@@ -2,7 +2,7 @@
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
 It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its three scripts (strum.js, overlay.js, then harptab.js) and its two stylesheets (viewer.css, then harptab.css) by
+its four scripts (strum.js, overlay.js, layers.js, then harptab.js) and two stylesheets (viewer.css, harptab.css) by
 their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole over the syllable it is blown
 on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w`` columns: a line wraps between its
 words, never parting a hole from its syllable), a blow in the accent colour, a draw in blue with its "−", a bend's
@@ -72,7 +72,9 @@ from caracole.viewer.instruments import GUITAR, chord_shapes
 from caracole.viewer.page import (
     HERE,
     LIBRARY_PAGE,
+    _HANDLE,
     _assets,
+    _layers,
     _overlay,
     _page,
     _sound,
@@ -155,7 +157,8 @@ def build_harmonica_viewer(
         + json_block("harp-data", data)
         + (json_block("song-names", names) if names else "")
     )
-    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), script), names=names)
+    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), _layers(), script),
+                 names=names)
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
@@ -481,7 +484,7 @@ def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = Fals
 # and why it was chosen between them; the neck, the overlay's sheet opened or closed (below 1200 px, as the viewer's);
 # ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it; ▶, scrolling
 # by itself. A tab shown as written has the overlay's buttons, Aa and ▶ alone.
-_BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
+_BAR = """<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="harps" role="group" aria-label="Harp">
@@ -517,4 +520,4 @@ _PILL = """<div class="pill" id="pill" role="group" aria-label="Auto-scroll" hid
 </div>
 <p class="vh" id="scroll-status" role="status"></p>
 <noscript><p class="noscript">Turn on JavaScript to hear the holes and change the harp.</p></noscript>
-"""
+""" + _HANDLE
