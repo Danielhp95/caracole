@@ -929,15 +929,18 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   - its `looked` mark says how far its game pages are read ("gametabs.net: 2 of 7 games", search_routes.py
     `_gametabs_looked`).
 - **iReal Pro's forum's charts and threads** (`search.search_ireal`, `search_ireal_threads`, `/api/search`'s `ireal`)
-  are songs whose artist is their composer, or the by-line a thread's name gives after the query:
+  are songs whose artist is their composer, or the by-line a thread's name gives:
   - a chart a line under its composer, "iReal Pro chart"; a thread caracole never read (`read: false`) a line under
-    its by-line, "thread not read yet", "Named from the thread's name" under its chevron (rows.js
-    `THREAD_SAID`), a song of yours on the same line as ever (a chart's row before a thread's of the same song);
+    its by-line, "thread not read yet", and on both pages "Named from the thread's name" under its chevron or ⋯
+    (rows.js `THREAD_SAID`, `THREAD_NAMED`), a song of yours on the same line as ever;
   - each Fetch the lookup that keeps that chart, a thread's reading it for its chart (`ireal`, the thread's address,
-    `caracole get --ireal`, `[ireal]`): nothing is sent before it;
-  - a thread whose name the query is in the middle of names no by-line: a title alone, apart, in an "iReal Pro"
-    group, its thread to open (rows.js `titleLine`, `TITLE_SITES`; library.js `model.threads`), since a song needs its
-    artist and the slug's words are no chart's title;
+    `caracole get --ireal`, `[ireal]`): nothing is sent before it; a pick whose thread holds no chart of the title,
+    nor one alone, says so in the sheet stage (get.py `IREAL_NONE`: "iReal Pro's forum: no chart titled “Blue” in that
+    thread"), before what Ultimate Guitar, asked after it, kept;
+  - a thread whose name names no by-line (no artist caracole knows ends it, or the query is in the middle of it): a
+    title alone, apart, in an "iReal Pro" group, its thread to open, never a Fetch (rows.js `titleLine`,
+    `TITLE_SITES`; library.js `model.threads`): a lookup needs its artist, and a wrong one would name the song and
+    keep another title's chart as its sheet;
   - its `looked` mark says how far its playlists are read ("iReal Pro: 1 of 7 playlists", search_routes.py
     `_ireal_looked`).
 
@@ -1455,10 +1458,19 @@ It is rows.js's, shared by both pages:
     harptabs_index.py) and gametabs.net's tables (its sitemaps' and the game pages read, gametabs_index.py);
   - iReal Pro's forum's charts of the thread pages read (`search_ireal`, ireal_index.py), a chart's title by one
     composer a hit, the composer its artist; and the threads its sitemaps name that caracole never read, by their
-    names alone (`search_ireal_threads`, `ThreadHit`: every word of the query's key a word of the slug, a slug that
-    begins with them first, then the oldest, `THREAD_ROWS` (8) at most; a thread read never, its charts standing for
-    it), each named from its slug by the query (where the slug begins with the query's words, those words as the slug
-    spells them the title and the rest the by-line; else the slug's words a title alone), a possible match;
+    names alone (`search_ireal_threads`, `ThreadHit`, the owner's rulings of 2026-11-18), a possible match:
+    - a slug that begins with the query's key first, then, for a query of two words or more, one it ends (a
+      composer's threads), then one that holds every word of it, each the oldest first, `THREAD_ROWS` (8) at most;
+      a query of no word of three letters or more (an article aside: "1", "i", "so", "the") none, and one with a
+      shorter word only those it begins;
+    - a name once (by its slug's key), never a thread read (its charts stand for it), nor one a chart hit is again
+      (`_charted`: its slug begins with the chart's title and the words after it hold its composer's: the Jazz 1460's
+      standards; a composer spelled otherwise stays);
+    - its by-line, after the query's words that begin it, the longest run of its last words that is an artist caracole
+      knows (`_KnownArtists`: a composer of the charts read, by his words, even of one word; of two words or more,
+      Ultimate Guitar's `ug_artists` or your library's), the words before it the title, less a last "by"
+      ("misty-roses-tim-hardin" is Misty Roses by Tim Hardin); for a query that ends it, the query; none known, or the
+      query in the middle, its words a title alone;
   - the tombstones of removed songs (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that
     brings one back, and in `/api/search`'s `removed`, which the library page shows with Add again);
   - UG's artist directory (`directory_artists`, ug/directory.py's table): an artist the query names whole whose page

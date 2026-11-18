@@ -622,7 +622,9 @@ const caracoleRows = (icons, does) => {
         (mine ? "Fetch " + display + " again" : "Fetch " + display) + (thread ? ", reading its iReal Pro thread"
           : " with its iReal Pro chart"));
       main.title = thread ? THREAD_FETCH : "Fetches the song and keeps this iReal Pro chart as its sheet";
-      const more = [{ heading: "On iReal Pro", links: [{ label: "Its thread", href: hit.url, source: "ireal" }] }];
+      const more = [linkGroup({ heading: "On iReal Pro",
+        links: [{ label: "Its thread", href: hit.url, source: "ireal" }] })];
+      if (thread) more[0].insertBefore(el("p", "hint", THREAD_NAMED), more[0].lastChild);
       const opens = mine ? opener(mine.links) : null;
       if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "ireal",
@@ -667,6 +669,7 @@ const caracoleRows = (icons, does) => {
   // An iReal Pro thread never read, named from its name (``read`` false): its words, and its Fetch's.
   const THREAD_SAID = "thread not read yet";
   const THREAD_FETCH = "Reads this iReal Pro thread and keeps its chart as the song's sheet";
+  const THREAD_NAMED = "Named from the thread's name: caracole hasn't read it yet.";
   // One song of the offline indexes (``item``): each site's row of it, as /api/search gives them (``ug``, an Ultimate
   // Guitar song; ``lacuerda`` and ``gtptabs``, a song of theirs; ``removed``, a song caracole removed), on one line
   // with each site's mark and its counts, and its identity (``key``) as the line's ``data-hit``. Get it looks the
@@ -742,7 +745,7 @@ const caracoleRows = (icons, does) => {
     if (ir) {  // iReal Pro's chart: its thread, and a Get it that keeps it when the line's own button is another site's
       const box = el("div", "row-group");
       box.appendChild(el("p", "subhead", "On iReal Pro"));
-      if (thread) box.appendChild(el("p", "hint", "Named from the thread's name: caracole hasn't read it yet."));
+      if (thread) box.appendChild(el("p", "hint", THREAD_NAMED));
       const actions = el("div", "actions");
       if (chart && (ug || chords || gone)) {
         actions.appendChild(button(thread ? "Fetch with this thread" : "Fetch with this chart", "small",

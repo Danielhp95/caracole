@@ -22,8 +22,9 @@ gametabs.net's group follows, unnumbered: its tracks of games, each with the ``c
 how far its game index has got. iReal Pro's forum's group comes last, unnumbered: its charts of jazz standards by
 title and composer, each with the ``caracole get --ireal`` line that looks the song up keeping that chart as its
 sheet (search.py ``search_ireal``), then the threads its sitemaps name that caracole never read, by their name alone,
-named from it by the query, each with the line that reads it and keeps its chart (a title alone, its address alone:
-``search_ireal_threads``), then how far its playlists are read.
+each with the line that reads it and keeps its chart (``search_ireal_threads``: its by-line an artist caracole knows
+its name ends with, or the query that ends it; a title alone with the line to name it yourself), then how far its
+playlists are read.
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -674,10 +675,10 @@ def _gametabs_lines(hit: SiteHit) -> str:
 
 def _ireal_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str]:
     """iReal Pro's forum's index's answer as the search prints it, unnumbered: its charts by title and composer, at
-    most ``limit``, then its threads known by their names alone (``THREAD_ROWS`` at most, as many as ``limit``); with
-    ``--artist``, the charts of that composer (a thread's name, read by the query as a title, never is one); with
-    ``--title``, those of that title. Then how far its playlists are read, while they aren't all. Nothing but why,
-    while it is turned off or its index is empty."""
+    most ``limit``, then its threads known by their names alone (``THREAD_ROWS`` at most, as many as ``limit``, none
+    that is a chart listed again); with ``--artist``, the charts of that composer and the threads whose name ends with
+    it; with ``--title``, those of that title. Then how far its playlists are read, while they aren't all. Nothing but
+    why, while it is turned off or its index is empty."""
     from caracole.ireal_index import index_state
     from caracole.search import THREAD_ROWS, search_ireal, search_ireal_threads
 
@@ -689,14 +690,15 @@ def _ireal_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int)
                 "ireal --index reads them now)."]
     threads = min(limit, THREAD_ROWS)
     if ask.artist is not None:
-        hits = [h for h in search_ireal(conn, f"{ask.artist} {ask.text}".strip(), limit) if h.via != "title"]
-        named = []
+        query = f"{ask.artist} {ask.text}".strip()
+        hits = [h for h in search_ireal(conn, query, limit) if h.via != "title"]
+        named = [h for h in search_ireal_threads(conn, query, threads, charts=hits) if h.via == "artist"]
     elif ask.title is not None:
         hits = [h for h in search_ireal(conn, ask.title, limit) if h.via == "title"]
-        named = search_ireal_threads(conn, ask.title, threads)
+        named = [h for h in search_ireal_threads(conn, ask.title, threads, charts=hits) if h.via == "title"]
     else:
         hits = search_ireal(conn, ask.text, limit)
-        named = search_ireal_threads(conn, ask.text, threads)
+        named = search_ireal_threads(conn, ask.text, threads, charts=hits)
     lines = [*map(_ireal_lines, hits), *map(_ireal_thread_lines, named)] or ["  nothing matches"]
     if not state.complete:
         lines += ["", _fill(f"iReal Pro's forum's playlists are still being read: {state.playlists_read:,} of "
@@ -714,11 +716,11 @@ def _ireal_lines(hit: SiteHit) -> str:
 
 def _ireal_thread_lines(hit: ThreadHit) -> str:
     """A thread of iReal Pro's forum known by its name alone: its names as read from it, its page, and the line that
-    reads it and keeps its chart as the sheet; one read as a title alone, which no line fetches (a song needs its
-    artist), its page and what to search for."""
+    reads it and keeps its chart as the sheet; one whose name names no artist caracole knows, a title alone, its page
+    and the line to fetch it under names you write (a song needs its artist)."""
     if not hit.artist:
-        return (f"  {_tag('ireal')}{hit.title} · a thread not read yet, its name alone: search its title to fetch it\n"
-                f"     {hit.url}")
+        return (f"  {_tag('ireal')}{hit.title} · a thread not read yet, its name alone\n     {hit.url}\n"
+                f"     fetch it under its names: caracole get --ireal {hit.url} ARTIST TITLE")
     return (f"  {_tag('ireal')}{hit.artist} - {hit.title} · a thread not read yet, named from its name\n"
             f"     {hit.url}\n     caracole get --ireal {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
 

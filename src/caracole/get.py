@@ -26,7 +26,9 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   caracole serve's line and its Sheet step. Without one from either, iReal Pro's
   forum's chart, from the index the nightly run keeps, for a song it has one of
   (ireal_fetch.py ``wants_a_chart``: no request and no client otherwise), or the
-  chart you picked, recorded under ``[ireal]``, asked first.
+  chart you picked, recorded under ``[ireal]``, asked first; a pick whose thread
+  holds no chart of the song's title (nor one chart alone) says so
+  (``IREAL_NONE``), before what Ultimate Guitar, asked after it, kept.
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
@@ -127,6 +129,7 @@ GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a 
 HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
 IREAL_KEPT = "chart kept from iReal Pro"  # the sheet stage's detail for iReal Pro's chart kept as the sheet
+IREAL_NONE = "iReal Pro's forum: no chart titled “{title}” in that thread"  # a chart you picked that is no chart kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
 # The words of a caracole with no ChordPro, no wanted.txt and no index.html to write (the phone's: android/): its
@@ -658,10 +661,17 @@ class _Lookup:
 
     def sheet(self) -> tuple[str, str] | str:
         if self._picked() is None:
-            # The chart you picked on iReal Pro's forum is the sheet: asked first, Ultimate Guitar's only after it.
+            # The chart you picked on iReal Pro's forum is the sheet: asked first, Ultimate Guitar's only after it,
+            # and the stage says what the pick came to before what it gave, or alone when it gave nothing either.
             if self._chart_picked() is not None:
                 charted = self._ireal()
                 if charted is not None and self._holds_chart():
+                    return charted
+                if charted is not None and charted[0] != "done":
+                    ug = self._sheet_from_ug()
+                    ug_state, ug_said = ug if isinstance(ug, tuple) else ("done", ug)
+                    if self._kept_sheet() is not None or ug_state not in ("done", "skipped"):
+                        return ug_state, f"{charted[1]}; {ug_said}"
                     return charted
             return self._sheet_from_ug()
         # Your pick on LaCuerda is the sheet; Ultimate Guitar's only when LaCuerda can't give it, and then the
@@ -900,7 +910,10 @@ class _Lookup:
                 raise e
             if s.shared:
                 raise s.shared[0]
-            return ("done", IREAL_KEPT) if s.kept else ("skipped", "no chart of it on iReal Pro's forum")
+            if s.kept:
+                return "done", IREAL_KEPT
+            return "skipped", (IREAL_NONE.format(title=self.song.title) if self._chart_picked() is not None
+                               else "no chart of it on iReal Pro's forum")
 
         out = self.asking("ireal", ask)
         self.song = get_song(self.conn, self.song.id)

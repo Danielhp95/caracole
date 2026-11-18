@@ -1524,6 +1524,53 @@ def test_a_lookup_with_the_chart_you_picked_on_irealpro_records_the_pick(cfg, co
         "thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 23346)}
 
 
+@pytest.mark.parametrize(("artist", "thread", "page", "kept"), [
+    ("Jerome Richardson", "RICHARDSON", "thread_groove-merchant-jerome-richardson.14294.html", "14294/48070/1"),
+    ("Thad Jones", "THAD_JONES", "thread_groove-merchant-thad-jones.9518.html", "9518/38106/1")])
+def test_a_thread_rows_fetch_keeps_its_chart_of_a_song_new_to_the_library(cfg, conn, sites, artist, thread, page, kept):
+    # A search's row of a thread known by its name alone (search.search_ireal_threads): its Fetch is this lookup, the
+    # thread's address with no post as the pick, of a song the library hasn't got, the index holding no thread read.
+    # The thread's one page read, its chart of the title kept (Thad Jones's latest post of two), and the pick recorded.
+    from helpers import ireal_site
+    from helpers.ireal_site import BASE, fixture
+    from test_search import ireal_sitemaps
+
+    from caracole.library import kept_files
+    from caracole.versions import get_version
+
+    ireal_sitemaps(conn)
+    conn.commit()
+    url = f"{BASE}/{getattr(ireal_site, thread)}"
+    sites.pages[url] = (200, fixture(page))
+
+    result, progress = look_up(cfg, sites=sites, artist=artist, title="Groove Merchant", ireal=url)
+
+    assert progress.states()["sheet"] == "done" and result.details["sheet"] == "chart kept from iReal Pro"
+    assert [u for u in sites.requests if "irealpro" in u] == [url]
+    assert "added to wanted.txt, line" in result.details["song"] and f"[ireal] {url}" in result.details["song"]
+    [song] = [s for s in list_songs(conn) if s.title == "Groove Merchant"]
+    tabs = {f.name: get_version(conn, f.version_id).tab_id for f in kept_files(conn, song.id)}
+    assert tabs == {"sheet.json": kept, "sheet.txt": kept}
+
+
+def test_a_chart_you_picked_that_its_thread_doesnt_hold_says_so_in_the_sheet_stage(cfg, conn, sites):
+    # A thread of two charts of another title: the pick keeps none, and the sheet stage says so in iReal Pro's
+    # forum's words, never Ultimate Guitar's, whose index has nothing of the song either.
+    from helpers.ireal_site import BASE, link, thread_page
+
+    path = "threads/blue-moon-richard-rogers.20000/"
+    ireal_index(conn, path)
+    conn.commit()
+    sites.pages[f"{BASE}/{path}"] = (200, thread_page("Blue Moon - Richard Rogers", [
+        (61, [link([("Blue Moon", "Rodgers Richard", "Ballad", "Eb", "[*AT44Eb^7   |C-7 F7 Z ")])]),
+        (62, [link([("Blue Moon", "Rodgers Richard", "Ballad", "C", "[*AT44C^7   |A-7 D7 Z ")])])], path=path))
+
+    result, progress = look_up(cfg, sites=sites, artist="Moon Richard Rogers", title="Blue", ireal=f"{BASE}/{path}")
+
+    assert progress.states()["sheet"] == "skipped"
+    assert result.details["sheet"] == "iReal Pro's forum: no chart titled “Blue” in that thread"
+
+
 def test_a_lookup_of_a_song_with_a_sheet_asks_irealpro_nothing(cfg, conn, sites):
     serve_creep(sites, conn)
 

@@ -2178,11 +2178,12 @@ def test_the_search_says_how_far_irealpros_index_has_got_its_mark_last(app, cfg,
 def test_the_search_gives_irealpros_charts_and_none_while_it_is_turned_off(app, cfg, conn):
     import dataclasses
 
-    from test_search import ireal_index
+    from test_search import ireal_index, ug_artists
 
     from caracole.config import ProviderPolicy
 
     ireal_index(conn)
+    ug_artists(conn, "jerome-richardson")
     song = add_song(conn, "Thad Jones", "Groove Merchant")
     conn.commit()
     data = as_json(get(app, "/api/search?q=groove+merchant"))
@@ -2192,6 +2193,9 @@ def test_the_search_gives_irealpros_charts_and_none_while_it_is_turned_off(app, 
     assert hit["url"] == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
     assert (hit["artist_key"], hit["title_key"], hit["song"]) == ("thad-jones", "groove-merchant", song.id)
     assert "read" not in hit and thread["read"] is False and thread["artist"] == "Jerome Richardson"
+    # A thread that is a chart found again (Erroll Garner's Misty, the Jazz 1460's) is none of them.
+    misty = [r["page"] for r in as_json(get(app, "/api/search?q=misty"))["ireal"]]
+    assert misty[0] == "threads/jazz-1460-standards.12753/" and "threads/misty-erroll-garner.3861/" not in misty
     off = dataclasses.replace(cfg, providers={**cfg.providers, "ireal": ProviderPolicy(20, (2.5, 5.0), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=misty"))
     assert data["ireal"] == []
@@ -2200,10 +2204,11 @@ def test_the_search_gives_irealpros_charts_and_none_while_it_is_turned_off(app, 
 def test_the_search_gives_irealpros_threads_known_by_their_names_alone_guessed_by_the_query(app, conn, queue,
                                                                                             monkeypatch):
     # The sitemaps read, no thread yet: "groove merchant" is its two threads by their names, each a row of ``ireal``
-    # marked ``read: false``, its names guessed from its slug, its address the thread's, which Fetch posts as the
-    # iReal pick; no count of charts, none being known. A name the query is in the middle of is a title alone: no
-    # by-line, no keys, no song of yours. Nothing asked of any site, nothing queued.
-    from test_search import ireal_sitemaps
+    # marked ``read: false``, its by-line an artist caracole knows (Ultimate Guitar's, your library's) its name ends
+    # with, its address the thread's, which Fetch posts as the iReal pick; no count of charts, none being known. A
+    # name the query is in the middle of is a title alone: no by-line, no keys, no song of yours. Nothing asked of any
+    # site, nothing queued.
+    from test_search import ireal_sitemaps, ug_artists
 
     from caracole.commands import _common
 
@@ -2213,6 +2218,7 @@ def test_the_search_gives_irealpros_threads_known_by_their_names_alone_guessed_b
     monkeypatch.setattr(_common, "make_client", never)
     monkeypatch.setattr(_common, "exclusive", never)
     ireal_sitemaps(conn)
+    ug_artists(conn, "thad-jones")
     song = add_song(conn, "Jerome Richardson", "Groove Merchant")
     conn.commit()
     data = as_json(get(app, "/api/search?q=groove+merchant"))
@@ -2225,7 +2231,7 @@ def test_the_search_gives_irealpros_threads_known_by_their_names_alone_guessed_b
     assert (jerome["artist"], jerome["url"], jerome["song"]) == (
         "Jerome Richardson", f"{thread}groove-merchant-jerome-richardson.14294/", song.id)
     assert [m for m in data["looked"] if m["source"] == "ireal"][0]["state"] == "partial"  # no playlist read yet
-    [alone] = as_json(get(app, "/api/search?q=thad+jones"))["ireal"]
+    alone, _ = as_json(get(app, "/api/search?q=merchant"))["ireal"]
     assert alone == {"source": "ireal", "read": False, "title": "Groove Merchant Thad Jones",
                      "url": f"{thread}groove-merchant-thad-jones.9518/", "score": 90.0,
                      "page": "threads/groove-merchant-thad-jones.9518/"}

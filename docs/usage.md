@@ -4261,19 +4261,32 @@ sheet (`[ireal]` in overrides.toml):
        https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106
        caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106 "Thad Jones" "Groove Merchant"
 
-Then the threads its sitemaps name that caracole hasn't read, up to eight whose name holds the words of your query
-(those whose name begins with them first, then the oldest): no chart of one is known, so each is named from its name
-by your query, the words that begin it the title and the rest the by-line, a possible match, with the line that reads
-the thread and keeps its chart as the sheet. A thread read is never one of them: its charts are the lines above.
+Then the threads its sitemaps name that caracole hasn't read, up to eight whose name holds your words: those whose
+name begins with them first, then, for two words or more, those it ends with (a composer's: `thad jones` lists Groove
+Merchant, Tip Toe, Big Dipper…), then those it holds anywhere, each the oldest first. A name says nothing itself of
+where its title ends, so its by-line is the longest run of its last words that is an artist caracole knows (one of
+Ultimate Guitar's, a composer of the charts read, one of your library's): `misty-roses-tim-hardin` is Misty Roses by
+Tim Hardin. Each is a possible match, with the line that reads the thread and keeps its chart as the sheet. A thread
+read is never one of them (its charts are the lines above), nor one that is a chart listed above again (the Jazz
+1460's Misty and the thread `misty-erroll-garner`), and a name the sitemaps list twice is one line. Words of fewer
+than three letters (`1`, `so`, `the` alone) look for none.
 
     [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name
        https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/
        caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/ "Jerome Richardson" "Groove Merchant"
 
-A thread whose name your words are in the middle of (`thad jones` in `groove-merchant-thad-jones`) says nothing of
-which words are its title: its address alone, and no line, as a song needs its artist (search its title to fetch it).
-While its playlists aren't all read, the group ends with how far it has got; turned off, or before its sitemaps or a
-playlist are read, it says so.
+A thread whose name ends with no artist caracole knows, or holds your words in its middle (`merchant`), says nothing
+of which words are its title: its address alone, and the line to fetch it under names you write, as a song needs its
+artist:
+
+    [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone
+       https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/
+       fetch it under its names: caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/ ARTIST TITLE
+
+`--artist` lists the threads whose name ends with it, `--title` those whose name begins with it. A chart you pick that
+its thread doesn't hold (a thread of another title's charts) is kept nowhere, and the lookup says so: `iReal Pro's
+forum: no chart titled “Blue” in that thread`. While its playlists aren't all read, the group ends with how far it
+has got; turned off, or before its sitemaps or a playlist are read, it says so.
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
@@ -4448,16 +4461,17 @@ the library, sent as they are: they carry no badge.
   recorded under `[gametabs]`; none while gametabs.net is turned off).
   **iReal Pro's forum**'s charts share them too, the composer as their artist
   (`iReal Pro chart ×2` on a line), and so do the threads its sitemaps name that
-  caracole hasn't read, up to eight whose name holds your words: each under the
-  by-line its name gives after them ("groove merchant" is Groove Merchant under
-  Thad Jones and under Jerome Richardson, `thread not read yet`, and
-  "Named from the thread's name" under its chevron). Fetch looks the song up by
-  those names and keeps the chart it reads in that thread (a lookup with
-  `--ireal`, recorded under `[ireal]`); nothing is asked of the forum before you
-  press it. A thread whose name your words are in the middle of names no
-  by-line: it comes apart, by its name alone, in an iReal Pro group with its
-  thread to open, as MuseScore's pages do (none while iReal Pro's forum is
-  turned off).
+  caracole hasn't read, up to eight whose name holds your words (as `caracole
+  search` lists them, above): each under the by-line its name gives, an artist
+  caracole knows that ends it, or your words where they end it ("groove
+  merchant" is Groove Merchant under Thad Jones and under Jerome Richardson,
+  `thread not read yet`, and "Named from the thread's name" under its chevron,
+  or its ⋯ on the lookup page). Fetch looks the song up by those names and
+  keeps the chart it reads in that thread (a lookup with `--ireal`, recorded
+  under `[ireal]`); nothing is asked of the forum before you press it. A thread
+  whose name gives no by-line comes apart, by its name alone, in an iReal Pro
+  group with its thread to open, as MuseScore's pages do, and no Fetch (none
+  while iReal Pro's forum is turned off).
   **Instruments.** A row for one instrument says which, in an outlined badge
   beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
   Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of

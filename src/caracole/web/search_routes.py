@@ -88,11 +88,12 @@ and keeps that tab
 (``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``). Of iReal Pro's forum it reads the charts of
 the thread pages caracole read (``search.search_ireal``: ``ireal``, a chart's title by its composer, the composer its
 artist, ``page`` its thread), then the threads its sitemaps name that caracole never read whose name holds the query
-(``search.search_ireal_threads``: after them in ``ireal``, ``read`` false, eight at most, possible matches named from
-their slug by the query, a by-line or none; a title alone has no keys and no song of yours); none while it is turned
-off; its mark among ``looked``'s says how far its playlists are read. A song's Get it on a chart's row keeps that chart
-as the song's sheet, and on a thread's reads the thread and keeps its chart (``ireal``, the thread's address:
-``caracole get --ireal``, recorded under ``[ireal]``).
+(``search.search_ireal_threads``, given those charts, none of which a thread stands for again: after them in
+``ireal``, ``read`` false, eight at most, possible matches named from their slug, the by-line an artist caracole knows
+the slug ends with or the query that ends it; a title alone, none known, has no keys and no song of yours); none
+while it is turned off; its mark among ``looked``'s says how far its playlists are read. A song's Get it on a chart's
+row keeps that chart as the song's sheet, and on a thread's reads the thread and keeps its chart (``ireal``, the
+thread's address: ``caracole get --ireal``, recorded under ``[ireal]``).
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
 pages' marks show it (``_looked``: a state, a short label, a line of detail), and
 ``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
@@ -516,7 +517,7 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
     lc_artists, lacuerda = search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out else ([], [])
     gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
     ireal = search_ireal(conn, q, SITE_HITS) if app.cfg.provider("ireal").enabled else []
-    threads = search_ireal_threads(conn, q) if app.cfg.provider("ireal").enabled else []
+    threads = search_ireal_threads(conn, q, charts=ireal) if app.cfg.provider("ireal").enabled else []
     kept = IndexAnswers(index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs,
                         lc_artists, lacuerda, gametabs, directory, ireal=ireal, ireal_threads=threads)
     app._found[q] = (time.monotonic(), kept)

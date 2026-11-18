@@ -23,21 +23,25 @@ IR_ROWS = "[...document.querySelectorAll('#results .hit[data-source=\"ireal\"]')
 
 
 def ireal(cfg):
-    """iReal Pro's forum's index, as test_search.py makes it."""
-    from test_search import ireal_index
+    """iReal Pro's forum's index, as test_search.py makes it, and Jerome Richardson an artist Ultimate Guitar's index
+    names: his unread thread's by-line."""
+    from test_search import ireal_index, ug_artists
 
     conn = db.connect(cfg.db_path)
     ireal_index(conn)
+    ug_artists(conn, "jerome-richardson")
     conn.commit()
     conn.close()
 
 
 def sitemaps(cfg):
-    """iReal Pro's forum's index as its sitemaps leave it, no thread read, as test_search.py makes it."""
-    from test_search import ireal_sitemaps
+    """iReal Pro's forum's index as its sitemaps leave it, no thread read, as test_search.py makes it, and both Groove
+    Merchant threads' composers artists Ultimate Guitar's index names."""
+    from test_search import ireal_sitemaps, ug_artists
 
     conn = db.connect(cfg.db_path)
     ireal_sitemaps(conn)
+    ug_artists(conn, "thad-jones", "jerome-richardson")
     conn.commit()
     conn.close()
 
@@ -61,7 +65,7 @@ def test_a_thread_known_by_its_name_alone_is_a_line_under_its_by_line_whose_fetc
     assert args[:3] == ("get", "--progress", f"--ireal={THREAD}groove-merchant-jerome-richardson.14294/")
     assert args[-2:] == ("Jerome Richardson", "Groove Merchant")
     # A name the query is in the middle of says no by-line: a title alone, apart, its thread to open.
-    search(browser, base, "thad jones")
+    search(browser, base, "merchant")
     alone = "#results .hit[data-source=\"ireal\"][data-hit^=\"ireal:\"]"
     assert browser.wait(f"Boolean(document.querySelector({alone!r}))")
     assert browser.js(f"document.querySelector({alone!r}).querySelector('h3').textContent") == \
@@ -69,12 +73,15 @@ def test_a_thread_known_by_its_name_alone_is_a_line_under_its_by_line_whose_fetc
     assert "a thread not read yet, its name alone" in browser.js(f"document.querySelector({alone!r}).textContent")
     assert browser.js(f"document.querySelector({alone!r}).querySelector('.line-action a').href") == \
         f"{THREAD}groove-merchant-thad-jones.9518/"
-    # The lookup page says it alike: a row to open.
-    browser.open(base + "lookup?q=thad+jones")
-    assert browser.wait(f"{IR_ROWS}.length === 1")
+    # The lookup page says it alike: a row to open; and a by-line's row, where its names come from.
+    browser.open(base + "lookup?q=merchant")
+    assert browser.wait(f"{IR_ROWS}.length === 2")
     assert browser.js(f"{IR_ROWS}[0].querySelector('.row-sub').textContent") == "A thread not read yet, its name alone"
     assert browser.js(f"{IR_ROWS}[0].querySelector('.row-action a').href") == \
         f"{THREAD}groove-merchant-thad-jones.9518/"
+    browser.open(base + "lookup?q=groove+merchant")
+    assert browser.wait(f"{IR_ROWS}.length === 2")
+    assert "Named from the thread's name: caracole hasn't read it yet." in browser.js(f"{IR_ROWS}[1].textContent")
     assert queue.snapshot()[1:] == []  # the one Fetch pressed alone
 
 
@@ -139,10 +146,13 @@ def test_irealpros_lines_and_rows_keep_the_calm_pages_look(cfg, live, tmp_path, 
     with driven(tmp_path, width) as page:
         search(page, base, "misty")
         assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length >= 1", timeout=20)
+        # Misty Roses's and Misty Blue's threads, which no name caracole knows ends: the title-alone group, drawn too.
+        alone = f"{IR_ROWS}.filter((h) => h.dataset.hit.startsWith('ireal:') && h.checkVisibility())"
+        assert page.wait(f"{alone}.length === 2", timeout=20)
         mark = f"{IR_ROWS}[0].querySelector('.line-sources .source')"
         assert page.js(f"[{mark}.dataset.source, getComputedStyle({mark}).borderTopLeftRadius]") == ["ireal", "4px"]
         assert page.js(odd_radii()) == [], "the library page's search"
-        calm_in(page, "the library page's search", {"#results .groups": 1, "results' titles": 1})
+        calm_in(page, "the library page's search", {"#results .groups": 1, "results' titles": 3})
         page.open(base + "lookup?q=groove+merchant")
         assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length === 2", timeout=20)
         assert page.js(odd_radii()) == [], "the lookup page"
