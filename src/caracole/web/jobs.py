@@ -53,7 +53,8 @@ job in the queue, and take turns with caracole's lock (commands/_common.py), so
 the server is still no more aggressive than one lookup's pace a site. The
 queue's worker starts a job only while no lane job runs or waits, which the lock
 would make it wait for anyway, and a lane worker the first lane job whose song
-has no job running: a song never has two jobs running.
+has no job running (``song_of_job``: Make this my version and a harmonica tab's
+reading are the song's jobs too): a song never has two jobs running.
 
 A step that exits non-zero fails its job, and the job's other steps are
 skipped; one the server ends as it stops (``stop``: Ctrl-C, systemd; every
@@ -489,6 +490,17 @@ def song_key_of(job_key: str) -> str:
     return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET)
 
 
+def song_of_job(job_key: str) -> str:
+    """The song a job is about, for the lane alone (``JobQueue``'s place for a request, and the song a lane worker
+    sees running): ``song_key_of``'s, and the song's own changes, Make this my version (``EXPORTING``) and a harmonica
+    tab's reading (``READING``), whose keys hold the song's identity key after their prefix, up to its first ":" (an
+    identity key has none). The queue's joining and every other reader keep ``song_key_of`` and the whole key."""
+    for prefix in (EXPORTING, READING):
+        if job_key.startswith(prefix):
+            return job_key.removeprefix(prefix).split(":", 1)[0]
+    return song_key_of(job_key)
+
+
 def _in_the_lane(args: Sequence[str]) -> bool:
     """Whether a step's command is one of the lookups' lane's (``lane_of``)."""
     options = _options(args)
@@ -687,8 +699,9 @@ class JobQueue:
         once it is done.
 
         Given a lane (``lane``), a request of the lane's commands alone (``lane_of``) is the lane's, unless its song
-        (``song_key_of``) has a job waiting or running in the queue (its removal, its sheet from YouTube, a
-        songbook's lookup of it, its Keep it, a pick's review): then it is the queue's, behind that job, by the rules
+        (``song_of_job``) has a job waiting or running in the queue (its removal, its sheet from YouTube, a
+        songbook's lookup of it, its Keep it, a pick's review, Make this my version, a harmonica tab's reading): then
+        it is the queue's, behind that job, by the rules
         above. A request joins only a job waiting in its own place: a lane request the song's lane job, a queue
         request never a lane job that waits (it is a job of its own in the queue), though a lane job that does as
         much is still its answer. Raises QueueFull when its place is full: the queue's ``limit`` jobs waiting or
@@ -738,9 +751,9 @@ class JobQueue:
         its place (the lane or the queue), then the song's job that does as much (in either), else its job that still
         waits in that place, joined, else a job of its own there, room allowing."""
         new = [Step(label, tuple(args)) for label, args in steps]
-        song = song_key_of(song_key)
+        song = song_of_job(song_key)
         lane = self._lanes > 0 and lane_of(steps) and not any(
-            job.active and not job.lane and song_key_of(job.song_key) == song for job in self._jobs)
+            job.active and not job.lane and song_of_job(job.song_key) == song for job in self._jobs)
         mine = [job for job in self._jobs if job.active and job.song_key == song_key]
         waiting = next((job for job in mine if job.state == "queued" and job.lane == lane), None)
         enough = _as_much(mine, waiting, new, fetching=fetching, join=join)
@@ -843,8 +856,9 @@ class JobQueue:
             thread.join(max(0.0, deadline - time.monotonic()))
 
     def run_pending(self) -> None:
-        """Run the queued jobs here and now, one at a time: the lane's first, in order, as its workers would start
-        them before the queue's, then the queue's."""
+        """Run the queued jobs here and now, for tests, one at a time and each to its end: the lane's first, in order,
+        then the queue's. The workers (``start``) start the lane's at once, several beside each other and beside the
+        queue's running job, so this is one order they may take, never what they do at once."""
         while (job := self._next(True) or self._next(False)) is not None:
             self._run(job)
 
@@ -867,11 +881,11 @@ class JobQueue:
     def _take(self, lane: bool) -> Job | None:
         """``_next`` under the queue's lock: for the queue's worker, its first queued job outside the lane, only while
         no lane job runs or waits (with no lane, its first queued job, as before the lane); for a lane worker, the
-        first queued lane job whose song (``song_key_of``) has no job running."""
+        first queued lane job whose song (``song_of_job``: its own changes among its jobs) has no job running."""
         if lane:
-            running = {song_key_of(j.song_key) for j in self._jobs if j.state == "running"}
+            running = {song_of_job(j.song_key) for j in self._jobs if j.state == "running"}
             job = next((j for j in self._jobs
-                        if j.state == "queued" and j.lane and song_key_of(j.song_key) not in running), None)
+                        if j.state == "queued" and j.lane and song_of_job(j.song_key) not in running), None)
         elif any(j.active and j.lane for j in self._jobs):
             job = None
         else:
@@ -976,9 +990,12 @@ class CaracoleRunner:
         self._env = child_env()
         self._lock = threading.Lock()
         self._processes: set[subprocess.Popen[str]] = set()  # a process a command running now, of every worker
+        self._terminated = False  # ``terminate`` ran: the server stops, and no command starts after it
 
     def __call__(self, args: Sequence[str], emit: Callable[[str], None]) -> int:
         with self._lock:  # started and kept at once, so that ``terminate`` ends every process started before it
+            if self._terminated:  # a worker past its check as the server stopped: ended, as ``terminate`` would
+                return -15
             process = subprocess.Popen(
                 [*self._argv, *args], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding="utf-8", errors="replace", env=self._env,
@@ -994,8 +1011,11 @@ class CaracoleRunner:
                 self._processes.discard(process)
 
     def terminate(self) -> None:
-        """End every command running now, as Ctrl-C or systemd would: each lets go of the lock as it exits."""
+        """End every command running now, as Ctrl-C or systemd would: each lets go of the lock as it exits. A command
+        asked after it starts no process and gives -15, as one ended so does (``JobQueue.stop``'s race: a worker
+        that passed its check as the server stopped)."""
         with self._lock:
+            self._terminated = True
             for process in self._processes:
                 if process.poll() is None:
                     process.terminate()

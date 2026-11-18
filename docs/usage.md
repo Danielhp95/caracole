@@ -4945,17 +4945,18 @@ the library, sent as they are: they carry no badge.
   it again. Made again with those ticks under another name, the new
   songbook takes its line; its Forget takes it off the tab.
 
-Every request runs the `caracole` command line, the queue's one command at a
-time and up to three lookups beside it, which take turns with caracole's lock
-([One caracole at a time](#one-step-at-a-time)), so the server is never more aggressive than you at a
-terminal: each command takes caracole's lock, keeps the pause after the last
-request any caracole sent, and keeps the budgets and cooldowns. A lookup keeps
-the interactive pace (about a second between two requests to a site, six for
-the song, sixty an hour), and a nightly run holding the lock lets it go first
-at its next pause. The
-queue holds 20 requests and one per song, and the lookups' lane three running
-and ten waiting of its own: asking again for a song gives its request, and
-Fetch on a song whose request only adds it fetches it too.
+Every request runs the `caracole` command line: the queue's one command at a
+time, and up to three lookups beside it, which take turns with caracole's lock
+([One caracole at a time](#one-step-at-a-time)); a request in the queue starts
+only once no lookup runs or waits. So the server is never more aggressive than
+you at a terminal: each command takes caracole's lock, keeps the pause after
+the last request any caracole sent, and keeps the budgets and cooldowns. A
+lookup keeps the interactive pace (about a second between two requests to a
+site, six for the song, sixty an hour), and a nightly run holding the lock lets
+it go first at its next pause. The queue holds 20 requests and one per song,
+and the lookups' lane three running and ten waiting of its own: asking again
+for a song gives its request, and Fetch on a song whose request only adds it
+fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
 loses no song, and the Journal keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the

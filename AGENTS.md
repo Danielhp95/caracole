@@ -1289,8 +1289,10 @@ It is rows.js's, shared by both pages:
   below): in the queue, one at a time, or in the lookups' lane (`jobs.lane_of`: a lookup, a pasted UG link,
   LaCuerda's search, an artist's page), up to `LANE` (3) at once on workers of their own (`caracole-lane-N`), started
   at once unless the song has a job in the queue. The queue's worker starts a job only while no lane job runs or
-  waits, a lane worker the first lane job whose song has no job running (`JobQueue._next`): a song never has two jobs
-  running, and its own job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`).
+  waits, a lane worker the first lane job whose song has no job running (`JobQueue._next`; `jobs.song_of_job`, Make
+  this my version's and a harmonica reading's jobs the song's too): a song never has two jobs running, and its own job
+  keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
+  `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`).
 - The one line a request shows is status.py's, read from the job's steps and the song's state, never from which
   commands ran: a step's label is that line while it runs ("Adding to the book…").
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
@@ -3373,7 +3375,8 @@ picks one).
 - It reads like `search` and appends to wanted.txt like `add`, and runs every other change as a `caracole` command in
   a child process, since the lock is re-entrant within a process and its threads would share it: one at a time in the
   queue, and up to `LANE` lookups beside it, which take turns with the lock (web/jobs.py; `CaracoleRunner` keeps a
-  process a running command, and `JobQueue.stop` ends them all, each request `INTERRUPTED`).
+  process a running command, and `JobQueue.stop` ends them all, each request `INTERRUPTED`, a command asked after it
+  starting none).
 - A removal too, `caracole remove --yes`, once the line's five seconds with Undo are over (the library page's script;
   without it, a page of its own), having asked what goes (`removal.plan_removal`, which only reads, and
   `removal.brief`); its job's song key is `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.

@@ -2,6 +2,7 @@
 
 import collections
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -11,10 +12,13 @@ from pathlib import Path
 import pytest
 
 from caracole.web.jobs import (
+    EXPORTING,
     INTERRUPTED,
     LANE,
     LANE_WAITING,
     LIMIT,
+    MINE,
+    READING,
     REMOVING,
     YOUTUBE_SHEET,
     CaracoleRunner,
@@ -1122,6 +1126,46 @@ def test_a_removal_asked_while_its_songs_lookup_runs_in_the_lane_starts_once_the
     assert [args[0] for args in runner.calls] == ["get"]
 
 
+# A song's own changes, under keys of their own: Make this my version's (export_routes.py) and a harmonica tab's
+# reading's (harmonica_routes.py), the song's identity key after their prefix
+CHANGES = {
+    "my version": (f"{EXPORTING}muse|uprising:key=G{MINE}",
+                   [("Making it your version", ("render", "--song=Muse - Uprising", "--version=key=G", "--mine"))]),
+    "a harmonica reading": (f"{READING}muse|uprising:harmonica-1.txt:clear{MINE}",
+                            [("Going back to our guess", ("harmonica", "--tab=harmonica-1.txt", "--clear", "--",
+                                                          "Muse", "Uprising"))]),
+}
+
+
+@pytest.mark.parametrize("how", ["waits", "runs"])
+@pytest.mark.parametrize("change", CHANGES)
+def test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it(change, how):
+    song_key, steps = CHANGES[change]
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    mine, _ = queue.submit(change, song_key, steps, display="Muse - Uprising", song_id=1)
+    assert not mine.lane
+    if how == "runs":
+        assert queue._next(False).id == mine.id
+    get = lookup(queue, "Muse", "Uprising")
+    assert not get.lane and get.id > mine.id  # a job of its own in the queue, after the song's change
+    other = lookup(queue, "Oasis", "Wonderwall")
+    assert other.lane and queue._next(True).id == other.id  # another song's: the lane's, the Muse lookup not
+
+
+@pytest.mark.parametrize("change", CHANGES)
+def test_a_lane_job_never_starts_beside_its_songs_own_change(change):
+    song_key, steps = CHANGES[change]
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    get = lookup(queue, "Muse", "Uprising")
+    mine, _ = queue.submit(change, song_key, steps, display="Muse - Uprising", song_id=1)
+    with queue._lock:  # running beside it, which the queue's worker never lets it: the lane worker's own check
+        next(job for job in queue._jobs if job.id == mine.id).state = "running"
+    assert queue._next(True) is None
+    with queue._lock:
+        next(job for job in queue._jobs if job.id == mine.id).state = "done"
+    assert queue._next(True).id == get.id
+
+
 def test_cancel_takes_out_a_lookup_waiting_for_a_slot_never_one_that_runs():
     runner = Gated()
     queue = JobQueue(runner, lane=LANE)
@@ -1171,6 +1215,33 @@ def test_run_pending_runs_the_lane_before_the_queue():
     queue.run_pending()
     assert [args[0] for args in runner.calls] == ["get", "add"]
     assert [job.state for job in queue.snapshot()] == ["done", "done"]
+
+
+def test_a_command_asked_once_the_runner_is_terminated_starts_no_process(monkeypatch):
+    started = []
+
+    def popen(*args, **kwargs):
+        started.append(args)
+        raise AssertionError("a process started after terminate")
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    runner = CaracoleRunner(None)
+    runner.terminate()
+    assert runner(["add", "--", "A", "B"], lambda line: None) == -15
+    # The stop race: a worker past _run's check as the server stops asks the runner after terminate
+    real = CaracoleRunner(None)
+
+    def stopping(args, emit):
+        queue._stopping = True  # as stop() sets it, then terminates the runner
+        real.terminate()
+        return real(args, emit)
+
+    queue = JobQueue(stopping)
+    job, _ = queue.submit("Add A - B", "a|b", add_steps("A", "B"))
+    queue._run(queue._next())
+    assert started == []
+    stopped = queue.job(job.id)
+    assert stopped.state == INTERRUPTED and [(s.state, s.code) for s in stopped.steps] == [(INTERRUPTED, -15)]
 
 
 @pytest.mark.slow
