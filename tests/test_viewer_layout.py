@@ -162,3 +162,69 @@ def test_the_rail_of_necks_takes_its_width_off_the_room_for_two_columns(tmp_path
     assert abs(seen[1280]["margins"][0] - seen[1280]["margins"][1]) <= 1, seen[1280]  # centred beside it
     assert seen[1600]["rail"] == 345 and seen[1600]["right"] > 0, seen[1600]
     assert not any(s["sideways"] for s in seen.values()), seen
+
+
+# Lines that wrap in two columns of today's 1180 px page and run on in the wider ones of a big window.
+WIDE_LINES = "{title: Wide Song}\n{artist: The Placeholders}\n" + "".join(
+    f"{{comment: Verse {n}}}\n[G]Made up words for [D]verse {n}, a line that goes on [Em]and on and on, long,\n"
+    f"[C]and another one after it that is [G]just as long as it is, or so,\n"
+    f"[Em]a third one, the same, [C]for the room it takes up on it,\n[G]and a fourth to [D]close the verse here for now\n\n"
+    for n in range(1, 9)
+)
+# Where the sheet sits in the room beside the rail of necks (the rail is open from 1200 px wide).
+SPAN = """(() => {
+  const sheet = document.getElementById("sheet");
+  const box = sheet.getBoundingClientRect();
+  const w = document.documentElement.clientWidth;
+  const rail = document.getElementById("necks");
+  const from = rail && !rail.hidden ? rail.getBoundingClientRect().right : 0;
+  return { columns: document.documentElement.dataset.columns, left: box.left, right: box.right, w, from,
+           height: box.height, window: innerHeight };
+})()"""
+
+
+def margins_ok(seen: dict) -> None:
+    room = seen["w"] - seen["from"]
+    assert seen["left"] >= seen["from"], seen  # never under the rail
+    assert abs(seen["left"] - seen["from"] - room * 0.05) <= room * 0.01, seen
+    assert abs(seen["w"] - seen["right"] - room * 0.05) <= room * 0.01, seen
+
+
+def test_two_columns_span_the_window_less_five_percent_each_side(tmp_path):
+    for width, height in ((1920, 1080), (2560, 1440)):
+        with Chromium(tmp_path / f"profile{width}", size=f"{width},{height}") as browser:
+            seen = opened(browser, build_viewer(SHORT), tmp_path / str(width)).eval(SPAN)
+        assert seen["columns"] == "2", seen
+        margins_ok(seen)
+
+
+def test_a_song_two_columns_of_the_old_width_could_not_show_whole_does_in_the_wider_ones(tmp_path):
+    with Chromium(tmp_path / "profile", size="1920,1080") as browser:
+        tab = opened(browser, build_viewer(WIDE_LINES), tmp_path)
+        wide = tab.eval(SPAN)
+        tab.eval("""(() => { const p = document.querySelector(".page").style;  // today's page: 1180 px at most
+          p.setProperty("max-width", "1180px", "important"); p.setProperty("margin", "0 auto", "important");
+          p.setProperty("padding-left", "16px", "important"); p.setProperty("padding-right", "16px", "important");
+          window.dispatchEvent(new Event("resize")); })()""")
+        tab.wait_for("document.documentElement.dataset.columns === '1'")
+    assert wide["columns"] == "2" and wide["height"] <= wide["window"], wide
+
+
+def test_a_song_too_tall_to_show_whole_stays_in_one_centred_column_on_a_big_window(tmp_path):
+    with Chromium(tmp_path / "profile", size="1920,1080") as browser:
+        seen = opened(browser, build_viewer(LONG), tmp_path).eval(LAYOUT)
+    assert seen["right"] == 0 and seen["width"] <= 860 and seen["font"] > 18, seen
+    assert abs(seen["margins"][0] - seen["margins"][1]) <= 1, seen
+
+
+def test_below_1100px_the_song_is_one_column(tmp_path):
+    with Chromium(tmp_path / "profile", size="1000,800") as browser:
+        seen = opened(browser, build_viewer(SHORT), tmp_path).eval(SPAN)
+    assert seen["columns"] == "1", seen
+
+
+def test_beside_the_rail_of_necks_the_columns_keep_five_percent_of_the_room_left(tmp_path):
+    with Chromium(tmp_path / "profile", size="1600,900") as browser:
+        seen = opened(browser, build_viewer(SHORT), tmp_path).eval(SPAN)
+    assert seen["from"] > 300 and seen["columns"] == "2", seen
+    margins_ok(seen)
