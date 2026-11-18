@@ -1195,7 +1195,8 @@ It is rows.js's, shared by both pages:
   - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
     `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (filled with
     `color-mix(in srgb, var(--accent) 8%, var(--surface))`, never the play buttons' `--raised`, the accent along its
-    edge; no opened card's box: card.css's box, an opened line's, keys on `:not(.selected)`), the card's head its
+    edge, among a search's results too, over rows.css's `#results .line.have`; no opened card's box: card.css's box,
+    an opened line's, keys on `:not(.selected)`), the card's head its
     heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
     `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
     or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the

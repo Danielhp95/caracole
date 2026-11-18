@@ -803,6 +803,53 @@ def test_a_song_you_have_stands_out_from_the_ones_you_have_not(cfg, live, browse
                                 "edge": False, "pill": None}, (title, lines)
 
 
+# How a line looks against the selected line's own look (library.css's #library-view .line.selected: the accent at 8 %
+# over the surface, the accent 3 px along its edge) and a song you have's among the results (rows.css's #results
+# .line.have: --have-tint, 4 px).
+SELECTED_LOOK = """
+((selector) => {
+  const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
+    const s = getComputedStyle(p); const got = [s.color, s.backgroundColor]; p.remove(); return got; };
+  const accent = probe('color: var(--accent)')[0];
+  const fill = probe('background-color: color-mix(in srgb, var(--accent) 8%, var(--surface))')[1];
+  const tint = probe('background-color: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface))')[1];
+  const line = document.querySelector(selector), c = getComputedStyle(line);
+  return { selected: line.classList.contains('selected'), have: line.classList.contains('have'),
+    filled: c.backgroundColor === fill, tinted: c.backgroundColor === tint, edge: c.boxShadow === accent + ' 3px 0px 0px 0px inset',
+    shadow: c.boxShadow };
+})
+"""
+
+
+def test_the_panes_line_shows_selected_in_the_list_and_among_the_results(cfg, live, browser):
+    # From 1200 px the line whose card the pane holds carries the selected fill and the accent along its edge, in the
+    # list and among a search's results, where a song you have is otherwise on the have wash with its 4 px edge: the
+    # pane's line is the one that stands out there too.
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "karma-police", 2), ("radiohead", "airbag", 2)])
+    karma, airbag = library(cfg, ("Radiohead", "Karma Police"), ("Radiohead", "Airbag"))
+    keep_sheet(cfg, karma)
+    keep_sheet(cfg, airbag)
+    browser.open(base)
+    listed = f'#list article.line[data-id="{karma.id}"]'
+    browser.click(listed + " .line-more")
+    assert browser.wait(f"document.querySelector({json.dumps(listed)}).classList.contains('selected')")
+    look = browser.js(f"{SELECTED_LOOK}({json.dumps(listed)})")
+    assert [look[k] for k in ("selected", "filled", "tinted", "edge")] == [True, True, False, True], look
+    browser.click(listed + " .line-more")  # closed again: the pane empty
+    assert browser.wait("document.querySelector('.line.selected') === null")
+    search(browser, "radiohead")
+    found = f'#results article.line[data-id="{karma.id}"]'
+    assert browser.wait(f"{answer_to('radiohead')} && document.querySelector({json.dumps(found)}) !== null")
+    browser.click(found + " .line-more")  # its card, from among the results
+    assert browser.wait(f"document.querySelector({json.dumps(found)}).classList.contains('selected')")
+    look = browser.js(f"{SELECTED_LOOK}({json.dumps(found)})")
+    assert [look[k] for k in ("selected", "have", "filled", "tinted", "edge")] == [True, True, True, False, True], look
+    theirs = f'#results article.line[data-id="{airbag.id}"]'
+    other = browser.js(f"{SELECTED_LOOK}({json.dumps(theirs)})")
+    assert other["have"] and other["tinted"] and not other["filled"] and not other["edge"], other  # its wash, as ever
+
+
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, **WONDERWALL)
