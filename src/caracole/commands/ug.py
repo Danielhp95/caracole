@@ -6,6 +6,10 @@ page alone (``/artist/…``): an interactive lookup, at the lookup pace (as ``ca
 lookup's budget, within the hour's lookups, no ntfy alert), what caracole serve's library page sends by itself for a UG
 link pasted into its box (web/ug_link_routes.py). Every list read is kept for searches (ug/artist_tabs.py), so a search
 then finds every song of that artist: UG's sitemaps name many of them by a bare id alone. ug/link.py does the work.
+It takes caracole's lock in the lookups' lane (``_common.exclusive(..., lane=True)``), reads overrides.toml once it holds
+it, and lets the next lookup there go first between a tab's page and its artist's lists (``pass_turn``), reading
+overrides.toml again after, as in its client's pause before each request but its first; its good run is what its own
+client was answered.
 
 A link caracole knows already (its tab's song, or its artist's page read), one of a type caracole keeps nothing of,
 and one UG answered 404 for are said with no request. A cooldown, a block, a spent budget and an error say so and exit
@@ -134,8 +138,9 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
     """``--link``: the link's page read now (ug/link.py ``read``), and what it came to said (the module's docstring)."""
     from contextlib import closing
 
+    from caracole.commands._common import handoffs, overrides_since, pass_turn
     from caracole.get import progress_line
-    from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
+    from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
     from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
     from caracole.stamps import shown
     from caracole.ug.fetch import FetchContext
@@ -143,8 +148,15 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
 
     first = "tab" if link.kind == "tab" else "artist"
     at = [first]  # the stage running: the one the last line ends
+    ctx: FetchContext | None = None  # once the lock is held
 
     def stage(name: str, state: str, detail: str = "") -> None:
+        if (name, state) == ("artist", "running") and at[0] == "tab" and ctx is not None:
+            # A tab's page read, its artist's lists next: the next lookup in the lane goes first, and what it
+            # wrote in overrides.toml meanwhile is what the lists are read with.
+            handed = handoffs()
+            pass_turn(cfg, ctx.conn)
+            ctx.overrides = overrides_since(cfg, ctx.overrides, handed)
         at[0] = name
         if progress:
             typer.echo(progress_line({"stage": name, "state": state, "detail": detail}))
@@ -154,8 +166,9 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
         typer.echo(line)
 
     stage(first, "running", "asking Ultimate Guitar")
-    overrides = load_ovr(cfg)
-    with exclusive(cfg, f"ug --link {link.url}", interactive=True), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"ug --link {link.url}", lane=True), closing(open_db(cfg)) as conn:
+        # Read once the lock is held: what the lane's lookups before it wrote while it waited is what it reads with
+        overrides = load_ovr(cfg)
         now = utcnow()
         was = known(cfg, conn, link, now)
         if was.state in ("found", "other", "gone"):
@@ -196,7 +209,7 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
             record_block(conn, PROVIDER, now, str(done.stopped))
         elif isinstance(done.stopped, ProviderError):
             record_error(conn, PROVIDER, now, str(done.stopped))
-        elif answered_any(conn, run_id, PROVIDER, client.requests_made):
+        elif client.answered_any():  # its own client's answers, never another lookup's of the same second
             record_ok(conn, PROVIDER, now)
         line = said(conn, done)
         if not line.startswith(NOT_READ):

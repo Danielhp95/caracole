@@ -27,6 +27,10 @@ bulk pace, with a budget of its own (``--budget``, ``caracole index build``'s by
 goes on where it stopped the next time, even for an empty library; ``caracole harptabs
 --artist NAME`` reads one artist's page now, at the lookup pace: what caracole serve's Songs of
 a harptabs.com artist runs. Its last line starts as ``caracole lacuerda --artist``'s does.
+``lacuerda --artist``, ``lacuerda --search`` and ``harptabs --artist`` take caracole's lock in
+the lookups' lane (``_common.exclusive(..., lane=True)``), where another lookup goes first in
+their client's pause before each request but its first; LaCuerda's search checks its gate and
+sends its one request in one turn. Each one's good run is what its own client was answered.
 ``caracole gametabs --index`` reads gametabs.net's game pages into its local index
 (gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
 instruments, so that a song is found by its composer.
@@ -381,7 +385,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
     from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
     from caracole.lacuerda_fetch import read_artist_page
 
-    with exclusive(cfg, f"lacuerda --artist {artist}", interactive=True), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"lacuerda --artist {artist}", lane=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         if is_cooling(conn, "lacuerda", now):
             typer.echo(f"{NOT_READ}waiting out LaCuerda until "
@@ -409,7 +413,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
             return
         finally:
             client.close()
-        if answered_any(conn, run_id, "lacuerda", client.requests_made):
+        if client.answered_any():  # its own client's answers, never another lookup's of the same second
             record_ok(conn, "lacuerda", now)
         row = found and conn.execute("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1",
                                      (found[0],)).fetchone()
@@ -465,7 +469,7 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
         end(f"{NOT_SEARCHED}LaCuerda needs a word of 4 letters or more; {shown_query} has none.")
         return
     say("running", "asking LaCuerda")
-    with exclusive(cfg, f"lacuerda --search {query}", interactive=True), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"lacuerda --search {query}", lane=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         backfill_cached(conn, CachedAnswers("lacuerda", cfg.cache_dir))  # the artist pages it holds: no request
         was = asked(conn, key, now)
@@ -515,7 +519,7 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             return
         finally:
             client.close()
-        if answered_any(conn, run_id, "lacuerda", client.requests_made):
+        if client.answered_any():  # its own client's answers, never another lookup's of the same second
             record_ok(conn, "lacuerda", now)
     if answer.songs:
         some = (f"{plural(answer.stated, 'song')} for {shown_query}; the first {len(answer.songs)} are"
@@ -722,7 +726,7 @@ def _harptabs_artist(cfg: Config, artist: str) -> None:
     if not cfg.provider("harptabs").enabled:
         typer.echo(f"{NOT_READ}harptabs is off (caracole.toml). Nothing asked.")
         return
-    with exclusive(cfg, f"harptabs --artist {artist}", interactive=True), closing(open_db(cfg)) as conn:
+    with exclusive(cfg, f"harptabs --artist {artist}", lane=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         paths = artist_paths(conn, artist)
         if not paths:
@@ -758,7 +762,7 @@ def _harptabs_artist(cfg: Config, artist: str) -> None:
             return
         finally:
             client.close()
-        if answered_any(conn, run_id, "harptabs", client.requests_made):
+        if client.answered_any():  # its own client's answers, never another lookup's of the same second
             record_ok(conn, "harptabs", now)
     if page is None:
         typer.echo(f"Not found: harptabs no longer has {artist}'s page.")

@@ -1358,7 +1358,17 @@ It is rows.js's, shared by both pages:
 ##### Jobs and requests
 
 - Beyond a wanted.txt line, every change runs as a `caracole` command queued in jobs.py (One caracole at a time,
-  below).
+  below): in the queue, one at a time, or in the lookups' lane (`jobs.lane_of`: a lookup, a pasted UG link,
+  LaCuerda's search, an artist's page), up to `LANE` (3) at once on workers of their own (`caracole-lane-N`), started
+  at once unless the song has a job in the queue. The queue's worker starts a job only while no lane job runs or
+  waits, a lane worker the first lane job whose song has no job running (`JobQueue._take`, which `_next` wraps;
+  `jobs.song_of_job`, Make this my version's and a harmonica reading's jobs the song's too): a song never has two jobs
+  running, and its own job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
+  `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`). A queued one's
+  line counts what it waits for (`jobs.ahead`: a lookup the lane's before it, any other every one before it and every
+  lookup), and the Journal says its place among those queued in its own place, the queue's next "Queued · next,
+  after the lookups" while a lane job runs or waits (feed.py `AFTER_LOOKUPS`), every running one under Now in the
+  order they were asked (feed.py; test_web_feed.py); with no lane, as one queue, the phone's, to the byte.
 - The one line a request shows is status.py's, read from the job's steps and the song's state, never from which
   commands ran: a step's label is that line while it runs ("Adding to the book…").
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
@@ -1393,9 +1403,9 @@ It is rows.js's, shared by both pages:
   - Nothing for a request's first second (`outcome.BAR_AFTER`, decided by the server, so a reload agrees): no steps
     until it has run one at the view's `now` (one a `/jobs.json` answer, `jobs_routes.views`, the phone's
     `JobsRoutes`), and none ever for one over within it, frozen or not.
-- Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, never one that runs, with the jobs
-  `submit_all` queued `together` with it), keeping it in the history as over ("cancelled"), so a page that follows it
-  hears it ended.
+- Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, a lookup waiting for a slot in the
+  lane among them, never one that runs, with the jobs `submit_all` queued `together` with it), keeping it in the
+  history as over ("cancelled"), so a page that follows it hears it ended.
 - Try again queues a finished one's steps again (a removal's asks its question again).
 - **A sandboxed viewer reaches a form** only through a GET page of the server's own, whose form posts with the token:
   - `/versions` (versions_routes.py: Make this the one, Keep and Back to our pick,
@@ -1668,7 +1678,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     either itself;
   - it records its own good run where its Python does: `Health.recordOk` after `Health.answeredAny` of its run
     (`LookupWords.lookupRunOf(c.now)`, `searchRunId` for LaCuerda's search), or after any request where versions_cmd.py
-    counts them;
+    counts them; the computer's lane commands count their own client's answers since lane 6
+    (`PoliteClient.answered_any`, two lookups of one second sharing a run id there), the phone, one job at a time, its
+    run's;
   - `versions --keep` and `--keep-more`: the runner begins the song stage and finds the song, the command says from
     `{"song": …}` on, and at its `pdf` and `pages` running events (versions_cmd.py's: a version kept, pdf then pages;
     any other outcome past its refusals, pages alone) the runner makes the song's pages and ends both stages in the
@@ -2833,10 +2845,17 @@ picks one).
     between two requests to a provider;
   - a budget of `lookup_requests` (6) requests to it for the song;
   - and at most `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`, counting
-    the `events` of runs named `lookup:…`).
+    the `events` of runs named `lookup:…`), read again after each turn (`_LockedClient` in the lane: the hour, the
+    day, and after the sheet its `reserve`), so two lookups at once never pass it together: what the other spent
+    in its turn cuts the next request, which is never sent, one `budget` event
+    (`test_commands_lane.py::test_after_a_turn_a_lookups_client_keeps_to_what_the_hour_and_the_day_leave`,
+    `::test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets`, `::test_the_hour_holds_for_two_lookups`).
 - What follows the sheet, which the nightly run would do anyway (get.py's `ug` stage, LaCuerda for a song with a
   sheet), spends only what leaves `get.SHEETS_SHARE` (half) of that hour's requests for sheets
-  (`_Lookup.after_the_sheet`).
+  (`_Lookup.after_the_sheet`), its client's `reserve` that share after a turn too; a turn's cut is said as kept for
+  sheets only where the reserve made it (`kept_back`: the budget would be more without it), the hour spent whole as
+  the hour's (`test_get.py::test_after_a_turn_what_follows_the_sheet_says_what_cut_it`,
+  `test_commands_lane.py::test_a_turn_after_which_the_hour_is_spent_whole_is_no_reserve_kept_for_sheets`).
 - Then `BudgetExhausted`: the rest waits for the nightly run.
 - Nothing else is looser for a lookup, and a lookup never runs yt-dlp.
 
@@ -2871,8 +2890,12 @@ picks one).
 
 #### Either pace
 
-- One request at a time per provider (a synchronous client, and the lock below), redirect hops included; UG's
-  artist directory alone has several in flight, the owner's choice above.
+- One request at a time per provider (a synchronous client, and the lock below; two lookups at once pass the lock
+  between two requests, a lane client's turn coming at the start of its pause before each request but its first,
+  and after one its pause runs from the other's last request and a block the other met stops it:
+  `test_commands_lane.py::test_two_lookups_requests_alternate_and_a_site_sees_one_at_a_time`,
+  `::test_one_lookups_block_stops_the_other_before_its_next_request`), redirect hops included; UG's artist
+  directory alone has several in flight, the owner's choice above.
 - A request answered with a redirect is a request sent, followed or not: `_common._SENT` and `Pace.SENT` count its
   `redirect` event in the hour's, the day's and `http:last_request:`.
 - A connection that fails before any byte is sent (`httpx.ConnectError`: no address, no route) is tried again only
@@ -2923,6 +2946,8 @@ picks one).
   (`_LockedClient._after_a_lookup`), and `record_block` adds no strike for a cooldown that began after its caller did,
   as `record_ok` clears none
   (`test_commands_common.py::test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first`).
+  So is one the other lookup in the lane met at its turn: one block, one strike
+  (`test_commands_lane.py::test_one_lookups_block_stops_the_other_before_its_next_request`).
 
 #### robots.txt
 
@@ -3318,15 +3343,65 @@ picks one).
   - a file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and dropped once it holds
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
+- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`): `caracole get`
+  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, and `harptabs
+  --artist` (commands/lyrics.py), the five
+  (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`):
+  - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
+    go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
+  - their tickets named `lane.<time.time_ns(), 20 digits>.<pid>` (`LANE_TICKET`), taken oldest first, a ticket
+    trying for the lock only at the head of the lane (`lane_tickets`: a dead one dropped at once, a stale one passed
+    over), one deleted from under its lookup made again under its own name, in its place;
+  - their turns (`pass_turn`): a lane process holding the lock, at a turn point (a lane client's pause before each
+    request but its first, and between two of a lookup's stages), in no transaction, when a lane ticket waits,
+    writes its own (the newest), lets go, takes the lock back when its ticket heads the lane, writes its record back
+    and counts a handoff (`handoffs()`), so whatever reads again after a handoff reads again after a turn; killed or
+    interrupted as it waits, it leaves no ticket and writes no record, and the next in the lane takes the lock;
+  - `caracole get` passes a turn before each stage (`_Lookup._turn`, never inside one), and after a turn, there or in
+    a client's pause, reads overrides.toml and its song again (`_Lookup.handed`, `overrides_since`), so its
+    index.html shows a tab the other pinned; its good run is what its own clients were answered
+    (`PoliteClient.answered_any`), never another lookup's errors under the same second's run id
+    (`test_get.py::test_a_lookup_passes_a_turn_before_each_stage_never_inside_one`,
+    `::test_after_a_turn_a_lookup_reads_overrides_and_its_song_again`,
+    `::test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_second`); a song that left the book
+    at a turn (another caracole took it out, or merged it into one of the same name) ends it as a refusal, its song
+    stage saying so and the stages left skipped, never a bug (`_Lookup._left`,
+    `::test_a_song_that_left_the_book_at_a_turn_ends_the_lookup_in_its_song_stages_words`);
+  - `ug --link` passes a turn between a tab's page and its artist's lists (its `stage` callback, as the artist stage
+    starts after a tab's), and reads overrides.toml again after it (`overrides_since`); the others only in their
+    client's pauses. What each reads before a request and writes after it: LaCuerda's search checks its gate (asked,
+    answered, the hour, a failure, the hour's automatic searches) and sends its one request, its client's first, in
+    one turn; `ug --link`'s `known` decides only before its first request, and kv `ug:link-failed` is read and written
+    after its last, with no turn between; `lacuerda --artist` and `harptabs --artist` store each page as they read it.
+    Each one's good run is its own client's (`PoliteClient.answered_any`)
+    (`test_commands_ug.py::test_a_ug_link_takes_a_turn_between_its_tab_page_and_its_artists_lists`,
+    `::test_a_ug_links_good_run_is_its_own_clients`,
+    `test_commands_lyrics.py::test_a_lacuerda_search_checks_its_gate_and_sends_in_one_turn`,
+    `::test_a_lacuerda_artist_pages_good_run_is_its_own_clients`,
+    `test_commands_harptabs.py::test_an_artist_pages_good_run_is_its_own_clients`);
+  - two lookups of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never
+    runs two jobs of a song): accepted (the spec's part 3);
+  - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for
+    it to empty, holding nothing (`_lane_empty`, `_wait_lane_empty`; asked now, announced, polling); a lock its
+    process holds already is taken again of the outer one's kind;
+  - a waiting lookup's `on_wait` is told whom it waits for after `WAIT_SAID` (1 s), its warning at once
+    (test_commands_lane.py).
 - `caracole versions --keep`, `--keep-more` and `--clear` (which writes overrides.toml under it) wait so too, and
   `--choose` through get.
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
   `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
-  (`test_commands_lock.py::test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt`,
-  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`). A process holding
-  the lock as a lookup hands it to no other (`hand_over`), since the run waiting to take it back would take it first.
-  The phone has no lock and no nightly run, so its queue needs none of this.
+  (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
+  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
+  - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
+    points (a yt-dlp pause, a YouTube sheet before its models, `fetch --song`'s pauses), taking the gate only if it is
+    free (held, it is the bulk work that let it in), and waits with a ticket of its own, written before it lets go, to
+    take it back once the lane is empty; so bulk work that let it in gives it back at its next pause
+    (`test_commands_lane.py::test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back`,
+    `::test_a_nightly_run_that_let_a_queue_job_in_gives_it_back_at_its_next_pause`). Another caracole asked for now
+    usually waits for its end: one waiting while this one is away (a terminal's `caracole remove`, a `caracole-admin`
+    command) may take the lock first once the lane is empty, as tickets outside the lane keep no order.
+  - The phone has no lock and no nightly run, so its queue needs none of this.
 - Every changing `caracole songbook` command (make, add, remove, move, set, rename, delete, render:
   commands/songbook.py) waits the same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
@@ -3334,13 +3409,18 @@ picks one).
 #### Bulk work hands the lock over
 
 - Bulk work hands the lock over (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it
-  back once the lookup is done, counts the handoff (`_common.handoffs()`), and goes on.
+  back last, once the lane is empty and no lookup waits (`HANDOFF_TAKE` bounding only a ticket nobody takes, never
+  the lane's work: `test_commands_lane.py::test_the_nightly_run_takes_the_lock_back_only_once_the_lane_is_empty`),
+  counts the handoff (`_common.handoffs()`), and goes on.
 - That count is how everything below learns a lookup went first (a client's block and pace checks, the re-reads of
   songs and overrides.toml): it is the one way to let go of the lock mid-work.
 - It hands it to lookups alone: meanwhile it holds the flock of `state_dir/caracole.lock.handoff`, and a caracole that
   isn't a lookup lets go of a lock it took during a handoff and waits for it to end (`_common._take_outside_handoffs`),
   so a `caracole-admin` command waiting for the run takes the lock after it, never in its middle
   (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting`).
+- No deadlock: bulk work alone blocks holding a flock, its gate: on the lane's flock (`_wait_lane_empty`, the lane's
+  work, however long), and then on the lock once the lane is empty. What the owner asked for now tries the gate
+  without waiting, a lane lookup polls for the lock, and a `caracole-admin` command holds nothing while it waits.
 - It does so in two places:
   - Its clients, and the yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
     lookup (every `HANDOFF_SLICE` s), then pause a whole `delay` again
@@ -3372,8 +3452,10 @@ picks one).
 #### `serve` never takes it
 
 - It reads like `search` and appends to wanted.txt like `add`, and runs every other change as a `caracole` command in
-  a child process, one at a time (web/jobs.py), since the lock is re-entrant within a process and its threads would
-  share it.
+  a child process, since the lock is re-entrant within a process and its threads would share it: one at a time in the
+  queue, and up to `LANE` lookups beside it, which take turns with the lock (web/jobs.py; `CaracoleRunner` keeps a
+  process a running command, and `JobQueue.stop` ends them all, each request `INTERRUPTED`, a command asked after it
+  starting none).
 - A removal too, `caracole remove --yes`, once the line's five seconds with Undo are over (the library page's script;
   without it, a page of its own), having asked what goes (`removal.plan_removal`, which only reads, and
   `removal.brief`); its job's song key is `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.

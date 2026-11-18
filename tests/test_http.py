@@ -692,6 +692,25 @@ def test_success_resets_error_count(tmp_path):
     assert results == ["ProviderError", "ProviderError", 200, "ProviderError", "ProviderError", 200]
 
 
+def test_a_client_says_whether_its_site_answered_any_of_its_requests(tmp_path):
+    # As health.answered_any reads a run's events, from the client's own count: two lookups in one second share a run
+    # id, and would read each other's errors there.
+    answered, _ = make_client(tmp_path / "a", ok(b"page"))
+    answered.get("https://tabs.ultimate-guitar.com/tab/1")
+    assert answered.answered_any()
+    failing, rec = make_client(tmp_path / "b", ok(b"boom", status=502))
+    for i in range(2):
+        with pytest.raises(ProviderError):
+            failing.get(f"https://tabs.ultimate-guitar.com/tab/{i}")
+    assert len(rec.requests) == 2 and not failing.answered_any()  # every request it sent failed
+    blocked, _ = make_client(tmp_path / "c", ok(b"no", status=403))
+    with pytest.raises(ProviderBlocked):
+        blocked.get("https://tabs.ultimate-guitar.com/tab/1")
+    assert not blocked.answered_any()  # a block is no answer either
+    unsent, _ = make_client(tmp_path / "d", ok(b"page"))
+    assert not unsent.answered_any()  # none sent: none answered
+
+
 def lrclib_outage(get_status):
     """LRCLIB with /api/get answering ``get_status`` and /api/search failing with 503."""
     return lambda r: httpx.Response(get_status if r.url.path == "/api/get" else 503, content=b"ServerOverloaded")

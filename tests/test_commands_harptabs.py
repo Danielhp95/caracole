@@ -268,6 +268,35 @@ def test_artist_gone_block_and_error_exit_0(tmp_path, sites, quick):
     assert len(sites.harptabs.requests) == asked
 
 
+def test_an_artist_pages_good_run_is_its_own_clients(tmp_path, sites, quick, monkeypatch):
+    # Two lookups started in one second share a run id: the other's errors are never this one's, which harptabs.com
+    # answered.
+    from datetime import timedelta
+
+    from caracole.health import get_state, record_block
+
+    indexed(tmp_path, sites)
+    now = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("caracole.commands.lyrics.utcnow", lambda: now)
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    try:
+        record_block(conn, "harptabs", now - timedelta(days=10), "403")  # one strike, its cooldown long over
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [(_common.lookup_run_id(now), now.strftime("%Y-%m-%dT%H:%M:%SZ"), "harptabs",
+                           f"{BASE}theirs-{i}", 502, "error") for i in range(50)])
+    finally:
+        conn.close()
+
+    result = run(tmp_path, "--artist", "Billy Joel")
+
+    assert result.stdout == "Read: harptabs' page of billy joel lists 7 of their 98 tabs.\n", result.output
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    try:
+        assert get_state(conn, "harptabs").strikes == 0
+    finally:
+        conn.close()
+
+
 def test_artist_turned_off_asks_nothing(tmp_path, sites, quick):
     result = run(tmp_path, "--artist", "Billy Joel", enabled=False)
     assert result.exit_code == 0

@@ -21,7 +21,9 @@ serve reads into the job's stages):
   ones, for a song still without any (azlyrics_fetch.py).
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
-  over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py).
+  over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py). A song
+  that left the book meanwhile (another caracole removed it, or merged it into a song of the same name) ends the
+  sheet there, before the models write anything: a refusal its song stage says, the stages left skipped.
 - ``pdf``: the PDF and the viewer, ``sheet (auto).html``, for this song alone (``render_all``'s
   ``song_ids``): the sheet is readable from here on (``Progress.readable``).
 - ``pages``: _todo.md and index.html.
@@ -132,6 +134,8 @@ class _Sheet:
         self._report(name, "running")
         try:
             out = run()
+        except _Stop:  # the song left the book: the sheet ends there (``run``)
+            raise
         except Exception as e:  # a bug: say so, and leave the stages after it
             log.error("The %s stage failed: %s: %s. That's a bug in caracole; its traceback follows.", name,
                       type(e).__name__, e, exc_info=True)
@@ -157,9 +161,16 @@ class _Sheet:
         return "failed", detail
 
     def _song_again(self) -> None:
+        """The song read again; gone (another caracole removed it, or merged it into a song of the same name, while
+        this one let a lookup have the lock), the sheet ends there, a refusal (``_Stop``), before anything more is
+        written for it."""
         from caracole.songs import get_song
 
-        self.song = get_song(self.conn, self.song.id)
+        try:
+            self.song = get_song(self.conn, self.song.id)
+        except KeyError:
+            raise _Stop(f"{self.song.display} left the book while its sheet was made (removed, or merged into a song "
+                        "of the same name)") from None
 
     # --- the stages -------------------------------------------------------------------------------
 
@@ -476,17 +487,22 @@ class _Sheet:
                     self._report("song", "done", self.find_song())
                 except _Stop as e:
                     return self._refuse(str(e))
-                for name, work in (("audio", self.audio), ("lyrics", self.lyrics), ("chords", self.chords),
-                                   ("pdf", self.pdf), ("pages", self.pages)):
-                    self.stage(name, work)
+                try:
+                    for name, work in (("audio", self.audio), ("lyrics", self.lyrics), ("chords", self.chords),
+                                       ("pdf", self.pdf), ("pages", self.pages)):
+                        self.stage(name, work)
+                except _Stop as e:  # the song left the book as this one let a lookup have the lock
+                    return self._refuse(str(e))
         self.result.seconds = self.clock() - self.started
         return self.result
 
     def _refuse(self, why: str) -> SheetResult:
+        """The sheet refused, its song stage failed with ``why``; the stages that hadn't ended, skipped."""
         self.result.refused = why
         self._report("song", "failed", why)
         for name, _ in STAGES[1:]:
-            self._report(name, "skipped", "")
+            if self.result.states.get(name, "running") == "running":
+                self._report(name, "skipped", "")
         self.result.seconds = self.clock() - self.started
         return self.result
 

@@ -650,7 +650,14 @@ When that cuts Ultimate Guitar short, a matched song is marked to fetch, as
 `caracole fetch --song` marks it, so the nightly run fetches it even if it was
 fetched before.
 A nightly run that holds caracole's lock lets the lookup go first at its next
-pause ([One caracole at a time](#one-step-at-a-time)).
+pause ([One caracole at a time](#one-step-at-a-time)). Two lookups at once take
+turns with the lock, a request or a stage each, so both move and each site still
+gets one request at a time; the hour's lookups are counted again after each turn.
+A song another caracole took out of the book meanwhile (or merged into a song of
+the same name) ends the lookup there, a refusal that exits 1, the stages left
+skipped:
+`Nothing fetched: Radiohead - Creep left the book during this fetch (removed, or
+merged into a song of the same name).`
 
 Options:
 
@@ -1912,7 +1919,7 @@ A page caracole can't write ends the command with status 1 and
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`get`, `ug`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
 `search --add`, `autochords` and the `songbook` commands that change a songbook
 or render one. A
@@ -1926,7 +1933,8 @@ lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
 
-A lookup (`caracole get`) never waits behind a whole run: it says
+A lookup (`caracole get`, `ug --link`, `lacuerda --search` and `--artist`,
+`harptabs --artist`) never waits behind a whole run: it says
 `Another caracole is running (pid 4242: run); it lets a lookup go first at its
 next pause, or between two songs.`, and the run, which spends most of its time in its 2.5–5 second
 pauses (its youtube step, in its 3.75–7.5 seconds between two yt-dlp runs), lets go
@@ -1954,11 +1962,29 @@ longer waited for after five seconds. The run lets lookups alone go first: a
 command that isn't one (`caracole fetch`, `render`, `sync`, …) still waits for
 the whole run, even when it started before the lookup came, and the run holds
 `caracole.lock.handoff` in the state folder while a lookup has the lock.
+Lookups take turns with the lock among themselves, a request or a stage each,
+so two or three at once all move and each site still gets one request at a
+time. They take it in a lane of their own, `caracole.lock.lane` in the state
+folder: while a lookup runs there or waits for its turn, no other caracole takes
+the lock, not even between two turns, so a run, a command asked for now or one
+from a terminal waits for the lane to empty. After a turn a lookup counts the
+hour's lookups again, sends nothing to a site the other was turned back by, and
+waits the pause after the other's last request there; `get` reads
+overrides.toml and its song again, and `ug --link` reads overrides.toml again
+between a tab's page and its artist's lists.
+LaCuerda's search checks what keeps it from asking and asks in one turn. A
+lookup still waits for a sync, an import, an index merge or a YouTube sheet's
+models, which hold the lock to their end: rare, and minutes at worst (the
+owner's choice of 2026-11-18).
 What you ask for now waits as a lookup does and says the same, so that a lookup
 `caracole serve` queues after it never waits behind the whole run either: `add`,
 `remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its
 `--sheet` and `--none` too), `youtube --search` and `youtube --video`. Holding the
-lock as a lookup, such a command lets nothing else go first in its own pauses.
+lock, such a command lets a lookup go first there (a yt-dlp pause, a YouTube
+sheet before its models, `fetch --song`'s pauses), and gets the lock back once
+the lookups are done; another command asked for now usually waits for its end
+(one that waits while the lookups have the lock, such as a `caracole remove`
+from a terminal, may take it first once they are done).
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
@@ -2165,6 +2191,10 @@ human sheet, an ignored one or one with a purchase linked, and one `[youtube]` s
 without a video given, and exits 1 then, as it does for a video YouTube won't give, audio
 auto-chords can't read, or a caracole that can't make chords of the audio (which it says before
 it asks anything); a block, a cooldown, a spent budget or a network error waits, and exits 0.
+A song another caracole took out of the book (or merged into a song of the same name) while a
+lookup had the lock, before the models, ends it there, a refusal that exits 1 with nothing more
+written: `No sheet made: Nick Cani - Vikingos veganos left the book while its sheet was made
+(removed, or merged into a song of the same name).`
 `--progress` adds a JSON line per stage, for caracole serve. A human sheet found later takes the
 auto sheet's place, as always.
 
@@ -4730,10 +4760,16 @@ the library, sent as they are: they carry no badge.
   on the line's row; once it is over, the skipped steps fold into one last
   line, "Skipped: PDF, Songbooks". Ready, the list folds away with the bar.
 
-  A request that waits behind another says its place ("Queued · 1 request
-  ahead…") with **Cancel** beside it, which takes it out of the queue as the
-  Journal's does (the line says Cancelled and the song's Fetch is back); the
-  one that runs is never stopped.
+  A lookup (Get it, Fetch, Fetch again, Fetch it now, a pasted UG link,
+  LaCuerda's search, an artist's page) starts at once beside the request that
+  runs, unless its song has a request in the queue, which it waits behind;
+  three at most run at once, and a fourth waits with its place and
+  **Cancel**. Any other request waits for the one that runs and for the
+  lookups. A request that waits says its place ("Queued · 1 request
+  ahead…": a lookup counts the lookups before it, any other request every
+  one before it and every lookup, which goes first) with **Cancel** beside
+  it, which takes it out of the queue as the Journal's does (the line says
+  Cancelled and the song's Fetch is back); one that runs is never stopped.
 
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
@@ -4755,9 +4791,11 @@ the library, sent as they are: they carry no badge.
   gives it, asked again every 1.5 seconds while one waits or runs and every 10
   seconds otherwise, only while the tab shows; its tab counts the requests that
   wait or run:
-  - **Now**: the request that runs, as a card with its song, how long ago it
-    started ("started 12 s ago"), its line ("Making the PDF…") and its
-    steps, the one running highlighted and those done ticked: for a lookup,
+  - **Now**: the requests that run, in the order they were asked (the
+    queue's one and up to three lookups beside it), each as a card with
+    its song, how long ago it started ("started 12 s ago"), its line
+    ("Making the PDF…") and its steps, the one running highlighted and
+    those done ticked: for a lookup,
     Song, Match Ultimate Guitar (or Match: not on UG, plain), Sheet (Sheet
     Ultimate Guitar or Sheet LaCuerda once it asks a site, then where the
     sheet came from), PDF,
@@ -4772,10 +4810,13 @@ the library, sent as they are: they carry no badge.
     such as the PDF of a song with no sheet, keeps its place, skipped, and the
     Sheet a cooldown, a block or a spent budget stopped is drawn failed; for a
     request of other commands, its commands, leaving out one skipped.
-    Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
-    each with **Cancel**, which takes it out of the queue before it starts
-    (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
-    one that is over stays). A cancelled request is over, never run: it stays
+    Under them, the requests queued, in order ("Queued · next", "Queued · 2nd":
+    a lookup's place among the lookups waiting for a slot, any other's in the
+    queue). A request in the queue waits for the lookups too, which go first:
+    while one runs or waits, its next says "Queued · next, after the lookups".
+    Each has **Cancel**, which takes it out of the queue before it
+    starts (`POST /jobs/cancel`; a request that runs is never stopped halfway,
+    and one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
     page on another device, the lookup and versions pages) say so, the
     song's line getting its Fetch back. Cancelling a request leaves its wanted.txt line:
@@ -4999,14 +5040,18 @@ the library, sent as they are: they carry no badge.
   it again. Made again with those ticks under another name, the new
   songbook takes its line; its Forget takes it off the tab.
 
-Every request runs the `caracole` command line, one command at a time, so the
-server is never more aggressive than you at a terminal: each command takes
-caracole's lock, keeps the pause after the last request any caracole sent, and
-keeps the budgets and cooldowns. A lookup keeps the interactive pace (about a
-second between two requests to a site, six for the song, sixty an hour), and
-a nightly run holding the lock lets it go first at its next pause. The
-queue holds 20 requests and one per song: asking again for a song gives its
-request, and Fetch on a song whose request only adds it fetches it too.
+Every request runs the `caracole` command line: the queue's one command at a
+time, and up to three lookups beside it, which take turns with caracole's lock
+([One caracole at a time](#one-step-at-a-time)); a request in the queue starts
+only once no lookup runs or waits. So the server is never more aggressive than
+you at a terminal: each command takes caracole's lock, keeps the pause after
+the last request any caracole sent, and keeps the budgets and cooldowns. A
+lookup keeps the interactive pace (`lookup_delay`, 0.125–0.375 seconds between
+two requests to a site, six for the song, sixty an hour), and a nightly run
+holding the lock lets it go first at its next pause. The queue holds 20
+requests and one per song, and the lookups' lane three running and ten
+waiting of its own: asking again for a song gives its request, and Fetch on
+a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
 loses no song, and the Journal keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the

@@ -1,23 +1,46 @@
-"""caracole/web/jobs.py: the queue of requests, run one caracole command at a time."""
+"""caracole/web/jobs.py: the queue of requests, run one caracole command at a time, and the lookups' lane beside it."""
 
+import collections
 import json
+import subprocess
 import sys
 import threading
+import time
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from caracole.web.jobs import (
+    EXPORTING,
+    INTERRUPTED,
+    LANE,
+    LANE_WAITING,
+    LIMIT,
+    MINE,
+    READING,
+    REMOVING,
+    YOUTUBE_SHEET,
     CaracoleRunner,
+    Job,
     JobQueue,
     JobStarted,
     QueueFull,
     add_steps,
+    ahead,
     child_env,
     fetch_steps,
+    harptabs_artist_steps,
+    lacuerda_artist_steps,
+    lacuerda_search_steps,
+    lane_of,
     lookup_steps,
+    remove_steps,
+    ug_link_steps,
     version_steps,
+    youtube_search_steps,
+    youtube_sheet_steps,
+    youtube_video_steps,
 )
 
 from conftest import subprocess_pythonpath
@@ -257,6 +280,8 @@ def test_a_job_that_mustnt_join_another_gets_the_songs_job_unchanged(state):
 
 TAB_A = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6789"
 TAB_B = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6790"
+TAB = TAB_A
+VIDEO = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 def test_a_version_picked_while_the_songs_lookup_runs_is_looked_up_after_it():
@@ -792,3 +817,452 @@ def test_an_import_of_a_staged_file_is_followed_by_its_stages():
     job, _ = JobQueue(FakeRunner()).submit("Sync with a file from Desk", "import:0123456789abcdef", steps)
     assert [(s.name, s.label) for s in job.stages] == list(PEER_IMPORT_STAGES)
     assert [s.name for s in job.stages] == ["check", "take", "render", "agree", "index"]
+
+
+# --- the lookups' lane: which requests go to it, and its room -------------------------------------------------------
+
+
+def test_lookups_and_the_search_boxs_one_request_reads_are_the_lanes_and_the_rest_the_queues():
+    assert all(lane_of(s) for s in (lookup_steps("Muse", "Uprising"), lookup_steps("Muse", "Uprising", tab=TAB),
+                                    ug_link_steps(TAB), lacuerda_search_steps("calamaro flaca", auto=True),
+                                    lacuerda_search_steps("calamaro flaca", auto=False),
+                                    lacuerda_artist_steps("andres-calamaro", "Andrés Calamaro"),
+                                    harptabs_artist_steps("/artist/9", "Muse"),
+                                    lookup_steps("--no-songbooks", "Uprising")))  # a name, after "--"
+    assert not any(lane_of(s) for s in (lookup_steps("Muse", "Uprising", songbooks=False),
+                                        add_steps("Muse", "Uprising"),
+                                        youtube_search_steps("muse uprising"), youtube_video_steps("dQw4w9WgXcQ"),
+                                        youtube_sheet_steps("Muse - Uprising", VIDEO),
+                                        version_steps("Muse", "Uprising", keep="1"),
+                                        version_steps("Muse", "Uprising", choose=TAB),  # it runs get, from a sheet
+                                        remove_steps("Muse - Uprising"), fetch_steps("Muse - Uprising"),
+                                        [*add_steps("Muse", "Uprising"), *lookup_steps("Muse", "Uprising")],
+                                        [("UG's directory", ("ug", "--directory"))],
+                                        [("LaCuerda's listings", ("lacuerda", "--index"))], []))
+
+
+def test_a_queue_of_no_lane_places_every_request_in_the_queue_as_today():
+    queue = JobQueue(FakeRunner())
+    job, _ = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"), fetching=True)
+    assert queue.lanes == 0 and not job.lane
+    assert queue.room() == LIMIT - 1 and queue.active_count() == 1
+
+
+@pytest.mark.parametrize(("first", "how"), [("removal", "after"), ("sheet from youtube", "after"),
+                                            ("songbook's lookup", "answered"), ("keep it", "joined")])
+def test_a_lane_request_for_a_song_with_a_job_in_the_queue_goes_into_the_queue_behind_it(first, how):
+    key = "muse|uprising"
+    song_key, steps, options = {
+        "removal": (REMOVING + key, remove_steps("Muse - Uprising"), {}),
+        "sheet from youtube": (YOUTUBE_SHEET + key, youtube_sheet_steps("Muse - Uprising", VIDEO), {}),
+        "songbook's lookup": (key, lookup_steps("Muse", "Uprising", songbooks=False), {"fetching": True}),
+        "keep it": (key, version_steps("Muse", "Uprising", keep="1"), {}),
+    }[first]
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    songs, _ = queue.submit(first, song_key, steps, **options)
+    assert not songs.lane
+    get, new = queue.submit("Fetch Muse - Uprising", key, lookup_steps("Muse", "Uprising"), fetching=True)
+    assert not get.lane  # in the queue by today's rules: answered, joined or after it
+    if how == "after":
+        assert new and get.id > songs.id
+    else:
+        assert not new and get.id == songs.id
+    if how == "joined":
+        assert [s.args[0] for s in get.steps] == ["versions", "get"]
+    assert queue.submit("Fetch Oasis - Wonderwall", "oasis|wonderwall", lookup_steps("Oasis", "Wonderwall"),
+                        fetching=True)[0].lane  # a song with nothing queued: the lane's
+
+
+def test_a_songs_job_in_the_queue_keeps_its_lookups_there_while_it_runs_and_none_once_it_is_over():
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    removal, _ = queue.submit("Remove Muse - Uprising", REMOVING + "muse|uprising", remove_steps("Muse - Uprising"))
+    with queue._lock:
+        queue._jobs[0].state = "running"
+    get, new = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"), fetching=True)
+    assert new and not get.lane and get.id > removal.id
+    with queue._lock:
+        for job in queue._jobs:
+            job.state = "done"
+    again, new = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"),
+                              fetching=True)
+    assert new and again.lane
+
+
+def test_lane_requests_join_each_other_and_a_queue_request_never_joins_a_lane_job_that_waits():
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    first, new = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"),
+                              fetching=True)
+    again, joined = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"),
+                                 fetching=True)
+    assert new and not joined and again.id == first.id and first.lane
+    keep, made = queue.submit("Keep", "muse|uprising", version_steps("Muse", "Uprising", keep="1"))
+    assert made and not keep.lane  # its own job, in the queue
+    assert [s.args[0] for s in queue.job(first.id).steps] == ["get"]  # the lane job as it was
+    add, made = queue.submit("Add", "muse|uprising", add_steps("Muse", "Uprising"))
+    assert not made and add.id == first.id  # a lane job that does as much is its answer
+
+
+def test_the_lane_has_room_of_its_own():
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    adds = [queue.submit(f"Add A - {n}", f"a|{n}", add_steps("A", str(n)))[0] for n in range(LIMIT)]
+    with pytest.raises(QueueFull):
+        queue.submit("Add B - 0", "b|0", add_steps("B", "0"))
+    assert queue.room() == 0
+    lookups = [queue.submit(f"Fetch C - {n}", f"c|{n}", lookup_steps("C", str(n)), fetching=True)[0]
+               for n in range(LANE + LANE_WAITING)]
+    assert all(job.lane for job in lookups)
+    with pytest.raises(QueueFull):
+        queue.submit("Fetch D - 0", "d|0", lookup_steps("D", "0"), fetching=True)
+    assert queue.active_count() == LIMIT + LANE + LANE_WAITING
+    queue.cancel(adds[0].id)  # room in the queue: an add fits, a lookup still doesn't
+    assert queue.room() == 1
+    with pytest.raises(QueueFull):
+        queue.submit("Fetch D - 0", "d|0", lookup_steps("D", "0"), fetching=True)
+    assert not queue.submit("Add B - 0", "b|0", add_steps("B", "0"))[0].lane
+    small = JobQueue(FakeRunner(), lane=1, lane_waiting=0)
+    assert small.submit("Fetch C - 0", "c|0", lookup_steps("C", "0"), fetching=True)[0].lane
+    with pytest.raises(QueueFull):
+        small.submit("Fetch C - 1", "c|1", lookup_steps("C", "1"), fetching=True)
+
+
+def test_requests_queued_together_each_take_their_own_lanes_room():
+    together = [
+        {"title": "Fetch B - 2", "song_key": "b|2", "steps": lookup_steps("B", "2"), "fetching": True},
+        {"title": "Put B - 2 in a songbook", "song_key": "songbook|b|2", "steps": [("Adding", ("songbook", "add"))]}]
+    full = JobQueue(FakeRunner(), lane=LANE)
+    for n in range(LIMIT):
+        full.submit(f"Add A - {n}", f"a|{n}", add_steps("A", str(n)))
+    with pytest.raises(QueueFull):
+        full.submit_all(together)
+    assert full.active_count() == LIMIT and not any(job.lane for job in full.snapshot())  # neither queued
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    (lookup, made), (change, made_too) = queue.submit_all(together)
+    assert made and made_too and lookup.lane and not change.lane
+    assert queue.job(lookup.id).together == queue.job(change.id).together == (lookup.id, change.id)
+    for n in range(LANE + LANE_WAITING - 1):  # the lane full: the queue's room is no help to the lookup
+        queue.submit(f"Fetch C - {n}", f"c|{n}", lookup_steps("C", str(n)), fetching=True)
+    with pytest.raises(QueueFull):
+        queue.submit_all([{**together[1], "song_key": "songbook|e|5"},
+                          {**together[0], "song_key": "e|5", "steps": lookup_steps("E", "5")}])
+    assert queue.active_count() == 2 + LANE + LANE_WAITING - 1  # the songbook's change taken back out
+
+
+def test_a_request_counts_ahead_what_it_waits_for():
+    def job(n: int, state: str, lane: bool = False) -> Job:
+        return Job(n, f"Job {n}", f"song|{n}", [], state=state, lane=lane)
+
+    jobs = [job(1, "running"), job(2, "running", True), job(3, "queued", True), job(4, "queued"),
+            job(5, "queued", True), job(6, "done", True)]
+    assert [ahead(jobs, jobs[i]) for i in (2, 4, 3)] == [1, 2, 4]
+    assert ahead(jobs[::-1], jobs[3]) == 4  # in any order: a snapshot's, newest first
+    # with no lane job, every active job before it, as today
+    today = [job(1, "done"), job(2, "running"), job(3, "queued"), job(4, "queued")]
+    assert [ahead(today, j) for j in today[1:]] == [0, 1, 2]
+
+
+def test_a_jobs_lane_is_kept_in_memory_alone(tmp_path):
+    from caracole.web.history import History
+
+    path = tmp_path / "requests.jsonl"
+    queue = JobQueue(FakeRunner(), history=History(path), lane=LANE)
+    job, _ = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"), fetching=True)
+    assert job.lane and "lane" not in job.as_json()
+    assert all("lane" not in json.loads(line) for line in path.read_text(encoding="utf-8").splitlines())
+    again = JobQueue(FakeRunner(), history=History(path), lane=LANE).job(job.id)  # the next caracole serve
+    assert again.state == "interrupted" and not again.lane
+
+
+# --- the lane's workers -------------------------------------------------------------------------------------------
+
+
+class Gated:
+    """A runner whose commands each wait for their gate, their last argument (a lookup's title, an add's), until it
+    is opened for them (``open``: once a command), and return -15 once terminated, as a command the server ends does;
+    ``calls``, the commands in the order they started, and ``running``, those that run now."""
+
+    def __init__(self):
+        self._said = threading.Condition()
+        self._opened = collections.Counter()
+        self._ended = False
+        self.calls = []
+        self.running = []
+
+    def __call__(self, args, emit):
+        args, gate = list(args), args[-1]
+        with self._said:
+            self.calls.append(args)
+            self.running.append(args)
+            self._said.notify_all()
+            opened = self._said.wait_for(lambda: self._opened[gate] > 0 or self._ended, timeout=30)
+            self.running.remove(args)
+            self._said.notify_all()
+            if self._ended:
+                return -15
+            if not opened:
+                return 1
+            self._opened[gate] -= 1
+            return 0
+
+    def open(self, gate):
+        with self._said:
+            self._opened[gate] += 1
+            self._said.notify_all()
+
+    def terminate(self):
+        with self._said:
+            self._ended = True
+            self._said.notify_all()
+
+    def until(self, check, timeout=10):
+        """Wait for ``check`` of the gates of the commands that run now, in the order they started."""
+        with self._said:
+            assert self._said.wait_for(lambda: check([args[-1] for args in self.running]), timeout), self.running
+
+
+def until_states(queue, check, timeout=10):
+    """Wait for ``check`` of every job's state (id -> state): the queue says so as each job ends."""
+    with queue._wake:
+        assert queue._wake.wait_for(lambda: check({job.id: job.state for job in queue._jobs}), timeout), [
+            (job.id, job.state) for job in queue._jobs]
+
+
+def lookup(queue, artist, title, **options):
+    return queue.submit(f"Fetch {artist} - {title}", f"{artist.lower()}|{title.lower()}",
+                        lookup_steps(artist, title, **options), fetching=True)[0]
+
+
+def test_a_lookup_asked_while_a_long_request_runs_starts_at_once_and_a_request_after_it_waits_for_it():
+    runner = Gated()
+    queue = JobQueue(runner, lane=LANE)
+    queue.start()
+    try:
+        long, _ = queue.submit("Add A - Long", "a|long", add_steps("A", "Long"))
+        runner.until(lambda gates: gates == ["Long"])
+        now = lookup(queue, "B", "Now")
+        assert now.lane
+        runner.until(lambda gates: gates == ["Long", "Now"])  # at once, beside it
+        after, _ = queue.submit("Add C - After", "c|after", add_steps("C", "After"))
+        assert not after.lane
+        runner.open("Long")
+        until_states(queue, lambda states: states[long.id] == "done")
+        assert queue.job(after.id).state == "queued"  # the lane is busy: it waits for the lookup
+        runner.open("Now")
+        runner.until(lambda gates: gates == ["After"])
+        assert queue.job(now.id).state == "done"
+        runner.open("After")
+        until_states(queue, lambda states: states[after.id] == "done")
+    finally:
+        queue.stop()
+    assert [args[-1] for args in runner.calls] == ["Long", "Now", "After"]
+
+
+def test_a_fourth_lookup_waits_for_a_slot_and_a_songs_second_job_for_its_first():
+    runner = Gated()
+    queue = JobQueue(runner, lane=LANE)
+    queue.start()
+    try:
+        first, second, third, fourth = (lookup(queue, "A", n) for n in "1234")
+        runner.until(lambda gates: sorted(gates) == ["1", "2", "3"])  # in any order: each its worker
+        assert queue.job(fourth.id).state == "queued"  # LANE slots: it waits for one
+        runner.open("1")
+        runner.until(lambda gates: sorted(gates) == ["2", "3", "4"])
+        runner.open("2")
+        runner.open("3")
+        until_states(queue, lambda states: states[second.id] == states[third.id] == "done")
+        a = lookup(queue, "Oasis", "Wonderwall", tab=TAB_A)
+        runner.until(lambda gates: sorted(gates) == ["4", "Wonderwall"])
+        b = lookup(queue, "Oasis", "Wonderwall", tab=TAB_B)
+        assert b.id != a.id and b.lane  # a job of its own, in the lane
+        e = lookup(queue, "E", "Five")
+        runner.until(lambda gates: sorted(gates) == ["4", "Five", "Wonderwall"])  # E goes past it
+        assert queue.job(b.id).state == "queued"  # the song's first runs
+        runner.open("Wonderwall")
+        until_states(queue, lambda states: states[a.id] == "done")
+        runner.until(lambda gates: sorted(gates) == ["4", "Five", "Wonderwall"])  # the song's second runs now
+        assert queue.job(b.id).state == "running"
+        for gate in ("4", "Five", "Wonderwall"):
+            runner.open(gate)
+        until_states(queue, lambda states: all(states[job.id] == "done" for job in (first, fourth, b, e)))
+    finally:
+        queue.stop()
+    tabs = [arg for args in runner.calls for arg in args if arg.startswith("--tab=")]
+    assert tabs == [f"--tab={TAB_A}", f"--tab={TAB_B}"]
+
+
+def test_a_songs_own_job_keeps_its_order():
+    runner = Gated()
+    queue = JobQueue(runner, lane=LANE)
+    queue.start()
+    try:
+        removal, _ = queue.submit("Remove Muse - Uprising", REMOVING + "muse|uprising", remove_steps("Muse - Uprising"))
+        runner.until(lambda gates: gates == ["Muse - Uprising"])
+        get, new = queue.submit("Fetch Muse - Uprising", "muse|uprising", lookup_steps("Muse", "Uprising"),
+                                fetching=True)
+        assert new and not get.lane  # a job in the queue, never the lane
+        assert queue.job(get.id).state == "queued"
+        runner.open("Muse - Uprising")
+        runner.until(lambda gates: gates == ["Uprising"])  # once the removal is done, after it
+        assert queue.job(removal.id).state == "done"
+        runner.open("Uprising")
+        until_states(queue, lambda states: states[get.id] == "done")
+    finally:
+        queue.stop()
+    assert [args[0] for args in runner.calls] == ["remove", "get"]
+    # that its wanted.txt line then brings the song back as new is test_songs.py's
+    # test_a_wanted_line_brings_a_removed_song_back_as_new
+
+
+def test_a_removal_asked_while_its_songs_lookup_runs_in_the_lane_starts_once_the_lookup_is_over():
+    runner = FakeRunner()
+    queue = JobQueue(runner, lane=LANE)
+    get = lookup(queue, "Muse", "Uprising")
+    running = queue._next(True)
+    assert get.lane and running.id == get.id  # it runs, in the lane
+    removal, new = queue.submit("Remove Muse - Uprising", REMOVING + "muse|uprising", remove_steps("Muse - Uprising"))
+    assert new and not removal.lane
+    assert queue._next(False) is None and queue._next(True) is None  # the queue's worker waits for the lane
+    queue._run(running)
+    assert queue._next(False).id == removal.id  # the lookup over: it starts
+    assert [args[0] for args in runner.calls] == ["get"]
+
+
+# A song's own changes, under keys of their own: Make this my version's (export_routes.py) and a harmonica tab's
+# reading's (harmonica_routes.py), the song's identity key after their prefix
+CHANGES = {
+    "my version": (f"{EXPORTING}muse|uprising:key=G{MINE}",
+                   [("Making it your version", ("render", "--song=Muse - Uprising", "--version=key=G", "--mine"))]),
+    "a harmonica reading": (f"{READING}muse|uprising:harmonica-1.txt:clear{MINE}",
+                            [("Going back to our guess", ("harmonica", "--tab=harmonica-1.txt", "--clear", "--",
+                                                          "Muse", "Uprising"))]),
+}
+
+
+@pytest.mark.parametrize("how", ["waits", "runs"])
+@pytest.mark.parametrize("change", CHANGES)
+def test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it(change, how):
+    song_key, steps = CHANGES[change]
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    mine, _ = queue.submit(change, song_key, steps, display="Muse - Uprising", song_id=1)
+    assert not mine.lane
+    if how == "runs":
+        assert queue._next(False).id == mine.id
+    get = lookup(queue, "Muse", "Uprising")
+    assert not get.lane and get.id > mine.id  # a job of its own in the queue, after the song's change
+    other = lookup(queue, "Oasis", "Wonderwall")
+    assert other.lane and queue._next(True).id == other.id  # another song's: the lane's, the Muse lookup not
+
+
+@pytest.mark.parametrize("change", CHANGES)
+def test_a_lane_job_never_starts_beside_its_songs_own_change(change):
+    song_key, steps = CHANGES[change]
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    get = lookup(queue, "Muse", "Uprising")
+    mine, _ = queue.submit(change, song_key, steps, display="Muse - Uprising", song_id=1)
+    with queue._lock:  # running beside it, which the queue's worker never lets it: the lane worker's own check
+        next(job for job in queue._jobs if job.id == mine.id).state = "running"
+    assert queue._next(True) is None
+    with queue._lock:
+        next(job for job in queue._jobs if job.id == mine.id).state = "done"
+    assert queue._next(True).id == get.id
+
+
+def test_cancel_takes_out_a_lookup_waiting_for_a_slot_never_one_that_runs():
+    runner = Gated()
+    queue = JobQueue(runner, lane=LANE)
+    queue.start()
+    try:
+        jobs = [lookup(queue, "A", n) for n in "1234"]
+        runner.until(lambda gates: sorted(gates) == ["1", "2", "3"])  # in any order: each its worker
+        cancelled = queue.cancel(jobs[3].id)
+        assert cancelled is not None and cancelled.state == "cancelled"
+        with pytest.raises(JobStarted):
+            queue.cancel(jobs[0].id)
+        for gate in "123":
+            runner.open(gate)
+        until_states(queue, lambda states: all(states[job.id] == "done" for job in jobs[:3]))
+    finally:
+        queue.stop()
+    assert sorted(args[-1] for args in runner.calls) == ["1", "2", "3"]  # never run
+    assert queue.job(jobs[3].id).state == "cancelled"
+
+
+def test_a_stop_interrupts_every_running_request_and_a_restart_reads_them_back_so(tmp_path):
+    from caracole.web.history import History
+
+    path = tmp_path / "requests.jsonl"
+    runner = Gated()
+    queue = JobQueue(runner, history=History(path), lane=LANE)
+    queue.start()
+    try:
+        add, _ = queue.submit("Add A - Long", "a|long", add_steps("A", "Long"))
+        runner.until(lambda gates: gates == ["Long"])  # the queue's, before the lookups come
+        jobs = [add, lookup(queue, "B", "1"), lookup(queue, "B", "2")]
+        runner.until(lambda gates: sorted(gates) == ["1", "2", "Long"])
+    finally:
+        queue.stop()
+    assert not any(thread.is_alive() for thread in queue._threads)  # every worker joined
+    assert [queue.job(job.id).state for job in jobs] == [INTERRUPTED] * 3
+    assert [queue.job(job.id).steps[0].state for job in jobs] == [INTERRUPTED] * 3
+    again = JobQueue(FakeRunner(), history=History(path), lane=LANE)  # the next caracole serve
+    assert [again.job(job.id).state for job in jobs] == [INTERRUPTED] * 3
+
+
+def test_run_pending_runs_the_lane_before_the_queue():
+    runner = FakeRunner()
+    queue = JobQueue(runner, lane=LANE)
+    queue.submit("Add A - B", "a|b", add_steps("A", "B"))
+    lookup(queue, "C", "D")
+    queue.run_pending()
+    assert [args[0] for args in runner.calls] == ["get", "add"]
+    assert [job.state for job in queue.snapshot()] == ["done", "done"]
+
+
+def test_a_command_asked_once_the_runner_is_terminated_starts_no_process(monkeypatch):
+    started = []
+
+    def popen(*args, **kwargs):
+        started.append(args)
+        raise AssertionError("a process started after terminate")
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    runner = CaracoleRunner(None)
+    runner.terminate()
+    assert runner(["add", "--", "A", "B"], lambda line: None) == -15
+    # The stop race: a worker past _run's check as the server stops asks the runner after terminate
+    real = CaracoleRunner(None)
+
+    def stopping(args, emit):
+        queue._stopping = True  # as stop() sets it, then terminates the runner
+        real.terminate()
+        return real(args, emit)
+
+    queue = JobQueue(stopping)
+    job, _ = queue.submit("Add A - B", "a|b", add_steps("A", "B"))
+    queue._run(queue._next())
+    assert started == []
+    stopped = queue.job(job.id)
+    assert stopped.state == INTERRUPTED and [(s.state, s.code) for s in stopped.steps] == [(INTERRUPTED, -15)]
+
+
+@pytest.mark.slow
+def test_the_runner_keeps_a_process_a_command_and_ends_them_all(tmp_path):
+    script = tmp_path / "caracole"
+    script.write_text(f'#!/bin/sh\n: > "{tmp_path}/started.$$"\nexec sleep 30\n', encoding="utf-8")
+    script.chmod(0o755)
+    runner = CaracoleRunner(None, python=str(script))
+    codes = {}
+
+    def run(n):
+        codes[n] = runner([f"--song={n}"], lambda line: None)
+
+    threads = [threading.Thread(target=run, args=(n,)) for n in (1, 2)]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + 10
+    while len(list(tmp_path.glob("started.*"))) < 2:  # both running: each wrote its marker
+        assert time.monotonic() < deadline
+        threading.Event().wait(0.01)
+    runner.terminate()
+    for thread in threads:
+        thread.join(5)
+    assert codes == {1: -15, 2: -15}

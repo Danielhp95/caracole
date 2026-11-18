@@ -59,6 +59,7 @@ from caracole.web.jobs import (
     REMOVING,
     Job,
     JobStarted,
+    ahead,
     song_key_of,
 )
 from caracole.web.pages import Refused
@@ -106,7 +107,7 @@ def requests_json(app: WebApp, asked: dict[str, list[str]]) -> Response:
     except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
         pass
     facts = {job_id: found[1] for job_id, found in songs.items()}
-    lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job), songbook_page=books.get(job.id))
+    lines = {job.id: job_line(job, facts.get(job.id), ahead=ahead(jobs, job), songbook_page=books.get(job.id))
              for job in jobs}
     outcomes = {job.id: outcome(job, lines[job.id], facts.get(job.id), song_id=songs.get(job.id, (None,))[0])
                 for job in jobs if not job.active}
@@ -209,7 +210,8 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
     as the Songbooks tab has them (``songbooks``): a songbook's change, a song's lookup, which makes
     the songbooks it is in again, and a removal all change them. A LaCuerda artist's read changes none.
 
-    ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
+    ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one (``jobs.ahead``: a lookup's in the
+    lane, those before it there; any other's, every one before it and every lookup);
     ``overrides`` None (overrides.toml unreadable) leaves the cards out.
     """
     from caracole.library_page import song_cards
@@ -260,7 +262,7 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     peer = peer_kind(job)
     kind = peer or ("remove" if job.song_key.startswith(REMOVING) else "export"
                     if job.song_key.startswith((EXPORTING, READING)) else "songbook" if songbook is not None else "song")
-    line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
+    line = job_line(job, facts, ahead=ahead(jobs, job), songbook_page=songbook_page)
     shown = song_line(line) if kind == "song" else line
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching, "line": shown.as_json(),
@@ -414,11 +416,6 @@ def forget_ended(app: WebApp, jobs: list[Job]) -> None:
     with app._ended_lock:
         for job_id in [i for i in app._ended if i not in kept]:
             del app._ended[job_id]
-
-
-def _ahead(jobs: list[Job], job: Job) -> int:
-    """How many jobs wait or run before a queued one."""
-    return sum(1 for j in jobs if j.active and j.id < job.id)
 
 
 def _songbook_page(conn: sqlite3.Connection, job: Job) -> str | None:
