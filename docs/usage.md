@@ -3383,7 +3383,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds in, over "key" until you transpose. On the narrowest screen "capo
   2" sits over "+1"; a key too long for its room ("Ab mixolydian") is a
   little smaller, and cut short only where even that is too long. A screen reader
-  hears the whole line ("Fm shapes (+1) · capo 2 · sounds Gm"). **The
+  hears the whole line ("Fm shapes (+1) · capo 2 · sounds Gm"). **Tap the
+  key** for the twelve keys in the song's mode, the key as written first
+  ("Am · as written", across its row; on the piano, the harmonica and the
+  winds, the key the song sounds in), the one you play marked: tap one and
+  the song moves there the nearest way, up or down (the capo stays where it
+  is), the list closes and the bar says what moved. On a phone the list sits
+  at the foot, above the bar, as the settings do; from 900 px wide it is the
+  rail beside the song, in the settings' place. A sheet whose key caracole
+  can't tell has no list: its key does nothing. **The
   neck** opens the overlay as a sheet on a phone or a tablet (above). The
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
   every screen; the bar has no button for it. **Aa** opens a small box over the bar with the text
@@ -3396,9 +3404,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
-- **Back and Escape**: the settings (or the Harmony panel in their place), a
-  chord's card, the necks' sheet, the versions list, Aa's text-size box and
-  Export PDF's question (served) are each one step of
+- **Back and Escape**: the settings (or the Harmony panel, or the key list,
+  in their place), a chord's card, the necks' sheet, the versions list, Aa's
+  text-size box and Export PDF's question (served) are each one step of
   the browser's history while they are open, so the browser's Back (a phone's
   too) closes the one on top, as Escape and its × do (Aa's box closes on a tap
   anywhere else too, and any other layer opening closes it; the question
@@ -3408,8 +3416,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   is open at a time: opening another (a chord's card with the settings open,
   the settings over the necks' sheet) closes the one open. From 900 px wide
   the card sits by its chord and the versions list under its line, beside
-  the settings or the Harmony panel (one of those two at a time, in the
-  rail), and Back closes the one opened last first. What you change with one
+  the settings, the Harmony panel or the key list (one of those three at a
+  time, in the rail), and Back closes the one opened last first. What you change with one
   open (the key, the capo, a shape) stays as it closes, in the address too,
   and the song stays where you scrolled it under it. A page whose history the browser refuses opens and
   closes them all the same, and Back leaves it. Full screen (below) is one of

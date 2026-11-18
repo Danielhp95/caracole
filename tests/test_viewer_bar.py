@@ -113,8 +113,10 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     assert re.search(r'id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">'
                      + re.escape(page._SCROLL_ICON) + '</span>', controls)
     assert 'id="shapes"' not in html  # the strip's one switch is the settings' All chord shapes
-    # The key between − and +, in short for the eye and in full for a screen reader.
-    assert re.search(r'<output class="now" id="key-now" for="t-down t-up">.*id="key-full"', controls)
+    # The key between − and +, in short for the eye and in full for a screen reader: a button, which opens the key
+    # list (test_viewer_key_list.py).
+    assert re.search(r'<button type="button" class="now" id="key-now" aria-haspopup="dialog" aria-controls="key-list"'
+                     r' aria-expanded="false">.*id="key-full"', controls)
     # Aa opens the size, there with the size it shows; ⋯ the settings.
     assert re.search(r'id="size"[^>]*aria-expanded="false" aria-controls="sizes"', controls)
     assert re.search(r'<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>', controls)
@@ -163,7 +165,7 @@ def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_pa
     page.write_text(build_viewer(cho), encoding="utf-8")
     dom = browser.dump_dom(page.as_uri() + fragment, (390, 844), hide_scrollbars=True)  # a phone's, over the page
     assert re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)  # there once the script ran
-    found = re.search(r'<output class="now" id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
+    found = re.search(r'<button[^>]*id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
                       r'<span class="d( changed)?" aria-hidden="true">([^<]*)</span>'
                       r'<span class="vh" id="key-full">([^<]*)</span>', dom)
     assert found, "no key in the bar"
@@ -376,7 +378,7 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         b.js("document.querySelector('.licence summary').focus({preventScroll: true})")
         assert bar(b)["where"] == "away"
         order = []
-        for _ in range(6):
+        for _ in range(7):
             b.press("Tab")
             order.append(bar(b)["focus"])
         back = settled(b, "shown")
@@ -388,7 +390,8 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         kept = down and not slid(b) and bar(b)["where"] == "shown"
         b.press("Enter")  # ⋯
         opened = bar(b)
-    assert order == ["t-down", "t-up", "necks-toggle", "size", "scroll", "more"]  # the rail's after the key, at 1280
+    # the key a button between − and + (its list), the rail's after it, at 1280
+    assert order == ["t-down", "key-now", "t-up", "necks-toggle", "size", "scroll", "more"]
     assert back and kept and opened["panel"]
 
 
@@ -468,7 +471,7 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
         # After the key, the rail's toggle from 1200 px; narrower, the neck in its place
-        tools = ["t-down", "t-up", "necks-toggle"] if width >= 1200 else ["t-down", "t-up", "necks-open"]
+        tools = ["t-down", "key-now", "t-up"] + (["necks-toggle"] if width >= 1200 else ["necks-open"])
         assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
         # The longest key in short, whole ("Ab mixolydian" over "capo 2 · +1"), with no guitar beside the neck to take

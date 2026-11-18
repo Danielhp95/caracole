@@ -893,7 +893,9 @@
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
-  const rails = [panel, harmony].filter(Boolean);  // from 900 px wide, beside the song: one at a time
+  const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
+  // From 900 px wide, beside the song, one at a time: the settings, the Harmony panel, the key list.
+  const rails = [panel, harmony, keyList].filter(Boolean);
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
@@ -1098,6 +1100,7 @@
     layout();  // fit() too
     drawHeadings();
     if (!harmony.hidden) drawHarmony();
+    if (!keyList.hidden) drawKeyList();  // the key played pressed, the keys named in the mode played
     if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
     dock();
     save();
@@ -1232,6 +1235,7 @@
     fitting = requestAnimationFrame(() => {
       layout();
       fitKey();
+      fitKeys();
       place();
       placeTip();
       dock();
@@ -1847,7 +1851,7 @@
   const landing = (which) => (which === necksEl ? rail.landing()
     : which === handle ? handle : which.querySelector("h2"));
   // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
-  const DOCKED = [panel, card, harmony, vList, necksEl].filter(Boolean);
+  const DOCKED = [panel, card, harmony, vList, necksEl, keyList].filter(Boolean);
   const dockedTop = () => {
     for (let i = layers.length - 1; i >= 0; i--) if (DOCKED.indexOf(layers[i].el) >= 0) return layers[i].el;
     return null;
@@ -1904,11 +1908,14 @@
   }
   const restack = () => {
     const rail = doc.dataset.panel;
-    for (const which of [panel, card, harmony, vList, necksEl]) if (which) which.classList.toggle("top", which === topLayer());
+    for (const which of [panel, card, harmony, vList, necksEl, keyList]) {
+      if (which) which.classList.toggle("top", which === topLayer());
+    }
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    keyNow.setAttribute("aria-expanded", keyList.hidden ? "false" : "true");
     sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
-    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's
+    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', Harmony's, the key list's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1916,8 +1923,8 @@
     layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
   // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
-  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel) are one at a time,
-  // a card and the versions list beside them.
+  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the key list) are
+  // one at a time, a card and the versions list beside them.
   const open = (which, opener, nested = false) => {
     auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
@@ -2004,6 +2011,65 @@
     }
     close(harmony);
     open(panel, more);
+  });
+
+  // --- the key list: the twelve keys, a tap away -----------------------------------------------------------------
+  // The bar's key opens it (page.py _KEY_LIST), and closes it where you see it, as ⋯ the settings: the twelve keys in
+  // the mode played, as data.keyNames names them, from the chords as written on this instrument (writtenAt: on one
+  // with no capo the sheet's capo folded in, the key the song sounds in), the first "· as written", the one the chords
+  // shown moved to pressed (moved()). A layer as the settings are: docked on the bar on a phone, from 900 px the rail
+  // in the settings' place (one rail at a time). A sheet with no key has none to list: the key is disabled.
+  const writtenAt = () => (takesCapo() ? 0 : sheetCapo);
+  const drawKeyList = () => {
+    const box = $("key-items"), at = mod12(moved());
+    for (let k = 0; k < 12; k++) {
+      let item = box.children[k];
+      if (!item) {
+        item = box.appendChild(document.createElement("button"));
+        item.type = "button";
+        item.dataset.k = String(k);
+        if (k === 0) item.className = "key-as";
+        item.addEventListener("click", () => chooseKey(k));
+      }
+      item.textContent = keyName(writtenAt() + k) + (k === 0 ? " · as written" : "");
+      item.setAttribute("aria-pressed", k === at ? "true" : "false");
+    }
+    fitKeys();
+  };
+  // Each key whole in its cell: where a name is too long for four a row (a mode's, "Ab mixolydian", its two words on
+  // two lines, in the rail or on a phone), the eleven a little smaller, all alike, down to three quarters of their
+  // size, as the bar's key is (fitKey); as written has its row. Measured to the fraction of a pixel, in the room
+  // within each one's padding; fitted again as the list opens and as the window changes.
+  const spills = (el) => {
+    const text = document.createRange(), s = getComputedStyle(el);
+    text.selectNodeContents(el);
+    return text.getBoundingClientRect().width > el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  };
+  const fitKeys = () => {
+    const items = Array.prototype.slice.call($("key-items").children, 1);
+    for (const item of items) item.style.fontSize = "";
+    if (keyList.hidden || !items.some(spills)) return;
+    const full = parseFloat(getComputedStyle(items[0]).fontSize);
+    for (let size = full - 0.5; size >= full * 0.75 && items.some(spills); size -= 0.5) {
+      for (const item of items) item.style.fontSize = size + "px";
+    }
+  };
+  // A key chosen: the song transposed there the nearest way, as Easy keys moves it (a tritone at most, up or down; the
+  // capo stays where it is), so the bar says what moved (keyShort); then the list closed, the focus on the key.
+  const chooseKey = (k) => {
+    step(wrapT(state.t + mod12(k - moved() + 6) - 6));
+    close(keyList);
+    keyNow.focus({ preventScroll: true });
+  };
+  keyNow.disabled = !key;
+  keyNow.addEventListener("click", () => {
+    if (inSight(keyList)) {
+      close(keyList);
+      return;
+    }
+    drawKeyList();
+    open(keyList, keyNow);
+    fitKeys();  // laid out now
   });
 
   // --- full screen: the song alone, the controls hidden for reading ----------------------------------------------

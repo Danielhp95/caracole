@@ -1,10 +1,10 @@
 (() => {
   "use strict";
   // A page's layers: what a viewer page opens over its sheet (the settings, Aa, a chord's card, the necks' sheet, the
-  // versions list), each one entry of the browser's history while it is open, so that Back, a phone's or the app's,
-  // closes the one on top rather than leaving the page. Inlined on every viewer page (sheet.html and a kept version's
-  // page, a songbook, a harmonica tab's page) before the page's own script, which calls it. It makes no element of its
-  // own and loads nothing: the standard library alone.
+  // versions list, the key list), each one entry of the browser's history while it is open, so that Back, a phone's or
+  // the app's, closes the one on top rather than leaving the page. Inlined on every viewer page (sheet.html and a kept
+  // version's page, a songbook, a harmonica tab's page) before the page's own script, which calls it. It makes no
+  // element of its own and loads nothing: the standard library alone.
   //
   // window.caracoleLayers:
   //   history(back)    the history's side of a page's layers: { sync(count) }. sync(count) says how many layers are

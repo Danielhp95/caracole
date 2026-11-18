@@ -324,7 +324,7 @@ def test_nothing_overflows_and_every_target_is_a_thumbs_on_a_sheet(tmp_path, wid
         assert b.wait(FULL)
         full = sheet(b)
     # On a phone the neck after the key, in the guitar's place: the strip is ⋯'s All chord shapes
-    assert bar["ids"] == ["t-down", "t-up", "necks-open", "size", "scroll", "more"], (width, bar)
+    assert bar["ids"] == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"], (width, bar)
     assert bar["smallest"] >= 44 and bar["row"], (width, bar)
     for now, small in (guitar, harmonica):
         assert not now["sideways"] and now["inside"] and small == [], (width, now, small)

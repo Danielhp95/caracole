@@ -417,7 +417,8 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   border-radius: 12px; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer;
   -webkit-tap-highlight-color: transparent; }
 .bar svg { width: 16px; height: 16px; fill: currentColor; }
-/* − Em +: the song a semitone down or up, its key in short between them; the rest sit at the end. */
+/* − Em +: the song a semitone down or up, its key in short between them, a button that opens the key list; the rest
+   sit at the end. */
 .keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; height: 54px; max-width: 240px;
   border-radius: 12px; background: var(--raised); }
 .keys .step { height: 54px; font-size: 1.35rem; }
@@ -434,6 +435,12 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    three lines keep within the buttons' height. */
 .now .d.stack { line-height: 1.05; }
 .now .d.stack > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* The bar's key is a button (the key list's), off .bar button's 44 px box: the room between − and +, as tall as they
+   are; open while the list is, tinted and ringed in the accent as the neck's sheet. A sheet with no key has none. */
+.bar button.now { display: flex; flex: 1 1 auto; align-items: stretch; width: auto; height: 54px; min-width: 0;
+  padding: 0 2px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.bar button.now[aria-expanded="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bar button.now:disabled { cursor: default; }
 .tool { font-weight: 650; }
 /* A tool after the key: its icon over its word, as tall as the key. Every icon has a slot as tall as Scroll's disc,
    itself in the middle of it, so the icons share a line and the words another. A tool pressed or open says its word
@@ -469,7 +476,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .bar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
   .bar-in { gap: 0; }
   .keys { margin-right: 2px; }
-  .now { padding: 0; }
+  .now, .bar button.now { padding: 0; }
 }
 .bar #size[aria-expanded="true"] { background: var(--raised); }
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
@@ -482,7 +489,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    and in the pill alike. */
 @media (hover: hover) {
   .bar button:hover, .pill button:hover { background: var(--raised); }
-  .keys .step:hover { background: var(--border); }
+  .keys .step:hover, .bar button.now:not(:disabled):not([aria-expanded="true"]):hover { background: var(--border); }
   .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
   .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
@@ -612,6 +619,18 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 #panel .chip small { display: inline; font-size: .74rem; font-weight: 500; color: var(--muted); opacity: 1; }
 #panel .chip.orig { padding: 0 11px; border: 2px solid var(--orig-edge); background: var(--orig-bg); }
 #panel .chip.orig[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+/* The key list (#key-list): the twelve keys four a row, as written first across its row, in the song's own mode's
+   look (.chip.orig's edge and fill); the key played in the accent's edge. A key's name wraps at its space where four
+   don't fit a row ("Ab" over "mixolydian"), a little smaller where even that is too long (viewer.js fitKeys). Each
+   44 px tall, a finger's 48 on a touch screen. */
+.keys12 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 2px; }
+.keys12 > button { min-width: 0; height: 44px; padding: 0 2px; border: 1px solid var(--border); border-radius: 10px;
+  background: none; color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; line-height: 1.1;
+  cursor: pointer; }
+.keys12 > .key-as { grid-column: 1 / -1; border: 2px solid var(--orig-edge); background: var(--orig-bg); }
+.keys12 > button[aria-pressed="true"] { border: 2px solid var(--accent); }
+@media (hover: hover) { .keys12 > button:not([aria-pressed="true"]):hover { background: var(--raised); } }
+@media (pointer: coarse) { .keys12 > button { height: 48px; } }
 .modes { margin-bottom: 12px; }
 .modeline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
 .modeline .lab { min-width: 0; font-size: .84rem; }

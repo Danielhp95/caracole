@@ -1312,7 +1312,14 @@ It is rows.js's, shared by both pages:
 - **What moved**: viewer.js's `moved()`, how far the chords shown moved from the sheet as written by your hand (the
   shapes' move on an instrument that takes a capo, so a sheet's capo taken off is "no capo · +2"; the transposition
   alone on one that takes none), is the one count the bar's word under its key (`changes()`, `keyShort`), the
-  settings' Transpose and the header's Key say (test_viewer_bar.py, test_viewer_header.py).
+  settings' Transpose and the header's Key say (test_viewer_bar.py, test_viewer_header.py), and the key list marks
+  (`mod12(moved())`).
+- **The key list** (page.py `_KEY_LIST`, `#key-list`): the bar's key is a button (`#key-now`, `aria-expanded`;
+  disabled on a sheet with no key) that opens the twelve keys in the mode played, `data.keyNames`' names from the
+  chords as written on this instrument (`writtenAt()`: the sheet's capo folded in on one with no capo), the first
+  `.key-as` "· as written" across its row; `chooseKey(k)` transposes there the nearest way (`step`, the capo kept),
+  then closes it. A layer in `DOCKED` and `rails`; book.js's `busy()` keeps the arrows with it; the harmonica tab's
+  page has none (test_viewer_key_list.py).
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;
@@ -1337,9 +1344,10 @@ It is rows.js's, shared by both pages:
   - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
     depth through what the page writes into its address;
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
-    leaving it open); from 900 px the rails (the settings, Harmony) one at a time, a card and the versions list beside
-    them;
-    `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
+    leaving it open); from 900 px the rails (`rails`: the settings, Harmony, the key list) one at a time, a card and
+    the versions list beside them;
+    `DOCKED` (panel, card, harmony, vList, necksEl, keyList) docks at the foot on a phone, the top one of them
+    (`dock()`);
   - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
     list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px;
     from 900 px the list and the sheet open together, either over the other (the sheet closing full screen, the list

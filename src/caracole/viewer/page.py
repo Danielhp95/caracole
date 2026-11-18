@@ -944,9 +944,10 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The bar at the foot of the page, the settings and the chord card the script fills in; hidden
+# The bar at the foot of the page, the settings, the key list and the chord card the script fills in; hidden
 # until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key in short
-# between them (for the eye; whole for a screen reader); right after it, the rail of necks shown or hidden (from
+# between them (for the eye; whole for a screen reader), a button that opens the key list (``_KEY_LIST``: the twelve
+# keys a tap away; disabled on a sheet with no key); right after it, the rail of necks shown or hidden (from
 # 1200 px, where there is a rail: pressed while it shows, as the rail's own Hide says; a sidebar, drawn as a path),
 # or in its place a neck, the overlay's sheet opened or closed (below 1200 px, where there is no rail: a dialog that
 # is not modal, Guitar and Harmonica, overlay.js; frets and a dot, drawn as a path); Aa, the text size in a box
@@ -957,8 +958,8 @@ def _words(text: str) -> list[str]:
 # titles; Aa and Scroll keep a name that holds their word (Text size, Auto-scroll).
 # The pill steers the scroll once it starts, above the bar's place, the bar out of the way while the song moves: its
 # first button counts down (a ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen
-# reader. The settings and the card are dialogs that are not modal: nothing dims the song or takes it out of reach
-# while they are open (viewer.js).
+# reader. The settings, the key list and the card are dialogs that are not modal: nothing dims the song or takes it
+# out of reach while they are open (viewer.js).
 # The bar is marked data-controls, what full screen hides (html[data-full], viewer.css), with the header's facts and
 # the rail of necks; full screen's handle (``_HANDLE``, after the pill: a thin bar at the window's foot, "Show
 # controls") brings them back.
@@ -1009,11 +1010,23 @@ _EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="
 """)
 
 
+# The key list, which the bar's key opens: the twelve keys in the song's mode, the key as written first (on an
+# instrument with no capo, the key the song sounds in), across its row, the one played pressed; a tap on one transposes
+# the song there (viewer.js drawKeyList, chooseKey). A dialog that is not modal, as the settings are: docked on the bar
+# on a phone, the right-hand rail in the settings' place from 900 px. The harmonica tab's page has none.
+_KEY_LIST = """<section class="sheet-ui panel keylist" id="key-list" hidden role="dialog" aria-labelledby="key-list-title">
+<header class="ui-head"><h2 id="key-list-title" tabindex="-1">Key</h2>
+<button type="button" class="x" data-close aria-label="Close">×</button></header>
+<div class="keys12" id="key-items" role="group" aria-labelledby="key-list-title"></div>
+</section>
+"""
+
+
 _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <span class="keys" id="keys" role="group" aria-label="Transpose">
 <button type="button" class="step" id="t-down" aria-label="Down a semitone">−</button>
-<output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
+<button type="button" class="now" id="key-now" aria-haspopup="dialog" aria-controls="key-list" aria-expanded="false"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></button>
 <button type="button" class="step" id="t-up" aria-label="Up a semitone">+</button>
 </span>
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden title="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg><span class="bw">Shapes</span></button>
@@ -1073,7 +1086,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 """ + _FULL_ROW + _HARMONY_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>
 </section>
-<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
+""" + _KEY_LIST + """<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
 <button type="button" class="tip-btn card-tip" id="card-tip" hidden>Circle &amp; keyboard</button>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>

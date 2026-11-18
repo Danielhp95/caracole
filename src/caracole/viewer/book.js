@@ -217,8 +217,9 @@
   const go = (to) => {
     if (to) location.hash = "song-" + to.dataset.n;
   };
-  // The settings, the Harmony panel, a card or the overlay's sheet open: the arrows and a swipe stay with them.
-  const busy = () => ["panel", "harmony", "card"].some((id) => {
+  // The settings, the Harmony panel, the key list, a card or the overlay's sheet open: the arrows and a swipe stay
+  // with them.
+  const busy = () => ["panel", "harmony", "key-list", "card"].some((id) => {
     const el = document.getElementById(id);
     return el && !el.hidden;
   }) || Boolean(document.querySelector("#necks[data-sheet]:not([hidden])"));
