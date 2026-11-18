@@ -2730,7 +2730,8 @@ beside it opens that page, from its tile and its row, its text a download.
 
 Under the tiles, **On the sites**: each site that is on, a small mark of its own
 (Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net,
-MuseScore, and YouTube for a song caracole takes the audio of): in its colours
+MuseScore, YouTube for a song caracole takes the audio of, and iReal Pro's
+forum once it was asked about the song or gave its chart): in its colours
 where the site has the song (MuseScore's a possible match, by the title), grey
 where it was asked and had nothing, fainter on a dashed edge where it wasn't
 asked yet, its tooltip saying which ("Ultimate Guitar: nothing for it (looked
@@ -4462,7 +4463,9 @@ the library, sent as they are: they carry no badge.
   each one's state too ("0 on 4 more: LaCuerda · index in part, up to C;
   MuseScore · turned us back; harptabs.com · index empty; gametabs.net · index
   empty"). When every count is 0, yours too, there is no row at all: the
-  list's own line says nothing was found. On a laptop (from 720 px wide) each site that found something is
+  list's own line says nothing was found. iReal Pro's forum has a mark, last,
+  only once caracole has read a thread page of it (its playlists, or a
+  thread read for your songs). On a laptop (from 720 px wide) each site that found something is
   named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
   on one line, and by its icon alone when it wouldn't, as on a phone; it fits
   itself again as the window narrows or widens. A screen reader hears each
