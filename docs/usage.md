@@ -2571,6 +2571,11 @@ YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
 it; and, served, Look in index.
 
+The card's parts always come in the same order, as on the phone: its head (its name, its artist and a
+close button, shown beside the list on a laptop), its facts, what needs you, the tiles, its buttons (Fetch
+again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Remove), its other files, which
+sites have it, where else to find it, and its progressions last.
+
 Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
 version, the source it came from with that source's mark, its formats at the end), in the order of the
 line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,

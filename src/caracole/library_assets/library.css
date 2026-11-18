@@ -338,3 +338,11 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
+
+/* A card's head (cardHead): its name, artist and close button; the laptop's pane shows it (stage 1d.4), until then
+   the line says it all. */
+.card-head { display: none; }
+.card-head-in { display: flex; align-items: baseline; gap: .5rem; }
+.card-name { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 1.1rem; font-weight: 600; overflow-wrap: anywhere; }
+.card-by { font-weight: 400; color: var(--muted, inherit); }
+.card-close { flex: none; }

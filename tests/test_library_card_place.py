@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 import test_web_page_again as served_page
 from conftest import add_song
 from helpers import cards
 from helpers.browser import CHROMIUM_MARKS
-from test_library_card import hotel, run
+from test_library_card import SERVED, hotel, run
 from test_library_page import attribute_of, put
 from test_web_page import CANDIDATES
 
@@ -141,3 +143,55 @@ def test_pick_the_match_opens_the_card_and_its_picker(cfg, live, browser):
     assert browser.wait(f"window.cardOf(document.querySelector({line})).querySelector('details.picker').open")
     assert browser.wait(f"document.activeElement === window.cardOf(document.querySelector({line}))"
                         ".querySelector('input[name=pick]')"), browser.js("document.activeElement.outerHTML")
+
+
+# --- the card's parts, in the phone's order, with a head ---------------------------------------------------------
+
+ORDER = r"""
+const partsOf = (title) => {
+  const line = lineOf(title);
+  const panel = openCardOf(line);
+  const foot = panel.querySelector(".foot");
+  const head = panel.querySelector(".card-head");
+  return {
+    parts: Array.from(panel.children).map((c) => c.className.split(" ").find((x) => x !== "row-group") ||
+      c.tagName.toLowerCase()),
+    foot: foot ? Array.from(foot.querySelectorAll("button, a, summary")).filter((c) => !c.closest(".foot-menu")).map(text) : [],
+    menu: foot ? Array.from(foot.querySelectorAll(".foot-menu button, .foot-menu a")).map(text) : [],
+    head: head && { text: text(head.querySelector(".card-name")), id: head.querySelector(".card-name").id,
+      hidden: head.getAttribute("aria-hidden"), tab: head.querySelector(".card-close").getAttribute("tabindex"),
+      said: head.querySelector(".card-close").getAttribute("aria-label"), shown: getComputedStyle(head).display,
+      tag: head.querySelector(".card-name").tagName.toLowerCase(), inner: head.firstElementChild.className },
+  };
+};
+note("hotel", partsOf("Hotel California"));
+note("lost", partsOf("Yesterday"));
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,900"])
+def test_a_cards_parts_come_in_the_phones_order(conn, cfg, tmp_path, size):
+    from caracole.db import kv_set_json
+    from caracole.musescore import parse_song_url
+    from caracole.progressions import KV, sheet_progressions
+    from test_library_page import PROGRESSIONS
+
+    song = hotel(conn, cfg)
+    put(cfg, song, "info.json")
+    conn.execute("INSERT INTO musescore_index VALUES (?, ?, ?, '18')",
+                 parse_song_url("https://musescore.com/song/hotel_california-1234"))
+    kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(PROGRESSIONS["pop"], None))
+    lost = add_song(conn, "The Beatles", "Yesterday")
+    update_song(conn, lost.id, match_decision="not_found")
+    dom = run(conn, cfg, tmp_path, ORDER, controls=SERVED, size=size)
+    found = attribute_of(dom, "data-hotel")
+    assert found["parts"] == ["card-head", "facts", "tiles", "foot", "card-sites", "find-elsewhere", "progressions"], found
+    assert found["foot"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "⋯"], found
+    assert found["menu"][-1] == "Remove", found
+    head = found["head"]
+    assert head["text"] == "Hotel California · Eagles" and head["tag"] == "h2", head
+    assert head["id"] == f"card-name-{song.id}" and head["inner"] == "card-head-in", head
+    assert head["hidden"] == "true" and head["tab"] == "-1" and head["said"] == "Close Hotel California", head
+    assert head["shown"] == "none", head  # until the pane shows it
+    missing = attribute_of(dom, "data-lost")
+    assert missing["parts"] == ["card-head", "facts", "actions", "foot", "card-sites", "find-elsewhere"], missing

@@ -1017,6 +1017,10 @@ It is rows.js's, shared by both pages:
   - made the first time it opens, from the song and its request as they are then (library.js `cardFor`, rows.js
     `resultRow`'s `more` a function): until then its panel, `.line-panel.song-card`, is empty and hidden, the
     chevron's `aria-controls` naming it (test_library_card_place.py);
+  - its parts in the phone's order, at every width: `cardHead` (`.card-head` > `.card-head-in` > `h2.card-name` and
+    `.card-close`, `aria-hidden` and tabindex -1 in place, `display: none` until stage 1d.4 shows it), the facts, what
+    needs you, the tiles, the foot (Fetch again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the
+    sites, Elsewhere, Progressions (test_library_card_place.py);
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,

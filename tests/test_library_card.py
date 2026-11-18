@@ -348,7 +348,7 @@ def test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links(conn, cfg, tm
     card = attribute_of(dom, "data-card")
     assert card["tiles"] == [] and "tiles" not in card["parts"]
     # Look in the index; which sites had it; links
-    assert card["parts"] == ["facts", "actions", "card-sites", "find-elsewhere", "foot"], card["parts"]
+    assert card["parts"] == ["card-head", "facts", "actions", "foot", "card-sites", "find-elsewhere"], card["parts"]
     assert attribute_of(dom, "data-action") == "Fetch Yesterday by The Beatles"
 
 
@@ -361,7 +361,7 @@ def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
     script = ('note("card", noteCard("Hotel California"));\n'
               'note("elsewhere", text(cardOf(lineOf("Hotel California")).querySelector(".find-elsewhere")));')
     dom = run(conn, cfg, tmp_path, script)
-    assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "card-sites", "find-elsewhere", "foot"]
+    assert attribute_of(dom, "data-card")["parts"] == ["card-head", "facts", "tiles", "foot", "card-sites", "find-elsewhere"]
     elsewhere = attribute_of(dom, "data-elsewhere")
     assert elsewhere.startswith("ElsewhereScores on MuseScore") and "hotel_california-1234" in elsewhere
 

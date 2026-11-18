@@ -1293,16 +1293,17 @@
         "Fetches the song and keeps this LaCuerda sheet", String(x.href)) : null),
     };
   };
-  // A song's card (card.js), under its line's chevron, which its title opens too: its facts, then what needs you (its
-  // picker or what to do about its match, where its audio comes from, a LaCuerda pick, Look in the index), what you
-  // play from it as tiles and their versions' drawer, which sites have it, its progressions, where else to find it, and
-  // its foot (Fetch again, Use LaCuerda's sheet, Add to a songbook…, info.json, Remove). Made the first time the
-  // chevron opens it (rows.js foldMore), once a line, from the song and its request as they are then: a card first
-  // opened while the song's request waits or runs has no Fetch again and a picker that only lists; one first opened
-  // while its removal counts down has its forms' buttons waiting with the line's (countdownIn).
+  // A song's card (card.js), under its line's chevron, which its title opens too, its parts in the phone's order: its
+  // head (cardHead), its facts, then what needs you (its picker or what to do about its match, where its audio comes
+  // from, a LaCuerda pick, Look in the index), what you play from it as tiles and their versions' drawer, its foot
+  // (Fetch again, Use LaCuerda's sheet, Add to a songbook…, info.json, Remove), its other files, which sites have it,
+  // where else to find it and its progressions. Made the first time the chevron opens it (rows.js foldMore), once a
+  // line, from the song and its request as they are then: a card first opened while the song's request waits or runs
+  // has no Fetch again and a picker that only lists; one first opened while its removal counts down has its forms'
+  // buttons waiting with the line's (countdownIn).
   const cardFor = (s) => {
     const id = Number(s.id);
-    const more = [];
+    const more = [cardHead(s)];
     const facts = factsOf(s);
     if (facts) more.push(facts);
     // The picker, or the note that says why there is none.
@@ -1332,28 +1333,51 @@
     const claimed = new Set();
     const shown = card.tiles(s, { guitar: Boolean(server && server.guitar), acts: drawerActs(s), claimed });
     if (shown) more.push(shown);
-    const sites = card.sites(listOf(s.sites));  // which sites have it, had nothing, or weren't asked yet
-    if (sites) more.push(sites);
     const info = listOf(s.files).find((f) => f && f.name === "info.json") || null;
+    const asked = server ? jobOfSong(id) : null;
+    const again = server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked)) ? againActions(s) : null;
+    const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
+      remove: server && !removing.has(id) ? removeForm(s) : null });  // removing: its action says so
+    if (foot) more.push(foot);
     const others = listOf(s.files).filter((f) => f && !claimed.has(f) && f !== info);
     if (others.length) more.push({ heading: "Files", links: others });
     if (server && !server.guitar && listOf(s.files).some((f) => f && typeof f.guitarPage === "string" && f.guitarPage)) {
       more.push(el("p", "note", "Guitar Pro files are downloads until caracole serve has alphaTab " +
         "(CARACOLE_ALPHATAB_DIR)."));
     }
-    const progs = progressionsOf(s);
-    if (progs) more.push(progs);
+    const sites = card.sites(listOf(s.sites));  // which sites have it, had nothing, or weren't asked yet
+    if (sites) more.push(sites);
     const elsewhere = card.findElsewhere([{ heading: "Find the chords", links: s.links },
       { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track, for an auto sheet", links: s.buy }]);
     if (elsewhere) more.push(elsewhere);
-    const asked = server ? jobOfSong(id) : null;
-    const again = server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked)) ? againActions(s) : null;
-    const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
-      remove: server && !removing.has(id) ? removeForm(s) : null });  // removing: its action says so
-    if (foot) more.push(foot);
+    const progs = progressionsOf(s);
+    if (progs) more.push(progs);
     const r = removals.get(id);  // counting down: its buttons wait as the line's do, until it is undone
     if (r) for (const part of more) if (part instanceof Element) holdForms(part, r);
     return more;
+  };
+  // A card's head: the song's name and artist, and a close button. Hidden until the laptop's pane shows it (the line
+  // says the same, so a screen reader hears it once); the pane's heading, its button closing the card.
+  const cardHead = (s) => {
+    const head = el("div", "card-head");
+    head.setAttribute("aria-hidden", "true");
+    const inner = head.appendChild(el("div", "card-head-in"));
+    const name = inner.appendChild(el("h2", "card-name", shownName(s, s.title)));
+    name.id = "card-name-" + s.id;
+    const artists = listOf(s.artists);
+    const by = artists.length > 1 ? artists.join(", ") : shownName(s, s.artist);
+    if (by) name.appendChild(el("span", "card-by", " \u00b7 " + by));
+    const close = inner.appendChild(el("button", "card-close"));
+    close.type = "button";
+    close.setAttribute("aria-label", "Close " + String(s.title));
+    close.setAttribute("tabindex", "-1");
+    close.appendChild(glyphFor("close"));
+    close.addEventListener("click", () => {
+      const line = document.querySelector('#list article.line[data-id="' + s.id + '"]');
+      const chevron = line && line.querySelector(":scope > .line-more");
+      if (chevron && chevron.getAttribute("aria-expanded") === "true") chevron.click();
+    });
+    return head;
   };
   // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
   // Pro file, its tab, its harmonica tab..., each opening it at once, none first), its status when it needs
