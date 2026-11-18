@@ -2681,7 +2681,7 @@ once when your system asks for less motion, and the focus is on its chevron.
 On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
 holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
 its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
-its line, raised, the accent along its edge; the card reads there as it does on a phone, the pane being about as
+its line, tinted with the accent, the accent along its edge; the card reads there as it does on a phone, the pane being about as
 narrow (its tiles a row each, a version's buttons under its number and its rating), with nothing to scroll sideways;
 another song's takes its place, and its chevron again, the head's close,
 or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
