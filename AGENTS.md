@@ -724,6 +724,24 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 
 ##### Searching from the pages
 
+- **Search mode** (library.js `searchMode`, `enterSearch`, `leaveSearch`, `backFromSearch`): `body.search-mode` is on
+  as the box takes the focus, or while it holds a query (`render`), served or from a file, at every width, with the ←
+  at the box's left (body.html's `#leave`, "Back to your songs", the one control so named: no row over the results
+  says it); a blur leaves it on. It ends with the ← (`backFromSearch`), Back, or Escape in the empty box, and nothing
+  else (`leaveSearch`: the box empty, the sites' results closed, the focus out, the address written in place); × clears
+  the box and keeps the focus in it, still searching (test_library_search_mode.py).
+  - Entering it from the empty box pushes one entry, `{ search: 1 }` (none when the entry is search's already: a
+    reload, Forward); `searchFor` pushes `{ search: n + 1 }`; the ← is `history.go(-n)` (`leaving`, so popstate then
+    leaves it whatever query was under its steps), else, with no steps, `leaveSearch` in place; popstate to an entry
+    with no `search` marker and no query ends it.
+- **The page's history**, every script of the library page's
+  (docs/superpowers/plans/2026-11-17-library-page-redesign.md, "Where the lanes meet" 1):
+  - every `history.replaceState` passes `history.state`, never `null`;
+  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`), and
+    any entry pushed while `body.search-mode` is on also carries `search: (Number(history.state &&
+    history.state.search) || 0) + 1`, never `search` spread from `history.state`;
+  - a `popstate` handler acts on its own marker alone, and a `pushState` that throws falls back quietly (the change
+    made in place, with no step).
 - **Enter in a search box never spends a request on a guess**:
   - on the lookup page it acts only on `/api/search`'s `best` (or opens the leading artist's songs);
   - on the library page, whose served bar searches `/api/search` as you type (which asks no site), it only moves the
@@ -810,7 +828,7 @@ It is rows.js's, shared by both pages:
   the marks show: library.js `drawCounts`, lookup_page.py `showCounts`.
 - `nothingFound`: a query that found nothing on the sites:
   - a line of the list under a quiet band, "Not on the sites", the query, Request where a song's Open is, the one
-    Request then, and no Back to your songs, its marks the row under the box's;
+    Request then, its marks the row under the box's;
   - under its chevron Ask LaCuerda and `unseen` folded.
 - `notesLine`: those two under results.
 - On the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are, before
@@ -844,9 +862,10 @@ It is rows.js's, shared by both pages:
   `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
 - **An artist's name**:
   - An artist's name (a header's, a line's, a site's row's, a lookup row's) searches for them as typing it would,
-    served or from a file (library.js `searchFor`, a step of the browser's history, which rows.js's
-    `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js `artistOf(name, onSearch,
-    cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's songs alone.
+    served or from a file (library.js `searchFor`, a step of the browser's history, search's `{ search: n + 1 }`,
+    which rows.js's `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js
+    `artistOf(name, onSearch, cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's
+    songs alone.
   - A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`) is a plain link to
     `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, as it
     reads `#artist=<key>`, the one-artist view's address once, then writes its own address in its place (`cameBy`:

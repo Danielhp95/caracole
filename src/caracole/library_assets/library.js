@@ -11,6 +11,7 @@
   const list = byId("list");
   const input = byId("q");
   const clear = byId("clear");
+  const leave = byId("leave");  // the ← at the box's left: out of the search (backFromSearch)
   const barStatus = byId("bar-status");
   const barCounts = byId("bar-counts");  // beside it, the marks of what each site found (drawCounts)
   const barSaid = barStatus.parentElement;
@@ -1634,6 +1635,57 @@
     showN.textContent = "Show " + plural(n, "song");
   };
 
+  // Search mode (body.search-mode): on as the box takes the focus, or while it holds a query (typed, the address's,
+  // an artist's name pressed), with the ← at its left; a blur leaves it on. It ends with the ←, Back, or Escape in
+  // the empty box, and nothing else: the box empty, the sites' results closed, the focus out of the box.
+  // The browser's history, the page's: entering search from the empty box is a step of its own, an entry marked
+  // { search: 1 }, and every entry any script pushes while searching counts one more (search: the count under it
+  // + 1: an artist's name pressed, searchFor's; tabs.js's step out of the library), so the ← takes them all back at
+  // once (history.go(-n)) and Back one at a time; each script's popstate acts on its own marker alone, and every
+  // address written in place keeps the entry's state. A browser that refuses a step (a local file's, in some
+  // browsers): search comes all the same, and the ← leaves it in place.
+  let leaving = false;  // the ← asked the browser to take search's steps back: popstate ends the search
+  const inSearch = () => document.body.classList.contains("search-mode");
+  const searchSteps = () => Number(history.state && history.state.search) || 0;
+  const searchMode = (on) => {
+    document.body.classList.toggle("search-mode", on);
+    leave.hidden = !on;
+  };
+  // The box focused, out of search: search begins, from the empty box a step of the browser's history (none when
+  // this entry is search's already: a reload of it, Forward to it). A box that holds a query is search already.
+  const enterSearch = () => {
+    if (inSearch()) return;
+    if (!input.value && !searchSteps()) {
+      try {
+        history.pushState({ search: 1 }, "", location.href);  // the address as it is: save() writes it in place
+      } catch (err) {
+        // A browser that refuses the step: search all the same, the ← leaving it in place.
+      }
+    }
+    searchMode(true);
+  };
+  // Out of search, here: the box empty (the sites' results with it), the focus out of it, the address written again.
+  const leaveSearch = () => {
+    setQuery("");
+    input.blur();
+    searchMode(false);
+  };
+  // The ←: every step search took taken back at once (popstate then ends it), else, with none (a query the page
+  // opened with, a browser that refused them), out of it in place.
+  const backFromSearch = () => {
+    const steps = searchSteps();
+    if (steps > 0) {
+      leaving = true;
+      try {
+        history.go(-steps);
+        return;
+      } catch (err) {
+        leaving = false;  // no Back on its way: out of it here
+      }
+    }
+    leaveSearch();
+  };
+
   const render = () => {
     const query = parseQuery(state.q);
     const fits = typedMatch(query);
@@ -1644,6 +1696,7 @@
     sort.value = state.sort;
     if (Boolean(server) && state.all) closePanel(false);  // the sites' results take the list's place, its tools too
     clear.hidden = !state.q;
+    if (state.q) searchMode(true);  // a query in the box is search, however it came
     drawTags();
     drawProg();
     // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
@@ -1831,13 +1884,14 @@
   // it: your songs that match; served, then the sites', their group first, as /api/search leads with an artist it is
   // given whole, sent at once, which asks no site: the indexes alone. The focus goes to the box, from which Enter goes
   // on to the first result and Escape back to your songs; the query before it is a step back in the browser's
-  // history (Back).
+  // history (Back), one more of search's (the ← takes it back with the rest). The query is in before the focus, so
+  // the focus finds search on and takes no step of its own.
   searchFor = (name) => {
     const q = String(name || "").trim();
     if (!q) return;
     if (q !== state.q) {
       try {
-        history.pushState(null, "", location.href);  // save() makes it this search's
+        history.pushState({ search: searchSteps() + 1 }, "", location.href);  // save() makes it this search's
       } catch (err) {
         // A browser that refuses it: the search runs all the same, with no step back.
       }
@@ -1861,19 +1915,30 @@
   // sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
   // A link to the page's own address goes there the same way (the Requests tab's Request by name, #q=…), and one to a
   // song's line (its Open in the library, #song=ID) brings that line into view, as when the page loads with it.
+  // Back to an entry that is no step of search's (no ``search`` marker) with no query ends the search, as the ←'s
+  // steps taken back do, whatever query was under them.
   window.addEventListener("popstate", () => {
     const at = addressed();
     requestAnimationFrame(toSong);
-    if (Object.keys(at).every((name) => at[name] === state[name])) return;
-    const all = at.all;
-    Object.assign(state, at, { all: state.all });
-    input.value = state.q;
-    focusFirst = false;
-    if (state.all && !all) {
-      leaveAll(false);
-    } else {
-      state.all = all;
-      render();
+    const left = leaving;
+    leaving = false;
+    if (!Object.keys(at).every((name) => at[name] === state[name])) {
+      const all = at.all;
+      Object.assign(state, at, { all: state.all });
+      input.value = state.q;
+      focusFirst = false;
+      if (state.all && !all) {
+        leaveAll(false);
+      } else {
+        state.all = all;
+        render();
+      }
+    }
+    if (left && state.q) {
+      leaveSearch();
+    } else if (left || (!at.q && !searchSteps())) {
+      input.blur();
+      searchMode(false);
     }
   });
   setProg = (key) => {
@@ -1905,10 +1970,12 @@
     state.all = sites;
     update();
   });
-  clear.addEventListener("click", () => {
+  clear.addEventListener("click", () => {  // the text gone, the box still yours: search goes on
     setQuery("");
     input.focus();
   });
+  input.addEventListener("focus", enterSearch);
+  leave.addEventListener("click", backFromSearch);
   for (const b of statusButtons) {
     b.addEventListener("click", () => {
       state.show = b.dataset.show;
@@ -2176,7 +2243,6 @@
   const groupsBox = el("div", "groups");
   const lcBox = el("div", "lacuerda-search-box");  // LaCuerda's own search, under the results
   const notesBox = el("div", "notes");
-  let backButton = null;  // Back to your songs, over the results: the way back, but where they found nothing
   let asking = null;  // the search of the sites on its way, to abort
   let asked = 0;  // the newest search sent: an older one's answer is dropped
   let askTimer = 0;
@@ -2730,10 +2796,8 @@
     if (missed) box.appendChild(missOf(model, missWas));  // nothing on the sites: a line of the list, last
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
-    // One Request: what found nothing has its own, in its line, so the form under the results waits for it; and no
-    // Back to your songs, as the box's × and Escape go back.
+    // One Request: what found nothing has its own, in its line, so the form under the results waits for it.
     results.classList.toggle("missed", missed);
-    if (backButton) backButton.hidden = missed;
     if (had && !groupsBox.contains(document.activeElement)) {
       const lines = Array.from(groupsBox.querySelectorAll("article"));
       const miss = missWas && missWas.contains(had) ? groupsBox.querySelector(":scope > section.nothing") : null;
@@ -3460,9 +3524,7 @@
     if (focus) input.focus();
   };
   if (server) {
-    const head = el("div", "results-head");
-    backButton = button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)");
-    head.appendChild(backButton);
+    const head = el("div", "results-head");  // what of yours the filters keep here (the way back is the box's ←)
     head.appendChild(keptNote);
     allMine.hidden = true;
     linkBox.hidden = true;
@@ -3521,6 +3583,9 @@
       leaveAll(!typing && results.contains(document.activeElement));
     } else if (e.key === "Escape" && typing && input.value) {
       setQuery("");
+    } else if (e.key === "Escape" && typing && !input.value && inSearch() && !inDialog(e.target)) {
+      e.preventDefault();  // the box empty: out of the search, as the ← goes
+      backFromSearch();
     }
   });
   // --- caracole serve: what the page does with a request's answers ----------------------------
@@ -3831,7 +3896,7 @@
       return line;
     };
     // A result's line whose request the server has just answered, put where it would be had the answer come at
-    // once: the line left the results while it was on its way (Back to your songs, the ×, Escape, a newer answer
+    // once: the line left the results while it was on its way (the ←, the ×, Escape, a newer answer
     // drawn). A newer answer with the same song takes this line in place of its own, its request line in it; else
     // the request's card comes under the bar (settleSpots), as for a line that leaves the results after the answer.
     const placed = (row) => {
@@ -3886,7 +3951,7 @@
     // wanted.txt line brings it back, and its lookup gets its sheet.
     addAgain = (pick, display, row, go) => askFrom("request", Object.assign({ fetch: "1" }, pick),
       ["artist", "title", "fetch"], row, go, (answer) => answer.job);
-    // Back to your songs: a request's line in the results that is a song new to the library becomes its line
+    // Back in your songs: a request's line in the results that is a song new to the library becomes its line
     // under the bar, which goes on saying how it goes; a song the list has says it on its own line. With
     // ``dropped``, only the lines a newer answer left out, at once.
     settleSpots = (dropped) => {

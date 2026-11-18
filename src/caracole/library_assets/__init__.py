@@ -31,6 +31,11 @@ file, and none of it loads anything from the network.
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
   Filter and Sort) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
   from 720 px, a sheet from the bottom on a phone), which library.js fills and opens.
+  library.js's search mode (``body.search-mode``, with body.html's ``#leave``, the ← at the box's left): on as the
+  box takes the focus or while it holds a query, a blur leaving it on, until the ←, Back or Escape in the empty
+  box; entering it from the empty box is an entry of the browser's history (``{ search: 1 }``) and each artist's
+  name pressed in it one more (``{ search: n + 1 }``), all of which the ← takes back at once; × clears the box and
+  keeps the search.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds

@@ -509,7 +509,7 @@ def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, brows
     assert browser.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
     assert browser.wait(f"{line}.querySelector('.line-plays .play-sheet') && "
                         f"/sheet[.]pdf$/.test({line}.querySelector('.line-plays .play-sheet').getAttribute('href'))")
-    # Back to your songs: the new song has a line of its own above the list.
+    # Escape, back to your songs: the new song has a line of its own above the list.
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
@@ -1132,8 +1132,9 @@ DRAWER = ("(() => { const s = document.querySelector('#results .nothing'); const
 # What the results show that requests a song by name, by its words.
 REQUESTS = ("[...document.querySelectorAll('#results button, #results summary')].filter((b) => b.checkVisibility() && "
             "/Request/.test(b.textContent)).map((b) => b.textContent.replace(/^[+]/, '').trim())")
-BACK = ("[...document.querySelectorAll('#results button')].some((b) => b.textContent === 'Back to your songs' && "
-        "b.checkVisibility())")
+# The way back to your songs: the ← at the box's left (#leave), shown while searching; no row over the results says it.
+BACK = "document.getElementById('leave').checkVisibility()"
+BACK_ROW = "[...document.querySelectorAll('#results button')].some((b) => b.textContent === 'Back to your songs')"
 OLD_NOTES = "document.querySelectorAll('#results .skipped, #results .index-hint, #results .read-page.unlisted').length"
 # What nothing found looks like under the box, with LaCuerda's listings read to C and MuseScore blocking caracole:
 # none of yours, nothing where it searched, MuseScore not searched.
@@ -1181,10 +1182,10 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
                                      for state in ("done", "empty", "partial", "blocked"))
     assert done == empty and done[0] == css_colour(browser, "var(--muted)"), (done, empty)
     assert partial[0] == css_colour(browser, "var(--wanted)") and blocked[0] == css_colour(browser, "var(--failed)")
-    # One Request; no Back to your songs (the box's × and Escape go back); the words under the box a screen reader's.
+    # One Request; the ← the way back, no row of its own; the words under the box a screen reader's.
     assert browser.js(REQUESTS) == ["Request"]
     assert browser.js("document.getElementById('request-box').checkVisibility()") is False
-    assert browser.js(BACK) is False
+    assert browser.js(BACK) is True and browser.js(BACK_ROW) is False
     assert browser.js(STATUS) == "Not on the sites" and browser.js(WORDS_SHOWN) is False
     assert browser.js(NO_SEARCHED_LINE)
     assert browser.js(OLD_NOTES) == 0 and browser.js("document.querySelector('#results .did-you-mean')") is None
@@ -1302,9 +1303,9 @@ def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_un
         "Ask LaCuerda: “hollow knight” · 1 request")
     assert browser.js("!!document.querySelector('#results .notes-line details.why-unseen')")
     assert browser.js(OLD_NOTES) == 0
-    # Under results the request form is the one Request, and Back to your songs the way back.
+    # Under results the request form is the one Request, and the ← at the box's left the way back.
     assert browser.js(REQUESTS) == ["Not here? Request it by name"]
-    assert browser.js(BACK) is True
+    assert browser.js(BACK) is True and browser.js(BACK_ROW) is False
     # Another answer, other counts: heard as words, the marks drawn again. A site's count is its songs, as its lines
     # show them: the three of Billy Joel's group (his artist's, his most viewed songs), never one for the artist.
     search(browser, "billy joel")
@@ -1387,7 +1388,7 @@ def test_a_typo_is_an_artist_band_first_whose_row_lists_their_songs_then_the_mis
     assert browser.js(f"document.querySelector('{their}').textContent") == "Their 5 songs on UG›"
     assert browser.js(f"document.querySelector('{their} [aria-hidden=true]').textContent") == "›"
     assert browser.js(STATUS) == "Not on the sites · did you mean Lynyrd Skynyrd?"
-    assert browser.js(DID_YOU_MEAN) is None and browser.js(HITS) == 0 and browser.js(BACK) is False
+    assert browser.js(DID_YOU_MEAN) is None and browser.js(HITS) == 0 and browser.js(BACK_ROW) is False
     searched = len(asked)
     browser.click(their)  # their songs, in their band, as an artist's are
     assert browser.wait(f"{HITS} === 5")

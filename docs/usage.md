@@ -2730,6 +2730,19 @@ caracole takes none for an option. `caracole serve` serves the same page, where 
 sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
+**Searching is a step of its own**, on the file and served alike. As the box takes
+the focus (a tap, a click, `/`), or while it holds a search, a ← shows at its
+left ("Back to your songs" to a screen reader), at every width. The ←, or the
+browser's Back (Android's too), leaves the search: the box empty, the list as
+it was before you searched, the box no longer focused, so a phone puts its
+keyboard away. Focusing the empty box is one step of the browser's history;
+typing adds none, and an artist's name pressed while you search is one more,
+which Back takes back one at a time and the ← all at once. The × at the box's
+right clears the text and keeps the focus in the box: you are still
+searching. Escape in the empty box leaves the search as the ← does. A tap
+elsewhere leaves the box but not the search, its ← still there. There is no
+Back to your songs row over the results.
+
 On a touch screen every button, fold, chip, menu and letter is at least 44
 pixels each way, for a thumb (but an artist's name, on its band or as a line's
 overline, 24 pixels: see above), and so are each line's buttons, its
@@ -4283,13 +4296,14 @@ the library, sent as they are: they carry no badge.
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Fetch, or a click or a key on the name,
-  does. Escape, or Back to your songs (over results; a search that found
-  nothing on the sites has none), goes back to
+  does. Escape goes back to
   the list with your search and buttons as they were (Escape again clears the
-  search; Enter, or typing on, brings the results back), and the box's × back
-  to all your songs; either way a song asked for there has its line (see
-  below); ↓ goes from the box to the first result's button. The address keeps
-  it (`#q=wonderwall&all=1`).
+  search, and once more, in the empty box, leaves it; Enter, or typing on,
+  brings the results back); the box's × goes back to all your songs, the focus
+  kept in the box, still searching; the ← at the box's left, or Back, leaves
+  the search (Searching is a step of its own, above); each way a song asked
+  for there has its line (see below); ↓ goes from the box to the first
+  result's button. The address keeps it (`#q=wonderwall&all=1`).
 
   **Fetch**, the download icon at a line's end (named "Fetch Oasis - Wonderwall
   from UG" to a screen reader and as a tooltip; **Fetch again**
@@ -4320,9 +4334,10 @@ the library, sent as they are: they carry no badge.
   list, or beside a line's title, puts their name in the search box and
   searches it as typing it would (their group first, with their songs, as a
   name typed whole leads), which asks no site, only the offline indexes; the
-  focus goes to the box, Escape goes back to your songs, and the browser's Back
+  focus goes to the box, Escape goes back to your songs, the browser's Back
   to the list as it was before it (its search, Show, sort and key, as its
-  address had them). A newer answer drawn while it goes (a search typed on)
+  address had them), and the ← out of the search, the name's step with the
+  rest. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
@@ -4342,8 +4357,8 @@ the library, sent as they are: they carry no badge.
   page, and it waits for no Ultimate Guitar review of other artists' songs of
   its title), and the nightly run looks it up (not a song under one of UG's
   `misc-…` names, which are no one's: request it by name as you know it).
-  Back to your songs, a song new to the library gets a line of its own under
-  the box ("Just requested").
+  Back in your songs (Escape, ×, ←), a song new to the library gets a line of
+  its own under the box ("Just requested").
 
   **A song you removed** (`caracole remove`, or Remove on the page) that the
   query matches shows in its artist's group as "Removed 2026-10-20", with

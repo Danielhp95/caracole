@@ -1007,7 +1007,7 @@ const caracoleRows = (icons, does) => {
       entered = query;
       return null;
     };
-    // The results left (Escape, Back to your songs): an Enter waiting for the answer is taken back, and the settle's
+    // The results left (Escape, the ←, the ×): an Enter waiting for the answer is taken back, and the settle's
     // timer sends nothing, as nothing of the sites is on the screen; back in them, the next answer arms it again.
     const leave = () => {
       entered = null;
