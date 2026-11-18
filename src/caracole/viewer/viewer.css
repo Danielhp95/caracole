@@ -416,7 +416,8 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 /* The bar at the foot: the key between − and +, the necks' button, Aa, Scroll's arrow and ⋯, each of those after the
    key with its word under it, on a background of its own, so it never sits over the words; 63 px tall with its
    padding and its line (--foot). It slides away as you scroll down (.away) and back as you scroll up;
-   while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
+   while the song scrolls by itself it is out of the way, back when it pauses, under the pill. From 1200 px it is a
+   toolbar under the song's title instead (below, after the room it leaves at the foot). */
 .bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
   padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   border-top: 1px solid var(--border); background: var(--surface); color: var(--text);
@@ -506,9 +507,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
 }
 /* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
-   or not, and above a sheet docked on the bar. Its first button counts down (a ring that empties, and
-   the seconds), then shows ❚❚, or ▶ when paused; every state is the same size and in the same place,
-   so nothing moves under a thumb. */
+   or not, and above a sheet docked on the bar (from 1200 px under the toolbar, below). Its first button counts
+   down (a ring that empties, and the seconds), then shows ❚❚, or ▶ when paused; every state is the same size and in
+   the same place, so nothing moves under a thumb. */
 .pill { position: fixed; z-index: 8; right: max(16px, env(safe-area-inset-right));
   bottom: calc(var(--foot) + 12px); display: flex; align-items: center; gap: 2px; padding: 3px;
   border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
@@ -568,6 +569,39 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   html[data-dock] .page { padding-bottom: calc(var(--dock) + var(--foot) + 19px + var(--pill)); }
   html[data-dock] .pill { bottom: calc(var(--dock) + var(--foot) + 12px); }
   html[data-dock="necks-full"] .pill { bottom: calc(var(--foot) + 12px); }  /* over the foot of the whole-screen sheet */
+}
+/* From 1200 px wide the bar is a toolbar under the song's title: layers.js's toolbar() puts it right after the song's
+   header.head, in the page's flow (a songbook's shown song's own), and back where the page wrote it below 1200 px. A
+   row of pills in the phone's order, none pushed to the end: the key between − and +, its key over its word, then
+   each tool its icon and its word side by side; 56 px tall with its padding (--toolbar). Once the title scrolls away
+   it sticks to the window's top, on the page's background, over the song and under every layer and popover; the sheet
+   keeps room for it, and what is brought into view comes up below it (scroll-padding-top). It never slides away; while
+   autoscroll counts down and runs it is asleep (data-asleep, viewer.js and harptab.js): out of sight with its room
+   kept, so the song doesn't jump, the pill under it (--toolbar-bottom: its bottom edge in the window, layers.js), Aa's
+   box under Aa. No bar at the foot: --foot is the safe area alone. The full-screen handle stays at the window's foot,
+   as at every width. */
+@media screen and (min-width: 1200px) {
+  :root { --foot: env(safe-area-inset-bottom); --toolbar: 56px; }
+  html { scroll-padding-top: calc(var(--toolbar) + 8px); }
+  .bar { position: sticky; z-index: 6; top: 0; left: auto; right: auto; bottom: auto; margin-top: 10px; padding: 6px 0;
+    border: 0; background: var(--bg); box-shadow: none; transition: none; }
+  .bar.away { transform: none; }
+  .bar[data-asleep] { visibility: hidden; }
+  .bar-in { justify-content: flex-start; gap: 8px; max-width: none; margin: 0; }
+  .keys { flex: 0 1 220px; height: 44px; max-width: 220px; border-radius: 22px; background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--border); }
+  .keys .step { height: 44px; border-radius: 22px; }
+  .bar button.now { height: 44px; border-radius: 10px; }
+  .bar .tool { flex-direction: row; gap: 7px; width: auto; height: 44px; padding: 0 15px 0 12px; border-radius: 22px;
+    background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+  .bar .tool > :first-child { height: auto; }
+  .bar .necks-toggle, .bar .necks-open, .size-box { margin-left: 0; }
+  .bw { font-size: .84rem; color: var(--text); }
+  .bar .play .disc { width: 26px; height: 26px; }
+  .bar .play .disc svg { width: 15px; height: 15px; }
+  .bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+  .sizes { top: calc(100% + 10px); bottom: auto; }
+  .pill { top: calc(var(--toolbar-bottom, 0px) + 12px); bottom: auto; }
 }
 .ui-head { display: flex; align-items: center; gap: 8px; }
 /* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
@@ -939,7 +973,6 @@ a.ver-main .ver-name { color: var(--accent); }
     border-radius: 0; box-shadow: -2px 0 14px rgb(0 0 0 / .06); }
   #panel { --pad: 20px; }
   html[data-panel] body { padding-right: var(--rail); }
-  html[data-panel] .bar { right: var(--rail); }
   html[data-panel] .pill { right: calc(var(--rail) + 16px); }
   .sheet-ui.card { position: absolute; top: var(--pop-top, 0px); right: auto; bottom: auto; left: var(--pop-left, 0px);
     width: 340px; height: auto; max-width: none; max-height: none; margin: 0; padding-bottom: 14px; overflow: visible;
@@ -992,7 +1025,7 @@ a.ver-main .ver-name { color: var(--accent); }
 .nk-dot.few.chosen, .nk-open.few.chosen { stroke-width: 1.2; }
 
 /* From 1200 px wide: the rail of necks on the left (viewer.js shows it while you keep it shown, and says so in
-   data-necks), which the song and the bar move over for, as they do for the settings' rail on the right. It
+   data-necks), which the song and its toolbar move over for, as they do for the settings' rail on the right. It
    scrolls on its own, and a wheel or a finger at its end leaves the song where it is. Everything in it is
    --nk times the page's sizes (the owner's 15 % more than the first 300 px): the rail, its padding, its text,
    the legends' buttons and swatches and the key's switch; the necks, drawn at its width, grow with it. */
@@ -1003,7 +1036,6 @@ a.ver-main .ver-name { color: var(--accent); }
     border-right: 1px solid var(--border); background: var(--surface); font-size: calc(1rem * var(--nk));
     scrollbar-width: thin; }
   html[data-necks] body { padding-left: var(--necks); }
-  html[data-necks] .bar { left: var(--necks); }
 }
 /* Its head, kept at its top as it scrolls: its tabs, Guitar, Harmonica and Harmony (overlay.js; or its one tab's
    name), and Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round
@@ -1093,7 +1125,11 @@ a.ver-main .ver-name { color: var(--accent); }
   .necks[data-sheet] .ov-change, .necks[data-sheet] .ov-tabs > button { min-height: 44px; }
   .necks[data-sheet] .hw { grid-template-columns: min(172px, 54%) minmax(0, 1fr); }
 }
-@media screen and (min-width: 900px) and (max-width: 1199.98px) { html[data-panel] .necks[data-sheet] { right: var(--rail); } }
+/* Up to 1199 px the bar and the necks' sheet at the foot leave the settings' rail its room; from 1200 px the bar is a
+   toolbar in the song's column, which the rail's room in body's padding moves over for. */
+@media screen and (min-width: 900px) and (max-width: 1199.98px) {
+  html[data-panel] .bar, html[data-panel] .necks[data-sheet] { right: var(--rail); }
+}
 @media screen and (max-width: 899.98px) { .necks[data-sheet]:not(.top) { visibility: hidden; } }
 @media (prefers-reduced-motion: no-preference) { .necks[data-sheet] { animation: sheet-up .22s ease-out; } }
 @keyframes sheet-up { from { transform: translateY(100%); } }

@@ -55,6 +55,7 @@ RAIL = """(() => {
   const rail = q('#necks');
   return {
     rail: box(rail), sheet: box(q('#sheet')), bar: box(q('#bar')), panel: box(q('#panel')), card: box(q('#card')),
+    page: box(q('.page')),
     chords: rail ? [...rail.querySelectorAll('.nk')].map((g) => {
       const svg = g.querySelector('svg.neck');
       const radios = [...g.querySelectorAll('[role=radio]')];
@@ -224,7 +225,8 @@ def test_from_1200_px_a_rail_on_the_left_shows_a_neck_per_chord(tmp_path, width)
     rail = seen["rail"]
     assert rail == {"top": 0, "bottom": 800, "left": 0, "right": 345, "width": 345, "height": 800}
     assert seen["sheet"]["left"] >= rail["right"] + 16  # the song beside it, never under it
-    assert seen["bar"]["left"] == rail["right"] and seen["bar"]["right"] == seen["client"]
+    # The bar a toolbar in the song's column (test_viewer_toolbar.py), beside the rail
+    assert seen["bar"]["left"] == seen["sheet"]["left"] and seen["bar"]["right"] <= seen["page"]["right"]
     assert [c["name"] for c in seen["chords"]] == LEGEND_CHORDS == seen["sheetChords"]
     g = seen["chords"][1]
     assert g["label"] == "G: 5 positions"
@@ -283,7 +285,8 @@ def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp
         whole = b.js("(() => { const r = document.getElementById('necks'); return r.scrollHeight <= r.clientHeight; })()")
         harmony_tab(b)
         seen.update(b.js(key_sizes))
-    assert whole and seen["whole"] and rail["rail"]["width"] == 345 and rail["sheet"]["left"] >= 345 + 16 and rail["bar"]["left"] == 345
+    assert whole and seen["whole"] and rail["rail"]["width"] == 345 and rail["sheet"]["left"] >= 345 + 16
+    assert rail["bar"]["left"] == rail["sheet"]["left"]  # the toolbar in the song's column, beside the rail
     was = {"neck": 267, "key": 267, "name": 16, "keyName": 16, "legend": 12.8, "button": 44, "swatch": 10,
            "chip": 15.2, "chipHeight": 44}
     for what, size in was.items():
@@ -323,7 +326,7 @@ def test_the_bars_button_hides_the_rail_and_the_song_takes_the_whole_width(tmp_p
     assert shown[1]["railNamed"] == "Chord necks"  # the rail by the name its heading and its toggles give it
     rail, said = hidden
     assert rail["rail"] is None and rail["padding"] == "0px"  # the song has the whole width
-    assert rail["bar"]["left"] == 0 and rail["bar"]["right"] == rail["client"]
+    assert rail["bar"]["left"] == rail["sheet"]["left"] and rail["bar"]["right"] <= rail["page"]["right"]  # its column
     assert rail["sheet"]["left"] < 345 and not rail["sideways"]
     assert said["button"] and said["pressed"] == "false" and said["necks"] == "0"  # the address keeps it
     assert again[0]["rail"]["width"] == 345 and again[1]["pressed"] == "true" and again[1]["necks"] is None

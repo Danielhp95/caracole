@@ -1369,8 +1369,29 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
-- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against;
-  the half screen of over-scroll is `.page::after`, never in it, and print drops it.
+- **From 1200 px the bar is a toolbar** under the song's title (D13 C; test_viewer_toolbar.py), for viewer.js and
+  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge() }`, neither script holding a
+  copy):
+  - `place()` puts `#bar` right after `head()` (`.page > header.head`; a songbook's shown song's own, `#sheet`'s
+    parent's `:scope > header.head`) while `wide` (`TOOLBAR`, `(min-width: 1200px)`), back where the page wrote it
+    (before `#pill`) while narrow, the focus kept on the control that had it: at load, and as `wide` changes; the tab
+    order changes with it (the toolbar right after the title);
+  - viewer.css's `@media screen and (min-width: 1200px)` block: sticky at the window's top once the title scrolls
+    away, on the page's background, `z-index` 6 (over the song, under every layer and popover), a row of pills in the
+    phone's order, none pushed to the end, 56 px tall (`--toolbar`); `--foot` is the safe area alone there, and
+    `html`'s `scroll-padding-top` keeps what is brought into view below it; the bar's `html[data-panel]` inset is
+    below 1200 px alone;
+  - it never slides away (the scroll handlers slide the bar below 1200 px alone); while autoscroll counts down and runs
+    it is `bar[data-asleep]` (`visibility: hidden`, its room kept: viewer.js `dock()`, harptab.js `showScroll()`, at
+    every width, where below 1200 px viewer.js hides the bar and harptab.js slides it), and `edge()` writes
+    `--toolbar-bottom` on `<html>` (on scroll and resize too), which puts the pill under it;
+  - a card or a numeral's tooltip goes above its chord only where it clears the toolbar (`place()`, `placeTip()`:
+    `barFoot()` the ceiling, the window's foot the floor, `barTop()`); `layout()` takes `--toolbar` off the window's
+    room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar (`data-controls`), its
+    handle staying at the window's foot.
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
+  1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
+  drops it.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
   the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after

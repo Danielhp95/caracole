@@ -437,10 +437,18 @@ def test_the_pill_fits_a_phone_and_a_desktop_and_holds_still(tmp_path):
     room = """(() => { const r = document.querySelector('#pill').getBoundingClientRect();
       return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
         && document.documentElement.scrollWidth <= innerWidth; })()"""
+    # From 1200 px the pill sits under the toolbar at the top (test_viewer_toolbar.py), never over a bar at the foot:
+    # down the song, where the toolbar is stuck to the window's top, it holds still too.
+    under = """(() => { const pill = document.querySelector('#pill').getBoundingClientRect();
+      const bar = document.querySelector('#bar').getBoundingClientRect();
+      return bar.top === 0 && pill.top >= bar.bottom && pill.top <= bar.bottom + 16; })()"""
     for width, height, mobile in ((390, 844, True), (1280, 800, False)):
         with viewer(tmp_path, width=width, height=height, mobile=mobile) as b:
+            if width >= 1200:
+                b.js("window.scrollTo(0, 1500)")
             b.click("#scroll")
             boxes = {tuple(b.js(box))}  # counting down
+            topped = b.js(under) if width >= 1200 else True
             b.click("#go")
             boxes.add(tuple(b.js(box)))  # scrolling
             for _ in range(4):
@@ -451,7 +459,7 @@ def test_the_pill_fits_a_phone_and_a_desktop_and_holds_still(tmp_path):
             b.click("#go")
             boxes.add(tuple(b.js(box)))  # paused
         assert len(boxes) == 1, (width, boxes)
-        assert smallest >= 44 and fits, width
+        assert smallest >= 44 and fits and topped, width
 
 
 @in_chromium

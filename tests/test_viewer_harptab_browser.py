@@ -266,7 +266,8 @@ def test_on_a_wide_screen_the_overlay_opens_on_harmonica_on_the_pages_harp(tmp_p
     assert first["centre"] == "Bm" and first["chosen"] == ["D harp, 4th position, aeolian"]
     assert (first["name"], first["tag"]) == ("D harp", "the tab's") and bar == "D harp"
     assert first["plays"] == "Plays A, D and Em; E as Em." and first["card"] == "Bm on a D harp4th position, aeolian"
-    assert named == "Chord necks" and rail[0] == 345 and rail[1] >= 345 + 16 and rail[2] == 345
+    # the bar a toolbar in the tab's column, beside the rail (test_viewer_toolbar.py)
+    assert named == "Chord necks" and rail[0] == 345 and rail[1] >= 345 + 16 and rail[2] == rail[1]
     assert guitar["necks"] == SHAPES and keyneck == "Am scale"  # the sheet's chords as written, on the guitar
 
 

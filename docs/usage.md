@@ -3375,7 +3375,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   playing: `− Em +`, a neck, `Aa`, an arrow down to a line and `⋯`, each
   after the key with its word under it: **Shapes**, **Text**, **Scroll**
   and **More**; from 1200 px the rail of necks' button, Shapes too, takes
-  the neck's place, after the key (both above). − and +
+  the neck's place, after the key (both above). **On a laptop** (from 1200 px
+  wide) the bar is a toolbar under the song's title instead, in the same
+  order, each tool a pill with its icon and its word side by side: once the
+  title scrolls away it sticks to the top of the window, and the song keeps
+  room for it (what a link or a section brings into view comes up below it).
+  It never slides away; while the song scrolls by itself it is out of sight,
+  its room kept, so the song doesn't jump, and the pill sits under it. Tab
+  reaches it right after the title. Narrower than 1200 px it is the bar at
+  the foot again. − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short and, under it, what changed the chords you see from
@@ -3400,12 +3408,14 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   can't tell has no list: its key does nothing. **The
   neck** opens the overlay as a sheet on a phone or a tablet (above). The
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
-  every screen; the bar has no button for it. **Aa** opens a small box over the bar with the text
-  size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
-  Escape, closes it. **Scroll**, the arrow in a disc, scrolls the song by
+  every screen; the bar has no button for it. **Aa** opens a small box
+  over the bar (under the laptop's toolbar) with the text size and A− and
+  A+, nothing dimmed behind it; a tap anywhere else, or Escape, closes it.
+  **Scroll**, the arrow in a disc, scrolls the song by
   itself (below), ringed while it is on (counting down, scrolling or
-  paused). **More** (⋯) opens the settings. The bar slides away as you scroll down the song, and comes back
-  when you scroll up, tap the page or reach the end, where the song's last
+  paused). **More** (⋯) opens the settings. Below 1200 px the bar slides
+  away as you scroll down the song, and comes back when you scroll up, tap
+  the page or reach the end, where the song's last
   lines and the footer end above it. It stays while the browser puts you
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
@@ -3431,9 +3441,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Full screen**: **Hide controls** (full screen ›), the first of the
   settings' places to go, or a double tap beside the song (in its margins, or
   beside a line's end, never on a word, a chord, the title or a control: two
-  taps or clicks within 350 ms and 30 px of each other), hides the bar, the
-  song's facts under the title and the rail of necks (and the necks' sheet), so the
-  song has the screen; a thin handle stays at the foot of the screen. A tap on
+  taps or clicks within 350 ms and 30 px of each other), hides the bar (or the
+  laptop's toolbar under the title), the song's facts under the title and the
+  rail of necks (and the necks' sheet), so the song has the screen; a thin
+  handle stays at the foot of the screen. A tap on
   it, Escape or Back brings them back, the focus on ⋯ when Hide controls hid
   them; a double tap while they are hidden does nothing. It is one step of the history, as the
   layers above are: on a phone a chord's card opened in full screen takes its
@@ -3668,9 +3679,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
   browser allows it. While it is on, a pill steers it, just above the bar's
-  place: − and + change the speed (1 to 30) as it scrolls, ❚❚ pauses and ▶
-  goes on after another countdown, and × ends it. The bar is out of the way
-  while the song scrolls, and back under the pill while it is paused, so you
+  place (on a laptop, under the toolbar): − and + change the speed (1 to 30)
+  as it scrolls, ❚❚ pauses and ▶ goes on after another countdown, and × ends
+  it. The bar (or the laptop's toolbar, its room kept) is out of the way
+  while the song scrolls, and back while it is paused, so you
   can transpose or change the text size before going on; the pill stays
   where it is, so a second tap lands on it again. A finger on the
   page, the mouse wheel, a key that scrolls, a
@@ -3797,7 +3809,8 @@ the library page link it, the tab's text beside it.
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
   **Aa** the text size, and Scroll scrolls by itself, as in the viewer,
-  each with its word under it (Shapes, Notes, Text, Scroll).
+  each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
+  a toolbar under the tab's title, as the viewer's.
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
   margins, never on a hole, a word, a line's ▶, the legend or a control) hides
   the bar, the facts, the "fit the sheet's chords" line and the rail, and a

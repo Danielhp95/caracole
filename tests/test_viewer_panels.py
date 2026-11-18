@@ -688,19 +688,21 @@ def test_on_a_desktop_a_chords_card_is_a_popover_by_the_chord(tmp_path):
         b.press("Escape")
         closed = look(b)
         back = b.js("document.activeElement === window.picked")
-        low = chord(b, "Am", below=800 - 63 - 200, above=800 - 63)  # near the bar: no room below it
+        low = chord(b, "Am", below=800 - 200, above=800)  # near the window's foot: no room below it
         click_at(b, *low[:2])
         above = look(b)
     for found, at in ((first, g), (second, d)):
         card = found["card"]
         assert card["top"] >= at[3] and card["top"] <= at[3] + 16  # just under its chord...
         assert card["left"] <= at[4] and card["right"] >= at[5]  # ...and across it
-        assert card["width"] <= 380 and card["bottom"] <= found["bar"]["top"]
+        # From 1200 px the bar is a toolbar at the top (test_viewer_toolbar.py): the card's floor is the window's foot
+        assert card["width"] <= 380 and card["bottom"] <= 800 and card["top"] >= found["bar"]["bottom"]
     assert first["name"] == "G" and second["name"] == "Em" and not first["inert"] and not first["scrim"]
     assert second["card"]["left"] > first["card"]["left"]  # over to the chord tapped
     assert scrolled["card"]["top"] == second["card"]["top"] - 120  # it goes with its chord as the page scrolls
     assert closed["card"] is None and back  # the focus back on the chord that opened it
-    assert above["card"]["bottom"] <= low[2] and above["card"]["bottom"] >= low[2] - 16 and above["card"]["top"] >= 0
+    assert above["card"]["bottom"] <= low[2] and above["card"]["bottom"] >= low[2] - 16
+    assert above["card"]["top"] >= max(0, above["bar"]["bottom"])  # clear of the toolbar
 
 
 @in_chromium

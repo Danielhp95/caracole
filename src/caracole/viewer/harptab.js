@@ -342,6 +342,7 @@
   window.addEventListener("resize", () => {
     dock();
     if (kinds) kinds.place();
+    toolbar.edge();
   });
   const showRail = (on) => {
     state.necks = on;
@@ -600,9 +601,17 @@
 
   // --- scrolling by itself, as the viewer does -------------------------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the harp; pressed again, it starts at once), running, or
-  // paused; the pill steers it, above the bar's place. A finger on the page, the wheel, a key that scrolls, a scroll
-  // by hand or the end of the tab pauses it.
+  // paused; the pill steers it, above the bar's place (from 1200 px under the toolbar). A finger on the page, the
+  // wheel, a key that scrolls, a scroll by hand or the end of the tab pauses it.
   const bar = $("bar"), pill = $("pill"), go = $("go");
+  // From 1200 px the bar is a toolbar under the tab's title, as the viewer's (layers.js's toolbar, viewer.css), back at
+  // the foot below it.
+  const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => document
+    .querySelector(".page > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
+  toolbar.wide.addEventListener("change", () => {
+    toolbar.place();
+    bar.classList.remove("away");
+  });
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -613,6 +622,8 @@
     if (scroll.state === "off") delete doc.dataset.pill;
     else doc.dataset.pill = scroll.state;
     bar.classList.toggle("away", moving() && !docked());  // the overlay's sheet, or the list, sits on it
+    bar.toggleAttribute("data-asleep", moving());  // from 1200 px the toolbar out of sight, its room kept
+    toolbar.edge();  // and the pill under it
     pill.dataset.state = scroll.state;
     $("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true");  // lit while it is on
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
@@ -749,7 +760,8 @@
   }
   window.addEventListener("scroll", () => {
     const y = window.scrollY, dy = y - reveal.y;
-    if (moving()) {
+    toolbar.edge();
+    if (moving() || toolbar.wide.matches) {  // from 1200 px the toolbar never slides away
       reveal.y = y;
       return;
     }
@@ -793,6 +805,7 @@
     }
   }
 
+  toolbar.place();  // under the title from 1200 px, before it shows
   bar.hidden = false;
   showScroll();
   render();

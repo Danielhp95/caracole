@@ -5,8 +5,8 @@ of chord necks shown or hidden (its tests are test_viewer_necks.py's); below 120
 up or down (test_viewer_overlay_sheet.py's); the text size; scrolling by itself, an arrow lit while it is on; and the
 rest of the settings, where All chord shapes is the strip's one switch. Each after the key says its word under its icon
 (Shapes, Text, Scroll, More). It slides away as you scroll down, and comes back when you scroll up, tap
-the page or reach the end. The tests that scroll and tap run in a
-Chromium of their own on real time (helpers/browser.py's ``Browser``).
+the page or reach the end. From 1200 px it is a toolbar under the song's title instead (test_viewer_toolbar.py). The
+tests that scroll and tap run in a Chromium of their own on real time (helpers/browser.py's ``Browser``).
 """
 
 from __future__ import annotations
@@ -413,8 +413,10 @@ def test_the_bar_slides_away_as_you_scroll_down_and_comes_back(tmp_path):
 
 @in_chromium
 def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
-    with viewer(tmp_path, width=1280, height=800, mobile=False) as b:
-        b.send("Input.dispatchMouseEvent", type="mouseWheel", x=640, y=400, deltaX=0, deltaY=600)
+    # At 1100 px, the widest the bar is at the foot (from 1200 px it is a toolbar under the title, which never slides
+    # away: test_viewer_toolbar.py).
+    with viewer(tmp_path, width=1100, height=800, mobile=False) as b:
+        b.send("Input.dispatchMouseEvent", type="mouseWheel", x=550, y=400, deltaX=0, deltaY=600)
         assert settled(b, "away")
         # The last thing on the page, without scrolling there (the end of the song brings the bar back).
         b.js("document.querySelector('.licence summary').focus({preventScroll: true})")
@@ -427,13 +429,13 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         # A control with the keyboard's focus is never slid out of sight, whatever scrolls the page.
         watch_slides(b)
         key(b, "PageDown", 34)
-        b.send("Input.dispatchMouseEvent", type="mouseWheel", x=640, y=400, deltaX=0, deltaY=600)
+        b.send("Input.dispatchMouseEvent", type="mouseWheel", x=550, y=400, deltaX=0, deltaY=600)
         down = b.wait(f"({BAR}).y > 600", 2)
         kept = down and not slid(b) and bar(b)["where"] == "shown"
         b.press("Enter")  # ⋯
         opened = bar(b)
-    # the key a button between − and + (its list), the rail's after it, at 1280
-    assert order == ["t-down", "key-now", "t-up", "necks-toggle", "size", "scroll", "more"]
+    # the key a button between − and + (its list), the neck after it (the overlay's sheet, at 1100)
+    assert order == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"]
     assert back and kept and opened["panel"]
 
 
@@ -502,19 +504,18 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
       return last.bottom <= document.querySelector('#bar').getBoundingClientRect().top; })()"""
-    for width, height, mobile in ((390, 844, True), (1280, 800, False), (768, 1024, True), (440, 932, True),
+    # From 1200 px the bar is a toolbar under the title (test_viewer_toolbar.py): 1100 px is the widest at the foot.
+    for width, height, mobile in ((390, 844, True), (1100, 800, False), (768, 1024, True), (440, 932, True),
                                   (430, 932, True), (360, 740, True), (320, 640, True)):
         with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"W{width}") + "#mode=mixolydian&t=1", width=width,
                     height=height, mobile=mobile) as b:
             m = b.js(measure)
             clear = b.js(end)
         assert 60 <= m["height"] <= 66 and m["bottom"] == height, (width, m)  # 10 px taller, for the words
-        rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
-        assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
+        assert m["left"] == 0 and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
-        # After the key, the rail's toggle from 1200 px; narrower, the neck in its place
-        tools = ["t-down", "key-now", "t-up"] + (["necks-toggle"] if width >= 1200 else ["necks-open"])
-        assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
+        # After the key the neck, the overlay's sheet up or down (from 1200 px, the rail's toggle in its place)
+        assert m["ids"] == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
         # The longest key in short, whole ("Ab mixolydian" over "capo 2 · +1"), with no guitar beside the neck to take
         # its room; narrower, the key a little smaller (on the narrowest cut short); and where one line has no room
@@ -643,6 +644,8 @@ def test_the_songs_end_comes_up_half_a_screen_clear_of_the_bar(tmp_path, kind):
               const last = [...document.querySelectorAll('.foot > *')].filter((e) => e.getClientRects().length).pop()
                 .getBoundingClientRect();
               const bar = document.querySelector('#bar'), r = bar.getBoundingClientRect();
-              const floor = bar.hidden || !r.height || bar.classList.contains('away') ? innerHeight : r.top;
+              // the window's foot where the bar isn't there: hidden, away, or from 1200 px the toolbar at the top
+              const floor = bar.hidden || !r.height || bar.classList.contains('away') || r.top < innerHeight / 2
+                ? innerHeight : r.top;
               return {room: floor - last.bottom, half: innerHeight / 2}; })()""")
         assert m["room"] >= m["half"] - 1, (kind, width, m)

@@ -54,6 +54,19 @@
   //                    that it ends above the bar (--foot). The versions list's, from 900 px wide. It writes to pop
   //                    alone.
   //
+  //   TOOLBAR          the media query from which the bar is a toolbar under the song's title: (min-width: 1200px).
+  //   toolbar(bar, head)
+  //                    the bar's place, written once for the pages: { wide, place(), edge() }. wide is
+  //                    matchMedia(TOOLBAR). place() puts bar right after head() (the song's header.head: a songbook's
+  //                    shown song's own) while wide, in the page's flow, where the page's stylesheet makes it a toolbar
+  //                    that sticks to the window's top once the title scrolls away; while narrow, back where the page
+  //                    wrote it (before what followed it then: the pill), at the foot. Moved, it keeps the focus on the
+  //                    control that had it. edge() writes --toolbar-bottom on <html> while wide: the toolbar's bottom
+  //                    edge in the window, in px, 0 at least (0 where it shows nothing: full screen), which the
+  //                    stylesheet puts the autoscroll pill under; narrow, it takes it off. place() calls it, and the
+  //                    page calls it as it scrolls and resizes. It writes to the bar's place and to <html>'s
+  //                    --toolbar-bottom alone.
+  //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
   // address.
@@ -202,6 +215,30 @@
     pop.style.setProperty("--pop-y", top + "px");
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, SHORT, DOUBLE_MS,
-    DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
+  const TOOLBAR = "(min-width: 1200px)";
+  const toolbar = (bar, head) => {
+    const doc = document.documentElement, wide = matchMedia(TOOLBAR);
+    const home = bar.parentNode, next = bar.nextSibling;  // where the page wrote it
+    const edge = () => {
+      if (!wide.matches) {
+        doc.style.removeProperty("--toolbar-bottom");
+        return;
+      }
+      doc.style.setProperty("--toolbar-bottom", Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px");
+    };
+    const place = () => {
+      const after = wide.matches ? head() : null;
+      if (after ? after.nextSibling !== bar : bar.parentNode !== home || bar.nextSibling !== next) {
+        const had = bar.contains(document.activeElement) ? document.activeElement : null;
+        if (after) after.after(bar);
+        else home.insertBefore(bar, next);
+        if (had && document.activeElement !== had) had.focus({ preventScroll: true });  // the move took it away
+      }
+      edge();
+    };
+    return Object.freeze({ wide, place, edge });
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, toolbar, SHORT,
+    TOOLBAR, DOUBLE_MS, DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
 })();

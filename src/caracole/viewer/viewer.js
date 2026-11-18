@@ -891,6 +891,10 @@
 
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
+  // From 1200 px the bar is a toolbar under the song's title (layers.js's toolbar: right after the song's header, a
+  // songbook's shown song's own; viewer.css), back at the foot below it.
+  const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => sheetEl.parentElement
+    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
   const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
@@ -1189,11 +1193,12 @@
     return most;
   };
   // One column, or columns side by side where viewer.css offers them (a wide screen), only for a song the window
-  // then shows whole: the song's end in the last column, and the sheet no taller than the window above the room the
-  // page keeps at its foot for the controls. The fewest columns that do, from two up to as many as fit side by side
-  // (MOST_COLUMNS at most), each at least as wide as the song's widest line within COLUMN_EM: at least 16 em, so that
-  // a song of short lines makes no slivers, and never asked to be more than 24 em, so that a song of long lines reads
-  // as it did in two (the owner's narrower columns, D8), its long lines wrapping. The columns share the page's width
+  // then shows whole: the song's end in the last column, and the sheet no taller than the window less the room the
+  // page keeps at its foot for the controls and, from 1200 px, the toolbar's at its top (--toolbar). The fewest
+  // columns that do, from two up to as many as fit side by side (MOST_COLUMNS at most), each at least as wide as the
+  // song's widest line within COLUMN_EM: at least 16 em, so that a song of short lines makes no slivers, and never
+  // asked to be more than 24 em, so that a song of long lines reads as it did in two (the owner's narrower columns,
+  // D8), its long lines wrapping. The columns share the page's width
   // (viewer.css): the room over widens each. At the reader's own text size, never a smaller one to fit; one column is
   // 3 px larger, and so is a song no count shows whole.
   const MOST_COLUMNS = 5;  // viewer.css lays out two to five
@@ -1207,6 +1212,10 @@
     sheetEl.style.width = "";
     sheetEl.style.columnCount = "";
   };
+  // The toolbar's room at the window's top, from 1200 px where it shows (none in full screen): its height, viewer.css's
+  // --toolbar (no such token below 1200 px).
+  const toolbarRoom = () => (toolbar.wide.matches && !doc.dataset.full
+    ? parseFloat(getComputedStyle(doc).getPropertyValue("--toolbar")) || 0 : 0);
   const layout = () => {
     const y = window.scrollY;
     let count = 1;
@@ -1221,7 +1230,7 @@
       const em = parseFloat(getComputedStyle(sheetEl).fontSize);
       const least = Math.min(COLUMN_EM[1] * em, Math.max(COLUMN_EM[0] * em, line));
       const page = sheetEl.closest(".page") || document.body;
-      const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+      const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0) - toolbarRoom();
       for (let n = 2; n <= MOST_COLUMNS; n++) {
         doc.dataset.columns = String(n);
         const gap = parseFloat(getComputedStyle(sheetEl).columnGap) || 0;
@@ -1254,7 +1263,13 @@
       place();
       placeTip();
       dock();
+      toolbar.edge();
     });
+  });
+  // Across 1200 px the bar moves: under the title as a toolbar, or back at the foot, never slid away there.
+  toolbar.wide.addEventListener("change", () => {
+    toolbar.place();
+    slide(false);
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layout(); fitKey(); }, () => {});
   // The tab's preamble opened or folded again (page.py): the song moves, and may take other columns,
@@ -1900,17 +1915,21 @@
   // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
   // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
+  // From 1200 px the toolbar under the title is asleep meanwhile (data-asleep: out of sight, its room kept, so the
+  // song doesn't jump), never hidden.
   function dock() {
     const there = !wide.matches ? dockedTop()
       : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
     const away = moving() && !there;
-    if (bar.hidden !== away) {
-      bar.hidden = away;
-      if (!away) {
+    const hide = away && !toolbar.wide.matches;
+    if (bar.hidden !== hide) {
+      bar.hidden = hide;
+      if (!hide) {
         slide(false);
         fitKey();
       }
     }
+    bar.toggleAttribute("data-asleep", away);
     if (there) {
       doc.dataset.dock = there === necksEl && sheetAt === "full" ? "necks-full" : there.id;
       doc.style.setProperty("--dock", there.offsetHeight + "px");
@@ -1919,21 +1938,26 @@
       doc.style.removeProperty("--dock");
     }
   }
-  // The bar's top, or the window's foot while it is out of sight (away, hidden, or full screen's).
-  const barTop = () => (bar.hidden || bar.classList.contains("away") || doc.dataset.full ? window.innerHeight
-    : bar.getBoundingClientRect().top);
+  // The bar's top, or the window's foot where it isn't at the foot: out of sight (away, hidden, or full screen's), or,
+  // from 1200 px, the toolbar at the top.
+  const barTop = () => (toolbar.wide.matches || bar.hidden || bar.classList.contains("away") || doc.dataset.full
+    ? window.innerHeight : bar.getBoundingClientRect().top);
+  // The toolbar's foot in the window from 1200 px (0 at least: 0 in full screen, where it shows nothing); 0 narrower,
+  // where the window's top is clear.
+  const barFoot = () => (toolbar.wide.matches ? Math.max(0, bar.getBoundingClientRect().bottom) : 0);
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
-  // no room below, and across it, within the song's column. It is placed in the page, so it goes
-  // with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's place).
+  // no room below and the room above clears the toolbar, and across it, within the song's column. It is placed in the
+  // page, so it goes with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's
+  // place).
   function place() {
     if (kinds) kinds.place();
     if (card.hidden || !wide.matches) return;
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
     const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
-    const floor = barTop();
+    const floor = barTop(), ceiling = barFoot();
     let top = a.bottom + gap;
-    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    if (top + height > floor - gap && a.top - gap - height >= ceiling + gap) top = a.top - gap - height;
     const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
     card.style.setProperty("--pop-top", Math.round(top + window.scrollY) + "px");
     card.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
@@ -2363,9 +2387,9 @@
     if (!tipOf || tip.hidden) return;
     const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
     const width = tip.offsetWidth, height = tip.offsetHeight, gap = 8;
-    const floor = barTop();
+    const floor = barTop(), ceiling = barFoot();
     let top = a.bottom + gap;
-    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    if (top + height > floor - gap && a.top - gap - height >= ceiling + gap) top = a.top - gap - height;
     const left = Math.max(gap, Math.min(a.left - 12, doc.clientWidth - gap - width));
     tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
     tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
@@ -2731,8 +2755,8 @@
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
-  // once), running, or paused. While it is on, the pill steers it, above the bar's place: − and +
-  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
+  // once), running, or paused. While it is on, the pill steers it, above the bar's place (from 1200 px under the
+  // toolbar): − and + change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
   // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
   // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
@@ -2749,6 +2773,7 @@
     if (scroll.state === "off") delete doc.dataset.pill;
     else doc.dataset.pill = scroll.state;  // room under the song for the pill
     dock();  // the bar, away or back
+    toolbar.edge();  // from 1200 px the pill under the toolbar, wherever it is now
     pill.dataset.state = scroll.state;
     $("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true");  // lit while it is on
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
@@ -2904,7 +2929,8 @@
   // songbook, putting you back where you were), and none just after a change of key or text size,
   // when the browser keeps the line you were reading in place by scrolling. It stays while the size
   // box or a sheet is open (the overlay's too), and while one of its controls has the keyboard's focus, which would
-  // otherwise go out of sight.
+  // otherwise go out of sight. Below 1200 px alone: from 1200 px the toolbar under the title never slides away (and
+  // Aa's box stays open as you scroll), and goes with the page as it scrolls, the pill under it (toolbar.edge()).
   const reveal = { y: window.scrollY, quiet: 0, touched: false };
   function hush() {
     if (doc.dataset.ready === "1") reveal.quiet = performance.now() + 400;
@@ -2925,6 +2951,11 @@
   }
   window.addEventListener("scroll", () => {
     const y = window.scrollY, dy = y - reveal.y;
+    toolbar.edge();
+    if (toolbar.wide.matches) {
+      reveal.y = y;
+      return;
+    }
     if (y <= 0 || window.innerHeight + y >= document.documentElement.scrollHeight - 2) {
       slide(false);
       reveal.y = y;
@@ -2947,6 +2978,7 @@
   // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and Scroll alone.
   $("keys").hidden = count === 0;
   more.hidden = count === 0;
+  toolbar.place();  // under the title from 1200 px, before it shows
   showScroll();
   render();
   if (hash.get("panel") === "1") open(panel, null);
