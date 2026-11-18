@@ -1321,9 +1321,10 @@ const caracoleRows = (icons, does) => {
       : "LaCuerda's list doesn't reach " + letter + " yet. We read its page for “" + name + "”, 1 request.";
     return go;
   };
-  // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Not on
-  // the sites", over one line, the library page's (``does.dense``) or a row, the lookup page's: the query in its
-  // quotes, and where a song's Open sits, the request by name (``does.request``: "Request", else ``does.requestText``,
+  // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Nothing
+  // for “query” in your songs or the sites' indexes" (``does.yours``: songs of yours the search shows, then "in the
+  // sites' indexes" alone), over one line, the library page's (``does.dense``) or a row, the lookup page's: the query,
+  // and where a song's Open sits, the request by name (``does.request``: "Request", else ``does.requestText``,
   // named ``does.requestLabel``); where caracole looked is the row of marks under the box (countMarks), each site at
   // 0, and no more here. Its chevron ("⋯" on a row) holds the rest: Ask LaCuerda while
   // LaCuerda's listings don't reach the name (``does.ask(button, box)``, LaCuerda's search first while its gate,
@@ -1334,11 +1335,12 @@ const caracoleRows = (icons, does) => {
     const box = el("section", "nothing");
     box.dataset.query = String(query);
     rowSerial += 1;
-    const head = el("h2", does.dense ? "miss-band" : "group miss-band", "Not on the sites");
+    const head = el("h2", does.dense ? "miss-band" : "group miss-band",
+      "Nothing for “" + query + "” in " + (does.yours ? "" : "your songs or ") + "the sites' indexes");
     head.id = "nothing-" + rowSerial;
     box.setAttribute("aria-labelledby", head.id);
     const said = String(does.requestLabel || "Request “" + query + "” by name");
-    const request = button(String(does.requestText || "Request"), "small primary", () => does.request(), said);
+    const request = button(String(does.requestText || "Request"), "small primary miss-request", () => does.request(), said);
     request.title = said + ": opens the form, filled from the search";
     const rest = el("div", "row-group miss-more");
     const actions = el("div", "actions");
@@ -1348,7 +1350,7 @@ const caracoleRows = (icons, does) => {
     const why = whyUnseen(d.unseen, query);
     if (why) actions.appendChild(why);
     rest.appendChild(actions);
-    const line = resultRow({ dense: Boolean(does.dense), title: "“" + query + "”", action: request,
+    const line = resultRow({ dense: Boolean(does.dense), title: String(query), action: request,
       more: actions.childNodes.length ? [rest] : [] });
     line.classList.add("miss");
     const more = does.unfolded ? line.querySelector(".line-more, .row-more") : null;

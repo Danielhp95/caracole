@@ -4246,8 +4246,11 @@ the library, sent as they are: they carry no badge.
   again: only Ask LaCuerda, and "Why isn't it found?", when they apply.
 
   When a query finds nothing on the sites, the list ends with a line of its
-  own, under a quiet band, "Not on the sites": the query in its quotes, and
-  **Request** where a song's Open is, which opens the request form below,
+  own, under a quiet band that says where caracole looked ("Nothing for
+  “zzzqqq” in your songs or the sites' indexes", or "… in the sites' indexes"
+  alone while some of your songs match): the query as the line's title, and
+  **Request** after it (under it on a phone), the one filled button, which opens
+  the request form below,
   filled in from the query (the form shows only then: one Request); under the
   box, no row of marks at all unless some of your songs match (then yours, and
   the sites in one mark at 0), and a screen reader hears "Nothing in your songs

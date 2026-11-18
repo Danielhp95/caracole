@@ -839,8 +839,10 @@ It is rows.js's, shared by both pages:
   screen reader's alone once the marks said it, and where no mark shows (every count 0) the row takes no room
   (`.counts-row.counted`).
 - `nothingFound`: a query that found nothing on the sites:
-  - a line of the list under a quiet band, "Not on the sites", the query, Request where a song's Open is, the one
-    Request then, no marks of its own (and no row under the box unless some of yours match);
+  - a line of the list under a quiet band that says where it looked ("Nothing for “q” in your songs or the sites' indexes", or
+    "… in the sites' indexes" alone when `does.yours`, the songs of yours the search shows, is above 0; the card is
+    made again when that number changes), the query as the line's title, Request (`.miss-request`, the one filled
+    button) after it, under it on a phone, the one Request then, no marks of its own (and no row under the box unless some of yours match);
   - under its chevron Ask LaCuerda and `unseen` folded.
 - `notesLine`: those two under results.
 - On the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are, before

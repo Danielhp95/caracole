@@ -1175,7 +1175,7 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
     search(browser, "lynrd")
     assert browser.wait(f"{answer_to('lynrd')} && !!document.querySelector('{NOTHING}')")
     # Its band says so in words, and its line has no marks of its own.
-    assert browser.js(MISS) == {"band": "Not on the sites", "query": "“lynrd”",
+    assert browser.js(MISS) == {"band": "Nothing for “lynrd” in your songs or the sites' indexes", "query": "lynrd",
                                 "request": ["Request", "Request “lynrd” by name"], "marks": 0}
     # A line of the list's, in the groups' box where an artist's band would be; no result of the sites.
     assert browser.js(f"document.querySelector('{NOTHING}').parentElement.matches('#results .groups')")
@@ -1219,6 +1219,49 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
     browser.click("#request-box > summary")
     assert browser.wait("!document.getElementById('request-box').checkVisibility()")
     assert browser.wait(f"document.activeElement === document.querySelector('{NOTHING} .line-action button')")
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_a_query_that_finds_nothing_says_where_it_looked_and_request_is_the_one_filled_button(cfg, live, tmp_path, width):
+    base, _, _ = live
+    sites(cfg)
+    read_to(cfg, ("_num", "a", "b", "c"))
+    page = driven(tmp_path, width=width, height=844, mobile=width < 720)
+    try:
+        page.open(base)
+        search(page, "zzzqqq")
+        assert page.wait(f"{answer_to('zzzqqq')} && !!document.querySelector('{NOTHING}')")
+        assert page.js(f"document.querySelector('{NOTHING} > h2').textContent") == \
+            "Nothing for “zzzqqq” in your songs or the sites' indexes"
+        title = page.js(f"(() => {{ const h = document.querySelector('{NOTHING} article h3'), s = getComputedStyle(h);"
+                        " return [h.textContent, s.fontStyle, s.color]; })()")
+        assert title == ["zzzqqq", "normal", css_colour(page, "var(--text)")]
+        req, h3 = (page.js(f"document.querySelector('{s}').getBoundingClientRect().toJSON()")
+                   for s in (f"{NOTHING} .miss-request", f"{NOTHING} article h3"))
+        assert page.js(f"getComputedStyle(document.querySelector('{NOTHING} .miss-request')).backgroundColor") == \
+            css_colour(page, "var(--accent)")
+        if width < 720:
+            assert req["top"] >= h3["bottom"] and abs(req["left"] - h3["left"]) <= 2  # under the query
+        else:
+            assert req["top"] < h3["bottom"] and 0 <= req["left"] - h3["right"] <= 24  # right after it
+        page.click(f"{NOTHING} .line-more")
+        assert page.js(f"document.querySelector('{NOTHING} .ask-lacuerda').classList.contains('primary')") is False
+    finally:
+        page.close()
+
+
+def test_nothing_on_the_sites_but_a_song_of_yours_says_the_sites_indexes_alone(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg)
+    c = db.connect(cfg.db_path)
+    add_song(c, "Radiohead", "Creep")
+    c.commit()
+    c.close()
+    browser.open(base)
+    search(browser, "creep")
+    assert browser.wait(f"{answer_to('creep')} && !!document.querySelector('{NOTHING}')")
+    assert browser.js(f"document.querySelector('{NOTHING} > h2').textContent") == \
+        "Nothing for “creep” in the sites' indexes"
 
 
 def test_ask_lacuerda_is_offered_only_for_a_name_under_a_letter_its_listings_dont_reach(cfg, live, browser):
@@ -1588,7 +1631,7 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     sites(cfg, ug=[("radiohead", "creep", 4)])
     browser.open(base + "lookup?q=lynrd")
     assert browser.wait(f"!!document.querySelector('{NOTHING}')")
-    assert browser.js(MISS) == {"band": "Not on the sites", "query": "“lynrd”",
+    assert browser.js(MISS) == {"band": "Nothing for “lynrd” in your songs or the sites' indexes", "query": "lynrd",
                                 "request": ["Look up", "Look up “lynrd” by name"], "marks": 0}
     assert browser.js(f"document.querySelector('{NOTHING} article').matches('.row:not(.hit)')")
     # As the library page's: every count 0, no row of marks under its box at all, and the words a screen reader's.
@@ -1727,7 +1770,7 @@ def test_the_lookup_page_suggests_a_title_as_a_row_whose_get_it_looks_it_up(cfg,
     browser.open(base + "lookup?q=hotl%20califronia")
     assert browser.wait("!!document.querySelector('#results .did-you-mean .hit')")
     assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
-        "Did you mean", "Not on the sites"]
+        "Did you mean", "Nothing for “hotl califronia” in your songs or the sites' indexes"]
     row = "#results .did-you-mean .hit"
     assert browser.js(f"[document.querySelector('{row} .row-title').textContent, document.querySelector('{row} "
                       f".row-artist').textContent, document.querySelector('{row} .source').dataset.source, "

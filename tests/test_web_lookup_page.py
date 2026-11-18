@@ -598,7 +598,7 @@ def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, 
     # A group of the page's own, "Did you mean", an artist's row each (UG's mark, their songs counted, Their songs),
     # then what found nothing: its band and line.
     assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
-        "Did you mean", "Not on the sites"]
+        "Did you mean", "Nothing for “lynrd” in your songs or the sites' indexes"]
     assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => [s.querySelector("
                       "'.row-title').textContent, s.querySelector('.source').dataset.source, s.querySelector("
                       "'.row-facts').textContent, s.querySelector('.row-action button').textContent])") == [

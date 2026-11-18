@@ -297,7 +297,7 @@ function show(data, text) {
   // gametabs.net's: its tracks of games, the game the artist, with its mark and their instruments' badges.
   if (gt.length) results.append(...group("On gametabs", gt.map(htSong)));
   // What the search says beside its results, as the library page says it (ROWS_SCRIPT's): nothing found, a band,
-  // "Not on the sites", over one row: the query, and Look up (the form by name) where a row's Get it is; under its
+  // "Nothing for “…” in your songs or the sites' indexes", over one row: the query, and Look up (the form by name) where a row's Get it is; under its
   // "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page may say, and why it may not
   // see an artist. Else those two in a line under the results (notesLine). Where it looked is the marks under the box.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;

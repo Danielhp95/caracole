@@ -2809,7 +2809,7 @@
     }
     const missed = foundNothing(model);
     const missWas = groupsBox.querySelector(":scope > section.nothing");
-    if (missed) box.appendChild(missOf(model, missWas));  // nothing on the sites: a line of the list, last
+    if (missed) box.appendChild(missOf(model, missWas, mine.length));  // nothing on the sites: a line of the list, last
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
     // One Request: what found nothing has its own, in its line, so the form under the results waits for it.
@@ -2856,11 +2856,12 @@
   // caracole looked, Request where a song's Open is; its chevron has Ask LaCuerda, for a name under a letter its
   // listings don't reach yet, and why it may not see an artist. Drawn again for the same query (LaCuerda's search
   // over, say), its chevron stays as it was (``was``, the line before).
-  const missOf = (model, was) => {
-    if (!model.card) {
+  const missOf = (model, was, yours) => {
+    if (!model.card || model.cardYours !== yours) {
       const says = saysOf(model);
       const open = Boolean(was && was.dataset.query === answer.q && was.querySelector('.line-more[aria-expanded="true"]'));
-      model.card = nothingFound(says.data, answer.q, Object.assign(says.does, { unfolded: open }));
+      model.card = nothingFound(says.data, answer.q, Object.assign(says.does, { unfolded: open, yours }));
+      model.cardYours = yours;
     }
     return model.card;
   };
