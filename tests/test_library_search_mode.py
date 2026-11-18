@@ -422,3 +422,26 @@ def test_with_no_storage_the_box_works_and_lists_nothing(conn, cfg, tmp_path):
         assert page.wait("location.hash === '#q=creep'")
     finally:
         page.close()
+
+
+def test_escape_in_the_laptops_pane_gives_the_focus_back_and_keeps_the_sites_results(cfg, live, browser):  # noqa: F811
+    # From 1200 px a song of yours among the sites' results opens in the pane, by the keyboard its name taking the
+    # focus; Escape there gives the focus back to its line's chevron and nothing else: the page's own Escape (out of the
+    # sites' results) never hears it.
+    base, _, _ = live
+    library(cfg, ("Radiohead", "Creep"))
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    browser.open(base)
+    search(browser, "creep")
+    chevron = "document.querySelector('#found article.line[data-id] .line-more')"
+    assert browser.wait(f"{answer_to('creep')} && !!{chevron}")
+    browser.js(f"{chevron}.focus()")
+    browser.press("Enter")
+    assert browser.wait("document.getElementById('card-pane').contains(document.activeElement) && "
+                        "document.activeElement.matches('.card-name')"), browser.js("document.activeElement.outerHTML")
+    browser.press("Escape")
+    assert browser.wait(f"document.activeElement === {chevron}"), browser.js("document.activeElement.outerHTML")
+    card_in_pane = (f"document.getElementById('card-pane').contains(document.getElementById("
+                    f"{chevron}.getAttribute('aria-controls')))")
+    assert browser.js(f"[document.body.classList.contains('searching-all'), document.getElementById('found').hidden, "
+                      f"{BOX}.value, {card_in_pane}]") == [True, False, "creep", True]

@@ -20,7 +20,7 @@ import time
 from datetime import UTC, datetime
 
 import pytest
-from helpers import browser
+from helpers import browser, cards
 from helpers.browser import CHROMIUM_MARKS
 
 from caracole import db
@@ -213,7 +213,7 @@ def dump_dom(url: str, tmp_path, size: str = "1280,900") -> str:
 
 
 # Notes each line the page shows, in order, and how wide the page ever got.
-WATCH = """
+WATCH = cards.KIT + """
 const seen = [];
 const note = () => {
   for (const p of document.querySelectorAll(".progress")) {
@@ -226,14 +226,14 @@ const note = () => {
   document.body.setAttribute("data-page", String(window.innerWidth));
 };
 new MutationObserver(note).observe(document.body, { subtree: true, childList: true, characterData: true });
-const cardOf = (title, where) => Array.from(document.querySelectorAll((where || "#list") + " article"))
+const lineOf = (title, where) => Array.from(document.querySelectorAll((where || "#list") + " article"))
   .find((c) => c.querySelector("h3").textContent === title);
 """
 
 
 def clicks(*titles: str) -> str:
     """The test script: Fetch now on each song's line titled so."""
-    calls = "".join(f'cardOf({json.dumps(t)}).querySelector("form.fetch button").click();\n' for t in titles)
+    calls = "".join(f'lineOf({json.dumps(t)}).querySelector("form.fetch button").click();\n' for t in titles)
     return "(() => {\n" + WATCH + calls + "})();\n"
 
 
@@ -246,8 +246,8 @@ const titles = {json.dumps(list(titles))};
 const next = () => {{
   const title = titles.shift();
   if (title === undefined) return;
-  cardOf(title).querySelector("form.fetch button").click();
-  const answered = () => cardOf(title).querySelector("form.fetch") ? setTimeout(answered, 10) : next();
+  lineOf(title).querySelector("form.fetch button").click();
+  const answered = () => lineOf(title).querySelector("form.fetch") ? setTimeout(answered, 10) : next();
   answered();
 }};
 next();
@@ -271,11 +271,12 @@ def attribute(dom: str, name: str):
 
 
 def card(dom: str, title: str) -> str:
-    """The song's line titled so (#requested's, or the list's: the first)."""
+    """The song's line titled so (#requested's, or the list's: the first), then its card, wherever the page puts it."""
     found = re.search(r"<article[^>]*>(?:(?!</article>).)*?<h3[^>]*>" + re.escape(title) + r"</h3>.*?</article>", dom,
                       re.S)
     assert found, dom[-3000:]
-    return found.group(0)
+    line, opened = found.group(0), cards.card_of(dom, title)
+    return line if not opened or opened in line else line + opened
 
 
 # A line's button of its sheet's PDF (card.js plays), which a fetched song's line has.
@@ -364,7 +365,7 @@ def test_a_songs_request_line_stays_the_same_live_region_until_its_request_ends(
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
     script = ("(() => {\n" + WATCH + FIRST_LINE_AND_FOCUS
-              + 'const go = cardOf("Creep").querySelector("form.fetch button");\ngo.focus();\ngo.click();\n})();\n')
+              + 'const go = lineOf("Creep").querySelector("form.fetch button");\ngo.focus();\ngo.click();\n})();\n')
     url = serve(FakeCaracole(cfg), script)
 
     dom = dump_dom(url, tmp_path)
@@ -640,13 +641,13 @@ def picks(title: str, ref: str) -> str:
     notes (data-both) if the line ever offered a pick while its request line said how the request goes."""
     return "(() => {\n" + WATCH + f"""
 new MutationObserver(() => {{
-  const c = cardOf({json.dumps(title)});
+  const c = lineOf({json.dumps(title)});
   const p = c && c.querySelector(".progress");
-  if (p && /Queued|Writing|Fetching/.test(p.textContent) && c.querySelector("form.pick-form")) {{
+  if (p && /Queued|Writing|Fetching/.test(p.textContent) && cardOf(c).querySelector("form.pick-form")) {{
     document.body.setAttribute("data-both", "1");
   }}
 }}).observe(document.body, {{ subtree: true, childList: true, characterData: true }});
-const card = cardOf({json.dumps(title)});
+const card = openCardOf(lineOf({json.dumps(title)}));
 card.querySelector("details.picker").open = true;
 card.querySelector('input[name="pick"][value={json.dumps(ref)}]').checked = true;
 card.querySelector("form.pick-form button[type=submit]").click();
@@ -675,7 +676,7 @@ def test_a_pick_on_a_line_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
 # song's picker is open (its "⋯" with it), and which candidate has the focus.
 FOLLOWS_THE_LINE = """
 const timer = setInterval(() => {
-  const go = Array.from(cardOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick");
+  const go = Array.from(lineOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick");
   if (!go) return;
   clearInterval(timer);
   go.click();
@@ -683,8 +684,8 @@ const timer = setInterval(() => {
     const at = document.activeElement;
     document.body.setAttribute("data-after", JSON.stringify({
       path: location.pathname, href: go.getAttribute("href"),
-      open: cardOf("Creep").querySelector("details.picker").open &&
-        !cardOf("Creep").querySelector(".line-panel").hidden,
+      open: cardOf(lineOf("Creep")).querySelector("details.picker").open &&
+        !cardOf(lineOf("Creep")).hidden,
       focus: at && at.name === "pick" ? at.value : null,
     }));
   }, 300);
@@ -728,19 +729,19 @@ def test_a_lines_pick_opens_its_picker_there_and_the_line_shows_how_it_goes(serv
     in_review(conn)
     script = "(() => {\n" + WATCH + """
 new MutationObserver(() => {
-  const r = cardOf("Creep");
+  const r = lineOf("Creep");
   const p = r && r.querySelector(".progress");
-  if (p && /Queued|Writing|Fetching/.test(p.textContent) && r.querySelector("form.pick-form, .line-pick")) {
+  if (p && /Queued|Writing|Fetching/.test(p.textContent) && (r.querySelector(".line-pick") || cardOf(r).querySelector("form.pick-form"))) {
     document.body.setAttribute("data-both", "1");
   }
 }).observe(document.body, { subtree: true, childList: true, characterData: true });
-const r = cardOf("Creep");
+const r = lineOf("Creep");
 r.querySelector(".line-action .line-pick").click();
-const panel = r.querySelector(".line-panel");
+const panel = cardOf(r);
 document.body.setAttribute("data-opened", JSON.stringify({
   panel: !panel.hidden, picker: panel.querySelector("details.picker").open }));
-r.querySelector('input[name="pick"][value="radiohead/creep"]').checked = true;
-r.querySelector("form.pick-form button[type=submit]").click();
+panel.querySelector('input[name="pick"][value="radiohead/creep"]').checked = true;
+panel.querySelector("form.pick-form button[type=submit]").click();
 })();
 """
     url = serve(FakeCaracole(cfg), script)
@@ -843,8 +844,9 @@ def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, c
 
 def press_remove(page, item):
     """Remove, from the "⋯" at the card's foot that holds it: the menu opened, then the button pressed."""
-    page.js(f"document.querySelector('{item} .foot-more').open = true")
-    page.click(f"{item} form.remove button")
+    card = cards.open_card(page, item)
+    page.js(f"document.querySelector('{card} .foot-more').open = true")
+    page.click(f"{card} form.remove button")
 
 # The library in numbers, as the masthead, the Filter panel's Status and the count over the list say it.
 COUNTS = """(() => ({
@@ -869,7 +871,7 @@ COUNTDOWN = """(() => {
     const r = undo.getBoundingClientRect();
     window.counting = { text: p.textContent, role: p.getAttribute('role'), focus: document.activeElement === undo,
                         undo: undo.getAttribute('aria-label'), big: r.width >= 44 && r.height >= 44,
-                        remove: window.song.querySelector('form.remove button').disabled };
+                        remove: cardOf(window.song).querySelector('form.remove button').disabled };
   }).observe(window.song, { subtree: true, childList: true, characterData: true });
   return true;
 })()"""
@@ -895,6 +897,7 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
         page.open(url + left)
         page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
+        cards.install(page)
         assert page.js(SHIFTS) and page.js(COUNTDOWN)
         tapped = time.monotonic()
         press_remove(page, item)
@@ -1117,9 +1120,10 @@ def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, siz
         page.press("Enter")  # the focus is on Undo
         assert page.wait(f"{line}.textContent === 'Not removed'"), page.js(f"{line}.textContent")
         time.sleep(max(0.0, tapped + QUICK["undo"] / 1000 + 0.3 - time.monotonic()))  # past its seconds
-        after = page.js(f"""(() => {{ const go = document.querySelector('{item} form.remove button');
+        card = cards.open_card(page, item)
+        after = page.js(f"""(() => {{ const go = document.querySelector('{card} form.remove button');
             return {{ line: {line}.textContent, enabled: !go.disabled,
-                      focus: document.activeElement === document.querySelector('{item} .foot-more > summary'),  // back on the "⋯" that leads to Remove
+                      focus: document.activeElement === document.querySelector('{card} .foot-more > summary'),  // back on the "⋯" that leads to Remove
                       gone: document.querySelectorAll('.gone').length }}; }})()""")
     assert after == {"line": "Not removed", "enabled": True, "focus": True, "gone": 0}, after
     assert not any(b"confirm=1" in body for _, target, body in runner.posted), runner.posted
@@ -1141,13 +1145,13 @@ window.fetch = (url, init) => {
   return real(url, init);
 };
 new MutationObserver(() => {
-  const left = cardOf("Creep") ? cardOf("Creep").querySelector(".progress .left") : null;
+  const left = lineOf("Creep") ? lineOf("Creep").querySelector(".progress .left") : null;
   if (!left || (ticks.length && ticks[ticks.length - 1][1] === left.textContent)) return;
   ticks.push([performance.now() - tapped, left.textContent]);
   document.body.setAttribute("data-ticks", JSON.stringify(ticks));
 }).observe(document.body, { subtree: true, childList: true, characterData: true });
 const tapped = performance.now();
-cardOf("Creep").querySelector("form.remove button").click();
+openCardOf(lineOf("Creep")).querySelector("form.remove button").click();
 })();
 """
     url = serve(FakeCaracole(cfg), script)
@@ -1184,8 +1188,9 @@ def test_a_song_asked_for_on_the_page_then_removed_there_is_drawn_as_gone(serve,
           form.requestSubmit(); })()""")
         assert page.wait(f"({line}.querySelector('.progress') || {{}}).textContent === 'Ready'", timeout=20)
         page.click("#requested article .line-more")
-        page.js("document.querySelector('#requested article .foot-more').open = true")
-        page.click("#requested article form.remove button")
+        card = cards.open_card(page, "#requested article")
+        page.js(f"document.querySelector('{card} .foot-more').open = true")
+        page.click(f"{card} form.remove button")
         assert page.wait(f"({line}.querySelector('.progress') || {{}}).textContent === 'Removed'", timeout=20)
         left = page.js(f"{line}.querySelectorAll('a, button, form').length")
         gone = page.js(f"{line}.classList.contains('gone')")

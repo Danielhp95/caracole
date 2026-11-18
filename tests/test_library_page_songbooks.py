@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from helpers import cards
 
 from caracole.library_page import WebControls, build_library_page, write_library_page
 from caracole.overrides import Overrides
@@ -471,9 +472,9 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
     crep = add_song(conn, "Radio Head", "Crep")
     update_song(conn, crep.id, review=True, match_decision="review", match_candidates=[
         {"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"}])
-    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, """
-      const card = qa("#list article").find((a) => a.querySelector("h3").textContent === "Crep");
-      card.querySelector(".line-more").click();
+    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, cards.KIT + """
+      const line = qa("#list article").find((a) => a.querySelector("h3").textContent === "Crep");
+      const card = openCardOf(line);
       card.querySelector("details.picker").open = true;
       const form = card.querySelector("details.picker form");
       const radio = form.querySelector("input[type=radio]");
@@ -514,7 +515,7 @@ LINE_TARGETS = """
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("size", ["390,844", "1024,800"])  # every card open, under its line
 def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands_on_it(library, tmp_path, size):
     from caracole.songs import update_song
 
@@ -706,8 +707,10 @@ def test_on_the_file_the_command_to_run_folds_away_beside_copy(library, tmp_path
     conn, cfg = library
     hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
     update_song(conn, hysteria["id"], match_decision="not_found")  # its line says what to run to find it
-    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
-      const hint = card("Hysteria").querySelector(".pick-hint").checkVisibility();
+    # Its card open before picking: the command in it is put away while picking.
+    opened = cards.KIT + 'openCardOf(qa("#list article").find((a) => a.querySelector("h3").textContent === "Hysteria"));'
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, opened + PICK + BAR + """
+      const hint = cardOf(card("Hysteria")).querySelector(".pick-hint").checkVisibility();
       pick("Creep"); pick("Hysteria");  // the bar's fields there (unfolded on a phone by + New songbook)
       const before = bar().height;
       q(".pick-name").value = "Friday set";

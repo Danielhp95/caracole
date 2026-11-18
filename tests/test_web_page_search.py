@@ -534,8 +534,9 @@ def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, brows
 
 
 # A line's "⋯" opened, and the names of the buttons it holds.
-OFFERS = ("((a) => { a.querySelector('.line-more').click(); "
-          "return [...a.querySelectorAll('.line-panel button')].map((b) => b.textContent); })")
+OFFERS = ("((a) => { const more = a.querySelector('.line-more'); more.click(); "
+          "const card = document.getElementById(more.getAttribute('aria-controls')); "
+          "return [...card.querySelectorAll('button')].map((b) => b.textContent); })")
 
 
 def test_a_song_get_it_brought_offers_no_songbook_until_the_page_is_loaded_again(cfg, live, browser):

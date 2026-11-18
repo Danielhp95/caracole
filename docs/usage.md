@@ -2553,15 +2553,16 @@ not before (Pick for one that needs review first, and Removing…
 while caracole removes it); and a chevron, which unfolds the song in place,
 turned while it is open. The title opens it too. A song you have has no
 button to fetch it again on its line: **Fetch again** is in its card. From
-720 px the line is one row of columns, the title and its buttons first, then
-the artist (sorted by title or by when added), the status, Fetch, the key
-and the chevron, so that the keys and the chevrons line up. Where each file
+720 px the line is one row of columns: the title, then its artist where the
+line shows one (an artist of one song, or sorted by title or by when added),
+its buttons, the status, Fetch, the key and the chevron, so that the keys and
+the chevrons line up. Where each file
 came from, each site's own icon says beside the file under the chevron too
 (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
 [Where each file came from](#where-each-file-came-from)).
 
-Its chevron opens the song in place, as a card over the list, which the
-chevron closes again. At its top, its key in words and where it came from ("Key
+Its chevron opens the song as a card, under its line (from 1200 px in the pane
+beside the list, below), which the chevron closes again. At its top, its key in words and where it came from ("Key
 A minor (from the tab)", "Key C major (guessed from the chords)", "(from the
 audio)"), its transposition, its lyrics' state and when it was added. Then what
 needs you: a review's candidates (below); where it stands on the YouTube route,
@@ -2570,6 +2571,11 @@ human sheet yet: caracole takes the audio from YouTube next", "Audio from
 YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
 it; and, served, Look in index.
+
+The card's parts always come in the same order, as on the phone: its head (its name, its artist and a
+close button, shown beside the list on a laptop), its facts, what needs you, the tiles, its buttons (Fetch
+again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Remove), its other files, which
+sites have it, where else to find it, and its progressions last.
 
 Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
 version, the source it came from with that source's mark, its formats at the end), in the order of the
@@ -2647,13 +2653,36 @@ again); and at the far end a **⋯** that opens info.json, a quiet download, and
 served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
 drawn again (a request over) keeps its card open, its drawer closed.
 
+A card longer than the screen keeps its name in sight: once you scroll its line, all of it (its buttons, and
+a request's line and steps under it), up under the search bar, the card's head sticks right under the bar, its
+name and artist on one line (cut short when long) and a close button, and goes with the card's end as that
+comes up under the bar. While any of the line shows, the head isn't there, so it never lies over the line: the
+line says the same. However you close a card, its line comes back into view, just under the search bar, at
+once when your system asks for less motion, and the focus is on its chevron.
+
+On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
+holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
+its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
+its line, raised, the accent along its edge; another song's takes its place, and its chevron again, the head's close,
+or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
+bar as the list scrolls, and scrolls on its own when the card is longer than the screen; a lookup's steps are listed
+there under the head, while the line keeps the bar of them as the lookup left it. Opened from the keyboard (Enter on
+the chevron), the focus goes to the song's name in the pane, and Escape there brings it back to the chevron, the card
+staying open. Beside the pane, a line whose artist is on it keeps its one row while its buttons fit there; where they
+don't, its title, its artist, its key and its chevron stay on its first row and its buttons go on a row under the
+title; under an artist's band a line's buttons stay beside its title where they fit, else go under it. Under 1200 px
+the library is one column, 800 px wide from 720 px, centred under the logo and the tabs, and a card opens under its
+line; widening or narrowing the window moves an open card between the two. Opening or closing a card is no step of
+Back, at any width, and Select puts the pane away until it is over.
+
 An artist of two or more songs has them under a band 34 px tall: their name in
 the artist's colour (cut short with an ellipsis, on one line) and, on its right,
 your count of their songs, small and muted. An artist of one song has no band:
 it folds into the song's line, their name a small overline in capitals, in the
 artist's colour, over the title (cut short on one line), the line about 64 px
-tall on a touch screen; from 720 px wide their name sits in the artist's column,
-as a line sorted by title shows it. So does an artist's group among a search's
+tall on a touch screen; from 720 px wide their name sits right after the title
+(then the buttons to play from, the key and the chevron), as a line sorted by
+title shows it. So does an artist's group among a search's
 results that holds one line and nothing else, never one with "+ N more" under it
 nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
 name, on its band or as an overline, which is 24 px.
@@ -2666,7 +2695,8 @@ the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
 as it was before. There is no view of one artist's songs alone, and no tag for
 it. Sorted by title, or by when the songs were added, the lines stand alone,
 each folded as a one-song artist's is: its artist's name a small overline over
-the title on a phone, in its own column from 720 px wide (and a click on it
+the title on a phone, right after the title from 720 px wide, before the
+buttons to play from (and a click on it
 does the same as one on the name over a band).
 `#by=` in the address, an artist's name as a sheet viewer's artist line links
 to it (`index.html#by=Soda%20Stereo`), does what pressing their name does, and

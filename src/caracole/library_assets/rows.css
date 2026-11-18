@@ -164,7 +164,9 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
    words stay for a screen reader, which hears the request end. */
 .line > .progress[data-tone="ready"], .row > .progress[data-tone="ready"] { position: absolute; width: 1px; height: 1px;
   margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
+/* A flex column: a child that sticks (a song's card's head, library.css) sticks within the whole of it, where a grid's
+   item would stay within its own row. */
+.line-panel { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
 /* From 720px one row: the title and its buttons, the artist (where no group names it), the status, the action (as wide
    as it is), the key and the chevron. A site's song has no key: its status and counts take most of that room, its

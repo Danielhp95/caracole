@@ -328,7 +328,7 @@ def test_a_failed_step_is_red_on_the_running_bar_and_keeps_its_place(cfg, live, 
         assert page.js(f"document.querySelector('{line} .step-chips, {line} .progress .step-count')") is None
 
 
-@pytest.mark.parametrize("width", [1280, 390])
+@pytest.mark.parametrize("width", [1024, 390])  # its card under its line (from 1200 px, in the pane: below)
 def test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line(cfg, live, tmp_path, width):
     base, runner = live
     runner.script = NOT_ON_UG
@@ -383,11 +383,44 @@ def test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line(cfg, l
         assert page.js(shown(line, ".step-list")) is False
 
 
+def test_on_a_laptop_the_selected_lines_steps_are_listed_in_the_pane(cfg, live, tmp_path):
+    # From 1200 px a song's card is in the pane beside the list: its steps listed there, under its head, while its line
+    # keeps its request's words and the bar as the lookup left it, frozen.
+    base, runner = live
+    runner.script = NOT_ON_UG
+    conn = db.connect(cfg.db_path)
+    song = add_song(conn, "Estopa", "Tu Calorro")
+    conn.close()
+    line = line_of(song)
+    with driven(tmp_path, 1280) as page:
+        page.open(base)
+        page.click(f"{line} form.fetch button")
+        wait_for(page, bar_of(line), ["done", "plain", "running"] + ["waiting"] * 4)
+        runner.go()
+        wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
+        page.click(f"{line} .line-title h3")  # its card in the pane
+        assert page.wait("Boolean(document.querySelector('#card-pane .song-card'))")
+        assert page.js(shown("#card-pane", ".step-list")) is True
+        assert page.js(steps_of("#card-pane")) == [
+            ["done", "✓", "Song", "in the book"], ["plain", "✓", "Match · not on UG", ""],
+            ["failed", "!", "Sheet · LaCuerda", LACUERDA_FAILS], ["done", "✓", "Lyrics", "found"],
+            ["failed", "!", "Extras", "asked already, for the sheet: " + LACUERDA_FAILS],
+            ["skipped-all", "–", "Skipped: PDF, Songbooks", ""]]
+        assert page.js("document.querySelector('#card-pane .card-head').compareDocumentPosition("
+                       "document.querySelector('#card-pane .step-list')) & Node.DOCUMENT_POSITION_FOLLOWING")
+        assert page.js(shown(line, ".step-bar")) is True
+        assert page.js(shown(line, ".step-list")) is False
+        assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
+        page.click(f"{line} .line-more")  # closed: the pane holds no steps, the line its frozen bar
+        assert page.wait("!document.querySelector('#card-pane .step-list')")
+        assert page.js(shown(line, ".step-bar")) is True
+
+
 def test_the_open_cards_list_follows_a_running_lookup_and_folds_away_once_ready(cfg, live, tmp_path):
     base, runner = live
     runner.script = FROM_UG
     line = line_of(creep(cfg))
-    with driven(tmp_path, 1280) as page:
+    with driven(tmp_path, 1024) as page:  # its card under its line
         page.open(base)
         page.click(f"{line} .line-more")  # Creep's card open
         page.click(f"{line} .line-action form.fetch button")

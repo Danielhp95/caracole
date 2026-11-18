@@ -68,7 +68,10 @@
 .check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; cursor: pointer; }
 .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .hint { margin: 0; color: var(--muted); font-size: .85rem; }
-/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). */
+/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). Its height,
+   --bar-h (library.js measures it: 0px until then), is where what sticks under it sticks, and what a jump to a line
+   leaves above it (library-screens.css). */
+:root { --bar-h: 0px; }
 .searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
 .searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
 .bar-edge { height: 0; }
@@ -120,6 +123,41 @@
 .recent-artist { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--muted); font-size: .85rem; }
 @media (pointer: coarse) { .recent-song { min-height: 44px; align-items: center; } }
+/* The library's columns (body.html .lib-cols): one under 1200 px, of 800 px from 720 px, centred under the masthead,
+   which keeps the page's width as the other tabs do; from 1200 px the list (760 px, or what the pane leaves it) and,
+   right of it, the pane (#card-pane, 400 to 480 px), which holds the card of the song opened (library.js selectLine),
+   kept in view under the bar as the list scrolls, and scrolling on its own when the card is taller than the screen. */
+.card-pane { display: none; }
+@media (min-width: 720px) and (max-width: 1199px) {
+  #library-view { max-width: 800px; margin: 0 auto; }
+}
+@media (min-width: 1200px) {
+  .lib-cols { display: grid; grid-template-columns: minmax(0, 760px) minmax(400px, 1fr); column-gap: 24px;
+    align-items: start; }
+  .lib-main { min-width: 0; }
+  .card-pane { display: block; position: sticky; top: calc(var(--bar-h) + 8px); max-width: 480px;
+    max-height: calc(100vh - var(--bar-h) - 16px); overflow-y: auto; overscroll-behavior: contain; margin-top: 10px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); }
+  .pane-empty { margin: 0; padding: 28px 20px; color: var(--muted); font-size: .9rem; text-align: center; }
+  /* The card there: its parts in a column, its head the pane's heading, across its top, always shown and never
+     stuck (it is in place: above), its "⋯" menu opening downward, under the button, inside the pane. */
+  #card-pane > .song-card { gap: var(--card-gap, 14px); padding: 0 14px var(--card-pad-end, 14px); }
+  #card-pane .card-head { position: static; height: auto; margin: 0 -14px; }
+  #card-pane .card-head-in { position: static; padding: 0 4px 0 14px; visibility: visible; }
+  #card-pane .foot-menu { top: calc(100% + 6px); bottom: auto; }
+  /* The selected line's steps, under the card's head (library.js showSteps): the list its line shows under it in
+     place (steps.css), while the line keeps the bar as the lookup left it. */
+  #card-pane .steps { display: block; margin: 0; }
+  #card-pane .steps > .step-list { display: grid; }
+  /* The line whose card the pane holds (aria-current): a wash of the accent over the surface, never the play buttons'
+     own --raised, so they keep their shape, the accent along its edge, with none of the box of a card opened under its
+     line (card.css's), its card being beside it; so a song removed from there moves nothing. The box's reset is a
+     crossing with Task 3b.4, which deletes it once card.css's box keys on :not(.selected). */
+  #library-view .line.selected { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
+  #library-view .line.selected:first-child { border-top: 0; }
+  #library-view .line.selected + .line { border-top: 1px solid var(--border); }
+}
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 /* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */
@@ -220,6 +258,43 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
   letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 100%; }
 @media (pointer: coarse) { section.artist.folded .line-by, section.flat .line-by { min-height: 24px; } }
+/* From 720 px, a line that names its artist on it reads on one row: the title, their name, the play tiles, then (past a
+   gap that takes what is left) the status, the action, the key and the chevron. The title's box and the line's meta
+   dissolve into the line's grid so that the name and the tiles are columns of it; the title gives way first (an
+   ellipsis): the artist keeps its whole name up to 16rem, then is cut with an ellipsis itself, and the tiles wrap
+   before they overlap anything. A site's line (.hit, .miss) is as before. */
+@media (min-width: 720px) {
+  section.artist.folded .line:not(.hit):not(.miss),
+  section.flat .line:not(.hit):not(.miss) { grid-template-columns: minmax(4rem, max-content) fit-content(16rem) auto
+    minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-areas: "name by plays . status act key more"; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title,
+  section.flat .line:not(.hit):not(.miss) > .line-title { display: contents; }
+  /* The name's own width is the button's least (capped, so a longer one is cut inside it): the track never shares it. */
+  section.artist.folded .line:not(.hit):not(.miss) > .line-meta > .line-by,
+  section.flat .line:not(.hit):not(.miss) > .line-meta > .line-by { min-width: min-content; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-meta > .line-by .artist-name,
+  section.flat .line:not(.hit):not(.miss) > .line-meta > .line-by .artist-name { display: block; max-width: 16rem; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title > h3,
+  section.flat .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: name; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays; max-width: none; }
+}
+/* From 1200 px, beside the pane (where the lanes meet, 12), the list is 760 px: a line's buttons (chips of 100 to
+   150 px) may not fit beside its title, its artist, its key and its chevron. A folded or flat line keeps the one row
+   above while they fit; where they don't (library.js placePlays: .plays-under), its first row is the title, its artist
+   right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under the
+   title, wrapping there. A band's line has them beside its title where they fit, else under it. None ever pushes the
+   key off the line, and the title keeps the room they took from it. */
+@media (min-width: 1200px) {
+  .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
+  .line > .line-title > .line-plays { max-width: 100%; }
+  section.artist.folded .line.plays-under:not(.hit):not(.miss),
+  section.flat .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(4rem, max-content)
+    fit-content(16rem) minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-rows: minmax(28px, auto);
+    grid-template-areas: "name by . status act key more" "plays plays plays plays plays . ."; }
+  section.artist.folded .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px; }
+}
 @media (max-width: 719px) {
   section.artist.folded .line,
   section.flat .line { grid-template-columns: minmax(calc(4rem - 6px), 1fr) auto auto auto var(--line-more);
@@ -317,3 +392,27 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
+
+/* A card's head (cardHead): its name, artist and close button. In place it takes no room and sticks under the bar
+   kept at the top the whole length of the card (its panel a flex column, rows.css), shown only while the card is on
+   the screen and its line, all of it, is under the bar (library.js: .head-away, which watches the mark at the card's
+   top, .card-top: out of the flow, at the top of the card's content); else the line says it all. One line, cut
+   short; no transition. */
+.line-panel > .card-head { display: block; position: sticky; top: var(--bar-h); z-index: 1; height: 0; }
+.line-panel > .card-top { position: absolute; width: 1px; height: 1px; visibility: hidden; pointer-events: none; }
+/* In place, the margin under it is its height (its 44px close and its divider) less the card's bottom padding, so it
+   goes with the card's end as that comes up under the bar, never past it; the margin over it, that and the card's gap
+   after it, so the card is laid out as with no head, and its own place is over the card's top, where it is stuck
+   the moment it shows. The card's gap and bottom padding are card.css's (--card-gap, --card-pad-end). */
+.line > .line-panel.song-card > .card-head { --head-under: calc(45px - var(--card-pad-end, 14px));
+  margin: calc(-1 * (var(--card-gap, 14px) + var(--head-under))) 0 var(--head-under); }
+.card-head-in { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: .5rem;
+  min-height: 44px; border-bottom: 1px solid var(--border); background: var(--card); visibility: hidden; }
+.head-away > .card-head > .card-head-in { visibility: visible; }
+.card-name { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; font-size: 1.05rem; font-weight: 600;
+  line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+.card-by { font-weight: 400; color: var(--muted); }
+.card-close { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.card-close:hover { background: var(--raised); color: var(--text); }
+.card-close svg.glyph { width: 18px; height: 18px; }

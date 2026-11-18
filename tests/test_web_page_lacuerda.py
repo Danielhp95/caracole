@@ -17,6 +17,7 @@ import time
 from datetime import UTC, datetime
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.lacuerda_site import artist_page
 from test_web_page_search import GROUPS, FakeGet, answer_to, library, posted, sites
@@ -361,6 +362,7 @@ def test_a_song_picked_on_lacuerda_says_on_its_card_that_tonights_run_gets_that_
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, picked, datetime.now(UTC)))
     conn.close()
     browser.open(path.as_uri())
+    cards.open_card(browser, "#list article.line")  # its card, made as it opens
     assert browser.wait("!!document.querySelector('.lacuerda-pick')")
     assert browser.js("document.querySelector('.lacuerda-pick').textContent").startswith(
         "Tonight's run fetches ")

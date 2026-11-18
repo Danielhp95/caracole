@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.fake_ytdlp import FakeYtDlp
 from test_web_page_steps import bar_of, wait_for, words_of
@@ -223,11 +224,12 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
     song = wanted(able)
     browser.open(base)
     opened(browser, song)
-    form = json.dumps(line(song) + " form.youtube-sheet")
+    card = cards.open_card(browser, line(song))
+    form = json.dumps(card + " form.youtube-sheet")
     assert browser.wait(f"document.querySelector({form}) !== null")
     browser.js(f"document.querySelector({form} + ' input[name=youtube]').focus()")
     browser.type(PASTED)
-    browser.click(line(song) + ' form.youtube-sheet button[type="submit"]')
+    browser.click(card + ' form.youtube-sheet button[type="submit"]')
     path, fields = posted.next(0)
     assert (path, fields) == ("/youtube", {"csrf": "tok", "song": str(song.id), "identity": song.key,
                                        "youtube": PASTED})
@@ -270,8 +272,9 @@ def test_where_no_sheet_can_be_made_the_form_says_why_and_nothing_offers_one(cfg
         song = wanted(cfg)
         browser.open(base)
         opened(browser, song)
-        assert browser.wait(f"!document.querySelector({json.dumps(line(song) + ' .line-panel')}).hidden")
-        assert browser.js(f"document.querySelector({json.dumps(line(song) + ' .youtube-sheet')})") is None
+        card = cards.open_card(browser, line(song))
+        assert browser.wait(f"!document.querySelector({json.dumps(card)}).hidden")
+        assert browser.js(f"document.querySelector({json.dumps(card + ' .youtube-sheet')})") is None
         assert browser.js("document.querySelector('form.request-form input[name=youtube]')") is None
         hints = browser.js("[...document.querySelectorAll('form.request-form .hint')].map((p) => p.textContent)")
         assert "No sheets from YouTube here: auto-chords isn't installed." in hints, hints

@@ -881,9 +881,21 @@ It is rows.js's, shared by both pages:
     (rows.js `indexLine`'s too, `onSearch`);
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
-    4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
+    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then its buttons,
+    the status, the action, the key and the chevron (the owner's order); Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
-    folding every line.
+    folding every line;
+  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
+    row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
+    its last button wraps below its first, once a line, by the list's width, the root's font size and Select, again
+    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`)
+    makes its first row the title, its artist right after it, the status, the action, the key and the chevron, and its
+    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
+    beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
+    (test_library_card_place.py, test_library_bands.py).
+- **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
+  list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
+  800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).
@@ -1014,6 +1026,53 @@ It is rows.js's, shared by both pages:
   how many; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
   song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
   its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - made the first time it opens, from the song and its request as they are then (library.js `cardFor`, rows.js
+    `resultRow`'s `more` a function): until then its panel, `.line-panel.song-card`, is empty and hidden, the
+    chevron's `aria-controls` naming it (test_library_card_place.py);
+  - its parts in the phone's order, at every width: `cardHead` (`.card-head` > `.card-head-in` > `h2.card-name` and
+    `.card-close`, `aria-hidden` and tabindex -1 in place), the facts, what needs you, the tiles, the foot (Fetch
+    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the sites, Elsewhere, Progressions
+    (test_library_card_place.py);
+  - in place, its head takes no room and sticks under the search bar (`--bar-h` on `:root`, the bar's border box,
+    which a ResizeObserver writes; the panel a flex column, so it sticks the whole card): shown (`head-away` on the
+    card) only while the card is on the screen and the whole of its line (its title's row, a request's `.progress`
+    and `.steps`) is under the bar, so it never lies over a part of the line: one IntersectionObserver over each card
+    open in place and the mark at its top, `.card-top` (out of the flow, at the top of its content), whose screen
+    begins under the bar (library.js `watchAway`, `cardToggled`: no layout read); its margins (library.css) leave
+    the card laid out as with no head, its own place over the card's top, and let it go with the card's end; a card
+    closed in place, however, scrolls its line back into view under the bar (`scrollIntoView` `nearest`,
+    `scroll-margin-top` `calc(var(--bar-h) + 8px)`, `smooth()`: at once with reduced motion), and the head's close
+    gives the chevron the focus (test_library_card_place.py);
+  - a crossing with card.css: lane 1's head rule (library.css) reads card.css's gap between a song card's parts and
+    its bottom padding as `var(--card-gap, 14px)` and `var(--card-pad-end, 14px)`, today's values; Task 3b.4, which
+    keys the card's box to `.line-panel.song-card`, defines the two tokens there once, and its rules use them. For
+    Task 1d.6: `.line-panel > .card-head` (sticky, height 0) and `.card-head-in` (absolute, hidden until
+    `.head-away`) aren't scoped to in place, only the head's margins are (`.line > .line-panel.song-card >
+    .card-head`): the pane undoes both (`#card-pane .card-head`, `.card-head-in`: static, shown);
+  - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
+    `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (filled with
+    `color-mix(in srgb, var(--accent) 8%, var(--surface))`, never the play buttons' `--raised`, the accent along its
+    edge; no opened card's box: `#library-view .line.selected`'s margin and border reset, a crossing with Task 3b.4,
+    which deletes it once card.css's box keys on `:not(.selected)`), the card's head its
+    heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
+    `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
+    or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the
+    line's chevron, closed (`unselect`); `paneWide` (`matchMedia("(min-width: 1200px)")`) crossing down puts it back
+    open (watched in place), crossing up takes the card opened last of those in place (`awayCards`' order) and closes
+    the others quietly (`shut`; `toWide`, put off while another tab shows, until `caracole:tab` shows the Library);
+    either way the focus on a node of the card moved is given back to it, else to the chevron (`focusAgain`); Escape
+    in the pane that the card's parts left gives the focus to the line's chevron;
+    a refilled selected line's new card takes its place (`placeAgain`; none, a song removed: the pane empty and as
+    tall as it was); the selected line's steps listed under the head (`showSteps`, a copy of its `.steps >
+    .step-list`; steps.css leaves a `.selected` line its frozen bar); a card, opened or closed, adds no history entry
+    (test_library_card_place.py, test_web_page_steps.py); Select puts the pane away (songbooks.css);
+  - wherever a line's card is: `cardOf(item)` (by its chevron's `aria-controls`), `itemOf(node)` (`closest("article")`,
+    else `selected` for a node in the pane), `partsOf(item)` (the line, and its card when it is outside it) and
+    `inItem(item, selector)`, which the forms posted in place, a removal's held buttons and focus, `paint`, the picker
+    and Recently opened go through;
+  - the pane's own rules, library.css's `#card-pane …` (its card's padding and gap, its head, `.foot-menu` opening
+    downward, the steps), the one way lane 1 names a card's part; the tiles' layout in the pane's 400–480 px is lane
+    3b's container's;
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,

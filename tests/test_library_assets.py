@@ -130,7 +130,7 @@ LANE_1 = {"rows.css": (PLACED,), "library.css": (PLACED, PANE)}
 def selectors_of(name):
     """Each selector of ``name``'s rules, a list split at its top-level commas."""
     lists = SELECTORS.findall(re.sub(r"/\*.*?\*/", "", text_of(name), flags=re.S))
-    return [s.strip() for l in lists for s in re.split(r",(?![^()]*\))", l)]
+    return [s.strip() for one in lists for s in re.split(r",(?![^()]*\))", one)]
 
 
 def test_the_play_buttons_and_the_cards_parts_are_styled_in_card_css_alone():

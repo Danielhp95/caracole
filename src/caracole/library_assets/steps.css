@@ -33,13 +33,14 @@
   @keyframes step-pulse { 50% { opacity: .2; } }
 }
 /* Under the line, across it, as its request line is; nothing shown (the line the bar, its card closed), no room taken.
-   Its card open, the list in the frozen bar's place. */
+   Its card open, the list in the frozen bar's place; its card in the laptop's pane (.selected), the list there, under
+   the card's head (library.css), and the frozen bar here. */
 .line > .steps { grid-column: 1 / -1; margin: 3px 0 4px; }
 .row > .steps { grid-column: 2 / -1; margin: 3px 0 2px; }
 .steps:not(:has(> .step-bar)), .steps > .step-list { display: none; }
-.line:has(> .line-more[aria-expanded="true"]) > .steps { display: block; }
-.line:has(> .line-more[aria-expanded="true"]) > .steps > .step-list { display: grid; }
-.line:has(> .line-more[aria-expanded="true"]) > .steps > .step-bar { display: none; }
+.line:not(.selected):has(> .line-more[aria-expanded="true"]) > .steps { display: block; }
+.line:not(.selected):has(> .line-more[aria-expanded="true"]) > .steps > .step-list { display: grid; }
+.line:not(.selected):has(> .line-more[aria-expanded="true"]) > .steps > .step-bar { display: none; }
 .step-list { gap: 2px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
 /* A step's line: its mark hanging in the margin, its name whole, what it found beside it (on a phone, under it). */
 .step { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; min-width: 0;
