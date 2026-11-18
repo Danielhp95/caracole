@@ -59,39 +59,9 @@ const caracoleRows = (icons, does) => {
     part: ["M12 3v9h9", "M21 12a9 9 0 1 1-9-9"],
   };
   const SVG = "http://www.w3.org/2000/svg";
-  // The glyphs' one sprite: every GLYPHS entry as a <symbol id="glyph-NAME"> of its paths in one hidden <svg>, put in
-  // the document as rows.js starts (or at the first glyph, if it is gone), so that each glyph on the page is one <use> of it, not its own paths
-  // (a long list draws thousands of them).
-  let sprite = null;
-  const spriteOf = () => {
-    if (sprite && sprite.isConnected) return sprite;
-    sprite = document.querySelector("svg.glyph-sprite");  // another caracoleRows of the page made it
-    if (sprite) return sprite;
-    sprite = document.createElementNS(SVG, "svg");
-    sprite.setAttribute("class", "glyph-sprite");
-    sprite.setAttribute("aria-hidden", "true");
-    sprite.setAttribute("focusable", "false");
-    for (const name of Object.keys(GLYPHS)) {
-      const symbol = document.createElementNS(SVG, "symbol");
-      symbol.setAttribute("id", "glyph-" + name);
-      symbol.setAttribute("viewBox", "0 0 24 24");
-      for (const d of GLYPHS[name]) {
-        const path = document.createElementNS(SVG, "path");
-        path.setAttribute("d", d);
-        symbol.appendChild(path);
-      }
-      sprite.appendChild(symbol);
-    }
-    const root = document.body || document.documentElement;
-    root.insertBefore(sprite, root.firstChild);
-    return sprite;
-  };
-  spriteOf();  // made as the page's script starts, so that a page that draws no glyph yet has it for the first one
-  // A glyph (``name``, of GLYPHS) as inline SVG, a <use> of the sprite's symbol, a text's height unless a stylesheet
-  // sizes it: named ``label`` for a screen reader and titled so for the pointer, else unheard, as the words beside it
-  // say what it is.
+  // A glyph (``name``, of GLYPHS) as inline SVG, a text's height unless a stylesheet sizes it: named ``label`` for a
+  // screen reader and titled so for the pointer, else unheard, as the words beside it say what it is.
   const glyph = (name, label) => {
-    spriteOf();
     const svg = document.createElementNS(SVG, "svg");
     svg.setAttribute("class", "glyph glyph-" + name);
     for (const [attr, value] of [["viewBox", "0 0 24 24"], ["width", "1em"], ["height", "1em"], ["fill", "none"],
@@ -108,10 +78,10 @@ const caracoleRows = (icons, does) => {
     } else {
       svg.setAttribute("aria-hidden", "true");
     }
-    if (own.call(GLYPHS, name)) {
-      const use = document.createElementNS(SVG, "use");
-      use.setAttribute("href", "#glyph-" + name);
-      svg.appendChild(use);
+    for (const d of own.call(GLYPHS, name) ? GLYPHS[name] : []) {
+      const path = document.createElementNS(SVG, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
     }
     return svg;
   };
