@@ -130,7 +130,8 @@ def _suite_on_the_path() -> None:
 
 
 def build(folder: Path, songs: int = 2000, *, seed: int = 7) -> Path:
-    """The library in ``folder/computer/`` (which must not exist yet) and its index.html, whose path it returns."""
+    """Build ``songs`` songs in a library under ``folder`` (which must not exist yet: the computer is
+    ``folder/computer/``, as e2e_library.py's) and return the path of its written index.html."""
     _suite_on_the_path()
     from caracole import db
     from caracole.library import keep_file, song_dir, write_info
@@ -249,9 +250,10 @@ def measure(page: Path, *, width: int = 390, height: int = 844, mobile: bool = T
         b.open(page.resolve().as_uri())
         if not b.wait("window.__m.drawn !== null", 300):
             raise driven.BrowserError("the page never finished drawing")
-        b.wait("window.__m.fcp !== null", 5)
+        if not b.wait("window.__m.fcp !== null", 5):
+            raise driven.BrowserError("the page painted no first contentful paint")
         asked = {m["name"]: m["value"] for m in b.send("Performance.getMetrics")["metrics"]}
-        out = {"drawn_ms": b.js("window.__m.drawn"), "fcp_ms": b.js("window.__m.fcp") or 0}
+        out = {"drawn_ms": b.js("window.__m.drawn"), "fcp_ms": b.js("window.__m.fcp")}
         for name in ("ScriptDuration", "LayoutDuration", "RecalcStyleDuration"):
             out[name] = asked[name] * 1000
         for name in ("LayoutCount", "Nodes", "JSHeapUsedSize"):

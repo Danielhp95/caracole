@@ -58,4 +58,5 @@ def test_measure_answers_every_number(tmp_path):
     scroll = done["scroll"]
     for key in ("frames", "p50_ms", "p95_ms", "max_ms", "over_50ms", "long_tasks"):
         assert scroll[key] >= 0, key
-    assert scroll["frames"] > 0
+    assert scroll["frames"] >= 2
+    assert done["Nodes"] > 200 and done["drawn_ms"] > 0 and done["fcp_ms"] > 0
