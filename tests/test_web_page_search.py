@@ -803,6 +803,88 @@ def test_a_song_you_have_stands_out_from_the_ones_you_have_not(cfg, live, browse
                                 "edge": False, "pill": None}, (title, lines)
 
 
+# How a line looks against the selected line's own look (library.css: in the list the accent at 8 % over the surface,
+# among a search's results at ``tint`` %, the accent 3 px along its edge either way) and a song you have's among the
+# results (rows.css's #results .line.have: --have-tint, 4 px); its background as computed, and each text on it that
+# shows on the line's own background (none of what has a background of its own: a badge, a tile), with its colour.
+SELECTED_LOOK = """
+((selector, tint) => {
+  const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
+    const s = getComputedStyle(p); const got = [s.color, s.backgroundColor]; p.remove(); return got; };
+  const accent = probe('color: var(--accent)')[0];
+  const fill = probe(`background-color: color-mix(in srgb, var(--accent) ${tint}%, var(--surface))`)[1];
+  const have = probe('background-color: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface))')[1];
+  const line = document.querySelector(selector), c = getComputedStyle(line);
+  const clear = (n) => /^rgba\\(.*, 0\\)$|^transparent$/.test(getComputedStyle(n).backgroundColor);
+  const texts = [...line.querySelectorAll('*')].filter((n) => !n.closest('.line-panel')
+    && [...n.childNodes].some((t) => t.nodeType === 3 && t.textContent.trim()) && n.checkVisibility()
+    && n.getBoundingClientRect().width > 1 && n.getBoundingClientRect().height > 1).filter((n) => {
+      for (let on = n; on !== line; on = on.parentElement) if (!clear(on)) return false;
+      return true;
+    }).map((n) => [n.textContent.trim().slice(0, 24), getComputedStyle(n).color]);
+  return { selected: line.classList.contains('selected'), have: line.classList.contains('have'),
+    filled: c.backgroundColor === fill, tinted: c.backgroundColor === have, edge: c.boxShadow === accent + ' 3px 0px 0px 0px inset',
+    shadow: c.boxShadow, background: c.backgroundColor, texts };
+})
+"""
+
+
+def _channels(colour: str) -> tuple[float, ...]:
+    """A computed colour, rgb(…) or color(srgb …), as its three 0–255 channels."""
+    import re
+
+    values = [float(v) for v in re.findall(r"[\d.]+", colour)[:3]]
+    return tuple(v * 255 for v in values) if colour.startswith("color(srgb") else tuple(values)
+
+
+def _contrast(a: str, b: str) -> float:
+    """WCAG's contrast ratio of two computed colours."""
+    def luminance(colour):
+        c = [v / 255 for v in _channels(colour)]
+        f = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize("scheme,tint", [("light", 16), ("dark", 22)])
+def test_the_panes_line_shows_selected_in_the_list_and_among_the_results(cfg, live, browser, scheme, tint):
+    # From 1200 px the line whose card the pane holds carries the selected fill and the accent along its edge: in the
+    # list the accent at 8 %; among a search's results, where a song you have is on its own wash (--have-tint, 4 px
+    # edge), on a stronger one, 7 points over that wash in either theme (16 % light, 22 % dark), told from a song you
+    # have by a clear margin, every text on it still 4.5:1. The pane's line is the one that stands out there too.
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "karma-police", 2), ("radiohead", "airbag", 2)])
+    karma, airbag = library(cfg, ("Radiohead", "Karma Police"), ("Radiohead", "Airbag"))
+    keep_sheet(cfg, karma)
+    keep_sheet(cfg, airbag)
+    browser.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
+    browser.open(base)
+    listed = f'#list article.line[data-id="{karma.id}"]'
+    browser.click(listed + " .line-more")
+    assert browser.wait(f"document.querySelector({json.dumps(listed)}).classList.contains('selected')")
+    look = browser.js(f"{SELECTED_LOOK}({json.dumps(listed)}, 8)")
+    assert [look[k] for k in ("selected", "filled", "tinted", "edge")] == [True, True, False, True], look
+    browser.click(listed + " .line-more")  # closed again: the pane empty
+    assert browser.wait("document.querySelector('.line.selected') === null")
+    search(browser, "radiohead")
+    found = f'#results article.line[data-id="{karma.id}"]'
+    assert browser.wait(f"{answer_to('radiohead')} && document.querySelector({json.dumps(found)}) !== null")
+    browser.click(found + " .line-more")  # its card, from among the results
+    assert browser.wait(f"document.querySelector({json.dumps(found)}).classList.contains('selected')")
+    look = browser.js(f"{SELECTED_LOOK}({json.dumps(found)}, {tint})")
+    assert [look[k] for k in ("selected", "have", "filled", "tinted", "edge")] == [True, True, True, False, True], look
+    theirs = f'#results article.line[data-id="{airbag.id}"]'
+    other = browser.js(f"{SELECTED_LOOK}({json.dumps(theirs)}, {tint})")
+    assert other["have"] and other["tinted"] and not other["filled"] and not other["edge"], other  # its wash, as ever
+    apart = max(abs(x - y) for x, y in zip(_channels(look["background"]), _channels(other["background"])))
+    assert apart >= 12, (apart, look["background"], other["background"])  # a clear margin, not a shade
+    assert look["texts"] and any(text == "Karma Police" for text, _ in look["texts"]), look["texts"]
+    for text, colour in look["texts"]:
+        assert _contrast(colour, look["background"]) >= 4.5, (text, colour, look["background"])
+
+
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, **WONDERWALL)

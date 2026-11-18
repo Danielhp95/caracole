@@ -12,9 +12,10 @@ file, and none of it loads anything from the network.
   (square and 50 % besides); a stylesheet writes no other (test_page_calm.py).
 - picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
-- steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): on index.html the Requests tab's
-  running request (requests.js), and a song's line, or a search result's row, while its lookup runs (library.js),
-  the same markup.
+- steps.css (``STEPS_STYLE``): a request's steps (web/outcome.py's) on index.html: a song's line, or a search
+  result's row, a bar of them while its lookup runs, frozen under the line once it ended otherwise than Ready, and
+  the list of them (library.js ``stepList``, a line a step) under the song's open card and in the Requests tab, the
+  running request's and every finished one's (requests.js), the same markup.
 - rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines, the marks
   of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
   with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
@@ -48,9 +49,10 @@ file, and none of it loads anything from the network.
   box takes the focus or while it holds a query, a blur leaving it on, until the ←, Back or Escape in the empty
   box; entering it from the empty box is an entry of the browser's history (``{ search: 1 }``) and each artist's
   name pressed in it one more (``{ search: n + 1 }``), all of which the ← takes back at once; × clears the box and
-  keeps the search. Recently opened: the box empty and focused shows up to five songs whose link on a line was last
-  followed (``#recent``, ``rememberOpened``, ``drawRecent``; localStorage ``caracole-library-recent``, a refusal
-  leaving it empty), newest first, a song removed since left out; a press on one keeps the box's focus.
+  keeps the search. Recently opened: the box empty and focused shows up to five songs last opened to play (their
+  line's play button, their card's tile or a drawer's Open, never another link of the line: ``OPENS``; ``#recent``,
+  ``rememberOpened``, ``drawRecent``; localStorage ``caracole-library-recent``, a refusal leaving it empty), newest
+  first, a song removed since left out; a press on one keeps the box's focus.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds

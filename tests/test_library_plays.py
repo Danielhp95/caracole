@@ -224,17 +224,13 @@ def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, c
 
 CHIPS = PLAYS + r"""
 note("chips", Array.from(document.querySelectorAll("#list .line")).map((l) => [l.querySelector("h3").textContent,
-  Array.from(l.querySelectorAll(".line-plays > .play")).map((a) => {
-    const text = (n) => n.textContent;
-    return { words: a.querySelector(".play-words").checkVisibility() ? text(a.querySelector(".play-words")) : null,
-    n: a.querySelector(".n") && a.querySelector(".n").checkVisibility() ? text(a.querySelector(".n")) : null,
+  Array.from(l.querySelectorAll(".line-plays > .play")).map((a) => ({
+    words: a.querySelector(".play-words") ? "words" : null,
+    n: a.querySelector(".n") && a.querySelector(".n").checkVisibility() ? a.querySelector(".n").textContent : null,
     marks: a.querySelector(".marks") ? a.querySelector(".marks").checkVisibility() : null,
-    height: Math.round(a.getBoundingClientRect().height),
-    hidden: a.querySelector(".play-words").getAttribute("aria-hidden") }; })]));
+    width: Math.round(a.getBoundingClientRect().width), height: Math.round(a.getBoundingClientRect().height) }))]));
 """
-WORDS = {"Hotel California": ["Chords · UG", "Guitar Pro · gtptabs", "Tab", "Harmonica · harptabs", "Score · inbox"],
-         "Take It Easy": ["Chords · UG", "Harmonica · harptabs"], "斑马，斑马": ["Auto sheet"],
-         "De Música Ligera": ["Chords · LaCuerda"]}
+TITLES = ["Hotel California", "Take It Easy", "斑马，斑马", "De Música Ligera"]
 
 
 def chip_library(conn, cfg):
@@ -255,22 +251,18 @@ def chip_library(conn, cfg):
 
 
 @pytest.mark.parametrize(("size", "touch"), [("1280,900", False), ("390,844", False), ("1280,900", True)])
-def test_the_pointer_decides_chips_for_a_mouse_tiles_for_a_thumb_whatever_the_width(conn, cfg, tmp_path, size, touch):
+def test_the_pointer_decides_the_tiles_size_whatever_the_width(conn, cfg, tmp_path, size, touch):
     chip_library(conn, cfg)
     drawn = dict(attribute_of(run(conn, cfg, tmp_path, CHIPS, size=size, touch=touch), "data-chips"))
-    for title, words in WORDS.items():
+    side = 48 if touch else 30  # a thumb's 48 px tile, a mouse's 30 px one: an icon, never words
+    for title in TITLES:
         shown = drawn[title]
-        if touch:  # a tile: its icon, the sites' marks at its corner, no words
-            assert all(p["words"] is None and p["marks"] is not False and p["height"] == 48 for p in shown), shown
-        else:  # a chip of about 28 px: the kind and the site in words, its count after them, no marks
-            assert [p["words"] for p in shown] == words, (title, shown)
-            assert all(p["height"] == 28 and p["marks"] in (False, None) for p in shown), shown
-        assert all(p["hidden"] == "true" for p in shown)  # its name is its aria-label, as before
-    if not touch:
-        assert [p["n"] for p in drawn["Hotel California"]] == ["6", "2", None, None, None]
+        assert all(p["words"] is None and p["marks"] is not False and p["width"] == side == p["height"]
+                   for p in shown), (title, shown)
+    assert [p["n"] for p in drawn["Hotel California"]] == ["6", "2", None, None, None]
 
 
-def test_a_real_mouse_gets_the_chips(conn, cfg, tmp_path):
+def test_a_real_mouse_gets_the_tiles(conn, cfg, tmp_path):
     from helpers.browser import FINE_POINTER, Browser
     from test_library_page import page
 
@@ -282,11 +274,10 @@ def test_a_real_mouse_gets_the_chips(conn, cfg, tmp_path):
         b.open(path.as_uri())
         assert b.wait("document.querySelectorAll('#list .line-plays .play').length === 9")
         assert b.js("matchMedia('(pointer: fine)').matches") is True
-        assert b.js("Array.from(document.querySelectorAll('#list .line-plays .play-words'))"
-                    ".filter((w) => w.checkVisibility()).length") == 9
+        assert b.js("document.querySelectorAll('#list .line-plays .play-words').length") == 0
 
 
-def test_a_chip_never_wraps_its_words_beside_a_long_title(conn, cfg, tmp_path):
+def test_a_tile_stays_whole_beside_a_long_title(conn, cfg, tmp_path):
     long = add_song(conn, "宋冬野", "斑马，斑马，你不要睡着啦，再给我看看你受伤的尾巴，我不想去触碰你伤口的疤")
     put(cfg, long, "sheet (auto).html", "sheet (auto).pdf")
     update_song(conn, long.id, status="found")
@@ -294,8 +285,8 @@ def test_a_chip_never_wraps_its_words_beside_a_long_title(conn, cfg, tmp_path):
     note("long", { cut: h3.scrollWidth > h3.clientWidth, chips: Array.from(l.querySelectorAll(".play"))
       .map((a) => Math.round(a.getBoundingClientRect().height)) });"""
     phone = attribute_of(run(conn, cfg, tmp_path, script, size="390,844"), "data-long")
-    assert phone == {"cut": True, "chips": [28]}, phone  # the title cut short, the chip whole on one line
-    assert attribute_of(run(conn, cfg, tmp_path, script, size="1280,900"), "data-long")["chips"] == [28]
+    assert phone == {"cut": True, "chips": [30]}, phone  # the title cut short, the tile whole on one line
+    assert attribute_of(run(conn, cfg, tmp_path, script, size="1280,900"), "data-long")["chips"] == [30]
 
 
 # --- one row, on a phone and on a desktop ------------------------------------------------------------------------
@@ -352,8 +343,8 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
                 assert not any(a[0] < part[1] - 0.5 and part[0] < a[1] - 0.5 and a[2] < part[3] - 0.5
                                and part[2] < a[3] - 0.5 for a in others), (title, part, others)
             w, h = p["box"][1] - p["box"][0], p["box"][3] - p["box"][2]
-            if not touch:  # a chip of 28 px, as wide as its words
-                assert round(h) == 28 and round(w) >= 28, p
+            if not touch:  # a mouse's tile, 30 px square
+                assert (round(w), round(h)) == (30, 30), p
             if touch:  # a thumb's target, 48 px square, its marks and count inside it
                 assert (round(w), round(h)) == (48, 48), p
                 assert all(p["box"][0] - .5 <= q[0] and q[1] <= p["box"][1] + .5 and p["box"][2] - .5 <= q[2]

@@ -391,6 +391,41 @@ def test_a_recent_song_opens_what_it_opened_before_and_keeps_the_boxs_focus(six_
     assert six_page.js("went").endswith("sheet.html")
 
 
+def test_only_what_opens_the_song_is_remembered_never_another_link_on_its_line(conn, cfg, tmp_path):
+    # Recently opened keeps what opens a song to play (its line's play button, its card's tile, a drawer's Open), never
+    # another link on its line or in its card: its request line's Details (the Journal's), its note's to-do page. Else
+    # the song's one entry, kept by its identity, would open the Journal in place of its sheet.
+    from caracole.library import song_dir
+    from caracole.library_page import WebControls
+    from caracole.songs import update_song
+
+    song = add_song(conn, "Radiohead", "Airbag")
+    folder = song_dir(cfg.library_dir, song)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "sheet.html").write_bytes(b"x")
+    update_song(conn, song.id, status="found", review=True, match_decision="review")  # its card's note: the to-do page
+    running = {"id": 7, "kind": "song", "songId": song.id, "state": "running", "display": "Radiohead - Airbag",
+               "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "details": "#tab=requests&job=7"}}
+    controls = WebControls(csrf="tok", busy=frozenset({song.id}), active=1, jobs=(running,),
+                           timers={"poll": 600_000})  # the line as served, never asked again meanwhile
+    url = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW, controls=controls))
+    page = opened(tmp_path, url.as_uri(), width=390, height=844, mobile=True)
+    line = f"document.querySelector('#list article.line[data-id=\"{song.id}\"]')"
+    kept = "JSON.parse(localStorage.getItem('caracole-library-recent') || '[]').map((e) => e.href)"
+    try:
+        page.js(STAY)
+        assert page.js(f"{line}.querySelector('.progress a').textContent") == "Details"
+        page.js(f"{line}.querySelector('.progress a').click()")
+        page.js(f"{line}.querySelector('.line-more').click()")  # its card, under its line on a phone
+        assert page.js(f"{line}.querySelector('.note a').getAttribute('href')") == "_todo.md"
+        page.js(f"{line}.querySelector('.note a').click()")
+        assert page.js(kept) == []
+        page.js(f"{line}.querySelector('.line-plays a.play').click()")
+        assert [href.endswith("sheet.html") for href in page.js(kept)] == [True]
+    finally:
+        page.close()
+
+
 def test_a_song_removed_since_is_not_among_them(six_page):
     six_page.js(STAY)
     open_song(six_page, "Airbag")

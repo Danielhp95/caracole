@@ -10,8 +10,8 @@
    stepList), which shows while the song's card is open, in the frozen bar's place, the bar of a lookup that runs
    staying on the line's row above it: a line a step, its mark (done and plain ✓, running ◐, waiting ○, skipped –,
    failed !), its name and its site, and what it found, quieter; once over, the skipped ones folded into one last line.
-   As chips: the Requests tab's running card. Those done ticked in the found colour, the one that runs lit, those to
-   come grey, a failed one red; a plain one dashed and muted. The site a step names is bold: "Sheet LaCuerda". */
+   The Requests tab draws the same list (requests.js, through stepList) for the request that runs and every finished
+   one. A step's name is bold, the site it names after it: "Sheet · LaCuerda". */
 .progress.barred, .step-bar { display: flex; align-items: center; gap: 8px; overflow: hidden; color: var(--muted);
   font-weight: 500; white-space: nowrap; }
 .progress.barred::before { content: none; }  /* the line's dot: the bar says it runs */

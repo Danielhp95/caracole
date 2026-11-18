@@ -2541,7 +2541,7 @@
     setQuery("");
     input.focus();
   });
-  // Recently opened: the songs whose link on a line was last followed, kept in this browser's storage (a refusal
+  // Recently opened: the songs last opened to play from their line or card, kept in this browser's storage (a refusal
   // leaves the page as it is, listing none), shown under the empty box while it has the focus.
   const RECENT = "caracole-library-recent";
   const RECENT_MAX = 5;
@@ -2587,8 +2587,12 @@
   };
   // A tap on a recent song keeps the box's focus (and the keyboard); the link opens it as the line's own does.
   recent.addEventListener("mousedown", (e) => e.preventDefault());
+  // What opens the song to play, alone (card.js's): its line's play button, its card's tile, a drawer's Open; never
+  // another link on its line or in its card (its request's Details, Pick, the to-do page, Removing…), which would
+  // make the song's one entry open that.
+  const OPENS = ":is(a.play, a.tile-open, a.go)[href]:not([download]):not([target=_blank])";
   document.addEventListener("click", (e) => {
-    const link = e.target.closest && e.target.closest("a[href]:not([download]):not([target=_blank])");
+    const link = e.target.closest && e.target.closest(OPENS);
     const line = link ? itemOf(link) : null;  // a link in the pane is the selected line's
     if (line && line.matches("article.line[data-id]")) rememberOpened(line, link);
   });

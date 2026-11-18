@@ -2591,7 +2591,7 @@ hold (songbooks; requests that wait or run), the address remembering which
 (`#tab=songbooks`, `#tab=sites`, `#tab=requests`), and at the end the number of songs
 wanted or ignored when there are any. Back from Songbooks, Sites, Journal or Share returns to
 Library, the list as you left it, the other tabs replacing one another (going from one to
-another is no step of Back), and pressing Library is that same step back. On a phone each tab is a thumb's 48 px tall and the
+another is no step of Back), and pressing Library, or Songbooks' + New songbook, is that same step back. On a phone each tab is a thumb's 48 px tall and the
 row of tabs scrolls sideways when they don't fit beside the mark, the chosen one
 kept in view. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
@@ -2618,14 +2618,12 @@ its **Guitar Pro** file, its **guitar tab** (Ultimate Guitar's text tab), its
 filed. A tap on one opens that one at once: the sheet viewer (see [The sheet
 viewer](#the-sheet-viewer), else the PDF, else the text), the Guitar Pro file
 in the browser when `caracole serve` shows it there (else a download), the
-harmonica tab's page, the text, the score. With a mouse, whatever the
-window's width, each is a chip that says what it is and where it came from
-("Chords · UG", "Guitar Pro · gtptabs", "Harmonica · harptabs"), its glyph
-before the words and how many versions the card lists of it after them when more
-than one. On a touch screen each is instead a filled tile 48 px square, 8 px
-from the next, its glyph with the marks of the sites its versions came from
-(two at most, the one in use first) in its bottom corner and the count in its
-top one, both inside it; its name says all of it, to a screen reader and as a tooltip ("Open
+harmonica tab's page, the text, the score. Whatever the pointer
+and the window's width, each is a filled icon tile with no words: its glyph, the
+marks of the sites its versions came from (two at most, the one in use first) in
+its bottom corner and, when the card lists more than one version of it, the
+count in its top one, both inside it. The tile is 30 px square with a mouse and
+48 px on a touch screen, 8 px from the next; its name says all of it, to a screen reader and as a tooltip ("Open
 the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
 file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
 title leaves too little room for them, they wrap to a second row beside it, and
@@ -2768,7 +2766,8 @@ once when your system asks for less motion, and the focus is on its chevron.
 On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
 holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
 its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
-its line, tinted with the accent, the accent along its edge; the card reads there as it does on a phone, the pane being about as
+its line, tinted with the accent, the accent along its edge (among a search's results more strongly than the songs you
+have there, so it stands out from them); the card reads there as it does on a phone, the pane being about as
 narrow (its tiles a row each, a version's buttons under its number and its rating), with nothing to scroll sideways;
 another song's takes its place, and its chevron again, the head's close,
 or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
