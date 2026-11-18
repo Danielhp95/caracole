@@ -243,6 +243,12 @@ sitemaps list by bare ids alone, and the fetch their page.
     - `versions`, `sheet_versions.as_data` with `sheet`, the one's provider, `pinned`, whether a `[pin]` chooses it
       (`sheet_versions.sheet_pins`, what `caracole versions --clear` takes out), and `this` on each entry, true on the
       page's own;
+    - `kinds`, right after it, what else the song keeps to play from, as its library card names it (`_kinds_data`):
+      its sheet's kind (`sheet`, `ukulele`: `sheet_versions.sheet_kind`) and page, then its Guitar Pro, text tab,
+      harmonica, game music and score files, a group a kind in the card's order, each item's label with its source as
+      `icons.SOURCES` names it ("Guitar Pro 1 · gtptabs", none for the inbox), a Guitar Pro file's `browser` and
+      `download`, a harmonica tab's `page` (`_SCORE_FORMATS`, library_page.py's, test_render_kinds.py); none on an
+      auto sheet beside a human one;
     - and `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
       linked in served settings as Guitar Pro tab.
   - **Exports**: `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the
@@ -2171,9 +2177,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
   the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
-  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port), after `PlainLyrics`
-  (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its progressions, script
-  and info.json alone, the phone's own pages of it forgotten.
+  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port, and its `kinds`,
+  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`), after
+  `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
+  progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
     made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`
     (`unit`, `build`, `script`, which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's

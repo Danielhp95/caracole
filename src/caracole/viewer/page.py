@@ -67,6 +67,13 @@ written ``\\u003c``:
   "list"}``, each entry's ``this`` saying whether it is this page's, ``sheet``, the provider of the
   sheet the title opens ("ug", "lacuerda", "auto"), and ``pinned``, whether a ``[pin]`` of yours chooses it:
   render.py's ``_versions_data``;
+- ``kinds``, right after it: what else the song keeps to play from, as its library card names it (render.py
+  ``_kinds_data``), for the version line's icons and its list: ``sheet``, its chord sheet's kind ("sheet",
+  "ukulele" for UG's Ukulele Chords, null for none), ``page``, the page the sheet opens ("sheet.html", "sheet
+  (auto).html", null), and ``groups``, each other kind it keeps a file of in the card's order (``guitar``, ``tab``,
+  ``harmonica``, ``gametab``, ``score``), its ``items`` ``{"name", "label"}`` ("Guitar Pro 1 · gtptabs"), a Guitar
+  Pro file's ``browser`` and ``download``, a harmonica tab's ``page``, a score's ``download`` but a PDF's; an auto
+  sheet kept beside a human one has none;
 - ``guitar``: the names of the song's Guitar Pro files beside the page that caracole serve shows in the browser
   (render.py, ``inbox.guitar_files``), for the settings' Guitar Pro row (``_GUITAR_ROW``): served, each a link to
   caracole serve's Guitar Pro page; or none, and no row. ``guitarDownload``, beside it: the name each saves under,
@@ -286,6 +293,7 @@ def build_viewer(
     harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
     pdf_traditional: str | None = None,
     video: Mapping[str, Any] | None = None,
+    kinds: Mapping[str, Any] | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -298,7 +306,10 @@ def build_viewer(
     this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
     sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
-    true on the page's own), goes in the page's data as ``versions``; without it, the data has none. ``guitar``, the
+    true on the page's own), goes in the page's data as ``versions``; without it, the data has none. ``kinds``, what
+    else the song keeps to play from (render.py ``_kinds_data``: its chord sheet's kind and page, and each other kind
+    it keeps a file of, as its library card names them), goes in its data as ``kinds``, right after ``versions``;
+    without it (an auto sheet kept beside a human one), the data has none. ``guitar``, the
     names of the song's Guitar Pro files beside the page that caracole serve shows in the browser (render.py), goes
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
@@ -312,6 +323,8 @@ def build_viewer(
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
+    if kinds is not None:
+        data["kinds"] = dict(kinds)
     if video is not None:
         data["video"] = dict(video)
     if harmonica:

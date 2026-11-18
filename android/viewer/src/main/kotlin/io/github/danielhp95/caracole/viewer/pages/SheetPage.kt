@@ -24,12 +24,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigInteger
 
-/** page.build_viewer's arguments, in its order. */
+/** page.build_viewer's arguments, in its order. [kinds] is render._kinds_data's: what else the song keeps to play
+ * from, which the data holds right after its `versions`. */
 data class ViewerInputs(val cho: String, val key: String? = null, val keySource: String? = null, val transpose: Int = 0,
                         val start: String? = null, val pdf: String? = null, val export: Boolean = true,
                         val versions: JsonObject? = null, val guitar: List<String> = emptyList(),
                         val harmonica: List<JsonObject> = emptyList(), val pdfTraditional: String? = null,
-                        val video: JsonObject? = null)
+                        val video: JsonObject? = null, val kinds: JsonObject? = null)
 
 /** page._read_song: a sheet as its page shows it: the sheet read, the key of its shapes and where it came from in
  * words, and the data its block gives the script, which a caller may change before the page is written (book.py
@@ -59,6 +60,7 @@ object SheetPage {
         val data = read.data
         data["start"] = i.start?.let(::JsonPrimitive) ?: JsonNull
         if (i.versions != null) data["versions"] = i.versions
+        if (i.kinds != null) data["kinds"] = i.kinds
         if (i.video != null) data["video"] = i.video
         if (i.harmonica.isNotEmpty()) {
             data["harmonicaTabs"] = JsonArray(i.harmonica.map { tab -> JsonObject(tab.filterKeys { it != "harp" }) })

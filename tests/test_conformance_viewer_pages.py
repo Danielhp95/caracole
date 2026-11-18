@@ -36,8 +36,8 @@ a mark, or null), ``{"chords": [int or string, …]}``, ``{"text": …}``, ``{"t
 ``vectors/viewer/pages-1.jsonl`` to ``pages-<PAGE_FILES>.jsonl``, the pages in that many runs, in order (each file a
 test of its own, a few seconds each): ``build_viewer(cho, **kw)`` for every sheet of ``viewer_corpus.sheets()`` (its
 ``key`` and ``key_source``, and options drawn by ``SEED``: ``transpose``, ``start``, ``pdf`` and ``pdf_traditional``,
-``export``, ``versions``, ``guitar``, ``harmonica`` with or without a ``harp``, ``video``), then ``EXTRA`` pages (every
-option at once, names to escape, a title that would end a script, an empty sheet). ``kw`` holds what isn't
+``export``, ``versions``, ``kinds``, ``guitar``, ``harmonica`` with or without a ``harp``, ``video``), then ``EXTRA``
+pages (every option at once, names to escape, a title that would end a script, an empty sheet). ``kw`` holds what isn't
 build_viewer's default; ``sheet`` names the corpus sheet. A page is 200–650 KB, so a record holds its digests (the
 corpus plan's page records): ``out`` is ``{"sha256", "size"}`` of the page's UTF-8, ``body`` (the first ``PART`` hex
 digits of the SHA-256 of the markup between ``<body>\\n`` and the ``song`` block: ``_body``'s), ``data`` (each member of
@@ -47,9 +47,10 @@ SHA-256 of ``json.dumps(value, ensure_ascii=False, separators=(",", ":"))``, so 
 of the sheet.
 
 ``vectors/viewer/page_whole.json``: ``WHOLE``, one small page kept whole (a sheet with no chords, with a PDF, Guitar
-Pro files, versions, a video and a start): ``pages``, each ``{"fn", "args", "kw", "pieces"}``, the page as its pieces in
-order, each a text or ``{"asset": name}`` where it inlines viewer/'s file ``name`` whole (ViewerAssets.text): the page
-is their concatenation, byte for byte, without a copy of the 316 kB of scripts and styles every page inlines.
+Pro files, versions, its other kinds, a video and a start): ``pages``, each ``{"fn", "args", "kw", "pieces"}``, the
+page as its pieces in order, each a text or ``{"asset": name}`` where it inlines viewer/'s file ``name`` whole
+(ViewerAssets.text): the page is their concatenation, byte for byte, without a copy of the 316 kB of scripts and styles
+every page inlines.
 
 Regenerate: ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_viewer_pages.py``, then
 ``nix develop ./android -c gradle -p android :viewer:test``.
@@ -93,7 +94,7 @@ CONSTANTS = ("LIBRARY_PAGE", "CREDIT_URL", "_NOTICE", "_CREDIT", "_VERSIONS", "_
 # build_viewer's keywords and their defaults: a record's kw holds the others alone.
 DEFAULTS: dict[str, Any] = {"key": None, "key_source": None, "transpose": 0, "start": None, "pdf": None,
                             "export": True, "versions": None, "guitar": (), "harmonica": (), "pdf_traditional": None,
-                            "video": None}
+                            "video": None, "kinds": None}
 STARTS = ("t=2", "t=-1&mode=dorian", "t=0&mode=aeolian&capo=3", "capo=2&alt=0.1-1", "t=5&at=3.2&inst=ukulele")
 GUITARS = (["guitar-1.gp5"], ["guitar-1.gp5", "guitar-2.gpx"], ["guitar-3.gp"],
            ["guitar-1.ptb", "guitar-2.gp4", "guitar-10.gp5"])
@@ -321,6 +322,30 @@ def _versions(rng: random.Random, tab: str) -> dict[str, Any]:
             "pinned": rng.random() < 0.3}
 
 
+# What a song keeps beside its sheet, as render.py's _kinds_data names it: a group's items to draw from, by kind.
+KIND_ITEMS = {
+    "guitar": ({"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True,
+                "download": "Placeholder Band - Synthetic Song.gp5"},
+               {"name": "guitar-2.ptb", "label": "Power Tab 2", "browser": False,
+                "download": "Placeholder Band - Synthetic Song (2).ptb"}),
+    "tab": ({"name": "tab.txt", "label": "Guitar tab · UG"},),
+    "harmonica": ({"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"},
+                  {"name": "harmonica-2.txt", "label": "Harmonica tab 2 · harptabs", "page": "harmonica-2.html"}),
+    "gametab": ({"name": "gametab-1.txt", "label": "Game music tab 1 · gametabs"},),
+    "score": ({"name": "score-1.mscz", "label": "Score 1 (MuseScore)", "download": "Canción <inventada> & más.mscz"},
+              {"name": "score-1.pdf", "label": "Score 1 (PDF)"}),
+}
+
+
+def _kinds(rng: random.Random) -> dict[str, Any]:
+    """A ``kinds`` as render.py's ``_kinds_data`` gives one: the sheet's kind and page, then some of the groups."""
+    sheet = rng.choice(("sheet", "sheet", "ukulele", None))
+    page = None if sheet is None else rng.choice(("sheet.html", "sheet (auto).html"))
+    groups = [{"kind": kind, "items": list(items[:rng.randint(1, len(items))])}
+              for kind, items in KIND_ITEMS.items() if rng.random() < 0.4]
+    return {"sheet": sheet, "page": page, "groups": groups}
+
+
 def _video(rng: random.Random) -> dict[str, Any]:
     mark: dict[str, Any] = {"name": "YouTube", "letters": "YT"}
     if rng.random() < 0.5:
@@ -362,6 +387,8 @@ def _options(rng: random.Random, sheet: viewer_corpus.CorpusSheet) -> dict[str, 
         kw["harmonica"] = _harmonica(rng)
     if (sheet.auto and rng.random() < 0.7) or rng.random() < 0.05:
         kw["video"] = _video(rng)
+    if rng.random() < 0.3:
+        kw["kinds"] = _kinds(rng)
     return {k: v for k, v in kw.items() if v != DEFAULTS[k] and not (v in ((), []) and DEFAULTS[k] == ())}
 
 
@@ -387,7 +414,8 @@ def _extra(rng: random.Random) -> list[tuple[str, str, dict[str, Any]]]:
         kw = {"key": sheet.key, "key_source": sheet.key_source, "transpose": 3, "start": STARTS[2],
               "pdf": "sheet.pdf", "pdf_traditional": "sheet (Traditional).pdf", "export": True,
               "versions": _versions(rng, "777"), "guitar": GUITARS[3], "harmonica": _harmonica(rng),
-              "video": _video(rng)}
+              "video": _video(rng), "kinds": {"sheet": "sheet", "page": "sheet.html",
+                                              "groups": [{"kind": k, "items": list(v)} for k, v in KIND_ITEMS.items()]}}
         kw["harmonica"].append({"name": "harmonica-9.txt", "href": "harmonica-9.txt", "page": "harmonica-9.html",
                                 "harp": 4})
         out.append((sheet.name, sheet.cho, {k: v for k, v in kw.items() if v is not None}))
@@ -480,7 +508,10 @@ WHOLE = (
                                         "page": None, "url": "https://tabs.ultimate-guitar.com/tab/x/y-chords-1",
                                         "this": True}], "sheet": "ug", "pinned": False},
      "video": {"title": "Whole Page (Official Video)", "href": "https://www.youtube.com/watch?v=abcdefghijk",
-               "channel": "Placeholder Records", "mark": {"name": "YouTube", "letters": "YT"}}},
+               "channel": "Placeholder Records", "mark": {"name": "YouTube", "letters": "YT"}},
+     "kinds": {"sheet": "sheet", "page": "sheet.html", "groups": [
+         {"kind": "guitar", "items": [{"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True,
+                                       "download": "The Placeholders - Whole Page.gp5"}]}]}},
 )
 
 

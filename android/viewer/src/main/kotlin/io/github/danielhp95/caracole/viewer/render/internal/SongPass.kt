@@ -11,16 +11,21 @@ import io.github.danielhp95.caracole.core.library.KeptFile
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyRe
+import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.ug.SheetVersion
 import io.github.danielhp95.caracole.core.ug.SheetVersions
+import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.viewer.harpfit.HarmonicaTab
 import io.github.danielhp95.caracole.viewer.harpfit.HarpFit
 import io.github.danielhp95.caracole.viewer.pages.HarmonicaPage
 import io.github.danielhp95.caracole.viewer.pages.SheetPage
 import io.github.danielhp95.caracole.viewer.pages.ViewerInputs
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import io.github.danielhp95.caracole.viewer.render.RenderNames
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.sheet.ChordPro
@@ -28,11 +33,14 @@ import io.github.danielhp95.caracole.viewer.sheet.MusicKeys
 import io.github.danielhp95.caracole.viewer.sheet.SongKey
 import io.github.danielhp95.caracole.viewer.version.Version
 import io.github.danielhp95.caracole.viewer.version.Versions
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.io.IOException
+import java.math.BigInteger
 import java.nio.file.NoSuchFileException
 import io.github.danielhp95.caracole.core.library.Versions as Rows
 
@@ -116,7 +124,10 @@ internal class SongPass(
                 f.key?.takeIf { it.isNotEmpty() }?.let { put("key", JsonPrimitive(it)) }
             })
         }
-        renderVersions(files, versions, listed, guitar)
+        // What else it keeps to play from, which the pages of its sheet and of its versions name (not an auto sheet's
+        // beside a human one, which lists no version either)
+        val kinds = kindsData(files, tabs)
+        renderVersions(files, versions, listed, guitar, kinds)
         val (humanKey, autoKey) = if (human != null || auto != null) MusicKeys.sheetKeys(db, libraryDir, song.id)
                                   else null to null
         val chosen = versions.firstOrNull { it.chosen }?.tabId
@@ -136,7 +147,8 @@ internal class SongPass(
             val video = sheet.video?.let(::videoData)
             renderSheet(kept, text, played,
                         start = if (song.key in overrides.version) exportQuery(played) else null,
-                        key = found, export = !beside, primary = isPrimary, versions = listing, guitar = guitar,
+                        key = found, export = !beside, primary = isPrimary, versions = listing,
+                        kinds = if (beside) null else kinds, guitar = guitar,
                         harmonica = harmonica.map { h ->
                             val harp = harps[(h["name"] as JsonPrimitive).content]
                             if (harp == null) h else JsonObject(LinkedHashMap(h).apply { put("harp", JsonPrimitive(harp)) })
@@ -198,6 +210,84 @@ internal class SongPass(
         return JsonObject(LinkedHashMap(listed).apply { put("list", kotlinx.serialization.json.JsonArray(list)) })
     }
 
+    /** render._kinds_data: what every page of the song says of what it keeps to play from (its data's `kinds`), as its
+     * library card names it: `sheet`, its chord sheet's kind ("ukulele" for one of UG's Ukulele Chords,
+     * SheetVersions.sheetKind; "sheet" for any other; null for none); `page`, the page its sheet opens in; and `groups`,
+     * each other kind of [files] it keeps one of in the card's order (RenderNames.KINDS), its `items` by N (Python's
+     * int of its digits), then name in code points. Each label names the source its version came from as icons.SOURCES
+     * names it (PhoneRender.sourceName), none for the inbox nor for a score; a Guitar Pro or Power Tab file's item its
+     * `browser` and `download`, as a score's but a PDF's has a `download`; a harmonica tab's its `page`. */
+    private fun kindsData(files: Map<String, KeptFile>, tabs: List<HarmonicaFile>): JsonObject {
+        fun said(label: String, kept: KeptFile): String {
+            val provider = Rows.get(db, kept.versionId)?.provider
+            val name = provider?.takeIf { it != RenderNames.INBOX }?.let(PhoneRender::sourceName)
+            return if (name != null) "$label · $name" else label
+        }
+        fun download(name: String): JsonPrimitive =
+            JsonPrimitive(DownloadNames.downloadName(song.artist, Normalize.cleanTitle(song.title), name))
+        fun number(digits: String): BigInteger = PyInt.parse(digits) ?: throw IllegalArgumentException(
+            "Exceeds the limit (${PyInt.MAX_DIGITS} digits) for integer string conversion: value has " +
+                "${Py.len(digits)} digits; use sys.set_int_max_str_digits() to increase the limit")
+        fun item(vararg members: Pair<String, JsonElement>) = JsonObject(linkedMapOf(*members))
+
+        val found = RenderNames.KINDS.associateWith { ArrayList<Triple<BigInteger, String, JsonObject>>() }
+        for (f in GuitarFiles.of(db, song.id)) {
+            val kept = files[f.name] ?: continue
+            val m = PyRe.fullmatch(RenderNames.KIND_GUITAR_RE, f.name) ?: continue
+            val digits = m.groupValues[1]
+            val kind = if (PyText.lower(m.groupValues[2]) == ".ptb") "Power Tab" else "Guitar Pro"
+            found.getValue("guitar").add(Triple(number(digits), f.name, item(
+                "name" to JsonPrimitive(f.name), "label" to JsonPrimitive(said("$kind $digits", kept)),
+                "browser" to JsonPrimitive(f.inBrowser), "download" to download(f.name))))
+        }
+        files[RenderNames.TAB]?.let { kept ->
+            found.getValue("tab").add(Triple(BigInteger.ZERO, RenderNames.TAB, item(
+                "name" to JsonPrimitive(RenderNames.TAB), "label" to JsonPrimitive(said("Guitar tab", kept)))))
+        }
+        for (t in tabs) {
+            val kept = files[t.name] ?: continue
+            val m = PyRe.fullmatch(HarmonicaFiles.FILE, t.name) ?: continue
+            val digits = m.groupValues[1]
+            found.getValue("harmonica").add(Triple(number(digits), t.name, item(
+                "name" to JsonPrimitive(t.name), "label" to JsonPrimitive(said("Harmonica tab $digits", kept)),
+                "page" to JsonPrimitive(t.page))))
+        }
+        for ((name, kept) in files) {
+            val game = PyRe.fullmatch(RenderNames.GAMETAB_FILE_RE, name)
+            if (game != null) {
+                val digits = game.groupValues[1]
+                found.getValue("gametab").add(Triple(number(digits), name, item(
+                    "name" to JsonPrimitive(name), "label" to JsonPrimitive(said("Game music tab $digits", kept)))))
+                continue
+            }
+            val score = PyRe.fullmatch(RenderNames.KIND_SCORE_RE, name) ?: continue
+            val format = RenderNames.SCORE_FORMATS[score.groupValues[2]] ?: continue
+            val digits = score.groupValues[1]
+            val members = linkedMapOf<String, JsonElement>(
+                "name" to JsonPrimitive(name), "label" to JsonPrimitive("Score $digits ($format)"))
+            if (score.groupValues[2] != ".pdf") members["download"] = download(name)
+            found.getValue("score").add(Triple(number(digits), name, JsonObject(members)))
+        }
+        val order = compareBy<Triple<BigInteger, String, JsonObject>> { it.first }.thenBy(Py.CODE_POINT_ORDER) { it.second }
+        val groups = found.filterValues { it.isNotEmpty() }.map { (kind, items) ->
+            item("kind" to JsonPrimitive(kind), "items" to JsonArray(items.sortedWith(order).map { it.third }))
+        }
+        val human = files[RenderNames.HUMAN_SHEET]
+        val auto = files[RenderNames.AUTO_SHEET]
+        val sheet = when {
+            human == null && auto == null -> null
+            SheetVersions.sheetKind(db, song.id) == "ukulele" -> "ukulele"
+            else -> "sheet"
+        }
+        val page = when {
+            human != null -> RenderNames.HUMAN_OUTPUTS[2]
+            auto != null -> RenderNames.AUTO_OUTPUTS[2]
+            else -> null
+        }
+        return item("sheet" to (sheet?.let(::JsonPrimitive) ?: JsonNull), "page" to (page?.let(::JsonPrimitive) ?: JsonNull),
+                    "groups" to JsonArray(groups))
+    }
+
     /** The song's Guitar Pro files the Guitar Pro page shows (inbox.guitar_files' `in_browser`), each page links. */
     private fun guitarNames(): List<String> = GuitarFiles.of(db, song.id).filter { it.inBrowser }.map { it.name }
 
@@ -218,16 +308,16 @@ internal class SongPass(
     /** render._render_versions: a page for each version kept beside the sheet, `version-<tab>.html`; the page of one
      * no longer kept goes while it is as written. */
     private fun renderVersions(files: Map<String, KeptFile>, versions: List<SheetVersion>, listed: JsonObject?,
-                               guitar: List<String>) {
+                               guitar: List<String>, kinds: JsonObject) {
         val pages = LinkedHashMap<String, SheetVersion>()
         for (v in versions) if (v.page != null && v.page == SheetVersions.versionNames(v.tabId).third) pages[v.page!!] = v
-        for ((page, v) in pages) renderVersion(files, v, page, onPage(listed, v.tabId), guitar)
+        for ((page, v) in pages) renderVersion(files, v, page, onPage(listed, v.tabId), guitar, kinds)
         val left = WrittenPages.record(db, song.id).keys.filter { SheetVersions.tabOf(it) != null && it !in pages }
         WrittenPages.forget(db, song.id, left, folder)
     }
 
     private fun renderVersion(files: Map<String, KeptFile>, v: SheetVersion, page: String, listed: JsonObject?,
-                              guitar: List<String>) {
+                              guitar: List<String>, kinds: JsonObject) {
         val doc = SheetVersions.versionNames(v.tabId).second
         val kept = files[doc] ?: return fail("$doc isn't kept")
         val raw = Sources.raw(db, kept.versionId)
@@ -239,17 +329,18 @@ internal class SongPass(
         val found = MusicKeys.sheetKey(raw, sheet.markup, sheet.capo)
         val text = ChordPro.chordProText(sheet.markup, Normalize.cleanTitle(song.title), song.artist, sheet.key, sheet.capo)
         val data = writeViewer(text, page, ViewerInputs(text, key = found?.key, keySource = found?.source, export = false,
-                                                        versions = listed, guitar = guitar)) ?: return
+                                                        versions = listed, guitar = guitar, kinds = kinds)) ?: return
         WrittenPages.note(db, song.id, page, data, unit)
     }
 
     // --- a sheet ----------------------------------------------------------------------------------------------------
 
     /** render._render_sheet, no PDF: the sheet's .cho ([text]), its progressions when it is the song's [primary]
-     * sheet, then its page, in the song's own version [played] (from [start]). */
+     * sheet, then its page, in the song's own version [played] (from [start]), naming the song's other [kinds] (none
+     * beside a human sheet). */
     private fun renderSheet(kept: KeptFile, text: String, played: Version, start: String?, key: SongKey?,
-                            export: Boolean, primary: Boolean, versions: JsonObject?, guitar: List<String>,
-                            harmonica: List<JsonObject>, video: JsonObject?, viewerText: String?) {
+                            export: Boolean, primary: Boolean, versions: JsonObject?, kinds: JsonObject?,
+                            guitar: List<String>, harmonica: List<JsonObject>, video: JsonObject?, viewerText: String?) {
         val (cho, _, page) = RenderNames.SHEET_OUTPUTS.getValue(kept.name)
         val data = text.toByteArray(Charsets.UTF_8)
         if (LibraryReads.writeIfChanged(File(folder, cho), data)) wrote = true
@@ -259,7 +350,7 @@ internal class SongPass(
         val bytes = writeViewer(shown, page, ViewerInputs(shown, key = key?.key, keySource = key?.source,
                                                           transpose = played.t, start = start, export = export,
                                                           versions = versions, guitar = guitar, harmonica = harmonica,
-                                                          video = video)) ?: return
+                                                          video = video, kinds = kinds)) ?: return
         WrittenPages.note(db, song.id, page, bytes, unit)
     }
 

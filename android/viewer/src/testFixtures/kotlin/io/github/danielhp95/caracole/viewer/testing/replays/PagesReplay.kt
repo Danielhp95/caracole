@@ -160,6 +160,7 @@ object PagesReplay : AreaReplay {
             guitar = kw["guitar"]?.let(::strings) ?: emptyList(),
             harmonica = kw["harmonica"]?.jsonArray?.map { it.jsonObject } ?: emptyList(),
             pdfTraditional = string("pdf_traditional"), video = kw["video"] as? JsonObject,
+            kinds = kw["kinds"] as? JsonObject,
         )
     }
 

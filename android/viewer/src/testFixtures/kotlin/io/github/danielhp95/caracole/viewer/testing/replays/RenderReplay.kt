@@ -76,7 +76,10 @@ object RenderReplay : AreaReplay {
             "SHEET_DOC" to RenderNames.SHEET_DOC, "AUTO_MARKER" to RenderNames.AUTO_MARKER, "LETTER" to RenderNames.LETTER,
             "HARMONICA_KIND" to RenderNames.HARMONICA_KIND, "HARMONICA_FILE" to RenderNames.HARMONICA_FILE,
             "HARMONICA_PAGE" to RenderNames.HARMONICA_PAGE, "LYRICS_PAGES" to RenderNames.LYRICS_PAGES,
-            "YOUTUBE" to RenderNames.YOUTUBE, "IGNORED" to RenderNames.IGNORED,
+            "YOUTUBE" to RenderNames.YOUTUBE, "IGNORED" to RenderNames.IGNORED, "KINDS" to RenderNames.KINDS,
+            "KIND_GUITAR" to RenderNames.KIND_GUITAR, "KIND_SCORE" to RenderNames.KIND_SCORE,
+            "GAMETAB_FILE" to RenderNames.GAMETAB_FILE, "TAB" to RenderNames.TAB,
+            "SCORE_FORMATS" to RenderNames.SCORE_FORMATS, "INBOX" to RenderNames.INBOX,
         )
         misses.check(want.keys == got.keys) { "constants: names ${got.keys}, Python's ${want.keys}" }
         for ((name, value) in got) {

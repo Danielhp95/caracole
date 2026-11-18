@@ -6,7 +6,9 @@ the same library.
 
 - ``constants``: what render.py, songs.py, inbox.py, library.py and keys.py name that the phone's render names too,
   read from the modules (``CONSTANTS``): kv's prefixes and keys, the sheets' names and their outputs', the harmonica
-  tabs' names and pages', the lyrics sites that ask a link back, and phone_render's record's suffix.
+  tabs' names and pages', the lyrics sites that ask a link back, phone_render's record's suffix, and what a viewer's
+  ``kinds`` reads (render.py ``_kinds_data``: the kinds in the card's order, the files' names, the scores' formats,
+  the inbox's source).
 - ``phone_render``: ``args`` ``[fixture, steps]``, a library (``helpers.corpus.dump_fixture``'s records: its
   database's rows, its kv, the phone's overrides as ``phone_overrides`` rows of overrides.toml, and the files of its
   songs' folders) and what is done to it in turn, each step one of ``{"render": song ids or null}`` (``phone_render``
@@ -29,7 +31,9 @@ beside a human sheet that takes none, one made from a YouTube video's audio (the
 credit off the viewer); Chinese sheets in Simplified and in Traditional characters (the phone's script record);
 LaCuerda's sheet; a sheet that can't be read (the song failed); a song with no sheet, and one ignored; a library that
 holds the computer's PDFs and their records (never linked, read or deleted: info.json's ``render`` null), whose human
-sheet then leaves (its .cho and page gone, the PDFs left).
+sheet then leaves (its .cho and page gone, the PDFs left); a ukulele sheet and every other kind a song keeps (Guitar
+Pro and Power Tab files, a text tab, a game music tab, a score in two formats), which its page's ``kinds`` names, one
+let go.
 
 Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 """
@@ -50,7 +54,7 @@ from caracole import canonical, db, inbox, keys, library, render, songs
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.autochords.merge import AUTO_MARKER, youtube_credit
 from caracole.config import load_config
-from caracole.icons import YOUTUBE
+from caracole.icons import INBOX, YOUTUBE
 from caracole.lyrics import Lyrics
 from caracole.overrides import SONG_TABLES, load_overrides, song_entries
 from caracole.songs import get_song, list_songs, update_song
@@ -87,6 +91,13 @@ CONSTANTS = {
     "LYRICS_PAGES": dict(library.LYRICS_PAGES),
     "YOUTUBE": YOUTUBE,
     "IGNORED": "ignored",
+    "KINDS": list(render._KINDS),
+    "KIND_GUITAR": render._KIND_GUITAR.pattern,
+    "KIND_SCORE": render._KIND_SCORE.pattern,
+    "GAMETAB_FILE": inbox.GAMETAB_FILE.pattern,
+    "TAB": render._TAB,
+    "SCORE_FORMATS": dict(render._SCORE_FORMATS),
+    "INBOX": INBOX,
 }
 
 
@@ -127,12 +138,14 @@ def _keep(w: World, song, vid: int, name: str, data: str | bytes, rank: int = 1)
 
 
 def ug_sheet(w: World, song, content: str, *, tab: int, tonality: str | None, capo: int | None = None,
-             names: tuple[str, str] = ("sheet.txt", "sheet.json"), rank: int = 1, version: int = 1) -> int:
+             names: tuple[str, str] = ("sheet.txt", "sheet.json"), rank: int = 1, version: int = 1,
+             kind: str = "chords") -> int:
     """A UG chords sheet kept as the fetch keeps one: its text, and its JSON with the raw content and the page's meta
-    (``names``: a version kept beside it, ``version-<tab>.txt`` and ``.json``)."""
+    (``names``: a version kept beside it, ``version-<tab>.txt`` and ``.json``); ``kind`` "ukulele" for one of UG's
+    Ukulele Chords."""
     raw = version_dict(tab, song=song.title, artist=song.artist, version=version,
                        **({"tonality_name": tonality} if tonality is not None else {}))
-    vid = _version(w, song, "ug", str(tab), "chords", raw=raw, url=raw["tab_url"], version=version)
+    vid = _version(w, song, "ug", str(tab), kind, raw=raw, url=raw["tab_url"], version=version)
     doc = {"version": raw, "content": content, "url": raw["tab_url"], "meta": {"capo": capo} if capo else {}}
     _keep(w, song, vid, names[0], strip_markup(content), rank)
     _keep(w, song, vid, names[1], json.dumps(doc, ensure_ascii=False, indent=2) + "\n", rank)
@@ -333,6 +346,22 @@ def case_computers_pdfs(w: World) -> list[dict]:
     return [{"render": None}, {"drop": [song.id, "sheet.txt"]}, {"drop": [song.id, "sheet.json"]}, {"render": None}]
 
 
+def case_kinds(w: World) -> list[dict]:
+    """A ukulele sheet and every other kind a song keeps, which its page names (render.py ``_kinds_data``); then its
+    text tab let go."""
+    song = add_song(w.conn, "Placeholder Band", "Every Kind")
+    ug_sheet(w, song, SODA, tab=94001, tonality="G", kind="ukulele")
+    for name, data, provider, kind, tab_id in (
+            ("guitar-1.gp5", b"FICHIER GUITAR PRO v5.00 synthetic", "gtptabs", "guitar-pro", "1202"),
+            ("guitar-2.ptb", b"ptab synthetic", "inbox", "power", "power"),
+            ("tab.txt", "e|--0--| synthetic\n", "ug", "tabs", "94002"),
+            ("gametab-1.txt", "e|--3--| synthetic\n", "gametabs", "gametab", "synthetic-game/main-theme"),
+            ("score-1.pdf", b"%PDF-1.4 a synthetic score\n", "inbox", "score", "score"),
+            ("score-1.mscz", b"PK synthetic score", "inbox", "score", "score")):
+        _keep(w, song, _version(w, song, provider, tab_id, kind, slot="guitar"), name, data)
+    return [{"render": None}, {"drop": [song.id, "tab.txt"]}, {"render": [song.id]}]
+
+
 CASES = {
     "ug_sheet": case_ug_sheet,
     "versions": case_versions,
@@ -342,6 +371,7 @@ CASES = {
     "chinese": case_chinese,
     "other_sheets": case_other_sheets,
     "computers_pdfs": case_computers_pdfs,
+    "kinds": case_kinds,
 }
 
 
@@ -507,6 +537,16 @@ def test_an_auto_sheet_beside_a_human_one_takes_no_lyrics(records):
     assert after[auto] == hashlib.sha256(before[auto]).hexdigest()
     raws = [json.loads(r["row"]["raw"]) for r in fixture if r.get("table") == "versions"]
     assert raws.count({"lyrics": "none"}) == 1  # its version's lyrics stay "none"
+
+
+def test_the_kinds_case_names_a_ukulele_sheet_and_every_kind_but_the_one_let_go(tmp_path):
+    run_case(tmp_path, "kinds")
+    page = next(tmp_path.rglob("Every Kind/sheet.html")).read_text("utf-8")
+    kinds = json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', page, re.S)[1])["kinds"]
+    assert (kinds["sheet"], kinds["page"]) == ("ukulele", "sheet.html")
+    assert [(g["kind"], [i["name"] for i in g["items"]]) for g in kinds["groups"]] == [
+        ("guitar", ["guitar-1.gp5", "guitar-2.ptb"]), ("gametab", ["gametab-1.txt"]),
+        ("score", ["score-1.mscz", "score-1.pdf"])]
 
 
 def test_the_vectors_are_within_reason():
