@@ -1037,10 +1037,13 @@ It is rows.js's, shared by both pages:
   `--radius-pill` 999 px, besides square and 50 %; every stylesheet takes its radii from them. test_page_calm.py lists
   the elements shown with another (`helpers.targets.odd_radii`), every one of the page, in each tab, a song's card (its
   tiles, a tile's drawer, the ⋯ menu), the Filter panel, a search, the Sync sheet and the tray, at 390 and 1280 px,
-  light and dark. steps.css and requests.css (lane 2's)
-  were already on the tokens, with fallbacks (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing;
-  songbooks.css (the Songbooks tab's) it brought to them. The test serves the page with a lookup running and one queued,
-  a songbook and each tab, and asserts each state drew what it names (it measures elements, never pseudo-elements).
+  light and dark. steps.css and requests.css (lane 2's) were already on the tokens, with fallbacks
+  (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing; songbooks.css (the Songbooks tab's) it brought
+  to them. The test serves the page with a lookup running and one queued, a songbook and each tab, and asserts each
+  state drew what it names (it measures elements, never pseudo-elements). caracole serve's own pages, base.css inlined
+  first (a pick, a removal, a message, the lookup page, the Guitar Pro page: pages.py, lookup_page.py, guitar.css),
+  take theirs from the same tokens (`test_caracole_serves_own_pages_have_the_same_four_radii`, alphaTab's drawing
+  inside `#score` left out, its box measured).
 - **No outline around the list** (stage 1f; library.css, rows.css): a list of lines or rows (`.groups`, `.lines`,
   `.rows`: index.html's list and a search's results, the lookup page's rows) has no border, shadow or fill of its own,
   the page's background under it: the bands (`--raised`) and the 1 px dividers between lines, rows and groups are its
