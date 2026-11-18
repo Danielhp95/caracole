@@ -273,8 +273,9 @@
     close: () => closeLayer("sheet"),
   }) : null;
   function drawRail() {
-    const can = Boolean(rail) && wide.matches, on = can && state.necks;
-    const phone = Boolean(rail) && !wide.matches && sheetAt !== null;
+    const full = Boolean(doc.dataset.full);  // full screen: the tab the whole width, no rail and no sheet
+    const can = Boolean(rail) && wide.matches, on = can && state.necks && !full;
+    const phone = Boolean(rail) && !wide.matches && sheetAt !== null && !full;
     necksButton.hidden = !can;
     necksButton.setAttribute("aria-pressed", on ? "true" : "false");
     sheetButton.hidden = !rail || wide.matches;
@@ -423,13 +424,14 @@
   // The layers: what the page opens over its tab (Aa, the overlay's sheet), each one entry of the browser's history
   // while it is open (layers.js, as viewer.js), the last on top. Below 900 px one at a time; Aa gives way to the sheet
   // at every width. A Back that takes k entries off closes the k on top.
-  const layers = [];  // {name: "sizes" | "sheet", opener}
+  const layers = [];  // {name: "sizes" | "sheet" | "full", opener}
   const apart = window.matchMedia("(min-width: 900px)");
   const layerHistory = window.caracoleLayers ? window.caracoleLayers.history((k) => {
     for (let i = 0; i < k && layers.length; i++) closeLayer(layers[layers.length - 1].name);
     save();
   }) : { sync() {} };
   function openLayer(name, opener) {
+    auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.name === name);
     if (at >= 0) layers.splice(at, 1);  // open already: on top again
     for (const layer of layers.slice().reverse()) {
@@ -437,6 +439,7 @@
     }
     layers.push({ name, opener: opener instanceof Element ? opener : null });
     if (name === "sheet") openSheet();
+    else if (name === "full") fullScreen(true);
     else showSizes(true);
     layerHistory.sync(layers.length);
   }
@@ -444,11 +447,16 @@
   function closeLayer(name, refocus = true) {
     const at = layers.findIndex((layer) => layer.name === name);
     if (at < 0) return;
-    layers.splice(at, 1);
+    const opener = layers.splice(at, 1)[0].opener;
     if (name === "sheet") closeSheet(refocus);
     else {
-      showSizes(false);
-      if (refocus) sizeButton.focus({ preventScroll: true });
+      if (name === "full") {
+        fullScreen(false);
+        if (refocus && opener && opener.isConnected) opener.focus({ preventScroll: true });
+      } else {
+        showSizes(false);
+        if (refocus) sizeButton.focus({ preventScroll: true });
+      }
     }
     layerHistory.sync(layers.length);
   }
@@ -461,8 +469,34 @@
   });
   // Escape closes the layer on top.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && layers.length) closeLayer(layers[layers.length - 1].name);
+    if (e.key !== "Escape") return;
+    if (layers.length) closeLayer(layers[layers.length - 1].name);
+    else if (doc.dataset.full === "auto") auto.end();
   });
+  // --- full screen: the tab alone, the controls hidden for reading --------------------------------------------------
+  // A double tap beside the tab (layers.js's doubleTap: MARGIN_SKIP and this page's own elements) hides what is
+  // marked data-controls (the bar), the header's facts and the rail (drawRail), html[data-full] (viewer.css); a thin
+  // handle stays at the window's foot. A layer of the stack above: the handle, Escape or Back brings it all back. A
+  // short screen does it by itself, with no entry (layers.js's autoFull). Nothing here is the viewer's own copy.
+  const handle = $("handle");
+  const fullScreen = (on) => {
+    if (on) doc.dataset.full = "on";
+    else delete doc.dataset.full;
+    handle.hidden = !on;
+    drawRail();
+  };
+  handle.addEventListener("click", () => {
+    if (doc.dataset.full === "auto") auto.end();
+    else closeLayer("full");
+  });
+  const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
+    handle, idle: () => layers.length === 0, changed: drawRail,
+  }) : { end() {} };
+  if (window.caracoleLayers) {
+    window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP + ", .h, .rp, .legend, .why", () => {
+      if (!doc.dataset.full) openLayer("full", null);
+    });
+  }
   const setSize = (to) => {
     state.fs = Math.max(FS.min, Math.min(FS.max, to));
     render();

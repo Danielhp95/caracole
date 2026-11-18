@@ -310,3 +310,80 @@ def test_a_hand_set_full_screen_is_left_alone_as_the_window_turns_short_and_back
                    else 390, height=height)
             time.sleep(0.3)
             assert b.js(FULL) is True
+
+
+# --- a harmonica tab's page -----------------------------------------------------------------------------------------
+
+HARP = """(() => { const q = (id) => document.getElementById(id), doc = document.documentElement, h = q('handle');
+  return {full: doc.dataset.full || null, bar: getComputedStyle(q('bar')).display,
+    facts: getComputedStyle(q('facts')).display, necks: q('necks').hidden, handle: !h.hidden}; })()"""
+
+
+@in_chromium
+def test_a_harmonica_page_goes_full_screen_by_a_double_tap(tmp_path):
+    from test_viewer_harptab_browser import opened, with_sheet
+
+    with opened(tmp_path, with_sheet(tmp_path), width=1400, height=900, mobile=False) as b:
+        assert b.js("document.getElementById('necks').hidden") is False
+        base = entries(b)
+        click_at(b, 1350, 400)  # the right margin, the rail being on the left
+        click_at(b, 1350, 400)
+        assert b.wait(FULL)
+        state = b.js(HARP)
+        assert (state["bar"], state["facts"], state["necks"], state["handle"]) == ("none", "none", True, True)
+        assert b.js("getComputedStyle(document.querySelector('.why') || document.body).display") in ("none", "block")
+        assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
+        click_at(b, 1350, 400)  # a double tap in full screen does nothing
+        click_at(b, 1350, 400)
+        time.sleep(0.3)
+        assert entries(b) == (base[0] + 1, base[1] + 1)
+        back(b)
+        assert b.wait(NOT_FULL)
+        state = b.js(HARP)
+        assert (state["bar"], state["facts"], state["necks"], state["handle"]) != ("none", "none", True, True)
+        assert state["necks"] is False and state["handle"] is False
+    with opened(tmp_path, with_sheet(tmp_path), width=1400, height=900, mobile=False) as b:
+        click_at(b, 1350, 400)
+        click_at(b, 1350, 400)
+        assert b.wait(FULL)
+        b.press("Escape")
+        assert b.wait(NOT_FULL)
+        click_at(b, 1350, 400)
+        click_at(b, 1350, 400)
+        assert b.wait(FULL)
+        b.click("#handle")
+        assert b.wait(NOT_FULL)
+
+
+@in_chromium
+def test_a_harmonica_page_on_its_side_slims_its_controls(tmp_path):
+    from test_viewer_harptab_browser import opened, with_sheet
+
+    with opened(tmp_path, with_sheet(tmp_path), **SIDEWAYS) as b:
+        assert b.wait(AUTO)
+        assert b.js(HARP)["bar"] == "none"
+        assert b.js("!document.getElementById('handle').hidden") is True
+        assert entries(b)[0] == entries(b)[1] - 1
+        tap(b, "#handle")
+        assert b.wait(NOT_FULL)
+        assert b.js(BAR_SHOWN) is True
+    with opened(tmp_path, with_sheet(tmp_path), **SIDEWAYS) as b:
+        assert b.wait(AUTO)
+        b.press("Escape")
+        assert b.wait(NOT_FULL)
+        assert b.js(BAR_SHOWN) is True
+
+
+@in_chromium
+def test_a_tab_shown_as_written_has_the_handle_too(tmp_path):
+    from test_viewer_harptab_browser import opened, written as harp_written
+
+    with opened(tmp_path, harp_written(tmp_path, "Just some words\nwith no holes at all\n"), width=1400, height=900,
+                mobile=False) as b:
+        assert b.js("document.getElementById('bar').hasAttribute('data-controls')") is True
+        click_at(b, 1350, 400)
+        click_at(b, 1350, 400)
+        assert b.wait(FULL)
+        assert b.js(HARP)["bar"] == "none"
+        b.press("Escape")
+        assert b.wait(NOT_FULL)

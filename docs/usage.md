@@ -3530,6 +3530,13 @@ the library page link it, the tab's text beside it.
   little smaller); the neck, below 1200 px, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
   **Aa** the text size, and ▶ scrolls by itself, as in the viewer.
+- **Full screen**, as the viewer's: a double tap beside the tab (in its
+  margins, never on a hole, a word, a line's ▶, the legend or a control) hides
+  the bar, the facts, the "fit the sheet's chords" line and the rail, and a
+  thin handle stays at the foot; the handle, Escape or Back brings them back.
+  It is one step of the history, and a double tap while they are hidden does
+  nothing. On its side (a screen under 500 px tall) a phone does it by itself,
+  as the viewer does, with no step of the history. The page has no More panel.
 - **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
