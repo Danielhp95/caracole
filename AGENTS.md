@@ -1222,12 +1222,17 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
-- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures two columns against;
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against;
   the half screen of over-scroll is `.page::after`, never in it, and print drops it.
-- **Two columns** (from 1100 px, viewer.css, test_viewer_layout.py) only where the whole song shows that way
-  (`layout()`), at the reader's own text size, never a smaller one, each at least 24 em (`columns: 2 24em`, the
-  owner's narrower columns, D8), spread across the window with 5 % of the room each side; else one column, `--fs` +
-  3 px.
+- **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
+  that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
+  the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after
+  `fit()`) within `COLUMN_EM`, 16 em at least and 24 em asked at most (a song of long lines as before, the owner's
+  narrower columns, D8), the owner's ask of 2026-11-18; at the reader's own text size, never a smaller one, spread
+  across the window with 5 % of the room each side, the room over widening the columns (`column-count`), the gap
+  narrower from three; `data-columns` says how many, which viewer.css keys on (`:not([data-columns="1"])` the wide
+  page, a rule a count); else one column, `--fs` + 3 px, as a harmonica tab's page (no `data-columns`). A trial
+  count's `fit()` runs in one column that wide (`fitIn`), never in balanced columns.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),

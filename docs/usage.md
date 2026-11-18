@@ -3008,25 +3008,31 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   first section are the song, and nothing is folded then.
 - **Printed** (the browser's Print), a sheet, a songbook's song and a
   harmonica tab's page print in the light colours, even from a screen in dark
-  mode, with a 15 mm margin on every side of the paper, and without the bar,
-  the settings or the links.
-- **On a wide screen** (1100 px or more: a laptop), a song short enough for
-  the window to show it whole in two columns is shown in two, side by side,
-  at your text size, each column at least 24 em wide (24 times the text's
-  size), spread across the window with only 5% of its width left empty on
-  each side (of the room beside the rail of necks, where it is open), so wider
-  columns let more songs fit whole. Else the song reads down one column,
-  centred, in slightly larger text: a longer one would otherwise run down the
-  first column and back up the second. Narrow columns let two fit at larger
-  text sizes too (at 1280 px with the rail hidden, up to 22 px). The viewer
-  measures again when the window or the text size changes, and when the
-  settings' rail opens beside the song. From
+  mode, in one column, with a 15 mm margin on every side of the paper, and
+  without the bar, the settings or the links.
+- **On a wide screen** (1100 px or more: a laptop), a song the window can show
+  whole in columns side by side is shown so, in the fewest columns that show it
+  whole, two to five, at your text size. Each column is at least as wide as the
+  song's widest line (a sung line, a line of chords, a tab), never narrower
+  than 16 em (16 times the text's size) and never asking for more than 24 em:
+  a song of short lines, such as one in Chinese with its readings over it,
+  takes three or four columns where two would run past the bar, and a song of
+  long lines takes two of 24 em as before, its long lines wrapping. The columns
+  spread across the window with only 5% of its width left empty on each side
+  (of the room beside the rail of necks, where it is open): the room over
+  widens the columns, never the gap, and three or more stand closer together
+  than two. Else the song reads down one column, centred, in slightly larger
+  text: a longer one would otherwise run down one column and back up the next.
+  Narrow columns let two fit at larger text sizes too (at 1280 px with the rail
+  hidden, up to 22 px for a song of long lines, at every size for one of short
+  lines). The viewer measures again when the window or the text size changes,
+  and when the settings' rail opens beside the song. From
   1200 px the rail of necks (below) takes 345 px on the left, and the song is
-  measured beside it: two columns then need a wider window (at 1280 px a song
-  reads in one, at 1600 px two fit as they did at 1280 px without it). Hidden,
-  the rail gives the song the whole width back. At 1200 px, with both the rail
-  and the settings open, the song still has about 480 px, and wraps rather
-  than scroll sideways.
+  measured beside it: columns then need a wider window (at 1280 px a song of
+  long lines reads in one, at 1600 px two fit as they did at 1280 px without
+  it). Hidden, the rail gives the song the whole width back. At 1200 px, with
+  both the rail and the settings open, the song still has about 480 px, and
+  wraps rather than scroll sideways.
 - **Tap a chord** for its fingerings: up to four shapes from chords-db, after
   any the sheet gives, with the fingers, the barre and the fret they start on
   (swipe, or ‹ ›, for the next). Every place the chord is played lights up
