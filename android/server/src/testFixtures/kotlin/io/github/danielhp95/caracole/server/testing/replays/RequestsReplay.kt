@@ -124,8 +124,10 @@ object RequestsReplay : AreaReplay {
     }
 
     /** outcome.Chip from its as_json. */
-    fun chip(o: JsonObject): Chip = Chip(o.getValue("name").jsonPrimitive.content, o.getValue("state").jsonPrimitive.content,
-                                         o.getValue("source").jsonPrimitive.content)
+    fun chip(o: JsonObject): Chip {
+        fun text(name: String) = o.getValue(name).jsonPrimitive.content
+        return Chip(text("name"), text("state"), text("site"), text("found"))
+    }
 
     /** status.Line from its as_json. */
     fun line(o: JsonObject): Line {

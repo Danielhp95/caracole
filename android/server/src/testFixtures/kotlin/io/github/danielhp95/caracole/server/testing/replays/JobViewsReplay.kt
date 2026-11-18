@@ -37,10 +37,10 @@ import java.time.Instant
  * Every job's line, chips and outcome (vectors/web/job_views.jsonl, job_views_kinds.jsonl and outcome.jsonl), each
  * record's job held as the phone holds it (tests/test_conformance_web.py's and test_conformance_sync_routes.py's
  * docstrings say each field) and answered as caracole serve answered it: jobs_routes.view by JobViews.view; status.py's
- * line (with no to-do page), outcome.steps, progress and outcome by Status and Outcomes; the words both look up by a
- * name (outcome.jsonl's `tables`) as Status's and Outcomes' tables; and what the library knows of a job's song
- * (job_views_song_of.jsonl: jobs_routes.song_of) by SongFacts.songOf, over each record's fixture in a database of its
- * own.
+ * line (with no to-do page), outcome.steps, progress and outcome by Status and Outcomes, each at the record's
+ * `now`; the words both look up by a name (outcome.jsonl's `tables`) as Status's and Outcomes' tables; and what the
+ * library knows of a job's song (job_views_song_of.jsonl: jobs_routes.song_of) by SongFacts.songOf, over each record's
+ * fixture in a database of its own.
  *
  * A record's job with `commands` is a job of commands, its stages those its commands report (JobCommands.stages,
  * checked against the record's names); one without is a job of the phone's own (a run), its stages the record's.
@@ -70,6 +70,7 @@ object JobViewsReplay : AreaReplay {
             "LOOKUP_STEPS" to steps(Outcomes.LOOKUP_STEPS), "YOUTUBE_STEPS" to steps(Outcomes.YOUTUBE_STEPS),
             "COMMAND_STEPS" to texts(Outcomes.COMMAND_STEPS), "PEER_STEPS" to texts(Outcomes.PEER_STEPS),
             "ASKS" to texts(Outcomes.ASKS), "ELSEWHERE" to texts(Outcomes.ELSEWHERE),
+            "SITE_NAMES" to texts(Outcomes.SITE_NAMES),
             "WHAT" to JsonObject(Outcomes.WHAT.mapValues { (_, said) ->
                 JsonArray(listOf(JsonPrimitive(said.first), JsonPrimitive(said.second)))
             }),
@@ -138,7 +139,8 @@ object JobViewsReplay : AreaReplay {
         val songId = held.getValue("song_id").jsonPrimitive.longOrNull
         val seen = JobViews.view(job, held.getValue("ahead").jsonPrimitive.int, songId,
                                  facts = SongFacts.of(r.extra["facts"]),
-                                 songbookPage = (r.extra["songbook_page"] as? JsonPrimitive)?.contentOrNull)
+                                 songbookPage = (r.extra["songbook_page"] as? JsonPrimitive)?.contentOrNull,
+                                 now = Instant.parse(r.extra.getValue("now").jsonPrimitive.content))
         misses.check(seen == r.out) { "${held["kind"]}, ${r.extra["note"]}: ${seen}, Python's ${r.out}" }
     }
 
@@ -153,7 +155,8 @@ object JobViewsReplay : AreaReplay {
         val seen = JsonObject(linkedMapOf(
             "line" to line.asJson(),
             "steps" to JsonArray(Outcomes.steps(job, facts).map { it.asJson() }),
-            "progress" to JsonObject(Outcomes.progress(job, line, facts)),
+            "progress" to JsonObject(Outcomes.progress(job, line, facts,
+                                                       Instant.parse(r.extra.getValue("now").jsonPrimitive.content))),
             "outcome" to (over?.asJson() ?: JsonNull),
         ))
         misses.check(seen == r.out) { "${held["kind"]}, ${r.extra["note"]}: ${seen}, Python's ${r.out}" }
@@ -195,6 +198,7 @@ object JobViewsReplay : AreaReplay {
                 step.output = said.getValue("output").jsonArray.map { it.jsonPrimitive.content }
             }
             job.startedAt = (held["started_at"] as? JsonPrimitive)?.contentOrNull?.let(Instant::parse)
+            job.finishedAt = (held["finished_at"] as? JsonPrimitive)?.contentOrNull?.let(Instant::parse)
             job.units = (held["units"] as? JsonArray).orEmpty().map { u ->
                 val (id, outcome, why) = u.jsonArray.map { it.jsonPrimitive.content }
                 JobUnit(id, outcome, why)

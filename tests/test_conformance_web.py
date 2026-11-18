@@ -39,7 +39,7 @@ import copy
 import json
 import sys
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from urllib.parse import urlencode
 
@@ -494,9 +494,10 @@ def test_icon_json_is_page_icons_marks():
 # asked for, a sheet from YouTube and a video searched for. Each record: ``job`` as the phone holds a job of commands
 # (``commands``: its steps, ``{label, args, state, code, output}``; ``stages`` its stages as it heard them; ``kind`` its
 # JobSpec's, ``JobCommands.kindOf``'s; ``song_id`` the view's song, ``job_song_id`` the job's own, ``started_at``,
-# ``fetching``, ``note``, ``units``, ``ahead``), ``facts`` (status.SongFacts as data, or null: no such song),
-# ``songbook_page`` (a songbook's change's page, or null), ``kw`` ``{"todo": null}`` (the phone has no to-do page:
-# status.job_line's ``todo``), and ``out`` the view. Every kind passes through every state (queued, running, done,
+# ``finished_at``, ``fetching``, ``note``, ``units``, ``ahead``), ``facts`` (status.SongFacts as data, or null: no such
+# song), ``songbook_page`` (a songbook's change's page, or null), ``kw`` ``{"todo": null}`` (the phone has no to-do
+# page: status.job_line's ``todo``), ``now`` the time it is asked at (``V_NOW``: a job running since ``V_WHEN`` has run
+# 12 s, one over ran 30 s), and ``out`` the view. Every kind passes through every state (queued, running, done,
 # failed, cancelled, interrupted), every stage status.STAGE_LINES words runs in a job of the first kind that has it,
 # and a sync's, a take's and a merge's commands (test_web_sync.peer_job) are there too.
 # vectors/web/job_views.jsonl, test_conformance_sync_routes.py's, holds the phone's own jobs (a sync, an index
@@ -504,11 +505,13 @@ def test_icon_json_is_page_icons_marks():
 #
 # ``vectors/web/outcome.jsonl``: first the words status.py and outcome.py look up by a name, whole (``{"fn":
 # "tables", "out": {table: its words}}``), then outcome.py over the same jobs and a done lookup for each way each site
-# ``_WHAT`` names waits or fails: ``out`` ``{line, steps, progress, outcome}``, status.job_line's line (todo None),
-# ``outcome.steps``' chips, ``outcome.progress`` and, for a job over, ``outcome.outcome`` (``{tone, word, reason,
-# action, also}``, each action ``{label, href, post, fields}``).
+# ``_WHAT`` names waits or fails, each at ``now`` as above: ``out`` ``{line, steps, progress, outcome}``,
+# status.job_line's line (todo None), ``outcome.steps``' chips, ``outcome.progress`` and, for a job over,
+# ``outcome.outcome`` (``{tone, word, reason, action, also}``, each action ``{label, href, post, fields}``).
 
-V_WHEN = datetime(2026, 11, 3, 9, 30, tzinfo=UTC)
+V_WHEN = datetime(2026, 11, 3, 9, 30, tzinfo=UTC)  # when a job started
+V_ENDED = V_WHEN + timedelta(seconds=30)  # when one over ended
+V_NOW = V_WHEN + timedelta(seconds=12)  # when the records ask
 V_SONG = ("Radiohead", "Creep")
 V_DISPLAY = "Radiohead - Creep"
 V_KEY = "radiohead/creep"
@@ -546,7 +549,8 @@ def phone_job(job: _Job, song_id: int | None, ahead: int) -> dict:
             "stages": [{"name": s.name, "label": s.label, "state": s.state, "detail": s.detail,
                         "running_detail": s.running_detail} for s in job.stages],
             "output": [line for s in job.steps for line in s.output], "song_id": song_id,
-            "job_song_id": job.song_id, "started_at": _stamp(job.started_at), "units": [list(u) for u in job.units],
+            "job_song_id": job.song_id, "started_at": _stamp(job.started_at),
+            "finished_at": _stamp(job.finished_at), "units": [list(u) for u in job.units],
             "ahead": ahead, "outcome": None}
 
 
@@ -577,7 +581,7 @@ def in_state(job: _Job, state: str, stages: dict[str, tuple[str, str]] | None = 
     job = copy.deepcopy(job)
     job.state = state
     job.started_at = None if state in ("queued", "cancelled") else V_WHEN
-    job.finished_at = V_WHEN if state not in ("queued", "running") else None
+    job.finished_at = V_ENDED if state not in ("queued", "running") else None
     for n, step in enumerate(job.steps):
         last = n == len(job.steps) - 1
         step.state = _STEP_STATES[state] if last else ("done" if state not in ("queued", "cancelled") else
@@ -726,6 +730,16 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
                                                                            "match": ("running", "")})),
         facts=_status.SongFacts())
     add("interrupted before it ran", _interrupted(look), None)
+    # Cut off as it asked Ultimate Guitar for the sheet: what it said while it ran is no finding.
+    add("interrupted as it asked for the sheet", _interrupted(in_state(look, "running", {
+        "song": ("done", "in the book"), "match": ("done", "matched to radiohead/creep"),
+        "sheet": ("running", SHEET_FROM["ug"])})), facts=_status.SongFacts())
+    first = in_state(look, "running", {"song": ("done", ""), "match": ("running", "")})
+    first.started_at = V_NOW  # at the records' ``now`` it has run 0 s: no steps
+    add("a lookup running, its first second", first, facts=_status.SongFacts())
+    quick = in_state(look, "done", _with(nothing, sheet=("skipped", UG_COOLING)), running={"sheet": SHEET_FROM["ug"]})
+    quick.finished_at = V_WHEN  # as it started: no steps, frozen or not
+    add("a lookup done within its first second", quick, facts=_status.SongFacts())
     no_books = lookup_job(("songbooks", False))
     add("a lookup that leaves its songbooks to a later job, running", in_state(no_books, "running", {
         "song": ("done", ""), "match": ("done", ""), "sheet": ("running", SHEET_FROM["ug"])}), facts=_status.SongFacts())
@@ -871,6 +885,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     youtube = queued_job(f"YouTube sheet {V_DISPLAY}", _jobs.YOUTUBE_SHEET + V_KEY,
                          _jobs.youtube_sheet_steps(V_DISPLAY, "https://www.youtube.com/watch?v=XFkzRNyygfk"),
                          display=V_DISPLAY)
+    add("a sheet from YouTube, waiting for the book", in_state(youtube, "running", {"song": (
+        "running", "waiting for the book (pid 9: run)")}), facts=ready)
     add("a sheet from YouTube, its audio", in_state(youtube, "running", {"song": ("done", ""),
                                                                         "audio": ("running", "")}), facts=ready)
     add("a sheet from YouTube, ready", in_state(youtube, "done", {
@@ -984,7 +1000,7 @@ def _interrupted(job: _Job) -> _Job:
     from caracole.web.history import interrupt
 
     job = copy.deepcopy(job)
-    interrupt(job, at=V_WHEN)
+    interrupt(job, at=V_ENDED)
     return job
 
 
@@ -999,10 +1015,10 @@ def view_kind_records(monkeypatch) -> list[dict]:
     for note, job, song_id, ahead, facts, page in kinds_jobs():
         queue = [_Job(job.id - 1 - n, "Add Other", f"other/{n}", [_jobs.Step("Adding to the library", ("add",))])
                  for n in range(ahead)] + [job]
-        out = _jobs_routes.view(job, queue[::-1], song_id, facts, songbook_page=page)
+        out = _jobs_routes.view(job, queue[::-1], song_id, facts, songbook_page=page, now=V_NOW)
         records.append({"fn": "caracole.web.jobs_routes.view", "note": note, "job": phone_job(job, song_id, ahead),
                         "facts": facts_json(facts), "songbook_page": page, "args": [], "kw": {"todo": None},
-                        "out": out})
+                        "now": _stamp(V_NOW), "out": out})
     return records
 
 
@@ -1043,8 +1059,9 @@ def reason_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | 
 
 
 def tables_record() -> dict:
-    """The words status.py and outcome.py look up by a stage's, a step's or a command's name, whole: what the
-    records above don't draw (the phone's own sync's mirror and index stages among them)."""
+    """The words status.py and outcome.py look up by a stage's, a step's, a command's or a site's name (a step's site
+    in full by its tag, ``SITE_NAMES``), whole: what the records above don't draw (the phone's own sync's mirror and
+    index stages among them)."""
     from caracole.web import songbooks
 
     return {"fn": "tables", "args": [], "kw": {}, "out": {
@@ -1054,7 +1071,8 @@ def tables_record() -> dict:
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
-        "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE}}
+        "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
+        "SITE_NAMES": _outcome.SITE_NAMES}}
 
 
 def outcome_records() -> list[dict]:
@@ -1069,10 +1087,10 @@ def outcome_records() -> list[dict]:
                                            "action": _action(over.action), "also": _action(over.also)}
         records.append({"fn": "caracole.web.outcome", "note": note, "job": phone_job(job, song_id, ahead),
                         "facts": facts_json(facts),
-                        "songbook_page": page, "args": [], "kw": {"todo": None},
+                        "songbook_page": page, "args": [], "kw": {"todo": None}, "now": _stamp(V_NOW),
                         "out": {"line": line.as_json(),
                                 "steps": [chip.as_json() for chip in _outcome.steps(job, facts)],
-                                "progress": _outcome.progress(job, line, facts), "outcome": shown}})
+                                "progress": _outcome.progress(job, line, facts, now=V_NOW), "outcome": shown}})
     return [tables_record()] + records
 
 
@@ -1106,10 +1124,11 @@ def test_outcome_jsonl_is_what_the_requests_tab_says_of_each_job():
     check(WEB / "outcome.jsonl", jsonl([tables, *records], corpus="web/outcome", made_by=MADE_BY))
 
 
-def test_a_skipped_pdf_stage_is_no_chip_and_says_nothing():
-    # A caracole that makes no PDF skips its pdf stage, whatever its words: no step drawn, no reason read.
+def test_a_skipped_pdf_stage_is_a_skipped_step_and_says_nothing():
+    # A caracole that makes no PDF skips its pdf stage, whatever its words: the step keeps its place, skipped, and no
+    # reason is read.
     job = in_state(lookup_job(), "done", DONE_ALL)
-    assert "PDF" not in [chip.name for chip in _outcome.steps(job)]
+    assert ("PDF", "skipped") in [(chip.name, chip.state) for chip in _outcome.steps(job)]
     line = _status.job_line(job, _status.SongFacts(sheet=SHEET), todo=None)
     assert _outcome.outcome(job, line, _status.SongFacts(sheet=SHEET)).reason == ""
 

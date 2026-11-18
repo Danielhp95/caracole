@@ -34,7 +34,7 @@ SyncRoutes (lane phone-sync-routes, then sync-routes) and JobViews (lane jobs) a
   running_detail}``: a staged job's stages, else its commands as ``Job.as_json`` lists them as steps), ``output``
   (what it printed, its ``error:`` line among them), ``song_id`` (the song the view names, or null), ``ahead`` (the
   jobs waiting or running before it) and ``outcome`` (what it took, gave and left: ``jobs_routes.peer_outcome``, which
-  the phone's job sets itself); ``out`` the view.
+  the phone's job sets itself); ``now`` the time the view is asked at (``NOW``); ``out`` the view.
 
 A change to sync_routes.py, jobs_routes.py's view, status.py's or outcome.py's words, or to the sync corpus's
 fixtures makes these stale: regenerate them (§3 of docs/superpowers/plans/2026-11-03-android-port-m1-m3.md), and the
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -316,6 +316,7 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
 
 
 WHEN = datetime(2026, 11, 3, 9, 30, tzinfo=UTC)
+NOW = WHEN + timedelta(seconds=12)  # when the views are asked
 SONG = ("Radiohead", "Creep")
 KEY = "radiohead/creep"
 
@@ -353,9 +354,9 @@ def view_record(note: str, job: PyJob, kind: str, *, song_id: int | None = None,
                 facts: SongFacts | None = None) -> dict[str, Any]:
     queue = [PyJob(job.id - 1 - n, "Add Other", f"other/{n}", [Step("Adding to the library", ("add",))])
              for n in range(ahead)] + [job]
-    out = view(job, queue[::-1], song_id, facts)
+    out = view(job, queue[::-1], song_id, facts, now=NOW)
     return {"fn": "caracole.web.jobs_routes.view", "note": note, "job": as_phone_job(job, kind, song_id, ahead),
-            "args": [], "kw": {}, "out": out}
+            "args": [], "kw": {}, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"), "out": out}
 
 
 SYNC_DONE = {"compare": ("done", "4 differences"), "take": ("done", "took 2"), "give": ("done", "gave 1"),

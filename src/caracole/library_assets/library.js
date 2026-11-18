@@ -664,26 +664,50 @@
     return i !== undefined && lines.get(i) === node;
   };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
-  // Its link says where to go next; details, the request's output in the Requests tab, follows it. ``counted``: a song's line or
-  // a result's row (showRequest), which says how many of its lookup's steps are over, "· 4 of 7 done" (the view's
-  // ``count``, while it runs).
-  const showLine = (p, view, counted) => {
+  // Its link says where to go next; details, the request's output in the Requests tab, follows it. ``onLine``: a
+  // song's line or a result's row (showRequest), where a lookup that runs, with its steps (the view's ``steps``, none
+  // for its first second, outcome.py's BAR_AFTER), is a bar of them in place of its words (p ``barred``): a segment a
+  // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``),
+  // which is what a screen reader hears; while a nightly run holds the book (``waits``), "Waiting for the book · 1 of
+  // 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
+  // A request that waits, on a served page (the view's id): Cancel beside its place takes it out of the queue
+  // (POST /jobs/cancel, the Journal's), never one that runs. Answered, the line says Cancelled, as the next view does;
+  // refused or unanswered, what went wrong, and the next view draws the line again.
+  const cancelButton = (p, view) => {
+    const b = el("button", "cancel", "Cancel");
+    b.type = "button";
+    b.setAttribute("aria-label", "Cancel " + String(view.display || "request"));
+    b.addEventListener("click", () => {
+      b.disabled = true;
+      postTo("/jobs/cancel", new URLSearchParams({ csrf: String(server.csrf || ""), job: String(view.id) })).then(
+        (answer) => showLine(p, answer.ok ? { line: { tone: "cancelled", text: "Cancelled" } } : failure(answer), true),
+        () => showLine(p, UNREACHABLE, true));
+    });
+    return b;
+  };
+  const showLine = (p, view, onLine) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
     const more = typeof line.details === "string" ? line.details : "";
-    const count = counted && view && typeof view.count === "string" ? view.count : "";
-    const key = [line.tone, line.text, to ? to.href : "", more, count].map(String).join("|");
+    const chips = chipsOf(view);
+    const barred = Boolean(onLine && line.tone === "running" && view && isActive(view) && chips.length);
+    const cancels = Boolean(onLine && server && line.tone === "queued" && view && view.state === "queued"
+      && Number.isInteger(view.id));
+    const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count,
+      view.waits === true] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""]).map(String).join("|");
     if (p.dataset.key === key) return;
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
+    p.classList.toggle("barred", barred);
+    if (barred) {
+      const shown = waitsIn(chips, view);
+      p.replaceChildren(segsOf(shown), ...stepWords(shown, view));
+      if (focused) focusOn(p);
+      return;
+    }
     p.textContent = "";
     p.appendChild(el("span", null, line.text || ""));
-    if (count) {
-      const dot = el("span", "dot", "·");
-      dot.setAttribute("aria-hidden", "true");
-      p.append(dot, el("span", "steps-over", count));
-    }
     for (const go of [to, more ? { label: "Details", href: more } : null]) {
       if (!go) continue;
       const dot = el("span", "dot", "·");
@@ -693,52 +717,128 @@
       if (go === to) a.addEventListener("click", (e) => pickHere(e, p));
       p.appendChild(a);
     }
+    if (cancels) {
+      const dot = el("span", "dot", "·");
+      dot.setAttribute("aria-hidden", "true");
+      p.append(dot, cancelButton(p, view));
+    }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };
-  // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names and its state) as chips
-  // under its request line ``p`` (steps.css's, the Requests tab's markup): those done ticked, the one that runs lit
-  // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone.
-  // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
-  // lookup, or ended Ready, its steps folded away): none drawn.
-  const STEP_MARKS = { done: "✓ ", failed: "✕ " };
-  const STEP_STATES = ["waiting", "running", "done", "failed", "plain"];
-  const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("step-chips")
+  // A request's steps (the view's ``steps``: outcome.py's, each its name, the site it names in full, ``site``, its
+  // state and what it found), those that are steps at all.
+  const STEP_STATES = ["waiting", "running", "done", "failed", "plain", "skipped"];
+  const stepState = (c) => (STEP_STATES.indexOf(c.state) >= 0 ? String(c.state) : "waiting");
+  const chipsOf = (view) => listOf(view && view.steps).filter((c) => c && typeof c === "object" && c.name);
+  // The bar's segments (steps.css's), one a step in its state, a failed one with its "!": for the eye alone, as the
+  // words beside them say how it goes.
+  const segsOf = (chips) => {
+    const segs = el("span", "step-segs");
+    segs.setAttribute("aria-hidden", "true");
+    for (const c of chips) {
+      const state = stepState(c);
+      segs.appendChild(el("i", "seg " + state, state === "failed" ? "!" : null));
+    }
+    return segs;
+  };
+  // The words beside the bar: the step in hand (the view's ``at``), its site, and its place among them all
+  // (``count``, "3 of 7"); none when the view names no step in hand. While it waits for the book (``waits``), the
+  // wait in place of the step's name.
+  const WAITS = "Waiting for the book";
+  const stepWords = (chips, view) => {
+    const at = view ? view.at : null;
+    if (!Number.isInteger(at) || at < 0 || at >= chips.length || typeof view.count !== "string") return [];
+    const c = chips[at];
+    const words = el("span", "step-at");
+    words.appendChild(el("b", null, view.waits === true ? WAITS : String(c.name)));
+    if (c.site) words.append(" · " + String(c.site));
+    return [words, el("span", "step-count", " · " + view.count)];
+  };
+  // The steps as the bar draws them: while a nightly run holds the book (the view's ``waits``, outcome.py's), the step
+  // in hand waiting, unlit and steady, as nothing moves.
+  const waitsIn = (chips, view) => (view && view.waits === true && Number.isInteger(view.at) && chips[view.at]
+    ? chips.map((c, i) => (i === view.at ? Object.assign({}, c, { state: "waiting" }) : c)) : chips);
+  // A lookup's steps under its request line ``p`` (steps.css's ``div.steps``, the one sibling right after it, which
+  // refill keeps): once ``p`` is no longer the bar (the request ended otherwise than Ready, or its line says something
+  // else), the bar as it left them, frozen (``.step-bar``: its segments, and the step that failed first and its place,
+  // "Sheet · LaCuerda · 3 of 7"), for a screen reader a picture its name says ("Steps: Song: done; …"); then always the
+  // list of them (stepList), which shows while the line's card is open, in the frozen bar's place. No live region: the
+  // line says how it goes; these are to look at and read. None in the view (a request that runs no lookup, or ended
+  // Ready, its steps folded away): none drawn. A line with no steps is no bar either (a removal counting down draws its
+  // own words in p).
+  const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("steps")
     ? p.nextElementSibling : null);
+  const stepSaid = (c) => {
+    const state = stepState(c);
+    return String(c.name) + (c.site ? ", " + String(c.site) : "") + ": " + (state === "plain" ? "done" : state);
+  };
   const drawSteps = (p, view) => {
-    const chips = listOf(view && view.steps).filter((c) => c && typeof c === "object" && c.name);
+    const chips = chipsOf(view);
     let box = stepsAfter(p);
     if (!chips.length) {
+      p.classList.remove("barred");
       if (box) box.remove();
       return;
     }
-    const key = JSON.stringify(chips.map((c) => [c.name, c.source, c.state]));
+    const barred = p.classList.contains("barred");
+    const over = !isActive(view);
+    const shown = waitsIn(chips, view);
+    const key = JSON.stringify([shown.map((c) => [c.name, c.site, c.state, c.found]), barred, over, view.at,
+      view.count, view.waits === true]);
     if (box && box.dataset.key === key) return;
     if (!box) {
-      box = el("ol", "step-chips");
-      box.setAttribute("aria-label", "Steps");
+      box = el("div", "steps");
       p.after(box);
     }
     box.dataset.key = key;
-    box.replaceChildren(...chips.map((c) => {
-      const state = STEP_STATES.indexOf(c.state) >= 0 ? String(c.state) : "waiting";
-      const chip = el("li", "step-chip " + state);
-      if (state === "running") chip.setAttribute("aria-current", "step");
-      if (own.call(STEP_MARKS, state)) {
-        const mark = el("span", null, STEP_MARKS[state]);
-        mark.setAttribute("aria-hidden", "true");
-        chip.appendChild(mark);
-      }
-      chip.appendChild(document.createTextNode(String(c.name)));
-      if (c.source) chip.append(" ", el("b", null, String(c.source)));
-      if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
-      return chip;
-    }));
+    const parts = [];
+    if (!barred) {
+      const bar = el("div", "step-bar");
+      bar.setAttribute("role", "img");
+      bar.setAttribute("aria-label", "Steps: " + shown.map(stepSaid).join("; "));
+      bar.append(segsOf(shown), ...stepWords(shown, view));
+      parts.push(bar);
+    }
+    parts.push(stepList(shown, over));
+    box.replaceChildren(...parts);
   };
-  // How a song's request goes on its line, a result's row or a line under the bar: its request line, with the count of
-  // its lookup's steps over, and the steps under it. Ended Ready, the steps fold away and the line's words are for a
-  // screen reader alone (rows.css), which hears the request end: the line is the song's, its buttons opening what it
-  // holds now. The focus, if the request line had it (Fetch now hands it there), goes to the first of them (a row's,
-  // a line's action that is a link: its Open).
+  // A request's steps as a list (``ol.step-list``, steps.css's), one line a step in its place: its mark, for the eye
+  // alone (done and plain ✓, the one that runs ◐ and the current step, those to come ○, a skipped one –, a failed one
+  // !), its name and the site it names, its state for a screen reader right after them (a plain one, "Match · not on
+  // UG", done), and what it found. ``over``: the request is over, and its skipped steps, which had nothing to do for the
+  // song, leave their places for one last line, "Skipped: PDF, Songbooks". The one function that draws a list of
+  // steps: the open card's (drawSteps) and the Journal's (requests.js, through window.caracoleLibrary).
+  const STEP_GLYPHS = { done: "✓", plain: "✓", running: "◐", waiting: "○", skipped: "–", failed: "!" };
+  const stepList = (chips, over) => {
+    const steps = el("ol", "step-list");
+    steps.setAttribute("aria-label", "Steps");
+    const skipped = [];
+    for (const c of listOf(chips).filter((x) => x && typeof x === "object" && x.name)) {
+      const state = stepState(c);
+      if (over && state === "skipped") {
+        skipped.push(String(c.name));
+        continue;
+      }
+      const item = steps.appendChild(el("li", "step " + state));
+      if (state === "running") item.setAttribute("aria-current", "step");
+      item.appendChild(el("span", "step-glyph", STEP_GLYPHS[state])).setAttribute("aria-hidden", "true");
+      const name = item.appendChild(el("span", "step-name"));
+      name.appendChild(el("b", null, String(c.name)));
+      if (c.site) name.append(" · " + String(c.site));
+      item.appendChild(el("span", "visually-hidden", ": " + (state === "plain" ? "done" : state)));
+      if (c.found) item.appendChild(el("span", "step-found", String(c.found)));
+    }
+    if (skipped.length) {
+      const item = steps.appendChild(el("li", "step skipped-all"));
+      item.appendChild(el("span", "step-glyph", STEP_GLYPHS.skipped)).setAttribute("aria-hidden", "true");
+      item.append("Skipped: " + skipped.join(", "));
+    }
+    return steps;
+  };
+  // How a song's request goes on its line, a result's row or #requested's line under the search box: its request
+  // line, a bar of its lookup's steps while it runs, and the steps under it once it ended otherwise than Ready. Ended
+  // Ready, the steps fold away and the line's words are for a screen reader alone (rows.css), which hears the request
+  // end: the line is the song's, its buttons opening what it holds now. The focus, if the request line had it (Fetch
+  // now hands it there), goes to the first of them (a row's, a line's action that is a link: its Open).
   const showRequest = (item, view) => {
     const p = progressIn(item);
     showLine(p, view, true);
@@ -3746,6 +3846,7 @@
       track(view);
     },
     showLine,
+    stepList,
     focusOn,
     fold,
   });

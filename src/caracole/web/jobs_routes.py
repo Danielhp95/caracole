@@ -11,14 +11,14 @@
 
 The Requests tab (feed.py, drawn by library_assets/requests.js) shows the request that runs with its steps and
 those queued under it, each with Cancel, then the finished ones newest first, each as outcome.py says it: its
-outcome, a reason, when it finished and its next step (Open, Pick the match, Get it from there, Request by name, Try
-again…), read from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local
-indexes have elsewhere, ``outcome.elsewhere``). Cancel and Try again answer a form with the tab (``REQUESTS``), and
-the page's script with data.
+outcome, a reason, a lookup's steps (``outcome.lists_steps``), when it finished and its next step (Open, Pick the
+match, Get it from there, Request by name, Try again…), read from its line and its song (``song_of``: for a song a
+fetch left without a sheet, what the local indexes have elsewhere, ``outcome.elsewhere``). Cancel and Try again answer
+a form with the tab (``REQUESTS``), and the page's script with data.
 
 Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
 an id songs.id gives again once the newest song is removed never shares), its line (status.py, as a song's
-line says it: ``song_line``), a lookup's steps and how many are over (outcome.py's ``progress``) and, once
+line says it: ``song_line``), a lookup's steps and the step in hand (outcome.py's ``progress``) and, once
 it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
 songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
@@ -217,9 +217,10 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
 
     shown = []
     section: dict[str, Any] | None = None  # read once, for every job that asks
+    now = datetime.now(UTC)  # one time an answer, for every job's steps
     for job in jobs if only is None else only:
         song_id, facts = song_of(app, conn, overrides, job)
-        seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
+        seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job), now=now)
         if (job.id in cards and not job.active and overrides is not None
                 and not job.song_key.startswith(INDEX_READS)):
             section = section or _songbooks(app, conn, overrides)
@@ -230,7 +231,7 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
             except KeyError:
                 shown.append(seen)
                 continue
-            card = song_cards(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0), [song])[0]
+            card = song_cards(conn, app.cfg, overrides, now.replace(microsecond=0), [song])[0]
             card["fetchable"] = not review_first(song, overrides)
             seen["card"] = card
         shown.append(seen)
@@ -238,7 +239,7 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
 
 
 def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None, *,
-         songbook_page: str | None = None) -> dict[str, Any]:
+         songbook_page: str | None = None, now: datetime | None = None) -> dict[str, Any]:
     """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
     ("song"), a song's removal ("remove"), an export of a song's sheet ("export", which is no song's line: its
     ``songId`` is None), or a songbook ("songbook", which ``songbook`` names), whose ``songbook_page`` its line
@@ -250,8 +251,8 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     identity.
 
     Its ``line`` is as a song's line says it (``song_line``): Ready alone, and its sheet as ``sheet``, which the
-    list of requests opens by the song's name. A lookup's ``steps`` and, while it runs, its ``count`` are
-    outcome.py's ``progress``: none once it ends Ready."""
+    list of requests opens by the song's name. A lookup's ``steps`` and the step in hand, ``at`` and ``count``, are
+    outcome.py's ``progress`` at ``now`` (None: the clock's): none once it ends Ready, nor for its first second."""
     from caracole.web.outcome import PEER_STEPS, progress
     from caracole.web.songbooks import songbook_of
 
@@ -273,7 +274,7 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     if shown is not line and line.link is not None:
         seen["sheet"] = line.link[1]
     if kind == "song":
-        seen.update(progress(job, line, facts))
+        seen.update(progress(job, line, facts, now=now))
     if song_id is not None and songbook is None:
         seen["identity"] = song_key_of(job.song_key)
     if songbook is not None:

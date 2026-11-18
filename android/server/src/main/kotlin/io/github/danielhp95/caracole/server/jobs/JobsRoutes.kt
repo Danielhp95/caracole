@@ -65,6 +65,7 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
         val ids = jobIds(asked)
         val jobs = queue.snapshot()
         val only = if (ids == null) jobs else jobs.filter { it.id in ids }
+        val now = clock()  // one time an answer, for every job's steps
         val shown = database.read { db ->
             ended.forget(jobs)
             var section: JsonObject? = null  // read once, for every job that asks
@@ -77,7 +78,7 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
                 val card = song?.let { cardOf(db, it) }
                 val ahead = if (job.state == Job.QUEUED) jobs.count { it.active && it.id < job.id } else 0
                 JobViews.view(job, ahead, songId, card = card, songbooks = if (over && !read) section else null,
-                              facts = facts, songbookPage = songbookPage(db, job))
+                              facts = facts, songbookPage = songbookPage(db, job), now = now)
             }
         }
         return json(200, JsonObject(linkedMapOf(

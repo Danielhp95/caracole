@@ -3,6 +3,7 @@
 import json
 import sys
 import threading
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -335,7 +336,7 @@ def test_a_lookup_that_joined_a_keep_it_starts_its_stages_afresh():
         if args[0] == "get":
             job = queue.snapshot()[0]
             seen.append({s.name: s.state for s in job.stages})
-            seen.append(progress(job, job_line(job, None), None))
+            seen.append(progress(job, job_line(job, None), None, now=job.started_at + timedelta(seconds=5)))
         return 0
 
     queue = JobQueue(runner)
@@ -348,7 +349,7 @@ def test_a_lookup_that_joined_a_keep_it_starts_its_stages_afresh():
         "pages": "waiting"}
     assert [(c["name"], c["state"]) for c in shown["steps"]][:4] == [
         ("Song", "done"), ("Match", "done"), ("Sheet", "running"), ("PDF", "waiting")]
-    assert shown["count"] == "2 of 7 done"
+    assert shown["count"] == "3 of 7"
 
 
 def test_a_lookup_asked_for_while_the_songs_keep_it_runs_comes_after_it():

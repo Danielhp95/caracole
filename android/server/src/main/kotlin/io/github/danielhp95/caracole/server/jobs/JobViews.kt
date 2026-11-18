@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 
 /**
  * jobs_routes.view on the phone: a job as `/jobs.json` gives it to the library page's script, which follows it on a
@@ -72,19 +73,20 @@ object JobViews {
 
     /** [view] with the jobs before a queued one counted in [queue], and its song the one the job knows. */
     fun view(job: Job, queue: JobQueue, card: JsonObject? = null, songbooks: JsonObject? = null,
-             facts: SongFacts? = null, songbookPage: String? = null): JsonObject =
+             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject =
         view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0,
              (card?.get("id") as? JsonPrimitive)?.content?.toLongOrNull() ?: job.songId, card, songbooks, facts,
-             songbookPage)
+             songbookPage, now)
 
     /**
      * A job as `/jobs.json` gives it; [ahead], the jobs waiting or running before a queued one; [songId], the song it
      * is about as the library has it now (jobs_routes.song_of, SongFacts.songOf), or null; [card], its song's card
      * as the page draws it now, for a job over ([SongCards]); [songbooks], the Songbooks tab's data as it is now;
-     * [facts], what the library knows of its song (SongFacts.songOf); [songbookPage], a songbook's change's page.
+     * [facts], what the library knows of its song (SongFacts.songOf); [songbookPage], a songbook's change's page;
+     * [now], the time it is asked at, for a lookup's steps (Outcomes.progress: none for its first second).
      */
     fun view(job: Job, ahead: Int, songId: Long?, card: JsonObject? = null, songbooks: JsonObject? = null,
-             facts: SongFacts? = null, songbookPage: String? = null): JsonObject {
+             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject {
         val shape = Shape(job)
         val kind = kindOf(shape)
         val line = line(shape, ahead, facts, songbookPage)
@@ -110,7 +112,7 @@ object JobViews {
             seen["outcome"] = if (shape.own) ownOutcome(job, kind) else if (kind in SYNCS) peerOutcome(shape) else JsonNull
         }
         if (shown != line && line.link != null) seen["sheet"] = JsonPrimitive(line.link.second)
-        if (kind == "song") seen.putAll(Outcomes.progress(shape, line, facts))
+        if (kind == "song") seen.putAll(Outcomes.progress(shape, line, facts, now))
         val songbook = if (shape.own) null else Status.songbookOf(job.key)
         val identified = if (shape.own) kind == "song" || kind == "remove" else songbook == null
         if (songId != null && identified) seen["identity"] = JsonPrimitive(Status.songKeyOf(job.key))

@@ -4,29 +4,41 @@ The library page's song lines keep status.py's ``Line``, and draw a lookup's ste
 the Requests tab (feed.py) reads that same line and says it its own way, never from anything else than
 the job and what the library knows of its song:
 
-- **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few steps
+- **Steps** (``steps``), for the request that runs, and for a lookup or a sheet from a YouTube video once it is
+  over, as it left them (``lists_steps``: one that started): a lookup's stages (get.py's ``STAGES``) as a few steps
   in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored
   and its tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file, harptabs.com's harmonica tab and gametabs.net's tab
   of game music, from the
   first to the last) and
   Songbooks; a request of other commands, its commands, each by what it does ("Sheet" for ``caracole
-  fetch``), else by its step's label. A step is running while one of its stages runs, or once some ran and
-  others wait; done once all are over, failed when one failed. A step the request doesn't use is not drawn:
-  the songbooks of a lookup that leaves them to a later job (``--no-songbooks``), and a step whose every
-  stage ended skipped, with nothing to do for the song. The sheet skipped for a block, a cooldown or a spent
-  budget had something to do: it is the step that stopped the lookup, drawn failed, as a site's error leaves
-  it, so a lookup that ends Not fetched yet shows it. Two steps name a site (``Chip.source``): Match the
-  offline index it matched in, Ultimate Guitar's ("Match UG"), or, for a song that index lacks, "Match · not
-  on UG", drawn plain (``plain``: over, and no failure, as the sheet may come from LaCuerda); Sheet no site
-  until it asks one, then the one it asks (its running detail, get.py's ``SHEET_FROM``: "Sheet LaCuerda"),
-  and once done where the song's sheet came from (``SongFacts.sheet_from``), never guessed.
+  fetch``), else by its step's label, each skipped one not drawn. A step is running while one of its stages
+  runs, or once some ran and others wait; done once all are over, failed when one failed. A lookup's steps are
+  fixed when it starts: those of its command (no Songbooks for one that leaves them to a later job,
+  ``--no-songbooks``), and a step whose every stage ended skipped, with nothing to do for the song, keeps its
+  place, ``skipped``, over as a done one is. The sheet skipped for a block, a cooldown or a spent budget had
+  something to do: it is the step that stopped the lookup, drawn failed, as a site's error leaves it, so a
+  lookup that ends Not fetched yet shows it. Two steps name a site, in full (``Chip.site``, ``SITE_NAMES``): Match
+  the offline index it matched in, Ultimate Guitar's ("Match Ultimate Guitar"), or, for a song that index lacks,
+  "Match · not on UG", drawn plain (``plain``: over, and no failure, as the sheet may come from LaCuerda); Sheet no
+  site until it asks one, then the one it asks (its running detail, get.py's ``SHEET_FROM``: "Sheet LaCuerda"),
+  and once done where the song's sheet came from (``SongFacts.sheet_from``), never guessed. Each says what it found
+  (``Chip.found``, ``_found``): its stages' words, those done as they said them ("in the book", "tab 1 from Ultimate
+  Guitar"), one that failed as the outcome words it where it can ("Ultimate Guitar answered 502. The sheet waits
+  until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits, nor from a stage
+  the server cut off, whose words are what it said while it ran.
 - **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Chords
-  and PDF, its audio skipped for a block, a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
+  and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
+  a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
   says what the sheet holds (its chords stage's words: chords over the timed lyrics, a chart then the lyrics, or
   chords alone), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
-- **Progress** (``progress``), for the library page: a lookup's steps under the song's line (or a search
-  result's row) while it runs, with how many are over ("4 of 7 done"); once it ends Ready they fold away, as
-  the song's line opens its sheet itself; ended otherwise they stay, to show which step stopped. A request
+- **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
+  result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
+  waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
+  step the lookup has from its start, so the count only rises, and ``waits`` while that step waits for the book
+  (a nightly run holds caracole's lock: "Waiting for the book · 1 of 7"); once it ends Ready they fold away, as
+  the song's line opens its sheet itself; ended otherwise they stay, to show which step stopped, ``at`` and ``count``
+  naming the first that failed, none when none did. Nothing for its first second (``BAR_AFTER``), decided here,
+  so a reload agrees: none while it has run less, and none ever for one over within it, frozen or not. A request
   that runs no lookup keeps its one line.
 - **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs your pick, Not on the sites,
   Not fetched yet, Failed, Removed, a songbook's Made, Deleted…: the line's), a reason in one sentence
@@ -66,15 +78,15 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
-from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
-from caracole.icons import tag
+from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
+from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import READY, Line, SongFacts, peer_kind
+from caracole.web.status import READY, _WAITING, Line, SongFacts, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -100,10 +112,15 @@ YOUTUBE_STEPS = (
     ("PDF", ("pdf",)),
 )
 YOUTUBE_SOURCE = tag("youtube")  # the site its Audio step names
+# A step's site in full, by its tag (icons.tag): get.py's names, YouTube's, and where an auto sheet or a file you filed
+# came from; a tag it lacks is named as it is.
+SITE_NAMES = {tag(key): name for key, name in NAMES.items()} | {
+    YOUTUBE_SOURCE: "YouTube", tag(AUTO): "auto-chords", tag(INBOX): "your inbox"}
 # A request of other commands: each command's step, by what it does; any other by its step's label.
 COMMAND_STEPS = {"add": "Add", "match": "Match", "fetch": "Sheet", "render": "PDF", "review": "Your pick",
                  "remove": "Remove", "lacuerda": "LaCuerda", "songbook": "Songbook", LOOKUP: "Fetch"}
 _OVER = ("done", "skipped", "failed")
+BAR_AFTER = timedelta(seconds=1)  # how long a request runs before the library page draws its steps
 MATCHED_IN = "UG"  # the offline index a lookup's match stage matches in: Ultimate Guitar's
 NOT_ON_UG = "Match · not on UG"  # its step, for a song that index lacks
 _ASKS = {said: tag(provider) for provider, said in SHEET_FROM.items()}  # a running sheet stage's site, by its words
@@ -139,15 +156,19 @@ _NO_UNITS = ("index-merge",)
 
 @dataclass(frozen=True)
 class Chip:
-    """A step of the running request: its name, its state (waiting, running, done or failed; or plain, over and
-    neither, "Match · not on UG") and the site it names, ``source`` ("UG", "LaCuerda"; "" for none)."""
+    """A step of a request: ``name``; ``state`` (waiting, running, done or failed; skipped, every stage of it ended
+    skipped, over, in its place; or plain, over and neither, "Match · not on UG"); ``site``, the site it names in full
+    (``SITE_NAMES``: "Ultimate Guitar", "LaCuerda", "YouTube"; "" for none); and ``found``, what it found (``_found``:
+    its stages' words, those done and those failed as it reads them; "" for nothing, a plain step, a skipped one and
+    one that waits). A step of a sync, a take or a request of other commands names no site and finds nothing."""
 
     name: str
     state: str
-    source: str = ""
+    site: str = ""
+    found: str = ""
 
     def as_json(self) -> dict[str, str]:
-        return {"name": self.name, "source": self.source, "state": self.state}
+        return {"name": self.name, "site": self.site, "state": self.state, "found": self.found}
 
 
 @dataclass(frozen=True)
@@ -179,8 +200,8 @@ class Outcome:
 
 
 def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
-    """The request's steps, as the Requests tab draws the one that runs; ``facts``: its song's, for where its
-    sheet came from."""
+    """The request's steps, as the Requests tab draws the one that runs, and a finished one ``lists_steps`` takes;
+    ``facts``: its song's, for where its sheet came from."""
     if peer_kind(job) is not None:  # a sync's or a take's: its stages, each skipped one not drawn
         return [Chip(PEER_STEPS.get(stage.name, stage.label), "failed" if stage.state == INTERRUPTED else stage.state)
                 for stage in job.stages if stage.state != "skipped"]
@@ -198,6 +219,12 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
     return chips
 
 
+def lists_steps(job: Job) -> bool:
+    """Whether the Requests tab lists the steps of ``job`` once it is over: a lookup's, or a sheet from a YouTube
+    video's, that started, as it left them; never one cancelled before it ran, nor a request of other commands."""
+    return not job.active and job.started_at is not None and (job.looks_up or job.from_youtube)
+
+
 def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     leaves_songbooks = any(step.args[:1] == (LOOKUP,) and "--no-songbooks" in step.args for step in job.steps)
     by_name = {stage.name: stage for stage in job.stages}
@@ -205,31 +232,43 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     for name, names in LOOKUP_STEPS:
         if name == "Songbooks" and leaves_songbooks:
             continue
-        states = [_sheet_waited(by_name[n]) for n in names if n in by_name]
-        state = _state(states)
+        read = [(by_name[n], _sheet_waited(by_name[n])) for n in names if n in by_name]
+        state = _state([s for _, s in read])
         if state is None:
             continue
         if name == "Match":
-            chips.append(_match(by_name["match"], state))
+            chips.append(_match(by_name["match"], state, _found(read)))
         elif name == "Sheet":
-            chips.append(Chip(name, state, _sheet_source(by_name["sheet"], state, facts)))
+            where = _sheet_source(by_name["sheet"], state, facts)
+            chips.append(Chip(name, state, SITE_NAMES.get(where, where), _found(read)))
         else:
-            chips.append(Chip(name, state))
+            chips.append(Chip(name, state, "", _found(read)))
     return chips
 
 
 def _youtube_steps(job: Job) -> list[Chip]:
     """A sheet from a YouTube video's steps: its audio skipped for a block, a cooldown or a spent budget is the step
-    that stopped it, drawn failed; a step every stage of which ended skipped, with nothing to do, is not drawn."""
+    that stopped it, drawn failed; a step every stage of which ended skipped, with nothing to do, keeps its place,
+    skipped."""
     by_name = {stage.name: stage for stage in job.stages}
     chips = []
     for name, names in YOUTUBE_STEPS:
-        states = ["failed" if (n == "audio" and by_name[n].state == "skipped" and by_name[n].detail)
-                  or by_name[n].state == INTERRUPTED else by_name[n].state for n in names if n in by_name]
-        state = _state(states)
+        read = [(by_name[n], "failed" if (n == "audio" and by_name[n].state == "skipped" and by_name[n].detail)
+                 or by_name[n].state == INTERRUPTED else by_name[n].state) for n in names if n in by_name]
+        state = _state([s for _, s in read])
         if state is not None:
-            chips.append(Chip(name, state, YOUTUBE_SOURCE if name == "Audio" else ""))
+            chips.append(Chip(name, state, SITE_NAMES[YOUTUBE_SOURCE] if name == "Audio" else "", _found(read)))
     return chips
+
+
+def _found(read: list[tuple[Stage, str]]) -> str:
+    """What a step found, from its stages, each with its state as the step reads it (a sheet a wait stopped, or a
+    YouTube sheet's audio, failed): each one done in its words, each one failed in the outcome's (``_stage_reason``)
+    when they say something, else in its own; in order, joined by " · "; "" for none. A stage the server cut off
+    (``INTERRUPTED``) found nothing: its words are what it said while it ran ("from UG"), no finding."""
+    said = [stage.detail if state == "done" else _stage_reason(stage) or stage.detail
+            for stage, state in read if state in ("done", "failed") and stage.state != INTERRUPTED]
+    return " · ".join(s for s in said if s)
 
 
 def _sheet_waited(stage: Stage) -> str:
@@ -241,16 +280,19 @@ def _sheet_waited(stage: Stage) -> str:
     return stage.state
 
 
-def _match(stage: Stage, state: str) -> Chip:
-    """Match, in the offline index of Ultimate Guitar's; a song it lacks, plainly: no failure."""
+def _match(stage: Stage, state: str, found: str) -> Chip:
+    """Match, in the offline index of Ultimate Guitar's, and what it ``found``; a song it lacks, plainly: no failure,
+    its name saying it. It names that index in every other state, waiting or skipped too: the one index it ever
+    matches in, so never a guess, as the Sheet's site would be before it asks one."""
     if state == "done" and stage.detail.startswith(MATCH_NOT_FOUND):
         return Chip(NOT_ON_UG, "plain")
-    return Chip("Match", state, MATCHED_IN)
+    return Chip("Match", state, SITE_NAMES[MATCHED_IN], found)
 
 
 def _sheet_source(stage: Stage, state: str, facts: SongFacts | None) -> str:
-    """The site a Sheet step names: none while it waits; while it runs, and once it failed, the one it said it asks
-    (``SHEET_FROM``); done, where the song's sheet came from (``SongFacts.sheet_from``)."""
+    """The site a Sheet step names, its tag ("UG", for ``SITE_NAMES``): none while it waits; while it runs, and once it
+    failed, the one it said it asks (``SHEET_FROM``); done, where the song's sheet came from
+    (``SongFacts.sheet_from``)."""
     if state == "running":
         return _ASKS.get(stage.detail, "")
     if state == "failed":
@@ -260,29 +302,72 @@ def _sheet_source(stage: Stage, state: str, facts: SongFacts | None) -> str:
     return ""
 
 
-def progress(job: Job, line: Line, facts: SongFacts | None) -> dict[str, Any]:
+def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | None = None) -> dict[str, Any]:
     """What the library page draws under a song's request line (/jobs.json's view): a lookup's ``steps``
-    (``Chip.as_json``, each its name, its site and its state) and, while it runs, how many are over (``count``,
-    "4 of 7 done"; a plain step is over). Nothing (an empty dict) for a request that runs no lookup, one queued or
-    cancelled, and one whose ``line`` (status.py's) says Ready: its steps fold away, as its song's line opens the
-    sheet. Ended otherwise, its steps stay, with no count: they show which step stopped."""
+    (``Chip.as_json``, each its name, its site, its state and what it found, every step it has from its start) and the
+    step in hand (``_in_hand``): its place, ``at``, and ``count``, "3 of 7", its place among them all, so the count only
+    rises; and ``waits``, true, right after them, while that step waits for the book (``_waits_for_the_book``: a
+    nightly run holds caracole's lock), which the page says in place of its name, the step drawn waiting.
+    Nothing (an empty dict) for a request that runs no lookup, one queued or cancelled, and one whose ``line``
+    (status.py's) says Ready: its steps fold away, as its song's line opens the sheet. Ended otherwise, its steps
+    stay, to show which step stopped: ``at`` and ``count`` name the one that failed, and are left out when none did.
+    Nothing either until it has run ``BAR_AFTER`` (``_has_run``) at ``now`` (None: the clock's)."""
     if (not (job.looks_up or job.from_youtube) or job.state in ("queued", "cancelled")
-            or (line.tone == "ready" and line.text == READY)):
+            or (line.tone == "ready" and line.text == READY) or not _has_run(job, now)):
         return {}
     chips = steps(job, facts)
     if not chips:
         return {}
     shown: dict[str, Any] = {"steps": [chip.as_json() for chip in chips]}
-    if job.state == "running":
-        over = sum(chip.state in ("done", "plain") for chip in chips)
-        shown["count"] = f"{over} of {len(chips)} done"
+    at = _in_hand(chips, running=job.state == "running")
+    if at is not None:
+        shown["at"] = at
+        shown["count"] = f"{at + 1} of {len(chips)}"
+        if job.state == "running" and _waits_for_the_book(job.stages):
+            shown["waits"] = True
     return shown
 
 
+def _waits_for_the_book(stages: list[Stage]) -> bool:
+    """Whether the stage that runs waits for the book, a nightly run holding caracole's lock: its detail begins as
+    status.py's ``_WAITING``, as ``_stage_line`` reads it for "Waiting for the book…"; the step in hand is that stage's
+    (the song's, a lookup's and a sheet from a YouTube video's)."""
+    stage = next((s for s in stages if s.state == "running"), None)
+    return stage is not None and stage.detail.startswith(_WAITING)
+
+
+def _has_run(job: Job, now: datetime | None) -> bool:
+    """Whether ``job`` has run ``BAR_AFTER`` (read as it is asked, so a test may set it): never, one that never
+    started; one over, from its start to its end (to ``now`` when it says no end); one that runs, to ``now``."""
+    if job.started_at is None:
+        return False
+    if not job.active and job.finished_at is not None:
+        end = job.finished_at
+    else:
+        end = now or datetime.now(UTC)
+    return end - job.started_at >= BAR_AFTER
+
+
+def _in_hand(chips: list[Chip], *, running: bool) -> int | None:
+    """The place of the step in hand among ``chips``: while the request runs (``running``), the step that runs, else
+    the first that waits (between two steps), else the last; once it is over, the first that failed, else none. A
+    plain step is over, and a skipped one too."""
+    states = [chip.state for chip in chips]
+    if not running:
+        return states.index("failed") if "failed" in states else None
+    for state in ("running", "waiting"):
+        if state in states:
+            return states.index(state)
+    return len(chips) - 1 if chips else None
+
+
 def _state(states: list[str]) -> str | None:
-    """A step's state from its stages'; None for a step not drawn (no stage, or every one skipped)."""
-    if not states or all(s == "skipped" for s in states):
+    """A step's state from its stages'; ``skipped`` once every one ended skipped, with nothing to do for the song;
+    None for a step with no stage, not drawn."""
+    if not states:
         return None
+    if all(s == "skipped" for s in states):
+        return "skipped"
     if "running" in states:
         return "running"
     if all(s in _OVER for s in states):

@@ -4249,9 +4249,9 @@ the library, sent as they are: they carry no badge.
   beside Ultimate Guitar's song, Fetch with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from UG… · 2 of 7
-  done"), with the lookup's steps as chips under it, as on a song's line
-  (below), and once the sheet is kept the line is the song's own line, yours,
+  line of its own ("Sending…", then, once the request has run a second, a bar
+  of the lookup's steps and "Sheet · Ultimate Guitar · 3 of 7"), as on a
+  song's line (below), and once the sheet is kept the line is the song's own line, yours,
   its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Fetch does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Fetch would,
   and while that request is on its way the name, like the button, can't be
@@ -4354,9 +4354,11 @@ the library, sent as they are: they carry no badge.
   with no human sheet, not ignored and with no purchase linked has the same
   under its line's chevron, **From a YouTube video**: the address, and
   Make the sheet, which replaces any audio it had from YouTube. The line then
-  says how it goes ("Getting the audio…", "Fetching lyrics…",
-  "Working out the chords…", "Making the PDF…"), with its steps as chips:
-  Song, Audio YouTube, Lyrics, Chords, PDF. Ready, its title and its Open open
+  says how it goes: once the job has run a second, a bar of its steps, Song,
+  Audio (YouTube), Lyrics, Chords and PDF, and the step in hand ("Chords ·
+  4 of 5"); ended otherwise than Ready, its words, with the bar frozen under
+  them and the steps listed in its open card, as for a lookup (below). Ready,
+  its title and its Open open
   `sheet (auto).html`, and the Journal says what the sheet holds ("Chords
   over the lyrics.", "Chords, then the lyrics.", "Chords only, no lyrics."), or
   why the lyrics wait ("No lyrics yet (LRCLIB unavailable); tonight's run tries
@@ -4520,22 +4522,31 @@ the library, sent as they are: they carry no badge.
   the book…" while a nightly run holds the lock until its next pause;
   then how it ended (a lookup that stopped says why, in its stage's words).
   While a song is looked up (Fetch, Fetch again, a search result's Fetch,
-  Fetch the missing songs, the Songbooks tab's Add a song, Try again), the line
-  counts the steps over ("Fetching lyrics… · 4 of 7 done"),
-  and under it each step is a chip, as in the Journal: Song, Match UG
-  (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
-  it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
-  other, and once done the site the sheet came from), PDF, Lyrics, Extras and
-  Songbooks; those done ticked, the one that runs lit, those to come grey, a
-  failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
-  UG**, drawn plain (dashed), never as a failure: the sheet may come from
-  LaCuerda. A step that turns out not to apply drops out, and the count with
-  it (no PDF without a sheet, no Songbooks when no songbook lists the song);
-  the Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
-  site's error stopped, so a lookup that ends Not fetched yet shows it.
+  Fetch the missing songs, the Songbooks tab's Add a song, Try again), once the
+  request has run a second (one over within its first second never shows its
+  steps, even after a reload), the line is a bar of its steps, in one row on
+  a laptop and a phone alike: a segment a step, those done in the accent,
+  the one that runs at half, pulsing (steady when your system asks for less
+  motion), those to come grey, a skipped one an outline, a failed one red,
+  taller, with a "!"; then the step in hand, the site it names in full, and
+  its place among them ("Sheet · Ultimate Guitar · 3 of 7": the third of
+  seven, the one that runs, else the next to come), which is what a screen
+  reader hears. While a nightly run holds the book, the bar says so in the
+  step's place ("Waiting for the book · 1 of 7"), that step grey and still,
+  until the lookup's turn comes. The steps are Song, Match (in Ultimate
+  Guitar's offline index), Sheet (then the site it asks, Sheet · Ultimate
+  Guitar or Sheet · LaCuerda, switching when it falls back to the other),
+  PDF, Lyrics, Extras and Songbooks. A song Ultimate Guitar's index lacks
+  reads **Match: not on UG**, drawn as done, never as a failure: the sheet
+  may come from LaCuerda. They are every step the lookup has from its start,
+  so the count only rises: a step that turns out not to apply keeps its
+  place, skipped (no PDF without a sheet, no Songbooks when no songbook lists
+  the song), and the Sheet a cooldown, a block or a spent budget stopped
+  stays, red, as one a site's error stopped, so a lookup that ends Not
+  fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
-  - **Ready**: the steps fold away and nothing takes their place; the line is
+  - **Ready**: the bar folds away and nothing takes its place; the line is
     the song's, found, and its title or its Open opens the sheet, its files
     under its chevron (a screen reader still hears Ready, and the focus Fetch
     gave the request line goes to that Open);
@@ -4562,9 +4573,27 @@ the library, sent as they are: they carry no badge.
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
-  Ended any way but Ready, a lookup's steps stay under its line, so that you
-  see which one stopped (a failed one crossed and red, Match: not on UG
-  plain).
+  Ended any way but Ready, the line says how in words, and a lookup's bar
+  stays under them, frozen as the lookup left it, so that you see which step
+  stopped, with the first that failed and its place ("Sheet · LaCuerda · 3 of
+  7"; no words when none failed); a screen reader hears it as a picture named
+  by every step and how it ended ("Steps: Song: done; Match · not on UG: done;
+  Sheet, LaCuerda: failed; …").
+
+  A song's card, open, lists its request's steps in the frozen bar's place, a
+  line a step: ✓ for one done (Match: not on UG too), ◐ for the one that runs,
+  ○ for those to come, ! for a failed one and – for a skipped one, then its
+  name, the site it names in full (Sheet · LaCuerda, and once done the site
+  the sheet came from) and what it found ("in the book", "matched to it", a
+  failure in the site's own words), beside it on a laptop and under it on a
+  phone. While the lookup runs the list follows it under the bar, which stays
+  on the line's row; once it is over, the skipped steps fold into one last
+  line, "Skipped: PDF, Songbooks". Ready, the list folds away with the bar.
+
+  A request that waits behind another says its place ("Queued · 1 request
+  ahead…") with **Cancel** beside it, which takes it out of the queue as the
+  Journal's does (the line says Cancelled and the song's Fetch is back); the
+  one that runs is never stopped.
 
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
@@ -4589,17 +4618,20 @@ the library, sent as they are: they carry no badge.
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Making the PDF…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
-    Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
-    LaCuerda once it asks a site, then where the sheet came from), PDF,
+    Song, Match Ultimate Guitar (or Match: not on UG, plain), Sheet (Sheet
+    Ultimate Guitar or Sheet LaCuerda once it asks a site, then where the
+    sheet came from), PDF,
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
     tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
     harmonica tab) and Songbooks,
-    the same chips the library page draws under a song's line, leaving out a
-    step it
-    doesn't use (Songbooks when Fetch the missing songs makes the songbook
-    after, a step that ended with nothing to do for the song, such as the PDF
-    of a song with no sheet, but never the Sheet a cooldown, a block or a spent
-    budget stopped, drawn failed); for a request of other commands, its commands.
+    the same steps the library page draws on an open song's card, here as
+    the same list, one line a step (its name, the site, what it found),
+    each step the
+    lookup has from its start (no Songbooks when Fetch the missing songs makes
+    the songbook after): a step that ended with nothing to do for the song,
+    such as the PDF of a song with no sheet, keeps its place, skipped, and the
+    Sheet a cooldown, a block or a spent budget stopped is drawn failed; for a
+    request of other commands, its commands, leaving out one skipped.
     Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
@@ -4614,8 +4646,11 @@ the library, sent as they are: they carry no badge.
     cancels the other too, while it waits.
   - **Today** and **Earlier** (by when each ended, in the server's time
     zone): the requests that are over, newest first, each with its outcome as
-    a coloured word, the reason in a sentence when there is one, the time it
-    ended and its next step:
+    a coloured word, the reason in a sentence when there is one, a lookup's
+    steps (or a sheet from a YouTube video's) as it left them, one line a step,
+    each saying what it found, the skipped ones folded into one last line,
+    "Skipped: Sheet, PDF", the time it ended and its next step; a lookup cancelled before
+    it ran has no steps, and a request of other commands keeps its one line:
     - **Ready** · **Open**, its sheet; a reason says what waits for tonight's
       run, in the site's own answer ("LRCLIB answered 503: the lyrics wait
       for tonight's run.");

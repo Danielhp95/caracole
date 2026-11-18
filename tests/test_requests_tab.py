@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import time
 import threading
+from pathlib import Path
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -18,6 +19,7 @@ from helpers.targets import UNFOLD, noted, noting, small_targets
 from caracole.get import MATCH_NOT_FOUND, SHEET_FROM, STAGES, progress_line
 from caracole.library import song_dir
 from caracole.songs import update_song
+from caracole.web import jobs_routes
 from caracole.web.app import WebApp, json_response
 from caracole.web.feed import feed
 from caracole.web.jobs import Job, JobQueue, Stage, Step, lookup_steps
@@ -112,8 +114,9 @@ def test_the_running_lookup_comes_first_with_its_stages_as_steps():
     card = now[0]
     assert (card["display"], card["state"], card["ago"]) == ("Muse - Hysteria", "running", "started 12 s ago")
     assert card["says"] == {"tone": "running", "text": "Making the PDF…"}
-    assert [(c["name"], c["source"], c["state"]) for c in card["steps"]] == [
-        ("Song", "", "done"), ("Match", "UG", "done"), ("Sheet", "UG", "done"), ("PDF", "", "running"),
+    assert [(c["name"], c["site"], c["state"]) for c in card["steps"]] == [
+        ("Song", "", "done"), ("Match", "Ultimate Guitar", "done"), ("Sheet", "Ultimate Guitar", "done"),
+        ("PDF", "", "running"),
         ("Lyrics", "", "waiting"), ("Extras", "", "waiting"), ("Songbooks", "", "waiting")]
     assert "actions" not in card  # the running one: never stopped halfway
 
@@ -124,9 +127,9 @@ def test_the_running_steps_say_a_song_ultimate_guitars_index_lacks_plainly_and_w
                                               "sheet": ("running", SHEET_FROM["lacuerda"])}, state="running")
     [card] = requests(feed([estopa], {8: job_line(estopa, None)}, now=NOW), "Now")
     assert card["says"]["text"] == "Fetching from LaCuerda…"
-    assert card["steps"][:3] == [{"name": "Song", "source": "", "state": "done"},
-                                 {"name": "Match · not on UG", "source": "", "state": "plain"},
-                                 {"name": "Sheet", "source": "LaCuerda", "state": "running"}]
+    assert card["steps"][:3] == [{"name": "Song", "site": "", "state": "done", "found": "in the book"},
+                                 {"name": "Match · not on UG", "site": "", "state": "plain", "found": ""},
+                                 {"name": "Sheet", "site": "LaCuerda", "state": "running", "found": ""}]
 
 
 def test_queued_requests_say_their_place_and_each_can_be_cancelled():
@@ -163,6 +166,40 @@ def test_each_outcome_says_its_word_its_reason_and_its_next_step():
     assert book["says"] == {"tone": "removed", "text": "Deleted"} and "actions" not in book
     # The to-do page is no next step here.
     assert "_todo.md" not in json.dumps(fed) and "to-do page" not in json.dumps(fed)
+
+
+def test_a_finished_lookup_keeps_its_steps_and_nothing_else_does():
+    shown = by_id(mockup_feed())
+    assert [(c["name"], c["state"]) for c in shown[5]["steps"]] == [
+        ("Song", "done"), ("Match", "done"), ("Sheet", "skipped"), ("PDF", "skipped"), ("Lyrics", "done"),
+        ("Extras", "done"), ("Songbooks", "done")]
+    assert list(shown[5])[:6] == ["id", "display", "state", "says", "reason", "steps"]
+    assert "steps" not in shown[2]  # a songbook deleted: no lookup
+    assert "steps" not in shown[7]  # queued: its place and Cancel
+    # Each as the running one's: the step that stopped short says what it found, in the outcome's words.
+    assert shown[3]["steps"][4] == {"name": "Lyrics", "site": "", "state": "failed",
+                                    "found": "LRCLIB answered 503. The lyrics wait until tonight."}
+
+
+def test_a_lookup_cancelled_before_it_ran_lists_no_steps_and_a_sheet_from_youtube_lists_its_own():
+    from test_web_outcome import EVERY, SHEET, youtube_job
+
+    # Cancelled in the queue, it never started: its steps and stages skipped, none of them run.
+    cancelled = lookup(9, "Estopa - Como Camarón", {name: ("skipped", "") for name, _ in STAGES}, state="cancelled",
+                       finished=NOW)
+    cancelled.started_at = None
+    for step in cancelled.steps:
+        step.state = "skipped"
+    line = job_line(cancelled, None)
+    shown = by_id(feed([cancelled], {9: line}, outcomes={9: outcome(cancelled, line)}, now=NOW))[9]
+    assert shown["says"] == {"tone": "cancelled", "text": "Cancelled"} and "steps" not in shown
+    made = youtube_job("done", EVERY)
+    line = job_line(made, SHEET)
+    shown = by_id(feed([made], {made.id: line}, outcomes={made.id: outcome(made, line, SHEET)},
+                       facts={made.id: SHEET}, now=NOW))[made.id]
+    assert [(c["name"], c["site"], c["state"]) for c in shown["steps"]] == [
+        ("Song", "", "done"), ("Audio", "YouTube", "done"), ("Lyrics", "", "done"), ("Chords", "", "done"),
+        ("PDF", "", "done")]
 
 
 def test_every_request_keeps_its_output_and_what_each_command_printed_once_it_is_opened():
@@ -464,9 +501,19 @@ def kept_sheet_from(cfg, conn, song, provider: str) -> None:
     update_song(conn, song.id, status="found")
 
 
-def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn):
+def test_a_views_steps_come_once_its_job_has_run_a_second():
+    # The first second is the server's: a view carries no steps until its job has run one, so a reload agrees.
+    job = lookup(6, "Muse - Hysteria", {"song": ("done", ""), "match": ("done", ""), "sheet": ("running", "")},
+                 state="running")
+    job.started_at = NOW
+    assert "steps" not in jobs_routes.view(job, [job], None, None, now=NOW + timedelta(milliseconds=500))
+    assert len(jobs_routes.view(job, [job], None, None, now=NOW + timedelta(seconds=2))["steps"]) == 7
+
+
+def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn, monkeypatch):
     # The tab gives the running request's steps; /jobs.json gives the library page the same steps, and how many are
-    # over, for the song's line.
+    # over, for the song's line (from its first instant: the fake command runs it in less than a second).
+    monkeypatch.setattr("caracole.web.outcome.BAR_AFTER", timedelta(0))
     creep = add_song(conn, "Radiohead", "Creep")
     seen, views = [], []
 
@@ -491,16 +538,17 @@ def test_a_lookups_progress_shows_in_the_tab_and_on_its_songs_line(cfg, conn):
     queue.run_pending()
     [card] = requests(seen[0], "Now")
     assert card["says"]["text"] == "Fetching from UG…" and card["ago"].startswith("started ")
-    assert card["steps"][:3] == [{"name": "Song", "source": "", "state": "done"},
-                                 {"name": "Match", "source": "UG", "state": "done"},
-                                 {"name": "Sheet", "source": "UG", "state": "running"}]
+    assert card["steps"][:3] == [{"name": "Song", "site": "", "state": "done", "found": "in the book"},
+                                 {"name": "Match", "site": "Ultimate Guitar", "state": "done",
+                                  "found": "matched to radiohead/creep"},
+                                 {"name": "Sheet", "site": "Ultimate Guitar", "state": "running", "found": ""}]
     asking, lyrics = views
-    assert asking["line"]["text"] == "Fetching from UG…" and asking["count"] == "2 of 7 done"
+    assert asking["line"]["text"] == "Fetching from UG…" and asking["count"] == "3 of 7"
     assert asking["steps"] == card["steps"]
     # Once done, the sheet says where the song's sheet came from: its version's site, as the library has it.
-    assert lyrics["line"]["text"] == "Fetching lyrics…" and lyrics["count"] == "4 of 7 done"
-    assert lyrics["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
-    assert requests(seen[1], "Now")[0]["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
+    assert lyrics["line"]["text"] == "Fetching lyrics…" and lyrics["count"] == "5 of 7"
+    sheet = {"name": "Sheet", "site": "Ultimate Guitar", "state": "done", "found": "tab 1 from Ultimate Guitar"}
+    assert lyrics["steps"][2] == sheet and requests(seen[1], "Now")[0]["steps"][2] == sheet
     # Over, and Ready: the steps fold away from the song's line.
     [over] = answer(get_json(app, "/jobs.json"))["jobs"]
     assert over["line"]["text"] == "Ready" and "steps" not in over and "count" not in over
@@ -543,7 +591,12 @@ DRAWN = """
       ids: Array.from(document.querySelectorAll("#requests li.req")).map((li) => li.id),
       library: document.getElementById("library-view").hidden,
       selected: document.querySelector("[role=tab][aria-selected=true]").id,
-      chips: Array.from(document.querySelectorAll("#req-6 .step-chip")).map((c) => c.textContent),
+      list: Array.from(document.querySelectorAll("#req-6 .step-list > li")).map((li) => [li.className,
+        li.querySelector(".step-glyph").textContent, (li.querySelector(".step-name") || li.lastChild).textContent]),
+      over: Array.from(document.querySelectorAll("#req-5 .step-list > li")).map((li) => [li.className,
+        (li.querySelector(".step-name") || li.lastChild).textContent]),
+      radii: Array.from(document.querySelectorAll("#requests *")).filter((n) => n.checkVisibility())
+        .map((n) => getComputedStyle(n).borderTopLeftRadius),
       says: Array.from(document.querySelectorAll("#requests .req-says")).map((s) => [s.textContent, s.dataset.tone]),
       actions: Array.from(document.querySelectorAll("#req-5 .req-next .btn, #req-4 .req-next .btn"))
         .map((b) => [b.textContent, b.tagName, b.closest("form") ? b.closest("form").getAttribute("action")
@@ -577,8 +630,14 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
                                                  "tab-sync"]  # Sync last
         assert shown["groups"] == ["Now", "Today"]
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
-        assert shown["chips"] == ["✓ Song: done", "✓ Match UG: done", "✓ Sheet UG: done", "PDF: running",
-                                  "Lyrics: waiting", "Extras: waiting", "Songbooks: waiting"]
+        assert shown["list"] == [["step done", "✓", "Song"], ["step done", "✓", "Match · Ultimate Guitar"],
+                                 ["step done", "✓", "Sheet · Ultimate Guitar"], ["step running", "◐", "PDF"],
+                                 ["step waiting", "○", "Lyrics"], ["step waiting", "○", "Extras"],
+                                 ["step waiting", "○", "Songbooks"]]
+        assert shown["over"] == [["step done", "Song"], ["step done", "Match · Ultimate Guitar"],
+                                 ["step done", "Lyrics"], ["step done", "Extras"], ["step done", "Songbooks"],
+                                 ["step skipped-all", "Skipped: Sheet, PDF"]]
+        assert set(shown["radii"]) <= {"0px", "4px", "8px", "12px", "999px"}, shown["radii"]
         assert shown["says"][:3] == [["Making the PDF…", "running"], ["Queued · next", "queued"],
                                      ["Not on the sites", "missing"]]
         assert shown["actions"] == [["Fetch from there", "BUTTON", "/lookup"],
@@ -713,3 +772,10 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
                            "location.hash]") == [True, "req-3", "#tab=requests"]
     finally:
         runner.go.set()
+
+
+def test_requests_js_draws_its_steps_with_librarys_one_list():
+    import re
+    text = (Path(__file__).parent.parent / "src/caracole/library_assets/requests.js").read_text()
+    assert "stepChips" not in text
+    assert re.search(r"\b(function|const|let)\s+stepList\b", text) is None
