@@ -94,8 +94,8 @@ a { color: inherit; }
 
 /* The title block. */
 .head { padding: 6px 0 4px; }
-.back { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: .9rem;
-  text-decoration: none; }
+.back { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+  margin: 0 0 0 -14px; color: var(--muted); font-size: 1.75rem; line-height: 1; text-decoration: none; }
 .head h1 { margin: 0; font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .artist { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; }
 /* The artist's name, a link to the library page on their songs (page.py artist_line): the line as it was, underlined

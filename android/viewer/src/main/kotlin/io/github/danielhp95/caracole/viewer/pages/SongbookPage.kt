@@ -68,7 +68,7 @@ object SongbookPage {
         ))
         val body = StringBuilder()
             .append("<div class=\"page\">\n<header class=\"head book-head\">\n")
-            .append("<a class=\"back\" href=\"").append(PageConstants.LIBRARY_PAGE).append("\">‹ Library</a>\n")
+            .append("<a class=\"back\" href=\"").append(PageConstants.LIBRARY_PAGE).append("\" aria-label=\"Library\" title=\"Library\">‹</a>\n")
             .append("<h1>").append(PyText.escape(name)).append("</h1>\n<p class=\"artist\">Songbook · ").append(count)
             .append("</p>\n</header>\n")
             .append(contents(songs, about, files, names))

@@ -219,9 +219,9 @@ def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
 
 def test_back_to_the_songs_sheet_or_the_library():
     # the sheet's (data-sheet): harptab.js takes the screen's choices back to it
-    assert '<a class="back" href="sheet.html" data-sheet>‹ Chord sheet</a>' in page(back="sheet.html")
-    assert '<a class="back" href="sheet%20%28auto%29.html" data-sheet>‹ Chord sheet</a>' in page(back="sheet (auto).html")
-    assert '<a class="back" href="../../index.html">‹ Library</a>' in page()
+    assert '<a class="back" href="sheet.html" data-sheet aria-label="Chord sheet" title="Chord sheet">‹</a>' in page(back="sheet.html")
+    assert '<a class="back" href="sheet%20%28auto%29.html" data-sheet aria-label="Chord sheet" title="Chord sheet">‹</a>' in page(back="sheet (auto).html")
+    assert '<a class="back" href="../../index.html" aria-label="Library" title="Library">‹</a>' in page()
     assert 'href="../../index.html#by=Placeholder%20Band"' in page()  # the artist's songs, as a sheet's line
 
 

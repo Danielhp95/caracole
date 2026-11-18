@@ -258,8 +258,8 @@ def _a(name: str) -> str:
 
 def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Mapping[str, Any],
             back: str | None, names: dict[str, dict[str, str]] | None = None) -> str:
-    link = (f'<a class="back" href="{escape(quote(back))}" data-sheet>‹ Chord sheet</a>\n' if back
-            else f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n')
+    link = (f'<a class="back" href="{escape(quote(back))}" data-sheet aria-label="Chord sheet" title="Chord sheet">‹</a>\n' if back
+            else f'<a class="back" href="{LIBRARY_PAGE}" aria-label="Library" title="Library">‹</a>\n')
     return (
         '<header class="head">\n'
         + link

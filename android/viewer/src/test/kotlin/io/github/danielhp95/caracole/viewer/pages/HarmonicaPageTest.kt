@@ -79,7 +79,7 @@ class HarmonicaPageTest {
         val html = page(facts = facts, pageKey = "Bb", back = "sheet (auto).html")
         assertTrue("<p class=\"facts\" id=\"facts\">Harmonica tab · <b>Bb harp</b>, as harptabs' key says</p>" in html)
         assertTrue("(<span class=\"b\">4</span> <span class=\"b\">5</span>)</span> together · Beginner · 224k views · 3.3★</p>" in html)
-        assertTrue("<a class=\"back\" href=\"sheet%20%28auto%29.html\" data-sheet>‹ Chord sheet</a>" in html)
+        assertTrue("<a class=\"back\" href=\"sheet%20%28auto%29.html\" data-sheet aria-label=\"Chord sheet\" title=\"Chord sheet\">‹</a>" in html)
         assertTrue("<p class=\"reading\" id=\"reading-foot\" hidden>" in html)
         assertEquals(JsonPrimitive(10), data(html)["start"])
         assertEquals("""{"10":"harptabs' key"}""", data(html)["why"].toString())
@@ -89,6 +89,6 @@ class HarmonicaPageTest {
         val html = page("ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n", pageKey = "C")
         assertTrue("<pre class=\"tab\">ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6</pre>" in html)
         assertTrue("We can't read its notation." in html && HarmonicaPage.BAR_RAW in html && "\"groups\"" !in html)
-        assertTrue("<a class=\"back\" href=\"../../index.html\">‹ Library</a>" in html)
+        assertTrue("<a class=\"back\" href=\"../../index.html\" aria-label=\"Library\" title=\"Library\">‹</a>" in html)
     }
 }

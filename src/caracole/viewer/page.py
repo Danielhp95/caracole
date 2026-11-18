@@ -678,7 +678,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
     pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
-        f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
+        f'<a class="back" href="{LIBRARY_PAGE}" aria-label="Library" title="Library">‹</a>\n'
         f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
         + artist_line(sheet.artist, names)
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'

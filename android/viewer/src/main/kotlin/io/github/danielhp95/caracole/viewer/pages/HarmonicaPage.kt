@@ -253,9 +253,9 @@ object HarmonicaPage {
     private fun header(title: String, artist: String, tab: Tab, choice: Choice, facts: JsonObject, back: String?,
                        names: Map<String, Map<String, String>>?): String {
         val link = if (!back.isNullOrEmpty()) {
-            "<a class=\"back\" href=\"${PyText.escape(PyUrl.quote(back))}\" data-sheet>‹ Chord sheet</a>\n"
+            "<a class=\"back\" href=\"${PyText.escape(PyUrl.quote(back))}\" data-sheet aria-label=\"Chord sheet\" title=\"Chord sheet\">‹</a>\n"
         } else {
-            "<a class=\"back\" href=\"${SheetPage.LIBRARY_PAGE}\">‹ Library</a>\n"
+            "<a class=\"back\" href=\"${SheetPage.LIBRARY_PAGE}\" aria-label=\"Library\" title=\"Library\">‹</a>\n"
         }
         val named = title.ifEmpty { "Untitled" }
         val readable = tab.readable
