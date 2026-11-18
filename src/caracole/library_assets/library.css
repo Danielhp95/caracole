@@ -87,6 +87,15 @@
 .leave { position: absolute; top: 1px; left: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: 1.25rem; line-height: 1; cursor: pointer; }
 .field:has(> .leave:not([hidden])) input { padding-left: 44px; }
+/* On a phone, search takes the screen: the logo and tabs slide away (--mast-h measured by searchMode before the class
+   goes on), hidden once gone so no tab is reachable behind the bar. */
+@media (max-width: 719px) {
+  body.search-mode .masthead.lib { margin-top: calc(-1 * var(--mast-h, 0px)); visibility: hidden; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .masthead.lib { transition: margin-top .2s ease, visibility 0s linear 0s; }
+  body.search-mode .masthead.lib { transition: margin-top .2s ease, visibility 0s linear .2s; }
+}
 .bar-row { display: flex; align-items: center; gap: 8px; }
 .bar-row .field { flex: 1; min-width: 0; }
 /* One line, its height kept: what typing and Enter do, or how the search of the sites goes. */

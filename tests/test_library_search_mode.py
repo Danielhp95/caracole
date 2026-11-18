@@ -208,3 +208,77 @@ def test_no_row_over_the_results_says_back_to_your_songs_the_arrow_does(cfg, liv
               parseFloat(getComputedStyle(q).paddingLeft), l.querySelector('[aria-hidden=true]').textContent]; })()""")
     assert seen[0] <= 2 and 0 <= seen[1] <= 2 and seen[2:5] == [44, 44, True] and seen[5] >= 44, seen
     assert seen[6] == "←"
+
+
+# --- on a phone, search takes the screen (library.js ``searchMode``, library.css ``--mast-h``) ---------------------
+MASTHEAD = "document.querySelector('.masthead.lib')"
+HIDDEN = (f"getComputedStyle({MASTHEAD}).visibility === 'hidden' && "
+          "document.querySelector('.searchbar').getBoundingClientRect().top <= 1")
+
+
+def many_songs(conn, cfg, n=40):
+    for i in range(n):
+        add_song(conn, f"Artist {i:02d}", f"Song {i:02d}")
+    return write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW)).as_uri()
+
+
+@pytest.mark.parametrize("width", [320, 390])
+def test_on_a_phone_the_masthead_slides_away_for_search_and_comes_back(conn, cfg, tmp_path, width):
+    page = opened(tmp_path, the_file(conn, cfg), width=width, height=800, mobile=True)
+    try:
+        assert page.js(f"parseFloat(getComputedStyle({MASTHEAD}).transitionDuration) > 0")
+        page.js(f"{BOX}.focus()")
+        assert page.wait(HIDDEN)
+        assert page.js("(() => { const r = document.getElementById('q').getBoundingClientRect();"
+                       " return r.left >= 16 - 1 && r.right <= innerWidth - 16 + 1 && "
+                       "document.documentElement.scrollWidth <= innerWidth })()")
+        page.js("document.getElementById('leave').click()")
+        assert page.wait(f"getComputedStyle({MASTHEAD}).visibility === 'visible' && "
+                         f"{MASTHEAD}.getBoundingClientRect().top >= 0")
+    finally:
+        page.close()
+
+
+def test_with_reduced_motion_the_masthead_goes_at_once(conn, cfg, tmp_path):
+    page = opened(tmp_path, the_file(conn, cfg), width=390, height=800, mobile=True)
+    try:
+        page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
+        assert page.js(f"getComputedStyle({MASTHEAD}).transitionDuration") == "0s"
+        assert page.js(f"{BOX}.focus() ?? getComputedStyle({MASTHEAD}).visibility") == "hidden"
+    finally:
+        page.close()
+
+
+def test_scrolled_down_search_moves_no_line_on_the_screen(conn, cfg, tmp_path):
+    page = opened(tmp_path, many_songs(conn, cfg), width=390, height=800, mobile=True)
+    try:
+        page.js("scrollTo(0, 800)")
+        assert page.wait("scrollY > 700")
+        line = "[...document.querySelectorAll('#list article.line')].find((a) => a.getBoundingClientRect().top > 100)"
+        page.js(f"window.mark = {line}")
+        top = page.js("mark.getBoundingClientRect().top")
+        page.js(f"{BOX}.focus()")
+        assert page.wait(HIDDEN)
+        assert abs(page.js("mark.getBoundingClientRect().top") - top) <= 2
+    finally:
+        page.close()
+
+
+def test_on_a_laptop_the_masthead_stays_in_search(file_page):
+    file_page.js(f"{BOX}.focus()")
+    assert file_page.wait(MODE)
+    assert file_page.js(f"getComputedStyle({MASTHEAD}).visibility") == "visible"
+    assert file_page.js(f"{MASTHEAD}.getBoundingClientRect().top") >= 0
+
+
+def test_show_all_of_a_filter_reset_never_enters_search(conn, cfg, tmp_path):
+    page = opened(tmp_path, the_file(conn, cfg) + "#prog=I+V+vi+IV", width=390, height=800, mobile=True)
+    try:
+        assert page.wait("document.querySelector('#prog button') !== null")
+        page.js("document.querySelector('#prog button').click()")
+        assert page.wait("document.querySelector('#prog button') === null")
+        assert page.js(f"[{MODE}, document.activeElement === {BOX}]") == [False, False]
+        assert page.js(f"getComputedStyle({MASTHEAD}).visibility") == "visible"
+        assert page.js(f"{MASTHEAD}.getBoundingClientRect().top") >= 0
+    finally:
+        page.close()

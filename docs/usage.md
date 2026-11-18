@@ -2741,7 +2741,10 @@ which Back takes back one at a time and the ← all at once. The × at the box's
 right clears the text and keeps the focus in the box: you are still
 searching. Escape in the empty box leaves the search as the ← does. A tap
 elsewhere leaves the box but not the search, its ← still there. There is no
-Back to your songs row over the results.
+Back to your songs row over the results. On a phone the logo and tabs
+slide away while you search, so the box and its results take the screen, and
+come back when you leave; with reduced motion they go at once. The Show all
+buttons of a filter reset leave the search box alone.
 
 On a touch screen every button, fold, chip, menu and letter is at least 44
 pixels each way, for a thumb (but an artist's name, on its band or as a line's

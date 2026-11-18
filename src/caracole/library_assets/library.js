@@ -9,6 +9,12 @@
     return node;
   };
   const list = byId("list");
+  const masthead = document.querySelector(".masthead.lib");
+  // A filter reset's focus: the list's first line to press, never the box (which would be search, and a keyboard).
+  const focusList = () => {
+    const first = list.querySelector("a[href], button");
+    if (first) first.focus();
+  };
   const input = byId("q");
   const clear = byId("clear");
   const leave = byId("leave");  // the ← at the box's left: out of the search (backFromSearch)
@@ -1090,7 +1096,7 @@
       state.prog = "";
       render();
       save();
-      input.focus();
+      focusList();
     }, "Show every song, not only " + progNumerals(state.prog)));
   };
   // The song's progressions, as it plays them, for its card: each shows the songs that play it too.
@@ -1648,6 +1654,7 @@
   const inSearch = () => document.body.classList.contains("search-mode");
   const searchSteps = () => Number(history.state && history.state.search) || 0;
   const searchMode = (on) => {
+    if (on && !inSearch()) masthead.style.setProperty("--mast-h", masthead.getBoundingClientRect().height + "px");
     document.body.classList.toggle("search-mode", on);
     leave.hidden = !on;
   };
@@ -2691,7 +2698,7 @@
     state.prog = "";
     render();
     save();
-    input.focus();
+    focusList();
   }, "Show all of yours: every status, instrument, key and progression"));
   keptNote.hidden = true;
   // A progression typed or named (/api/search's ``progression``: "vi IV I V", "andalusian"): how many of your songs
