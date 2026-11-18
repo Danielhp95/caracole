@@ -480,7 +480,7 @@ def test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_w
     monkeypatch.setattr("caracole.youtube_fetch.route_problem", lambda cfg: None)  # as with auto-chords
     took: list[tuple[str, bool]] = []
 
-    def acquire(cfg, what, *, fatal=True, interactive=False, on_wait=None):
+    def acquire(cfg, what, *, fatal=True, interactive=False, lane=False, on_wait=None):
         took.append((what, interactive))
         raise _Took
 

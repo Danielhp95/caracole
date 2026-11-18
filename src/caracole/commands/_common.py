@@ -24,6 +24,8 @@ another caracole waiting meanwhile takes it once the bulk work is done
 (``_take_outside_handoffs``). What the owner asked for just now (one song's add,
 removal, review, fetch or PDF, YouTube's search, what caracole serve queues) waits as
 a lookup does, so that a lookup queued behind it never waits behind the whole run.
+Lookups take the lock in a lane of their own (``exclusive(..., lane=True)``, a shared
+flock of ``caracole.lock.lane``): while one is there, no other caracole takes the lock.
 """
 
 from __future__ import annotations
@@ -59,6 +61,8 @@ if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_
 LOCK_NAME = "caracole.lock"  # in the state directory
 WAITING_DIR = "caracole.lock.waiting"  # in the state directory: a file per lookup waiting for the lock
 HANDOFF_NAME = "caracole.lock.handoff"  # in the state directory: flocked while bulk work hands the lock over
+LANE_NAME = "caracole.lock.lane"  # in the state directory: flocked shared by each lookup in the lane
+LANE_TICKET = "lane."  # how a lane ticket's name starts: lane.<time.time_ns(), 20 digits>.<pid>[.<n>]
 LOOKUP_RUN = "lookup:"  # how an interactive lookup's run id starts, in events
 HANDOFF_SLICE = 0.25  # seconds of a bulk pause between two looks for a waiting lookup
 HANDOFF_TAKE = 10.0  # seconds a lookup has to take the lock once it is handed over
@@ -66,6 +70,7 @@ WAIT_POLL = 0.05  # seconds between a waiting lookup's tries at the lock
 TICKET_BEAT = 1.0  # seconds between two touches of a waiting lookup's ticket
 TICKET_STALE = 5.0  # seconds untouched after which a ticket is no longer waited for
 TICKET_FORGOTTEN = 3600.0  # seconds untouched after which a ticket is deleted
+WAIT_SAID = 1.0  # seconds a lookup waits for the lock before ``on_wait`` hears whom it waits for
 sleep = time.sleep  # tests replace it
 _handoff_sleep = time.sleep  # the short waits of a handoff, which tests don't skip
 
@@ -222,14 +227,22 @@ def lookup_run_id(now: datetime) -> str:
 
 _held: dict[Path, tuple[int, int]] = {}  # lock file -> (its descriptor, how many hold it here)
 _handoffs = 0  # how many times this process handed the lock to a waiting lookup and took it back
-# Lock files this process took as a lookup: it hands them to no other (``hand_over``), since the bulk work that
-# handed one to it waits to take it back, and would take it first and keep it to its end.
+# Lock files this process took as a lookup, interactive or in the lane: it hands them to no other (``hand_over``),
+# since the bulk work that handed one to it waits to take it back, and would take it first and keep it to its end.
 _as_lookup: set[Path] = set()
+_lane: dict[Path, int] = {}  # lock file -> the lane file's descriptor, flocked shared while this process is in the lane
 
 
-def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False,
+def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False, lane: bool = False,
              on_wait: Callable[[str], None] | None = None) -> Path:
-    """Take caracole's lock, waiting for another process that holds it; see ``exclusive``."""
+    """Take caracole's lock, waiting for another process that holds it; see ``exclusive``.
+
+    Held here already, it is taken again, of the outer one's kind. Else, three ways: ``lane``, a lookup in the
+    lane, joins it (a shared flock of ``LANE_NAME``, blocking, as nothing holds it exclusively but for an instant)
+    and takes the lock at once when it is free and no lane ticket waits, else waits announced, in the lane's
+    order; ``interactive`` takes it at once when it is free and the lane empty, else waits announced; anything
+    else waits outside handoffs and the lane (``_take_outside_handoffs``). An acquire that fails before it has the
+    lock (Ctrl-C as it waits) lets go of the lane too, so a process that goes on is out of it."""
     warn_elsewhere()
     path = cfg.state_dir / LOCK_NAME
     if path in _held:
@@ -243,28 +256,57 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
         if not fatal:
             raise
         fail(f"can't open {path}: {_reason(e)}")
+    lane_fd: int | None = None
     try:
-        if interactive:
+        if lane:
+            lane_path = cfg.state_dir / LANE_NAME
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                holder = _holder(fd)
-                if on_wait is not None:
-                    on_wait(holder)
-                warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause, "
-                     "or between two songs.")
-                _wait_announced(cfg, what, fd)
+                lane_fd = os.open(lane_path, os.O_RDWR | os.O_CREAT, 0o600)
+            except OSError as e:
+                if not fatal:
+                    raise
+                fail(f"can't open {lane_path}: {_reason(e)}")
+            fcntl.flock(lane_fd, fcntl.LOCK_SH)  # in the lane: from now on, nobody outside it takes the lock
+            if lane_tickets(cfg) or not _try_flock(fd):
+                _warn_waiting(fd)
+                _wait_announced(cfg, what, fd, lane=True, on_wait=on_wait)
+        elif interactive:
+            had = _try_flock(fd)
+            if not (had and _lane_empty(cfg)):
+                if had:  # free, but lookups are in the lane: theirs first
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                _warn_waiting(fd)
+                _wait_announced(cfg, what, fd, on_wait=on_wait)
         else:
             _take_outside_handoffs(cfg, fd, fatal=fatal, on_wait=on_wait)
         os.ftruncate(fd, 0)
         os.pwrite(fd, f"{os.getpid()} {what}\n".encode(), 0)
     except BaseException:
         os.close(fd)
+        if lane_fd is not None:
+            os.close(lane_fd)  # and with it the lane
         raise
     _held[path] = (fd, 1)
-    if interactive:
+    if lane_fd is not None:
+        _lane[path] = lane_fd
+    if interactive or lane:
         _as_lookup.add(path)
     return path
+
+
+def _try_flock(fd: int) -> bool:
+    """Flock ``fd`` exclusively if nothing stands in the way, never waiting; True when it did."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def _warn_waiting(fd: int) -> None:
+    """What a lookup, or what the owner asked for now, says as it starts to wait for caracole's lock (``fd``)."""
+    warn(f"Another caracole is running ({_holder(fd)}); it lets a lookup go first at its next pause, "
+         "or between two songs.")
 
 
 def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
@@ -273,7 +315,9 @@ def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
     and never while bulk work has let go of it for a lookup (``hand_over``, which holds the flock of
     ``HANDOFF_NAME`` meanwhile). A lock taken then is let go at once, and taken again once the handoff is
     over: a `caracole-admin` command waiting for the nightly run takes it after the whole run, never in the
-    middle of one of its steps, and never ahead of the lookup."""
+    middle of one of its steps, and never ahead of the lookup. Nor while a lookup is in the lane
+    (``_lane_empty``): it lets go of a lock it took then, waits for the lane to empty holding nothing
+    (``_wait_lane_empty``), and starts again."""
     path = cfg.state_dir / HANDOFF_NAME
     try:
         gate = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -306,17 +350,53 @@ def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
                 fcntl.flock(gate, fcntl.LOCK_UN)
                 continue
             fcntl.flock(gate, fcntl.LOCK_UN)
+            if not _lane_empty(cfg):  # lookups in the lane: theirs, however long, then this one's
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                said = said or say()
+                _wait_lane_empty(cfg)
+                continue
             return
     finally:
         os.close(gate)
 
 
-def _announce(cfg: Config, what: str) -> Path:
-    """Say that a lookup waits for the lock: a file named after this process, which goes once it has it."""
+def _lane_empty(cfg: Config) -> bool:
+    """Whether no lookup is in the lane: the lane file flocked exclusively for an instant, on a descriptor of this
+    call's own. A lane file that can't be opened has nobody in it (a lookup that can't open it never joins).
+    A lane process never asks: it would find itself there."""
+    try:
+        fd = os.open(cfg.state_dir / LANE_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return True
+    try:
+        return _try_flock(fd)
+    finally:
+        os.close(fd)  # and with it the flock, had it
+
+
+def _wait_lane_empty(cfg: Config) -> None:
+    """Wait until no lookup is in the lane, however long its work: the lane file flocked exclusively, blocking, then
+    let go at once. The caller holds nothing meanwhile. A lane process never calls it: it would wait for itself."""
+    try:
+        fd = os.open(cfg.state_dir / LANE_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    finally:
+        os.close(fd)
+
+
+def _announce(cfg: Config, what: str, *, lane: bool = False) -> Path:
+    """Say that a lookup waits for the lock: a file named after this process, which goes once it has it.
+    A lane ticket (``lane``) is named by when it was made first, ``lane.<time.time_ns(), 20 digits>.<pid>``
+    (``.<n>`` after it on a clash), so the lane's tickets sort oldest first (``lane_tickets``); any other is
+    ``<pid>.<n>``."""
     folder = cfg.state_dir / WAITING_DIR
     folder.mkdir(mode=0o700, exist_ok=True)
+    stem = f"{LANE_TICKET}{time.time_ns():020d}.{os.getpid()}" if lane else str(os.getpid())
     for n in range(1000):
-        ticket = folder / f"{os.getpid()}.{n}"
+        ticket = folder / (stem if lane and n == 0 else f"{stem}.{n}")
         try:
             fd = os.open(ticket, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError:
@@ -327,50 +407,76 @@ def _announce(cfg: Config, what: str) -> Path:
     raise OSError(f"too many lookups of this process wait in {folder}")
 
 
-def _wait_announced(cfg: Config, what: str, fd: int) -> None:
-    """Wait for caracole's lock as a lookup: announced by a ticket, touched every ``TICKET_BEAT`` seconds
-    while this process tries for the lock, so that a ticket left by a lookup that was killed while it
-    waited (its pid maybe another process's since) soon stops counting (``lookups_waiting``)."""
-    ticket = _announce(cfg, what)
-    beat = time.monotonic()
+def _wait_announced(cfg: Config, what: str, fd: int, *, lane: bool = False, ticket: Path | None = None,
+                    on_wait: Callable[[str], None] | None = None) -> None:
+    """Wait for caracole's lock as a lookup: announced by a ticket (``ticket``, else a new one), touched every
+    ``TICKET_BEAT`` seconds while this process tries for the lock, so that a ticket left by a lookup that was
+    killed while it waited (its pid maybe another process's since) soon stops counting (``lookups_waiting``).
+
+    A lane ticket (``lane``) tries for the lock only while it heads the lane (``lane_tickets``), so the lane's
+    lookups go in the order they came; any other takes the lock only while the lane is empty, letting go at
+    once of one it had. ``on_wait`` hears whom it waits for once, ``WAIT_SAID`` seconds after the wait began:
+    a lookup that starts as another passes its turn says nothing."""
+    ticket = ticket or _announce(cfg, what, lane=lane)
+    began = beat = time.monotonic()
+    told = on_wait is None
     try:
         while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return
-            except BlockingIOError:
-                pass
+            if not lane or lane_tickets(cfg)[:1] == [ticket]:
+                if _try_flock(fd):
+                    if lane or _lane_empty(cfg):
+                        return
+                    fcntl.flock(fd, fcntl.LOCK_UN)  # not the lane's, and lookups are in it: theirs first
             _handoff_sleep(WAIT_POLL)
-            if time.monotonic() - beat >= TICKET_BEAT:
-                beat = time.monotonic()
+            now = time.monotonic()
+            if not told and now - began >= WAIT_SAID:
+                told = True
+                assert on_wait is not None
+                on_wait(_holder(fd))
+            if now - beat >= TICKET_BEAT:
+                beat = now
                 try:
                     os.utime(ticket)
                 except FileNotFoundError:  # deleted from under it: announce it again
-                    ticket = _announce(cfg, what)
+                    ticket = _announce(cfg, what, lane=lane)
     finally:
         ticket.unlink(missing_ok=True)
 
 
-def lookups_waiting(cfg: Config) -> bool:
-    """Whether a lookup waits for caracole's lock: a ticket of a live process, touched in the last
-    ``TICKET_STALE`` seconds. A ticket a process that ended left is dropped, and so is one untouched
-    for ``TICKET_FORGOTTEN``."""
+def _ticket_pid(name: str) -> int | None:
+    """The pid a ticket's name gives, ``<pid>.<n>`` or a lane ticket's ``lane.<time>.<pid>[.<n>]``; None for a
+    name that isn't caracole's."""
+    lane = name.startswith(LANE_TICKET)
+    parts = name[len(LANE_TICKET):].split(".") if lane else name.split(".")
+    try:
+        pid = int(parts[1] if lane else parts[0])
+    except (IndexError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def _live_tickets(cfg: Config) -> list[str]:
+    """The names of the tickets in caracole's waiting folder that still wait: each of a live process, touched in the
+    last ``TICKET_STALE`` seconds. A ticket a process that ended left is dropped, and so is one untouched for
+    ``TICKET_FORGOTTEN``."""
     folder = cfg.state_dir / WAITING_DIR
     try:
         names = os.listdir(folder)
     except OSError:
-        return False
-    waiting = False
+        return []
+    live = []
     now = time.time()
     for name in names:
         ticket = folder / name
-        try:
-            os.kill(int(name.split(".")[0]), 0)
-        except ProcessLookupError:
-            ticket.unlink(missing_ok=True)
-            continue
-        except (ValueError, PermissionError):
-            pass  # not caracole's name, or a process of another user: its age tells
+        pid = _ticket_pid(name)
+        if pid is not None:  # else not caracole's name: its age tells
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                ticket.unlink(missing_ok=True)
+                continue
+            except (PermissionError, OverflowError):
+                pass  # a process of another user, or no pid at all: its age tells
         try:
             age = now - ticket.stat().st_mtime
         except OSError:
@@ -379,8 +485,21 @@ def lookups_waiting(cfg: Config) -> bool:
             if age > TICKET_FORGOTTEN:
                 ticket.unlink(missing_ok=True)
             continue
-        waiting = True
-    return waiting
+        live.append(name)
+    return live
+
+
+def lookups_waiting(cfg: Config) -> bool:
+    """Whether a lookup waits for caracole's lock, in the lane or not: a ticket of a live process, touched in the
+    last ``TICKET_STALE`` seconds (``_live_tickets``)."""
+    return bool(_live_tickets(cfg))
+
+
+def lane_tickets(cfg: Config) -> list[Path]:
+    """The lane's tickets that still wait (``_live_tickets``), oldest first: the next to take caracole's lock
+    first. A dead one is dropped at once, a stale one passed over."""
+    folder = cfg.state_dir / WAITING_DIR
+    return [folder / name for name in sorted(_live_tickets(cfg)) if name.startswith(LANE_TICKET)]
 
 
 def handoffs() -> int:
@@ -469,7 +588,10 @@ def _release(path: Path) -> None:
         return
     del _held[path]
     _as_lookup.discard(path)
+    lane = _lane.pop(path, None)
     os.close(fd)  # and with it the lock
+    if lane is not None:
+        os.close(lane)  # and with it the lane: once the lock is free
 
 
 def _holder(fd: int) -> str:
@@ -482,7 +604,7 @@ def _holder(fd: int) -> str:
 
 
 @contextmanager
-def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False,
+def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False, lane: bool = False,
               on_wait: Callable[[str], None] | None = None) -> Iterator[None]:
     """Hold caracole's lock, ``state_dir/caracole.lock``, for a command that sends requests or writes.
 
@@ -503,9 +625,17 @@ def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool =
     queues, so that a lookup queued after it never waits behind a whole nightly run either),
     which announces that it waits, so that bulk work hands the lock over at its next pause, or
     between two songs (``hand_over``); it never hands the lock on itself. ``on_wait`` hears
-    whom it waits for, when it must.
+    whom it waits for, when it must: at once for bulk work, and for one that waits announced once
+    it has waited ``WAIT_SAID`` seconds.
+
+    ``lane``: a lookup in the lane, which implies ``interactive``. It holds a shared flock of
+    ``state_dir/caracole.lock.lane`` from before it asks for the lock until it lets go of it, and
+    waits, when it must, behind the lane's tickets that came before its own (``lane_tickets``).
+    While the lane holds anyone, no caracole outside it takes the lock: one that has it lets go
+    and waits for the lane to empty, holding nothing. A lock this process holds already is taken
+    again of the outer one's kind, so a lookup's clients never wait for a lane it is in.
     """
-    path = _acquire(cfg, what, fatal=fatal, interactive=interactive, on_wait=on_wait)
+    path = _acquire(cfg, what, fatal=fatal, interactive=interactive or lane, lane=lane, on_wait=on_wait)
     try:
         yield
     finally:

@@ -3244,6 +3244,17 @@ picks one).
   - a file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and dropped once it holds
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
+- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`):
+  - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
+    go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
+  - their tickets named `lane.<time.time_ns(), 20 digits>.<pid>` (`LANE_TICKET`), taken oldest first, a ticket
+    trying for the lock only at the head of the lane (`lane_tickets`: a dead one dropped at once, a stale one passed
+    over);
+  - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for
+    it to empty, holding nothing (`_lane_empty`, `_wait_lane_empty`; asked now, announced, polling); a lock its
+    process holds already is taken again of the outer one's kind;
+  - a waiting lookup's `on_wait` is told whom it waits for after `WAIT_SAID` (1 s), its warning at once
+    (test_commands_lane.py).
 - `caracole versions --keep`, `--keep-more` and `--clear` (which writes overrides.toml under it) wait so too, and
   `--choose` through get.
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
