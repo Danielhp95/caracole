@@ -393,9 +393,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **overlay.js**: the rail of a wide screen, Guitar (the necks) and Harmonica (the circle of fifths, the key on the
-    harp chosen, each chord's holes, the slim bar), and narrower the phone's sheet, `window.caracoleOverlay`, which
-    viewer.js and harptab.js draw with what they look up.
+  - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
+    harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
+    `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
+    `window.caracoleOverlay`, which viewer.js and harptab.js draw with what they look up.
   - **harp.py**: the Richter harmonica:
     - its layout in every key, positions by Wikipedia's circle-of-fifths numbering;
     - the overlay's tables by steps above the tonic (`ring`, `holes`, `key_scales`, `outside`, `chord_steps`);
@@ -1276,11 +1277,11 @@ It is rows.js's, shared by both pages:
   - an AudioContext only on a tap (`navigator.userActivation`), suspended when the page is hidden or silent, resumed
     on the next tap.
   - `caracoleSound.play` is what a part that plays chords in sequence calls (its header documents it; the Harmony
-    panel's ▶ does), never another synthesis (test_viewer_sound.py, test_viewer_panels.py).
+    tab's ▶ does), never another synthesis (test_viewer_sound.py, test_viewer_harmony_tab.py).
   - It times a progression on the context's clock alone (a strum it comes to late moves the rest on, never two
     crammed together).
-  - Every stop (■, another ▶ or strum, the panel closed, the page hidden or left) leaves no note to begin and no timer
-    of it, even when the notes cut tell they ended late.
+  - Every stop (■, another ▶ or strum, the Harmony tab left, the page hidden or left) leaves no note to begin and no
+    timer of it, even when the notes cut tell they ended late.
   - A sound asked while the context wakes plays only if nothing was asked after it, and a context woken for nothing
     sleeps again.
   - test_viewer_sound.py's `SCHEDULE` records each note and timer the page makes, and plays a slow device on demand
@@ -1293,7 +1294,7 @@ It is rows.js's, shared by both pages:
   the songbook has neither.
   - The list's place: on a phone a sheet from the bottom, docked on the bar as the settings are (one of `DOCKED`);
     from 900 px a popover under the line, never a rail (no `data-panel`: the song's column stays), beside the settings
-    or Harmony: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
+    or the key list: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
     `--pop-left`, 6 px under the line's box, at its left, in the page's coordinates, so it scrolls with the page),
     which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
   - The popover keeps 8 px within the window less the rails (the room body's padding leaves them: `data-necks`,
@@ -1323,8 +1324,14 @@ It is rows.js's, shared by both pages:
   `#scroll-status`, outside the bar) says the key's line as − and + move it (viewer.js `sayKey`: not on load, nor
   while the settings' outputs or the key's own name say it; test_viewer_bar.py).
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
-  - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
-    alone;
+  - three tabs on a sheet, Guitar, Harmonica and Harmony, and two on a harmonica tab's page, Harmonica first, the tab
+    shown kept for that page alone (test_viewer_overlay.py);
+  - Harmony (D12 B), a sheet's with a key (viewer.js `hasHarmony`, where the settings' Harmony row was: no Harmony
+    panel, no row), is the page's own pane, overlay.js's `page.harmony(pane)`, drawn on each draw while it shows
+    (`harmonyPane`: `#harmony-key`, the key's neck, which then leaves the Guitar tab, `#tempo-row`, `#progs`), each
+    control with a `data-f` the focus comes back to; leaving it (`page.left`, another tab; `close(necksEl)`;
+    `showNecks(false)`; `drawNecks()` drawing no Harmony pane while one plays) stops every sound, as the panel's ✕ did
+    (`stopPlaying(true)`; test_viewer_harmony_tab.py, test_viewer_sound.py);
   - viewer.js and harptab.js hand it what they look up, and Harmonica's notes, scales and harps are harp.py's tables,
     by steps above the tonic as the song sounds, a transposition moving every harp and a capo none
     (test_viewer_harp.py, test_viewer_overlay.py, test_viewer_harptab_browser.py).
@@ -1346,9 +1353,9 @@ It is rows.js's, shared by both pages:
   - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
     depth through what the page writes into its address;
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
-    leaving it open); from 900 px the rails (`rails`: the settings, Harmony, the key list) one at a time, a card and
-    the versions list beside them;
-    `DOCKED` (panel, card, harmony, vList, necksEl, keyList) docks at the foot on a phone, the top one of them
+    leaving it open); from 900 px the rails (`rails`: the settings, the key list) one at a time, a card and the
+    versions list beside them;
+    `DOCKED` (panel, card, vList, necksEl, keyList) docks at the foot on a phone, the top one of them
     (`dock()`);
   - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
     list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px;

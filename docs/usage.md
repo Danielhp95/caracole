@@ -2821,7 +2821,7 @@ progression", "the Andalusian cadence"), and the named progressions it
 plays within it (a verse ii–I–V–vi–IV–♭VII–I–V–vi–IV plays the pop
 progression twice). A progression's button under a song's
 chevron, or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
-sheet viewer's Harmony panel links to it; written by hand, `#prog=vi–IV–I–V` is
+sheet viewer's Harmony tab links to it; written by hand, `#prog=vi–IV–I–V` is
 the same progression), shows only your songs that play it,
 in any key and starting on any of its chords, under a line that says which,
 with Show all: "Songs with I–V–vi–IV, the pop progression · Show all". A
@@ -3174,9 +3174,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Loud (one, two and three waves). With it off, a tap opens the card alone. A
   phone set to silent may keep it silent.
 - **The overlay**, on a laptop (1200 px wide or more): a rail on the left
-  with two tabs, **Guitar** and **Harmonica**; a sheet opens on Guitar, and
-  the tab you choose holds for that page alone. **Guitar** is a neck per
-  chord: it lists each chord of the song once, in the order it first comes, with a
+  with three tabs, **Guitar**, **Harmonica** and **Harmony** (on a sheet
+  whose key caracole can tell; without one, the first two); a sheet opens on
+  Guitar, and the tab you choose holds for that page alone. **Guitar** is a
+  neck per chord (the key's neck heads Harmony, below, or Guitar on a page
+  with no Harmony tab): it lists each chord of the song once, in the order it
+  first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
   a colour of its own, the tab's own ringed (a note several shapes play is a
   smaller dot for each, side by side in the fret, the first shape leftmost,
@@ -3211,8 +3214,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   every harp. It starts on the harp the song's harmonica tab plays on (with the
   record, or as its words say), else on the first harp for the song's key.
   Once the circle has scrolled away, a slim bar at the rail's top names the
-  harp, with **Change harp** to go back up to it. The rail scrolls on its
-  own, the song and the bar move over for it, and it isn't printed.
+  harp, with **Change harp** to go back up to it. **Harmony** heads with the
+  key's neck and lists each section's progression (below). The rail scrolls
+  on its own, the song and the bar move over for it, and it isn't printed.
   **On a phone or a tablet** (below 1200 px) the neck in the bar, after the
   key, slides the same overlay up from the bar as a sheet over about half
   the screen, its tabs, circle, cards and slim bar as the rail has them; the
@@ -3241,8 +3245,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
-  library's links don't carry it. **Reset all** shows the rail again. Hidden, the
-  Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
+  library's links don't carry it. **Reset all** shows the rail again. Below 1200 px
   there is no rail and no button for it, but the neck (narrowed with the
   keyboard's focus in the rail, the focus goes to the bar).
 - **The song's facts**, under the title, on three lines, each a label and its
@@ -3354,7 +3357,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the browser" (see [Guitar Pro files in the browser](#caracole-serve)), as
   the settings' Guitar Pro row does. On a phone the list comes up from the
   bottom, over the bar, where the settings do; from 900 px wide it opens
-  under the line, beside the settings or the Harmony panel, the song staying
+  under the line, beside the settings or the key list, the song staying
   where it is, never over a rail, and scrolls with the page; it ends above
   the bar, its rows scrolling within it, and its heading and × stay at its
   top as they scroll, on a phone too. A kept version opens from it, in
@@ -3406,8 +3409,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
-- **Back and Escape**: the settings (or the Harmony panel, or the key list,
-  in their place), a chord's card, the necks' sheet, the versions list, Aa's
+- **Back and Escape**: the settings (or the key list, in their place), a
+  chord's card, the necks' sheet, the versions list, Aa's
   text-size box and Export PDF's question (served) are each one step of
   the browser's history while they are open, so the browser's Back (a phone's
   too) closes the one on top, as Escape and its × do (Aa's box closes on a tap
@@ -3418,8 +3421,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   is open at a time: opening another (a chord's card with the settings open,
   the settings over the necks' sheet) closes the one open. From 900 px wide
   the card sits by its chord and the versions list under its line, beside
-  the settings, the Harmony panel or the key list (one of those three at a
-  time, in the rail), and Back closes the one opened last first. What you change with one
+  the settings or the key list (one of the two at a time, in the rail), and
+  Back closes the one opened last first. What you change with one
   open (the key, the capo, a shape) stays as it closes, in the address too,
   and the song stays where you scrolled it under it. A page whose history the browser refuses opens and
   closes them all the same, and Back leaves it. Full screen (below) is one of
@@ -3529,11 +3532,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   whose Circle & keyboard opens this tooltip, with the chords' names alone too.
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
-- **Harmony ›** (in the settings, after Hide controls and with Guitar Pro tab
-  and Export PDF after a rule, near their foot) opens a panel in their place, docked at the
-  foot on a phone and a rail on the right from 900 px wide: the key the
-  numerals are read in and where it came from, the key's neck on a phone (on
-  a laptop it heads the rail of necks), and each section's progression in
+- **Harmony**, the overlay's third tab (the rail of necks on a laptop, the
+  neck's sheet on a phone or a tablet, above; the settings have no row for
+  it), on a sheet whose key caracole can tell: the key the numerals are read
+  in and where it came from, the key's neck (its scale, or its pentatonic
+  box: **Scale** or the pentatonic switches it; on an instrument with no
+  neck, the guitar's at its capo), and each section's progression in
   numerals, one cycle of it with the times it is played ("I–V–vi–IV ×4"; "×8,
   one variation" when a pass plays it otherwise, with a chord changed, or one
   added or left out, or, in a cycle of four chords or more, a chord changed
@@ -3576,7 +3580,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   progression's order (a busy page plays the rest later, never two chords at
   once), marking the chord playing. **■** stops it at once, as another ▶, a
   tap on a chord and switching away from the page do: nothing more of it
-  sounds. Closing the panel stops every sound, a chord tapped too.
+  sounds. Leaving the tab stops every sound, a chord tapped too: another
+  tab, the sheet closed (✕, Escape, Back, the neck, or another panel opening
+  in its place on a phone), the rail hidden or full screen, or the window
+  narrowed past the rail.
   **Songs with this progression** opens the library
   page with the songs that have it (`index.html#prog=I%20V%20vi%20IV`), and
   **Songs with the pop progression**, under a section that plays it within

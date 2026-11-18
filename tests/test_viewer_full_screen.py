@@ -66,13 +66,15 @@ def hide_controls(b: Browser) -> None:
 
 def test_the_page_has_a_handle_and_hide_controls():
     songbook = build_songbook("Campfire", [BookSong("One", "Synthetic", cho=UG_CHO, id="aaaa")])
+    with_files = build_viewer(UG_CHO, guitar=("guitar-1.gp5",))
+    assert '<div class="places ruled" id="places">\n' + page._FULL_ROW + page._GUITAR_ROW in with_files
     for html in (build_viewer(UG_CHO), songbook):
         assert html.count(page._HANDLE) == 1
         assert page._HANDLE == ('<button type="button" class="handle" id="handle" hidden aria-label="Show controls">'
                                 '</button>\n')
         assert '<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">' in html
-        # Hide controls, the first of the places to go, before Harmony.
-        assert '<div class="places ruled" id="places">\n' + page._FULL_ROW + page._HARMONY_ROW in html
+        # Hide controls, the first of the places to go (a song's Guitar Pro files after it, then Export PDF).
+        assert '<div class="places ruled" id="places">\n' + page._FULL_ROW in html
         assert '<span class="goto-lab">Hide controls</span><span class="goto-v">full screen' in page._FULL_ROW
         assert 'id="full-open"' in page._FULL_ROW
         # The handle right after the pill, out of the bar.

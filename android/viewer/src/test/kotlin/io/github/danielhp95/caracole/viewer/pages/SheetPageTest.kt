@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer.pages
 
 import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.viewer.pages.internal.PageConstants
 import io.github.danielhp95.caracole.viewer.sheet.Blank
 import io.github.danielhp95.caracole.viewer.sheet.ChordRow
 import io.github.danielhp95.caracole.viewer.sheet.Item
@@ -29,9 +30,9 @@ class SheetPageTest {
         misses.assertNone()
     }
 
-    @Test fun theControlsHoldTheHarmonyRowOnceForTheGuitarProRowToFollow() {
-        val harmony = "<div id=\"harmony-row\" hidden>"
-        assertEquals(1, SheetPage.CONTROLS.split(harmony).size - 1)
+    @Test fun theControlsHoldTheFullScreenRowOnceForTheGuitarProRowToFollow() {
+        assertEquals(1, SheetPage.CONTROLS.split(PageConstants.FULL_ROW).size - 1)
+        assertTrue("<div id=\"harmony-row\"" !in SheetPage.CONTROLS)  // Harmony is the overlay's third tab
         assertEquals("../../index.html", SheetPage.LIBRARY_PAGE)
     }
 

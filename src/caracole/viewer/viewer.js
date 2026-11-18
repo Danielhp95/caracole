@@ -32,7 +32,7 @@
   const FS = { min: 13, max: 30, step: 2, start: 18 };
   // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
   const SPEED = { min: 1, max: 30, start: 6, px: 2 };
-  // The Harmony panel's tempo, in beats a minute: a chord a bar of four.
+  // The Harmony tab's tempo, in beats a minute: a chord a bar of four.
   const BPM = { min: 40, max: 200, start: 80, step: 5 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
@@ -890,12 +890,12 @@
   });
 
   // --- drawing the page --------------------------------------------------------------------------
-  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
   const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
-  // From 900 px wide, beside the song, one at a time: the settings, the Harmony panel, the key list.
-  const rails = [panel, harmony, keyList].filter(Boolean);
+  // From 900 px wide, beside the song, one at a time: the settings, the key list.
+  const rails = [panel, keyList].filter(Boolean);
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
@@ -1111,11 +1111,10 @@
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     drawSpeed();
     drawStrip();
+    drawWords();  // the words in the characters chosen, with their readings: the Harmony tab names its sections so
     drawNecks();  // before layout(), which measures the song beside the rail
-    drawWords();  // and the words in the characters chosen, with their readings
     layout();  // fit() too
     drawHeadings();
-    if (!harmony.hidden) drawHarmony();
     if (!keyList.hidden) drawKeyList();  // the key played pressed, the keys named in the mode played
     if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
     dock();
@@ -1301,8 +1300,9 @@
 
   // --- the key's neck: its scale, or its pentatonic box, across the frets, the tonic marked ------------
   // In the key shown, of the shapes played on the instrument ``it`` (``s`` semitones from the sheet's key): with a
-  // capo, the frets count from it, as the chords' necks do. The rail's first neck (overlay.js draws it); on a phone,
-  // the Harmony panel's. Scale or Pentatonic switches it.
+  // capo, the frets count from it, as the chords' necks do. The Harmony tab's first (overlay.js draws it), or the
+  // Guitar tab's on a sheet with no Harmony tab. Scale or Pentatonic switches it; the overlay's draw keeps the focus on
+  // the switch (its data-f).
   const keySpec = (s = shift(), it = inst()) => ({
     name: keyName(s), tonic: mod12(key.tonic + s), tonicName: names(s)[mod12(key.tonic + s)],
     scale: table("keyScale") || [], pentatonic: table("pentatonic") || [],
@@ -1310,29 +1310,24 @@
     // The instrument's strings, each open note's pitch class (data.instruments' tuning, as MIDI notes).
     tuning: Array.isArray(it.tuning) && it.tuning.length ? it.tuning : data.tuning,
     box: state.kn === "penta", onSwitch: (which) => setKeyNeck(which) });
-  const keyNeck = () => overlay.keyNeck(keySpec());
   const setKeyNeck = (which) => {
-    const active = document.activeElement;
-    const from = active && active.closest ? active.closest(".kn") : null;
-    const holder = from ? from.parentElement : null;
     state.kn = which;
     render();
-    const to = holder && holder.querySelector('.kn [aria-pressed="true"]');
-    if (to) to.focus({ preventScroll: true });
   };
 
-  // --- the overlay: a wide screen's rail, on the left, Guitar and Harmonica ---------------------------
+  // --- the overlay: a wide screen's rail, on the left, Guitar, Harmonica and Harmony -------------------
   // From 1200 px wide (viewer.css), overlay.js draws it, its Guitar tab first and shown when the page opens. Guitar:
-  // the key's neck, then each chord the sheet shows, once, in the order it first comes (two chords shown by one name
-  // are one), with every position of it along a neck and a legend naming them, on the instrument played (a ukulele's
-  // four strings), or the guitar's on one with no neck (the piano, the harmonica, the winds: then at the guitar's
-  // capo). Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
-  // every place of that chord, kept with the rest (state.at); one of the guitar's for another instrument holds for
-  // the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no capo; a transposition moves
-  // every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one the song's harmonica tab
-  // plays on, else the first harp.py's choices pick), the key on it and each chord's holes, harp.py's tables looked
-  // up. Hide, at the rail's top, and the bar's button (after the key, from 1200 px) show it or hide it (state.necks),
-  // the two always in step; hidden, the song has the whole width.
+  // each chord the sheet shows, once, in the order it first comes (two chords shown by one name are one; on a sheet
+  // with no Harmony tab, the key's neck first), with every position of it along a neck and a legend naming them, on
+  // the instrument played (a ukulele's four strings), or the guitar's on one with no neck (the piano, the harmonica,
+  // the winds: then at the guitar's capo). Picking one, on the neck or in the legend, makes it the shape the strip
+  // and the chord's card show, at every place of that chord, kept with the rest (state.at); one of the guitar's for
+  // another instrument holds for the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no
+  // capo; a transposition moves every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one
+  // the song's harmonica tab plays on, else the first harp.py's choices pick), the key on it and each chord's holes,
+  // harp.py's tables looked up. Harmony, on a sheet with a key to read numerals in (hasHarmony): the key's neck, then
+  // each section's progression (harmonyPane, below). Hide, at the rail's top, and the bar's button (after the key,
+  // from 1200 px) show it or hide it (state.necks), the two always in step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
   // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
   // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
@@ -1373,14 +1368,24 @@
   const necksOf = () => (inst().kind === "strings" ? inst() : GUITAR);
   // The guitar at its capo (the one set, else the sheet's), as the chords would be named were it played.
   const guitarShift = () => state.t - ((state.capo === null ? sheetCapo : state.capo) - sheetCapo);
+  // The necks' instrument and how far its chords are from the sheet's: the one played, else the guitar at its capo.
+  const necksAt = () => {
+    const it = necksOf(), played = it === inst();
+    return { it, played, s: played ? shift() : guitarShift() };
+  };
+  // A Harmony tab where the settings' Harmony row was: a key to read the numerals in, and each section's progression.
+  const hasHarmony = Boolean(key) && Boolean(data.numerals) && Boolean(data.progressions);
+  // Its progression playing (below), which drawing the overlay may stop as early as a short screen's full screen:
+  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}.
+  let playing = null;
   const guitarTab = () => {
-    const it = necksOf(), played = it === inst(), s = played ? shift() : guitarShift();
+    const { it, played, s } = necksAt();
     const chords = shownOnce(s).map(([c, rep, name]) => {
       const shapes = shapesOf(rep, s, it);
       return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
     });
     return { name: String(it.tab || it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
-      key: key && data.keyScale ? keySpec(s, it) : null };
+      key: key && data.keyScale && !hasHarmony ? keySpec(s, it) : null };  // the key's neck: Harmony's, where it is
   };
   // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
   const sameRep = (a, b) => Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
@@ -1413,6 +1418,10 @@
     first: "guitar",
     guitar: guitarTab,
     harmonica: harmonicaTab,
+    harmony: hasHarmony ? (pane) => harmonyPane(pane) : undefined,
+    left: (tab) => {
+      if (tab === "harmony") stopPlaying(true);  // as the Harmony panel closed did: every sound, a chord tapped too
+    },
     pick: (name, p) => {
       if (necksOf() === inst()) {
         pickPosition(name, p);
@@ -1456,7 +1465,11 @@
     if (on || phone) rail.draw();
     else if (rail) rail.empty();
     else necksEl.textContent = "";
+    // The window across 1200 px with the sheet closed, or full screen: no Harmony tab drawn, nothing of it playing.
+    if (playing && !harmonyShown()) stopPlaying(true);
   };
+  // Whether the overlay shows its Harmony tab now.
+  const harmonyShown = () => Boolean(necksEl) && necksEl.querySelector("#harmony") !== null;
   // A position picked for a chord: every place the sheet shows it plays it, and its card, when it shows
   // that chord as it is played, turns to it.
   const pickPosition = (name, p) => {
@@ -1468,8 +1481,10 @@
     if (!card.hidden) drawCard();
     save();
   };
-  // Shown or hidden: the song and the bar move back, or over, and the card follows its chord.
+  // Shown or hidden: the song and the bar move back, or over, and the card follows its chord. Hidden on its Harmony
+  // tab, every sound stops with it.
   const showNecks = (on) => {
+    if (!on && harmonyShown()) stopPlaying(true);
     state.necks = on;
     keepNecks();
     render();
@@ -1496,7 +1511,6 @@
       const had = necksEl.contains(document.activeElement);
       if (railWide.matches && sheetAt !== null) dropSheet();
       drawNecks();
-      if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
       if (had && !necksEl.contains(document.activeElement)) {
@@ -1867,7 +1881,7 @@
   const landing = (which) => (which === necksEl ? rail.landing()
     : which === handle ? handle : which.querySelector("h2"));
   // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
-  const DOCKED = [panel, card, harmony, vList, necksEl, keyList].filter(Boolean);
+  const DOCKED = [panel, card, vList, necksEl, keyList].filter(Boolean);
   const dockedTop = () => {
     for (let i = layers.length - 1; i >= 0; i--) if (DOCKED.indexOf(layers[i].el) >= 0) return layers[i].el;
     return null;
@@ -1924,14 +1938,14 @@
   }
   const restack = () => {
     const rail = doc.dataset.panel;
-    for (const which of [panel, card, harmony, vList, necksEl, keyList]) {
+    for (const which of [panel, card, vList, necksEl, keyList]) {
       if (which) which.classList.toggle("top", which === topLayer());
     }
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
     keyNow.setAttribute("aria-expanded", keyList.hidden ? "false" : "true");
     sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
-    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', Harmony's, the key list's
+    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the key list's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1939,8 +1953,8 @@
     layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
   // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
-  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the key list) are
-  // one at a time, a card and the versions list beside them.
+  // any other closes every one open first; from 900 px the rails (the settings, the key list) are one at a time, a
+  // card and the versions list beside them.
   const open = (which, opener, nested = false) => {
     auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
@@ -1969,6 +1983,7 @@
     const active = document.activeElement;
     const mine = refocus && (!active || active === document.body || which.contains(active));
     if (which === necksEl) {
+      if (harmonyShown()) stopPlaying(true);  // closed on its Harmony tab: every sound stops, as the panel's did
       sheetAt = null;
       drawNecks();
     } else if (which === ask) {
@@ -1979,7 +1994,6 @@
       which.hidden = true;
     }
     if (which === card) for (const el of chordEls) el.classList.remove("on");
-    if (which === harmony) stopPlaying(true);
     restack();
     if (!mine) return;  // the focus is somewhere else of yours: it stays there
     let to = opener && opener.isConnected ? opener : null;
@@ -1993,7 +2007,6 @@
     else delete doc.dataset.full;
     handle.hidden = !on;
     drawNecks();
-    if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
     layout();
     if (!on) fitKey();  // the bar back: its key measured again
   };
@@ -2019,13 +2032,11 @@
     else if (doc.dataset.full === "auto") auto.end();
   });
   // ⋯ closes the settings where you see them, and opens them otherwise (on a phone in the place of the one open).
-  // The settings and the Harmony panel take one place: either opens in the other's.
   more.addEventListener("click", () => {
     if (inSight(panel)) {
       close(panel);
       return;
     }
-    close(harmony);
     open(panel, more);
   });
 
@@ -2160,7 +2171,6 @@
     $("roles").hidden = !can;
     $("roles").setAttribute("aria-pressed", state.roles ? "true" : "false");
     $("names-hint").textContent = can ? "" : "No key found, so no numerals.";
-    $("harmony-row").hidden = !can || !data.progressions;
   }
   $("roles").addEventListener("click", () => {
     state.roles = !state.roles;
@@ -2423,15 +2433,15 @@
   tip.addEventListener("pointerover", () => clearTimeout(leaving));
   tip.addEventListener("pointerout", leave);
 
-  // --- the Harmony panel: each section's progression, named, played ------------------------------------
-  // In the settings' place (docked on a phone, a rail from 900 px): the key the numerals are read in, its
-  // neck on a phone (the rail of necks has it on a laptop), and each section's progression (page.py's
-  // ``progressions``): its numerals, one cycle, the times it is played (and how many of those vary it), its
-  // name, the named progressions it plays within it, and how it ends. Tap one to go to its section; ▶ plays it
-  // with strum.js's synthesis (window.caracoleSound, when the page has it), a chord a bar at the tempo set (− and
-  // + change it as it plays), each chord as the page shows it, its shape and the capo, and marks the one playing;
-  // ■ stops it, and closing the panel every sound. Songs with this progression is the library's page, with it
-  // filtered (#prog=), and so is Songs with each one it contains.
+  // --- the Harmony tab: each section's progression, named, played ---------------------------------------
+  // The overlay's third tab (the rail from 1200 px, the phone's sheet narrower), on a sheet with a key (hasHarmony):
+  // the key the numerals are read in, its neck, and each section's progression (page.py's ``progressions``): its
+  // numerals, one cycle, the times it is played (and how many of those vary it), its name, the named progressions it
+  // plays within it, and how it ends. Tap one to go to its section; ▶ plays it with strum.js's synthesis
+  // (window.caracoleSound, when the page has it), a chord a bar at the tempo set (− and + change it as it plays),
+  // each chord as the page shows it, its shape and the capo, and marks the one playing; ■ stops it, and leaving the
+  // tab every sound (another tab, the sheet closed, the rail hidden or gone). Songs with this progression is the
+  // library's page, with it filtered (#prog=), and so is Songs with each one it contains.
   const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
     half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
   const counted = (n, word) => n + " " + word + (n === 1 ? "" : "s");
@@ -2480,10 +2490,9 @@
     const found = window.caracoleSound;
     return found && found.available !== false && typeof found.play === "function" ? found : null;
   };
-  let playing = null;  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}
   const soundsNow = () => musicOf(state) + "|" + state.inst;
   const drawPlaying = () => {
-    for (const li of $("progs").children) {
+    for (const li of document.querySelectorAll("#progs > .prog")) {
       const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
       const play = li.querySelector(".prog-play");
       play.textContent = mine ? "■" : "▶";
@@ -2491,8 +2500,8 @@
       li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
     }
   };
-  // ■, another ▶, the song played otherwise (drawHarmony) or the panel closed: the progression stops; the panel
-  // closed (``all``), every sound strum.js still makes too, a chord tapped among them.
+  // ■, another ▶, the song played otherwise (harmonyPane) or the tab left: the progression stops; the tab left
+  // (``all``), every sound strum.js still makes too, a chord tapped among them.
   function stopPlaying(all) {
     const was = playing;
     playing = null;
@@ -2539,106 +2548,100 @@
       drawPlaying();
     }
   };
-  const drawHarmony = () => {
-    if (!key) return;
+  // Drawn into the overlay's pane (overlay.js) each time it draws the tab, every control with the data-f the focus
+  // comes back to: bpm-down, bpm-up, and of section n prog-go:n, prog-play:n, prog-songs:n and prog-named:n:j (its
+  // j-th Songs with …); the neck's switch keeps keyNeck's.
+  const harmonyPane = (pane) => {
     // Transposed, or another capo, mode, swap, shape or instrument: what it plays is no longer the page's chords.
     if (playing && playing.sounds !== soundsNow()) stopPlaying();
-    $("harmony-key").textContent = "In " + keyWords() + ".";
-    const neckBox = $("harmony-neck");
-    const inNeck = neckBox.contains(document.activeElement);
-    neckBox.textContent = "";
-    if (!railOn() && data.keyScale && inst().kind === "strings") neckBox.appendChild(keyNeck());  // not in the rail: here
-    if (inNeck) {
-      const to = neckBox.querySelector('[aria-pressed="true"]');
-      if (to) to.focus({ preventScroll: true });
+    const box = pane.appendChild(document.createElement("div"));
+    box.id = "harmony";
+    box.className = "harmony";
+    const make = (parent, tag, cls, text) => {
+      const node = parent.appendChild(document.createElement(tag));
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    make(box, "p", "hint", "In " + keyWords() + ".").id = "harmony-key";
+    if (data.keyScale) {
+      const { it, s } = necksAt();
+      box.appendChild(overlay.keyNeck(keySpec(s, it)));
     }
     const synth = state.vol > 0 ? synthesis() : null;  // Sound off: no ▶ that would play nothing
-    $("tempo-row").hidden = !synth;
-    $("bpm").textContent = String(state.bpm);
-    const list = $("progs");
-    // The focus comes back to the same control of the same row: its row, its class, and which of the row's
-    // controls of that class it is (a row has a Songs with … link for each progression it contains).
-    const active = list.contains(document.activeElement) ? document.activeElement : null;
-    const cls = active && ["prog-go", "prog-play", "prog-songs", "prog-named"].find((c) => active.classList.contains(c));
-    const row = active && active.closest(".prog");
-    const back = cls && row ? [Array.prototype.indexOf.call(list.children, row), cls,
-      Array.prototype.indexOf.call(row.querySelectorAll("." + cls), active)] : null;
-    list.textContent = "";
+    const tempo = make(box, "div", "row");
+    tempo.id = "tempo-row";
+    tempo.hidden = !synth;
+    make(tempo, "span", "lab", "Tempo");
+    const stepper = make(tempo, "span", "stepper");
+    const stepButton = (id, said, text, by) => {
+      const b = make(stepper, "button", "", text);
+      b.type = "button";
+      b.id = id;
+      b.dataset.f = id;
+      b.setAttribute("aria-label", said);
+      b.addEventListener("click", () => setBpm(state.bpm + by));
+    };
+    stepButton("bpm-down", "Slower", "−", -BPM.step);
+    make(stepper, "output", "", String(state.bpm)).id = "bpm";
+    stepButton("bpm-up", "Faster", "+", BPM.step);
+    make(tempo, "span", "hint-inline", "bpm · 1 chord a bar");
+    const list = make(box, "ol", "progs");
+    list.id = "progs";
     const found = table("progressions") || [];
-    $("progs-none").hidden = found.length > 0;
+    const none = make(box, "p", "hint", "No chords we can read.");
+    none.id = "progs-none";
+    none.hidden = found.length > 0;
     for (const row of found) {
       const [n, numerals, repeats, name, ending, pkey, chords, variations] = row;
-      const li = list.appendChild(document.createElement("li"));
-      li.className = "prog";
+      const li = make(list, "li", "prog");
       li.dataset.n = String(n);
-      const go = li.appendChild(document.createElement("button"));
+      const go = make(li, "button", "prog-go");
       go.type = "button";
-      go.className = "prog-go";
-      const part = (cls, text) => {
-        const span = go.appendChild(document.createElement("span"));
-        span.className = cls;
-        if (text !== undefined) span.textContent = text;
-        return span;
-      };
-      part("prog-sec", sectionName(n));
-      const nums = part("prog-nums");
+      go.dataset.f = "prog-go:" + n;
+      make(go, "span", "prog-sec", sectionName(n));
+      const nums = make(go, "span", "prog-nums");
       numerals.forEach((numeral, k) => {
         if (k) nums.appendChild(document.createTextNode("–"));
-        const pn = nums.appendChild(document.createElement("span"));
-        pn.className = "pn";
-        pn.textContent = numeral;
+        make(nums, "span", "pn", numeral);
       });
       if (repeats > 1) {
-        const times = nums.appendChild(document.createElement("span"));
-        times.className = "prog-x";
-        times.textContent = "×" + repeats;
+        const times = make(nums, "span", "prog-x", "×" + repeats);
         if (variations > 0) {  // "×8, 1 variation", the words kept together
           times.appendChild(document.createTextNode(", "));
-          const varied = times.appendChild(document.createElement("span"));
-          varied.className = "prog-var";
-          varied.textContent = counted(variations, "variation");
+          make(times, "span", "prog-var", counted(variations, "variation"));
         }
       }
-      part("prog-about", [name, containsWords(row), ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending] : ""]
-        .filter(Boolean).join(" · "));
+      make(go, "span", "prog-about", [name, containsWords(row), ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending]
+        : ""].filter(Boolean).join(" · "));
       go.addEventListener("click", () => {
         const sec = sectionEls()[n];
         if (sec) sec.scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" });
       });
-      const play = li.appendChild(document.createElement("button"));
+      const play = make(li, "button", "round prog-play");
       play.type = "button";
-      play.className = "round prog-play";
+      play.dataset.f = "prog-play:" + n;
       play.hidden = !synth || !Array.isArray(chords);
       play.addEventListener("click", () => playSection(n, repeats, chords || []));
-      const songs = li.appendChild(document.createElement("a"));
-      songs.className = "link prog-songs";
+      const songs = make(li, "a", "link prog-songs", "Songs with this progression");
       songs.href = String(data.library || "") + "#prog=" + encodeURIComponent(pkey);
-      songs.textContent = "Songs with this progression";
-      for (const [cname, , ckey] of containedOf(row)) {
-        const more = li.appendChild(document.createElement("a"));
-        more.className = "link prog-named";
-        more.href = String(data.library || "") + "#prog=" + encodeURIComponent(ckey);
-        more.textContent = "Songs with " + cname;
-      }
+      songs.dataset.f = "prog-songs:" + n;
+      containedOf(row).forEach(([cname, , ckey], j) => {
+        const link = make(li, "a", "link prog-named", "Songs with " + cname);
+        link.href = String(data.library || "") + "#prog=" + encodeURIComponent(ckey);
+        link.dataset.f = "prog-named:" + n + ":" + j;
+      });
     }
     drawPlaying();
-    const again = back && list.children[back[0]] && list.children[back[0]].querySelectorAll("." + back[1])[back[2]];
-    if (again) again.focus({ preventScroll: true });
   };
-  $("harmony-open").addEventListener("click", () => {
-    close(panel);
-    drawHarmony();
-    open(harmony, more);
-  });
-  // The progression playing takes the new tempo from its next strum on.
+  // The progression playing takes the new tempo from its next strum on; the tab shows it where it is drawn.
   const setBpm = (n) => {
     state.bpm = Math.max(BPM.min, Math.min(BPM.max, n));
-    $("bpm").textContent = String(state.bpm);
+    const out = $("bpm");
+    if (out) out.textContent = String(state.bpm);
     if (playing && playing.handle && typeof playing.handle.tempo === "function") playing.handle.tempo(state.bpm);
     save();
   };
-  $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
-  $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
   // --- the version line and its list (kinds.js) --------------------------------------------------
   // Under the artist, which of the song's versions this page is and an icon a kind it keeps to play from; the line
   // opens the list of them (a layer: a sheet from the bottom on a phone, a popover under the line from 900 px, placed

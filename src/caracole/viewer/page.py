@@ -975,8 +975,9 @@ def _words(text: str) -> list[str]:
 # one switch), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
 # one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
-# opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), Harmony, the song's Guitar Pro
-# files (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet.
+# opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), the song's Guitar Pro files
+# (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet. Harmony is
+# no place here: it is the overlay's third tab, which viewer.js draws (``harmonyPane``).
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
@@ -999,9 +1000,6 @@ _FULL_ROW = ('<div id="full-row"><button type="button" class="goto" id="full-ope
              '</span><span class="goto-v">full screen' + _GO + '</span></button></div>\n')
 # Full screen's handle at the window's foot, hidden until it is on: a tap on it brings the controls back.
 _HANDLE = '<button type="button" class="handle" id="handle" hidden aria-label="Show controls"></button>\n'
-_HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
-                'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scales'
-                + _GO + '</span></button></div>\n')
 # Export PDF of this version, in words at its right: served, a link to the PDF itself, caracole serve's download
 # (viewer.js); from a file, a row that unfolds the command that makes it, with Copy.
 _EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="goto-lab">Export PDF</span>"""
@@ -1086,7 +1084,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
 <div class="places ruled" id="places">
-""" + _FULL_ROW + _HARMONY_ROW + """</div>
+""" + _FULL_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>
 </section>
 """ + _KEY_LIST + """<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
@@ -1101,18 +1099,6 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 <div class="info"><p class="tones" id="card-tones"></p><p class="solo" id="card-scale"></p></div>
-</section>
-<section class="sheet-ui panel harmony" id="harmony" hidden role="dialog" aria-labelledby="harmony-title">
-<header class="ui-head"><h2 id="harmony-title" tabindex="-1">Harmony</h2>
-<button type="button" class="x" data-close aria-label="Close">×</button></header>
-<p class="hint" id="harmony-key"></p>
-<div id="harmony-neck"></div>
-<div class="row" id="tempo-row" hidden><span class="lab">Tempo</span>
-<span class="stepper"><button type="button" id="bpm-down" aria-label="Slower">−</button>
-<output id="bpm">80</output><button type="button" id="bpm-up" aria-label="Faster">+</button></span>
-<span class="hint-inline">bpm · 1 chord a bar</span></div>
-<ol class="progs" id="progs"></ol>
-<p class="hint" id="progs-none" hidden>No chords we can read.</p>
 </section>
 <div class="tip" id="tip" role="tooltip" hidden>
 <div class="tip-head"><span class="tip-chord" id="tip-chord"></span><span class="tip-nm" id="tip-nm"></span><span class="tip-role" id="tip-role"></span></div>
@@ -1151,8 +1137,8 @@ _PLACES_END = '</div>\n<div class="panel-end ruled">'  # where the places to go 
 
 
 def _with_guitar(controls: str, guitar: bool) -> str:
-    """``controls`` with the Guitar Pro row after Harmony's, when the song has Guitar Pro files."""
-    return controls.replace(_HARMONY_ROW, _HARMONY_ROW + _GUITAR_ROW, 1) if guitar else controls
+    """``controls`` with the Guitar Pro row after Hide controls, when the song has Guitar Pro files."""
+    return controls.replace(_FULL_ROW, _FULL_ROW + _GUITAR_ROW, 1) if guitar else controls
 
 
 # Export PDF's question, served, pressed on a version other than the song's own (viewer.js fills it in and opens it): a

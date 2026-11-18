@@ -1,5 +1,6 @@
-"""The overlay (overlay.js): from 1200 px, the rail on the left with two tabs, Guitar and Harmonica, on a chord sheet
-(viewer.js) and a songbook's song. Guitar is the rail of necks (test_viewer_necks.py's tests); Harmonica, the circle
+"""The overlay (overlay.js): from 1200 px, the rail on the left with three tabs, Guitar, Harmonica and Harmony, on a
+chord sheet (viewer.js) and a songbook's song. Guitar is the rail of necks (test_viewer_necks.py's tests); Harmony,
+the key's neck and each section's progression (test_viewer_harmony_tab.py's); Harmonica, the circle
 of fifths that picks the harp, the key on that harp, each chord's holes on it, and the slim bar once the circle has
 scrolled out of the rail. A harmonica tab's page has it too (test_viewer_harptab_browser.py); narrower, the phone's
 sheet holds it (test_viewer_overlay_sheet.py)."""
@@ -97,9 +98,10 @@ def test_a_sheet_opens_on_guitar_and_harmonica_is_a_tab_away_and_not_kept(tmp_pa
         harmonica(b)
         reopen(b, written(tmp_path, IN_C, name="Other"))
         other = seen(b)
-    assert first["shown"] and first["tabs"] == [["Guitar", "true"], ["Harmonica", "false"]]
+    assert first["shown"] and first["tabs"] == [["Guitar", "true"], ["Harmonica", "false"], ["Harmony", "false"]]
     assert first["pane"] == "guitar" and first["necks"] == SHAPES and first["name"] is None
-    assert shown["tabs"] == [["Guitar", "false"], ["Harmonica", "true"]] and shown["pane"] == "harmonica"
+    assert shown["tabs"] == [["Guitar", "false"], ["Harmonica", "true"], ["Harmony", "false"]]
+    assert shown["pane"] == "harmonica"
     assert shown["necks"] == [] and shown["centre"] == "Bm" and shown["focus"] == "Harmonica"
     assert back["pane"] == "guitar" and back["necks"] == SHAPES
     # Each page opens on its own tab: neither a reload nor another sheet keeps Harmonica.
@@ -122,9 +124,22 @@ def test_the_arrows_go_from_tab_to_tab_and_round_the_circle(tmp_path):
         assert b.wait("document.querySelector('#necks .hw-name').textContent === 'E harp'")
         b.press("Enter")
         again = seen(b)
+        b.js("document.querySelector('#necks [role=tab][data-tab=harmonica]').focus()")
+        key(b, "ArrowRight", 39)
+        assert b.wait("document.querySelector('#necks .ov-pane').dataset.tab === 'harmony'")
+        harmony = seen(b)
+        key(b, "ArrowRight", 39)  # round again, to the first
+        assert b.wait("document.querySelector('#necks .ov-pane').dataset.tab === 'guitar'")
+        round_again = seen(b)
+        key(b, "ArrowLeft", 37)
+        assert b.wait("document.querySelector('#necks .ov-pane').dataset.tab === 'harmony'")
+        back = seen(b)
     assert on_tab["focus"] == "Harmonica" and on_tab["tabs"][1] == ["Harmonica", "true"]
     assert next_one["focus"] == "D harp, 4th position, aeolian" and next_one["chosen"] == [next_one["focus"]]
     assert again["chosen"] == ["E harp, 2nd position, mixolydian"] and again["focus"] == again["chosen"][0]
+    assert harmony["focus"] == "Harmony" and harmony["tabs"][2] == ["Harmony", "true"]
+    assert round_again["focus"] == "Guitar" and round_again["necks"] == SHAPES
+    assert back["focus"] == "Harmony"  # ← from the first, round to the last
 
 
 # --- the circle, and the harp chosen --------------------------------------------------------------------------
@@ -350,7 +365,8 @@ def test_a_songbook_song_has_the_overlay_too(tmp_path):
         second = seen(b)
         harmonica(b)
         harmonicas = seen(b)
-    assert first["tabs"] == [["Guitar", "true"], ["Harmonica", "false"]] and first["necks"] == ["C", "G", "Am", "F"]
+    assert first["tabs"] == [["Guitar", "true"], ["Harmonica", "false"], ["Harmony", "false"]]
+    assert first["necks"] == ["C", "G", "Am", "F"]
     assert second["pane"] == "guitar" and second["necks"] == SHAPES  # each song opens on its own
     assert harmonicas["centre"] == "Bm" and harmonicas["name"] == "A harp"
 

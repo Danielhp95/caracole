@@ -15,10 +15,10 @@ import pytest
 from caracole.viewer.book import BookSong, build_songbook, songbook_csp
 
 from helpers.browser import CHROMIUM_MARKS, Browser
-from helpers.viewer_pages import back, key, viewer as open_viewer
+from helpers.viewer_pages import back, harmony_tab, key, viewer as open_viewer
+from test_viewer_harmony_tab import FAKE_SOUND, PLAY, SAID as PLAYING, SONG as PROG_SONG
 from test_viewer_instruments_page import IN_E, SETTINGS, SONG, THREE, choose
 from test_viewer_necks import reload, served, to_song
-from test_viewer_panels import SONG as PROG_SONG
 
 pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
 
@@ -36,20 +36,26 @@ def _songbook(tmp_path, songs) -> str:
 
 @pytest.mark.parametrize("panel", ["settings", "harmony"])
 def test_the_arrows_stay_in_the_song_while_a_panel_is_open(tmp_path, panel):
-    """With the settings or the Harmony panel open, ← and → stay with it (a progression playing there goes on), as
-    with a card or the overlay's sheet open."""
+    """With the settings open, or the overlay's sheet on its Harmony tab, ← and → stay with it (a progression playing
+    there goes on), as with a card open."""
     book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
                                 BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")])
-    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
-        b.click("#more")
+    size = DESKTOP if panel == "settings" else {"width": 1100, "height": 800, "mobile": False}  # the sheet, not the rail
+    with open_viewer(tmp_path, book + "#song-1", **size) as b:
         if panel == "harmony":
-            b.click("#harmony-open")
-            assert b.wait("!document.getElementById('harmony').hidden")
+            b.js(FAKE_SOUND)
+            harmony_tab(b)
+            b.js(PLAY)
+            b.js("document.querySelector('#harmony .prog-play').focus()")  # on ■, as a tap on ▶ leaves it
+        else:
+            b.click("#more")
         b.js("window.before = true")
         key(b, "ArrowRight", 39)
         time.sleep(0.5)
         seen = b.js("[location.hash.split('=')[0], window.before === true]")
+        playing = b.js(PLAYING) if panel == "harmony" else None
     assert seen == ["#song-1", True], seen
+    assert playing == ("Stop" if panel == "harmony" else None)  # the progression goes on
 
 
 

@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 from helpers import browser
 from helpers.browser import Browser, in_chromium
-from helpers.viewer_pages import key, tap_at
+from helpers.viewer_pages import HARMONY_TAB, LEAVE_HARMONY, key, tap_at
 
 from caracole.inline import sha256_source
 from caracole.viewer import build_viewer, page, viewer_csp
@@ -326,7 +326,7 @@ def test_a_songbooks_song_plays_its_chords(tmp_path):
         assert b.wait(f"document.documentElement.dataset.heard === {json.dumps(C_OPEN)}")
 
 
-# --- the synthesis, and what a Harmony panel calls ------------------------------------------------------
+# --- the synthesis, and what the Harmony tab calls --------------------------------------------------------
 
 
 @in_chromium
@@ -510,7 +510,7 @@ AM_OPEN = "110.00 164.81 220.00 261.63 329.63"  # x02210
 F_BARRE = "87.31 130.81 174.61 220.00 261.63 349.23"  # 133211
 POSITIONS = {C_OPEN: '["x32010", "032010", 1, []]', G_OPEN: '["320003", "210003", 1, []]',
              AM_OPEN: '["x02210", "002310", 1, []]', F_BARRE: '["133211", "134211", 1, [1]]'}
-# Two sections: the verse I–V–vi–IV four times, the chorus IV–V–I–vi twice (▶ 0 and ▶ 1 in the Harmony panel).
+# Two sections: the verse I–V–vi–IV four times, the chorus IV–V–I–vi twice (▶ 0 and ▶ 1 in the Harmony tab).
 SECTIONS = ("{title: Sections}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
             + "[C]made [G]up [Am]words [F]here\n" * 4 + "\n{comment: Chorus}\n" + "[F]and [G]the [C]cho[Am]rus\n" * 2)
 VERSE = [C_OPEN, G_OPEN, AM_OPEN, F_BARRE] * 4
@@ -618,14 +618,14 @@ def when_ahead(b: Browser, action: str) -> tuple[float, float]:
 
 
 def harmony_at_200_bpm(b: Browser) -> None:
-    tapped(b, "document.getElementById('more').click(); document.getElementById('harmony-open').click();"
-              "for (let k = 0; k < 24; k++) document.getElementById('bpm-up').click()")
+    tapped(b, HARMONY_TAB + "; for (let k = 0; k < 24; k++) document.getElementById('bpm-up').click()")
     assert b.js("document.getElementById('bpm').textContent") == "200"
 
 
 PLAY = "document.querySelectorAll('#harmony .prog-play')[%d].click()"
 CHORD = "document.querySelector('#sheet .c[data-c=\"%d\"]').click()"
-OPEN_HARMONY = "document.getElementById('more').click(); document.getElementById('harmony-open').click()"
+OPEN_HARMONY = HARMONY_TAB  # the overlay's Harmony tab, at any width
+TO_GUITAR = "document.querySelector('#necks [role=tab][data-tab=guitar]').click()"  # the Harmony tab left for another
 LAPTOP = {"width": 1280, "height": 800, "mobile": False}
 
 
@@ -687,12 +687,12 @@ def test_play_twice_at_once_plays_the_second_alone(tmp_path):
 
 
 @in_chromium
-def test_closing_the_panel_stops_every_sound_and_leaves_no_timer(tmp_path):
+def test_leaving_the_harmony_tab_stops_every_sound_and_leaves_no_timer(tmp_path):
     with scheduled(tmp_path, SECTIONS) as b:
         harmony_at_200_bpm(b)
         tapped(b, PLAY % 0)
         assert b.wait("notesNow().length >= 15")
-        _, t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        _, t = when_ahead(b, LEAVE_HARMONY)  # the sheet's ✕
         time.sleep(0.6)
         silent_after(b, t)
         before = len(b.js("notesNow()"))
@@ -701,29 +701,29 @@ def test_closing_the_panel_stops_every_sound_and_leaves_no_timer(tmp_path):
         assert b.wait("log.context.state === 'suspended'", 8)  # silent, it lets the device's audio sleep
         assert strum_timers(b) == []
 
-    # A chord's strum, ringing when the panel closes, stops with it: on a laptop, where the chord's card opens beside
-    # the panel (on a phone it takes the panel's place, before the chord sounds: the test after this one).
+    # A chord's strum, ringing as the tab is left, stops with it: on a laptop, where the chord's card opens beside the
+    # rail (on a phone it takes the sheet's place, before the chord sounds: the test after this one).
     with scheduled(tmp_path, SECTIONS, **LAPTOP) as b:
         tapped(b, OPEN_HARMONY)
         tapped(b, CHORD % 1)
         assert b.wait("log.context.state === 'running' && document.documentElement.dataset.heard === %s" % json.dumps(G_OPEN))
-        t = tapped(b, "document.querySelector('#harmony [data-close]').click(); log.context.currentTime")
+        t = tapped(b, TO_GUITAR + "; log.context.currentTime")
         silent_after(b, t)
 
 
 @in_chromium
-def test_on_a_phone_a_chord_tapped_with_a_progression_playing_takes_the_panels_place_and_sounds_alone(tmp_path):
+def test_on_a_phone_a_chord_tapped_with_a_progression_playing_takes_the_sheets_place_and_sounds_alone(tmp_path):
     with scheduled(tmp_path, SECTIONS) as b:
         harmony_at_200_bpm(b)
         tapped(b, PLAY % 0)
         assert b.wait("notesNow().length >= 15")
-        _, t = when_ahead(b, CHORD % 1)  # G, its card in the panel's place: one layer at a time
-        assert b.js("[document.getElementById('harmony').hidden, document.getElementById('card').hidden]") == [True, False]
+        _, t = when_ahead(b, CHORD % 1)  # G, its card in the sheet's place: one layer at a time
+        assert b.js("[document.getElementById('harmony'), document.getElementById('card').hidden]") == [None, False]
         assert b.wait("document.documentElement.dataset.heard === %s" % json.dumps(G_OPEN))
         mark, notes = b.js("[log.mark, notesNow()]")
         time.sleep(0.5)
         assert len(b.js("notesNow()")) == len(notes)  # nothing more of the progression is scheduled
-    for note in notes[:mark]:  # the progression's, stopped as the panel closed
+    for note in notes[:mark]:  # the progression's, stopped as the sheet closed
         if note["when"] > t + 0.01:
             assert not sounds(note), (t, note)
         else:
@@ -780,17 +780,17 @@ def woken(b: Browser) -> None:
 
 @in_chromium
 def test_while_the_context_wakes_only_what_was_asked_last_sounds(tmp_path):
-    # On a laptop, where a chord's card opens beside the Harmony panel: on a phone it takes the panel's place.
+    # On a laptop, where a chord's card opens beside the rail's Harmony tab: on a phone it takes the sheet's place.
     with scheduled(tmp_path, SECTIONS, **LAPTOP) as b:
         tapped(b, OPEN_HARMONY)
         tapped(b, CHORD % 0)  # C: the context made, running at once
         assert b.wait("log.context !== null && log.context.state === 'running' && notesNow().length === 5")
 
-        # G tapped, then the panel closed, before the context woke: once awake, nothing sounds, and it goes
-        # back to sleep with no timer left.
+        # G tapped, then the tab left, before the context woke: once awake, nothing sounds, and it goes back to sleep
+        # with no timer left.
         before = asleep_and_slow_to_wake(b)
         tapped(b, CHORD % 1)
-        tapped(b, "document.querySelector('#harmony [data-close]').click()")
+        tapped(b, TO_GUITAR)
         woken(b)
         assert b.js("log.context.state") == "running" and len(b.js("notesNow()")) == before
         assert b.wait("log.context.state === 'suspended'", 8)
@@ -925,7 +925,7 @@ def test_a_progression_on_the_piano_strikes_each_chord_at_once_and_stops(tmp_pat
         assert b.wait("notesNow().length >= 24")
         notes = b.js("notesNow()")
         heard = b.js("document.documentElement.dataset.heard")
-        _, t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        _, t = when_ahead(b, LEAVE_HARMONY)
         time.sleep(0.6)
         for note in b.js("notesNow()"):  # nothing due after it is heard, and what rang fades out
             assert not sounds(note) if note["when"] > t + 0.01 else ends(note) <= t + FADE + 1e-6, (t, note)
@@ -995,7 +995,7 @@ def test_a_progression_on_the_harmonica_blows_or_draws_each_chord_at_once_and_st
         tapped(b, PLAY % 0)  # the verse: C G Am F, on a C harp
         assert b.wait("notesNow().length >= 9")
         notes = b.js("notesNow()")
-        _, t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        _, t = when_ahead(b, LEAVE_HARMONY)
         time.sleep(0.6)
         for note in b.js("notesNow()"):  # nothing due after it is heard, and what rang fades out
             assert not sounds(note) if note["when"] > t + 0.01 else ends(note) <= t + FADE + 1e-6, (t, note)

@@ -302,9 +302,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   stroke-linejoin: round; }
 .tip-hear { border-color: var(--accent); color: var(--accent); }
 .tip-hear svg { fill: currentColor; stroke: none; }
-/* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
-   ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
-   section's heading names its progression. */
+/* The Harmony tab (viewer.js), the overlay's third: the key the numerals are read in, the key's neck, the tempo, and
+   each section's progression, a button to its section, ▶ beside it, and its songs, and those of each named progression
+   it contains; the numeral playing marked. A section's heading names its progression. */
 .progs { margin: 0; padding: 0; list-style: none; }
 .prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 6px 0;
   border-top: 1px solid var(--border); }
@@ -320,8 +320,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .prog-about:empty { display: none; }
 .prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
 .hint-inline { color: var(--muted); font-size: .82rem; }
-#harmony-key { margin-bottom: 8px; }
-#harmony-neck:empty { display: none; }
+#harmony-key { margin: calc(10px * var(--nk)) 0 0; }
 .lbl .prog-of { font-weight: 600; letter-spacing: 0; text-transform: none; }
 /* With the script, a chord may reach over the words after it (.tight); the script widens
    a column only where two chords would touch. It sits in its column's row, a line in its size
@@ -994,12 +993,12 @@ a.ver-main .ver-name { color: var(--accent); }
   html[data-necks] body { padding-left: var(--necks); }
   html[data-necks] .bar { left: var(--necks); }
 }
-/* Its head, kept at its top as it scrolls: its tabs, Guitar and Harmonica (overlay.js; or its one tab's name), and
-   Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round Hide to show
-   whole. */
+/* Its head, kept at its top as it scrolls: its tabs, Guitar, Harmonica and Harmony (overlay.js; or its one tab's
+   name), and Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round
+   Hide to show whole. */
 .nk-head { position: sticky; z-index: 2; top: 0; margin: 0 calc(-16px * var(--nk));
   padding: calc(6px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk)); background: var(--surface); }
-.nk-row { display: flex; align-items: center; gap: 8px; }
+.nk-row { display: flex; align-items: center; gap: 4px; }
 .nk-title { margin: 0; color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .nk-hide { flex: none; display: grid; place-items: center; width: calc(44px * var(--nk)); height: calc(44px * var(--nk));
@@ -1042,10 +1041,11 @@ a.ver-main .ver-name { color: var(--accent); }
 .sw.p3 { background: var(--p4); }
 .sw.tabs { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text); }  /* ringed, as on the neck */
 
-/* The overlay's tabs (overlay.js): a segmented control in the rail's head, the tab shown raised. */
-.ov-tabs { flex: 0 1 auto; min-width: 0; }
+/* The overlay's tabs (overlay.js): a segmented control in the rail's head, the tab shown raised; three of them
+   (Harmony too) fit beside Hide at 1200 px, its scroll bar beside them, the longest neck's name ("Baritone") too. */
+.ov-tabs { flex: 0 1 auto; min-width: 0; gap: 1px; padding: 2px; }
 .ov-tabs > button { flex: none; min-width: calc(44px * var(--nk)); min-height: calc(38px * var(--nk));
-  padding: 0 calc(12px * var(--nk)); font-size: .8em; }
+  padding: 0 calc(5px * var(--nk)); font-size: .8em; }
 /* The slim bar: once the circle has scrolled out of the rail, it slides in under the head, naming the harp, with
    Change harp, which goes back up to the circle. Out of the way, it is clipped, and inert. */
 .ov-clip { position: absolute; top: 100%; left: 0; right: 0; overflow: hidden; padding-bottom: 8px;

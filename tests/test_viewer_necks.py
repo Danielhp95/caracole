@@ -23,7 +23,7 @@ from caracole.viewer.voicings import load_voicings
 
 from helpers.browser import CHROMIUM_MARKS, Browser
 from helpers.targets import small_targets
-from helpers.viewer_pages import click_at, key, viewer as open_viewer, written
+from helpers.viewer_pages import click_at, harmony_tab, key, viewer as open_viewer, written
 
 pytestmark = CHROMIUM_MARKS
 
@@ -263,27 +263,32 @@ def test_the_rail_comes_and_goes_as_the_window_widens_and_narrows(tmp_path):
 
 def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp_path):
     # The owner's ask: 15 % larger than the 300 px rail, its necks (drawn at its width), their names, the legends
-    # and their buttons, and the key's neck with its switch, all of it.
+    # and their buttons, and the key's neck with its switch (the Harmony tab's), all of it.
     sizes = """(() => { const rail = document.getElementById('necks'), q = (s) => rail.querySelector(s);
       const px = (el, p) => parseFloat(getComputedStyle(el)[p]), w = (el) => el.getBoundingClientRect().width;
       const radio = q('.nk [role=radio]');
-      return {neck: w(q('.nk svg.neck')), key: w(q('.kn svg.neck')), name: px(q('.nk-name'), 'fontSize'),
-              keyName: px(q('.kn-name'), 'fontSize'), legend: px(radio, 'fontSize'),
+      return {neck: w(q('.nk svg.neck')), name: px(q('.nk-name'), 'fontSize'), legend: px(radio, 'fontSize'),
               button: radio.getBoundingClientRect().height, swatch: w(q('.sw')),
-              chip: px(q('.kn-switch .chip'), 'fontSize'), chipHeight: q('.kn-switch .chip').getBoundingClientRect().height,
               title: px(q('.ov-tabs [role=tab]'), 'fontSize'),
               tabHeight: q('.ov-tabs [role=tab]').getBoundingClientRect().height}; })()"""
+    key_sizes = """(() => { const rail = document.getElementById('necks'), q = (s) => rail.querySelector(s);
+      const px = (el, p) => parseFloat(getComputedStyle(el)[p]), w = (el) => el.getBoundingClientRect().width;
+      return {key: w(q('.kn svg.neck')), keyName: px(q('.kn-name'), 'fontSize'),
+              chip: px(q('.kn-switch .chip'), 'fontSize'), chipHeight: q('.kn-switch .chip').getBoundingClientRect().height,
+              whole: rail.scrollHeight <= rail.clientHeight}; })()"""
     # Tall enough for the whole rail: no scroll bar takes its width from the necks.
     with open_viewer(tmp_path, written(tmp_path, IN_C), width=1280, height=1600, mobile=False) as b:
         seen = b.js(sizes)
         rail = b.js(RAIL)
         whole = b.js("(() => { const r = document.getElementById('necks'); return r.scrollHeight <= r.clientHeight; })()")
-    assert whole and rail["rail"]["width"] == 345 and rail["sheet"]["left"] >= 345 + 16 and rail["bar"]["left"] == 345
+        harmony_tab(b)
+        seen.update(b.js(key_sizes))
+    assert whole and seen["whole"] and rail["rail"]["width"] == 345 and rail["sheet"]["left"] >= 345 + 16 and rail["bar"]["left"] == 345
     was = {"neck": 267, "key": 267, "name": 16, "keyName": 16, "legend": 12.8, "button": 44, "swatch": 10,
            "chip": 15.2, "chipHeight": 44}
     for what, size in was.items():
         assert seen[what] == pytest.approx(size * 1.15, abs=1), (what, seen)
-    # The rail's own heading too: its tabs, Guitar and Harmonica (the overlay), a finger's target and more.
+    # The rail's own heading too: its tabs, Guitar, Harmonica and Harmony (the overlay), a finger's target and more.
     assert seen["title"] == pytest.approx(0.8 * 16 * 1.15, abs=0.5) and seen["tabHeight"] >= 43.5, seen
 
 
@@ -294,7 +299,7 @@ TOGGLES = """(() => { const q = (s) => document.querySelector(s), shown = (el) =
   const button = q('#necks-toggle');
   return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.title,
           word: button.querySelector('.bw') && button.querySelector('.bw').textContent,
-          hide: shown(q('#necks .nk-hide')), harmonyNeck: Boolean(q('#harmony-neck .kn')),
+          hide: shown(q('#necks .nk-hide')),
           necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id,
           railNamed: q('#necks') && q('#necks').getAttribute('aria-label')}; })()"""
 
@@ -412,16 +417,6 @@ def test_reset_everything_brings_the_rail_back(tmp_path):
         kept = b.js(RAIL)
     assert reset[0]["rail"]["width"] == 345 and reset[1]["pressed"] == "true"
     assert reset[1]["necks"] is None and kept["rail"]["width"] == 345
-
-
-def test_with_the_rail_hidden_the_harmony_panel_shows_the_keys_neck(tmp_path):
-    with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
-        b.click("#more")
-        b.click("#harmony-open")
-        with_rail = toggles(b)
-        b.click("#necks-toggle")
-        without = toggles(b)
-    assert not with_rail["harmonyNeck"] and without["harmonyNeck"]  # the key's neck in one place or the other
 
 
 @pytest.mark.parametrize("width", [1200, 1280, 1440])
@@ -796,7 +791,7 @@ IN_C = ("{title: In C}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
         "[C]Made up [G]words to [Am]sing a[F]long\n")
 OPEN_STRINGS = [4, 9, 2, 7, 11, 4]  # E A D G B E, low E first
 MAJOR, DORIAN, MAJOR_BOX = (0, 2, 4, 5, 7, 9, 11), (0, 2, 3, 5, 7, 9, 10), (0, 2, 4, 7, 9)
-# The rail's key neck: where it is, its name, its switch, and its dots as [string (0: low E), fret, tonic].
+# The rail's key neck (its Harmony tab's): where it is, its name, its switch, and its dots as [string (0: low E), fret, tonic].
 KEY_NECK = """(() => { const g = document.querySelector('#necks .kn'); if (!g) return null;
   return {first: document.querySelector('#necks :is(.kn, .nk)') === g, name: g.querySelector('.kn-name').textContent,
     switch: [...g.querySelectorAll('.chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')]),
@@ -811,23 +806,26 @@ def scale_dots(tonic: int, steps: tuple[int, ...], frets: int = 15) -> list[list
             if (OPEN_STRINGS[s] + f - tonic) % 12 in steps]
 
 
-def test_the_rails_first_neck_is_the_keys_scale_with_its_tonic_marked(tmp_path):
+def test_the_harmony_tabs_first_neck_is_the_keys_scale_with_its_tonic_marked(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
+        harmony_tab(b)
         scale = b.js(KEY_NECK)
         b.click("#necks .kn .chip:nth-of-type(2)")
         box = b.js(KEY_NECK)
         focus = b.js("document.activeElement.textContent")
-        chords = b.js(RAIL)["chords"]
+        b.click("#necks [role=tab][data-tab=guitar]")
+        guitar = [b.js(KEY_NECK), b.js(RAIL)["chords"]]
     assert scale["first"] and scale["name"] == "C scale"
     assert scale["switch"] == [["Scale", "true"], ["Major pentatonic", "false"]]
     assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale, tonic C marked"
     assert box["name"] == "C major pentatonic" and box["dots"] == scale_dots(0, MAJOR_BOX)
     assert box["switch"] == [["Scale", "false"], ["Major pentatonic", "true"]] and focus == "Major pentatonic"
-    assert [c["name"] for c in chords] == ["C", "G", "Am", "F"]  # the chords' necks after it
+    assert guitar[0] is None and [c["name"] for c in guitar[1]] == ["C", "G", "Am", "F"]  # the chords' necks alone
 
 
 def test_the_keys_neck_follows_the_key_the_mode_and_the_capo(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
+        harmony_tab(b)  # where the key's neck is
         b.click("#t-up")
         b.click("#t-up")
         up = b.js(KEY_NECK)
