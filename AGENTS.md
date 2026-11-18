@@ -762,8 +762,12 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     opening it pushes `{ caracoleMenu: n }` (n a serial), with `search` one more than the entry under it in search
     mode, at the same address, so Back (or the ← of search) closes it and leaves the card open; closed otherwise
     (a choice in it, Escape, a press elsewhere, its card drawn again), it takes its entry back once the press's own
-    handlers ran, so an entry another script pushed meanwhile stays, and Back skips the menu's under it; a mouse
-    pushes nothing; no other script copies `caracoleMenu` into its entries (test_library_card.py).
+    handlers ran, so an entry another script pushed meanwhile stays; never `history.back()` for a press that leaves
+    the page or steps back (a same-window link but a download, a download too on a page opened as a file, search's
+    `#leave` while the entry is search's; the Navigation API's `navigate` and `pagehide` besides), whose entry stays,
+    replaced as `{ …its fields, caracoleMenu: "closed" }`; Back passes over a closed menu's entry, and Forward too
+    where `navigation.currentEntry.index` says the way; a reload with a menu open leaves its entry the page's (one
+    Back spent); a mouse pushes nothing; no other script copies `caracoleMenu` into its entries (test_library_card.py).
 - **Enter in a search box never spends a request on a guess**:
   - on the lookup page it acts only on `/api/search`'s `best` (or opens the leading artist's songs);
   - on the library page, whose served bar searches `/api/search` as you type (which asks no site), it only moves the

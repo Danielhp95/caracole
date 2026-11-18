@@ -11,23 +11,54 @@
 // it, ``search`` the count under it + 1, never a copy of that entry's), at the address as it is, so that Back closes
 // the menu and leaves its card open. Closed otherwise (a choice in it, Escape, a press elsewhere, its card drawn
 // again), its entry is taken back, once the press's own handlers ran: one of the page's that pushed an entry of its
-// own keeps it, and Back skips the menu's under it later. A menu opened as another closes takes that one's entry.
-// With a mouse a menu is no step, and a browser that refuses the step opens and closes it all the same.
+// own keeps it. A press that leaves the page (a link opened in this window, a download but on a page opened as a
+// file) or goes back through the history (search's ←, whose steps count the menu's) is left to do it: the entry
+// stays, marked { caracoleMenu: "closed" }, never taken back then, which would cancel the one or add a step to the
+// other. Back and Forward pass over a closed menu's entry, the way the browser went. A menu opened as another closes
+// takes that one's entry. A reload with a menu open leaves its entry the page's (one Back spent on it). With a mouse a
+// menu is no step, and a browser that refuses the step opens and closes it all the same.
 const caracoleMenus = (() => {
   "use strict";
   const MENU = "caracoleMenu";
+  const CLOSED = "closed";
   // The serial of the last menu's entry, counted from the page's load time, so that an entry a reload left in the
   // history (the page reloaded with a menu open) is never taken for a new one's.
   let menus = Date.now();
   let shown = null;  // { more, n }: the menu open whose entry is the history's
   let closing = 0;  // the serial of a menu closed whose entry is still to be taken back
+  let press = null;  // the last press while a menu is open or closing
+  let leaving = false;  // the page began to leave meanwhile (the Navigation API's word for it, or pagehide)
+  const nav = typeof window.navigation === "object" && window.navigation ? window.navigation : null;
+  let from = -1;  // the history's index the last change came from, where the Navigation API tells it
   const ours = (n) => Boolean(history.state && history.state[MENU] === n);
+  // A press that leaves the page or steps back through the history, its handlers run: a link opened in this window
+  // (a download stays, but on a page opened as a file, which downloads nothing and opens it), or search's ←, while
+  // the entry it goes back from is search's (its steps then count the menu's).
+  const leaves = (e) => {
+    const at = e && e.target instanceof Element ? e.target : null;
+    if (!at || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return false;
+    if (at.closest("#leave")) return Number(history.state && history.state.search) > 0;
+    const a = at.closest("a[href]");
+    if (!a || (a.target && a.target !== "_self")) return false;
+    return !a.hasAttribute("download") || location.protocol === "file:";
+  };
+  addEventListener("click", (e) => { if (shown || closing) press = e; }, true);
+  const left = () => { if (shown || closing) leaving = true; };
+  addEventListener("pagehide", left);
+  if (nav && typeof nav.addEventListener === "function") {
+    nav.addEventListener("navigate", (e) => {  // a download's name may be "": a string all the same
+      if (typeof e.downloadRequest !== "string" && e.navigationType !== "replace") left();
+    });
+    nav.addEventListener("currententrychange", (e) => { from = e.from && e.from.index >= 0 ? e.from.index : -1; });
+  }
   // A menu open whose card is drawn again (its request over) goes with the card it was in: its entry too, as when it
   // closes. Watched while it is open; a card moved (from its line to the pane) is back in the page by then.
   const gone = typeof MutationObserver === "function"
     ? new MutationObserver(() => { if (shown && !shown.more.isConnected) closed(shown.more); }) : null;
   const show = (more, n) => {
     shown = { more, n };
+    press = null;
+    leaving = false;
     if (gone) gone.observe(document.body, { childList: true, subtree: true });
   };
   const hide = () => {
@@ -40,7 +71,11 @@ const caracoleMenus = (() => {
       hide();
       was.open = false;
     }
-    if (!shown && history.state && history.state[MENU]) history.back();  // a closed menu's entry: skipped
+    if (shown || !(history.state && history.state[MENU])) return;
+    // A closed menu's entry, or one a reload left: passed over, Forward's way where the Navigation API says so.
+    const at = nav && nav.currentEntry ? nav.currentEntry.index : -1;
+    if (at >= 0 && from >= 0 && from < at) history.forward();
+    else history.back();
   });
   const opened = (more) => {
     if (!matchMedia("(pointer: coarse)").matches) return;
@@ -70,7 +105,18 @@ const caracoleMenus = (() => {
     setTimeout(() => {  // after the press's own handlers: one that pushed an entry of its own keeps it
       if (closing !== n) return;  // another menu took it
       closing = 0;
-      if (ours(n)) history.back();
+      const by = press;
+      press = null;
+      if (!ours(n)) return;  // the history is elsewhere: Back's, or another entry of the page's
+      if (leaving || leaves(by)) {  // the press goes on: the entry stays, closed, for Back and Forward to pass over
+        try {
+          history.replaceState(Object.assign({}, history.state, { [MENU]: CLOSED }), "");
+        } catch (err) {
+          // Left as it is: Back passes over it all the same.
+        }
+      } else {
+        history.back();
+      }
     }, 0);
   };
   return { opened, closed };

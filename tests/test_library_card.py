@@ -1194,9 +1194,11 @@ def test_with_a_mouse_the_more_menu_pushes_nothing(conn, cfg, versions_served, t
         assert b.js("history.length") == length and b.js(OURS) is False
 
 
-def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_search(conn, cfg, versions_served,
-                                                                                    tmp_path):
-    # "Where the lanes meet" 1 and 2: pushed in search mode, the entry counts one step more than the one under it.
+@contextmanager
+def searched_menu(conn, cfg, versions_served, tmp_path):
+    """A phone's page searching "hotel" (search mode, its one step), Hotel California's card open from the results,
+    then its ⋯; yields the browser, the menu's expression and the page's address (before its fragment).
+    ``window.stay`` is set, so that a test tells the page staying from another document."""
     base, _, _ = versions_served
     song = hotel(conn, cfg)
     with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
@@ -1208,12 +1210,94 @@ def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_se
         found = "document.getElementById('found')"  # the sites' answer drawn, so that nothing moves under the tap
         assert b.wait(f"{found}.dataset.query === 'hotel' && {found}.getAttribute('aria-busy') !== 'true'")
         card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
         b.click(card + " details.foot-more > summary")
-        assert b.wait(f"{OURS} && history.state.search === 2")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        b.js("window.stay = 1")
+        yield b, menu, base
+
+
+# Out of search on the page it was on: search's steps and the menu's taken back, none more, no menu left open (its
+# card may be drawn again out of search).
+LEFT_SEARCH = ("window.stay === 1 && !document.body.classList.contains('search-mode') && history.state === null && "
+               "document.querySelectorAll('details.foot-more[open]').length === 0")
+
+
+def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_search(conn, cfg, versions_served,
+                                                                                    tmp_path):
+    # "Where the lanes meet" 1 and 2: pushed in search mode, the entry counts one step more than the one under it.
+    with searched_menu(conn, cfg, versions_served, tmp_path) as (b, _, base):
+        assert b.js(f"{OURS} && history.state.search === 2") is True
         b.click("#leave")  # ← takes back both steps: search left, nothing of the menu's left behind
-        assert b.wait("!document.body.classList.contains('search-mode')")
-        assert b.js("history.state") is None  # its card may be drawn again out of search: no menu of it left open
-        assert b.js("document.querySelectorAll('details.foot-more[open]').length") == 0
+        assert b.wait(LEFT_SEARCH)
+        assert b.js("location.origin + location.pathname") == base
+
+
+def test_the_arrow_pressed_as_the_menu_closes_takes_back_its_steps_and_no_more(conn, cfg, versions_served, tmp_path):
+    # The ← heard after the menu's closing (its toggle first, as on a slow phone): the ← takes the menu's step back
+    # with search's, and the menu takes back nothing more, so the page stays.
+    with searched_menu(conn, cfg, versions_served, tmp_path) as (b, menu, base):
+        b.js(f"{menu}.addEventListener('toggle', () => document.getElementById('leave').click(), {{ once: true }});"
+             f"{menu}.open = false")
+        assert b.wait(LEFT_SEARCH)
+        assert b.js("location.origin + location.pathname") == base
+
+
+def test_a_link_tapped_while_the_menu_is_open_opens_its_page(conn, cfg, versions_served, tmp_path):
+    # The Chord sheet's tile tapped with ⋯ open: the press closes the menu and opens the sheet, the menu's step left
+    # where it is, marked closed, which Back from the sheet comes back to.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (_, href)):
+        card = "#" + b.js(f"{menu}.closest('.song-card').id")
+        sheet = b.js(f"document.querySelector('{card} .tile-sheet a.tile-open').href")
+        b.js("window.stay = 1")
+        b.click(card + " .tile-sheet a.tile-open")
+        assert b.wait(f"location.href === {json.dumps(sheet)} && document.readyState === 'complete'")
+        b.js("history.back()")
+        assert b.wait(f"location.href === {json.dumps(href)} && document.readyState === 'complete'")
+        assert b.js("history.state") == {"caracoleMenu": "closed"}
+
+
+def test_a_download_chosen_in_the_menu_takes_its_step_back(conn, cfg, versions_served, tmp_path):
+    # Served, info.json downloads: the page stays, and so the menu takes its step back as when it closes otherwise.
+    put(cfg, hotel(conn, cfg), "info.json")
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (_, href)):
+        saved = tmp_path / "saved"
+        saved.mkdir()
+        b._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(saved))
+        b.js("window.stay = 1")
+        b.click("#" + b.js(f"{menu}.closest('.song-card').id") + " .foot-menu a.info-file")
+        assert b.wait(f"!{menu}.open && history.state === null && window.stay === 1")
+        assert b.js("location.href") == href
+
+
+def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path):
+    # A page opened as a file downloads nothing: its info.json opens, and the menu's step is left for it.
+    put(cfg, hotel(conn, cfg), "info.json")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(path.as_uri())
+        card = cards.open_card(b, "#list article.line")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true && {OURS}")
+        info = b.js(f"document.querySelector('{card} .foot-menu a.info-file').href")
+        b.click(card + " .foot-menu a.info-file")
+        assert b.wait(f"location.href === {json.dumps(info)}")
+
+
+def test_forward_passes_over_a_closed_menus_entry_too(conn, cfg, versions_served, tmp_path):
+    # Behind an entry another part of the page pushed as the menu closed: Back passes over the menu's entry, and so
+    # does Forward, the way the browser went.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.js("document.addEventListener('click', () => history.pushState({ other: 1 }, ''), { once: true });"
+             "document.body.click()")
+        assert b.wait(f"!{menu}.open && history.state && history.state.other === 1")
+        b.js("history.back()")
+        assert b.wait(f"!(history.state && history.state.other) && !{OURS}")
+        b.js("history.forward()")
+        assert b.wait("Boolean(history.state && history.state.other === 1)")
 
 
 def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn, cfg, tmp_path):
