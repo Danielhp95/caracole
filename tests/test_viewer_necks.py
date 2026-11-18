@@ -289,11 +289,10 @@ def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp
 
 # --- showing and hiding the rail -----------------------------------------------------------------------
 
-# The rail's toggles: the bar's (shown from 1200 px), the rail's own Hide at its top and the settings' row.
+# The rail's two toggles: the bar's (shown from 1200 px) and the rail's own Hide at its top.
 TOGGLES = """(() => { const q = (s) => document.querySelector(s), shown = (el) => Boolean(el && el.getClientRects().length);
-  const button = q('#necks-toggle'), chip = q('#necks-chip');
+  const button = q('#necks-toggle');
   return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.getAttribute('aria-label'),
-          row: !q('#necks-row').hidden, chip: chip.getAttribute('aria-pressed'), said: chip.textContent,
           hide: shown(q('#necks .nk-hide')), harmonyNeck: Boolean(q('#harmony-neck .kn')),
           necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id,
           railNamed: q('#necks') && q('#necks').getAttribute('aria-label')}; })()"""
@@ -358,24 +357,6 @@ def test_the_hide_buttons_focus_ring_is_whole_inside_the_rail(tmp_path):
         assert seen["top"] >= 0 and seen["right"] >= 0, seen
 
 
-def test_the_settings_row_and_the_bars_button_say_the_same_both_ways(tmp_path):
-    with open_viewer(tmp_path, written(tmp_path, LEGEND), **DESKTOP) as b:
-        b.click("#more")
-        before = toggles(b)
-        b.click("#necks-chip")
-        from_row = [b.js(RAIL), toggles(b)]
-        b.click("#necks-toggle")  # with the settings open: the row says so
-        from_bar = [b.js(RAIL), toggles(b)]
-    assert before["row"] and before["chip"] == before["pressed"] == "true" and before["said"] == "Chord necks"
-    assert from_row[0]["rail"] is None and from_row[1]["chip"] == from_row[1]["pressed"] == "false"
-    assert from_row[1]["said"] == "Chord necks" and from_row[0]["panel"] is not None  # the settings stay open
-    assert from_bar[0]["rail"]["width"] == 345 and from_bar[1]["chip"] == from_bar[1]["pressed"] == "true"
-    assert from_bar[1]["said"] == "Chord necks"  # a switch: pressed or not
-    # The song between the two rails, or beside the settings' alone.
-    assert from_row[0]["sheet"]["left"] < 345 <= from_bar[0]["sheet"]["left"]
-    assert from_bar[0]["sheet"]["right"] <= from_bar[0]["panel"]["left"]
-
-
 def test_the_choice_is_kept_across_a_reload_and_for_every_other_sheet(tmp_path):
     # One choice for the screen, not a song's: hidden here, it is hidden on the next sheet opened too.
     url, other = written(tmp_path, LEGEND), written(tmp_path, IN_C, name="Other")
@@ -427,7 +408,7 @@ def test_reset_everything_brings_the_rail_back(tmp_path):
         reset = [b.js(RAIL), toggles(b)]
         reopen(b, url)
         kept = b.js(RAIL)
-    assert reset[0]["rail"]["width"] == 345 and reset[1]["pressed"] == reset[1]["chip"] == "true"
+    assert reset[0]["rail"]["width"] == 345 and reset[1]["pressed"] == "true"
     assert reset[1]["necks"] is None and kept["rail"]["width"] == 345
 
 
@@ -461,13 +442,13 @@ def test_below_1200_px_there_is_no_toggle(tmp_path, size):
     with open_viewer(tmp_path, written(tmp_path, LEGEND), **size) as b:
         b.click("#more")
         seen = toggles(b)
-    assert not seen["button"] and not seen["row"] and not seen["hide"]
+    assert not seen["button"] and not seen["hide"]
 
 
 def test_a_sheet_without_chords_has_no_rail_and_no_toggle(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, "{title: T}\n{artist: A}\nwords alone\n"), **DESKTOP) as b:
         seen = [b.js(RAIL), toggles(b)]
-    assert seen[0]["rail"] is None and not seen[1]["button"] and not seen[1]["row"]
+    assert seen[0]["rail"] is None and not seen[1]["button"]
 
 
 # --- the necks ---------------------------------------------------------------------------------------

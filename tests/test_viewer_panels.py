@@ -330,14 +330,13 @@ def test_the_mode_line_says_what_it_sounds_like(tmp_path):
 NAMES = """[...document.querySelectorAll('#names > button')].map((c) => [c.textContent, c.getAttribute('aria-label'),
   c.getAttribute('aria-pressed'), !c.disabled])"""
 # Each switch of the settings shown: its id, its words, whether it is on, and whether it looks it (its track in the
-# accent); and the strip, the necks' rail, the pinyin and the role colours, which they show or hide.
+# accent); and the strip, the pinyin and the role colours, which they show or hide.
 SWITCHES = """(() => { const accent = getComputedStyle(document.querySelector('#sheet .c')).color;
   const shown = (el) => Boolean(el) && el.getClientRects().length > 0;
   return {switches: [...document.querySelectorAll('#panel .switch')].filter(shown).map((s) => [s.id,
             s.textContent.replace(/home away pull$/, '').trim(), s.getAttribute('aria-pressed'),
             getComputedStyle(s, '::after').backgroundColor === accent]),
-          strip: !document.getElementById('strip').hidden, bar: document.getElementById('shapes').getAttribute('aria-pressed'),
-          necks: shown(document.getElementById('necks')), pinyin: document.querySelectorAll('#sheet ruby').length > 0,
+          strip: !document.getElementById('strip').hidden, pinyin: document.querySelectorAll('#sheet ruby').length > 0,
           roles: document.documentElement.dataset.roles || 'on',
           colours: [...document.querySelectorAll('#roles .roles > span')].map((s) => [s.textContent, getComputedStyle(s).color])}; })()"""
 ZH = "{title: 合成}\n{artist: 示例}\n{key: C}\n{comment: Verse}\n[C]你好 [G]世界\n"
@@ -356,22 +355,20 @@ def test_chord_names_is_one_segmented_control(tmp_path):
 
 
 @in_chromium
-def test_role_colours_all_shapes_necks_and_pinyin_are_switches(tmp_path):
+def test_role_colours_all_shapes_and_pinyin_are_switches(tmp_path):
+    # The rail of necks has no switch here: its Hide and the bar's button are its two controls (test_viewer_necks.py).
     with viewer(tmp_path, written(tmp_path, ZH), **DESKTOP) as b:
         b.click("#more")
         first = b.js(SWITCHES)
-        for switch in ("#roles", "#strip-toggle", "#necks-chip", "#pinyin-chip"):
+        for switch in ("#roles", "#strip-toggle", "#pinyin-chip"):
             b.click(switch)
         flipped = b.js(SWITCHES)
-        b.click("#shapes")  # the bar's guitar: the switch follows
-        bar = b.js(SWITCHES)
     assert first["switches"] == [["roles", "Role colours", "true", True], ["strip-toggle", "All chord shapes", "false", False],
-                                 ["necks-chip", "Chord necks", "true", True], ["pinyin-chip", "Pinyin", "false", False]]
-    assert [first[k] for k in ("strip", "necks", "pinyin", "roles")] == [False, True, False, "on"]
-    assert [s[2] for s in flipped["switches"]] == ["false", "true", "false", "true"]
-    assert [s[3] for s in flipped["switches"]] == [False, True, False, True]
-    assert [flipped[k] for k in ("strip", "bar", "necks", "pinyin", "roles")] == [True, "true", False, True, "off"]
-    assert bar["switches"][1][2] == "false" and not bar["strip"]
+                                 ["pinyin-chip", "Pinyin", "false", False]]
+    assert [first[k] for k in ("strip", "pinyin", "roles")] == [False, False, "on"]
+    assert [s[2] for s in flipped["switches"]] == ["false", "true", "true"]
+    assert [s[3] for s in flipped["switches"]] == [False, True, True]
+    assert [flipped[k] for k in ("strip", "pinyin", "roles")] == [True, True, "off"]
     home, away, pull = first["colours"]  # Role colours, then home, away and pull in their own colours
     assert [home[0], away[0], pull[0]] == ["home", "away", "pull"] and len({home[1], away[1], pull[1]}) == 3
 
@@ -420,7 +417,7 @@ def instrument(b: Browser, value: str) -> None:
 def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
     with viewer(tmp_path, written(tmp_path, IN_E)) as b:
         b.click("#more")
-        b.click("#strip-toggle")  # the strip, from the settings: on a phone the bar's neck has the guitar's place
+        b.click("#strip-toggle")  # the strip, from its one switch
         guitar = b.js(MENU)
         instrument(b, "ukulele")
         uke = b.js(MENU)
@@ -1211,7 +1208,7 @@ def test_reading_settings_are_no_change(tmp_path):
         b.click("#more")
         b.js("[...document.querySelectorAll('#names > button')][1].click()")  # + Numerals
         b.js("document.querySelectorAll('#volumes > button')[0].click()")  # the strum Off
-        b.click("#necks-chip")
+        b.click("#necks-toggle")  # the rail of necks hidden, by the bar's button
         b.js("document.getElementById('pill-faster').click()")
         address = b.js("location.hash")
         b.click("#export")

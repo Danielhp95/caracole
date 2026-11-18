@@ -1,10 +1,10 @@
 """caracole.viewer: the bar at the foot of the sheet viewer (page.py ``_CONTROLS``, viewer.js).
 
-[necks] [− key +] [neck] [guitar] [Aa] [▶] [⋯]: from 1200 px, the rail of chord necks shown or hidden (its tests are
-test_viewer_necks.py's); the song a semitone down or up, with its key in short; below 1200 px, the overlay's sheet up
-or down (test_viewer_overlay_sheet.py's), in the guitar's place on a phone (below 440 px); the strip of
-the song's chord shapes, shown or hidden; the text size; scrolling by itself; and the rest of the settings. It slides away as you scroll down, and comes
-back when you scroll up, tap the page or reach the end. The tests that scroll and tap run in a
+[− key +] [necks] [neck] [Aa] [▶] [⋯]: the song a semitone down or up, with its key in short; from 1200 px, the rail
+of chord necks shown or hidden (its tests are test_viewer_necks.py's); below 1200 px, in its place, the overlay's sheet
+up or down (test_viewer_overlay_sheet.py's); the text size; scrolling by itself; and the rest of the settings, where
+All chord shapes is the strip's one switch. It slides away as you scroll down, and comes back when you scroll up, tap
+the page or reach the end. The tests that scroll and tap run in a
 Chromium of their own on real time (helpers/browser.py's ``Browser``).
 """
 
@@ -97,11 +97,10 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     controls = html[start:html.index('<div class="pill"')]
     # In the order a keyboard reaches them, each named for a screen reader.
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', controls) == [
-        ("necks-toggle", "Chord necks"), ("t-down", "Down a semitone"), ("t-up", "Up a semitone"),
-        ("necks-open", "Necks and harps"), ("shapes", "Chord shapes"),
-        ("size", "Text size"),
-        ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Auto-scroll"),
-        ("more", "Settings")]
+        ("t-down", "Down a semitone"), ("t-up", "Up a semitone"), ("necks-toggle", "Chord necks"),
+        ("necks-open", "Necks and harps"), ("size", "Text size"), ("smaller", "Smaller text"),
+        ("bigger", "Bigger text"), ("scroll", "Auto-scroll"), ("more", "Settings")]
+    assert 'id="shapes"' not in html  # the strip's one switch is the settings' All chord shapes
     # The key between − and +, in short for the eye and in full for a screen reader.
     assert re.search(r'<output class="now" id="key-now" for="t-down t-up">.*id="key-full"', controls)
     # Aa opens the size, there with the size it shows; ⋯ the settings.
@@ -112,10 +111,6 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     # The neck opens the overlay's sheet, a dialog, below 1200 px (the script shows it there)
     assert re.search(r'id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
                      r' aria-expanded="false"', controls)
-    # The guitar shows the strip of chord shapes, or hides it: a toggle, a tool like Aa and ⋯, its icon drawn.
-    shapes = re.search(r'<button type="button" class="tool shapes" id="shapes"[^>]*>(.*?)</button>', controls)
-    assert shapes and 'aria-pressed="false" aria-controls="strip"' in shapes.group(0)
-    assert re.fullmatch(r'<svg viewBox="0 0 16 16" aria-hidden="true">(<path d="[^"]+"/>)+</svg>', shapes.group(1))
     # The settings keep the rest: the transposition and its reset, the capo, the mode, the shapes, and
     # Reset everything; the text size and the scrolling are the bar's.
     panel = html[html.index('id="panel"'):html.index('id="card"')]
@@ -123,6 +118,8 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
         assert wanted in panel, wanted
     for gone in ('id="smaller"', 'id="scroll"', 'id="scroll-row"', 'id="speed"'):
         assert gone not in panel, gone
+    # One control each: the strip's in the settings, the rail's the bar's button (and its own Hide).
+    assert 'id="strip-toggle"' in panel and 'id="necks-chip"' not in html and 'id="necks-row"' not in html
 
 
 # --- what it says ------------------------------------------------------------------------------------
@@ -161,9 +158,9 @@ def test_a_sheet_without_chords_keeps_the_text_size_and_the_scrolling(tmp_path):
     page.write_text(build_viewer("{title: T}\n{artist: A}\nOnly words\n"), encoding="utf-8")
     dom = browser.dump_dom(page.as_uri(), (390, 844))
     assert 'data-ready="1"' in dom and re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)
-    # Nothing to transpose, no shapes and no other setting: no key, no guitar and no ⋯, but Aa and ▶.
+    # Nothing to transpose, no shapes and no other setting: no key and no ⋯, but Aa and ▶.
     assert re.search(r'id="keys"[^>]*hidden', dom) and re.search(r'id="more"[^>]*hidden', dom)
-    assert re.search(r'id="shapes"[^>]*hidden', dom) and re.search(r'id="necks-open"[^>]*hidden', dom)  # no overlay
+    assert re.search(r'id="necks-open"[^>]*hidden', dom)  # no overlay
     assert not re.search(r'id="size"[^>]*hidden', dom) and not re.search(r'id="scroll"[^>]*hidden', dom)
 
 
@@ -250,15 +247,11 @@ def test_more_opens_the_rest_of_the_settings(tmp_path):
     assert not closed["panel"] and closed["more"] == "false" and closed["focus"] == "more"
 
 
-# The strip of chord shapes, the guitar in the bar and the settings' switch, which say the same.
+# The strip of chord shapes and the settings' All chord shapes, its one switch.
 SHAPES = """(() => {
-  const q = (s) => document.querySelector(s);
-  const strip = q("#strip"), r = strip.getBoundingClientRect();
+  const strip = document.querySelector("#strip");
   return {strip: !strip.hidden && strip.querySelectorAll("button").length > 0,
-          pressed: q("#shapes").getAttribute("aria-pressed"), chip: q("#strip-toggle").getAttribute("aria-pressed"),
-          said: q("#strip-toggle").textContent, top: Math.round(r.top), bottom: Math.round(r.bottom),
-          bar: Math.round(q("#bar").getBoundingClientRect().top), y: Math.round(scrollY),
-          focus: document.activeElement ? document.activeElement.id : ""};
+          chip: document.querySelector("#strip-toggle").getAttribute("aria-pressed")};
 })()"""
 
 
@@ -266,71 +259,26 @@ def shapes(b: Browser) -> dict:
     return b.js(SHAPES)
 
 
-# A phone wide enough for the guitar beside the neck (from 440 px); narrower, the neck takes its place.
-WIDE_PHONE = {"width": 440, "height": 932}
+def all_chord_shapes(b: Browser) -> None:
+    """The strip shown or hidden by its one switch, the settings' All chord shapes: ⋯, then the switch."""
+    b.click("#more")
+    b.click("#strip-toggle")
 
 
 @in_chromium
-def test_the_guitar_shows_the_chord_shapes_and_hides_them_again(tmp_path):
-    with viewer(tmp_path, written(tmp_path, UG_CHO), **WIDE_PHONE) as b:
-        before = shapes(b)
-        b.click("#shapes")
-        shown, opened = shapes(b), bar(b)["panel"]
-        b.click("#shapes")
-        hidden = shapes(b)
-    assert not opened  # the strip alone: the settings stay closed
-    assert not before["strip"] and before["pressed"] == before["chip"] == "false"
-    assert shown["strip"] and shown["pressed"] == shown["chip"] == "true"
-    assert not hidden["strip"] and hidden["pressed"] == hidden["chip"] == "false"
-    assert before["said"] == shown["said"] == hidden["said"] == "All chord shapes"  # a switch: its state, its press
-
-
-@in_chromium
-def test_the_guitar_and_the_settings_chip_stay_in_step_both_ways(tmp_path):
-    with viewer(tmp_path, written(tmp_path, UG_CHO), **WIDE_PHONE) as b:
-        b.click("#more")
-        b.click("#strip-toggle")  # the chip shows them: the guitar is pressed
-        from_chip = shapes(b)
-        b.click("#shapes")  # the guitar hides them, with the settings open: the chip says so
-        from_bar = shapes(b)
-        panel = bar(b)["panel"]
-    assert from_chip["strip"] and from_chip["pressed"] == from_chip["chip"] == "true"
-    assert not from_bar["strip"] and from_bar["pressed"] == from_bar["chip"] == "false"
-    assert from_bar["said"] == "All chord shapes" and panel  # the settings stay open
-
-
-@in_chromium
-def test_the_guitar_brings_the_shapes_into_view_from_anywhere_in_the_song(tmp_path):
-    # The strip is above the song: read from halfway down, the guitar takes you up to it, where the
-    # shapes are whole above the bar, and the bar stays.
-    with viewer(tmp_path, **WIDE_PHONE) as b:
-        b.js("window.scrollTo(0, 2000)")
-        assert b.wait("scrollY === 2000")
-        b.click("#shapes")
-        assert b.wait(f"(({SHAPES}).top >= 0) && ({SHAPES}).bottom <= ({SHAPES}).bar", 3), shapes(b)
-        rest(b)
-        there = shapes(b)
-        shown = bar(b)["where"]
-        b.click("#shapes")  # hidden again: nowhere to go
-        y = shapes(b)["y"]
-    assert there["strip"] and 0 <= there["top"] and there["bottom"] <= there["bar"] and shown == "shown"
-    assert y <= there["y"] + 1, (y, there)
-
-
-@in_chromium
-def test_the_guitars_choice_is_kept_across_a_reload(tmp_path):
+def test_all_chord_shapes_is_kept_across_a_reload(tmp_path):
     url = written(tmp_path, UG_CHO)
-    with viewer(tmp_path, url, **WIDE_PHONE) as b:
-        b.click("#shapes")
+    with viewer(tmp_path, url) as b:
+        all_chord_shapes(b)
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
         again = shapes(b)
-        b.click("#shapes")
+        all_chord_shapes(b)
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
         off = shapes(b)
-    assert again["strip"] and again["pressed"] == again["chip"] == "true"
-    assert not off["strip"] and off["pressed"] == off["chip"] == "false"
+    assert again["strip"] and again["chip"] == "true"
+    assert not off["strip"] and off["chip"] == "false"
 
 
 @in_chromium
@@ -364,7 +312,7 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         b.js("document.querySelector('.licence summary').focus({preventScroll: true})")
         assert bar(b)["where"] == "away"
         order = []
-        for _ in range(7):
+        for _ in range(6):
             b.press("Tab")
             order.append(bar(b)["focus"])
         back = settled(b, "shown")
@@ -376,7 +324,7 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         kept = down and not slid(b) and bar(b)["where"] == "shown"
         b.press("Enter")  # ⋯
         opened = bar(b)
-    assert order == ["necks-toggle", "t-down", "t-up", "shapes", "size", "scroll", "more"]  # the rail's first, at 1280
+    assert order == ["t-down", "t-up", "necks-toggle", "size", "scroll", "more"]  # the rail's after the key, at 1280
     assert back and kept and opened["panel"]
 
 
@@ -455,14 +403,12 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
-        # The rail's toggle on its side from 1200 px; narrower, the neck after the key, and the guitar beside it from
-        # 440 px: on a phone the neck takes the guitar's place, and the key keeps its room
-        tools = (["necks-toggle", "t-down", "t-up", "shapes"] if width >= 1200
-                 else ["t-down", "t-up", "necks-open"] + ["shapes"] * (width >= 440))
+        # After the key, the rail's toggle from 1200 px; narrower, the neck in its place
+        tools = ["t-down", "t-up", "necks-toggle"] if width >= 1200 else ["t-down", "t-up", "necks-open"]
         assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
-        if width >= 768 or width in (430, 390):  # the longest key in short, whole ("Ab mixolydian" over "shapes ·
-            # capo 2 · +1")
+        if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1"), with no
+            # guitar beside the neck to take its room
             assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
             assert m["size"] == 16, (width, m)
         elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole; the key a little smaller
@@ -536,12 +482,12 @@ def test_a_songbook_song_has_the_bar_and_its_next_and_previous_too(tmp_path):
 
 
 @in_chromium
-def test_a_songbook_songs_guitar_shows_its_shapes(tmp_path):
-    with viewer(tmp_path, songbook(tmp_path) + "#song-2", **WIDE_PHONE) as b:
-        b.click("#shapes")
+def test_a_songbook_songs_all_chord_shapes_shows_them(tmp_path):
+    with viewer(tmp_path, songbook(tmp_path) + "#song-2") as b:
+        all_chord_shapes(b)
         shown = shapes(b)
         names = b.js("[...document.querySelectorAll('#strip button')].map((e) => e.lastChild.textContent)")
-    assert shown["strip"] and shown["pressed"] == shown["chip"] == "true"
+    assert shown["strip"] and shown["chip"] == "true"
     assert names == ["Cm", "Ab", "Bb", "G7"]
 
 

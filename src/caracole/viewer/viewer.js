@@ -882,7 +882,7 @@
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
   const rails = [panel, harmony].filter(Boolean);  // from 900 px wide, beside the song: one at a time
-  const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
@@ -1077,7 +1077,6 @@
       return level;
     }) : []);
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
-    shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
@@ -1298,16 +1297,16 @@
   // the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no capo; a transposition moves
   // every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one the song's harmonica tab
   // plays on, else the first harp.py's choices pick), the key on it and each chord's holes, harp.py's tables looked
-  // up. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row show it
-  // or hide it (state.necks), the three always in step; hidden, the song has the whole width.
+  // up. Hide, at the rail's top, and the bar's button (after the key, from 1200 px) show it or hide it (state.necks),
+  // the two always in step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
   // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
   // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
   // and ✕, Escape, Back or the neck again close it, the focus back on the neck. Each page opens with it closed; the
-  // rail's Hide and Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
+  // rail's Hide and the bar's button are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
-  const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
+  const necksButton = $("necks-toggle"), sheetButton = $("necks-open");
   const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
   const railOn = () => railCan() && state.necks && !doc.dataset.full;  // full screen: the song the whole width
   const sheetCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && !railWide.matches;
@@ -1416,10 +1415,6 @@
       sheetButton.hidden = !sheetCan();
       sheetButton.setAttribute("aria-expanded", phone ? "true" : "false");
     }
-    if (necksChip) {
-      $("necks-row").hidden = !can;
-      necksChip.setAttribute("aria-pressed", on ? "true" : "false");
-    }
     if (!necksEl) return;
     necksEl.hidden = !on && !phone;
     if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
@@ -1447,7 +1442,6 @@
     place();
   };
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
-  if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (sheetButton) {
     // The neck: the sheet up (on a phone in the place of the settings or a card), or closed where you see it.
     sheetButton.addEventListener("click", () => {
@@ -1462,8 +1456,8 @@
   if (necksEl) {
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it. Widened with
     // the sheet open, the rail takes its place (where it is shown), on its tab, the focus kept in it. Narrowed with the
-    // keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's button was; the sheet
-    // stays closed until the neck is pressed.
+    // keyboard's focus in the rail, the focus goes to the bar's first control, rather than to nothing; the sheet stays
+    // closed until the neck is pressed.
     railWide.addEventListener("change", () => {
       const had = necksEl.contains(document.activeElement);
       if (railWide.matches && sheetAt !== null) dropSheet();
@@ -2614,18 +2608,6 @@
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
-  // The guitar in the bar shows the strip, or hides it, as the settings' chip does. The strip is above
-  // the song: shown from further down, the page goes up to it, so the shapes are in view above the bar
-  // (from there, a shape's card; back down by hand). Hidden, the page stays where it is.
-  shapesButton.addEventListener("click", () => {
-    state.strip = !state.strip;
-    render();
-    if (!state.strip) return;
-    const strip = $("strip"), r = strip.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > bar.getBoundingClientRect().top) {
-      strip.scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
-    }
-  });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
@@ -2854,7 +2836,6 @@
 
   // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and ▶ alone.
   $("keys").hidden = count === 0;
-  shapesButton.hidden = count === 0;
   more.hidden = count === 0;
   showScroll();
   render();

@@ -350,8 +350,8 @@
     save();
   };
   necksButton.addEventListener("click", () => showRail(!state.necks));
-  // The window narrowed below 1200 px with the keyboard's focus in the rail: it goes to the bar's first control, where
-  // the rail's button was. Widened past it with the sheet open: the rail takes its place, on its tab.
+  // The window narrowed below 1200 px with the keyboard's focus in the rail: it goes to the bar's first control, rather
+  // than to nothing. Widened past it with the sheet open: the rail takes its place, on its tab.
   wide.addEventListener("change", () => {
     const had = aside.contains(document.activeElement);
     if (wide.matches) {

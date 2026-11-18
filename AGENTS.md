@@ -1318,9 +1318,11 @@ It is rows.js's, shared by both pages:
 - **Below 1200 px** the bar's neck (`necks-open`, after the key) slides it up as the phone's sheet (the page's
   `sheet()`, `data-sheet` half or full: its handle and ✕ for Hide), a dialog not modal and, in viewer.js, one of the
   layers docked on the bar (`--dock`):
-  - each page opens with it closed, ▶ leaves it at half, the rail's Hide and Chord necks don't touch it;
-  - and below 440 px (a phone, the owner's choice) the neck takes the guitar's place in the bar, the strip then ⋯'s
-    All chord shapes (test_viewer_overlay_sheet.py, test_viewer_bar.py).
+  - each page opens with it closed, ▶ leaves it at half, the rail's Hide and the bar's `necks-toggle` don't touch it
+    (test_viewer_overlay_sheet.py);
+  - one control each (D11): the rail's button, `necks-toggle`, takes the neck's place after the key from 1200 px, and
+    the strip of shapes has no button in the bar, ⋯'s All chord shapes (`strip-toggle`) its one switch
+    (test_viewer_bar.py).
 - **Layers and Back**: layers.js (`window.caracoleLayers`, inlined on every viewer page before its own script) keeps
   a page's layers in the browser's history, one entry each while it is open, marked `history.state.caracoleLayer`
   (its depth, from 1), so Back closes the one on top and leaves the page only once none is open:
@@ -1374,7 +1376,7 @@ It is rows.js's, shared by both pages:
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
       sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
       tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
-    - with its Hide, the bar's button and the settings' row in step (test_viewer_necks.py).
+    - with its Hide and the bar's button in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and
     it:

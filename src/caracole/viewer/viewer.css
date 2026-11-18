@@ -402,7 +402,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The bar at the foot: the key between − and +, the guitar, Aa, ▶ and ⋯, on a background of its own, so it
+/* The bar at the foot: the key between − and +, the necks' button, Aa, ▶ and ⋯, on a background of its own, so it
    never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
    while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
 .bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
@@ -434,26 +434,17 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
 /* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
 .size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
-/* The guitar: the strip of chord shapes, shown while it is pressed: tinted and ringed in the accent (the
-   ring 3:1 at least against the bar, light and dark). The first of the tools at the end; its icon a little
-   larger than the others', since on the slant it fills less of its box. */
-.bar .shapes { margin-left: auto; }
-.bar .shapes:not([hidden]) + .size-box { margin-left: 0; }
-.bar .shapes svg { width: 20px; height: 20px; }
-.bar .shapes[aria-pressed="true"], .bar .necks-toggle[aria-pressed="true"],
-.bar .necks-open[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent); }
-/* The rail of necks shown or hidden: from 1200 px, where there is a rail (viewer.js), first in the bar, on the
-   rail's side; pressed while it shows, as the guitar is. */
-.bar .necks-toggle svg { width: 18px; height: 18px; }
-/* The neck: the overlay's sheet up or down, below 1200 px, where there is no rail (viewer.js, harptab.js): the first of
-   the tools at the end, right after the key; tinted while the sheet is open. On a phone (below 440 px, the owner's
-   choice) it takes the guitar's place, so the key keeps its room, and the strip of shapes is the settings' All chord
-   shapes; wider, the guitar beside it, with room for the longest key ("Ab mixolydian") a little smaller. */
-.bar .necks-open { margin-left: auto; }
-.bar .necks-open:not([hidden]) ~ .shapes, .bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
-.bar .necks-open svg { width: 18px; height: 18px; }
-@media (max-width: 439px) { .bar .necks-open:not([hidden]) ~ .shapes { display: none; } }
+/* The necks' button, the first of the tools at the end, right after the key (viewer.js, harptab.js): from 1200 px,
+   where there is a rail, the rail of necks shown or hidden, pressed while it shows; below it, where there is none,
+   in its place the neck, the overlay's sheet up or down, tinted while the sheet is open. Pressed or open, tinted and
+   ringed in the accent (the ring 3:1 at least against the bar, light and dark). The strip of chord shapes is the
+   settings' All chord shapes alone. */
+.bar .necks-toggle, .bar .necks-open { margin-left: auto; }
+.bar .necks-toggle:not([hidden]) ~ .necks-open, .bar .necks-toggle:not([hidden]) ~ .size-box,
+.bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
+.bar .necks-toggle svg, .bar .necks-open svg { width: 18px; height: 18px; }
+.bar .necks-toggle[aria-pressed="true"], .bar .necks-open[aria-expanded="true"] { background: var(--accent-soft);
+  color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {

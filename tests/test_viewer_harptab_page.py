@@ -348,5 +348,5 @@ def test_a_harp_its_page_guesses_is_no_tabs():
 def test_the_page_has_the_overlays_rail_and_its_bars_button():
     html = page(TAB_D, cho=a_song(), key="Am", key_source="tab")
     assert '<aside class="necks" id="necks" hidden aria-label="Chord necks"></aside>' in html
-    assert re.search(r'<div class="bar-in">\n<button type="button" class="tool necks-toggle" id="necks-toggle" hidden',
-                     html)
+    assert re.search(r'<div class="bar-in">\n<span class="keys" id="harps"', html)
+    assert re.search(r'</span>\n<button type="button" class="tool necks-toggle" id="necks-toggle" hidden', html)

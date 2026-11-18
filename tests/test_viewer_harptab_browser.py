@@ -372,7 +372,7 @@ def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_p
         b.send("Emulation.setDeviceMetricsOverride", width=1100, height=1000, deviceScaleFactor=1, mobile=False)
         assert b.wait("document.getElementById('necks').hidden")
         focus = b.js("document.activeElement.id")
-    assert focus == "h-down"  # the bar's first control, where the rail's button was
+    assert focus == "h-down"  # the bar's first control, rather than nothing
 
 
 def test_the_pages_harp_diagrams_have_draw_above_the_holes_and_blow_below(tmp_path):

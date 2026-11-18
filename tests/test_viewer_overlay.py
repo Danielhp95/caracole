@@ -392,8 +392,8 @@ def test_below_1200_px_the_overlay_waits_for_the_bars_neck(tmp_path):
 
 @in_chromium
 def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_path):
-    # The rail goes below 1200 px, and the keyboard's focus with it: it goes to the bar's first control, where the rail's
-    # button was, rather than to nothing.
+    # The rail goes below 1200 px, and the keyboard's focus with it: it goes to the bar's first control, rather than to
+    # nothing.
     with open_viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
         harmonica(b)
         b.js("document.querySelector('#necks .hw-harp[aria-checked=true]').focus()")

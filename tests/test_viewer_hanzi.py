@@ -492,7 +492,6 @@ def test_the_row_is_a_segmented_control_like_the_chord_names_right_above_the_pin
       const off = (seg) => seg.querySelector('[aria-pressed=false]');
       return {track: [style(names), style(mine)], on: [style(on(names)), style(on(mine))],
         off: [style(off(names)), style(off(mine))], row: box('hanzi-row'), pinyin: box('pinyin-row'),
-        necks: document.getElementById('necks-row').hidden ? null : box('necks-row'),
         heights: [...mine.children].map((b) => b.getBoundingClientRect().height)};
     })()"""
     with open_viewer(tmp_path, written(tmp_path, SHEET), **PHONE) as b:
