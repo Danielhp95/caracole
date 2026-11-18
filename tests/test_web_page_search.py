@@ -1002,6 +1002,7 @@ def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_results
     every = [["Radiohead", [["Creep", "yours"]]], ["Stone Temple Pilots", [["Creep", "yours"]]]]
     assert browser.wait(same(LINES, every)), browser.js(LINES)
     assert browser.js(f"{note}.hidden") is True and "show=" not in browser.js("location.hash")
+    assert browser.js("document.activeElement === document.getElementById('q')") is False  # a reset, not the box
 
 
 def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, live, browser):

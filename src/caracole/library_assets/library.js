@@ -10,10 +10,14 @@
   };
   const list = byId("list");
   const masthead = document.querySelector(".masthead.lib");
-  // A filter reset's focus: the list's first line to press, never the box (which would be search, and a keyboard).
+  // A filter reset's focus: the control of the first line (never the box, which would be search and a keyboard; an
+  // artist band's button only if no line has one), one a person can see and press, with no scroll. None: unchanged.
   const focusList = () => {
-    const first = list.querySelector("a[href], button");
-    if (first) first.focus();
+    const seen = (n) => (n.checkVisibility ? n.checkVisibility() : n.offsetParent !== null);
+    const pick = (sel) => [...list.querySelectorAll(sel)].find((n) => seen(n));
+    const first = pick("article.line a[href], article.line button:not(:disabled)") ||
+      pick("a[href], button:not(:disabled)");
+    if (first) first.focus({ preventScroll: true });
   };
   const input = byId("q");
   const clear = byId("clear");

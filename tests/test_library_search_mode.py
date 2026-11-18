@@ -278,7 +278,10 @@ def test_show_all_of_a_filter_reset_never_enters_search(conn, cfg, tmp_path):
         page.js("document.querySelector('#prog button').click()")
         assert page.wait("document.querySelector('#prog button') === null")
         assert page.js(f"[{MODE}, document.activeElement === {BOX}]") == [False, False]
+        assert page.js("document.getElementById('list').contains(document.activeElement)")
+        assert page.js("document.activeElement.checkVisibility() && !document.activeElement.disabled")
         assert page.js(f"getComputedStyle({MASTHEAD}).visibility") == "visible"
         assert page.js(f"{MASTHEAD}.getBoundingClientRect().top") >= 0
     finally:
         page.close()
+
