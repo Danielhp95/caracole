@@ -1641,14 +1641,15 @@
   let playsFrame = 0;
   const PLACED = "section.artist.folded .line, section.flat .line";
   const placeable = (line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays");
-  // ``lines`` (folded or flat lines, placeable) placed where they are laid out and weren't at this width, text and
-  // Select.
-  const placeLines = (lines) => {
+  // ``lines`` (folded or flat lines, placeable) placed where they are laid out, or in ``shown`` (runs on the screen),
+  // and weren't at this width, text and Select.
+  const placeLines = (lines, shown) => {
     const main = libraryView.querySelector(".lib-main");
     const at = [main ? main.clientWidth : 0, getComputedStyle(document.documentElement).fontSize,
       document.body.classList.contains("selecting")].join(" ");
     const todo = lines.filter((line) => placedAt.get(line) !== at
-      && line.checkVisibility({ contentVisibilityAuto: true }));
+      && (line.checkVisibility({ contentVisibilityAuto: true })
+        || Boolean(shown && line.checkVisibility() && shown.has(line.closest(".cv")))));
     for (const line of todo) line.classList.remove("plays-under");
     const wraps = todo.filter((line) => {
       const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
@@ -1668,7 +1669,14 @@
     }
     const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter(placeable));
     for (const line of under) if (!lines.has(line)) unplace(line);  // a band's line now
-    placeLines(Array.from(lines));
+    // A list just drawn has its runs laid out only as the next frame is made, so the lines that frame shows would be
+    // placed a frame after it: the runs whose own box is on the screen (read without laying out what they hold) are
+    // laid out now for their lines, as they would be in this frame anyway; never one off the screen.
+    const shown = new Set(Array.from(list.querySelectorAll(".cv")).filter((cv) => {
+      const box = cv.getBoundingClientRect();
+      return box.bottom > 0 && box.top < innerHeight;
+    }));
+    placeLines(Array.from(lines), shown);
   };
   // Placed once a frame, however many lines a frame draws again (a poll's views, their refills), before it is painted.
   const placePlaysSoon = () => {
@@ -2172,23 +2180,40 @@
   };
 
   // A smooth scroll's end is set as it starts, the runs it passes as tall as their estimates: laid out on the way, they
-  // make a long one land off its mark. Once it ends, the item is put where it was to go, at once; a scroll the reader
-  // takes over (a wheel, a touch, a key, a press) is theirs.
+  // make a long one land off its mark. Once it ends, the item is taken where it was to go, smoothly too (the runs about
+  // it laid out by then, so that one lands); a scroll the reader takes over (a wheel, a touch, a key, a press) is
+  // theirs. A jump that won't move the page (the item at the top already, or the page at its end) has no end to wait
+  // for, and waits for none, so that no later scroll's end is taken for its; nor does one whose scroll never begins.
   const TAKEN_OVER = ["wheel", "touchstart", "keydown", "pointerdown"];
+  const NEVER_BEGUN = 2000;  // ms
   let landing = null;  // the one a smooth scroll is on its way to
+  const moves = (item) => {
+    const margin = parseFloat(getComputedStyle(item).scrollMarginTop) || 0;
+    const end = Math.max(0, document.scrollingElement.scrollHeight - innerHeight);
+    const to = Math.min(Math.max(scrollY + item.getBoundingClientRect().top - margin, 0), end);
+    return Math.abs(to - scrollY) >= 1;
+  };
   const landsOn = (item) => {
     if (landing) landing.off();
-    if (smooth() !== "smooth" || !("onscrollend" in window)) return;
+    if (smooth() !== "smooth" || !("onscrollend" in window) || !moves(item)) return;
+    let timer = 0;
+    const begun = () => {
+      clearTimeout(timer);
+      removeEventListener("scroll", begun);
+    };
     const off = () => {
+      begun();
       removeEventListener("scrollend", land);
       for (const name of TAKEN_OVER) removeEventListener(name, off, true);
       if (landing && landing.off === off) landing = null;
     };
     const land = () => {
       off();
-      if (item.isConnected) item.scrollIntoView({ block: "start" });
+      if (item.isConnected) item.scrollIntoView({ block: "start", behavior: smooth() });
     };
     landing = { off };
+    timer = setTimeout(off, NEVER_BEGUN);
+    addEventListener("scroll", begun, { passive: true });
     addEventListener("scrollend", land);
     for (const name of TAKEN_OVER) addEventListener(name, off, true);
   };
@@ -2284,9 +2309,9 @@
       to.type = "button";
       to.setAttribute("aria-label", "Jump to " + letter);
       to.addEventListener("click", () => {
+        landsOn(item);  // first: whether the page moves is read before it does
         item.scrollIntoView({ block: "start", behavior: smooth() });
         item.focus({ preventScroll: true });  // so the next Tab goes on from there
-        landsOn(item);
       });
       jump.appendChild(to);
     }

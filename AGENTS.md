@@ -1029,15 +1029,22 @@ It is rows.js's, shared by both pages:
     heights (`--band-h`, `--line-h`, `--fold-h`, by width and pointer, the means over tests/helpers/big_library.py's
     songs), each within a quarter of what it lays out to; once laid out, as tall as it was; a flow root, so that an
     open card's margins never move it as its containment comes and goes (test_web_page.py's Remove: no shift).
-  - One that holds an open card is laid out whole (`.cv:has(.line-panel:not([hidden]))`), so that its containment
-    never cuts the card's "⋯" menu; the dividers' rules follow the runs (a run's first line or group keeps the one
-    over it, but the first in its box); find in page finds a line off the screen; the A–Z strip's smooth jump, whose
-    end is set while the runs it passes are as tall as their estimates, is put where it aimed once it ends
-    (`landsOn`, on `scrollend`; a wheel, touch, key or press in between leaves the scroll to the reader).
+  - Its containment clips what is painted outside it `overflow-clip-margin: 6px` out, room for a focused line's ring
+    (base.css's, 2 to 5 px outside the line, as wide as its run: test_library_long.py reads its four sides' pixels).
+    One that holds an open card, or a removed song's `.card-gone` box, is laid out whole
+    (`.cv:has(.line-panel:not([hidden]), .line.card-gone)`), so that its containment never cuts the card's "⋯" menu or
+    its shadow; the dividers' rules follow the runs (a run's first line or group keeps the one over it, but the first
+    in its box); find in page finds a line off the screen.
+  - The A–Z strip's smooth jump, whose end is set while the runs it passes are as tall as their estimates, is taken
+    where it aimed once it ends, smoothly too (`landsOn`, on `scrollend`; a wheel, touch, key or press in between
+    leaves the scroll to the reader; a jump with no scroll begun two frames on waits for no end, so no later scroll's
+    is taken for its).
   - What reads a line's layout reads it where the line is laid out: `placePlays` measures a line only while
-    `checkVisibility({ contentVisibilityAuto: true })`, and the others as their run comes near the screen (that run's
-    lines alone, `placeRuns`, not every line again each frame of a scroll); reading one inside a skipped run lays the
-    run out for that read (test_library_long.py counts none).
+    `checkVisibility({ contentVisibilityAuto: true })`, or in a run whose own box is on the screen (a list just drawn,
+    whose runs on the screen the next frame would lay out anyway: placed before that frame is painted), and the others
+    as their run comes near the screen (that run's lines alone, `placeRuns`, not every line again each frame of a
+    scroll); reading one inside a skipped run off the screen lays it out for that read (test_library_long.py counts
+    none).
   - Every line stays in the DOM: no virtualized list (the redesign's rule).
 - The play buttons', the foot's and the opened card's box's rules are card.css's; where the buttons sit on a line (a
   selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
