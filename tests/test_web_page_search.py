@@ -782,7 +782,8 @@ def keep_sheet(cfg, song):
 
 def test_a_song_you_have_stands_out_from_the_ones_you_have_not(cfg, live, browser):
     # A found song: its name in the text's colour on a wash of the accent with an edge, no pill to see. Every other
-    # line, a wanted song of yours or a site's: a muted name on a plain line. The weight is the same for all.
+    # line, a wanted song of yours or a site's: a muted name on a plain line. The weight is the same for all, every
+    # song title's (600).
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "karma-police", 2), ("radiohead", "airbag", 2), ("radiohead", "no-surprises", 2)])
     (karma, _) = library(cfg, ("Radiohead", "Karma Police"), ("Radiohead", "Creep"))
@@ -793,12 +794,12 @@ def test_a_song_you_have_stands_out_from_the_ones_you_have_not(cfg, live, browse
     search(browser, "radiohead")
     assert browser.wait(f"{answer_to('radiohead')} && document.querySelectorAll('#results article.line').length >= 4")
     lines = dict(browser.js(HAVE))
-    assert lines["Karma Police"] == {"have": True, "ink": True, "quiet": False, "weight": "500", "tinted": True,
+    assert lines["Karma Police"] == {"have": True, "ink": True, "quiet": False, "weight": "600", "tinted": True,
                                      "edge": True, "pill": None}, lines  # yours, with its own line
     assert lines["Airbag"]["have"] and lines["Airbag"]["tinted"] and lines["Airbag"]["edge"], lines
     assert lines["Airbag"]["ink"] and 0 < lines["Airbag"]["pill"] <= 1, lines  # the sites' row says it, to a screen reader
     for title in ("Creep", "No Surprises"):  # a wanted song of yours, and one only a site has
-        assert lines[title] == {"have": False, "ink": False, "quiet": True, "weight": "500", "tinted": False,
+        assert lines[title] == {"have": False, "ink": False, "quiet": True, "weight": "600", "tinted": False,
                                 "edge": False, "pill": None}, (title, lines)
 
 
@@ -1958,8 +1959,9 @@ def test_a_search_opened_from_the_address_moves_nothing_when_its_answer_comes(cf
 
 @pytest.mark.parametrize("size,dark", [((1280, 800), False), ((1280, 800), True), ((390, 844), True)])
 def test_the_results_read_in_light_and_dark_and_line_up_with_your_songs(cfg, live, tmp_path, size, dark):
-    # In dark mode as in light, the results' groups have the list's look; on a laptop a site's line has its
-    # columns where your songs' lines have theirs.
+    # In dark mode as in light, the results' groups have the list's look (no box: no fill of their own, the page's
+    # background, in its own mode, under them); on a laptop a site's line has its columns where your songs' lines have
+    # theirs.
     base, _, _ = live
     sites(cfg, ug=[("eagles", "hotel-california", 5), ("eagles", "take-it-easy", 2)])
     library(cfg, ("Eagles", "Hotel California"))
@@ -1973,8 +1975,8 @@ def test_the_results_read_in_light_and_dark_and_line_up_with_your_songs(cfg, liv
         colours = page.js("(() => { const s = (q) => getComputedStyle(document.querySelector(q)); return ["
                           "s('body').backgroundColor, s('#results .groups').backgroundColor, "
                           "s('#results .hit h3').color]; })()")
-        assert colours[0] != colours[1] and colours[1] != colours[2], colours
-        assert (sum(int(n) for n in colours[1][4:-1].split(",")[:3]) > 384) is not dark, colours  # its own mode
+        assert colours[1] == "rgba(0, 0, 0, 0)" and colours[0] != colours[2], colours
+        assert (sum(int(n) for n in colours[0][4:-1].split(",")[:3]) > 384) is not dark, colours  # its own mode
         if size[0] > 1000:  # your song's line and the site's: the same columns
             cols = page.js("(() => { const at = (q) => document.querySelector(q).getBoundingClientRect(); return "
                            "[at('#results .line[data-id] .line-action').right, at('#results .hit .line-action').right,"

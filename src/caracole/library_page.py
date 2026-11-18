@@ -37,8 +37,8 @@ them first (card.js ``plays``: its sheet, its Guitar Pro file, its text tab, its
 music, a score: read from its files and ``instruments``), each opening it at once (its viewer, its harmonica tab's
 page, the Guitar Pro page, the file), its instrument's glyph marked with the sites its versions came from and
 counting them; its status when it needs something (Wanted, Needs review, Ignored: a found song says nothing), its
-key as a chip and, served, its main action, where it has one: Fetch now's download glyph, or Pick the match.
-Everything else a song has is under its chevron, which
+key in muted bold letters and, served, its main action, where it has one: Fetch now's download glyph, or Pick the
+match. Everything else a song has is under its chevron, which
 unfolds it in place as a card (library_assets/card.js): its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from; a tile for each thing it holds, read

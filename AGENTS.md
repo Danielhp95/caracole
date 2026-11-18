@@ -1034,14 +1034,21 @@ It is rows.js's, shared by both pages:
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
 - **Four corner radii** (stage 1f; base.css `:root`): `--radius-s` 4 px, `--radius-m` 8 px, `--radius-l` 12 px and
-  `--radius-pill` 999 px, besides square and 50 %; every stylesheet takes its radii from them, the inner corners of a
-  12 px box (a band's, a row's) `--radius-l`. test_page_calm.py lists the elements shown with another
-  (`helpers.targets.odd_radii`), in each tab, the Filter panel, a search, the Sync sheet and the tray, at 390 and 1280
-  px, light and dark, but for card.css's (`.line-panel`, `.play`, lane 3b's, which brings its own to the tokens when it
-  merges: the test's `OTHER_LANES` then empties). steps.css and requests.css (lane 2's) were already on the tokens, with fallbacks
-  (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing; songbooks.css (the Songbooks tab's) it brought
-  to them. The test serves the page with a lookup running and one queued, a songbook and each tab, and asserts each
-  state drew what it names (it measures elements, never pseudo-elements).
+  `--radius-pill` 999 px, besides square and 50 %; every stylesheet takes its radii from them. test_page_calm.py lists
+  the elements shown with another (`helpers.targets.odd_radii`), in each tab, the Filter panel, a search, the Sync sheet
+  and the tray, at 390 and 1280 px, light and dark, but for card.css's (`.line-panel`, `.play`, lane 3b's, which brings
+  its own to the tokens when it merges: the test's `OTHER_LANES` then empties). steps.css and requests.css (lane 2's)
+  were already on the tokens, with fallbacks (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing;
+  songbooks.css (the Songbooks tab's) it brought to them. The test serves the page with a lookup running and one queued,
+  a songbook and each tab, and asserts each state drew what it names (it measures elements, never pseudo-elements).
+- **No outline around the list** (stage 1f; library.css, rows.css): a list of lines or rows (`.groups`, `.lines`,
+  `.rows`: index.html's list and a search's results, the lookup page's rows) has no border, shadow or fill of its own,
+  the page's background under it: the bands (`--raised`) and the 1 px dividers between lines, rows and groups are its
+  shape, the first band as square as the others. A line's key (`.line-key`, `.row-key`) is plain text, muted and bold,
+  in no box; every song's title is semi-bold (600; a search's results' too, one weight for all), a band's name bold
+  (700) in `--artist`, its count muted. test_page_calm.py's `test_no_outline_around_the_list_or_the_key` measures them
+  on the page opened as a file (by artist and by title), a served search's results and the lookup page, at 390 and
+  1280 px, light and dark, and that each state drew what it names.
 - **A long list** (stage 1e; library.js `render`, library.css `#list .cv`): what is off the screen isn't laid out.
   Each band group of `BIG_GROUP` (50) lines or fewer is a `.cv`, a larger one's lines in runs of `RUN` (40) inside its
   `.lines`, under its band; folded artists in a row, and a flat list's lines, in runs of 40 too (`div.run`, each a

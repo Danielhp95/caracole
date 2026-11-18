@@ -2546,9 +2546,9 @@ title leaves too little room for them, they wrap to a second row beside it, and
 a long title is cut short first. The lyrics have no button: their tile, under
 the chevron, says where they came from. Then its status when it needs
 something, one word: Wanted, Needs review when caracole isn't sure of the match,
-or Ignored (a found song, nearly every one, says nothing); its key, in a small
-box ("Am"; a screen reader hears "Key A minor (from the tab)", see [The song's
-key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
+or Ignored (a found song, nearly every one, says nothing); its key, in muted
+bold letters ("Am"; a screen reader hears "Key A minor (from the tab)", see
+[The song's key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
 **Fetch**, a download icon in the accent, which looks the song up then and
 not before (Pick for one that needs review first, and Removing…
 while caracole removes it); and a chevron, which unfolds the song in place,

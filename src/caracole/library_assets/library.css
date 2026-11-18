@@ -172,7 +172,7 @@
   font-size: .85rem; }
 .searching-all .prog-filter { display: none; }
 .prog-found { margin: 10px 0 0; }
-/* The sites' results: one box of groups, as the list's, your songs and the indexes' under each artist's header, then
+/* The sites' results: groups, as the list's, your songs and the indexes' under each artist's header, then
    the artist's foot: "+ 57 more by Estopa", or the offer to read their page on LaCuerda. */
 #found > .groups { margin-top: 10px; }
 .group-tail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 2px 4px 4px 12px;
@@ -199,12 +199,10 @@
 .jump button:hover { background: var(--raised); color: var(--text); }
 .count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
 .count[hidden] { display: none; }
-/* The songs: by artist, one box of groups, each artist's name and how many of their songs are yours on a band over
-   their lines; by title or by when they came, one box of lines. */
-.lines, .groups { border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface);
-  box-shadow: var(--shadow); }
+/* The songs: by artist, groups, each artist's name and how many of their songs are yours on a band over their lines;
+   by title or by when they came, lines. No box around them, no outline, shadow or fill of their own: the bands and the
+   dividers between lines and groups are the list's shape. */
 .list > .groups, .list > section.flat { margin-top: 10px; }
-section.artist .lines, section.nothing .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
 section.artist + section.artist, .groups > section + section.nothing { border-top: 1px solid var(--border); }
 /* A long list's groups and lines off the screen aren't laid out (library.js render: each band group of 50 lines or
    fewer, and each run, div.run, of 40 lines or folded artists, is a .cv). Each is as tall as what it holds says
@@ -238,7 +236,6 @@ section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); 
 .artist-title { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--band-h); min-height: 0;
   margin: 0; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
   font-size: .906rem; font-weight: 700; line-height: 1.2; overflow: hidden; }
-section.artist:first-child > .artist-title { border-radius: var(--radius-l) var(--radius-l) 0 0; }
 .artist-title .artist-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto;
   min-width: 0; }
 .artist-title button.artist, .artist-title button.artist:hover { color: var(--artist); font-size: inherit;
@@ -252,7 +249,6 @@ section.artist:first-child > .artist-title { border-radius: var(--radius-l) var(
 .miss-band { min-height: 34px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border);
   background: var(--raised); color: var(--text); font-size: .875rem; font-weight: 700; letter-spacing: .02em;
   line-height: 1.3; overflow-wrap: anywhere; }
-section.nothing:first-child > .miss-band { border-radius: var(--radius-l) var(--radius-l) 0 0; }
 section.nothing .line.miss:has(> .line-more[aria-expanded="true"]) { margin: 0; border: 0; border-radius: 0;
   background: none; box-shadow: none; }
 section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }

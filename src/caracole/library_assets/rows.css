@@ -35,8 +35,8 @@ button.artist:hover .artist-name { text-decoration: underline; text-underline-of
   text-underline-offset: 3px; }
 .title-get:focus-visible { outline-offset: -1px; }
 .title-get:disabled { cursor: default; }
-.rows { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface);
-  box-shadow: var(--shadow); }
+/* A list of rows, as the library's lines: no box, its dividers its shape. */
+.rows { margin-top: 10px; }
 /* Below 900px a row is two lines: the title and the main action, then the artist with the key and
    badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
 .row { --row-more: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto var(--row-more);
@@ -45,8 +45,8 @@ button.artist:hover .artist-name { text-decoration: underline; text-underline-of
 .row:first-child { border-top: 0; }
 .row[data-status="ignored"] { opacity: .7; }
 .row > .source { grid-area: src; justify-self: center; }
-.row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
-  white-space: nowrap; text-overflow: ellipsis; }
+.row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; font-weight: 600;
+  line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 /* A row's title link fills its line: as easy to hit as the button beside it. */
 .row > .title-link { grid-area: title; display: flex; align-items: center; align-self: stretch; width: auto;
   min-width: 0; }
@@ -56,7 +56,7 @@ button.artist:hover .artist-name { text-decoration: underline; text-underline-of
 .row-artist .artist-name { overflow: hidden; text-overflow: ellipsis; }
 .row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
   gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
-.row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.row-key { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .row-action form { margin: 0; }
 .row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
@@ -119,10 +119,9 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
    never as a state of the song. */
 .badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .line-facts { flex: 1 1 0; min-width: 3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* The key, a small chip; where a site's song came from, its sites' marks. */
-.line-key { grid-area: key; justify-self: center; min-width: 2.25rem; padding: 1px 6px; border: 1px solid
-  var(--border-strong); border-radius: var(--radius-m); color: var(--text); font-size: .8rem; font-weight: 700; line-height: 1.3;
-  text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The key, plain muted bold text, centred in its column; where a site's song came from, its sites' marks. */
+.line-key { grid-area: key; justify-self: center; min-width: 2.25rem; color: var(--muted); font-size: .8rem;
+  font-weight: 700; line-height: 1.3; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Marks of sites, each a square of --mark, --mark-gap apart, drawn within it (an icon a pixel inside its edge, a dashed
    edge on it), so that a cell as wide as its marks shows each whole; one narrower wraps them, never cuts one: where a
    site's song is (``sources``), and in a song's card which sites have it (rows.js siteMarks), in its colours where it
@@ -275,15 +274,11 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 /* A search's results (index.html's, the lookup page's): a song you have fetched stands out from the ones you have not.
    Yours (rows.js ``have``: a song with a sheet) is a line or row on a faint wash of the accent with an edge in it, its
    name in the text's colour; every other, a site's or one of yours still wanted, a muted name on a plain line. The
-   weight is one for all, and the pill ("In your library", "Found") the wash says is left to a screen reader. Only the
-   results: the library's own list is all yours. */
-#results .line h3, #results .row-title { font-weight: 500; }
+   weight is one for all, every title's (600), and the pill ("In your library", "Found") the wash says is left to a
+   screen reader. Only the results: the library's own list is all yours. */
+#results .line h3, #results .row-title { font-weight: 600; }
 #results .line:not(.have) h3, #results .row.hit:not(.have):not(.artist-hit) .row-title { color: var(--muted); }
 #results .line.have, #results .row.have { background: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface));
   box-shadow: inset 4px 0 0 var(--accent); }
 #results .have .badge.found { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; }
-/* The wash of a box's first or last line follows the box's rounded corners. */
-#results .rows > .row.have:first-child { border-top-left-radius: var(--radius-l); border-top-right-radius: var(--radius-l); }
-#results .rows > .row.have:last-child { border-bottom-left-radius: var(--radius-l); border-bottom-right-radius: var(--radius-l); }
-#results .groups > section:last-child > .lines:last-child > .line.have:last-child { border-radius: 0 0 var(--radius-l) var(--radius-l); }
