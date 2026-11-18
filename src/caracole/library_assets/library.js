@@ -1630,28 +1630,25 @@
   // From 1200 px a folded or flat line's buttons stay on its row while they fit beside its title and its artist, and
   // go on a row of their own under the title where they don't (``plays-under``, library.css): measured in the one row,
   // where they wrap (the last below the first), once a line, and again once the list's width, Select, or the line
-  // itself (refill, an action gone) changes; a line hidden is measured once it shows. Under 1200 px, none.
+  // itself (refill, an action gone) changes; a line hidden is measured once it shows, and a line of a run off the
+  // screen (render's runs, which content-visibility leaves unlaid) once its run comes near it, never by laying the
+  // run out to read it. Under 1200 px, none.
   const placedAt = new WeakMap();  // a line -> the list's width, the text's size and Select its buttons were placed at
   const unplace = (line) => {  // placed again when it is a folded or flat line beside the pane next
     line.classList.remove("plays-under");
     placedAt.delete(line);
   };
   let playsFrame = 0;
-  const placePlays = () => {
-    if (playsFrame) cancelAnimationFrame(playsFrame);
-    playsFrame = 0;
-    const under = Array.from(libraryView.querySelectorAll(".line.plays-under"));
-    if (!paneWide || !paneWide.matches) {
-      for (const line of under) unplace(line);
-      return;
-    }
-    const lines = new Set(Array.from(libraryView.querySelectorAll("section.artist.folded .line, section.flat .line"))
-      .filter((line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays")));
-    for (const line of under) if (!lines.has(line)) unplace(line);  // a band's line now
+  const PLACED = "section.artist.folded .line, section.flat .line";
+  const placeable = (line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays");
+  // ``lines`` (folded or flat lines, placeable) placed where they are laid out and weren't at this width, text and
+  // Select.
+  const placeLines = (lines) => {
     const main = libraryView.querySelector(".lib-main");
     const at = [main ? main.clientWidth : 0, getComputedStyle(document.documentElement).fontSize,
       document.body.classList.contains("selecting")].join(" ");
-    const todo = Array.from(lines).filter((line) => placedAt.get(line) !== at && line.checkVisibility());
+    const todo = lines.filter((line) => placedAt.get(line) !== at
+      && line.checkVisibility({ contentVisibilityAuto: true }));
     for (const line of todo) line.classList.remove("plays-under");
     const wraps = todo.filter((line) => {
       const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
@@ -1661,10 +1658,38 @@
     for (const line of todo) placedAt.set(line, at);
     for (const line of wraps) line.classList.add("plays-under");
   };
+  const placePlays = () => {
+    if (playsFrame) cancelAnimationFrame(playsFrame);
+    playsFrame = 0;
+    const under = Array.from(libraryView.querySelectorAll(".line.plays-under"));
+    if (!paneWide || !paneWide.matches) {
+      for (const line of under) unplace(line);
+      return;
+    }
+    const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter(placeable));
+    for (const line of under) if (!lines.has(line)) unplace(line);  // a band's line now
+    placeLines(Array.from(lines));
+  };
   // Placed once a frame, however many lines a frame draws again (a poll's views, their refills), before it is painted.
   const placePlaysSoon = () => {
     if (!playsFrame) playsFrame = requestAnimationFrame(placePlays);
   };
+  // A run come near the screen, laid out now (it isn't on the screen yet): its lines alone placed in the next frame,
+  // not every line of the list again, as each frame of a scroll may bring one.
+  const shownRuns = new Set();
+  let runsFrame = 0;
+  const placeRuns = () => {
+    runsFrame = 0;
+    const runs = Array.from(shownRuns).filter((run) => run.isConnected);
+    shownRuns.clear();
+    if (!paneWide || !paneWide.matches || playsFrame) return;  // every line is to be placed this frame anyway
+    placeLines(runs.flatMap((run) => Array.from(run.querySelectorAll(PLACED))).filter(placeable));
+  };
+  list.addEventListener("contentvisibilityautostatechange", (e) => {
+    if (e.skipped || !paneWide || !paneWide.matches) return;
+    shownRuns.add(e.target);
+    if (!runsFrame) runsFrame = requestAnimationFrame(placeRuns);
+  }, true);
   if (pane) {
     pane.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || !selected) return;
@@ -2117,6 +2142,57 @@
     leaveSearch();
   };
 
+  // A long list's groups and lines off the screen aren't laid out (``.cv``: content-visibility, library.css): each
+  // band group of BIG_GROUP lines or fewer is one, a larger one's lines are in runs of RUN (``div.run``), each one;
+  // folded artists in a row, and a flat list's lines, in runs of RUN too, the last of them RUN_MIN or more (a shorter
+  // one goes with the run before it, which then holds up to RUN + RUN_MIN - 1), and a row shorter than RUN_MIN in
+  // none. Each says what it holds, ``--bands``, ``--lines`` (under a band) and ``--folds`` (folded artists, or a flat
+  // list's lines, drawn as theirs), which library.css's heights make its estimate of until it has been laid out once.
+  const RUN = 40;
+  const RUN_MIN = 8;
+  const BIG_GROUP = 50;
+  const unlaid = (node, holds) => {
+    node.classList.add("cv");
+    for (const [name, n] of Object.entries(holds)) node.style.setProperty("--" + name, String(n));
+    return node;
+  };
+  // ``nodes`` (a row of them, in order) cut into runs, each holding ``kind``; too few, as they are.
+  const runsOf = (nodes, kind) => {
+    if (nodes.length < RUN_MIN) return nodes;
+    const sizes = [];
+    for (let at = 0; at < nodes.length; at += RUN) sizes.push(Math.min(RUN, nodes.length - at));
+    if (sizes.length > 1 && sizes[sizes.length - 1] < RUN_MIN) sizes[sizes.length - 2] += sizes.pop();
+    let at = 0;
+    return sizes.map((size) => {
+      const run = unlaid(el("div", "run"), { [kind]: size });
+      run.append(...nodes.slice(at, at + size));
+      at += size;
+      return run;
+    });
+  };
+
+  // A smooth scroll's end is set as it starts, the runs it passes as tall as their estimates: laid out on the way, they
+  // make a long one land off its mark. Once it ends, the item is put where it was to go, at once; a scroll the reader
+  // takes over (a wheel, a touch, a key, a press) is theirs.
+  const TAKEN_OVER = ["wheel", "touchstart", "keydown", "pointerdown"];
+  let landing = null;  // the one a smooth scroll is on its way to
+  const landsOn = (item) => {
+    if (landing) landing.off();
+    if (smooth() !== "smooth" || !("onscrollend" in window)) return;
+    const off = () => {
+      removeEventListener("scrollend", land);
+      for (const name of TAKEN_OVER) removeEventListener(name, off, true);
+      if (landing && landing.off === off) landing = null;
+    };
+    const land = () => {
+      off();
+      if (item.isConnected) item.scrollIntoView({ block: "start" });
+    };
+    landing = { off };
+    addEventListener("scrollend", land);
+    for (const name of TAKEN_OVER) addEventListener(name, off, true);
+  };
+
   const render = () => {
     const query = parseQuery(state.q);
     const fits = typedMatch(query);
@@ -2152,11 +2228,11 @@
       if (!firsts.has(letter)) firsts.set(letter, item);
     };
     if (state.sort === "artist") {
-      const runs = [];  // ORDERS.artist has each artist's songs together
+      const artists = [];  // ORDERS.artist has each artist's songs together
       for (const i of shown) {
         const key = String(songs[i].sortArtist || "");
-        if (!runs.length || runs[runs.length - 1].key !== key) runs.push({ key, items: [] });
-        runs[runs.length - 1].items.push(i);
+        if (!artists.length || artists[artists.length - 1].key !== key) artists.push({ key, items: [] });
+        artists[artists.length - 1].items.push(i);
       }
       // How many songs of each artist you have, the songs the search or a filter leaves out too.
       const yours = new Map();
@@ -2165,24 +2241,41 @@
         yours.set(key, (yours.get(key) || 0) + 1);
       }
       const groups = el("div", "groups");
-      for (const { key, items } of runs) {
+      let folds = [];  // folded artists in a row, put in runs once the row ends
+      const foldsEnd = () => {
+        groups.append(...runsOf(folds, "folds"));
+        folds = [];
+      };
+      for (const { key, items } of artists) {
         const head = songs[items[0]];
         const group = artistGroup({ key, name: String(shownName(head, head.artist)) }, items.map(lineOf),
           { mine: yours.get(key) || 0 });
         first(String(songs[items[0]].artistLetter || "#"), group);
+        if (group.classList.contains("folded")) {
+          folds.push(group);
+          continue;
+        }
+        foldsEnd();
+        if (items.length <= BIG_GROUP) {
+          unlaid(group, { bands: 1, lines: items.length });
+        } else {  // its band always laid out, its lines in runs
+          const box = group.querySelector(":scope > .lines");
+          box.replaceChildren(...runsOf(Array.from(box.children), "lines"));
+        }
         groups.appendChild(group);
       }
-      if (runs.length) list.appendChild(groups);
+      foldsEnd();
+      if (artists.length) list.appendChild(groups);
     } else if (shown.length) {
       const flat = el("section", "flat");
       flat.appendChild(el("h2", "visually-hidden", state.sort === "title" ? "Songs by title"
         : "Newest first"));
       const box = el("div", "lines");
-      for (const i of shown) {
+      box.append(...runsOf(shown.map((i) => {
         const line = lineOf(i);
         if (letterOf) first(String(songs[i][letterOf] || "#"), line);
-        box.appendChild(line);
-      }
+        return line;
+      }), "folds"));
       flat.appendChild(box);
       list.appendChild(flat);
     }
@@ -2193,6 +2286,7 @@
       to.addEventListener("click", () => {
         item.scrollIntoView({ block: "start", behavior: smooth() });
         item.focus({ preventScroll: true });  // so the next Tab goes on from there
+        landsOn(item);
       });
       jump.appendChild(to);
     }

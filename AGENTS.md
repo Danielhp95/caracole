@@ -889,7 +889,9 @@ It is rows.js's, shared by both pages:
   - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
     row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
     its last button wraps below its first, once a line, by the list's width, the root's font size and Select, again
-    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`)
+    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`; a line of a run off
+    the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
+    out: below)
     makes its first row the title, its artist right after it, the status, the action, the key and the chevron, and its
     buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
     beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
@@ -1017,6 +1019,26 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
+- **A long list** (stage 1e; library.js `render`, library.css `#list .cv`): what is off the screen isn't laid out.
+  Each band group of `BIG_GROUP` (50) lines or fewer is a `.cv`, a larger one's lines in runs of `RUN` (40) inside its
+  `.lines`, under its band; folded artists in a row, and a flat list's lines, in runs of 40 too (`div.run`, each a
+  `.cv`), the last of a row `RUN_MIN` (8) or more (a shorter rest goes with the run before it), a row shorter than 8 in
+  none (`runsOf`); never a line alone.
+  - A `.cv` is `content-visibility: auto`, its `contain-intrinsic-size` `auto` and what it holds (`--bands`, `--lines`,
+    `--folds`, by `style.setProperty`: the page's policy allows no `style` attribute in markup) times library.css's
+    heights (`--band-h`, `--line-h`, `--fold-h`, by width and pointer, the means over tests/helpers/big_library.py's
+    songs), each within a quarter of what it lays out to; once laid out, as tall as it was; a flow root, so that an
+    open card's margins never move it as its containment comes and goes (test_web_page.py's Remove: no shift).
+  - One that holds an open card is laid out whole (`.cv:has(.line-panel:not([hidden]))`), so that its containment
+    never cuts the card's "⋯" menu; the dividers' rules follow the runs (a run's first line or group keeps the one
+    over it, but the first in its box); find in page finds a line off the screen; the A–Z strip's smooth jump, whose
+    end is set while the runs it passes are as tall as their estimates, is put where it aimed once it ends
+    (`landsOn`, on `scrollend`; a wheel, touch, key or press in between leaves the scroll to the reader).
+  - What reads a line's layout reads it where the line is laid out: `placePlays` measures a line only while
+    `checkVisibility({ contentVisibilityAuto: true })`, and the others as their run comes near the screen (that run's
+    lines alone, `placeRuns`, not every line again each frame of a scroll); reading one inside a skipped run lays the
+    run out for that read (test_library_long.py counts none).
+  - Every line stays in the DOM: no virtualized list (the redesign's rule).
 - The play buttons', the foot's and the opened card's box's rules are card.css's; where the buttons sit on a line (a
   selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
   library.css) are lane 1's: test_library_assets.py.

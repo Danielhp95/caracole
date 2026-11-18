@@ -2546,7 +2546,7 @@ def test_an_artists_name_is_a_button_that_searches_for_them(conn, cfg, tmp_path)
     add_song(conn, "Radiohead", "Karma Police")  # two songs: a band over them; Oasis's one, folded into its line
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     grouped = listing(dump_dom(path, tmp_path))
-    head = re.search(r'<section class="artist" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
+    head = re.search(r'<section class="artist cv" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     folded = re.search(r'<section class="artist folded" data-artist="oasis"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     flat = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Creep")  # no group over it: its own
     # The name alone, in the band, on a line no band is over and on a folded line, as served: its title says what it
