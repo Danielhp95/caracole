@@ -7,6 +7,9 @@ button, a field, a menu or a fold's summary (a box or a radio counts as its labe
 box as its frame). A link in a line of text is left out, as WCAG 2.5.8 leaves it out, and so is
 whatever the CSS selector ``exempt`` matches.
 
+``odd_radii(skip)`` lists every element shown whose corner radius is none of the four of base.css (4, 8, 12 px, a
+pill), square or a circle; what ``skip`` (a tuple of selectors) matches, and what is inside it, is left out.
+
 ``weak_edges(exempt)`` lists every field, menu and Select box shown whose edge is less than 3:1
 against the colour around it or its own fill (WCAG 1.4.11); a box filled with its edge's colour is
 measured against what is around it alone.
@@ -115,6 +118,23 @@ _WEAK = r"""
 })
 """
 
+_ODD_RADII = r"""
+((skip) => {
+  __NAME__
+  // The four corner radii of the page: 4, 8, 12 px and a pill, besides square and a circle (a percentage).
+  const allowed = new Set(["0px", "4px", "8px", "12px", "999px", "50%"]);
+  const odd = [];
+  for (const node of document.querySelectorAll("body *")) {
+    if (!node.checkVisibility() || (skip.length && node.closest(skip.join(", ")))) continue;
+    const style = getComputedStyle(node);
+    const corners = ["TopLeft", "TopRight", "BottomRight", "BottomLeft"].map((c) => style["border" + c + "Radius"]);
+    const bad = corners.join(" ").split(/\s+/).filter((r) => !allowed.has(r));
+    if (bad.length) odd.push({ what: name(node), said: said(node), radius: corners.join(" / ") });
+  }
+  return odd;
+})
+"""
+
 UNFOLD = """
 for (const more of document.querySelectorAll(".line-more"))
   if (more.getAttribute("aria-expanded") !== "true") more.click();
@@ -131,6 +151,12 @@ def small_targets(exempt: str = "", least: int = 44) -> str:
 def weak_edges(exempt: str = "") -> str:
     """An expression: the fields, menus and Select boxes shown whose edge is under 3:1."""
     return _WEAK.replace("__NAME__", _NAME) + f"({json.dumps(exempt)})"
+
+
+def odd_radii(skip: tuple[str, ...] = ()) -> str:
+    """An expression: the elements rendered (a short path each) whose corner radius is none of 0, 4, 8, 12 px, a pill
+    (999 px) or a circle (50%), those inside an element ``skip`` (selectors) matches left out."""
+    return _ODD_RADII.replace("__NAME__", _NAME) + f"({json.dumps(list(skip))})"
 
 
 def noting(attribute: str, expression: str) -> str:
