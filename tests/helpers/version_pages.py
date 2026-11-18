@@ -9,7 +9,9 @@ of the sheet the title opens, and each entry's ``this`` for the page that holds 
 ``WONDERWALL`` is thirteen chords versions as UG lists Wonderwall's: the one (Ver 3, 4.86★ from 408 votes) and
 two kept beside it, then ten that aren't, one of them gone from UG. ``entry`` makes one more, ``with_versions``
 puts the data into a page ``build_viewer`` made, as ``folder`` does into each page, each entry's ``this`` saying
-whether it is that page's (a page none is, LaCuerda's sheet's or an auto sheet's, has every ``this`` false).
+whether it is that page's (a page none is, LaCuerda's sheet's or an auto sheet's, has every ``this`` false), and with
+``kinds`` what else the song keeps to play from (render.py ``_kinds_data``'s shape): ``KINDS``, two Guitar Pro files
+and a harmonica tab beside its chord sheet.
 """
 
 from __future__ import annotations
@@ -48,9 +50,26 @@ WONDERWALL: dict[str, Any] = {
 }
 
 
-def with_versions(page: str, versions: dict[str, Any] | None, name: str | None = None) -> str:
+# What else the song keeps to play from, as render.py's _kinds_data writes it: its chord sheet, two Guitar Pro files
+# (one from gtptabs.com, a Power Tab file from the inbox) and a harmonica tab from harptabs.com.
+KINDS: dict[str, Any] = {
+    "sheet": "sheet",
+    "page": "sheet.html",
+    "groups": [
+        {"kind": "guitar", "items": [
+            {"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True, "download": "Artist - Title.gp5"},
+            {"name": "guitar-2.ptb", "label": "Power Tab 2", "browser": False, "download": "Artist - Title (2).ptb"}]},
+        {"kind": "harmonica", "items": [
+            {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"}]},
+    ],
+}
+
+
+def with_versions(page: str, versions: dict[str, Any] | None, name: str | None = None,
+                  kinds: dict[str, Any] | None = None) -> str:
     """``page``, a viewer ``build_viewer`` made, with ``versions`` as its data's ``versions``: as the page
-    ``name`` holds them, each entry's ``this`` true for the entry whose page that is."""
+    ``name`` holds them, each entry's ``this`` true for the entry whose page that is; and ``kinds``, given, as its
+    ``kinds`` right after them."""
     found = re.search(r'<script type="application/json" id="song">(.*?)</script>\n', page)
     assert found, "no song data in the page"
     data = json.loads(found.group(1))
@@ -58,18 +77,20 @@ def with_versions(page: str, versions: dict[str, Any] | None, name: str | None =
         versions = {**versions, "list": [{**v, "this": v["page"] == name and (name != "sheet.html" or v["chosen"])}
                                          for v in versions["list"]]}
     data["versions"] = versions
+    if kinds is not None:
+        data["kinds"] = kinds
     return page[:found.start()] + json_block("song", data) + page[found.end():]
 
 
 def folder(tmp_path: Path, versions: dict[str, Any] | None, *, name: str = "Title",
-           pages: tuple[str, ...] | None = None) -> dict[str, Path]:
+           pages: tuple[str, ...] | None = None, kinds: dict[str, Any] | None = None) -> dict[str, Path]:
     """The song's folder, Artist/<name>/ under ``tmp_path``, with sheet.html and each page ``versions`` names
-    (or ``pages``), each the viewer of the same sheet with ``versions``; each page by its name."""
+    (or ``pages``), each the viewer of the same sheet with ``versions`` and ``kinds``; each page by its name."""
     where = tmp_path / "Artist" / name
     where.mkdir(parents=True, exist_ok=True)
     names = pages or ("sheet.html", *(v["page"] for v in (versions or {}).get("list", []) if v["page"]))
     out = {}
     for page in dict.fromkeys(names):
-        (where / page).write_text(with_versions(build_viewer(CHO), versions, page), encoding="utf-8")
+        (where / page).write_text(with_versions(build_viewer(CHO), versions, page, kinds), encoding="utf-8")
         out[page] = where / page
     return out

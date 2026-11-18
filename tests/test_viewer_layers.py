@@ -544,7 +544,12 @@ def test_every_viewer_page_inlines_layers_js_before_its_own_script():
         assert html.count(layers) == 1
         # before the page's own script, never right before: kinds.js and screen.js come between them
         assert html.index(inlined(after)) < html.index(layers) < html.index(inlined(before)), (after, before)
-    assert page.HERE / "layers.js" in page.BUILD_FILES
+    # kinds.js, the version line's, after layers.js and before the page's own script on a sheet; never in a songbook
+    sheet, book = pages[0][0], pages[1][0]
+    assert sheet.count(inlined("kinds.js")) == 1
+    assert sheet.index(layers) < sheet.index(inlined("kinds.js")) < sheet.index(inlined("viewer.js"))
+    assert inlined("kinds.js") not in book
+    assert page.HERE / "layers.js" in page.BUILD_FILES and page.HERE / "kinds.js" in page.BUILD_FILES
     # It makes no element of its own and loads nothing.
     for word in ("innerHTML", "createElement", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function"):
         assert word not in page._layers(), word

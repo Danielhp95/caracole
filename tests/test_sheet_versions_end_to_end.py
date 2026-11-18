@@ -1,6 +1,6 @@
 """A song's sheet versions end to end: Ultimate Guitar lists four chords versions of it, ``caracole get`` keeps
 the sheet and the two runners-up it scores beside it (ug/fetch.py), render writes a viewer page for each
-(render.py), whose switcher lists them and steps between them (viewer.js), the library page's "⋯" lists them
+(render.py), whose version line names each and whose list opens them (kinds.js), the library page's "⋯" lists them
 (library_page.py), and caracole serve serves each version's page and makes one the sheet (versions_routes.py:
 ``caracole versions --choose``, queued).
 
@@ -128,7 +128,9 @@ def browser(tmp_path):
 SWITCHER = """(() => {
   const q = (s) => document.querySelector(s);
   return {page: decodeURIComponent(location.pathname.split('/').pop()), line: q('#ver-line').textContent,
-          prev: q('#ver-prev').getAttribute('href'), next: q('#ver-next').getAttribute('href'),
+          icons: [...document.querySelectorAll('#kinds .kind')].map((k) => [k.dataset.kind, k.querySelector('.n').textContent]),
+          links: Object.fromEntries([...document.querySelectorAll('#version-list a[data-page]')].map((a) =>
+            [a.dataset.page, a.getAttribute('href')])),
           rows: [...document.querySelectorAll('#ver-items > li')].map((li) => li.querySelector('.ver-main').textContent),
           acts: [...document.querySelectorAll('#ver-acts a, #ver-acts button')].map((a) =>
             [a.textContent, a.getAttribute('href')]),
@@ -137,37 +139,39 @@ SWITCHER = """(() => {
 })()"""
 
 
-def step(b: Browser, which: str, page: str) -> dict:
-    """Click ‹ or › (``which``) and wait for ``page``, the new document."""
+def step(b: Browser, page: str) -> dict:
+    """Open the list from the line, click the kept version ``page`` in it and wait for it, the new document."""
     b.js("window.before = true")
-    b.click(which)
+    b.click("#ver-now")
+    assert b.wait("!document.querySelector('#version-list').hidden")
+    b.click(f"#version-list a[data-page={json.dumps(page)}]")
     assert b.wait(f"!window.before && location.pathname.endsWith({json.dumps('/' + quote(page))})"
                   " && document.querySelector('#ver-line').textContent !== ''")
     return b.js(SWITCHER)
 
 
 @in_chromium
-def test_the_switcher_steps_through_the_kept_versions_pages_and_lists_them_all(
-        config, sites, conn, tmp_path, browser):
+def test_the_line_names_the_kept_versions_and_its_list_opens_them_all(config, sites, conn, tmp_path, browser):
     folder = looked_up(config, sites, conn, tmp_path)
 
     browser.open((folder / "version-103.html").as_uri())
     assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
     seen = browser.js(SWITCHER)
-    assert seen["line"] == "Ver 3 of 4 · 4.20★ (50)"
-    assert (seen["prev"], seen["next"]) == ("sheet.html", "version-101.html")
+    assert seen["line"] == "Chords · Ver 3 of 4 · ★ 4.20 (50)"
+    assert seen["icons"] == [["sheet", "4"]]  # render.py's kinds: the chord sheet alone, its 4 versions
+    assert seen["links"] == {"sheet.html": "sheet.html", "version-101.html": "version-101.html"}
     assert [r.split(" · ")[0] for r in seen["rows"]] == ["Ver 2", "Ver 3", "Ver 1", "Ver 4"]
     assert "the album version" in seen["rows"][0]
     assert seen["acts"] == [["Make this the one", None]]  # from a file, a button showing the command
     assert seen["keep"] == [["On UG", f"{TAB}radiohead/creep-chords-104"], ["Keep", None]]
 
-    seen = step(browser, "#ver-next", "version-101.html")
-    assert seen["line"] == "Ver 1 of 4 · 4.90★ (100)" and seen["next"] is None
+    seen = step(browser, "version-101.html")
+    assert seen["line"] == "Chords · Ver 1 of 4 · ★ 4.90 (100)"
+    assert seen["links"] == {"sheet.html": "sheet.html", "version-103.html": "version-103.html"}
 
-    step(browser, "#ver-prev", "version-103.html")
-    seen = step(browser, "#ver-prev", "sheet.html")
-    assert seen["line"] == "Ver 2 of 4 · 4.60★ (50) · the one" and seen["prev"] is None
-    assert seen["next"] == "version-103.html"
+    seen = step(browser, "sheet.html")
+    assert seen["line"] == "Chords · Ver 2 of 4 · ★ 4.60 (50)"
+    assert seen["links"] == {"version-103.html": "version-103.html", "version-101.html": "version-101.html"}
 
 
 @in_chromium
@@ -217,10 +221,10 @@ def test_a_lacuerda_sheet_rendered_is_named_the_one_and_ug_versions_still_switch
     assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
     other = browser.js(SWITCHER)
 
-    assert one["line"] == "2 versions on UG · the one: LaCuerda's sheet"
-    assert (one["prev"], one["next"]) == (None, version_names(str(r.B))[2])
+    assert one["line"] == "Chords · LaCuerda's sheet"
+    assert one["links"] == {version_names(str(r.B))[2]: version_names(str(r.B))[2]}
     assert [row.split(" · ")[0] for row in one["rows"]] == ["LaCuerda's sheet", "Ver 1", "Ver 2"]
-    assert other["line"] == "Ver 1 of 2 · 4.80★ (100)" and other["prev"] == "sheet.html"
+    assert other["line"] == "Chords · Ver 1 of 2 · ★ 4.80 (100)" and other["links"] == {"sheet.html": "sheet.html"}
     assert other["acts"] == [["Make this the one", None]]
 
 
@@ -336,4 +340,4 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     browser.click("a.btn.primary")  # Open it
     assert browser.wait("!window.before && location.pathname.endsWith('/version-104.html')"
                         " && document.querySelector('#ver-line').textContent !== ''")
-    assert browser.js(SWITCHER)["line"] == "Ver 4 of 4 · 3.50★ (20)"
+    assert browser.js(SWITCHER)["line"] == "Chords · Ver 4 of 4 · ★ 3.50 (20)"

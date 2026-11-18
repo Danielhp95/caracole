@@ -1,16 +1,19 @@
-"""caracole.viewer: a sheet's versions (viewer.js, viewer.css, page.py's switcher and list).
+"""caracole.viewer: a sheet's versions and the song's other kinds (kinds.js, viewer.css, page.py's line and list).
 
 Each viewer of a song with versions (its data's ``versions``, sheet_versions.as_data: the sheet's own
-viewer and each kept version's) says under its key line which of UG's versions it is ("Ver 3 of 13 ·
-4.86★ (408) · the one"), between ‹ and ›, which open the version kept before or after it in rank order,
-in the same tab. The line opens the list of every version UG has: a kept one opens, one not kept is
-kept (caracole serve's /versions page) or shows the command that keeps it (a file), a gone one is
-neither. The data here is helpers/version_pages.py's, in the shape render.py writes.
+viewer and each kept version's) says under its artist which of UG's versions it is, its kind first and its rating
+last ("Chords · Ver 3 of 13 · ★ 4.86 (408)"), then an icon for each kind of thing the song keeps to play from (its
+data's ``kinds``, render.py ``_kinds_data``), the library card's glyphs, with how many of each. The line opens the
+list of every version UG has: a kept one opens, in the same tab, with the text size and the screen's choices; one not
+kept is kept (caracole serve's /versions page) or shows the command that keeps it (a file), a gone one is neither.
+The data here is helpers/version_pages.py's, in the shape render.py writes.
 """
 
 from __future__ import annotations
 
 import http.server
+import json
+import re
 import threading
 from contextlib import contextmanager
 from copy import deepcopy
@@ -19,18 +22,20 @@ from urllib.parse import parse_qs, urlsplit
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.version_pages import CHO, UG, WONDERWALL, entry, folder
+from helpers.version_pages import CHO, KINDS, UG, WONDERWALL, entry, folder
 from helpers.viewer_pages import viewer
 
+from caracole import render
 from caracole.sheet_versions import SheetVersion, as_data
-from caracole.viewer import build_viewer, viewer_csp
+from caracole.viewer import build_viewer, page, viewer_csp
 from caracole.viewer.book import BookSong, build_songbook
 
 PHONE = {"width": 390, "height": 844, "mobile": True}
 DESKTOP = {"width": 1280, "height": 800, "mobile": False}
 DISPLAY = "'The Placeholders - Synthetic Test Song'"
 
-# What the switcher and the list show.
+# What the line and the list show: the line's words, its icons (each a glyph and its count) and what names them for a
+# screen reader, the list's rows and each kept version's link.
 SEEN = """(() => {
   const q = (s) => document.querySelector(s);
   const shown = (el) => Boolean(el) && !el.closest('[hidden]') && el.getClientRects().length > 0;
@@ -41,14 +46,28 @@ SEEN = """(() => {
             actions: [...li.querySelectorAll('.ver-acts a, .ver-acts button')].map((a) =>
               [a.textContent, a.getAttribute('href')])};
   });
+  const glyph = (kind) => (kind.querySelector('svg').getAttribute('class').match(/glyph-(\\w+)/) || [])[1];
   return {nav: shown(q('#versions')), line: q('#ver-line').textContent,
-          prev: q('#ver-prev').getAttribute('href'), next: q('#ver-next').getAttribute('href'),
-          prevOff: q('#ver-prev').getAttribute('aria-disabled'), nextOff: q('#ver-next').getAttribute('aria-disabled'),
+          icons: [...document.querySelectorAll('#kinds .kind')].map((k) => [glyph(k), k.querySelector('.n').textContent]),
+          said: [...document.querySelectorAll('#kinds .vh')].map((s) => s.textContent),
+          steppers: document.querySelectorAll('#ver-prev, #ver-next, .vstep').length,
+          links: Object.fromEntries([...document.querySelectorAll('#version-list a[data-page]')].map((a) =>
+            [a.dataset.page, a.getAttribute('href')])),
           list: shown(q('#version-list')), title: q('#version-list-title').textContent, rows,
           acts: [...document.querySelectorAll('#ver-acts a, #ver-acts button')].map((a) =>
             [a.textContent, a.getAttribute('href')]),
           sideways: document.documentElement.scrollWidth > innerWidth};
 })()"""
+
+# How each of the line's icons is drawn: the icon's own attributes, its glyph's, its glyph's painted fill and its size.
+DRAWN = """[...document.querySelectorAll('#kinds .kind')].map((k) => {
+  const svg = k.querySelector('svg');
+  const r = svg.getBoundingClientRect();
+  return {hidden: k.getAttribute('aria-hidden'),
+          svg: Object.fromEntries(['viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+                                   'aria-hidden'].map((a) => [a, svg.getAttribute(a)])),
+          painted: getComputedStyle(svg).fill, size: [r.width, r.height]};
+})"""
 
 
 def seen(b: Browser) -> dict:
@@ -88,45 +107,84 @@ def served(root: Path):
         server.server_close()
 
 
-# --- the line, and ‹ › ---------------------------------------------------------------------------
+# --- the line ----------------------------------------------------------------------------------------------
 
 
 @in_chromium
-def test_the_line_names_the_version_its_rating_and_the_one(tmp_path):
-    pages = folder(tmp_path, WONDERWALL)
+def test_the_line_names_the_kind_the_version_and_its_rating(tmp_path):
+    pages = folder(tmp_path, WONDERWALL, kinds=KINDS)
+    others = {}
     with viewer(tmp_path, pages["sheet.html"].as_uri()) as b:
         one = seen(b)
-        b.open(pages["version-39144.html"].as_uri())
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        kept = seen(b)
-        b.open(pages["version-2161290.html"].as_uri())
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        third = seen(b)
-    assert one["nav"] and one["line"] == "Ver 3 of 13 · 4.86★ (408) · the one"
-    assert kept["line"] == "Ver 1 of 13 · 4.85★ (12,629)"
-    assert third["line"] == "Ver 7 of 13 · acoustic · 4.80★ (1,204)"
+        drawn = b.js(DRAWN)
+        for name in ("version-39144.html", "version-2161290.html"):
+            b.open(pages[name].as_uri())
+            assert b.wait("document.documentElement.dataset.ready === '1'")
+            others[name] = seen(b)
+    assert one["nav"] and one["line"] == "Chords · Ver 3 of 13 · ★ 4.86 (408)"  # no "the one" on the line
+    assert others["version-39144.html"]["line"] == "Chords · Ver 1 of 13 · ★ 4.85 (12,629)"
+    assert others["version-2161290.html"]["line"] == "Chords · Ver 7 of 13 · acoustic · ★ 4.80 (1,204)"
+    for shown in (one, *others.values()):
+        assert shown["icons"] == [["sheet", "13"], ["guitar", "2"], ["harmonica", "1"]]
+        assert shown["said"] == ["13 chord versions, 2 Guitar Pro files, 1 harmonica tab"]
+        assert shown["steppers"] == 0  # no ‹ › any more: the list opens each kept version
+    # Each icon drawn as the library's glyphs are, a stroke in the text's colour on a 24-unit grid, unheard: the
+    # words beside them name them.
+    assert drawn == [{"hidden": "true", "svg": {"viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor",
+                                                "stroke-width": "1.8", "stroke-linecap": "round",
+                                                "stroke-linejoin": "round", "aria-hidden": "true"},
+                      "painted": "none", "size": [16, 16]}] * 3
 
 
 @in_chromium
-def test_back_and_forth_open_the_kept_versions_in_rank_order_in_the_same_tab(tmp_path):
-    pages = folder(tmp_path, WONDERWALL)
+def test_one_version_and_one_kind_is_no_ver_1_of_1_and_one_icon(tmp_path):
+    one = {"total": 1, "sheet": "ug",
+           "list": [entry("1064463", 3, 4.86, 408, 1, kept=True, chosen=True, page="sheet.html")]}
+    unrated = deepcopy(one)
+    unrated["list"][0].update(rating=None, votes=None)
+    alone = {"sheet": "sheet", "page": "sheet.html", "groups": []}
+    shown = {}
+    for name, versions in (("rated", one), ("unrated", unrated)):
+        pages = folder(tmp_path / name, versions, kinds=alone)
+        with viewer(tmp_path / name, pages["sheet.html"].as_uri()) as b:
+            shown[name] = seen(b)
+    assert shown["rated"]["nav"] and shown["rated"]["line"] == "Chords · ★ 4.86 (408)"
+    assert shown["unrated"]["line"] == "Chords · New"
+    assert shown["rated"]["icons"] == shown["unrated"]["icons"] == [["sheet", "1"]]
+    assert shown["rated"]["said"] == ["1 chord version"]
+
+
+@in_chromium
+def test_a_lacuerda_sheet_says_so(tmp_path):
+    # Review Focus 3: the song's sheet is LaCuerda's: no UG version is chosen, and the line says so.
+    versions = deepcopy(WONDERWALL)
+    versions["list"][0].update(chosen=False, page="version-1064463.html")
+    versions["sheet"] = "lacuerda"
+    pages = folder(tmp_path, versions, kinds=KINDS)
     with viewer(tmp_path, pages["sheet.html"].as_uri()) as b:
-        first = seen(b)
-        b.click("#ver-next")
-        assert b.wait("location.pathname.endsWith('/version-39144.html')"
-                      " && document.documentElement.dataset.ready === '1'")
-        second = seen(b)
-        b.click("#ver-next")
-        assert b.wait("location.pathname.endsWith('/version-2161290.html')"
-                      " && document.documentElement.dataset.ready === '1'")
-        last = seen(b)
-        b.click("#ver-prev")
-        assert b.wait("location.pathname.endsWith('/version-39144.html')"
-                      " && document.documentElement.dataset.ready === '1'")
-    assert (first["prev"], first["prevOff"], first["next"]) == (None, "true", "version-39144.html")
-    assert (second["prev"], second["next"]) == ("sheet.html", "version-2161290.html")
-    assert second["prevOff"] is None and second["nextOff"] is None
-    assert (last["prev"], last["next"], last["nextOff"]) == ("version-39144.html", None, "true")
+        sheet = seen(b)
+        open_list(b)
+        listed = seen(b)
+        b.open(pages["version-1064463.html"].as_uri())
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        version = seen(b)
+    assert sheet["line"] == "Chords · LaCuerda's sheet"
+    assert sheet["icons"] == [["sheet", "13"], ["guitar", "2"], ["harmonica", "1"]]
+    assert sheet["links"]["version-1064463.html"] == "version-1064463.html"
+    assert listed["rows"][0]["text"].startswith("LaCuerda's sheet") and "the one" in listed["rows"][0]["text"]
+    assert listed["rows"][0]["current"] == "page"
+    assert version["line"] == "Chords · Ver 3 of 13 · ★ 4.86 (408)" and version["links"]["sheet.html"] == "sheet.html"
+
+
+@in_chromium
+def test_a_ukulele_sheet_is_ukulele_chords(tmp_path):
+    # UG's Ukulele Chords, the song's sheet where UG has no chords for it (render.py's kinds' "ukulele").
+    pages = folder(tmp_path, WONDERWALL, kinds={**KINDS, "sheet": "ukulele"})
+    with viewer(tmp_path, pages["version-39144.html"].as_uri()) as b:
+        shown = seen(b)
+    assert shown["line"] == "Ukulele chords · Ver 1 of 13 · ★ 4.85 (12,629)"
+    assert shown["icons"] == [["ukulele", "13"], ["guitar", "2"], ["harmonica", "1"]]
+    assert shown["said"] == ["13 ukulele chord versions, 2 Guitar Pro files, 1 harmonica tab"]
 
 
 @in_chromium
@@ -135,7 +193,7 @@ def test_the_text_size_goes_along_to_the_next_version(tmp_path):
     pages = folder(tmp_path, WONDERWALL)
     with viewer(tmp_path, pages["sheet.html"].as_uri() + "#t=2&fs=24") as b:
         shown = seen(b)
-    assert shown["next"] == "version-39144.html#fs=24"  # the size, not the key: its chords are other ones
+    assert shown["links"]["version-39144.html"] == "version-39144.html#fs=24"  # the size, not the key: other chords
 
 
 @in_chromium
@@ -143,28 +201,7 @@ def test_the_rail_of_necks_hidden_stays_hidden_on_the_next_version(tmp_path):
     pages = folder(tmp_path, WONDERWALL)
     with viewer(tmp_path, pages["sheet.html"].as_uri() + "#fs=24&necks=0") as b:
         shown = seen(b)
-    assert shown["next"] == "version-39144.html#fs=24&necks=0"
-
-
-@in_chromium
-def test_a_lacuerda_sheet_is_the_one_and_ug_versions_still_switch(tmp_path):
-    # Review Focus 3: the song's sheet is LaCuerda's: no UG version is chosen, and the line says so.
-    versions = deepcopy(WONDERWALL)
-    versions["list"][0].update(chosen=False, page="version-1064463.html")
-    versions["sheet"] = "lacuerda"
-    pages = folder(tmp_path, versions)
-    with viewer(tmp_path, pages["sheet.html"].as_uri()) as b:
-        sheet = seen(b)
-        open_list(b)
-        listed = seen(b)
-        b.open(pages["version-1064463.html"].as_uri())
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        version = seen(b)
-    assert sheet["line"] == "13 versions on UG · the one: LaCuerda's sheet"
-    assert (sheet["prev"], sheet["next"]) == (None, "version-1064463.html")
-    assert listed["rows"][0]["text"].startswith("LaCuerda's sheet") and "the one" in listed["rows"][0]["text"]
-    assert listed["rows"][0]["current"] == "page"
-    assert version["line"] == "Ver 3 of 13 · 4.86★ (408)" and version["prev"] == "sheet.html"
+    assert shown["links"]["version-39144.html"] == "version-39144.html#fs=24&necks=0"
 
 
 @in_chromium
@@ -180,9 +217,10 @@ def test_an_auto_sheet_standing_alone_is_the_one(tmp_path):
         b.open(pages["sheet (auto).html"].as_uri())
         assert b.wait("document.documentElement.dataset.ready === '1'")
         auto = seen(b)
-    assert listed["prev"] == "sheet%20(auto).html"
+    assert listed["links"]["sheet (auto).html"] == "sheet%20(auto).html"
     assert listed["rows"][0]["link"] == "sheet%20(auto).html" and "the auto sheet" in listed["rows"][0]["text"]
-    assert auto["line"] == "13 versions on UG · the one: the auto sheet" and auto["next"] == "version-1064463.html"
+    assert auto["line"] == "Chords · the auto sheet"
+    assert auto["links"]["version-1064463.html"] == "version-1064463.html"
 
 
 @in_chromium
@@ -195,27 +233,112 @@ def test_a_version_whose_text_is_the_sheets_opens_the_sheet(tmp_path):
     with viewer(tmp_path, pages["sheet.html"].as_uri()) as b:
         open_list(b)
         shown = seen(b)
-    assert shown["line"] == "Ver 3 of 13 · 4.86★ (408) · the one"
+    assert shown["line"] == "Chords · Ver 3 of 13 · ★ 4.86 (408)"
     assert shown["rows"][0]["current"] == "page" and shown["rows"][1]["link"] == "sheet.html"
     assert "kept" in shown["rows"][1]["text"]
-    assert shown["next"] == "version-2161290.html"  # sheet.html once
 
 
 @in_chromium
-def test_without_versions_there_is_no_switcher(tmp_path):
-    for versions in (None, {"total": 0, "list": []}):
-        pages = folder(tmp_path, versions)
-        with viewer(tmp_path, pages["sheet.html"].as_uri()) as b:
+def test_without_versions_or_other_kinds_there_is_no_line(tmp_path):
+    nothing = {"sheet": "sheet", "page": "sheet.html", "groups": []}
+    cases = ((None, None), ({"total": 0, "list": []}, None), (None, nothing), ({"total": 0, "list": []}, nothing))
+    for n, (versions, kinds) in enumerate(cases):
+        pages = folder(tmp_path / str(n), versions, kinds=kinds)
+        with viewer(tmp_path / str(n), pages["sheet.html"].as_uri()) as b:
             shown = seen(b)
             b.click("#more")  # the settings work as ever
             assert b.wait("!document.querySelector('#panel').hidden")
-        assert not shown["nav"] and not shown["list"], versions
+        assert not shown["nav"] and not shown["list"], (versions, kinds)
+    # A song with no versions that keeps more than this page: the line, its kind alone, and its icons.
+    pages = folder(tmp_path / "more", None, kinds=KINDS)
+    with viewer(tmp_path / "more", pages["sheet.html"].as_uri()) as b:
+        more = seen(b)
+    assert more["nav"] and more["line"] == "Chords"
+    assert more["icons"] == [["sheet", "1"], ["guitar", "2"], ["harmonica", "1"]]
+    assert more["said"] == ["1 chord version, 2 Guitar Pro files, 1 harmonica tab"]
 
 
-def test_the_songbook_has_no_switcher():
-    page = build_songbook("Set", [BookSong("Synthetic Test Song", "The Placeholders", CHO)])
-    assert 'id="versions"' not in page and 'id="version-list"' not in page
+def test_the_songbook_has_no_line():
+    book = build_songbook("Set", [BookSong("Synthetic Test Song", "The Placeholders", CHO)])
+    assert 'id="versions"' not in book and 'id="version-list"' not in book
     assert 'id="versions"' in build_viewer(CHO) and 'id="version-list"' in build_viewer(CHO)
+    kinds = f"<script>{page._kinds()}</script>"
+    assert kinds in build_viewer(CHO) and kinds not in book  # kinds.js is a sheet page's, never a songbook's
+
+
+# --- the icons are the library's ------------------------------------------------------------------------------
+
+LIBRARY = page.HERE.parent / "library_assets"
+# The page that holds kinds.js's copies to the library's: rows.js's glyphs (an <svg> of paths, or a <use> of the
+# sprite's #glyph-NAME symbol where rows.js comes to draw one) against kinds.js's GLYPHS, and the line's icons as
+# kinds.js draws them (each kind of render.py's _kinds_data once) against rows.js's drawing of the same glyph.
+COMPARE = """(() => {
+  const rows = caracoleRows({});
+  const paths = (svg) => {
+    const use = svg.querySelector("use");
+    const from = use ? document.querySelector(use.getAttribute("href") || use.getAttribute("xlink:href")) : svg;
+    return from ? [...from.querySelectorAll("path")].map((p) => p.getAttribute("d")) : null;
+  };
+  const drawing = (svg) => Object.fromEntries(svg.getAttributeNames().filter((a) => a !== "class").sort()
+    .map((a) => [a, svg.getAttribute(a)]));
+  const names = Object.keys(caracoleKinds.GLYPHS);
+  const groups = KINDS.map((kind) => ({kind, items: [{name: kind + "-1.txt", label: kind}]}));
+  caracoleKinds.attach({data: {kinds: {sheet: "sheet", page: "sheet.html", groups}}, here: "sheet.html",
+    served: false, sheetPath: "Artist/Title/sheet.html", carry: (p) => p, open() {}, close() {}, inSight: () => false});
+  document.documentElement.dataset.result = JSON.stringify({
+    glyphs: names.map((n) => [n, caracoleKinds.GLYPHS[n], paths(rows.glyph(n))]),
+    drawn: [...document.querySelectorAll("#kinds .kind")].map((k) => {
+      const svg = k.querySelector("svg");
+      const theirs = rows.glyph(caracoleKinds.GLYPH_OF[k.dataset.kind]);
+      return [k.dataset.kind, paths(svg), paths(theirs), drawing(svg), drawing(theirs)];
+    }),
+    glyphOf: caracoleKinds.GLYPH_OF,
+    frozen: Object.isFrozen(caracoleKinds) && Object.isFrozen(caracoleKinds.GLYPHS)
+      && Object.isFrozen(caracoleKinds.GLYPH_OF) && names.every((n) => Object.isFrozen(caracoleKinds.GLYPHS[n])),
+  });
+})();"""
+
+
+def card_glyphs() -> dict[str, str]:
+    """Each kind's glyph as library_assets/card.js's ``things`` name it (``kind: "guitar", glyph: "guitar"``), the
+    chord sheet's ``ukulele ? "ukulele" : "sheet"`` as both kinds of sheet."""
+    source = (LIBRARY / "card.js").read_text(encoding="utf-8")
+    found: dict[str, str] = {}
+    for kind, glyph, either in re.findall(r'kind: "(\w+)", glyph: (?:"(\w+)"|(ukulele \? "ukulele" : "sheet"))',
+                                          source):
+        found.update({"sheet": "sheet", "ukulele": "ukulele"} if either else {kind: glyph})
+    assert {"sheet", "ukulele", "guitar"} <= set(found), "card.js's things no longer read as kind and glyph pairs"
+    return found
+
+
+@in_chromium
+def test_the_kind_icons_are_the_library_cards_drawings(tmp_path):
+    # kinds.js holds a copy of the library's glyphs (rows.js's, which the sheet pages don't inline) and of the glyph
+    # card.js's things draw each kind with: a glyph the library redraws, or a kind it draws otherwise, fails here, and
+    # kinds.js follows it.
+    html = ("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>\n" + page._VERSIONS + page._VERSION_LIST
+            + f"<script>{(LIBRARY / 'rows.js').read_text(encoding='utf-8')}</script>\n"
+            + f"<script>{page._kinds()}</script>\n"
+            + f"<script>const KINDS = {json.dumps(list(render._KINDS))};\n{COMPARE}</script>\n</body></html>\n")
+    path = tmp_path / "glyphs.html"
+    path.write_text(html, encoding="utf-8")
+    with Browser(tmp_path / "profile") as b:
+        b.open(path.as_uri())
+        assert b.wait("document.documentElement.dataset.result !== undefined")
+        result = json.loads(b.js("document.documentElement.dataset.result"))
+    assert sorted(name for name, *_ in result["glyphs"]) == ["guitar", "harmonica", "score", "sheet", "ukulele"]
+    for name, mine, theirs in result["glyphs"]:
+        assert mine == theirs, f"kinds.js's {name} glyph is not rows.js's: copy rows.js's into kinds.js's GLYPHS"
+    assert [kind for kind, *_ in result["drawn"]] == ["sheet", *render._KINDS]
+    for kind, mine, theirs, drawn, drawing in result["drawn"]:
+        assert mine == theirs and drawn == drawing, kind  # rows.js's paths, drawn as rows.js draws them
+    card = card_glyphs()
+    for kind in ("sheet", "ukulele", *render._KINDS):
+        assert result["glyphOf"][kind] == card[kind], kind  # tab and gametab the guitar's, as on the card
+    assert set(result["glyphOf"].values()) == {name for name, *_ in result["glyphs"]}
+    assert result["frozen"]
+    for word in ("innerHTML", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function"):
+        assert word not in page._kinds(), word
 
 
 # --- the list of every version -------------------------------------------------------------------
@@ -267,9 +390,9 @@ def test_a_gone_version_is_listed_but_opens_nothing(tmp_path):
         shown = seen(b)
     for row in (shown["rows"][2], shown["rows"][8]):
         assert row["link"] is None and row["actions"] == [] and "gone from UG" in row["text"]
-    assert shown["next"] == "version-39144.html"
+    assert list(shown["links"]) == ["version-39144.html"]  # the gone one opens nothing, kept or not
     with viewer(tmp_path, pages["version-39144.html"].as_uri()) as b:
-        assert seen(b)["next"] is None  # nothing kept after it but the gone one
+        assert list(seen(b)["links"]) == ["sheet.html"]
 
 
 @in_chromium
@@ -305,8 +428,7 @@ def test_a_version_you_chose_offers_caracoles_pick_back(tmp_path):
         b.click("#ver-acts button")
         assert b.wait("document.querySelector('#ver-acts .cmd') !== null")
         cmd = b.js("document.querySelector('#ver-acts .cmd').textContent")
-    assert shown["line"] == "Ver 6 of 13 · 4.58★ (180) · the one"
-    assert shown["prev"] == "version-2161290.html" and shown["next"] is None  # by rank, the 6th after the 3rd
+    assert shown["line"] == "Chords · Ver 6 of 13 · ★ 4.58 (180)"
     assert shown["acts"] == [["Back to our pick", None]]
     assert cmd == f"caracole versions {DISPLAY} --clear"
 

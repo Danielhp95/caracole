@@ -520,7 +520,7 @@ def pieces(html: str) -> list[Any]:
     style, script = page._assets()
     assets = [("viewer.css", style), ("strum.js", page._sound()), ("overlay.js", page._overlay()),
               ("instruments.js", page._instruments()), ("winds.js", page._winds()), ("layers.js", page._layers()),
-              ("viewer.js", script)]
+              ("kinds.js", page._kinds()), ("viewer.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

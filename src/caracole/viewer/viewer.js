@@ -260,7 +260,7 @@
       }
     } catch (err) { /* an address the page can't change */ }
     exportLink();
-    versionLinks();
+    if (kinds) kinds.links();  // each link to another version, with the text size and the screen's choices now
   };
 
   // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the PDF itself for this very
@@ -2475,40 +2475,10 @@
   };
   $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
   $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
-  // --- the versions of the sheet -----------------------------------------------------------------
-  // UG's chords versions of the song (data.versions: sheet_versions.as_data, with ``sheet``, the provider of
-  // the sheet the title opens, and each entry's ``this``, whether it is this page's), on the sheet's own
-  // viewer and on each kept version's. Under the key line, the line says which of them this page is and opens the list
-  // of them all; ‹ and › open the version kept before or after this one, in rank order (first the sheet the
-  // title opens, when it is none of UG's), in this tab: the served viewer's sandbox opens no other, and
-  // they take the text size and the scroll speed along (the key and the rest are this sheet's chords'). In
-  // the list a kept version opens; one not kept is kept by caracole serve's /versions page, which reads it
-  // on UG now, or, from a file, links to UG's page and shows the command that keeps it, with Copy; a version
-  // gone from UG opens nothing. Make this the one, and Back to our pick (while your [pin] chooses the sheet),
-  // the same way.
-  const vSource = data.versions && typeof data.versions === "object" ? data.versions : {};
-  const vRows = (Array.isArray(vSource.list) ? vSource.list : [])
-    .filter((v) => v && typeof v === "object" && typeof v.tab === "string")
-    .sort((a, b) => (Number(a.rank) || 0) - (Number(b.rank) || 0));
-  const vOn = Boolean(vList && $("versions")) && vRows.length > 0;
-  const here = pageName();
-  const vChosen = vRows.find((v) => v.chosen) || null;
-  // This page's version: the one its data says, or, where it says none, the one whose page this is.
-  const vHere = vRows.some((v) => typeof v.this === "boolean") ? vRows.find((v) => v.this === true) || null
-    : vRows.find((v) => v.page === here && v.chosen) || vRows.find((v) => v.page === here) || null;
-  // The sheet the title opens when it is none of UG's versions: LaCuerda's, or an auto sheet standing alone.
-  const OTHERS = { lacuerda: { label: "LaCuerda's sheet", page: "sheet.html" },
-    auto: { label: "the auto sheet", page: "sheet (auto).html" } };
-  const vOne = vChosen || !own.call(OTHERS, vSource.sheet) ? null : OTHERS[vSource.sheet];
-  const vTotal = Number.isInteger(vSource.total) && vSource.total >= vRows.length ? vSource.total : vRows.length;
-  const vCount = (n) => n + (n === 1 ? " version" : " versions");
-  const vName = (v) => (Number.isInteger(v.number) ? "Ver " + v.number : "No. " + v.rank);
-  const vRating = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) ? ""
-    : v.rating.toFixed(2) + "★" + (Number.isInteger(v.votes) ? " (" + v.votes.toLocaleString("en-US") + ")" : ""));
-  // The pages ‹ and › go through, each once.
-  const vPages = vOne ? [vOne.page] : [];
-  for (const v of vRows) if (v.page && (!v.gone || v === vHere) && vPages.indexOf(v.page) < 0) vPages.push(v.page);
-  const vAt = vPages.indexOf(here);
+  // --- the version line and its list (kinds.js) --------------------------------------------------
+  // Under the artist, which of the song's versions this page is and an icon a kind it keeps to play from; the line
+  // opens the list of them (a layer). A link to another of the song's pages takes the text size and the scroll speed
+  // along, and the screen's choices (the key and the rest are each sheet's own): vAddress, kinds.js's carry.
   const vAddress = (page) => {
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
@@ -2517,137 +2487,8 @@
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
-  // Each link to a version again, as the text size or the speed changes (save()).
-  function versionLinks() {
-    if (!vOn) return;
-    const step = (link, page) => {
-      if (page) {
-        link.setAttribute("href", vAddress(page));
-        link.removeAttribute("aria-disabled");
-      } else {
-        link.removeAttribute("href");
-        link.setAttribute("aria-disabled", "true");
-      }
-    };
-    step($("ver-prev"), vAt > 0 ? vPages[vAt - 1] : null);
-    step($("ver-next"), vAt >= 0 && vAt + 1 < vPages.length ? vPages[vAt + 1] : null);
-    for (const link of vList.querySelectorAll("a[data-page]")) link.setAttribute("href", vAddress(link.dataset.page));
-  }
-  const make = (tag, className, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
-  const apart = () => make("span", "vh", " · ");  // heard between the parts a row shows apart
-  const SAYS = {
-    keep: "it fetches this version from UG and keeps it beside the sheet.",
-    choose: "this version becomes the song's sheet, PDF and songbook entry.",
-    clear: "the song goes back to our pick, the best rated version with lyrics.",
-  };
-  // Served, a link to caracole serve's page that asks for it; from a file, a button that shows the command.
-  const vCommand = (box, what, tab) => {
-    for (const old of vList.querySelectorAll(".vcmd")) old.remove();
-    const shown = make("div", "vcmd");
-    const code = make("code", "cmd", "caracole versions " + songNamed() + " --" + what + (tab ? " " + tab : ""));
-    const copy = make("button", "chip", "Copy");
-    copy.type = "button";
-    copy.addEventListener("click", () => {
-      try {
-        navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }, () => {});
-      } catch (err) { /* no clipboard: the command is selectable */ }
-    });
-    shown.append(code, copy, make("p", "hint", "Run this where caracole is installed: " + SAYS[what]));
-    box.appendChild(shown);
-  };
-  const vAction = (box, text, what, tab, primary, where) => {
-    const control = make(served ? "a" : "button", primary ? "btn primary" : "link", text);
-    if (served) {
-      const query = new URLSearchParams();
-      query.set("sheet", sheetPath());
-      if (tab) query.set("tab", tab);
-      query.set("do", what);
-      control.setAttribute("href", "/versions?" + query.toString());
-    } else {
-      control.type = "button";
-      control.addEventListener("click", () => vCommand(where || box, what, tab));
-    }
-    box.appendChild(control);
-  };
-  // A version in the list: its name, its rating, what it is (the one, kept, this page, gone) and the
-  // tabber's note, a link to its page when it opens; under it, what you can do with it.
-  const vItem = (title, rating, tags, note, page, current) => {
-    const li = make("li", "ver");
-    const main = make(page && !current ? "a" : "div", "ver-main");
-    if (page && !current) main.dataset.page = page;
-    if (current) main.setAttribute("aria-current", "page");
-    main.appendChild(make("span", "ver-name", title));
-    if (rating) main.append(apart(), make("span", "ver-rate", rating));
-    const said = tags.concat(current ? ["this page"] : []).filter(Boolean);
-    if (said.length) {
-      const box = make("span", "ver-tags");
-      said.forEach((tag, n) => {
-        if (n) box.appendChild(apart());
-        box.appendChild(make("span", tag === "the one" ? "tag one" : "tag", tag));
-      });
-      main.append(apart(), box);
-    }
-    if (note) main.append(apart(), make("span", "ver-note", note));
-    const acts = make("div", "ver-acts");
-    li.append(main, acts);
-    return [li, acts];
-  };
-  const drawVersions = () => {
-    $("versions").hidden = false;
-    // The line: which version this is and its rating, then what it is, in a tag that wraps whole.
-    const line = $("ver-line");
-    line.textContent = "";
-    line.appendChild(make("span", "", vHere ? [vName(vHere) + " of " + vTotal, vHere.label, vRating(vHere)]
-      .filter(Boolean).join(" · ") : vCount(vTotal) + " on UG"));
-    const what = vHere ? [vHere.chosen ? "the one" : "", vHere.gone ? "gone from UG" : ""]
-      : [vOne && vOne.page === here ? "the one: " + vOne.label : ""];
-    for (const tag of what.filter(Boolean)) line.append(apart(), make("span", tag === "gone from UG" ? "tag" : "tag one", tag));
-    $("version-list-title").textContent = vCount(vTotal) + " on UG";
-    const acts = $("ver-acts");
-    acts.textContent = "";
-    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make this the one", "choose", vHere.tab, true);
-    // While a [pin] of yours chooses the sheet (the data's ``pinned``, the pin caracole versions --clear takes
-    // out); on a page whose data has no ``pinned`` (written before it), while your choice isn't caracole's first.
-    const pick = vRows.find((v) => !v.gone);
-    const pinned = typeof vSource.pinned === "boolean" ? vSource.pinned : Boolean(vChosen && pick && pick !== vChosen);
-    if (pinned) vAction(acts, "Back to our pick", "clear", null, false);
-    acts.hidden = acts.children.length === 0;
-    const items = $("ver-items");
-    items.textContent = "";
-    if (vOne) items.appendChild(vItem(vOne.label, "", ["the one"], null, vOne.page, !vHere && vOne.page === here)[0]);
-    for (const v of vRows) {
-      const [li, todo] = vItem(vName(v) + (v.label ? " · " + v.label : ""), vRating(v),
-        [v.chosen ? "the one" : v.page ? "kept" : "", v.gone ? "gone from UG" : ""],
-        typeof v.note === "string" ? v.note : "", v.page && !v.gone ? v.page : null, v === vHere);
-      if (!v.page && !v.gone) {
-        if (!served && /^https:\/\//.test(String(v.url || ""))) {
-          const ug = make("a", "link", "On UG");
-          ug.setAttribute("href", v.url);
-          todo.appendChild(ug);
-        }
-        vAction(todo, "Keep", "keep", v.tab, false, li);
-      }
-      todo.hidden = todo.children.length === 0;
-      items.appendChild(li);
-    }
-  };
-  if (vOn) {
-    drawVersions();
-    $("ver-now").addEventListener("click", () => {
-      if (inSight(vList)) {
-        close(vList);
-        return;
-      }
-      open(vList, $("ver-now"));
-      const mine = vList.querySelector("[aria-current]");  // this page's, in sight
-      if (mine) vList.scrollTop = Math.max(0, mine.parentElement.offsetTop - vList.clientHeight / 3);
-    });
-  }
+  const kinds = window.caracoleKinds ? window.caracoleKinds.attach({ data, here: pageName(), served,
+    sheetPath: sheetPath(), carry: vAddress, open, close, inSight }) : null;
 
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap

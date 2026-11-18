@@ -1042,9 +1042,15 @@ It is rows.js's, shared by both pages:
     sleeps again.
   - test_viewer_sound.py's `SCHEDULE` records each note and timer the page makes, and plays a slow device on demand
     (a resume held, `ended` events late).
-- **Versions**: a sheet viewer's data `versions` (sheet_versions.as_data, with each entry's `this` and the one's
-  provider, `sheet`) draws its switcher under the key line and the list it opens, a rail like the settings and never
-  beside them (test_viewer_versions.py); the songbook has none.
+- **Versions**: kinds.js (`window.caracoleKinds`, inlined on a sheet's page after layers.js and before viewer.js, which
+  attaches it with its layers and `carry`, its `vAddress`) draws, from a sheet viewer's data `versions`
+  (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) and `kinds` (render.py
+  `_kinds_data`), the version line under the artist ("Chords · Ver 3 of 13 · ★ 4.86 (408)") with an icon a kind the
+  song keeps and how many, and the list it opens, a rail like the settings and never beside them; no ‹ ›, the list
+  opens each kept version (test_viewer_versions.py); the songbook has neither.
+  - Its icons are the library card's: `GLYPHS`, rows.js's drawings copied, and `GLYPH_OF`, card.js's glyph of each
+    kind, which `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and
+    card.js: a library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;
@@ -1094,8 +1100,8 @@ It is rows.js's, shared by both pages:
   - **The necks**: whether the rail shows (`state.necks`) is the one setting kept for every page at once:
     - localStorage `caracole-viewer-necks`;
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
-      sandbox with no storage, as a link to another of the song's pages does (a version's ‹ ›, a harmonica tab's and
-      its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
+      sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
+      tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
     - with its Hide, the bar's button and the settings' row in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and

@@ -437,7 +437,8 @@ def test_served_in_its_sandbox_with_no_storage_the_address_keeps_it(tmp_path):
 def test_the_next_version_opens_with_the_pinyin_too(tmp_path):
     pages = folder(tmp_path, WONDERWALL)
     with open_viewer(tmp_path, pages["sheet.html"].as_uri() + "#fs=24&py=1") as b:
-        following = b.js("document.getElementById('ver-next').getAttribute('href')")
+        following = b.js("document.querySelector('#version-list a[data-page=\"version-39144.html\"]')"
+                         ".getAttribute('href')")
     assert following == "version-39144.html#fs=24&py=1"
 
 

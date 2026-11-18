@@ -121,18 +121,22 @@ dl.facts .fact { display: contents; }
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
 dl.facts .from { color: var(--muted); }
-/* The versions of the sheet, under the key line: ‹ the line that opens the list ›. An end has no address,
-   and fades. The line wraps on a narrow screen rather than widen the page. */
-.versions { display: flex; align-items: center; gap: 2px; margin: 6px 0 0 -12px; }
-.vstep { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
-  color: var(--accent); font-size: 1.6rem; line-height: 1; text-decoration: none; -webkit-tap-highlight-color: transparent; }
-.vstep:not([href]) { color: var(--muted); opacity: .4; }
-.vnow { flex: 0 1 auto; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
+/* The version line, under the artist (kinds.js): which version this page is, the chevron, and an icon for each kind
+   the song keeps with how many of it, in the muted colour, the library card's glyphs; the whole a button that opens
+   the list. On a narrow screen the line wraps between its parts rather than widen the page, and the icons go under
+   it. */
+.versions { display: flex; align-items: center; margin: 6px 0 0; }
+.vnow { flex: 0 1 auto; min-width: 0; min-height: 44px; display: inline-flex; flex-wrap: wrap; align-items: center;
+  gap: 4px 8px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
   font: inherit; font-size: .88rem; line-height: 1.3; text-align: start; font-variant-numeric: tabular-nums; cursor: pointer; }
 #ver-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 #ver-line > span { min-width: 0; overflow-wrap: anywhere; }
-.vnow svg { flex: none; width: 12px; height: 12px; fill: var(--muted); }
+#ver-line .vw { display: inline-block; max-width: 100%; }  /* a part wraps whole, "★ 4.86 (408)" never apart */
+.vnow > svg { flex: none; width: 12px; height: 12px; fill: var(--muted); }  /* the chevron */
+.kinds { display: inline-flex; gap: 10px; }
+.kind { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.kind svg { width: 16px; height: 16px; }
+.kind .n { font-size: .8rem; font-variant-numeric: tabular-nums; }
 .vnow[aria-expanded="true"] { background: var(--raised); }
 .notice { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--raised); color: var(--muted);
   font-size: .85rem; }
@@ -445,7 +449,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .keys .step:hover { background: var(--border); }
   .bar .play:hover, .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
-  .vstep[href]:hover, .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
+  .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
 }
 /* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
    or not, and above a sheet docked on the bar. Its first button counts down (a ring that empties, and

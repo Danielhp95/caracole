@@ -3055,9 +3055,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   songbook (a page you come back to, by a reload, Back or a tab restored, opens
   on the browser's choice whatever its old address says; so do the pinyin, the
   Chinese characters and the instrument), and the address keeps `necks=0` too, for a page served by
-  `caracole serve`, where the browser keeps nothing: ‹ and › to another
-  version keep it, so do a harmonica tab's link in the Harmonica row and its
-  page's ‹ Chord sheet, and in a songbook so does every step to another song (the
+  `caracole serve`, where the browser keeps nothing: a link to another
+  version in the version list keeps it, so do a harmonica tab's link in the
+  Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset all** shows the rail again. Hidden, the
@@ -3132,8 +3132,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   browser keeps it once for every sheet and songbook, and the address keeps
   `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
   `recorder`) while it is another
-  than the guitar, for a page served by `caracole serve`; ‹ and › to another
-  version keep it, so does the trip to a harmonica tab's page and back, and so
+  than the guitar, for a page served by `caracole serve`; a link to another
+  version in the version list keeps it, so does the trip to a harmonica tab's
+  page and back, and so
   does every step to another song in a songbook (a
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
@@ -3141,18 +3142,25 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the instrument shown, and **Make mine** keeps it, so the song
   opens there (`caracole render --version`'s `inst=`); a songbook may play a
   song on its own (`caracole songbook set --instrument`).
-- **The versions** of a song Ultimate Guitar has several of: under the key
-  line, the sheet's viewer and each version kept beside it say which of UG's
-  chords versions they are, with its rating and votes: "Ver 3 of 13 ·
-  4.86★ (408) · the one", the one being the version the title opens. A song
-  whose sheet is LaCuerda's says "13 versions on UG · the one: LaCuerda's
-  sheet" there. ‹ and › open the version kept before or after this one, in
-  rank order, in the same tab, at the same text size and scroll speed (the
-  key, the capo and the rest are each sheet's own). Tap the line for the list
+- **The version line**, under the artist, on the sheet's viewer and each
+  version kept beside it: the kind of sheet, which of UG's chords versions
+  the page is, its label where UG gives one, and its rating and votes:
+  "Chords · Ver 7 of 13 · acoustic · ★ 4.80 (1,204)" ("Ukulele chords" for
+  UG's Ukulele Chords; "New" for a version with no rating yet; no "Ver 1 of
+  1" for a song with one version). A song whose sheet is LaCuerda's says
+  "Chords · LaCuerda's sheet" there. After it, an icon for each kind of
+  thing the song keeps to play from, the library card's (the chord sheet,
+  Guitar Pro, a text tab, a harmonica tab, a game music tab, a score), each
+  with how many: the chord sheet's count is its versions on UG, "13", the
+  same as "of 13". The line shows where UG lists a version of the song, or
+  the song keeps something more than the page: none for a sheet alone. On a
+  narrow screen the icons go under the line. Tap the line for the list
   of every version UG has, in rank order: rating, votes, which is the one,
   which are kept, which is this page, and the first lines of the tabber's
   note. It sits where the settings do (at the foot on a phone, a rail beside
-  the song from 900 px wide, in their place). A kept version opens from it;
+  the song from 900 px wide, in their place). A kept version opens from it,
+  in the same tab, at the same text size and scroll speed (the key, the capo
+  and the rest are each sheet's own);
   one gone from UG is listed and opens nothing. Served by `caracole serve`,
   **Keep** on a version not kept, **Make this the one** on a kept
   version's page, and **Back to our pick** while a `[pin]` of yours

@@ -1,9 +1,9 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its six
-scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js and viewer.js, and its stylesheet makes the browser
-enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its seven
+scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js, and its stylesheet makes
+the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
@@ -62,8 +62,8 @@ written ``\\u003c``:
   (``solo``, ``altSolo``, ``scaleWords``, ``scales``), the key's scale (``keyScale``, ``pentatonic``) and
   each section's progression (``progressions``): harmony_tables.py says how;
 - ``library``: the library's index.html, relative to the page;
-- ``versions``: UG's chords versions of the song, for the switcher under the key line and the list it
-  opens (``_VERSIONS``, ``_VERSION_LIST``), or null for none: ``sheet_versions.as_data``'s ``{"total",
+- ``versions``: UG's chords versions of the song, for the version line under the artist and the list it
+  opens (``_VERSIONS``, ``_VERSION_LIST``, kinds.js), or null for none: ``sheet_versions.as_data``'s ``{"total",
   "list"}``, each entry's ``this`` saying whether it is this page's, ``sheet``, the provider of the
   sheet the title opens ("ug", "lacuerda", "auto"), and ``pinned``, whether a ``[pin]`` of yours chooses it:
   render.py's ``_versions_data``;
@@ -190,6 +190,7 @@ BUILD_FILES = (
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
     HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
+    HERE / "kinds.js",  # the version line, its icon a kind the song keeps, and the list it opens, on a sheet's page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -272,6 +273,15 @@ def _layers() -> str:
 
 
 @lru_cache(maxsize=1)
+def _kinds() -> str:
+    """kinds.js: the version line under the artist, an icon for each kind the song keeps to play from, the library
+    card's glyphs, and the list it opens (``window.caracoleKinds``), inlined after layers.js and before viewer.js,
+    which attaches it, in a sheet.html and a kept version's page; never in a songbook (book.py), whose songs have no
+    versions."""
+    return (HERE / "kinds.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _instruments() -> str:
     """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
     script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
@@ -347,7 +357,7 @@ def build_viewer(
               guitar=bool(guitar), names=names, pdf_traditional=pdf_traditional, credit=video is not None)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
-        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), script),
+        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), script),
         names=names,
     )
 
@@ -718,8 +728,8 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         f'<a class="back" href="{LIBRARY_PAGE}" aria-label="Library" title="Library">‹</a>\n'
         f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
         + artist_line(sheet.artist, names)
-        + facts_html(key, origin, sheet.capo or 0, tuning, chords=bool(sheet.chords))
         + _VERSIONS
+        + facts_html(key, origin, sheet.capo or 0, tuning, chords=bool(sheet.chords))
         + "</header>\n"
         + _song_html(sheet, credit=credit)
         + _footer(pdf_link)
@@ -1051,16 +1061,14 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <noscript><p class="noscript">Turn on JavaScript to transpose, change mode and see chord shapes.</p></noscript>
 """
 
-# A sheet viewer's versions (its data's ``versions``), hidden until the script fills them in: under the key
-# line, ‹ and › open the version kept before or after this one, in rank order, and between them the line
-# that says which this is ("Ver 3 of 13 · 4.86★ (408) · the one") opens the list of every version UG has, a
-# dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where it takes the
-# settings' place). An end ‹ or › has no address. The songbook has neither: its songs have no versions.
-_VERSIONS = """<nav class="versions" id="versions" hidden aria-label="Versions">
-<a class="vstep" id="ver-prev" aria-label="Previous version">‹</a>
-<button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg></button>
-<a class="vstep" id="ver-next" aria-label="Next version">›</a>
-</nav>
+# A sheet viewer's version line (its data's ``versions`` and ``kinds``), under the artist, hidden until kinds.js fills
+# it in: which of the song's versions this page is, its kind first and its rating last ("Chords · Ver 3 of 13 · ★ 4.86
+# (408)"), then an icon for each kind of thing the song keeps to play from, with how many of it; it opens the list of
+# every version UG has, a dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where
+# it takes the settings' place). The songbook has neither: its songs have no versions.
+_VERSIONS = """<div class="versions" id="versions" hidden>
+<button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg><span class="kinds" id="kinds"></span></button>
+</div>
 """
 
 _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidden role="dialog" aria-labelledby="version-list-title">

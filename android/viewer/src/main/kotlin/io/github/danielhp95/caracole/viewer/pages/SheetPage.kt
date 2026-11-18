@@ -165,7 +165,7 @@ object SheetPage {
     /** _words: [text] cut where a line may wrap. */
     fun words(text: String): List<String> = PageHtml.words(text)
 
-    /** _body: the page's header (‹ Library, the title, the artist, the song's facts, the versions), the song, the
+    /** _body: the page's header (‹ Library, the title, the artist, the version line, the song's facts), the song, the
      * footer, and the controls; [tuning] the one the sheet's notes name. */
     private fun body(sheet: Sheet, title: String, key: Key?, origin: String?, pdf: String?, tuning: String?,
                      export: Boolean, guitar: Boolean, names: Map<String, Map<String, String>>?, pdfTraditional: String?,
@@ -176,8 +176,8 @@ object SheetPage {
             "<a class=\"back\" href=\"${PageConstants.LIBRARY_PAGE}\" aria-label=\"Library\" title=\"Library\">‹</a>\n" +
             "<h1${zhAttr(title, names)}>${PyText.escape(title)}</h1>\n" +
             artistLine(sheet.artist, names) +
-            factsHtml(key, origin, sheet.capo ?: 0, tuning, chords = sheet.chords.isNotEmpty()) +
             PageConstants.VERSIONS +
+            factsHtml(key, origin, sheet.capo ?: 0, tuning, chords = sheet.chords.isNotEmpty()) +
             "</header>\n" +
             songHtml(sheet, credit = credit) +
             footer(pdfLink) +
