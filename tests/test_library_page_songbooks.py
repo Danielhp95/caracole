@@ -515,7 +515,7 @@ LINE_TARGETS = """
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("size", ["390,844", "1024,800"])  # every card open, under its line
 def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands_on_it(library, tmp_path, size):
     from caracole.songs import update_song
 

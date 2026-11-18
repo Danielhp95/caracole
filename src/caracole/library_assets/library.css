@@ -123,6 +123,39 @@
 .recent-artist { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--muted); font-size: .85rem; }
 @media (pointer: coarse) { .recent-song { min-height: 44px; align-items: center; } }
+/* The library's columns (body.html .lib-cols): one under 1200 px, of 800 px from 720 px, centred under the masthead,
+   which keeps the page's width as the other tabs do; from 1200 px the list (760 px, or what the pane leaves it) and,
+   right of it, the pane (#card-pane, 400 to 480 px), which holds the card of the song opened (library.js selectLine),
+   kept in view under the bar as the list scrolls, and scrolling on its own when the card is taller than the screen. */
+.card-pane { display: none; }
+@media (min-width: 720px) and (max-width: 1199px) {
+  #library-view { max-width: 800px; margin: 0 auto; }
+}
+@media (min-width: 1200px) {
+  .lib-cols { display: grid; grid-template-columns: minmax(0, 760px) minmax(400px, 1fr); column-gap: 24px;
+    align-items: start; }
+  .lib-main { min-width: 0; }
+  .card-pane { display: block; position: sticky; top: calc(var(--bar-h) + 8px); max-width: 480px;
+    max-height: calc(100vh - var(--bar-h) - 16px); overflow-y: auto; overscroll-behavior: contain; margin-top: 10px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); }
+  .pane-empty { margin: 0; padding: 28px 20px; color: var(--muted); font-size: .9rem; text-align: center; }
+  /* The card there: its parts in a column, its head the pane's heading, across its top, always shown and never
+     stuck (it is in place: above), its "⋯" menu opening downward, under the button, inside the pane. */
+  #card-pane > .song-card { gap: var(--card-gap, 14px); padding: 0 14px var(--card-pad-end, 14px); }
+  #card-pane .card-head { position: static; height: auto; margin: 0 -14px; }
+  #card-pane .card-head-in { position: static; padding: 0 4px 0 14px; visibility: visible; }
+  #card-pane .foot-menu { top: calc(100% + 6px); bottom: auto; }
+  /* The selected line's steps, under the card's head (library.js showSteps): the list its line shows under it in
+     place (steps.css), while the line keeps the bar as the lookup left it. */
+  #card-pane .steps { display: block; margin: 0; }
+  #card-pane .steps > .step-list { display: grid; }
+  /* The line whose card the pane holds (aria-current): raised, the accent along its edge, with none of the box of a
+     card opened under its line (card.css's), its card being beside it; so a song removed from there moves nothing. */
+  #library-view .line.selected { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0;
+    background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+  #library-view .line.selected:first-child { border-top: 0; }
+  #library-view .line.selected + .line { border-top: 1px solid var(--border); }
+}
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 /* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */
@@ -243,6 +276,21 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
   section.flat .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: name; }
   section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
   section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays; max-width: none; }
+}
+/* From 1200 px, beside the pane (where the lanes meet, 12), the list is 760 px: too narrow for a line's buttons (chips
+   of 100 to 150 px) beside its title, its artist, its key and its chevron. A folded or flat line keeps its first row
+   the owner's (the title, its artist right after it, then the status, the action, the key and the chevron) and its
+   buttons go on a row of their own under the title, wrapping there; a band's line has them beside its title where
+   they fit, else under it. None ever pushes the key off the line, and the title keeps the room they took from it. */
+@media (min-width: 1200px) {
+  .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
+  .line > .line-title > .line-plays { max-width: 100%; }
+  section.artist.folded .line:not(.hit):not(.miss),
+  section.flat .line:not(.hit):not(.miss) { grid-template-columns: minmax(4rem, max-content) fit-content(16rem)
+    minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-rows: minmax(28px, auto);
+    grid-template-areas: "name by . status act key more" "plays plays plays plays plays . ."; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px; }
 }
 @media (max-width: 719px) {
   section.artist.folded .line,

@@ -194,8 +194,11 @@ def test_a_cards_parts_come_in_the_phones_order(conn, cfg, tmp_path, size):
     head = found["head"]
     assert head["text"] == "Hotel California · Eagles" and head["tag"] == "h2", head
     assert head["id"] == f"card-name-{song.id}" and head["inner"] == "card-head-in", head
-    assert head["hidden"] == "true" and head["tab"] == "-1" and head["said"] == "Close Hotel California", head
-    assert head["shown"] == "block" and head["rest"] == "hidden", head  # in place: shown once its line is out of sight
+    assert head["said"] == "Close Hotel California" and head["shown"] == "block", head
+    if size == "390,844":  # in place: shown once its line is out of sight, and never heard (the line says it)
+        assert head["hidden"] == "true" and head["tab"] == "-1" and head["rest"] == "hidden", head
+    else:  # in the laptop's pane: its heading, heard and shown, its close a stop of Tab's
+        assert head["hidden"] is None and head["tab"] is None and head["rest"] == "visible", head
     missing = attribute_of(dom, "data-lost")
     assert missing["parts"] == ["card-head", "facts", "actions", "foot", "card-sites", "find-elsewhere"], missing
 
@@ -455,3 +458,371 @@ def test_at_320_px_a_chinese_or_long_name_stays_one_line(conn, cfg, tmp_path):
         assert b.js("document.documentElement.scrollWidth") <= 320
     finally:
         b.close()
+
+
+# --- the laptop: one column under 1200 px, the list and the pane from 1200 px ---------------------------------------
+
+LAPTOP = {"width": 1280, "height": 900}
+# The page's script's names for a test's: a line by its title, the pane, whether a line's card is in it, and the
+# focus's element.
+PANE = r"""
+window.lineOf = (title) => [...document.querySelectorAll('#list article.line')]
+  .find((l) => l.querySelector('h3').textContent === title);
+window.pane = () => document.getElementById('card-pane');
+window.inPane = (title) => { const c = cardOf(lineOf(title)); return Boolean(c && pane().contains(c)); };
+window.chevronOf = (title) => lineOf(title).querySelector(':scope > .line-more');
+window.empty = () => pane().querySelector('.pane-empty');
+"""
+
+
+def _radiohead(conn, cfg, *more):
+    """Radiohead's Creep and Karma Police found, each with its chord sheet, and ``more`` (artist, title) songs alike:
+    the file's address."""
+    for artist, title in (("Radiohead", "Creep"), ("Radiohead", "Karma Police"), *more):
+        song = add_song(conn, artist, title)
+        put(cfg, song, "sheet.html", "sheet.pdf")
+        update_song(conn, song.id, status="found")
+    return write_library_page(cfg.library_dir, page(conn, cfg)).as_uri()
+
+
+def _opened(tmp_path, url, size=LAPTOP):
+    try:
+        b = Browser(tmp_path / "chrome", **size)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    b.open(url)
+    cards.install(b)
+    b.js(PANE)
+    return b
+
+
+@pytest.mark.parametrize("width", [1280, 1200])
+def test_from_1200_px_the_list_and_an_empty_pane(conn, cfg, tmp_path, width):
+    # From 1200 px the list (760 px, or what is left beside the pane) and, right of it, the pane, which says what it is
+    # for until a song is opened.
+    b = _opened(tmp_path, _radiohead(conn, cfg), {"width": width, "height": 900})
+    try:
+        at = b.js("(() => { const r = (n) => n.getBoundingClientRect(); const list = document.getElementById('list'); "
+                  "return { said: empty().textContent, shown: empty().checkVisibility(), "
+                  "list: [r(list).left, r(list).right, r(list).width], pane: [r(pane()).left, r(pane()).width], "
+                  "label: pane().getAttribute('aria-label'), tag: pane().tagName.toLowerCase(), "
+                  "page: [document.documentElement.scrollWidth, innerWidth] }; })()")
+        assert at["said"] == "Open a song to see its card here." and at["shown"], at
+        assert at["tag"] == "aside" and at["label"] == "Song", at
+        if width == 1280:
+            assert abs(at["list"][2] - 760) <= 0.5, at
+        else:
+            assert at["list"][2] >= 700, at
+        assert 400 <= at["pane"][1] <= 480 and at["pane"][0] >= at["list"][1], at
+        assert at["page"][0] <= at["page"][1], at
+    finally:
+        b.close()
+
+
+def test_a_title_puts_its_card_in_the_pane_and_marks_its_line(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        length = b.js("history.length")
+        creep = b.js("lineOf('Creep').dataset.id")
+        b.click(f'#list article.line[data-id="{creep}"] .line-title h3')
+        assert b.wait("inPane('Creep')"), b.js("pane().outerHTML.slice(0, 300)")
+        shown = b.js("(() => { const card = cardOf(lineOf('Creep')); const name = card.querySelector('.card-name'); "
+                     "const line = lineOf('Creep'); return { name: name.textContent, hidden: name.closest('[aria-hidden]') "
+                     "!== null, seen: name.checkVisibility({ visibilityProperty: true }), card: card.hidden, "
+                     "selected: line.classList.contains('selected'), current: line.getAttribute('aria-current'), "
+                     "expanded: chevronOf('Creep').getAttribute('aria-expanded'), empty: empty().checkVisibility(), "
+                     "labelled: pane().getAttribute('aria-labelledby') === name.id, "
+                     "close: card.querySelector('.card-close').tabIndex, length: history.length, "
+                     "look: [getComputedStyle(line).marginTop, getComputedStyle(line).boxShadow.includes('inset'), "
+                     "getComputedStyle(line).backgroundColor === getComputedStyle(document.querySelector("
+                     "'#list .artist-title')).backgroundColor] }; })()")
+        assert shown == {"name": "Creep · Radiohead", "hidden": False, "seen": True, "card": False, "selected": True,
+                         "current": "true", "expanded": "true", "empty": False, "labelled": True, "close": 0,
+                         "length": length, "look": ["0px", True, True]}, shown  # raised, the accent on its edge
+        # Another song's chevron: its card in the pane, Creep's back under its line, closed.
+        b.click(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"] .line-more')
+        assert b.wait("inPane('Karma Police')")
+        back = b.js("(() => { const card = cardOf(lineOf('Creep')); return { selected: lineOf('Creep').classList"
+                    ".contains('selected'), current: lineOf('Creep').hasAttribute('aria-current'), "
+                    "inLine: card.parentNode === lineOf('Creep'), hidden: card.hidden, "
+                    "expanded: chevronOf('Creep').getAttribute('aria-expanded'), "
+                    "head: card.querySelector('.card-head').getAttribute('aria-hidden'), "
+                    "karma: lineOf('Karma Police').classList.contains('selected'), "
+                    "lines: document.querySelectorAll('.line.selected').length }; })()")
+        assert back == {"selected": False, "current": False, "inLine": True, "hidden": True, "expanded": "false",
+                        "head": "true", "karma": True, "lines": 1}, back
+        # Its chevron again: the pane empty, the card back under its line.
+        b.click(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"] .line-more')
+        assert b.wait("empty().checkVisibility() && !pane().querySelector('.song-card')"), b.js("pane().outerHTML")
+        assert b.js("document.querySelectorAll('.line.selected, [aria-current]').length") == 0
+        assert b.js("cardOf(lineOf('Karma Police')).parentNode === lineOf('Karma Police')")
+        assert b.js("history.length") == length
+    finally:
+        b.close()
+
+
+def test_the_keyboard_goes_into_the_pane_and_escape_comes_back(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js("chevronOf('Creep').focus()")
+        b.press("Enter")
+        assert b.wait("inPane('Creep')")
+        assert b.wait("document.activeElement === cardOf(lineOf('Creep')).querySelector('.card-name')"), \
+            b.js("document.activeElement.outerHTML.slice(0, 200)")
+        b.press("Escape")
+        assert b.wait("document.activeElement === chevronOf('Creep')"), b.js("document.activeElement.outerHTML")
+        assert b.js("inPane('Creep') && lineOf('Creep').classList.contains('selected')")
+        assert b.js("document.body.classList.contains('search-mode')") is False  # the page's own Escape heard nothing
+    finally:
+        b.close()
+
+
+def test_while_selecting_the_pane_is_put_away(conn, cfg, tmp_path):
+    # Select puts away what a line opens: the pane too, until it is over.
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.wait("inPane('Creep')")
+        b.js("document.dispatchEvent(new CustomEvent('caracole:new-songbook'))")
+        assert b.wait("document.body.classList.contains('selecting') && !pane().checkVisibility()")
+        b.js("document.querySelector('.pick-done').click()")
+        assert b.wait("pane().checkVisibility() && inPane('Creep')")
+    finally:
+        b.close()
+
+
+def test_crossing_1200_px_moves_the_open_card(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.wait("inPane('Creep')")
+        b.send("Emulation.setDeviceMetricsOverride", width=1000, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait("(() => { const card = cardOf(lineOf('Creep')); return card.parentNode === lineOf('Creep') && "
+                      "!card.hidden && chevronOf('Creep').getAttribute('aria-expanded') === 'true' && "
+                      "!document.querySelector('.line.selected') && !pane().checkVisibility(); })()"), \
+            b.js("[cardOf(lineOf('Creep')).parentNode.tagName, cardOf(lineOf('Creep')).hidden]")
+        assert b.js("cardOf(lineOf('Creep')).querySelector('.card-head').getAttribute('aria-hidden')") == "true"
+        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait("inPane('Creep') && lineOf('Creep').classList.contains('selected')")
+        assert b.js("!cardOf(lineOf('Creep')).hidden && pane().checkVisibility()")
+    finally:
+        b.close()
+
+
+def test_crossing_1200_px_takes_the_card_opened_last_and_closes_the_others(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg), {"width": 1000, "height": 900})
+    try:
+        b.js("openCardOf(lineOf('Karma Police')); openCardOf(lineOf('Creep'))")
+        assert b.js("(() => { scrollTo(0, 0); return scrollY; })()") == 0
+        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait("inPane('Creep')")
+        assert b.js("[chevronOf('Karma Police').getAttribute('aria-expanded'), cardOf(lineOf('Karma Police')).hidden, "
+                    "cardOf(lineOf('Karma Police')).parentNode === lineOf('Karma Police'), scrollY]") == \
+            ["false", True, True, 0]
+    finally:
+        b.close()
+
+
+def test_under_1200_px_one_column_of_800(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg), {"width": 1000, "height": 900})
+    try:
+        at = b.js("(() => { const r = (n) => n.getBoundingClientRect(); const v = r(document.getElementById('library-view')); "
+                  "const inside = (s) => { const x = r(document.querySelector(s)); return x.left >= v.left - 0.5 && "
+                  "x.right <= v.right + 0.5; }; return { view: [v.left, v.width, innerWidth - v.right], "
+                  "bar: inside('.searchbar .bar-row') && document.getElementById('library-view')"
+                  ".contains(document.querySelector('.searchbar')), counts: document.getElementById('library-view')"
+                  ".contains(document.querySelector('.counts-row')) && inside('.counts-row'), "
+                  "list: r(document.getElementById('list')).width, mast: r(document.querySelector('.masthead')).width, "
+                  "pane: pane().checkVisibility() }; })()")
+        assert abs(at["view"][1] - 800) <= 0.5 and abs(at["view"][0] - at["view"][2]) <= 1, at  # centred
+        assert at["bar"] and at["counts"] and at["pane"] is False, at
+        assert at["mast"] > 900, at  # the masthead keeps the page's width
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.js("cardOf(lineOf('Creep')).parentNode === lineOf('Creep') && !cardOf(lineOf('Creep')).hidden")
+        assert b.js("document.querySelectorAll('.line.selected').length") == 0
+    finally:
+        b.close()
+
+
+def test_the_pane_empties_when_its_line_leaves_the_list(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.wait("inPane('Creep')")
+        b.js("document.getElementById('q').focus()")
+        b.type("karma")
+        assert b.wait("empty().checkVisibility() && !pane().querySelector('.song-card')"), b.js("pane().outerHTML")
+        assert b.js("document.querySelectorAll('.line.selected').length") == 0
+        assert b.js("!lineOf('Creep')")  # not in the list
+    finally:
+        b.close()
+
+
+def test_the_panes_head_keeps_a_long_name_on_one_line(conn, cfg, tmp_path):
+    long_title = ("The Longest Song Title Anybody Ever Gave A Song About A Very Long Road Home Through The Night "
+                  "And Back Again At Dawn Now")
+    assert len(long_title) == 120
+    zh = add_song(conn, "宋冬野", long_title)
+    put(cfg, zh, "sheet.html")
+    update_song(conn, zh.id, status="found")
+    b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    try:
+        b.js(f"openCardOf(lineOf({json.dumps(long_title)}))")
+        assert b.wait(f"inPane({json.dumps(long_title)})")
+        head = b.js(f"(() => {{ const name = cardOf(lineOf({json.dumps(long_title)})).querySelector('.card-name'); "
+                    "return { text: name.textContent, height: name.clientHeight, line: parseFloat(getComputedStyle(name)"
+                    ".lineHeight), cut: name.scrollWidth > name.clientWidth, "
+                    "inside: name.getBoundingClientRect().right <= pane().getBoundingClientRect().right }; })()")
+        assert head["text"] == long_title + " · 宋冬野", head
+        assert 0 < head["height"] <= 1.5 * head["line"] and head["cut"] and head["inside"], head
+        assert b.js("document.documentElement.scrollWidth <= innerWidth")
+    finally:
+        b.close()
+
+
+@pytest.mark.parametrize("size", [{"width": 390, "height": 844, "mobile": True}, LAPTOP], ids=["in-place", "pane"])
+def test_opening_a_card_adds_no_history_entry(conn, cfg, tmp_path, size):
+    # Back closes the card's ⋯ menu (lane 3's); the card itself is no step of the browser's history, at either width.
+    b = _opened(tmp_path, _radiohead(conn, cfg), size)
+    try:
+        said = b.js("(() => { const now = () => [history.length, JSON.stringify(history.state)]; const before = now(); "
+                    "const card = openCardOf(lineOf('Creep')); const opened = now(); "
+                    "const where = pane().contains(card) ? 'pane' : card.parentNode === lineOf('Creep') ? 'line' : '?'; "
+                    "closeCard(lineOf('Creep')); return { before, opened, closed: now(), where }; })()")
+        assert said["before"] == said["opened"] == said["closed"], said
+        assert said["where"] == ("line" if size.get("mobile") else "pane"), said
+    finally:
+        b.close()
+
+
+# Each song line's parts where they are: its h3's box, its artist's and its buttons', its key's and chevron's lefts and
+# rights, every play's box inside the line, and the list's right.
+PARTS = """(() => {
+  const r = (n) => n && n.checkVisibility() ? n.getBoundingClientRect() : null;
+  const list = document.getElementById('list').getBoundingClientRect();
+  return Object.fromEntries([...document.querySelectorAll('#list article.line')].map((line) => {
+    const h3 = r(line.querySelector('h3')), by = r(line.querySelector('.line-by')), key = r(line.querySelector('.line-key')),
+      more = r(line.querySelector('.line-more')), plays = r(line.querySelector('.line-plays')), box = r(line);
+    const each = [...line.querySelectorAll('.line-plays > .play')].map((p) => p.getBoundingClientRect());
+    return [line.querySelector('h3').textContent, {
+      h3: [h3.left, h3.right, h3.top, h3.bottom], by: by && [by.left, by.right, (by.top + by.bottom) / 2],
+      plays: plays && [plays.left, plays.top], key: key && [key.left, key.right, key.top], more: more && [more.left, more.right],
+      inside: each.every((p) => p.left >= box.left - 0.5 && p.right <= box.right + 0.5 && p.top >= box.top - 0.5
+        && p.bottom <= box.bottom + 0.5), n: each.length, line: [box.left, box.right, box.width],
+      cut: line.querySelector('h3').scrollWidth > line.querySelector('h3').clientWidth }];
+  }).concat([["", { list: [list.left, list.right], page: [document.documentElement.scrollWidth, innerWidth] }]]));
+})()"""
+
+
+@pytest.mark.parametrize("size", ["1280,900", "1200,900"])
+def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size):
+    # Beside the pane, a folded line keeps its first row the owner's (its title, its artist right after it, then its
+    # key and chevron) and its play buttons go on a row of their own under its title: none pushes the key off the line,
+    # and the title keeps its room.
+    from test_library_bands import keyed
+
+    hotel(conn, cfg)
+    for title in ("Creep", "Karma Police"):
+        keyed(conn, cfg, "Radiohead", title)
+    width, height = (int(n) for n in size.split(","))
+    b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri(), {"width": width, "height": height})
+    try:
+        at = b.js(PARTS)
+        hotel_line, creep, karma = at["Hotel California"], at["Creep"], at["Karma Police"]
+        whole = at[""]
+        assert hotel_line["n"] == 5 and creep["n"] == 1, at
+        assert abs(hotel_line["key"][0] - creep["key"][0]) <= 1, at  # the key's column, whatever the buttons
+        for line in (hotel_line, creep, karma):
+            assert line["inside"], line
+            assert line["more"][1] <= whole["list"][1] + 0.5, (line, whole)
+            assert not line["cut"], line  # the title whole
+        assert abs(hotel_line["more"][0] - karma["more"][0]) <= 1 and abs(creep["more"][0] - karma["more"][0]) <= 1, at
+        assert hotel_line["key"][1] <= whole["list"][1] + 0.5, at
+        # Folded (Eagles has one song): the title, its artist right after it on its row, the key there too; the buttons
+        # under the title.
+        h3, by = hotel_line["h3"], hotel_line["by"]
+        assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], hotel_line
+        assert hotel_line["key"][2] < h3[3], hotel_line
+        assert hotel_line["plays"][1] >= h3[3] - 1 and abs(hotel_line["plays"][0] - h3[0]) <= 1, hotel_line
+        # In Radiohead's band: the title, then its button beside it where it fits.
+        assert creep["plays"][0] >= creep["h3"][1] and creep["plays"][1] < creep["h3"][3], creep
+        assert whole["page"][0] <= whole["page"][1], whole
+    finally:
+        b.close()
+
+
+def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_dont_fit(conn, cfg, tmp_path):
+    hotel(conn, cfg)
+    for title in ("Desperado", "Take It Easy"):
+        song = add_song(conn, "Eagles", title)
+        put(cfg, song, "sheet.html")
+        update_song(conn, song.id, status="found")
+    for size in ("1280,900", "1200,900"):
+        width, height = (int(n) for n in size.split(","))
+        b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri(),
+                    {"width": width, "height": height})
+        try:
+            at = b.js(PARTS)
+            hotel_line, desperado = at["Hotel California"], at["Desperado"]
+            assert hotel_line["plays"][1] >= hotel_line["h3"][3] - 1, hotel_line  # under the title
+            assert desperado["plays"][0] >= desperado["h3"][1] and desperado["plays"][1] < desperado["h3"][3], desperado
+            assert abs(hotel_line["more"][0] - desperado["more"][0]) <= 1 and hotel_line["inside"], at
+            assert not hotel_line["cut"] and at[""]["page"][0] <= at[""]["page"][1], at
+        finally:
+            b.close()
+
+
+STAY = "document.addEventListener('click', (e) => e.preventDefault())"  # the tile opens nothing during the test
+
+
+def test_a_song_opened_from_the_pane_is_recently_opened(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js(STAY)
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.wait("inPane('Creep')")
+        href = b.js("pane().querySelector('a.tile-open').getAttribute('href')")
+        b.js("pane().querySelector('a.tile-open').click()")
+        b.js("document.getElementById('q').focus()")
+        assert b.wait("document.getElementById('recent').checkVisibility()")
+        assert b.js("[...document.querySelectorAll('#recent a')].map((a) => [a.querySelector('.recent-title')"
+                    ".textContent, a.getAttribute('href')])")[0] == ["Creep", href]
+    finally:
+        b.close()
+
+
+def test_the_panes_close_empties_it_and_gives_its_line_the_focus(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg))
+    try:
+        b.js("openCardOf(lineOf('Creep'))")
+        assert b.wait("inPane('Creep')")
+        b.click("#card-pane .card-close")
+        assert b.wait("empty().checkVisibility() && !pane().querySelector('.song-card')")
+        assert b.js("document.activeElement === chevronOf('Creep') && !lineOf('Creep').classList.contains('selected')")
+        assert b.js("cardOf(lineOf('Creep')).parentNode === lineOf('Creep') && cardOf(lineOf('Creep')).hidden")
+    finally:
+        b.close()
+
+
+def test_a_selected_lines_card_drawn_again_takes_its_place_in_the_pane(cfg, live, browser):
+    # Served, Fetch again from the pane: the request over, its line is drawn again, and its card, made again from the
+    # song as it is now, takes the old one's place in the pane, open, the line still selected.
+    base, posted = live
+    found = served_page.camaron(cfg)
+    browser.open(base)
+    cards.install(browser)
+    browser.js(PANE)
+    line = json.dumps(_line(found))
+    browser.js(f"openCardOf(document.querySelector({line}))")
+    assert browser.wait(f"pane().contains(cardOf(document.querySelector({line})))")
+    old = browser.js(f"cardOf(document.querySelector({line})).id")
+    browser.js(f"cardOf(document.querySelector({line})).querySelector('.actions.again button').click()")
+    posted.next(0)
+    assert browser.wait(f"(() => {{ const l = document.querySelector({line}); const c = cardOf(l); "
+                        f"return Boolean(c) && c.id !== {json.dumps(old)} && pane().contains(c) && !c.hidden && "
+                        "l.classList.contains('selected') && pane().querySelectorAll('.song-card').length === 1 && "
+                        "!document.getElementById(" + json.dumps(old) + "); })()", timeout=15), \
+        browser.js("pane().outerHTML.slice(0, 300)")
+    assert browser.js(f"cardOf(document.querySelector({line})).querySelector('.card-head').hasAttribute('aria-hidden')") \
+        is False
+    assert browser.js("pane().getAttribute('aria-labelledby')") == f"card-name-{found.id}"

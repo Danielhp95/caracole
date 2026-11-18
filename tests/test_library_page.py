@@ -1504,7 +1504,8 @@ def test_the_written_pages_guitar_pro_links_name_their_song_in_their_download_at
 chipOf("斑马，斑马", "", "guitar").click();  // its two files, put there by hand: from no site
 note("saved", Array.from(lineOf("斑马，斑马").querySelectorAll("a[download]")).map((a) =>
   [a.getAttribute("href").split("/").pop(), a.getAttribute("download")]));"""
-    saved = {unquote(name): name_saved for name, name_saved in card_notes(conn, cfg, tmp_path, script, "saved")}
+    saved = {unquote(name): name_saved for name, name_saved in card_notes(conn, cfg, tmp_path, script, "saved",
+                                                                            size=cards.IN_PLACE)}
     assert {name: saved[name] for name in ("guitar-1.gp5", "guitar-2.ptb", "score-1.mscz")} == {
         "guitar-1.gp5": "宋冬野 - 斑马，斑马.gp5", "guitar-2.ptb": "宋冬野 - 斑马，斑马 (2).ptb",
         "score-1.mscz": "宋冬野 - 斑马，斑马.mscz"}, saved
@@ -2021,7 +2022,7 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
 
     sourced_library(conn, cfg)
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), UNFOLD + MARKS))
-    marks = marks_of(dump_dom(path, tmp_path))
+    marks = marks_of(dump_dom(path, tmp_path, size=cards.IN_PLACE))  # every card open, under its line
     ug = [m for m in marks if m["source"] == "ug"]
     assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from UG" for m in ug), ug
     # Under a song's chevron, the chips of each tile say where what it holds came from ("From [UG] Ultimate Guitar",
@@ -2633,7 +2634,8 @@ def test_a_mouse_keeps_the_compact_controls(conn, cfg, tmp_path):
     from helpers.targets import UNFOLD, noted, noting
 
     html = with_script(every_control(conn, cfg), UNFOLD + noting("data-compact", COMPACT))
-    heights = noted(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="1280,800"), "data-compact")
+    # A laptop's window whose cards open under their lines, every one of them open.
+    heights = noted(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="1024,800"), "data-compact")
     assert all(h is not None and h < 44 for h in heights.values()), heights
 
 
@@ -3295,8 +3297,8 @@ def _overlap(a, b):
 
 
 @in_chromium
-@pytest.mark.parametrize(("size", "touch", "fragment", "scheme"), [
-    ("1280,900", False, "", "dark"), ("1280,900", False, "#sort=title", "light"), ("1024,800", False, "", "light"),
+@pytest.mark.parametrize(("size", "touch", "fragment", "scheme"), [  # every card open: under their lines, under 1200 px
+    ("1199,900", False, "", "dark"), ("1199,900", False, "#sort=title", "light"), ("1024,800", False, "", "light"),
     ("900,800", False, "", "light"), ("820,1180", True, "", "light"), ("720,800", False, "#sort=title", "dark"),
     ("390,844", True, "", "dark")])
 def test_every_mark_of_a_site_shows_whole_at_every_width(conn, cfg, tmp_path, size, touch, fragment, scheme):
@@ -3411,7 +3413,8 @@ LINE_STATES = "(() => {" + cards.KIT + """
         }
       }
     }
-    measured[l.querySelector("h3").textContent] = { height: Math.round(lb.height), out, over };
+    measured[l.querySelector("h3").textContent] = { height: Math.round(lb.height), out, over,
+      plays: Boolean(l.querySelector(".line-plays > .play")) };
   }
   const crep = lines.find((l) => l.querySelector("h3").textContent === "Crep");
   crep.querySelector(".line-action button").click();
@@ -3445,8 +3448,10 @@ def test_a_lines_states_fit_its_line_and_its_pick_opens_the_picker_where_it_is(c
     assert states["page"] == int(size.split(",")[0]) and states["scroll"] <= states["page"], states
     for title, line in states["lines"].items():
         assert line["out"] == [] and line["over"] == [], (title, line)
-    # A line with a request's line is one line taller than the rest, no more.
-    plain = max(line["height"] for title, line in states["lines"].items() if title != "Bohemian Rhapsody")
+    # A line with a request's line is one line taller than the rest, no more; from 1200 px a folded line's buttons are
+    # a row of their own too (library.css), so the rest are those with none.
+    plain = max(line["height"] for title, line in states["lines"].items()
+                if title != "Bohemian Rhapsody" and not line["plays"])
     # The queued line holds Cancel, a button of 32 px (44 on a touch screen) that the line grows to hold, as a
     # removal's Undo does; the limit of 30 predates a button in it.
     assert plain < states["lines"]["Bohemian Rhapsody"]["height"] <= plain + 30 + 14, states

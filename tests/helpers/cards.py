@@ -17,8 +17,8 @@ the line or its card is not there), for ``page.js`` and ``page.wait`` with no ``
 ``card_of(dom, title)``: from a DOM dump, the markup of the element the chevron of the line headed ``title`` names (nested
 elements counted), or "" when there is none; a test opens the card first (a script that clicks the chevron).
 
-``IN_PLACE``: the widest window ("1024,900") whose cards open under their lines, for a test that reads several cards of
-one page in one dump.
+``IN_PLACE``: a laptop's window ("1024,900") whose cards open under their lines (any under 1200 px; from 1200 px a card
+is in the pane beside the list, one at a time), for a test that reads several cards of one page in one dump.
 """
 
 from __future__ import annotations

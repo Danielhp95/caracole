@@ -20,17 +20,19 @@ file, and none of it loads anything from the network.
   rows.js before its own script. Both draw the count row under their box with its ``drawCountMarks``: yours, the
   sites that found something (named in full from 720 px while the row fits on one line, ``fitCounts``), then the
   rest in one quiet mark, "0 on N more"; no row when every count is 0.
-- card.css and card.js (``caracoleCard``): a song of yours opened on index.html, a card under its line (library.js
-  ``cardFor`` puts its parts in the line's panel, the first time it opens): what you play from it as tiles, each
-  source's versions of each as chips that open one drawer under the row of tiles that holds its tile, its
-  progressions, where else to find it, and its foot, Remove at its end. Drawn from the page's data alone: a chip or a
+- card.css and card.js (``caracoleCard``): a song of yours opened on index.html, a card under its line, or from 1200 px
+  in the pane beside the list (library.js ``cardFor`` puts its parts in the line's panel, the first time it opens,
+  under the line or in the pane: ``selectLine``): what you play from it as tiles, each source's versions of each as
+  chips that open one drawer under the row of tiles that holds its tile, its progressions, where else to find it, and
+  its foot, Remove at its end. Drawn from the page's data alone: a chip or a
   drawer asks nothing of anyone; what a drawer's versions do (Use this one, Fetch them, Back to our pick) library.js
   makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library.css sets the bands: ``--band-h`` (34 px,
   an artist's, one line, their count on its right) and ``--fold-h`` (64 px, a folded line's: an artist of one line,
   library.js ``artistGroup``'s ``folded``, has no band, their name the line's overline over its title, rows.css's
-  ``.line-by`` in their colour; from 720 px in the flat line's ``by`` column). library-screens.css comes
-  after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
+  ``.line-by`` in their colour; from 720 px in the flat line's ``by`` column), and the library's columns (body.html's
+  ``.lib-cols``: one of 800 px from 720 px; from 1200 px the list and the pane, ``#card-pane``). library-screens.css
+  comes after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
   Filter and Sort) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
   from 720 px, a sheet from the bottom on a phone), which library.js fills and opens.

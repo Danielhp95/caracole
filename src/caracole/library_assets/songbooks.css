@@ -186,6 +186,10 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
   grid-template-areas: "pick title key" "pick meta meta"; }
 .selecting .line > .pick { grid-area: pick; align-self: center; }
 .selecting .line.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+/* The laptop's pane is put away with the rest of what a line opens (its card is the selected line's), and that line
+   reads as any other until it is picked. */
+.selecting .card-pane { display: none; }
+.selecting #library-view .line.selected:not(.picked) { background: none; box-shadow: none; }
 /* A line its one-song artist folded into (library.css): on a phone the box beside its artist's overline and its title,
    its buttons and its key beside both; from 720 px its artist in the column a title-sorted line names its own in. */
 @media (max-width: 719px) {
@@ -200,6 +204,11 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
     grid-template-areas: "pick name by plays . status key"; }
   .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title status key"; }
+}
+@media (min-width: 1200px) {  /* beside the laptop's pane, its buttons under its title (library.css) */
+  .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
+    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-areas: "pick name by . status key" "pick plays plays plays plays ."; }
 }
 .selecting .page { padding-bottom: 104px; }
 .selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }

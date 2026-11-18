@@ -2659,6 +2659,20 @@ comes up under the bar. While any of the line shows, the head isn't there, so it
 line says the same. However you close a card, its line comes back into view, just under the search bar, at
 once when your system asks for less motion, and the focus is on its chevron.
 
+On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
+holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
+its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
+its line, raised, the accent along its edge; another song's takes its place, and its chevron again, the head's close,
+or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
+bar as the list scrolls, and scrolls on its own when the card is longer than the screen; a lookup's steps are listed
+there under the head, while the line keeps the bar of them as the lookup left it. Opened from the keyboard (Enter on
+the chevron), the focus goes to the song's name in the pane, and Escape there brings it back to the chevron, the card
+staying open. Beside the pane, a line whose artist is on it keeps its title, its artist, its key and its chevron on its
+first row and its buttons on a row under the title; under an artist's band a line's buttons stay beside its title
+where they fit, else go under it. Under 1200 px the library is one column, 800 px wide from 720 px, centred under the
+logo and the tabs, and a card opens under its line; widening or narrowing the window moves an open card between the
+two. Opening or closing a card is no step of Back, at any width, and Select puts the pane away until it is over.
+
 An artist of two or more songs has them under a band 34 px tall: their name in
 the artist's colour (cut short with an ellipsis, on one line) and, on its right,
 your count of their songs, small and muted. An artist of one song has no band:

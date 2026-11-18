@@ -883,7 +883,15 @@ It is rows.js's, shared by both pages:
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
     4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
-    folding every line.
+    folding every line;
+  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line's first row
+    the title, its artist right after it, the status, the action, the key and the chevron, its buttons a row of their
+    own under the title (library.css, songbooks.css selecting); a band's line its buttons beside its title where they
+    fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line (test_library_card_place.py,
+    test_library_bands.py).
+- **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
+  list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
+  800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).
@@ -1036,7 +1044,27 @@ It is rows.js's, shared by both pages:
     keys the card's box to `.line-panel.song-card`, defines the two tokens there once, and its rules use them. For
     Task 1d.6: `.line-panel > .card-head` (sticky, height 0) and `.card-head-in` (absolute, hidden until
     `.head-away`) aren't scoped to in place, only the head's margins are (`.line > .line-panel.song-card >
-    .card-head`): the pane undoes both;
+    .card-head`): the pane undoes both (`#card-pane .card-head`, `.card-head-in`: static, shown);
+  - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
+    `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (no opened
+    card's box: `#library-view .line.selected`, which 3b.4's `:not(.selected)` makes redundant), the card's head its
+    heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
+    `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
+    or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the
+    line's chevron, closed (`unselect`); `paneWide` (`matchMedia("(min-width: 1200px)")`) crossing down puts it back
+    open (watched in place), crossing up takes the card opened last of those in place (`awayCards`' order) and closes
+    the others quietly (`shut`); Escape in the pane that the card's parts left gives the focus to the line's chevron;
+    a refilled selected line's new card takes its place (`placeAgain`; none, a song removed: the pane empty and as
+    tall as it was); the selected line's steps listed under the head (`showSteps`, a copy of its `.steps >
+    .step-list`; steps.css leaves a `.selected` line its frozen bar); a card, opened or closed, adds no history entry
+    (test_library_card_place.py, test_web_page_steps.py); Select puts the pane away (songbooks.css);
+  - wherever a line's card is: `cardOf(item)` (by its chevron's `aria-controls`), `itemOf(node)` (`closest("article")`,
+    else `selected` for a node in the pane), `partsOf(item)` (the line, and its card when it is outside it) and
+    `inItem(item, selector)`, which the forms posted in place, a removal's held buttons and focus, `paint`, the picker
+    and Recently opened go through;
+  - the pane's own rules, library.css's `#card-pane …` (its card's padding and gap, its head, `.foot-menu` opening
+    downward, the steps), the one way lane 1 names a card's part; the tiles' layout in the pane's 400–480 px is lane
+    3b's container's;
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,

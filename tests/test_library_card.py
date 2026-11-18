@@ -497,8 +497,10 @@ def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, c
     # What you play from, a row each: its name and version, the source it came from with that source's mark, its
     # downloads at the end. Under the card's foot only Fetch again, Add to a songbook and ⋯ show.
     hotel(conn, cfg)
-    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size="1280,900"), "data-rows")
-    assert rows and all(r["height"] <= 76 for r in rows), rows
+    # A card under its line, in the 800 px column a laptop has under 1200 px (from 1200 px it is in the pane, which lane
+    # 3b's container lays out), where a tile's name may take two lines.
+    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=cards.IN_PLACE), "data-rows")
+    assert rows and all(r["height"] <= 80 for r in rows), rows
     assert all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one line
     [sheet] = [r for r in rows if r["name"] == "Chord sheet"]
     assert sheet["mark"] is True, sheet  # "From" the source's icon and its name
