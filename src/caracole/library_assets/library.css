@@ -155,7 +155,8 @@
      crossing with Task 3b.4, which deletes it once card.css's box keys on :not(.selected). */
   #library-view .line.selected { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0;
     background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
-  #library-view .line.selected:first-child { border-top: 0; }
+  #library-view .lines > .line.selected:first-child,
+  #library-view .lines > .run:first-child > .line.selected:first-child { border-top: 0; }
   #library-view .line.selected + .line { border-top: 1px solid var(--border); }
 }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
@@ -208,11 +209,35 @@
 .list > .groups, .list > section.flat { margin-top: 10px; }
 section.artist .lines, section.nothing .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
 section.artist + section.artist, .groups > section + section.nothing { border-top: 1px solid var(--border); }
+/* A long list's groups and lines off the screen aren't laid out (library.js render: each band group of 50 lines or
+   fewer, and each run, div.run, of 40 lines or folded artists, is a .cv). Each is as tall as what it holds says
+   (``--bands``, ``--lines``, ``--folds``, set on it, times the heights below) until it has been laid out once, then as
+   tall as it was. Its containment clips what is painted outside it 6 px out, room for a focused line's ring (drawn 2
+   to 5 px outside the line, which is as wide as the run); one that holds an open card, or the box a removed one
+   keeps, is laid out whole, so that nothing of it is cut (the card's "⋯" menu rises over the run's top, its shadow
+   falls past the run's sides). A flow root either way, so that an open card's margins stay inside it and nothing
+   moves as its containment comes and goes. Runs move no divider: a run's first line or group keeps the one over it,
+   but the first in its box (under a band, or the list's top), and the line after an open card's box has none, as
+   card.css's rule has it within a run. */
+#list .cv { display: flow-root; content-visibility: auto; contain-intrinsic-size: auto calc(var(--bands, 0) *
+  var(--band-h) + var(--lines, 0) * var(--line-h) + var(--folds, 0) * var(--fold-h)); overflow-clip-margin: 6px; }
+#list .cv:has(.line-panel:not([hidden]), .line.card-gone) { content-visibility: visible; }
+.lines > .run + .run > .line:first-child, .groups > * + .run > section.artist:first-child,
+.groups > .run + section.artist { border-top: 1px solid var(--border); }
+.lines > .run:has(> .line:last-child:not(.hit):not(.selected) > .line-more[aria-expanded="true"])
+  + .run > .line:first-child,
+.lines > .run:has(> .line.card-gone:last-child) + .run > .line:first-child { border-top: 0; }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The band of an artist: 34 px, their name in the second accent (--artist) a little bigger than the titles under
-   it, one line cut with an ellipsis, your count small and muted on its right. */
-.list, #found { --band-h: 34px; --fold-h: 64px; }
+   it, one line cut with an ellipsis, your count small and muted on its right. With it the heights a long list's
+   estimates are made of (.cv, above), the mean of each over tests/helpers/big_library.py's songs (390 and 800 px wide,
+   by touch and with a mouse, and 1280 px): a line under a band (--line-h), and a folded artist, its line and the
+   divider over it, or a flat list's line (--fold-h; on a phone's touch screen 64 px, its least height). */
+.list, #found { --band-h: 34px; --line-h: 47px; --fold-h: 48px; }
+@media (pointer: coarse) { .list, #found { --line-h: 49px; --fold-h: 64px; } }
+@media (min-width: 720px) { .list, #found { --line-h: 29px; --fold-h: 34px; } }
+@media (min-width: 720px) and (pointer: coarse) { .list, #found { --line-h: 49px; --fold-h: 49px; } }
 .artist-title { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--band-h); min-height: 0;
   margin: 0; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
   font-size: .906rem; font-weight: 700; line-height: 1.2; overflow: hidden; }

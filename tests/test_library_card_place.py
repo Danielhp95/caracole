@@ -923,7 +923,7 @@ def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn,
         update_song(conn, song.id, status="found")
     b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
     under = "lineOf('Hotel California').classList.contains('plays-under')"
-    kind = "lineOf('Hotel California').closest('section').className"
+    kind = "[...lineOf('Hotel California').closest('section').classList].filter((c) => c !== 'cv').join(' ')"
     lines = "document.querySelectorAll('#list article.line').length"
     try:
         assert b.js(f"[{kind}, {under}]") == ["artist", False]  # a band's line: beside its title, else under it

@@ -296,6 +296,11 @@ class PhoneEndToEndTest {
             val gone = cards(main).let { all -> (0 until all.length()).map { all.getJSONObject(it) } }
                 .first { it.optString("title") == REMOVED.second && it.optString("artist") == REMOVED.first }
             val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from your logbook")}]"
+            // The card is built when it is first opened (stage 1d): open the song's card by its chevron first.
+            js("""(() => { const line = [...document.querySelectorAll("article.line")]
+                .find((l) => (l.querySelector("h3") || {}).textContent === ${JSONObject.quote(REMOVED.second)});
+                const more = line && line.querySelector(".line-more");
+                if (more && more.getAttribute("aria-expanded") !== "true") more.click(); })()""")
             assertTrue("its Remove", js("document.querySelector(${JSONObject.quote(remove)}) !== null") == true)
             val beforeRemoval = Caracole.started()!!.queue.snapshot().map { it.id }.toSet()
             js("document.querySelector(${JSONObject.quote(remove)}).click()")

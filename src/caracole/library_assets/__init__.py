@@ -28,9 +28,15 @@ file, and none of it loads anything from the network.
   drawer asks nothing of anyone; what a drawer's versions do (Use this one, Fetch them, Back to our pick) library.js
   makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library.css sets the bands: ``--band-h`` (34 px,
-  an artist's, one line, their count on its right) and ``--fold-h`` (64 px, a folded line's: an artist of one line,
-  library.js ``artistGroup``'s ``folded``, has no band, their name the line's overline over its title, rows.css's
-  ``.line-by`` in their colour; from 720 px in the flat line's ``by`` column), and the library's columns (body.html's
+  an artist's, one line, their count on its right) and ``--fold-h`` (a folded line's: an artist of one line, library.js
+  ``artistGroup``'s ``folded``, has no band, their name the line's overline over its title, rows.css's ``.line-by`` in
+  their colour; from 720 px in the flat line's ``by`` column; 64 px on a phone's touch screen, its least height there,
+  48 px with a mouse, 34 px from 720 px, 49 px from 720 px by touch), with ``--line-h``, a band's line's (49 px by
+  touch, 47 px with a mouse, 29 px from 720 px), the heights a long list's estimates are made of: library.js
+  ``render`` makes each band group of 50 lines or fewer, and
+  each run (``div.run``) of 40 lines or folded artists, a ``.cv``, which library.css gives ``content-visibility: auto``
+  and a ``contain-intrinsic-size`` from what it holds (``--bands``, ``--lines``, ``--folds``), so that what is off the
+  screen isn't laid out; and the library's columns (body.html's
   ``.lib-cols``: one of 800 px from 720 px; from 1200 px the list and the pane, ``#card-pane``). library-screens.css
   comes after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
