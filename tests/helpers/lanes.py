@@ -18,6 +18,16 @@ within ``GO_WITHIN`` seconds exits, its test gone. What a script says on stderr 
 - ``HOLD`` (name): in the lane, writes ``holding <name> <t>``, then sleeps 60 s holding the lock.
 - ``WAITER`` (name, kind): ``exclusive(cfg, f"remove {name}", interactive=kind == "asked")``, then ``got <name>
   <t>``, holding it: "asked" waits as what the owner asked for now does, anything else as bulk work.
+- ``BULK`` (name, count): the nightly run, ``exclusive(cfg, "run")``, and a bulk-pace UG client
+  (``make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")``) sending ``count`` requests, which hands the lock over
+  in its pauses.
+- ``QUEUE_JOB`` (name, count): a queue job such as ``fetch --song``, ``exclusive(cfg, f"fetch --song {name}",
+  interactive=True)``, and the same bulk-pace client, sending ``count`` requests.
+
+Each of those two asks for ``https://tabs.ultimate-guitar.com/tab/<name>/<i>``, through a transport that writes
+``start <name> <t> <url>`` and ``end <name> <t> <status>`` around each request (200 "ok", 403 for a URL ending in
+``/block``), and ends ``done <name> <t> <handoffs>`` (its client's ``handoffs``), still holding the lock. Their
+database is ``cfg.db_path``: a test that gives them one already migrated (the ``conn`` fixture) starts them sooner.
 """
 
 from __future__ import annotations
@@ -35,7 +45,7 @@ from conftest import subprocess_pythonpath
 SRC = Path(__file__).resolve().parents[2] / "src"
 GO_WITHIN = 120  # seconds a script waits for its go file before it gives up
 
-_PRELUDE = f"""
+_HEAD = """
 import os, sys, time
 from pathlib import Path
 from caracole.commands import _common
@@ -48,15 +58,44 @@ name = args[0]
 
 
 def say(word, *rest):
-    log.write(" ".join([word, name, f"{{time.time():.6f}}", *map(str, rest)]) + "\\n")
+    log.write(" ".join([word, name, f"{time.time():.6f}", *map(str, rest)]) + "\\n")
+"""
 
-
+_GO = f"""
 say("ready")
 deadline = time.monotonic() + {GO_WITHIN}
 while go and not os.path.exists(go):
     if time.monotonic() > deadline:
         sys.exit("never told to go")
     time.sleep(0.005)
+"""
+
+_PRELUDE = _HEAD + _GO
+
+# A recording site for UG and the database, made before the script says it is ready.
+_SITE = """
+import httpx
+from caracole import db
+
+
+def answer(request):
+    url = str(request.url)
+    say("start", url)
+    status = 403 if url.endswith("/block") else 200
+    say("end", status)
+    return httpx.Response(status, text="ok")
+
+
+_common.transport_for = lambda provider: httpx.MockTransport(answer)
+conn = db.connect(cfg.db_path)
+"""
+
+_REQUESTS = """
+    client = _common.make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    for i in range(int(args[1])):
+        client.get(f"https://tabs.ultimate-guitar.com/tab/{name}/{i}")
+    say("done", client.handoffs)
+    client.close()
 """
 
 TURNS = _PRELUDE + """
@@ -78,6 +117,14 @@ WAITER = _PRELUDE + """
 with _common.exclusive(cfg, f"remove {name}", interactive=args[1] == "asked"):
     say("got")
 """
+
+BULK = _HEAD + _SITE + _GO + """
+with _common.exclusive(cfg, "run"):
+""" + _REQUESTS
+
+QUEUE_JOB = _HEAD + _SITE + _GO + """
+with _common.exclusive(cfg, f"fetch --song {name}", interactive=True):
+""" + _REQUESTS
 
 
 class Record(NamedTuple):

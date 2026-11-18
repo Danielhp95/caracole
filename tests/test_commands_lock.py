@@ -491,15 +491,14 @@ def test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_w
     assert took[0][1] is (args in ASKED_NOW), took
 
 
-def test_a_command_holding_the_lock_as_a_lookup_hands_it_to_no_other(tmp_path, config, monkeypatch):
-    # Handed the lock by the nightly run, it would otherwise let go of it at a pause of its own, and the run,
-    # waiting to take it back, could take it first and keep it to its end.
+def test_a_command_holding_the_lock_as_asked_now_hands_it_to_the_lane_alone(tmp_path, config, monkeypatch):
     from caracole.config import load_config
 
     cfg = load_config(config, env={})
     monkeypatch.setattr(_common, "lookups_waiting", lambda cfg: True)
+    monkeypatch.setattr(_common, "lane_tickets", lambda cfg: [])
     with _common.exclusive(cfg, "fetch", interactive=True):
-        assert not _common.hand_over(cfg)
+        assert not _common.hand_over(cfg)  # a ticket asked for now, not the lane's: it waits for this one's end
     with _common.exclusive(cfg, "fetch"):
         monkeypatch.setattr(_common, "HANDOFF_TAKE", 0.05)
-        assert _common.hand_over(cfg)  # bulk work does
+        assert _common.hand_over(cfg)  # bulk work hands it to any lookup, as before

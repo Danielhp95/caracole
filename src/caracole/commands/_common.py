@@ -16,14 +16,17 @@ One caracole at a time, but a lookup never waits behind a whole nightly run:
 it announces itself in ``state_dir/caracole.lock.waiting/`` (``exclusive(...,
 interactive=True)``), and bulk work, which spends most of its time in its
 pauses, hands the lock over during a pause (``hand_over``), takes it back once
-the lookup is done, and then waits a whole pause again before its next request.
-Bulk work that sends no request (auto-chords, a pass of PDFs) hands it over
-between two songs. The lookup touches its announcement while it waits, so one
-a killed lookup left soon stops counting. Only lookups take it in a handoff:
-another caracole waiting meanwhile takes it once the bulk work is done
+the lane is empty and no lookup waits, and then waits a whole pause again before
+its next request. Bulk work that sends no request (auto-chords, a pass of PDFs)
+hands it over between two songs. The lookup touches its announcement while it
+waits, so one a killed lookup left soon stops counting. Only lookups take it in a
+handoff: another caracole waiting meanwhile takes it once the bulk work is done
 (``_take_outside_handoffs``). What the owner asked for just now (one song's add,
 removal, review, fetch or PDF, YouTube's search, what caracole serve queues) waits as
-a lookup does, so that a lookup queued behind it never waits behind the whole run.
+a lookup does, so that a lookup queued behind it never waits behind the whole run;
+holding the lock, it hands it to the lane's lookups alone, at its own hand-over
+points (a yt-dlp pause, a YouTube sheet before its models, ``fetch --song``'s
+pauses), and takes it back once the lane is empty.
 Lookups take the lock in a lane of their own (``exclusive(..., lane=True)``, a shared
 flock of ``caracole.lock.lane``): while one is there, no other caracole takes the lock.
 They take turns at it (``pass_turn``): before each request but a client's first, and
@@ -229,8 +232,8 @@ def lookup_run_id(now: datetime) -> str:
 
 _held: dict[Path, tuple[int, int]] = {}  # lock file -> (its descriptor, how many hold it here)
 _handoffs = 0  # how many times this process handed the lock to a waiting lookup and took it back
-# Lock files this process took as a lookup, interactive or in the lane: it hands them to no other (``hand_over``),
-# since the bulk work that handed one to it waits to take it back, and would take it first and keep it to its end.
+# Lock files this process took as interactive or in the lane: hands the lock to lane lookups alone (``hand_over``;
+# one in the lane takes turns instead, ``pass_turn``).
 _as_lookup: set[Path] = set()
 _lane: dict[Path, int] = {}  # lock file -> the lane file's descriptor, flocked shared while this process is in the lane
 
@@ -314,10 +317,10 @@ def _warn_waiting(fd: int) -> None:
 def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
                            on_wait: Callable[[str], None] | None) -> None:
     """Take caracole's lock (``fd``) as a caracole that isn't a lookup: once the one that holds it is done,
-    and never while bulk work has let go of it for a lookup (``hand_over``, which holds the flock of
-    ``HANDOFF_NAME`` meanwhile). A lock taken then is let go at once, and taken again once the handoff is
-    over: a `caracole-admin` command waiting for the nightly run takes it after the whole run, never in the
-    middle of one of its steps, and never ahead of the lookup. Nor while a lookup is in the lane
+    and never while bulk work, or what the owner asked for now, has let go of it for a lookup (``hand_over``,
+    which holds the flock of ``HANDOFF_NAME`` meanwhile). A lock taken then is let go at once, and taken again
+    once the handoff is over: a `caracole-admin` command waiting for the nightly run takes it after the whole
+    run, never in the middle of one of its steps, and never ahead of the lookup. Nor while a lookup is in the lane
     (``_lane_empty``): it lets go of a lock it took then, waits for the lane to empty holding nothing
     (``_wait_lane_empty``), and starts again."""
     path = cfg.state_dir / HANDOFF_NAME
@@ -551,46 +554,69 @@ def pass_turn(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     held = _held.get(path)
     if held is None or path not in _lane or (conn is not None and conn.in_transaction) or not lane_tickets(cfg):
         return False
-    fd, _ = held
+    if not _away_announced(cfg, held[0], lane=True, refused="No turn"):
+        return False
+    _handoffs += 1
+    logging.getLogger(__name__).debug("Passed caracole's lock to the next lookup in the lane, and took it back.")
+    return True
+
+
+def _away_announced(cfg: Config, fd: int, *, lane: bool, refused: str) -> bool:
+    """Let go of caracole's lock (``fd``) and take it back as a lookup, by a ticket written first, the newest
+    (``_announce``; a lane ticket with ``lane``), so that whoever waits to take it back after this process sees it
+    waiting; then wait by it (``_wait_announced``) and write the lock's record back; True. A ticket that can't be
+    written lets go of nothing: ``refused`` says so in the log, and it is False. Interrupted as it waits, it holds
+    nothing: its ticket goes, and no record is written."""
     record = os.pread(fd, 256, 0)
     what = record.decode("utf-8", "replace").strip().partition(" ")[2]
     try:
-        ticket = _announce(cfg, what, lane=True)
+        ticket = _announce(cfg, what, lane=lane)
     except OSError as e:
-        logging.getLogger(__name__).warning("No turn: no ticket can be written in %s: %s.", WAITING_DIR,
+        logging.getLogger(__name__).warning("%s: no ticket can be written in %s: %s.", refused, WAITING_DIR,
                                             _reason(e))
         return False
     try:
         fcntl.flock(fd, fcntl.LOCK_UN)
-        _wait_announced(cfg, what, fd, lane=True, ticket=ticket)
+        _wait_announced(cfg, what, fd, lane=lane, ticket=ticket)
     except BaseException:
         ticket.unlink(missing_ok=True)  # holding nothing, or about to: no record written
         raise
     os.ftruncate(fd, 0)
     os.pwrite(fd, record, 0)
-    _handoffs += 1
-    logging.getLogger(__name__).debug("Passed caracole's lock to the next lookup in the lane, and took it back.")
     return True
 
 
 def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     """Let a waiting lookup have caracole's lock now, and take it back once it is done; True when it did.
 
-    Only bulk work calls it, during a pause between two requests, when it holds
-    the lock and ``conn`` is in no transaction (the lookup must be able to write);
-    a process that took the lock as a lookup hands it to no other.
-    The lock is let go, each waiting lookup takes it in turn (each has
-    ``HANDOFF_TAKE`` seconds to), and this process waits until it is free again.
-    Its record (which caracole holds it) is written back. Meanwhile it holds the
-    flock of ``HANDOFF_NAME``, so that a caracole waiting for the lock that isn't a
-    lookup (a `caracole-admin` command) leaves it to the lookups and this process
-    (``_take_outside_handoffs``); without that file, nothing is handed over.
+    Called at a hand-over point (a pause between two requests, between two songs, a YouTube sheet before its
+    models), holding the lock, with ``conn`` in no transaction (the lookup must be able to write). A lane process
+    never hands over: it takes turns (``pass_turn``). Two ways, by how the lock was taken:
+
+    - Bulk work (the nightly run, a `caracole-admin` command) hands it to any lookup that waits
+      (``lookups_waiting``). It holds the flock of ``HANDOFF_NAME`` meanwhile, waiting for it if it must, so that a
+      caracole waiting for the lock that isn't a lookup leaves it to the lookups and this process
+      (``_take_outside_handoffs``); lets go of the lock; and takes it back last, once the lane is empty and no
+      lookup waits (``_take_back_last``: ``HANDOFF_TAKE`` bounds only a ticket nobody takes, never the lane's
+      work). Interrupted meanwhile, it takes the lock back all the same: it is never left without it.
+    - What the owner asked for now (``exclusive(..., interactive=True)``: a queue job such as ``fetch --song``,
+      a YouTube search or sheet) hands it to the lane's lookups alone (``lane_tickets``): another caracole asked
+      for now waits for its end. It takes the gate only if it is free, never waiting for it: held, it is the bulk
+      work that let this one in, in its own handoff. It waits with a ticket of its own, written before it lets go,
+      to take the lock back once the lane is empty (``_away_announced``), so the bulk work that let it in, waiting
+      too, gives it back at its next pause rather than keeping it to its end. Interrupted as it waits, it holds
+      nothing: its ticket goes, and no record is written.
+
+    Either way, the lock's record (which caracole holds it) is written back and a handoff counted (``handoffs()``).
+    Without the gate's file, nothing is handed over.
     """
     global _handoffs
     path = cfg.state_dir / LOCK_NAME
     held = _held.get(path)
-    if (held is None or path in _as_lookup or (conn is not None and conn.in_transaction)
-            or not lookups_waiting(cfg)):
+    if held is None or path in _lane or (conn is not None and conn.in_transaction):
+        return False
+    asked_now = path in _as_lookup
+    if not (lane_tickets(cfg) if asked_now else lookups_waiting(cfg)):
         return False
     fd, _ = held
     try:
@@ -599,23 +625,45 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
         logging.getLogger(__name__).info("No lookup goes first: %s can't be opened: %s.", HANDOFF_NAME, _reason(e))
         return False
     try:
-        fcntl.flock(gate, fcntl.LOCK_EX)
-        record = os.pread(fd, 256, 0)
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        try:
-            for _ in range(int(HANDOFF_TAKE / 0.05)):
-                if not lookups_waiting(cfg):
-                    break
-                _handoff_sleep(0.05)
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            os.ftruncate(fd, 0)
-            os.pwrite(fd, record, 0)
+        if asked_now:
+            _try_flock(gate)  # free, it keeps others out; held, by the bulk work that let this one in
+            if not _away_announced(cfg, fd, lane=False, refused="No lookup goes first"):
+                return False
+        else:
+            fcntl.flock(gate, fcntl.LOCK_EX)
+            record = os.pread(fd, 256, 0)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            try:
+                _take_back_last(cfg, fd)
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_EX)  # held again, or interrupted: never left without the lock
+                os.ftruncate(fd, 0)
+                os.pwrite(fd, record, 0)
     finally:
-        os.close(gate)  # and with it its flock
+        os.close(gate)  # and with it its flock, had it
     _handoffs += 1
-    logging.getLogger(__name__).info("Handed caracole's lock to a lookup, and took it back.")
+    logging.getLogger(__name__).info("Handed caracole's lock to %s, and took it back.",
+                                     "the lane's lookups" if asked_now else "a lookup")
     return True
+
+
+def _take_back_last(cfg: Config, fd: int) -> None:
+    """Take caracole's lock (``fd``) back as bulk work that handed it over, last: once no ticket waits
+    (``lookups_waiting``, ``HANDOFF_TAKE`` seconds at most: a ticket nobody takes) and the lane is empty, however
+    long its work (``_wait_lane_empty``, holding nothing but the gate; then the tickets again, whoever waited
+    behind the lane first), blocking, and let go again for a lookup that joined the lane meanwhile."""
+    while True:
+        for _ in range(int(HANDOFF_TAKE / 0.05)):
+            if not lookups_waiting(cfg):
+                break
+            _handoff_sleep(0.05)
+        if not _lane_empty(cfg):  # the lane's work, however long: then whoever waits behind it, first
+            _wait_lane_empty(cfg)
+            continue
+        fcntl.flock(fd, fcntl.LOCK_EX)  # whatever holds it lets go at its end, or at its next hand-over point
+        if _lane_empty(cfg):
+            return
+        fcntl.flock(fd, fcntl.LOCK_UN)  # a lookup joined the lane meanwhile: its turns first
 
 
 def _patient_sleep(cfg: Config, conn: sqlite3.Connection | None, seconds: float,
@@ -675,7 +723,8 @@ def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool =
     add, removal, review, fetch, PDF or YouTube sheet, a YouTube search: what caracole serve
     queues, so that a lookup queued after it never waits behind a whole nightly run either),
     which announces that it waits, so that bulk work hands the lock over at its next pause, or
-    between two songs (``hand_over``); it never hands the lock on itself. ``on_wait`` hears
+    between two songs (``hand_over``). Holding it, it hands it on to the lane's lookups alone,
+    at its own hand-over points, and takes it back once the lane is empty. ``on_wait`` hears
     whom it waits for, when it must: at once for bulk work, and for one that waits announced once
     it has waited ``WAIT_SAID`` seconds.
 
@@ -904,7 +953,8 @@ def make_client(
     event too, once it is logged.
 
     Bulk work's client keeps the provider's ``delay`` and ``budget``, and hands
-    the lock to a waiting lookup in its pauses. ``interactive``, a lookup's
+    the lock to a waiting lookup in its pauses (under a lock taken as asked for now, as
+    ``fetch --song`` takes it, to the lane's lookups alone). ``interactive``, a lookup's
     (``caracole get``), keeps ``lookup_policy``: a gap of a quarter of a second, and a
     few requests; its run id starts with ``lookup:`` so the hourly budget counts
     them, and it never hands the lock over. Bulk work's tries a connection that fails before any byte is
@@ -1050,7 +1100,8 @@ def make_youtube(
     caracole made, and every run is logged to ``events``. Every caller closes it.
 
     It is bulk work: each pause, its first included, hands the lock to a lookup that waits
-    meanwhile (``hand_over``), then starts again, whole."""
+    meanwhile (``hand_over``; under a lock taken as asked for now, a YouTube search's, to the
+    lane's lookups alone), then starts again, whole."""
     from caracole.youtube import PROVIDER, YtDlp
 
     lock = _acquire(cfg, "youtube downloads")

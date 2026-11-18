@@ -3268,9 +3268,15 @@ picks one).
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
   `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
   (`test_commands_lock.py::test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt`,
-  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`). A process holding
-  the lock as a lookup hands it to no other (`hand_over`), since the run waiting to take it back would take it first.
-  The phone has no lock and no nightly run, so its queue needs none of this.
+  `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
+  - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
+    points (a yt-dlp pause, a YouTube sheet before its models, `fetch --song`'s pauses), taking the gate only if it is
+    free (held, it is the bulk work that let it in), and waits with a ticket of its own, written before it lets go, to
+    take it back once the lane is empty; so bulk work that let it in gives it back at its next pause
+    (`test_commands_lane.py::test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back`,
+    `::test_a_nightly_run_that_let_a_queue_job_in_gives_it_back_at_its_next_pause`). Another caracole asked for now
+    waits for its end.
+  - The phone has no lock and no nightly run, so its queue needs none of this.
 - Every changing `caracole songbook` command (make, add, remove, move, set, rename, delete, render:
   commands/songbook.py) waits the same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
@@ -3278,13 +3284,18 @@ picks one).
 #### Bulk work hands the lock over
 
 - Bulk work hands the lock over (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it
-  back once the lookup is done, counts the handoff (`_common.handoffs()`), and goes on.
+  back last, once the lane is empty and no lookup waits (`HANDOFF_TAKE` bounding only a ticket nobody takes, never
+  the lane's work: `test_commands_lane.py::test_the_nightly_run_takes_the_lock_back_only_once_the_lane_is_empty`),
+  counts the handoff (`_common.handoffs()`), and goes on.
 - That count is how everything below learns a lookup went first (a client's block and pace checks, the re-reads of
   songs and overrides.toml): it is the one way to let go of the lock mid-work.
 - It hands it to lookups alone: meanwhile it holds the flock of `state_dir/caracole.lock.handoff`, and a caracole that
   isn't a lookup lets go of a lock it took during a handoff and waits for it to end (`_common._take_outside_handoffs`),
   so a `caracole-admin` command waiting for the run takes the lock after it, never in its middle
   (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting`).
+- No deadlock: bulk work alone blocks holding a flock, its gate: on the lane's flock (`_wait_lane_empty`, the lane's
+  work, however long), and then on the lock once the lane is empty. What the owner asked for now tries the gate
+  without waiting, a lane lookup polls for the lock, and a `caracole-admin` command holds nothing while it waits.
 - It does so in two places:
   - Its clients, and the yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
     lookup (every `HANDOFF_SLICE` s), then pause a whole `delay` again
