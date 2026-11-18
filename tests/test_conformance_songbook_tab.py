@@ -45,7 +45,8 @@ say something (``{"key": "G", "capo": 0}``).
     ``{sha256, size}``.
 - viewer/songbook_pages.jsonl: ``build_songbook(name, songs, pdf=, cho=, pdf_traditional=)`` over the viewer corpus's
   sheets (``helpers.viewer_corpus``), songbooks drawn by ``SEED`` and edges (a songbook of none, of one, of missing
-  songs alone, starts that name a ``t`` and starts that don't, names to escape, Chinese songs); each song
+  songs alone, starts that name a ``t`` and starts that don't, names to escape, Chinese songs, a song whose notes name
+  its tuning); each song
   ``{title, artist, cho, key, key_source, transpose, missing, id, start}``. ``out``: the page's ``sha256`` and
   ``size``, and its ``pieces``, the page cut at each JSON block: ``[name, digest]``, the text between two blocks
   named ``text`` and each block by its id, its digest the first ``PART`` hex digits of its text's SHA-256, a song's
@@ -522,6 +523,13 @@ MISSING = ("no sheet yet", "not in the logbook", None)
 NAMES = ("Campfire", "Road trip #1", "<b>Rock</b> & \"Roll\" 'n'", "篝火晚会", "", "A " * 30)
 
 
+# A song whose notes name its tuning: its facts' Tuning line, and its data's tuningName.
+TUNED_SONG = {"title": "Tuned", "artist": "The Placeholders",
+              "cho": ("{title: Tuned}\n{artist: The Placeholders}\n{key: Dm}\nTuning: Drop D\n\n{comment: Verse}\n"
+                      "[Dm]Words to sing\n{comment: Chorus}\n[F]More words\n"),
+              "key": None, "key_source": None, "transpose": 0, "missing": None, "id": "00000000aa", "start": None}
+
+
 def _book_song(rng: random.Random, sheet: viewer_corpus.CorpusSheet | None) -> dict[str, Any]:
     if sheet is None:
         title, artist = rng.choice((("Missing Song", "Nobody"), ("斑马，斑马", "宋冬野"), ("A <b>", "&amp;")))
@@ -558,6 +566,7 @@ def _songbooks() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
         ("中文", [_book_song(rng, s) for s in chinese] + [_book_song(rng, sheets[1])],
          {"pdf": "songbook.pdf", "pdf_traditional": "songbook (Traditional).pdf"}),
         ("Phone", [_book_song(rng, s) for s in pick[:3]], {}),
+        ("Tuned", [_book_song(rng, sheets[2]), TUNED_SONG], {}),  # a song whose notes name its tuning
     ]
     return out
 

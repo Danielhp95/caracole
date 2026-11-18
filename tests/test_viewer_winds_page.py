@@ -54,7 +54,13 @@ PANEL = """(() => {
       li.querySelector('.wd-text') ? li.querySelector('.wd-text').getAttribute('href') : null]),
   };
 })()"""
-FACTS = "document.getElementById('facts').textContent"
+# The header's facts: each line's name and its value's text.
+FACTS = "[...document.querySelectorAll('#facts .fact')].map((r) => [r.dataset.fact, r.querySelector('dd').textContent])"
+
+
+def harps_of(line: str) -> str:
+    """harp.py's header line without its label: the facts' Harmonica line names it."""
+    return line.removeprefix("Harmonica: ")
 
 
 def chords_in(key: Key, names: list[str]) -> list:
@@ -88,10 +94,10 @@ def test_the_harmonica_line_names_the_harps_for_the_song_and_follows_the_key(tmp
         b.click("#t-up")
         b.click("#t-up")
         up = b.js(FACTS)
-    assert "Harmonica" not in guitar
-    assert here == "Key G · from the sheet" + "Harmonica: G harp (1st position) · C harp (2nd)"
-    assert here.endswith(harp.header_line(G, chords_in(G, CHORDS)))
-    assert up.endswith("Harmonica: A harp (1st position) · D harp (2nd)")
+    assert [name for name, _ in guitar] == ["tuning", "capo", "key"]
+    assert here == [["key", "G · from the sheet"], ["inst", "G harp (1st position) · C harp (2nd)"]]
+    assert here[1][1] == harps_of(harp.header_line(G, chords_in(G, CHORDS)))
+    assert up == [["key", "A (+2) · from the sheet"], ["inst", "A harp (1st position) · D harp (2nd)"]]
 
 
 def test_with_a_capo_the_harmonica_plays_the_key_the_song_sounds_in(tmp_path):
@@ -100,8 +106,9 @@ def test_with_a_capo_the_harmonica_plays_the_key_the_song_sounds_in(tmp_path):
         names = b.js("[...document.querySelectorAll('#sheet .c')].map((c) => c.textContent)")
     sounding = Key(6, "aeolian")  # F#m
     assert names == ["F#m", "D", "A", "E"]
-    assert facts == "Key F#m · from the sheet" + harp.header_line(sounding, chords_in(sounding, names))
-    assert facts.endswith("Harmonica: E harp (3rd position, dorian) · D harp (5th, phrygian) · A harp (4th, aeolian)")
+    assert facts == [["key", "F#m · from the sheet"],
+                     ["inst", harps_of(harp.header_line(sounding, chords_in(sounding, names)))]]
+    assert facts[1][1] == "E harp (3rd position, dorian) · D harp (5th, phrygian) · A harp (4th, aeolian)"
 
 
 # --- its settings row: each chord on the harp chosen ------------------------------------------------------------------
@@ -271,7 +278,8 @@ def test_a_songbooks_song_on_the_flute_reads_the_one_block_of_fingerings(tmp_pat
         facts = b.js(FACTS)
         choose(b, "Harmonica")
         line = b.js(FACTS)
-    assert facts.startswith("Key F#m") and found["title"] == ["F#m scale"]
+    assert facts == [["key", "F#m · from the sheet"]] and found["title"] == ["F#m scale"]
     assert [[n, f] for n, f, _ in found["scale"]] == fingered(FLUTE, scale_notes(Key(6, "aeolian")))
-    assert line.endswith(harp.header_line(Key(6, "aeolian"), chords_in(Key(6, "aeolian"), ["F#m", "D", "A", "E"])))
+    harps = harp.header_line(Key(6, "aeolian"), chords_in(Key(6, "aeolian"), ["F#m", "D", "A", "E"]))
+    assert line == [["key", "F#m · from the sheet"], ["inst", harps_of(harps)]]
     assert json.dumps(found)  # drawn, from the songbook's one block

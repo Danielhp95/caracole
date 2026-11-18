@@ -1670,9 +1670,9 @@ and cache.
   `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
   one song's with `--song`, in the song's own version: its `[version]` (Make
   this my version, below), else transposed as `[transpose]` says, else as written.
-  The PDF has one line under the title: the artist and the viewer's key line
-  ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
-  without a capo), then a capo or a tuning the tab's notes name
+  The PDF has one line under the title: the artist and the viewer's Capo and
+  Key lines on one line ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or
+  "Soda Stereo · Key Bm" without a capo), then a capo or a tuning the tab's notes name
   ("Soda Stereo · Key Bm · half step down"): a capo they name for a sheet
   with none of its own, only where its chords are played where the sheet
   writes them (a version in another key or capo plays them elsewhere, and
@@ -3055,24 +3055,31 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   songbook (a page you come back to, by a reload, Back or a tab restored, opens
   on the browser's choice whatever its old address says; so do the pinyin, the
   Chinese characters and the instrument), and the address keeps `necks=0` too, for a page served by
-  `caracole serve`, where the browser keeps nothing: ‹ and › to another
-  version keep it, so do a harmonica tab's link in the Harmonica row and its
-  page's ‹ Chord sheet, and in a songbook so does every step to another song (the
+  `caracole serve`, where the browser keeps nothing: a link to another
+  version in the version list keeps it, so do a harmonica tab's link in the
+  Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset all** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
   there is no rail and no button for it, but the neck (narrowed with the
   keyboard's focus in the rail, the focus goes to the bar).
-- **The key line** under the title says how the song is played. With a capo,
-  it names the key of the shapes you play, the capo and the key the song
-  sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
-  "Key Em". Each says where the key came from. On the piano, the harmonica,
-  the flute and the recorder, which take no capo, it names the key the song
-  sounds in ("Key F#m"), and the chords are named as they sound (F#m, not
-  Em): the guitar's capo comes back with the guitar. On the harmonica a
-  second line names the harps for the song, each in its position: "Harmonica:
-  G harp (1st position) · C harp (2nd)" (below).
+- **The song's facts**, under the title, on three lines, each a label and its
+  value, as you play the song: **Tuning**, the instrument's open strings (the
+  guitar's E A D G B E, a ukulele's G C E A, the baritone's D G B E), on the
+  guitar the tuning the sheet's notes name ("Drop D", as the PDF's line under
+  the title names it); **Capo**, none or its fret, as set now; and **Key**,
+  how the song is played. With a capo, the Key line names the key of the
+  shapes you play and the key the song sounds in: "Em shapes · sounds F#m".
+  With none, the key alone: "Em". Transposed, the key it sounds in says how
+  far it moved: "F#m (+2)". Each says where the key came from. A sheet of
+  words alone has no facts, so none says its capo either (its PDF's line does).
+  The piano, the harmonica, the flute and the recorder take no capo and have
+  no strings: no Tuning or Capo line, and the Key line names the key the song
+  sounds in ("F#m"), the chords named as they sound (F#m, not Em): the
+  guitar's capo comes back with the guitar. On the harmonica a line under the
+  Key line, **Harmonica**, names the harps for the song, each in its position:
+  "G harp (1st position) · C harp (2nd)" (below).
 - **Instrument**, a menu in the settings: Guitar (the default), Ukulele (G C E A, the
   G string high), Ukulele, low G, Baritone ukulele (D G B E), Piano,
   Harmonica, Flute and Recorder. It
@@ -3092,11 +3099,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the first and second inversions (‹ ›), the right hand around middle C and
   the bass, the root or a slash chord's, for the left hand below it. The rail
   of necks (below) draws a ukulele's four strings, and the piano has none.
-  The **Harmonica** is a 10-hole diatonic harp in Richter tuning. The key line
-  names the harps that play the song, two or three, best first, each with its
-  position, numbered round the circle of fifths (1st: the harp in the song's
-  key; 2nd, "cross harp": a harp a fourth above the song; 3rd, "slant harp": a
-  whole tone below; and the mode the harp plays in from the 3rd on: "E harp
+  The **Harmonica** is a 10-hole diatonic harp in Richter tuning. Its line in
+  the song's facts names the harps that play the song, two or three, best
+  first, each with its position, numbered round the circle of fifths (1st: the
+  harp in the song's key; 2nd, "cross harp": a harp a fourth above the song;
+  3rd, "slant harp": a whole tone below; and the mode the harp plays in from
+  the 3rd on: "E harp
   (3rd position, dorian)"). A song in a major key lists the 1st position, then
   the 2nd; a song in another mode, the positions that suit it (the 3rd, 4th
   and 5th for a minor one), those that play the most of its chords first. Its
@@ -3124,8 +3132,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   browser keeps it once for every sheet and songbook, and the address keeps
   `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
   `recorder`) while it is another
-  than the guitar, for a page served by `caracole serve`; ‹ and › to another
-  version keep it, so does the trip to a harmonica tab's page and back, and so
+  than the guitar, for a page served by `caracole serve`; a link to another
+  version in the version list keeps it, so does the trip to a harmonica tab's
+  page and back, and so
   does every step to another song in a songbook (a
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
@@ -3133,18 +3142,39 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the instrument shown, and **Make mine** keeps it, so the song
   opens there (`caracole render --version`'s `inst=`); a songbook may play a
   song on its own (`caracole songbook set --instrument`).
-- **The versions** of a song Ultimate Guitar has several of: under the key
-  line, the sheet's viewer and each version kept beside it say which of UG's
-  chords versions they are, with its rating and votes: "Ver 3 of 13 ·
-  4.86★ (408) · the one", the one being the version the title opens. A song
-  whose sheet is LaCuerda's says "13 versions on UG · the one: LaCuerda's
-  sheet" there. ‹ and › open the version kept before or after this one, in
-  rank order, in the same tab, at the same text size and scroll speed (the
-  key, the capo and the rest are each sheet's own). Tap the line for the list
-  of every version UG has, in rank order: rating, votes, which is the one,
-  which are kept, which is this page, and the first lines of the tabber's
-  note. It sits where the settings do (at the foot on a phone, a rail beside
-  the song from 900 px wide, in their place). A kept version opens from it;
+- **The version line**, under the artist, on the sheet's viewer and each
+  version kept beside it: the kind of sheet, which of UG's chords versions
+  the page is, its label where UG gives one, and its rating and votes:
+  "Chords · Ver 7 of 13 · acoustic · ★ 4.80 (1,204)" ("Ukulele chords" for
+  UG's Ukulele Chords; "New" for a version with no rating yet; no "Ver 1 of
+  1" for a song with one version). A song whose sheet is LaCuerda's says
+  "Chords · LaCuerda's sheet" there. After it, an icon for each kind of
+  thing the song keeps to play from, the library card's (the chord sheet,
+  Guitar Pro, a text tab, a harmonica tab, a game music tab, a score), each
+  with how many: the chord sheet's count is its versions on UG, "13", the
+  same as "of 13". The line shows where UG lists a version of the song, or
+  the song keeps something more than the page: none for a sheet alone. On a
+  narrow screen the icons go under the line. Tap the line for the list,
+  a group a kind with its icon and how many, in the library card's order.
+  **Chords** first: every version UG has, in rank order, its rating and votes
+  ("★ 4.86 (408)", or "New"), which is the one, which are kept, which is this
+  page (ticked), and the first lines of the tabber's note; a song UG lists
+  no version of has its chord sheet alone there ("Chord sheet", or "Ukulele
+  chords"). Then a group for each other kind the song keeps, a row a file,
+  named as the library card names it ("Guitar Pro 1 · gtptabs", "Harmonica
+  tab 1 · harptabs", "Score 1 (PDF)"): a harmonica tab opens its page, a text
+  tab, a game music tab or a score's PDF the file itself, and a Guitar Pro
+  or Power Tab file, or a score in another format, is saved under the song's
+  name; served by `caracole serve`, a Guitar Pro file it can draw opens "in
+  the browser" (see [Guitar Pro files in the browser](#caracole-serve)), as
+  the settings' Guitar Pro row does. On a phone the list comes up from the
+  bottom, over the bar, where the settings do; from 900 px wide it opens
+  under the line, beside the settings or the Harmony panel, the song staying
+  where it is, never over a rail, and scrolls with the page; it ends above
+  the bar, its rows scrolling within it, and its heading and × stay at its
+  top as they scroll, on a phone too. A kept version opens from it, in
+  the same tab, at the same text size and scroll speed (the key, the capo
+  and the rest are each sheet's own), and so does a harmonica tab's page;
   one gone from UG is listed and opens nothing. Served by `caracole serve`,
   **Keep** on a version not kept, **Make this the one** on a kept
   version's page, and **Back to our pick** while a `[pin]` of yours
@@ -3189,18 +3219,18 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Back then leaves the page, as it would have with none opened. On a phone one
   is open at a time: opening another (a chord's card with the settings open,
   the settings over the necks' sheet) closes the one open. From 900 px wide
-  the card sits by its chord beside the settings, the Harmony panel or the
-  versions (one of those three at a time, in the rail), and Back closes the
-  one opened last first. What you change with one open (the key, the capo, a
-  shape) stays as it closes, in the address too, and the song stays where you
-  scrolled it under it. A page whose history the browser refuses opens and
+  the card sits by its chord and the versions list under its line, beside
+  the settings or the Harmony panel (one of those two at a time, in the
+  rail), and Back closes the one opened last first. What you change with one
+  open (the key, the capo, a shape) stays as it closes, in the address too,
+  and the song stays where you scrolled it under it. A page whose history the browser refuses opens and
   closes them all the same, and Back leaves it. Full screen (below) is one of
   them too.
 - **Full screen**: **Hide controls** (full screen ›), the first of the
   settings' places to go, or a double tap beside the song (in its margins, or
   beside a line's end, never on a word, a chord, the title or a control: two
-  taps or clicks within 350 ms and 30 px of each other), hides the bar, the key
-  line under the title and the rail of necks (and the necks' sheet), so the
+  taps or clicks within 350 ms and 30 px of each other), hides the bar, the
+  song's facts under the title and the rail of necks (and the necks' sheet), so the
   song has the screen; a thin handle stays at the foot of the screen. A tap on
   it, Escape or Back brings them back, the focus on ⋯ when Hide controls hid
   them; a double tap while they are hidden does nothing. It is one step of the history, as the
@@ -3408,14 +3438,14 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   mode and the chord names change the chords alone. The choice is the
   reader's, not a song's, as the rail of necks' is: the browser keeps it once
   for every sheet and songbook, and the address keeps `py=1` while it is on,
-  for a page served by `caracole serve`, where the browser keeps nothing: ‹
-  and › to another version keep it, and in a songbook so does every step to
-  another song (served, a sheet opened afresh from the library page starts
-  without it, as with the rail). Printed from the browser, the page prints
-  what it shows, readings and all; the PDFs (the sheet's, an export's, a
-  songbook's) have none. Copied, the lyrics leave the readings out. A sheet
-  without chords has no settings, so no Pinyin row, but shows the readings
-  when another page turned them on.
+  for a page served by `caracole serve`, where the browser keeps nothing: a
+  link to another version in the version list keeps it, and in a songbook
+  so does every step to another song (served, a sheet opened afresh from the
+  library page starts without it, as with the rail). Printed from the
+  browser, the page prints what it shows, readings and all; the PDFs (the
+  sheet's, an export's, a songbook's) have none. Copied, the lyrics leave the
+  readings out. A sheet without chords has no settings, so no Pinyin row, but
+  shows the readings when another page turned them on.
 - **Guitar Pro tab ↗**, in the settings of a song with a Guitar Pro file (not a
   Power Tab one), a row a file: served by caracole serve, it opens the file
   drawn and played "in the browser" (see
@@ -3568,6 +3598,16 @@ the library page link it, the tab's text beside it.
   instrument as they came (served, where the browser keeps nothing, the
   address carries them both ways), and **Tab as text**, at the foot, opens
   `harmonica-1.txt`.
+- **The version line**, under the artist, as on the sheet's viewer (above):
+  "Harmonica · Tab 1 of 2" (the tab alone of its song says "Harmonica"), then
+  the song's icons, the sheet's. Tap it for the same list: UG's versions of
+  the song's sheet (none of them this page), each other kind it keeps, this
+  tab ticked under Harmonica. Each page opens from it with the rail hidden,
+  the pinyin, the Chinese characters and the instrument as they came, as ‹
+  Chord sheet does; served, Keep and Back to our pick work on the song's
+  sheet, and a song with no sheet lists its other kinds alone. On a phone the list comes up from the bottom, over the bar, in the
+  place of the overlay's sheet (one at a time); from 900 px it opens under
+  the line. A tab with nothing else beside it has no line.
 - **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
   and shown: its harp is the page's, both ways (a harp tapped on the circle is
   the one the page plays and names its notes on, and − and + move the

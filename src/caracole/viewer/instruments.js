@@ -22,8 +22,9 @@
   //                                     draw itself (a harmonica, a flute: not "strings" or "keys"); the viewer offers
   //                                     it in its Instrument menu only once registered, and draws the page again
   //                                     (the event "caracole:instruments" on document). ``parts``, each optional:
-  //                                       header(view)  a line of text under the key line, for this instrument alone,
-  //                                                     or "" for none
+  //                                       header(view)  a line of text for this instrument alone, or "" for none:
+  //                                                     the header's facts give it a line of its own, under the
+  //                                                     Key line, the instrument's name its label
   //                                       diagram(view, chord, bare)
   //                                                     a chord's picture, an Element (the card's, and the strip's,
   //                                                     ``bare``), or null for none

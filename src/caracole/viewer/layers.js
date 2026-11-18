@@ -43,6 +43,17 @@
   //                    is called after either. It makes no history entry. Returns { end() }: ends an "auto" (the
   //                    handle's tap, Escape, any layer opened) and keeps it ended until SHORT changes again.
   //
+  //   placeUnder(pop, anchor)
+  //                    a popover's place under what opens it, measured from the boxes as they are now: pop's
+  //                    --pop-top and --pop-left (px, in the page's coordinates: the page's stylesheet sets it absolute
+  //                    at them, so that it scrolls with the page) put it UNDER_GAP (6) px under anchor's box, its left
+  //                    edge on the anchor's, kept UNDER_EDGE (8) px within the window less the page's rails (the room
+  //                    body's padding leaves them: viewer.css's html[data-necks] on the left, html[data-panel] on the
+  //                    right) on either side; --pop-room, that room's width, as wide as the stylesheet lets it be;
+  //                    --pop-y, its top in the window as it is placed, which the stylesheet's max-height counts, so
+  //                    that it ends above the bar (--foot). The versions list's, from 900 px wide. It writes to pop
+  //                    alone.
+  //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
   // address.
@@ -171,6 +182,26 @@
     });
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, SHORT, DOUBLE_MS, DOUBLE_PX,
-    MARGIN_SKIP });
+  const UNDER_GAP = 6, UNDER_EDGE = 8;
+  const placeUnder = (pop, anchor) => {
+    if (!(pop instanceof HTMLElement) || !(anchor instanceof Element)) return;
+    // Measured with the popover at the page's top left, where it moves nothing (a place of its own, or none yet, at
+    // the document's end, could bring the page a scrollbar that shifts the anchor).
+    for (const name of ["--pop-top", "--pop-left", "--pop-y"]) pop.style.setProperty(name, "0px");
+    const a = anchor.getBoundingClientRect();
+    // The window less the rails beside the song, which make room for themselves in body's padding.
+    const body = document.body, b = body.getBoundingClientRect(), s = getComputedStyle(body);
+    const from = Math.max(0, b.left + (parseFloat(s.paddingLeft) || 0)) + UNDER_EDGE;
+    const to = Math.min(document.documentElement.clientWidth, b.right - (parseFloat(s.paddingRight) || 0)) - UNDER_EDGE;
+    pop.style.setProperty("--pop-room", Math.max(0, Math.floor(to - from)) + "px");
+    const left = Math.max(from, Math.min(a.left, to - pop.offsetWidth));  // its width within that room, measured
+    // Its top on a whole pixel at or below the anchor's foot: the gap never less than UNDER_GAP.
+    const top = Math.ceil(a.bottom) + UNDER_GAP;
+    pop.style.setProperty("--pop-top", top + Math.round(window.scrollY) + "px");
+    pop.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
+    pop.style.setProperty("--pop-y", top + "px");
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, SHORT, DOUBLE_MS,
+    DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
 })();

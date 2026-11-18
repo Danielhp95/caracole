@@ -49,6 +49,29 @@ object RenderNames {
     const val HARMONICA_FILE = """harmonica-(\d+)\.txt"""
     const val HARMONICA_PAGE = """harmonica-(\d+)\.html"""
 
+    /** render._KINDS: what a song keeps to play from beside its chord sheet, in its library card's order (a viewer's
+     * `kinds`, SongPass's). */
+    val KINDS: List<String> = listOf("guitar", "tab", "harmonica", "gametab", "score")
+
+    /** render._KIND_GUITAR, render._KIND_SCORE and inbox.GAMETAB_FILE: a kept Guitar Pro or Power Tab file's name, a
+     * score's and a game music tab's; render._TAB, UG's text tab. */
+    const val KIND_GUITAR = """guitar-(\d+)(\.[A-Za-z0-9]+)"""
+    const val KIND_SCORE = """score-(\d+)(\.[a-z]+)"""
+    const val GAMETAB_FILE = """gametab-(\d+)\.txt"""
+    const val TAB = "tab.txt"
+    val KIND_GUITAR_RE: Regex by lazy { PyRegex.compile(KIND_GUITAR) }
+    val KIND_SCORE_RE: Regex by lazy { PyRegex.compile(KIND_SCORE) }
+    val GAMETAB_FILE_RE: Regex by lazy { PyRegex.compile(GAMETAB_FILE) }
+
+    /** render._SCORE_FORMATS: a score's format by its extension, as the library card names it, in the order it lists
+     * a score's formats (inbox.SCORE_EXTENSIONS'). */
+    val SCORE_FORMATS: Map<String, String> = linkedMapOf(
+        ".mscz" to "MuseScore", ".mxl" to "MusicXML", ".musicxml" to "MusicXML", ".pdf" to "PDF", ".mid" to "MIDI",
+        ".midi" to "MIDI")
+
+    /** icons.INBOX: the source of a file you filed from the inbox, which a kind's label names none of. */
+    const val INBOX = "inbox"
+
     /** library.LYRICS_PAGES: the lyrics sites whose fair use asks a link back, and where their pages are. */
     val LYRICS_PAGES: Map<String, String> =
         linkedMapOf("megalobiz" to "https://megalobiz.com/", "azlyrics" to "https://www.azlyrics.com/")

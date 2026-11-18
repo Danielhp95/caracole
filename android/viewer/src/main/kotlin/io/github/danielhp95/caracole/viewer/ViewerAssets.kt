@@ -21,13 +21,16 @@ object ViewerAssets {
     enum class Page(val styles: List<String>, val scripts: List<String>) {
         SHEET(
             listOf("viewer.css"),
-            listOf("strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "viewer.js"),
+            listOf("strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "kinds.js", "viewer.js"),
         ),
         SONGBOOK(
             listOf("viewer.css", "book.css"),
             listOf("book.js", "strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "viewer.js"),
         ),
-        HARMONICA(listOf("viewer.css", "harptab.css"), listOf("strum.js", "overlay.js", "layers.js", "harptab.js")),
+        HARMONICA(
+            listOf("viewer.css", "harptab.css"),
+            listOf("strum.js", "overlay.js", "layers.js", "kinds.js", "harptab.js"),
+        ),
     }
 
     private val texts = ConcurrentHashMap<String, String>()

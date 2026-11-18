@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.viewer.render.internal.RenderError
 import io.github.danielhp95.caracole.viewer.render.internal.SongPass
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -318,6 +319,12 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
 
         private const val OPEN = "<script type=\"application/json\" id=\"songs\">"
         private const val CLOSE = "</script>"
+
+        /** icons.SOURCES[provider].name ("UG", "gtptabs"), as a library with no icon kept names it
+         * (caracole/page/empty_library.json's `icons`, every source's): the source a viewer's `kinds` labels a file
+         * with (SongPass); null for a provider it names none of. */
+        internal fun sourceName(provider: String): String? =
+            ((EMPTY_ICONS[provider] as? JsonObject)?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content
 
         private val EMPTY_ICONS: JsonObject by lazy {
             val path = "caracole/page/empty_library.json"

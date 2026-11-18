@@ -72,11 +72,19 @@ class SheetPageTest {
                      SheetPage.preambleHtml(Section(null, lines = listOf(Text("One"), Text("Two"))), emptyList()))
     }
 
-    @Test fun theKeyLineSaysTheShapesTheCapoAndTheSound() {
-        assertEquals("Key <b>Em</b> · <span class=\"from\">from the tab</span>",
-                     SheetPage.facts(Key(4, "aeolian"), "from the tab", 0))
-        assertEquals("<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b>", SheetPage.facts(Key(4, "aeolian"), null, 2))
-        assertEquals("Capo <b>3</b>", SheetPage.facts(null, "from the tab", 3))
-        assertEquals("", SheetPage.facts(null, null, 0))
+    @Test fun theFactsAreTuningCapoAndKeyTheKeySayingTheShapesAndTheSound() {
+        assertEquals("E A D G B E", SheetPage.GUITAR_STRINGS)
+        assertEquals("<dl class=\"facts\" id=\"facts\">\n" +
+                     "<div class=\"fact\" data-fact=\"tuning\"><dt>Tuning</dt><dd>E A D G B E</dd></div>\n" +
+                     "<div class=\"fact\" data-fact=\"capo\"><dt>Capo</dt><dd>none</dd></div>\n" +
+                     "<div class=\"fact\" data-fact=\"key\"><dt>Key</dt><dd><b>Am</b> · " +
+                     "<span class=\"from\">from the tab</span></dd></div>\n</dl>\n",
+                     SheetPage.factsHtml(Key(9, "aeolian"), "from the tab", 0, null, chords = true))
+        val capo = SheetPage.factsHtml(Key(4, "aeolian"), null, 2, "Drop <D>", chords = true, suffix = "-3")
+        assertTrue(capo.startsWith("<dl class=\"facts\" id=\"facts-3\">\n"), capo)
+        assertTrue("<dd>Drop &lt;D&gt;</dd>" in capo && "<dd>2</dd>" in capo, capo)
+        assertTrue("<dd><b>Em</b> shapes · sounds <b>F#m</b></dd>" in capo, capo)
+        assertTrue("data-fact=\"key\"" !in SheetPage.factsHtml(null, "from the tab", 3, null, chords = true))
+        assertEquals("", SheetPage.factsHtml(Key(4, "aeolian"), "from the tab", 3, null, chords = false))
     }
 }

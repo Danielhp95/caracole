@@ -315,9 +315,9 @@ def test_the_page_builds_the_header_line_and_the_chords_holes_on_every_transposi
         for s in SHIFTS:
             shown = Key((7 + s) % 12, mode)
             moved = [shifted(c, s) for c in mapped[mode]]
-            line = "Harmonica: " + " · ".join(
+            line = " · ".join(  # the header's Harmonica line, labelled so: the PDF's line says "Harmonica: " first
                 f"{data['harpKeys'][(7 + s + offset) % 12]} harp ({label})" for _, offset, label in data["harps"][mode])
-            assert line == header_line(shown, moved)
+            assert "Harmonica: " + line == header_line(shown, moved)
             names = spelling(shown)
             for i, chord in enumerate(moved):
                 for offset in range(12):

@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer.pages
 
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.web.DownloadNames
 import io.github.danielhp95.caracole.core.web.Inline
@@ -23,12 +24,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigInteger
 
-/** page.build_viewer's arguments, in its order. */
+/** page.build_viewer's arguments, in its order. [kinds] is render._kinds_data's: what else the song keeps to play
+ * from, which the data holds right after its `versions`. */
 data class ViewerInputs(val cho: String, val key: String? = null, val keySource: String? = null, val transpose: Int = 0,
                         val start: String? = null, val pdf: String? = null, val export: Boolean = true,
                         val versions: JsonObject? = null, val guitar: List<String> = emptyList(),
                         val harmonica: List<JsonObject> = emptyList(), val pdfTraditional: String? = null,
-                        val video: JsonObject? = null)
+                        val video: JsonObject? = null, val kinds: JsonObject? = null)
 
 /** page._read_song: a sheet as its page shows it: the sheet read, the key of its shapes and where it came from in
  * words, and the data its block gives the script, which a caller may change before the page is written (book.py
@@ -38,7 +40,7 @@ class ReadSong(val sheet: Sheet, val key: Key?, val origin: String?, val data: L
 /**
  * viewer/page.py: a sheet's page (sheet.html, and a kept version's page), byte for byte as `build_viewer` writes it
  * for the same inputs, and the page's frame book.py and harptab_page.py reuse (`_page`, `_read_song`, `_song_html`,
- * `_facts`, `_footer`, `names_table`, `zh_attr`, `artist_line`, `pdf_line`, `_words`, `_CONTROLS`), each named after
+ * `facts_html`, `_footer`, `names_table`, `zh_attr`, `artist_line`, `pdf_line`, `_words`, `_CONTROLS`), each named after
  * Python's. Its HTML and constants are page.py's own, from data/caracole/viewer/page.json, which
  * tests/test_conformance_viewer_pages.py writes from the module; its stylesheets and scripts viewer/'s files, inlined
  * as page.py inlines them (ViewerAssets.Page.SHEET). A names table ([namesTable]) is `{"simplified": {name: as
@@ -58,6 +60,7 @@ object SheetPage {
         val data = read.data
         data["start"] = i.start?.let(::JsonPrimitive) ?: JsonNull
         if (i.versions != null) data["versions"] = i.versions
+        if (i.kinds != null) data["kinds"] = i.kinds
         if (i.video != null) data["video"] = i.video
         if (i.harmonica.isNotEmpty()) {
             data["harmonicaTabs"] = JsonArray(i.harmonica.map { tab -> JsonObject(tab.filterKeys { it != "harp" }) })
@@ -76,7 +79,8 @@ object SheetPage {
         val title = sheet.title.ifEmpty { "Untitled" }
         val pageTitle = if (sheet.artist.isNotEmpty()) "$title · ${sheet.artist}" else title
         val names = namesTable("hanzi" in data, listOf(title, sheet.artist, pageTitle))
-        val body = body(sheet, title, read.key, read.origin, i.pdf, export = i.export, guitar = i.guitar.isNotEmpty(),
+        val tuning = (data["tuningName"] as? JsonPrimitive)?.content
+        val body = body(sheet, title, read.key, read.origin, i.pdf, tuning, export = i.export, guitar = i.guitar.isNotEmpty(),
                         names = names, pdfTraditional = i.pdfTraditional, credit = i.video != null) +
             Inline.jsonBlock("song", JsonObject(data)) +
             (if (names != null) Inline.jsonBlock("song-names", PageData.names(names)) else "")
@@ -121,12 +125,15 @@ object SheetPage {
     fun page(title: String, body: String, styles: List<String>, scripts: List<String>,
              names: Map<String, Map<String, String>>? = null): String = PageFrame.page(title, body, styles, scripts, names)
 
-    /** _read_song: the sheet read, its key and where that came from, and its data. */
+    /** _read_song: the sheet read, its key and where that came from, and its data, with `tuningName`, the tuning its
+     * notes name (Sheets.splitPreamble, the PDF's rule), when they name one. */
     fun readSong(cho: String, key: String?, keySource: String?, transpose: Int): ReadSong {
         val sheet = Sheets.parse(cho)
         val chords = SheetView.chords(sheet)
         val (songKey, origin) = SheetView.songKey(sheet, chords, key, keySource)
-        return ReadSong(sheet, songKey, origin, PageData.data(sheet, chords, songKey, origin, transpose))
+        val data = PageData.data(sheet, chords, songKey, origin, transpose)
+        Sheets.splitPreamble(PyStr.splitlines(cho)).tuning?.let { data["tuningName"] = JsonPrimitive(it) }
+        return ReadSong(sheet, songKey, origin, data)
     }
 
     /** _song_html: what follows a song's header, on sheet.html and in a songbook alike; [suffix] tells a songbook's
@@ -144,8 +151,13 @@ object SheetPage {
     /** _section_html: a section of the song, its label and its lines; [names] the sheet's chords. */
     fun sectionHtml(section: Section, names: List<String>): String = PageHtml.sectionHtml(section, names)
 
-    /** _facts: the key line under the title, as HTML. */
-    fun facts(key: Key?, origin: String?, capo: Int): String = PageHtml.facts(key, origin, capo)
+    /** GUITAR_STRINGS: the guitar's open strings, as the Tuning line names them for a sheet that names no tuning. */
+    val GUITAR_STRINGS: String get() = PageHtml.GUITAR_STRINGS
+
+    /** facts_html: the song's facts under its title, as HTML: its Tuning, its Capo and, where it has one, its Key (a
+     * songbook's song's by [suffix], "-3"); "" for a sheet with no [chords]. */
+    fun factsHtml(key: Key?, origin: String?, capo: Int, tuning: String?, chords: Boolean, suffix: String = ""): String =
+        PageHtml.factsHtml(key, origin, capo, tuning, chords, suffix)
 
     /** _footer: [links] to the files beside the page, chords-db's credit and licence, a word on privacy. */
     fun footer(links: String): String = PageHtml.footer(links)
@@ -153,19 +165,19 @@ object SheetPage {
     /** _words: [text] cut where a line may wrap. */
     fun words(text: String): List<String> = PageHtml.words(text)
 
-    /** _body: the page's header (‹ Library, the title, the artist, the key line, the versions), the song, the
-     * footer, and the controls. */
-    private fun body(sheet: Sheet, title: String, key: Key?, origin: String?, pdf: String?, export: Boolean,
-                     guitar: Boolean, names: Map<String, Map<String, String>>?, pdfTraditional: String?,
+    /** _body: the page's header (‹ Library, the title, the artist, the version line, the song's facts), the song, the
+     * footer, and the controls; [tuning] the one the sheet's notes name. */
+    private fun body(sheet: Sheet, title: String, key: Key?, origin: String?, pdf: String?, tuning: String?,
+                     export: Boolean, guitar: Boolean, names: Map<String, Map<String, String>>?, pdfTraditional: String?,
                      credit: Boolean): String {
         val pdfLink = if (!pdf.isNullOrEmpty()) pdfLine(listOf(Triple(pdf, "PDF", pdfTraditional))) else ""
         val controls = if (export) PageConstants.SHEET_CONTROLS else PageConstants.CONTROLS
         return "<div class=\"page\">\n<header class=\"head\">\n" +
-            "<a class=\"back\" href=\"${PageConstants.LIBRARY_PAGE}\">‹ Library</a>\n" +
+            "<a class=\"back\" href=\"${PageConstants.LIBRARY_PAGE}\" aria-label=\"Library\" title=\"Library\">‹</a>\n" +
             "<h1${zhAttr(title, names)}>${PyText.escape(title)}</h1>\n" +
             artistLine(sheet.artist, names) +
-            "<p class=\"facts\" id=\"facts\">${facts(key, origin, sheet.capo ?: 0)}</p>\n" +
             PageConstants.VERSIONS +
+            factsHtml(key, origin, sheet.capo ?: 0, tuning, chords = sheet.chords.isNotEmpty()) +
             "</header>\n" +
             songHtml(sheet, credit = credit) +
             footer(pdfLink) +

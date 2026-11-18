@@ -243,6 +243,12 @@ sitemaps list by bare ids alone, and the fetch their page.
     - `versions`, `sheet_versions.as_data` with `sheet`, the one's provider, `pinned`, whether a `[pin]` chooses it
       (`sheet_versions.sheet_pins`, what `caracole versions --clear` takes out), and `this` on each entry, true on the
       page's own;
+    - `kinds`, right after it, what else the song keeps to play from, as its library card names it (`_kinds_data`):
+      its sheet's kind (`sheet`, `ukulele`: `sheet_versions.sheet_kind`) and page, then its Guitar Pro, text tab,
+      harmonica, game music and score files, a group a kind in the card's order, each item's label with its source as
+      `icons.SOURCES` names it ("Guitar Pro 1 · gtptabs", none for the inbox), a Guitar Pro file's `browser` and
+      `download`, a harmonica tab's `page` (`_SCORE_FORMATS`, library_page.py's, test_render_kinds.py); none on an
+      auto sheet beside a human one;
     - and `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
       linked in served settings as Guitar Pro tab.
   - **Exports**: `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the
@@ -317,8 +323,8 @@ sitemaps list by bare ids alone, and the fetch their page.
     a key's scale and a chord's notes as they read them.
   - harp.py and winds.py, each with its `tables` in a viewer's data, for **winds.js**, which registers the Harmonica,
     the Flute and the Recorder with instruments.js:
-    - the harmonica's line under the key line, a chord's holes on the card and the strip, its settings row (a harp of
-      the line chosen, each chord on it, the song's `harmonicaTabs` linked);
+    - the harmonica's line in the header's facts (Harmonica: the harps for the song), a chord's holes on the card and
+      the strip, its settings row (a harp of the line chosen, each chord on it, the song's `harmonicaTabs` linked);
     - the winds' fingerings of a chord's notes and their row (A–G or Do–Si, the recorder's baroque or German, the
       key's scale);
     - the notes heard in strum.js's `reed`, `flute` and `recorder` voices.
@@ -330,7 +336,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     - `chord_shapes`, what the viewer shows a chord on one;
     - and version.py's `for_instrument`, the capo folded in on one that takes none.
   - **instruments.js**: their box and keyboard and `window.caracoleInstruments`, where another instrument's script
-    registers its drawing, a header line and a settings row.
+    registers its drawing, a line of the header's facts and a settings row.
 - **songbook.py**: songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts
   (`caracole songbook set --instrument`, the Songbooks tab's chip; `_run_strings`, the strings its PDF draws).
   - `SongbookSong`, `Songbook.songs`, `.texts`.
@@ -347,7 +353,16 @@ sitemaps list by bare ids alone, and the fetch their page.
 `harmonica-N.html` comes of `_render_harmonica`, whatever came of the sheet's PDF:
 
 - viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, strum.js,
-  overlay.js and harptab.js.
+  overlay.js, layers.js, kinds.js and harptab.js.
+- **Its version line and list**, the sheet's viewer's (page.py `_VERSIONS` after the artist line, `_VERSION_LIST`
+  after the pill; kinds.js): render.py passes `versions=_on_page(listed, None)` (no `this`) and the song's `kinds`,
+  its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
+  Tab 1 of 2", kinds.js's `hereIn`), its icons the sheet's; the list's Chords group the sheet's, none of it this
+  page, and this tab ticked in its group. harptab.js attaches it with its `"list"` layer (`openLayer`, `closeLayer`,
+  `inSight`), `carry` the screen's choices as ‹ Chord sheet takes them (`screenChoices`), `sheetPath` the song's
+  sheet's path in the library, none for a song with no sheet, so served its versions are kept and chosen on the
+  song's sheet; on a phone the list docks (`.top`, `data-dock="version-list"`), from 900 px a popover
+  (test_viewer_versions.py's section "a harmonica tab's page", test_render_kinds.py).
 - **harptab.py reads the tab**, its holes over syllables in the sheet's `.s` columns:
   - a notation is data (`Notation`, its `Symbol`s: a mark, its meaning, before, after, around or between holes;
     `PRESETS` signs, brackets, letters, signs after, barrett, the commonest first);
@@ -1036,9 +1051,30 @@ It is rows.js's, shared by both pages:
     sleeps again.
   - test_viewer_sound.py's `SCHEDULE` records each note and timer the page makes, and plays a slow device on demand
     (a resume held, `ended` events late).
-- **Versions**: a sheet viewer's data `versions` (sheet_versions.as_data, with each entry's `this` and the one's
-  provider, `sheet`) draws its switcher under the key line and the list it opens, a rail like the settings and never
-  beside them (test_viewer_versions.py); the songbook has none.
+- **Versions**: kinds.js (`window.caracoleKinds`, inlined on a sheet's page after layers.js and before viewer.js, which
+  attaches it with its layers and `carry`, its `vAddress`, and on a harmonica tab's page before harptab.js) draws, from a sheet viewer's data `versions`
+  (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) and `kinds` (render.py
+  `_kinds_data`), the version line under the artist ("Chords · Ver 3 of 13 · ★ 4.86 (408)") with an icon a kind the
+  song keeps and how many, and the list it opens; no ‹ ›, the list opens each kept version (test_viewer_versions.py);
+  the songbook has neither.
+  - The list's place: on a phone a sheet from the bottom, docked on the bar as the settings are (one of `DOCKED`);
+    from 900 px a popover under the line, never a rail (no `data-panel`: the song's column stays), beside the settings
+    or Harmony: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
+    `--pop-left`, 6 px under the line's box, at its left, in the page's coordinates, so it scrolls with the page),
+    which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
+  - The popover keeps 8 px within the window less the rails (the room body's padding leaves them: `data-necks`,
+    `data-panel`), as wide as fits there (`--pop-room`), and ends above the bar (`--pop-y`, its top in the window as
+    placed, in viewer.css's `max-height` with `--foot`), so its own scroll reaches its last row on a short window;
+    its head (its ×) is sticky at every width (test_viewer_versions.py's short window, rails and resize tests).
+  - The list is a group a kind (`#kind-groups`, `section.kind-group[data-kind]`, `h3.kind-head`): Chords first
+    (`#ver-acts`, `#ver-items`: every version UG has, or the chord sheet alone), then each other kind in the card's
+    order, a row each named as the card names it, a tap from the list: a harmonica tab's page with `carry`, a Guitar
+    Pro file caracole serve draws its `/guitar?file=` page (served alone), any other file the file itself; this page's
+    own row ticked, `aria-current`, no link. The settings keep their Guitar Pro row beside the list's group.
+  - Its icons are the library card's: `GLYPHS`, rows.js's drawings copied (with its `check`, the tick), and
+    `GLYPH_OF`, card.js's glyph of each kind, which
+    `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and card.js: a
+    library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;
@@ -1061,11 +1097,14 @@ It is rows.js's, shared by both pages:
   - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
     depth through what the page writes into its address;
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
-    leaving it open); from 900 px the rails (the settings, Harmony, the versions) one at a time, a card beside them;
+    leaving it open); from 900 px the rails (the settings, Harmony) one at a time, a card and the versions list beside
+    them;
     `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
-  - a harmonica tab's page (harptab.js) has two, `"sizes"` (Aa) and `"sheet"` (the necks' sheet): `layers`,
-    `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px, Aa giving way to the sheet at
-    every width, Escape closing the top one; it has no More panel;
+  - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
+    list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px;
+    from 900 px the list and the sheet open together, either over the other (the sheet closing full screen, the list
+    opening over it); Aa giving way to the sheet and the list at every width, the top of the sheet and the list docked
+    on a phone (`topDocked`, `docked`, `dock`, `restack`), Escape closing the top one; it has no More panel;
   - `history.scrollRestoration` is `manual` from a layer's entry on, so a step down leaves the song scrolled where it
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
@@ -1088,8 +1127,8 @@ It is rows.js's, shared by both pages:
   - **The necks**: whether the rail shows (`state.necks`) is the one setting kept for every page at once:
     - localStorage `caracole-viewer-necks`;
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
-      sandbox with no storage, as a link to another of the song's pages does (a version's ‹ ›, a harmonica tab's and
-      its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
+      sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
+      tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
     - with its Hide, the bar's button and the settings' row in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and
@@ -2136,7 +2175,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
   writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
   inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
-  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `factsHtml`,
   `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
   - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
     writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
@@ -2153,8 +2192,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
   `build` writes `build_harmonica_viewer`'s page on SheetPage's frame (`page`, `namesTable`, `isChinese`, `zhAttr`,
-  `artistLine`, `words`, `LIBRARY_PAGE`; `ViewerAssets.Page.HARMONICA`), its data's members in Python's order (`groups` and `rows` filled as the tab
-  is written), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
+  `artistLine`, `words`, `LIBRARY_PAGE`, PageConstants' `VERSIONS` and `VERSION_LIST`; `ViewerAssets.Page.HARMONICA`),
+  its data's members in Python's order (`groups` and `rows` filled as the tab is written, `versions` and `kinds` after
+  `overlay`, SongPass's `renderHarmonica` passing them as render.py does), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
   `viewer.harpfit.HarpFit`, harpfit.py: `pitch`, `words`, `sheetLines`, `recordFit` (PySequence.SequenceMatcher, the
   fits by share then harp), `choose` and `Choice.tabsHarp`, and render.py's `_tab_harps` as `tabHarps` (each
   `HarmonicaTab` a kept tab as render.py reads it; one it can't read, a refused pin among them, gives no harp), the
@@ -2171,9 +2211,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
   the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
-  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port), after `PlainLyrics`
-  (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its progressions, script
-  and info.json alone, the phone's own pages of it forgotten.
+  sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port, and its `kinds`,
+  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`), after
+  `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
+  progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
     made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`
     (`unit`, `build`, `script`, which `chineseSongs` reads for the cards, the phone making no PDF record); a songbook's

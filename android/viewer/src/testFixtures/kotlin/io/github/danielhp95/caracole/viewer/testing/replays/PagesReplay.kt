@@ -71,11 +71,14 @@ object PagesReplay : AreaReplay {
                     })
                 }
                 P + "_words" -> misses.expect(record) { strings(a[0]).map(SheetPage::words) }
-                P + "_facts" -> misses.expect(record) {
+                P + "facts_html" -> misses.expect(record) {
                     val key = key(a[0])
                     a[1].jsonArray.map { case ->
-                        val (origin, capo) = case.jsonArray
-                        SheetPage.facts(key, (origin as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content, capo.jsonPrimitive.int)
+                        val (origin, capo, tuning, chords, suffix) = case.jsonArray
+                        SheetPage.factsHtml(key, (origin as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content,
+                                            capo.jsonPrimitive.int,
+                                            (tuning as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content,
+                                            chords.jsonPrimitive.boolean, text(suffix))
                     }
                 }
                 P + "_footer" -> misses.expect(record) { SheetPage.footer(text(a[0])) }
@@ -157,6 +160,7 @@ object PagesReplay : AreaReplay {
             guitar = kw["guitar"]?.let(::strings) ?: emptyList(),
             harmonica = kw["harmonica"]?.jsonArray?.map { it.jsonObject } ?: emptyList(),
             pdfTraditional = string("pdf_traditional"), video = kw["video"] as? JsonObject,
+            kinds = kw["kinds"] as? JsonObject,
         )
     }
 

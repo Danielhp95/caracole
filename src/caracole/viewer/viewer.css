@@ -94,8 +94,8 @@ a { color: inherit; }
 
 /* The title block. */
 .head { padding: 6px 0 4px; }
-.back { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: .9rem;
-  text-decoration: none; }
+.back { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+  margin: 0 0 0 -14px; color: var(--muted); font-size: 1.75rem; line-height: 1; text-decoration: none; }
 .head h1 { margin: 0; font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .artist { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; }
 /* The artist's name, a link to the library page on their songs (page.py artist_line): the line as it was, underlined
@@ -108,22 +108,35 @@ a { color: inherit; }
 .artist a:hover, .artist a:focus-visible { color: var(--text); text-decoration: underline; }
 .artist a:focus-visible { outline: none; }
 .artist a:focus-visible > span { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+/* The header's facts: a harmonica tab's one line (harptab_page.py, p.facts); a sheet's three, Tuning, Capo and Key
+   (page.py facts_html, dl.facts), each a label and its value, the labels muted in a column as wide as the longest,
+   a value in the text's colour, wrapping anywhere rather than widen a phone's page (a long tuning the notes name). */
 .facts { margin: 8px 0 0; color: var(--muted); font-size: .88rem; }
 .facts:empty { display: none; }
 .facts b { color: var(--text); font-weight: 650; }
 .facts .from { font-size: .8rem; }
-/* The versions of the sheet, under the key line: ‹ the line that opens the list ›. An end has no address,
-   and fades. The line wraps on a narrow screen rather than widen the page. */
-.versions { display: flex; align-items: center; gap: 2px; margin: 6px 0 0 -12px; }
-.vstep { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
-  color: var(--accent); font-size: 1.6rem; line-height: 1; text-decoration: none; -webkit-tap-highlight-color: transparent; }
-.vstep:not([href]) { color: var(--muted); opacity: .4; }
-.vnow { flex: 0 1 auto; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; padding-top: 8px;
+  border-top: 1px solid var(--border); font-size: .9rem; }
+dl.facts .fact { display: contents; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+dl.facts .from { color: var(--muted); }
+/* The version line, under the artist (kinds.js): which version this page is, the chevron, and an icon for each kind
+   the song keeps with how many of it, in the muted colour, the library card's glyphs; the whole a button that opens
+   the list. On a narrow screen the line wraps between its parts rather than widen the page, and the icons go under
+   it. */
+.versions { display: flex; align-items: center; margin: 6px 0 0; }
+.vnow { flex: 0 1 auto; min-width: 0; min-height: 44px; display: inline-flex; flex-wrap: wrap; align-items: center;
+  gap: 4px 8px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
   font: inherit; font-size: .88rem; line-height: 1.3; text-align: start; font-variant-numeric: tabular-nums; cursor: pointer; }
 #ver-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 #ver-line > span { min-width: 0; overflow-wrap: anywhere; }
-.vnow svg { flex: none; width: 12px; height: 12px; fill: var(--muted); }
+#ver-line .vw { display: inline-block; max-width: 100%; }  /* a part wraps whole, "★ 4.86 (408)" never apart */
+.vnow > svg { flex: none; width: 12px; height: 12px; fill: var(--muted); }  /* the chevron */
+.kinds { display: inline-flex; gap: 10px; }
+.kind { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.kind svg { width: 16px; height: 16px; }
+.kind .n { font-size: .8rem; font-variant-numeric: tabular-nums; }
 .vnow[aria-expanded="true"] { background: var(--raised); }
 .notice { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--raised); color: var(--muted);
   font-size: .85rem; }
@@ -436,7 +449,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .keys .step:hover { background: var(--border); }
   .bar .play:hover, .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
-  .vstep[href]:hover, .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
+  .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
 }
 /* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
    or not, and above a sheet docked on the bar. Its first button counts down (a ring that empties, and
@@ -486,8 +499,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    docks at the foot, on the bar (--foot: its height; the bar stays while one is docked, even as the song
    scrolls by itself, the pill above), the settings in at most 45 % of the screen and the card in about
    200 px; the one opened last hides the other until it closes. The page leaves room under the song for it
-   (--dock: its height, from the script), so the song's end comes up above it. From 900 px wide, the
-   settings are a rail beside the song and the card a popover by its chord (below). */
+   (--dock: its height, from the script), so the song's end comes up above it: the versions list too, a sheet
+   from the bottom. From 900 px wide, the settings are a rail beside the song, and the card a popover by its
+   chord and the versions list one under its line (below). */
 :root { --foot: calc(53px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
 html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
@@ -506,6 +520,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
    the next moves nothing under it. */
 .ui-head h2 { display: flex; align-items: center; min-height: 2.4em; margin: 0; font-size: 1.15rem; line-height: 1.2; }
 .panel .ui-head { padding-bottom: 6px; }  /* the second line clear of the line under it */
+/* The versions list's head kept at its top as its rows scroll (it opens scrolled to this page's row), its × within
+   reach: over the list's padding above it, and its sides, so that no row shows round it. */
+#version-list .ui-head { position: sticky; z-index: 1; top: -6px; margin: -6px -16px 0; padding: 6px 16px;
+  background: var(--surface); }
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
@@ -662,12 +680,17 @@ a.link[hidden] { display: none; }
 .hint:empty { display: none; }
 .center { text-align: center; }
 a.btn { display: inline-flex; align-items: center; text-decoration: none; }
-/* The list of versions: a row each, in rank order, the one this page is shaded; what to do with one under it. */
+/* The list: a group a kind, its heading the kind's glyph, its name and how many; in each a row each, in rank order,
+   this page's shaded and ticked; what to do with one under it. */
+.kind-group + .kind-group { margin-top: 10px; }
+.kind-head { display: flex; align-items: center; gap: 6px; margin: 4px 0; color: var(--muted); font-size: .75rem;
+  font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .vers { margin: 0; padding: 0; list-style: none; }
 .ver { display: flex; flex-wrap: wrap; align-items: center; padding: 2px 0; border-top: 1px solid var(--border); }
 .ver-main { flex: 1 1 9em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: 44px; padding: 10px 8px;
   border-radius: 10px; color: var(--text); text-decoration: none; }
 .ver-main[aria-current] { background: var(--raised); }
+.ver-main > .glyph-check { flex: none; align-self: center; color: var(--accent); }
 .ver-name { font-weight: 650; }
 a.ver-main .ver-name { color: var(--accent); }
 .ver-rate { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
@@ -761,7 +784,6 @@ a.ver-main .ver-name { color: var(--accent); }
 .card[data-kind="keys"] .shape { grid-template-columns: 84px 84px; }
 .card[data-kind="keys"] .shape .round { justify-self: center; width: 44px; }
 .strip svg.kb { width: 132px; }
-.facts .inst-line { display: block; margin-top: 2px; }
 .inst-panel:empty { display: none; }
 .inst-panel > .hint { margin: 0; }
 /* The harmonica and the winds (winds.js): a harp's ten holes, those a chord plays lit; a flute's keys or a
@@ -816,7 +838,11 @@ a.ver-main .ver-name { color: var(--accent); }
   [data-columns="2"] .sheet { columns: 2 28em; column-gap: clamp(56px, 4vw, 96px); }
 }
 /* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
-   popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. */
+   popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. So is
+   the versions list, a popover under its line (layers.js placeUnder: 6 px under #ver-now, at its left, within the
+   window less the rails, --pop-room), beside the rail and moving nothing, its rows scrolling within it past 60 % of
+   the window, or past the bar's top where that comes first (--pop-y: its top in the window as it was placed), so its
+   last row is always within reach. */
 @media screen and (min-width: 900px) {
   .sheet-ui:not(.top) { visibility: visible; }
   .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
@@ -837,6 +863,12 @@ a.ver-main .ver-name { color: var(--accent); }
   .diagram svg.wd { width: 32px; }
   .card[data-kind="keys"] .shape { grid-template-columns: 106px 106px; }
   .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
+  /* The list is a .panel too (its head's room): its rail's edges, padding and shadow are the card's here. */
+  #version-list { position: absolute; top: var(--pop-top, 0px); left: var(--pop-left, 0px); right: auto; bottom: auto;
+    width: min(380px, calc(100vw - 32px), var(--pop-room, 380px));
+    max-height: max(9rem, min(60vh, calc(100vh - var(--foot) - var(--pop-y, 0px) - 8px)));
+    max-height: max(9rem, min(60dvh, calc(100dvh - var(--foot) - var(--pop-y, 0px) - 8px)));
+    padding: 6px 16px 14px; border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
 }
 @media print {
   .bar, .pill, .handle, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }

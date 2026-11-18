@@ -163,8 +163,9 @@ def test_a_tabs_key_named_by_its_letter_alone_over_minor_chords_is_minor_on_the_
     folder = folder_of(cfg, song)
     for page in ("sheet.html", version_names(str(B))[2]):
         assert page_data(folder / page)["key"] == {"tonic": 9, "mode": "aeolian", "from": "from the tab"}, page
-        facts = re.search(r'<p class="facts" id="facts">(.*?)</p>', (folder / page).read_text("utf-8"), re.S)
-        assert facts and facts.group(1).startswith("<b>Am</b> shapes · capo <b>2</b> · sounds <b>Bm</b>"), page
+        html = (folder / page).read_text("utf-8")
+        assert '<div class="fact" data-fact="capo"><dt>Capo</dt><dd>2</dd></div>' in html, page
+        assert '<div class="fact" data-fact="key"><dt>Key</dt><dd><b>Am</b> shapes · sounds <b>Bm</b>' in html, page
     assert json.loads((folder / "info.json").read_text("utf-8"))["key"] == "A minor"
 
 

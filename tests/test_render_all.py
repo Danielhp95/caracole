@@ -2175,7 +2175,8 @@ def test_a_key_estimated_from_the_chords_names_the_shapes_in_the_pdf_viewer_expo
     assert (info_json(cfg, song)["key"], info_json(cfg, song)["key_source"]) == ("A minor", "chords")
     assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Am shapes · capo 5 · sounds Dm}"
     page = (song_dir(cfg.library_dir, song) / "sheet.html").read_text(encoding="utf-8")
-    assert re.search(r'<p class="facts" id="facts"><b>Am</b> shapes · capo <b>5</b> · sounds <b>Dm</b>', page)
+    assert '<div class="fact" data-fact="capo"><dt>Capo</dt><dd>5</dd></div>' in page
+    assert '<div class="fact" data-fact="key"><dt>Key</dt><dd><b>Am</b> shapes · sounds <b>Dm</b>' in page
     assert kv_get_json(conn, f"{KV}{song.id}")["key"] == "A minor"
     path, run = export(conn, cfg, song, "capo=0")  # the Am shapes moved up five, to sound where they did
     assert path.name == "sheet (D Minor, capo 0).pdf"

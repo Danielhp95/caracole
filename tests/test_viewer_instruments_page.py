@@ -52,7 +52,8 @@ SETTINGS = """(() => ({
   chips: [...document.querySelectorAll('#insts option')].map((o) => [o.textContent, o.selected ? 'true' : 'false']),
   row: !document.getElementById('inst-row').hidden, hint: document.getElementById('insts').title,
   capo: !document.getElementById('capo-row').hidden, easy: !document.getElementById('easy-row').hidden,
-  facts: document.getElementById('facts').textContent, hash: location.hash,
+  facts: [...document.querySelectorAll('#facts .fact')].map((r) => [r.dataset.fact, r.querySelector('dd').textContent]),
+  hash: location.hash,
 }))()"""
 
 
@@ -165,20 +166,26 @@ def test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back(tmp_path
         card = [b.js("document.getElementById('card-name').textContent"), b.js("document.getElementById('shape-note').textContent")]
         choose(b, "Guitar")
         back = [b.js(SETTINGS)["facts"], chords(b)]
-    assert guitar[0] == "Em shapes · capo 2 · sounds F#m · key from the sheet" and guitar[1] == ["Em", "C", "G", "D"]
-    assert moved[0].startswith("D#m shapes · capo 3 · sounds F#m") and moved[1] == ["D#m", "B", "F#", "C#"]
-    # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row.
-    assert piano[0]["facts"] == "Key F#m · from the sheet" and not piano[0]["capo"]
+    assert guitar[0] == [["tuning", "E A D G B E"], ["capo", "2"],
+                         ["key", "Em shapes · sounds F#m · key from the sheet"]]
+    assert guitar[1] == ["Em", "C", "G", "D"]
+    assert moved[0] == [["tuning", "E A D G B E"], ["capo", "3"],
+                        ["key", "D#m shapes · sounds F#m · key from the sheet"]]
+    assert moved[1] == ["D#m", "B", "F#", "C#"]
+    # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row in the settings
+    # nor line in the header, and no Tuning line: the piano has no strings.
+    assert piano[0]["facts"] == [["key", "F#m · from the sheet"]] and not piano[0]["capo"]
     assert piano[1] == ["F#m", "D", "A", "E"] and piano[2].startswith("F#m") and "capo" not in piano[2]
     assert card == ["F#m", "Root position · F# in the bass, left hand"]
-    assert back[0].startswith("D#m shapes · capo 3 · sounds F#m") and back[1] == ["D#m", "B", "F#", "C#"]
+    assert back[0] == moved[0] and back[1] == ["D#m", "B", "F#", "C#"]
 
 
 def test_a_ukulele_keeps_the_capo(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, CAPO_2)) as b:
         choose(b, "Ukulele")
         seen = [b.js(SETTINGS), chords(b)]
-    assert seen[0]["capo"] and seen[0]["facts"].startswith("Em shapes · capo 2 · sounds F#m")
+    assert seen[0]["capo"] and seen[0]["facts"] == [["tuning", "G C E A"], ["capo", "2"],
+                                                    ["key", "Em shapes · sounds F#m · key from the sheet"]]
     assert seen[1] == ["Em", "C", "G", "D"]
 
 
@@ -302,7 +309,7 @@ def test_the_instrument_is_kept_for_every_sheet_and_in_the_address(tmp_path):
     assert reloaded["chips"][1][1] == "true" and reloaded["hash"] == "#inst=ukulele"
     assert elsewhere[0]["chips"][1][1] == "true" and elsewhere[0]["hash"] == "#inst=ukulele"
     assert guitar["chips"][0][1] == "true" and guitar["hash"] == ""
-    assert asked["chips"][4][1] == "true" and asked["facts"] == "Key C · from the sheet"
+    assert asked["chips"][4][1] == "true" and asked["facts"] == [["key", "C · from the sheet"]]
     assert unknown["chips"][0][1] == "true" and unknown["hash"] == ""  # one the viewer doesn't draw: the guitar
 
 
@@ -339,7 +346,7 @@ def test_a_served_songbook_carries_the_instrument_from_song_to_song(tmp_path):
         follow(b, "document.querySelector('#song-1 a[rel=next]').click()")
         two = [b.js(SETTINGS), b.js(BOARDS + "(document.querySelectorAll('#strip svg'))")]
     assert two[0]["chips"][4][1] == "true" and two[0]["hash"] == "#song-2=&inst=piano"
-    assert two[0]["facts"].startswith("Key E")
+    assert two[0]["facts"] == [["key", "E · from the sheet"]]
 
 
 def test_a_songbook_song_on_its_own_instrument_opens_on_it(tmp_path):
@@ -459,7 +466,8 @@ def test_an_instrument_a_script_registers_is_offered_then_drawn_by_it(tmp_path, 
         after = b.js(SETTINGS)
         choose(b, "Kazoo")
         on = [b.js(SETTINGS), b.js("[...document.querySelectorAll('#strip .kz')].map((p) => p.textContent)"),
-              b.js("document.querySelector('#inst-panel .kz-panel').textContent")]
+              b.js("document.querySelector('#inst-panel .kz-panel').textContent"),
+              b.js("document.querySelector('#facts [data-fact=inst] dt').textContent")]
         strip(b)
         bare = b.js("[...document.querySelectorAll('#strip .kz.bare')].map((p) => p.textContent)")
         b.click('#sheet .c[data-c="0"]')
@@ -468,6 +476,8 @@ def test_an_instrument_a_script_registers_is_offered_then_drawn_by_it(tmp_path, 
         heard = b.wait("document.documentElement.dataset.heard === '369.99'")  # F#4: its notes, as it says
     assert [c[0] for c in before["chips"]] == NAMES and before["chips"][0][1] == "true"  # not drawn yet: the guitar
     assert [c[0] for c in after["chips"]] == [*NAMES, "Kazoo"]
-    assert on[0]["facts"] == "Key F#m · from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
+    # Its line, under the Key line, its name the line's label.
+    assert on[0]["facts"] == [["key", "F#m · from the sheet"], ["inst", "Kazoo in F#m, 4 chords"]]
+    assert on[3] == "Kazoo"
     assert on[0]["hint"] == "Hum along." and not on[0]["capo"] and on[2] == "Kazoo at 2"
     assert bare == ["hum F#", "hum D", "hum A", "hum E"] and card == "hum F#" and heard

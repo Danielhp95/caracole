@@ -12,10 +12,11 @@
   //                   data.harpForms[f][offset], what a chord plays on that harp (null, or [kind, breath, first, last,
   //                   suffix]), its form ``f`` by its index (data.harpChords[mode][i], data.harpAlts[mode][i][j]);
   //                   data.winds.harps[harp key], each harp's notes, [blow, draw], for the sound of its holes.
-  //                   Its header line, under the key line: "Harmonica: G harp (1st position) · C harp (2nd)". Its
+  //                   Its line in the header's facts, Harmonica, under the Key line: "G harp (1st position) · C
+  //                   harp (2nd)" (harp.py header_line's harps, the line's label the instrument's name). Its
   //                   picture of a chord: the harp's ten holes, those it plays lit, and what to play ("draw 2–5",
   //                   "draw 4–6 (as Dm, minor substitute)", "not on this harp"), on the harp chosen in its settings
-  //                   row (Harp: the harps of the header line, the first by default; this page's choice alone),
+  //                   row (Harp: the harps of that line, the first by default; this page's choice alone),
   //                   which lists the song's harmonica tabs too (data.harmonicaTabs: a link each to its page beside
   //                   the page, harmonica-N.html, its holes over the words, and to its text, with the key its
   //                   harptabs.com page named, "key C (harptabs)", never a harp's).
@@ -173,7 +174,7 @@
   const harmonica = {
     header(view) {
       const list = harps(view);
-      return list.length ? "Harmonica: " + list.map((h) => harpName(view, h) + " (" + h[2] + ")").join(" · ") : "";
+      return list.map((h) => harpName(view, h) + " (" + h[2] + ")").join(" · ");
     },
     diagram(view, chord, bare) {
       const harp = chosen(view);

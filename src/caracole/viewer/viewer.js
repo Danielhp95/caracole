@@ -260,7 +260,7 @@
       }
     } catch (err) { /* an address the page can't change */ }
     exportLink();
-    versionLinks();
+    if (kinds) kinds.links();  // each link to another version, with the text size and the screen's choices now
   };
 
   // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the PDF itself for this very
@@ -521,8 +521,9 @@
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is
-  // [before, in bold, after, where the key came from]; ``moved`` says the transposition.
-  // page.py writes the same line for the sheet as written.
+  // [before, in bold, after, where the key came from]; ``moved`` says the transposition. keyLabel's,
+  // as the PDF's line under the title is (page.py key_line_text); the header says it on two lines,
+  // Capo and Key (keyFacts).
   const keyLine = (moved) => {
     const capo = capoNow();
     if (!key) return capo ? [["Capo ", String(capo), "", ""]] : saysNoCapo() ? [["No capo", "", "", ""]] : [];
@@ -542,6 +543,28 @@
     }
     return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
       .concat(shown ? [shown] : []).join(" · ");
+  };
+  // The header's Key line, in keyLine's parts, with no capo in it (its Capo line says it), as page.py's facts_html
+  // writes it for the sheet as written: with no capo the key the song sounds in ("A · from the tab"); with one the key
+  // of the shapes and the key it sounds in ("G shapes · sounds A · key from the tab"); ``moved``, the transposition's
+  // words after the key it sounds in (" (+1)").
+  const keyFacts = (moved) => {
+    const sounds = keyName(state.t + sheetCapo);
+    if (!capoNow()) return [["", sounds, moved, key.from]];
+    return [["", keyName(shift()), " shapes", ""], ["sounds ", sounds, moved, ""]]
+      .concat(key.from ? [["", "", "", "key " + key.from]] : []);
+  };
+  // The header's Tuning line: the instrument's open strings, in the order its box draws them, each named as a sheet
+  // with no key names a note (data.names[""]): the guitar's "E A D G B E", a ukulele's "G C E A"; on the guitar the
+  // tuning the sheet's notes name (data.tuningName, "Drop D"), as its PDF says it. "" on one with no strings (the
+  // piano, the harmonica, the winds).
+  const tuningNow = () => {
+    const i = inst();
+    if (i.kind !== "strings") return "";
+    if (i.id === "guitar" && typeof data.tuningName === "string" && data.tuningName) return data.tuningName;
+    const plain = String((data.names && data.names[""]) || "").split(" ");
+    const notes = (Array.isArray(i.tuning) ? i.tuning : []).map((n) => plain[mod12(n)] || "");
+    return notes.length && notes.every(Boolean) ? notes.join(" ") : "";
   };
   // In short, for the bar, between − and +: the key you play, and under it what it is, the capo
   // and the transposition (["Em", "shapes", ["capo 2"]], ["Em", "key", ["+1"]]); the key it sounds
@@ -787,7 +810,7 @@
       return null;
     }
   };
-  // Its line under the key line: "" for none.
+  // Its line in the header's facts, under the Key line (drawFacts): "" for none.
   const headerLine = () => {
     const parts = partsOf();
     if (!parts || typeof parts.header !== "function") return "";
@@ -857,7 +880,8 @@
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
-  const rails = [panel, harmony, vList].filter(Boolean);  // from 900 px wide, beside the song: one at a time
+  let kinds = null;  // its line and its list, kinds.js's (below)
+  const rails = [panel, harmony].filter(Boolean);  // from 900 px wide, beside the song: one at a time
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
@@ -942,6 +966,45 @@
       if (Number.isInteger(n) && n > 0 && sign !== "" && keptAt.signs[i] === sign) setAt(i, n);
     }
   }
+  // The song's facts under its title as it is played, drawn again on every change in page.py's facts_html markup
+  // (which writes them for the sheet as written, on the guitar), so that nothing moves as the script runs: a
+  // div.fact a line, named by its data-fact, a dt and a dd. Tuning on an instrument with strings (tuningNow), Capo on
+  // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, the transposition said after
+  // the key it sounds in: " (+1)"), and the instrument's own line where its script gives one (instruments.js
+  // register's header), the instrument's name its label: "Harmonica  G harp (1st position) · C harp (2nd)". A sheet
+  // with no chords has no facts, and nothing is drawn.
+  const drawFacts = () => {
+    const box = $("facts");
+    if (!box) return;
+    box.textContent = "";
+    const fact = (name, label) => {
+      const row = box.appendChild(document.createElement("div"));
+      row.className = "fact";
+      row.dataset.fact = name;
+      row.appendChild(document.createElement("dt")).textContent = label;
+      return row.appendChild(document.createElement("dd"));
+    };
+    const strings = tuningNow();
+    if (strings) fact("tuning", "Tuning").textContent = strings;
+    if (takesCapo()) fact("capo", "Capo").textContent = capoNow() ? String(capoNow()) : "none";
+    if (key) {
+      const said = fact("key", "Key");
+      keyFacts(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
+        if (n) said.appendChild(document.createTextNode(" · "));
+        if (f[0]) said.appendChild(document.createTextNode(f[0]));
+        if (f[1]) said.appendChild(document.createElement("b")).textContent = f[1];
+        if (f[2]) said.appendChild(document.createTextNode(f[2]));
+        if (f[3]) {
+          if (f[0] || f[1]) said.appendChild(document.createTextNode(" · "));  // "A · from the tab"
+          const from = said.appendChild(document.createElement("span"));
+          from.className = "from";
+          from.textContent = f[3];
+        }
+      });
+    }
+    const line = headerLine();
+    if (line) fact("inst", String(inst().name || inst().id)).textContent = line;
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -965,31 +1028,7 @@
     fitKey();
     $("key-full").textContent = keyLabel(true);
     drawHead();
-    const box = $("facts");
-    box.textContent = "";
-    keyLine(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
-      if (n) box.appendChild(document.createTextNode(" · "));
-      if (f[0]) box.appendChild(document.createTextNode(f[0]));
-      if (f[1]) {
-        const b = document.createElement("b");
-        b.textContent = f[1];
-        box.appendChild(b);
-      }
-      if (f[2]) box.appendChild(document.createTextNode(f[2]));
-      if (f[3]) {
-        if (f[0] || f[1]) box.appendChild(document.createTextNode(" · "));  // "Key D · from the tab"
-        const from = document.createElement("span");
-        from.className = "from";
-        from.textContent = f[3];
-        box.appendChild(from);
-      }
-    });
-    const header = headerLine();  // an instrument's own line (instruments.js register): under the key line
-    if (header) {
-      const line = box.appendChild(document.createElement("span"));
-      line.className = "inst-line";
-      line.textContent = header;
-    }
+    drawFacts();
 
     $("shift").textContent = signed(state.t);
     showReset($("reset-t"), state.t !== (Number(data.transpose) || 0));  // the PDF's transposition, else none
@@ -1719,9 +1758,9 @@
   // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
   // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
   // the bar, one at a time (opening one closes the one open), and the song scrolls under it; from 900 px wide
-  // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
-  // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
-  // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
+  // (viewer.css) the settings are a rail beside the song, the card a popover by its chord and the versions list
+  // one under its line. Each takes the focus as it opens (its heading); Escape closes the one on top, and the focus
+  // goes back to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
   // at the foot up to 1199 px, the focus on its tab shown as it opens. Each one open is an entry of the browser's
   // history (layers.js): Back, a phone's or the app's, closes the one on top as Escape does, and leaves the page only
   // once none is open. Full screen is one too (below), its element the handle, which takes the focus as it opens.
@@ -1775,8 +1814,9 @@
     : bar.getBoundingClientRect().top);
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
   // no room below, and across it, within the song's column. It is placed in the page, so it goes
-  // with its chord as the page scrolls.
+  // with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's place).
   function place() {
+    if (kinds) kinds.place();
     if (card.hidden || !wide.matches) return;
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
@@ -1794,7 +1834,7 @@
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
     sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
-    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's, the versions'
+    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1802,8 +1842,8 @@
     layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
   // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
-  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the versions) are one
-  // at a time, a card beside them.
+  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel) are one at a time,
+  // a card and the versions list beside them.
   const open = (which, opener, nested = false) => {
     auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
@@ -2437,40 +2477,11 @@
   };
   $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
   $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
-  // --- the versions of the sheet -----------------------------------------------------------------
-  // UG's chords versions of the song (data.versions: sheet_versions.as_data, with ``sheet``, the provider of
-  // the sheet the title opens, and each entry's ``this``, whether it is this page's), on the sheet's own
-  // viewer and on each kept version's. Under the key line, the line says which of them this page is and opens the list
-  // of them all; ‹ and › open the version kept before or after this one, in rank order (first the sheet the
-  // title opens, when it is none of UG's), in this tab: the served viewer's sandbox opens no other, and
-  // they take the text size and the scroll speed along (the key and the rest are this sheet's chords'). In
-  // the list a kept version opens; one not kept is kept by caracole serve's /versions page, which reads it
-  // on UG now, or, from a file, links to UG's page and shows the command that keeps it, with Copy; a version
-  // gone from UG opens nothing. Make this the one, and Back to our pick (while your [pin] chooses the sheet),
-  // the same way.
-  const vSource = data.versions && typeof data.versions === "object" ? data.versions : {};
-  const vRows = (Array.isArray(vSource.list) ? vSource.list : [])
-    .filter((v) => v && typeof v === "object" && typeof v.tab === "string")
-    .sort((a, b) => (Number(a.rank) || 0) - (Number(b.rank) || 0));
-  const vOn = Boolean(vList && $("versions")) && vRows.length > 0;
-  const here = pageName();
-  const vChosen = vRows.find((v) => v.chosen) || null;
-  // This page's version: the one its data says, or, where it says none, the one whose page this is.
-  const vHere = vRows.some((v) => typeof v.this === "boolean") ? vRows.find((v) => v.this === true) || null
-    : vRows.find((v) => v.page === here && v.chosen) || vRows.find((v) => v.page === here) || null;
-  // The sheet the title opens when it is none of UG's versions: LaCuerda's, or an auto sheet standing alone.
-  const OTHERS = { lacuerda: { label: "LaCuerda's sheet", page: "sheet.html" },
-    auto: { label: "the auto sheet", page: "sheet (auto).html" } };
-  const vOne = vChosen || !own.call(OTHERS, vSource.sheet) ? null : OTHERS[vSource.sheet];
-  const vTotal = Number.isInteger(vSource.total) && vSource.total >= vRows.length ? vSource.total : vRows.length;
-  const vCount = (n) => n + (n === 1 ? " version" : " versions");
-  const vName = (v) => (Number.isInteger(v.number) ? "Ver " + v.number : "No. " + v.rank);
-  const vRating = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) ? ""
-    : v.rating.toFixed(2) + "★" + (Number.isInteger(v.votes) ? " (" + v.votes.toLocaleString("en-US") + ")" : ""));
-  // The pages ‹ and › go through, each once.
-  const vPages = vOne ? [vOne.page] : [];
-  for (const v of vRows) if (v.page && (!v.gone || v === vHere) && vPages.indexOf(v.page) < 0) vPages.push(v.page);
-  const vAt = vPages.indexOf(here);
+  // --- the version line and its list (kinds.js) --------------------------------------------------
+  // Under the artist, which of the song's versions this page is and an icon a kind it keeps to play from; the line
+  // opens the list of them (a layer: a sheet from the bottom on a phone, a popover under the line from 900 px, placed
+  // by place() above). A link to another of the song's pages takes the text size and the scroll speed along, and the
+  // screen's choices (the key and the rest are each sheet's own): vAddress, kinds.js's carry.
   const vAddress = (page) => {
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
@@ -2479,137 +2490,8 @@
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
-  // Each link to a version again, as the text size or the speed changes (save()).
-  function versionLinks() {
-    if (!vOn) return;
-    const step = (link, page) => {
-      if (page) {
-        link.setAttribute("href", vAddress(page));
-        link.removeAttribute("aria-disabled");
-      } else {
-        link.removeAttribute("href");
-        link.setAttribute("aria-disabled", "true");
-      }
-    };
-    step($("ver-prev"), vAt > 0 ? vPages[vAt - 1] : null);
-    step($("ver-next"), vAt >= 0 && vAt + 1 < vPages.length ? vPages[vAt + 1] : null);
-    for (const link of vList.querySelectorAll("a[data-page]")) link.setAttribute("href", vAddress(link.dataset.page));
-  }
-  const make = (tag, className, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
-  const apart = () => make("span", "vh", " · ");  // heard between the parts a row shows apart
-  const SAYS = {
-    keep: "it fetches this version from UG and keeps it beside the sheet.",
-    choose: "this version becomes the song's sheet, PDF and songbook entry.",
-    clear: "the song goes back to our pick, the best rated version with lyrics.",
-  };
-  // Served, a link to caracole serve's page that asks for it; from a file, a button that shows the command.
-  const vCommand = (box, what, tab) => {
-    for (const old of vList.querySelectorAll(".vcmd")) old.remove();
-    const shown = make("div", "vcmd");
-    const code = make("code", "cmd", "caracole versions " + songNamed() + " --" + what + (tab ? " " + tab : ""));
-    const copy = make("button", "chip", "Copy");
-    copy.type = "button";
-    copy.addEventListener("click", () => {
-      try {
-        navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }, () => {});
-      } catch (err) { /* no clipboard: the command is selectable */ }
-    });
-    shown.append(code, copy, make("p", "hint", "Run this where caracole is installed: " + SAYS[what]));
-    box.appendChild(shown);
-  };
-  const vAction = (box, text, what, tab, primary, where) => {
-    const control = make(served ? "a" : "button", primary ? "btn primary" : "link", text);
-    if (served) {
-      const query = new URLSearchParams();
-      query.set("sheet", sheetPath());
-      if (tab) query.set("tab", tab);
-      query.set("do", what);
-      control.setAttribute("href", "/versions?" + query.toString());
-    } else {
-      control.type = "button";
-      control.addEventListener("click", () => vCommand(where || box, what, tab));
-    }
-    box.appendChild(control);
-  };
-  // A version in the list: its name, its rating, what it is (the one, kept, this page, gone) and the
-  // tabber's note, a link to its page when it opens; under it, what you can do with it.
-  const vItem = (title, rating, tags, note, page, current) => {
-    const li = make("li", "ver");
-    const main = make(page && !current ? "a" : "div", "ver-main");
-    if (page && !current) main.dataset.page = page;
-    if (current) main.setAttribute("aria-current", "page");
-    main.appendChild(make("span", "ver-name", title));
-    if (rating) main.append(apart(), make("span", "ver-rate", rating));
-    const said = tags.concat(current ? ["this page"] : []).filter(Boolean);
-    if (said.length) {
-      const box = make("span", "ver-tags");
-      said.forEach((tag, n) => {
-        if (n) box.appendChild(apart());
-        box.appendChild(make("span", tag === "the one" ? "tag one" : "tag", tag));
-      });
-      main.append(apart(), box);
-    }
-    if (note) main.append(apart(), make("span", "ver-note", note));
-    const acts = make("div", "ver-acts");
-    li.append(main, acts);
-    return [li, acts];
-  };
-  const drawVersions = () => {
-    $("versions").hidden = false;
-    // The line: which version this is and its rating, then what it is, in a tag that wraps whole.
-    const line = $("ver-line");
-    line.textContent = "";
-    line.appendChild(make("span", "", vHere ? [vName(vHere) + " of " + vTotal, vHere.label, vRating(vHere)]
-      .filter(Boolean).join(" · ") : vCount(vTotal) + " on UG"));
-    const what = vHere ? [vHere.chosen ? "the one" : "", vHere.gone ? "gone from UG" : ""]
-      : [vOne && vOne.page === here ? "the one: " + vOne.label : ""];
-    for (const tag of what.filter(Boolean)) line.append(apart(), make("span", tag === "gone from UG" ? "tag" : "tag one", tag));
-    $("version-list-title").textContent = vCount(vTotal) + " on UG";
-    const acts = $("ver-acts");
-    acts.textContent = "";
-    if (vHere && !vHere.chosen && !vHere.gone) vAction(acts, "Make this the one", "choose", vHere.tab, true);
-    // While a [pin] of yours chooses the sheet (the data's ``pinned``, the pin caracole versions --clear takes
-    // out); on a page whose data has no ``pinned`` (written before it), while your choice isn't caracole's first.
-    const pick = vRows.find((v) => !v.gone);
-    const pinned = typeof vSource.pinned === "boolean" ? vSource.pinned : Boolean(vChosen && pick && pick !== vChosen);
-    if (pinned) vAction(acts, "Back to our pick", "clear", null, false);
-    acts.hidden = acts.children.length === 0;
-    const items = $("ver-items");
-    items.textContent = "";
-    if (vOne) items.appendChild(vItem(vOne.label, "", ["the one"], null, vOne.page, !vHere && vOne.page === here)[0]);
-    for (const v of vRows) {
-      const [li, todo] = vItem(vName(v) + (v.label ? " · " + v.label : ""), vRating(v),
-        [v.chosen ? "the one" : v.page ? "kept" : "", v.gone ? "gone from UG" : ""],
-        typeof v.note === "string" ? v.note : "", v.page && !v.gone ? v.page : null, v === vHere);
-      if (!v.page && !v.gone) {
-        if (!served && /^https:\/\//.test(String(v.url || ""))) {
-          const ug = make("a", "link", "On UG");
-          ug.setAttribute("href", v.url);
-          todo.appendChild(ug);
-        }
-        vAction(todo, "Keep", "keep", v.tab, false, li);
-      }
-      todo.hidden = todo.children.length === 0;
-      items.appendChild(li);
-    }
-  };
-  if (vOn) {
-    drawVersions();
-    $("ver-now").addEventListener("click", () => {
-      if (inSight(vList)) {
-        close(vList);
-        return;
-      }
-      open(vList, $("ver-now"));
-      const mine = vList.querySelector("[aria-current]");  // this page's, in sight
-      if (mine) vList.scrollTop = Math.max(0, mine.parentElement.offsetTop - vList.clientHeight / 3);
-    });
-  }
+  kinds = window.caracoleKinds ? window.caracoleKinds.attach({ data, here: pageName(), served,
+    sheetPath: sheetPath(), carry: vAddress, open, close, inSight }) : null;
 
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap

@@ -89,7 +89,10 @@ sheet's is from sheet.json, in its own key and as written, with no .cho or PDF a
 Export PDF, as an export is the one's (``export_viewer``) (``_render_versions``); it is
 recorded like the sheet's viewer, and goes, while it is still as written, once the version
 is no longer kept. Every viewer of the song (the one's, and each
-version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``).
+version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``), and what else it
+keeps to play from in its ``kinds``, as its library card names them (``_kinds_data``: its sheet's kind and page, its
+Guitar Pro files, its text tab, its harmonica tabs, its game music tabs, its scores); an auto sheet's beside a human
+one has neither.
 
 Each harmonica tab the song keeps (harptabs_fetch.py: ``harmonica-N.txt``) gets a page of its own,
 ``harmonica-N.html`` (viewer/harptab_page.py), made from its text with the song's chord sheet (its human
@@ -171,8 +174,9 @@ from caracole.autochords.merge import AUTO_MARKER, youtube_credit
 from caracole.chordpro import to_chordpro
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
-from caracole.icons import YOUTUBE, page_icon
-from caracole.inbox import HARMONICA_PAGE, HarmonicaFile, guitar_files, harmonica_files
+from caracole.download_names import download_name
+from caracole.icons import INBOX, SOURCES, YOUTUBE, page_icon
+from caracole.inbox import GAMETAB_FILE, HARMONICA_FILE, HARMONICA_PAGE, HarmonicaFile, guitar_files, harmonica_files
 from caracole.library import (
     KeptFile,
     NotRegularFile,
@@ -191,7 +195,7 @@ from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, add_version, load_overrides
 from caracole.pdf_fonts import ROLES, PdfFonts, in_folder, metrics
 from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
-from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_pins, tab_of, version_names
+from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_kind, sheet_pins, tab_of, version_names
 from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
@@ -736,7 +740,8 @@ def _render_song(
 
     The versions kept beside the sheet get their pages first (``_render_versions``), so a sheet
     whose PDF fails costs them nothing. The song's UG chords versions are in the viewer of the
-    one (the human sheet's, else an auto sheet's standing alone) and in each version page.
+    one (the human sheet's, else an auto sheet's standing alone), in each version page and in each harmonica tab's
+    page, and so is what else it keeps to play from (``_kinds_data``).
     Its harmonica tabs get theirs last (``_render_harmonica``), whatever came of the sheets, with the
     text of the sheet it reads (the human one, else the auto one) when that was read.
     """
@@ -753,7 +758,10 @@ def _render_song(
     tabs = harmonica_files(conn, song.id)
     harmonica = tuple({"name": f.name, "href": quote(f.name, safe=""), "page": quote(f.page, safe=""),
                        **({"key": f.key} if f.key else {})} for f in tabs)
-    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar)]
+    # What else it keeps to play from, which the viewers of its sheet and of its versions name (not an auto sheet's
+    # beside a human one, which lists no version either)
+    kinds = _kinds_data(conn, song, files, tabs)
+    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar, kinds)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
     primary: list[tuple[str, tuple[str | None, str | None]]] = []  # the sheet the harmonica tabs' pages read
@@ -779,7 +787,8 @@ def _render_song(
                                   start=export_query(played) if song.key in overrides.version else None,
                                   cjk_font=cjk_font, fonts=fonts, runner=runner, force=force, key=mine,
                                   export=not beside,
-                                  primary=not sheet.auto or human is None, versions=listed, guitar=guitar,
+                                  primary=not sheet.auto or human is None, versions=listed,
+                                  kinds=None if beside else kinds, guitar=guitar,
                                   harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
                                                   for h in harmonica),
                                   video=video, viewer_text=_sheet_cho(song, sheet, credit=False) if video else None)
@@ -810,7 +819,7 @@ def _render_song(
     finally:  # the tabs' pages, whatever came of the sheet's PDF: with the sheet's text read, if it was
         back = HUMAN_OUTPUTS[2] if human is not None else AUTO_OUTPUTS[2] if auto is not None else None
         done.append(_render_harmonica(conn, cfg, overrides, song, folder, tabs, files, primary[0] if primary else None,
-                                      back))
+                                      back, listed, kinds))
     return done
 
 
@@ -831,6 +840,71 @@ def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: 
     return {**as_data(versions, len(versions)), "sheet": provider, "pinned": pinned}
 
 
+# What a song keeps to play from beside its chord sheet, as its library card names it (library_page.py ``_label``,
+# library_assets/card.js ``things``): its kinds in the card's order, a kind's files by these names, the scores' formats
+# by their extension, in the order the card lists them (library_page._SCORE_FORMATS', which test_render_kinds.py holds
+# equal to this copy, and inbox.SCORE_EXTENSIONS').
+_KINDS = ("guitar", "tab", "harmonica", "gametab", "score")
+_KIND_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
+_KIND_SCORE = re.compile(r"score-(\d+)(\.[a-z]+)")
+_SCORE_FORMATS = {".mscz": "MuseScore", ".mxl": "MusicXML", ".musicxml": "MusicXML", ".pdf": "PDF", ".mid": "MIDI",
+                  ".midi": "MIDI"}
+_TAB = "tab.txt"  # UG's text tab (ug/fetch.py)
+
+
+def _kinds_data(conn: sqlite3.Connection, song: Song, files: Mapping[str, KeptFile],
+                tabs: list[HarmonicaFile]) -> dict[str, Any]:
+    """What every viewer of the song says of what it keeps to play from (its data's ``kinds``), as its library card
+    names it: ``sheet``, its chord sheet's kind ("ukulele" for one of UG's Ukulele Chords,
+    ``sheet_versions.sheet_kind``; "sheet" for any other; None for none); ``page``, the viewer its sheet opens in
+    ("sheet.html" with a human sheet, else "sheet (auto).html", else None); and ``groups``, each other kind
+    (``_KINDS``) of its kept ``files`` (``kept_files``) it keeps one of, in the card's order: ``guitar``
+    (``inbox.guitar_files``), ``tab`` (UG's text tab), ``harmonica`` (its harmonica ``tabs``), ``gametab`` and
+    ``score`` (inbox.py's formats). Each group's ``items``, in the card's order (by N, then by name; a score's formats
+    by N, then in ``_SCORE_FORMATS``' order, inbox.SCORE_EXTENSIONS': library_page.py ``_numbered`` and ``_scores``),
+    are ``{"name", "label"}``, the card's label ("Guitar Pro 1 · gtptabs", "Power Tab 2", "Guitar tab · UG",
+    "Score 1 (PDF)"), with the source its version came from as ``icons.SOURCES`` names it (none for the inbox, nor for
+    a score, as the card's); a Guitar Pro or Power Tab file's with its ``browser`` (``GuitarFile.in_browser``) and its
+    ``download``, the name it downloads under (download_names.py), as a score's but a PDF's; a harmonica tab's with its
+    ``page``, written beside it (``_render_harmonica``)."""
+
+    def said(label: str, kept: KeptFile) -> str:
+        provider = get_version(conn, kept.version_id).provider
+        return f"{label} · {SOURCES[provider].name}" if provider in SOURCES and provider != INBOX else label
+
+    def download(name: str) -> str:
+        return download_name(song.artist, clean_title(song.title), name)
+
+    # Each item by (N, then its place among a score's formats, 0 for the other kinds, then its name)
+    found: dict[str, list[tuple[int, int, str, dict[str, Any]]]] = {kind: [] for kind in _KINDS}
+    for f in guitar_files(conn, song.id):
+        if f.name in files and (m := _KIND_GUITAR.fullmatch(f.name)):
+            kind = "Power Tab" if m.group(2).lower() == ".ptb" else "Guitar Pro"
+            found["guitar"].append((int(m.group(1)), 0, f.name, {
+                "name": f.name, "label": said(f"{kind} {m.group(1)}", files[f.name]), "browser": f.in_browser,
+                "download": download(f.name)}))
+    if _TAB in files:
+        found["tab"].append((0, 0, _TAB, {"name": _TAB, "label": said("Guitar tab", files[_TAB])}))
+    for t in tabs:
+        if t.name in files and (m := HARMONICA_FILE.fullmatch(t.name)):
+            found["harmonica"].append((int(m.group(1)), 0, t.name, {
+                "name": t.name, "label": said(f"Harmonica tab {m.group(1)}", files[t.name]), "page": t.page}))
+    for name, kept in files.items():
+        if m := GAMETAB_FILE.fullmatch(name):
+            found["gametab"].append((int(m.group(1)), 0, name, {
+                "name": name, "label": said(f"Game music tab {m.group(1)}", kept)}))
+        elif (m := _KIND_SCORE.fullmatch(name)) and m.group(2) in _SCORE_FORMATS:
+            found["score"].append((int(m.group(1)), list(_SCORE_FORMATS).index(m.group(2)), name, {
+                "name": name, "label": f"Score {m.group(1)} ({_SCORE_FORMATS[m.group(2)]})",
+                **({} if m.group(2) == ".pdf" else {"download": download(name)})}))
+    groups = [{"kind": kind, "items": [item for *_, item in sorted(items, key=lambda each: each[:3])]}
+              for kind, items in found.items() if items]
+    human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
+    sheet = None if human is None and auto is None else "ukulele" if sheet_kind(conn, song.id) == "ukulele" else "sheet"
+    page = HUMAN_OUTPUTS[2] if human is not None else AUTO_OUTPUTS[2] if auto is not None else None
+    return {"sheet": sheet, "page": page, "groups": groups}
+
+
 def _on_page(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] | None:
     """``listed`` as one page holds it: each entry's ``this`` says whether it is the page's own (``tab``'s;
     with None, the page of a sheet that is none of them, a LaCuerda or an auto sheet)."""
@@ -841,12 +915,13 @@ def _on_page(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] |
 
 def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: Mapping[str, KeptFile],
                      versions: list[SheetVersion], listed: dict[str, Any] | None,
-                     guitar: tuple[str, ...] = ()) -> _Done:
+                     guitar: tuple[str, ...] = (), kinds: Mapping[str, Any] | None = None) -> _Done:
     """Write a viewer page for each version kept beside the sheet, ``version-<tab>.html`` (its ``page``),
     from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF. It offers
     no export: an export is made from the sheet ``export_viewer`` names, so this page's would be the one's PDF.
-    Each page starts as the version is written, in its own key (``keys.sheet_key``), and is recorded
-    (``_note_written``) and written only when its bytes change.
+    Each page starts as the version is written, in its own key (``keys.sheet_key``), names what else the song keeps
+    as the sheet's viewer does (``kinds``, ``_kinds_data``), and is recorded (``_note_written``) and written only when
+    its bytes change.
 
     The page of a version no longer kept (the fetch let it go) goes while it still holds what caracole wrote
     (``_forget_written``): one changed since, on a synced device, stays, and is forgotten. A page that can't
@@ -856,14 +931,15 @@ def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: M
     pages = {v.page: v for v in versions if v.page == version_names(v.tab_id)[2]}  # kept, and not the one
     ok = True
     for page, v in pages.items():
-        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id), guitar) and ok
+        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id), guitar, kinds) and ok
     left = tuple(name for name in _written(conn, song.id) if tab_of(name) is not None and name not in pages)
     _forget_written(conn, song.id, left, folder)
     return _Done("pages", viewer_failed=not ok)
 
 
 def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, files: Mapping[str, KeptFile],
-                    v: SheetVersion, listed: dict[str, Any] | None, guitar: tuple[str, ...] = ()) -> bool:
+                    v: SheetVersion, listed: dict[str, Any] | None, guitar: tuple[str, ...] = (),
+                    kinds: Mapping[str, Any] | None = None) -> bool:
     """Write the kept version ``v``'s viewer page; False, logged, when it can't be made or written."""
     _, doc, page = version_names(v.tab_id)
     kept = files.get(doc)
@@ -880,7 +956,7 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
     text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo)
     data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),
-                         transpose=0, start=None, export=False, versions=listed, guitar=guitar)
+                         transpose=0, start=None, export=False, versions=listed, kinds=kinds, guitar=guitar)
     if data is None:
         return False
     _note_written(conn, song.id, page, data)
@@ -925,14 +1001,17 @@ def _harmonica_pin(overrides: Overrides, song: Song, tab: HarmonicaFile) -> str 
 
 def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, folder: Path,
                       tabs: list[HarmonicaFile], files: Mapping[str, KeptFile],
-                      sheet: tuple[str, tuple[str | None, str | None]] | None, back: str | None) -> _Done:
+                      sheet: tuple[str, tuple[str | None, str | None]] | None, back: str | None,
+                      listed: dict[str, Any] | None = None, kinds: Mapping[str, Any] | None = None) -> _Done:
     """Write a page for each harmonica tab the song keeps (harptabs_fetch.py), ``harmonica-N.html`` beside its
     ``harmonica-N.txt`` (viewer/harptab_page.py), from the tab's text and what its version says of it (its page, its
     key, its harp, its difficulty, its views, its rating), read as overrides.toml's ``[harmonica]`` has it, else as
     caracole guesses, with the song's chord sheet ``sheet`` (its ChordPro and its key as
     keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
-    song's sheet viewer, which its ‹ Chord sheet opens. Each page is recorded (``_note_written``) and written only
-    when its bytes change.
+    song's sheet viewer, which its ‹ Chord sheet opens. Its version line names the song's UG chords versions
+    (``listed``, ``_versions_data``, none of them the page's: ``_on_page`` with no tab) and what else it keeps
+    (``kinds``, ``_kinds_data``), as its sheet's viewer does. Each page is recorded (``_note_written``) and written
+    only when its bytes change.
 
     The page of a tab no longer kept, or whose text is no longer in the folder (deleted on a synced device), goes
     while it still holds what caracole wrote (``_forget_written``). A page that can't be made or written (its text
@@ -961,7 +1040,7 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Override
             html = build_harmonica_viewer(
                 text, title=clean_title(song.title), artist=song.artist, tab_file=tab.name, url=version.url,
                 page_key=tab.key, harp=tab.harp, pin=_harmonica_pin(overrides, song, tab), facts=raw, cho=cho, key=key,
-                key_source=key_source, back=back)
+                key_source=key_source, back=back, versions=_on_page(listed, None), kinds=kinds)
         except Exception:  # a tab the page can't read must never cost the song's other pages
             log.warning("no viewer for %s: cannot build %s", song.display, tab.page, exc_info=True)
             ok = False
@@ -1515,6 +1594,7 @@ def _render_sheet(
     export: bool = True,
     primary: bool = False,
     versions: dict[str, Any] | None = None,
+    kinds: Mapping[str, Any] | None = None,
     guitar: tuple[str, ...] = (),
     harmonica: tuple[Mapping[str, Any], ...] = (),
     video: Mapping[str, Any] | None = None,
@@ -1528,7 +1608,8 @@ def _render_sheet(
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
     ``export``, whether the viewer offers an export (``export_viewer``); ``primary``, whether this is the
     song's sheet the library finds it by (its human one, else its auto one: ``_note_progressions``);
-    ``versions``, the song's versions as this viewer lists them (``_on_page``), or None; ``guitar``, the names of the
+    ``versions``, the song's versions as this viewer lists them (``_on_page``), or None; ``kinds``, what else the song
+    keeps to play from (``_kinds_data``), or None (an auto sheet beside a human one); ``guitar``, the names of the
     song's Guitar Pro files its viewer links; ``harmonica``, its harmonica tabs, which its viewer names; ``video``, the
     YouTube video an auto sheet's audio came from (``_video_data``), which its viewer draws, made from ``viewer_text``
     (the .cho without the credit's line that names it) in place of ``text``.
@@ -1548,8 +1629,8 @@ def _render_sheet(
     def viewer() -> bool:
         page = folder / f"{stem}.html"
         data = _write_viewer(song, viewer_text or text, page, pdf, key=key, transpose=version.t, start=start,
-                             export=export, versions=versions, guitar=guitar, harmonica=harmonica, twin=twin,
-                             video=video)
+                             export=export, versions=versions, kinds=kinds, guitar=guitar, harmonica=harmonica,
+                             twin=twin, video=video)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -1716,16 +1797,17 @@ def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
                   transpose: int, start: str | None, export: bool = True,
-                  versions: dict[str, Any] | None = None, guitar: tuple[str, ...] = (),
-                  harmonica: tuple[Mapping[str, Any], ...] = (), twin: Path | None = None,
-                  video: Mapping[str, Any] | None = None) -> bytes | None:
+                  versions: dict[str, Any] | None = None, kinds: Mapping[str, Any] | None = None,
+                  guitar: tuple[str, ...] = (), harmonica: tuple[Mapping[str, Any], ...] = (),
+                  twin: Path | None = None, video: Mapping[str, Any] | None = None) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
     key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
-    ``versions`` lists the song's versions, and ``guitar`` its Guitar Pro files caracole serve shows in the
-    browser (``inbox.guitar_files``), and ``harmonica`` its harmonica tabs (``inbox.harmonica_files``); ``twin``, the
-    sheet's PDF in Traditional characters, which the PDF's link opens while the viewer shows them, when it is there;
+    ``versions`` lists the song's versions, ``kinds`` what else it keeps to play from (``_kinds_data``), and
+    ``guitar`` its Guitar Pro files caracole serve shows in the browser (``inbox.guitar_files``), and ``harmonica``
+    its harmonica tabs (``inbox.harmonica_files``); ``twin``, the sheet's PDF in Traditional characters, which the
+    PDF's link opens while the viewer shows them, when it is there;
     ``video``, the YouTube video an auto sheet's audio came from, which it draws under its notice.
     A viewer that hasn't changed isn't written again.
 
@@ -1738,7 +1820,7 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
                             export=export, versions=versions, guitar=guitar, harmonica=harmonica,
-                            pdf_traditional=traditional, video=video)
+                            pdf_traditional=traditional, video=video, kinds=kinds)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None

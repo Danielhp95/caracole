@@ -1,9 +1,9 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its six
-scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js and viewer.js, and its stylesheet makes the browser
-enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its seven
+scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js, and its stylesheet makes
+the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
@@ -27,7 +27,10 @@ written ``\\u003c``:
   own version (overrides.toml's ``[version]``, "Make this my version"), as the
   viewer's address writes it (viewer/version.py), or null for none: the script starts
   there when its address names no version (``t``, ``mode``, ``capo``, ``alt``, ``at``);
-  ``capoSheet``: the sheet's own capo;
+  ``capoSheet``: the sheet's own capo; ``tuningName``: the tuning its notes name ("Drop D": ``sheet.split_preamble``,
+  the PDF's rule), for the header's Tuning line (``facts_html``), where they name one;
+- ``names[""]``: each pitch class's name with no key (``theory.spelling(None)``), on every page: the chords' names on a
+  sheet with no key, and an instrument's strings on the header's Tuning line (viewer.js ``tuningNow``);
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
@@ -59,11 +62,18 @@ written ``\\u003c``:
   (``solo``, ``altSolo``, ``scaleWords``, ``scales``), the key's scale (``keyScale``, ``pentatonic``) and
   each section's progression (``progressions``): harmony_tables.py says how;
 - ``library``: the library's index.html, relative to the page;
-- ``versions``: UG's chords versions of the song, for the switcher under the key line and the list it
-  opens (``_VERSIONS``, ``_VERSION_LIST``), or null for none: ``sheet_versions.as_data``'s ``{"total",
+- ``versions``: UG's chords versions of the song, for the version line under the artist and the list it
+  opens (``_VERSIONS``, ``_VERSION_LIST``, kinds.js), or null for none: ``sheet_versions.as_data``'s ``{"total",
   "list"}``, each entry's ``this`` saying whether it is this page's, ``sheet``, the provider of the
   sheet the title opens ("ug", "lacuerda", "auto"), and ``pinned``, whether a ``[pin]`` of yours chooses it:
   render.py's ``_versions_data``;
+- ``kinds``, right after it: what else the song keeps to play from, as its library card names it (render.py
+  ``_kinds_data``), for the version line's icons and its list: ``sheet``, its chord sheet's kind ("sheet",
+  "ukulele" for UG's Ukulele Chords, null for none), ``page``, the page the sheet opens ("sheet.html", "sheet
+  (auto).html", null), and ``groups``, each other kind it keeps a file of in the card's order (``guitar``, ``tab``,
+  ``harmonica``, ``gametab``, ``score``), its ``items`` ``{"name", "label"}`` ("Guitar Pro 1 · gtptabs"), a Guitar
+  Pro file's ``browser`` and ``download``, a harmonica tab's ``page``, a score's ``download`` but a PDF's; an auto
+  sheet kept beside a human one has none;
 - ``guitar``: the names of the song's Guitar Pro files beside the page that caracole serve shows in the browser
   (render.py, ``inbox.guitar_files``), for the settings' Guitar Pro row (``_GUITAR_ROW``): served, each a link to
   caracole serve's Guitar Pro page; or none, and no row. ``guitarDownload``, beside it: the name each saves under,
@@ -124,6 +134,7 @@ from caracole.viewer.sheet import (
     is_legend,
     parse_sheet,
     preamble_section,
+    split_preamble,
     written,
 )
 from caracole.viewer.theory import (
@@ -179,6 +190,7 @@ BUILD_FILES = (
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
     HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
+    HERE / "kinds.js",  # the version line, its icons and its list, on a sheet's and a harmonica tab's page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -261,6 +273,15 @@ def _layers() -> str:
 
 
 @lru_cache(maxsize=1)
+def _kinds() -> str:
+    """kinds.js: the version line under the artist, an icon for each kind the song keeps to play from, the library
+    card's glyphs, and the list it opens (``window.caracoleKinds``), inlined after layers.js and before viewer.js,
+    which attaches it, in a sheet.html and a kept version's page, and before harptab.js in a harmonica tab's page
+    (harptab_page.py); never in a songbook (book.py), whose songs have no versions."""
+    return (HERE / "kinds.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _instruments() -> str:
     """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
     script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
@@ -282,6 +303,7 @@ def build_viewer(
     harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
     pdf_traditional: str | None = None,
     video: Mapping[str, Any] | None = None,
+    kinds: Mapping[str, Any] | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -294,7 +316,10 @@ def build_viewer(
     this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
     sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
-    true on the page's own), goes in the page's data as ``versions``; without it, the data has none. ``guitar``, the
+    true on the page's own), goes in the page's data as ``versions``; without it, the data has none. ``kinds``, what
+    else the song keeps to play from (render.py ``_kinds_data``: its chord sheet's kind and page, and each other kind
+    it keeps a file of, as its library card names them), goes in its data as ``kinds``, right after ``versions``;
+    without it (an auto sheet kept beside a human one), the data has none. ``guitar``, the
     names of the song's Guitar Pro files beside the page that caracole serve shows in the browser (render.py), goes
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
@@ -308,6 +333,8 @@ def build_viewer(
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
+    if kinds is not None:
+        data["kinds"] = dict(kinds)
     if video is not None:
         data["video"] = dict(video)
     if harmonica:
@@ -326,11 +353,11 @@ def build_viewer(
     names = names_table("hanzi" in data, [title, sheet.artist, page_title])
     return _page(
         page_title,
-        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names,
-              pdf_traditional=pdf_traditional, credit=video is not None)
+        _body(sheet, title, song_key, origin, pdf, tuning=data.get("tuningName"), export=export,
+              guitar=bool(guitar), names=names, pdf_traditional=pdf_traditional, credit=video is not None)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
-        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), script),
+        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), script),
         names=names,
     )
 
@@ -439,11 +466,15 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
 def _read_song(cho: str, key: str | None, key_source: str | None,
                transpose: int) -> tuple[Sheet, Key | None, str | None, dict[str, Any]]:
     """A ChordPro sheet as its page shows it: the sheet read, the key of its shapes and where that came
-    from in words (``_song_key``), and the data its block gives the script (``_data``)."""
+    from in words (``_song_key``), and the data its block gives the script (``_data``), with ``tuningName``, the
+    tuning its notes name (``split_preamble``, the PDF's rule: pdf_text.py), when they name one."""
     sheet = parse_sheet(cho)
     chords = [parse_chord(name, strict=False) for name in sheet.chords]
     song_key, origin = _song_key(sheet, chords, key, key_source)
-    return sheet, song_key, origin, _data(sheet, chords, song_key, origin, transpose)
+    data = _data(sheet, chords, song_key, origin, transpose)
+    if (tuning := split_preamble(cho.splitlines()).tuning) is not None:
+        data["tuningName"] = tuning
+    return sheet, song_key, origin, data
 
 
 def viewer_key(cho: str, key: str | None = None, key_source: str | None = None) -> Key | None:
@@ -518,7 +549,6 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
     alts_by_mode: dict[str, list[list[Chord]]] = {}
     if key is not None:
         data["modes"] = list(MODES)
-        data["names"] = {}
         for mode in MODES:
             in_mode = Key(key.tonic, mode)
             mapped = mapped_by_mode[mode] = [None if c is None else map_chord(c, key, mode) for c in chords]
@@ -643,27 +673,43 @@ def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:
 # --- the page ------------------------------------------------------------------------------------
 
 
-def _facts(key: Key | None, origin: str | None, capo: int) -> str:
-    """The key line under the title, as HTML, as viewer.js writes it for the sheet as written.
+# The guitar's open strings, low to high, as the Tuning line names them for a sheet that names no tuning of its own
+GUITAR_STRINGS = " ".join(spelling(None)[n % 12] for n in instruments.GUITAR.tuning)
 
-    With a capo it says the key of the shapes played, the capo and the key the song sounds in,
-    as Cifra Club's key line does ("Em shapes · capo 2 · sounds F#m"): "Key Em" alone would read
-    as the song's key. Without one, the key ("Key Em"). Each says where the key came from.
+
+def facts_html(key: Key | None, origin: str | None, capo: int, tuning: str | None, *, chords: bool,
+               suffix: str = "") -> str:
+    """The song's facts under its title, as HTML, for the sheet as written on the guitar: a ``dl.facts`` (``#facts``,
+    a songbook's song's ``#facts-N`` by ``suffix``) of its lines, each a ``div.fact`` named by its ``data-fact``, a
+    ``dt`` and a ``dd``, as viewer.js redraws them for the song as it is played.
+
+    Tuning: ``tuning``, the one the sheet's notes name (``sheet.split_preamble``, the PDF's rule), else the guitar's
+    strings (``GUITAR_STRINGS``). Capo: "none", or its fret. Key, where the sheet has one: with no capo the key
+    ("Am"), with one the key of the shapes played and the key the song sounds in, as Cifra Club's key line says it
+    ("Em shapes · sounds F#m"): "Key Em" alone would read as the song's key; each says where the key came from
+    (``origin``). A sheet with no chords (``chords``) has no facts: "".
     """
-    source = escape(origin or "")
-    if key is None:
-        return f"Capo <b>{capo}</b>" if capo else ""
-    if not capo:
-        return f"Key <b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")
-    return (
-        f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
-        + (f' · <span class="from">key {source}</span>' if source else "")
-    )
+    if not chords:
+        return ""
+    rows = [("tuning", "Tuning", escape(tuning or GUITAR_STRINGS)), ("capo", "Capo", str(capo) if capo else "none")]
+    if key is not None:
+        source = escape(origin or "")
+        if not capo:
+            said = f"<b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")
+        else:
+            said = (f"<b>{escape(key_name(key))}</b> shapes · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
+                    + (f' · <span class="from">key {source}</span>' if source else ""))
+        rows.append(("key", "Key", said))
+    return (f'<dl class="facts" id="facts{suffix}">\n'
+            + "".join(f'<div class="fact" data-fact="{fact}"><dt>{label}</dt><dd>{value}</dd></div>\n'
+                      for fact, label, value in rows)
+            + "</dl>\n")
 
 
 def key_line_text(key: Key | None, capo: int | None) -> str:
-    """The key line in words, as ``_facts`` writes it without its markup and where the key came from:
-    "Em shapes · capo 2 · sounds F#m", "Key Em", "Capo 2" for a sheet with no key, else ""."""
+    """The key line in words, the PDF's (pdf_text.py's subtitle): the page's Capo and Key lines (``facts_html``) on
+    one line, without where the key came from: "Em shapes · capo 2 · sounds F#m", "Key Em", "Capo 2" for a sheet with
+    no key, else ""."""
     capo = capo or 0
     if key is None:
         return f"Capo {capo}" if capo else ""
@@ -673,16 +719,17 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
-          export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None,
-          pdf_traditional: str | None = None, credit: bool = False) -> str:
+          tuning: str | None = None, export: bool = True, guitar: bool = False,
+          names: Mapping[str, Mapping[str, str]] | None = None, pdf_traditional: str | None = None,
+          credit: bool = False) -> str:
     pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
-        f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
+        f'<a class="back" href="{LIBRARY_PAGE}" aria-label="Library" title="Library">‹</a>\n'
         f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
         + artist_line(sheet.artist, names)
-        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
         + _VERSIONS
+        + facts_html(key, origin, sheet.capo or 0, tuning, chords=bool(sheet.chords))
         + "</header>\n"
         + _song_html(sheet, credit=credit)
         + _footer(pdf_link)
@@ -1014,23 +1061,22 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <noscript><p class="noscript">Turn on JavaScript to transpose, change mode and see chord shapes.</p></noscript>
 """
 
-# A sheet viewer's versions (its data's ``versions``), hidden until the script fills them in: under the key
-# line, ‹ and › open the version kept before or after this one, in rank order, and between them the line
-# that says which this is ("Ver 3 of 13 · 4.86★ (408) · the one") opens the list of every version UG has, a
-# dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where it takes the
-# settings' place). An end ‹ or › has no address. The songbook has neither: its songs have no versions.
-_VERSIONS = """<nav class="versions" id="versions" hidden aria-label="Versions">
-<a class="vstep" id="ver-prev" aria-label="Previous version">‹</a>
-<button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg></button>
-<a class="vstep" id="ver-next" aria-label="Next version">›</a>
-</nav>
+# A sheet viewer's version line (its data's ``versions`` and ``kinds``), under the artist, hidden until kinds.js fills
+# it in: which of the song's versions this page is, its kind first and its rating last ("Chords · Ver 3 of 13 · ★ 4.86
+# (408)"), then an icon for each kind of thing the song keeps to play from, with how many of it; it opens the list, a
+# dialog that is not modal, like the settings (a sheet from the bottom on a phone, a popover under the line from 900 px
+# wide, beside the settings): a group a kind in #kind-groups, which kinds.js draws, Chords first (every version UG has,
+# with #ver-acts and #ver-items), then each other kind the song keeps, in the library card's order. The songbook has
+# neither: its songs have no versions.
+_VERSIONS = """<div class="versions" id="versions" hidden>
+<button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg><span class="kinds" id="kinds"></span></button>
+</div>
 """
 
 _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidden role="dialog" aria-labelledby="version-list-title">
 <header class="ui-head"><h2 id="version-list-title" tabindex="-1">Versions</h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
-<div class="row vrow" id="ver-acts" hidden></div>
-<ol class="vers" id="ver-items"></ol>
+<div id="kind-groups"></div>
 </section>
 """
 
