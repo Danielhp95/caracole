@@ -76,6 +76,7 @@
 .vrow + .vrow { border-top: 1px solid var(--border); }
 .vrow .ver { grid-area: ver; font-weight: 650; }
 .vrow .stars { grid-area: stars; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.vrow .stars .new { color: var(--muted); font-weight: 650; }
 .vrow .stars b { color: var(--wanted); font-weight: 650; }
 .vrow .note { grid-area: note; min-width: 0; color: var(--muted); font-size: .84rem; }
 .vrow .note b { color: var(--found); font-weight: 600; }

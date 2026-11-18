@@ -120,7 +120,7 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     # From the file, a Guitar Pro file and a MusicXML score download under the song's name.
     assert tiles[1]["download"] == "Eagles - Hotel California.gp5" and tiles[0]["download"] is None
     assert tiles[5]["download"] == "Eagles - Hotel California.mxl"
-    assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "a text tab", "Tab 1",
+    assert [t["from"] for t in tiles] == ["Ver 3 · ★ 4.86 (408) · in use", "guitar-1.gp5", "a text tab", "Tab 1",
                                           "timed", "Score 1 (MusicXML)"]
     assert [d["text"] for d in tiles[1]["downloads"]] == [".gp5"] and [d["text"] for d in tiles[2]["downloads"]] == [
         "Text"]
@@ -246,6 +246,23 @@ def test_a_chip_opens_its_drawer_and_another_chip_closes_it(conn, cfg, tmp_path)
     assert chips["closed"] is True and chips["lc"] == "false" and chips["drawers"] == 1
 
 
+def test_a_version_with_no_rating_is_new(conn, cfg, tmp_path):
+    song = add_song(conn, "Radiohead", "Creep")
+    v = upsert_version(conn, provider="ug", tab_id="7", song_id=song.id, slot="sheet", kind="chords", rating=0,
+                       votes=0, version=1, label=None,
+                       url="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-7", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet.txt", data=b"[ch]G[/ch]\nx", rank=1)
+    upsert_version(conn, provider="ug", tab_id="8", song_id=song.id, slot="sheet", kind="chords", rating=4.5, votes=3,
+                   version=2, label=None, url="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-8", raw={},
+                   now="x")  # a second, not kept: one version alone would be a fixed chip, with no drawer to open
+    put(cfg, song, "sheet.html")
+    update_song(conn, song.id, status="found")
+    script = ('const card = noteCard("Creep");\nchipOf("Creep", "ug").click();\n'
+              'note("new", { from: card.tiles[0].from, stars: noteDrawer("Creep").rows.map((r) => r.stars) });')
+    assert attribute_of(run(conn, cfg, tmp_path, script), "data-new") == {"from": "Ver 1 · New · in use",
+                                                                         "stars": ["New"]}
+
+
 def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tmp_path):
     from helpers.cli_lines import parsed
 
@@ -255,7 +272,7 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
     assert drawer["said"] == "13 on UG · 3 in your logbook"
     rows = drawer["rows"]
     assert [(r["ver"], r["stars"]) for r in rows] == [
-        ("Ver 3", "4.86★ · 408 votes"), ("Ver 4", "4.75★ · 850 votes"), ("Ver 5", "4.70★ · 800 votes")], rows
+        ("Ver 3", "★ 4.86 (408)"), ("Ver 4", "★ 4.75 (850)"), ("Ver 5", "★ 4.70 (800)")], rows
     assert [r["note"] for r in rows] == ["All the lyrics · our pick", "80% of the lyrics",
                                          "50% of the lyrics"]
     assert [r["acts"] for r in rows] == [["In use", "Open"], ["Open"], ["Open"]]  # the file chooses nothing

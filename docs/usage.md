@@ -2588,8 +2588,8 @@ file, its **Guitar tab** (a text tab), its
 what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
-the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
-in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
+the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · ★ 4.86 (408) ·
+in use`, `LaCuerda`, `from the recording`); a version's rating is written with its votes, `★ 4.86 (408)`, and `New` for one nobody rated; its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's
 PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text

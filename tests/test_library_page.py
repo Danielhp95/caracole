@@ -2461,8 +2461,8 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
                         "drawer")
     assert drawer["said"] == "4 on UG · 3 in your logbook"
     assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
-        ("Ver 3", "4.86★ · 408 votes", ["In use", "Open"]), ("Ver 1", "4.85★ · 12,629 votes", ["Open"]),
-        ("Ver 2", "4.70★ · 3,000 votes", ["Open"])], drawer
+        ("Ver 3", "★ 4.86 (408)", ["In use", "Open"]), ("Ver 1", "★ 4.85 (12,629)", ["Open"]),
+        ("Ver 2", "★ 4.70 (3,000)", ["Open"])], drawer
     assert [r["open"] for r in drawer["rows"]] == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
                                                    "Oasis/Wonderwall/version-27596.txt"]
     # The line's sheet button still opens the one, sheet.html, counting the three, and the export is the sheet's.

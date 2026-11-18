@@ -51,7 +51,9 @@ const caracoleCard = (icons, rows) => {
     const said = coverage >= 0.995 ? "All the lyrics" : percent(coverage) + " of the lyrics";
     return complete === true ? el("b", null, said) : said;
   };
-  const stars = (v) => (typeof v.rating === "number" ? v.rating.toFixed(2) + "★" : "");
+  // A version's rating with its votes, as the sheet's versions list writes it: "★ 4.85 (12,629)", "New" for none.
+  const rated = (v) => typeof v.rating === "number" && isFinite(v.rating) && Number(v.votes) > 0
+    ? "★ " + v.rating.toFixed(2) + " (" + Number(v.votes).toLocaleString("en") + ")" : "New";
 
   // --- the files, by what they are -----------------------------------------------------------------------------
   const SHEET_FILES = [["sheet.pdf", "PDF"], ["sheet.txt", "Text"], ["sheet.cho", "ChordPro"]];
@@ -99,10 +101,16 @@ const caracoleCard = (icons, rows) => {
   const versionRow = (r) => {
     const row = el("li", "vrow" + (r.cls ? " " + r.cls : ""));
     row.appendChild(el("span", "ver", r.ver));
-    const rated = el("span", "stars");
-    if (r.stars) rated.appendChild(el("b", null, r.stars));
-    if (r.votes) rated.appendChild(document.createTextNode((r.stars ? " · " : "") + r.votes));
-    row.appendChild(rated);
+    const stars = el("span", "stars");
+    const cut = String(r.stars || "").indexOf(" (");
+    if (r.stars === "New") stars.appendChild(el("span", "new", "New"));
+    else if (!r.stars) { /* a file with no rating: an empty cell */ }
+    else if (cut < 0) stars.appendChild(el("b", null, r.stars));
+    else {
+      stars.appendChild(el("b", null, r.stars.slice(0, cut)));
+      stars.appendChild(document.createTextNode(r.stars.slice(cut)));
+    }
+    row.appendChild(stars);
     const note = el("span", "note");
     listOf(r.note).filter(Boolean).forEach((part, n) => {
       if (n) note.appendChild(document.createTextNode(" · "));
@@ -154,8 +162,7 @@ const caracoleCard = (icons, rows) => {
       if (x.chosen) actions.push(inUse());
       else if (!x.gone && acts.choose) actions.push(acts.choose(x, ver));
       actions.push(openLink(x.href, "Open " + ver + " of " + title));
-      ol.appendChild(versionRow({ ver, stars: stars(x),
-        votes: typeof x.votes === "number" ? many(x.votes, "vote") : "", note, actions,
+      ol.appendChild(versionRow({ ver, stars: rated(x), note, actions,
         cls: (x.chosen ? "cur" : "") + (x.gone ? " gone" : "") }));
     }
     drawer.appendChild(ol);
@@ -311,7 +318,7 @@ const caracoleCard = (icons, rows) => {
       const name = autoOnly ? "Auto sheet" : ukulele ? "Ukulele chords" : "Chord sheet";
       const v = s.versions && typeof s.versions === "object" ? s.versions : null;
       const one = v ? listOf(v.list).find((x) => x && x.chosen) : null;
-      const from = one ? ["Ver " + (Number(one.number) || "?"), stars(one), "in use"].filter(Boolean).join(" · ")
+      const from = one ? ["Ver " + (Number(one.number) || "?"), rated(one), "in use"].filter(Boolean).join(" · ")
         : autoOnly || s.source === "auto" || s.source === "youtube" ? "from the recording"
         : s.source ? nameOf(s.source) : "";
       const chips = [];

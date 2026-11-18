@@ -187,8 +187,8 @@ def test_the_library_pages_menu_lists_the_kept_versions(config, sites, conn, tmp
                      encoding="utf-8")
     drawer = attribute_of(dump_dom(index.as_uri(), (1280, 800)), "data-drawer")
     assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
-        ("Ver 2", "4.60★ · 50 votes", ["In use", "Open"]), ("Ver 3", "4.20★ · 50 votes", ["Open"]),
-        ("Ver 1", "4.90★ · 100 votes", ["Open"])], drawer
+        ("Ver 2", "★ 4.60 (50)", ["In use", "Open"]), ("Ver 3", "★ 4.20 (50)", ["Open"]),
+        ("Ver 1", "★ 4.90 (100)", ["Open"])], drawer
     assert [r["open"] for r in drawer["rows"]] == [
         "Radiohead/Creep/sheet.html", "Radiohead/Creep/version-103.html", "Radiohead/Creep/version-101.html"]
 
