@@ -1165,9 +1165,8 @@ It is rows.js's, shared by both pages:
   library.css) are lane 1's: test_library_assets.py.
 - A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
-  `glyph`, inline SVG made with `createElementNS`, the one address the page names, on a touch screen the marks of the
-  sites its versions came from, with a mouse its kind and its site in words (`play-words`: `PLAY_KIND`, `PLAY_SITE`),
-  how many; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (30 px with a mouse, 48 px on a touch screen, no
+  words), the marks of the sites its versions came from at its foot, how many at its corner; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
   song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
   its chevron open it as a card (card.js `caracoleCard`, card.css):
   - made the first time it opens, from the song and its request as they are then (library.js `cardFor`, rows.js

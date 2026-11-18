@@ -370,13 +370,11 @@ def test_a_lines_button_of_a_chosen_instrument_is_lit(shelf, laptop):
       const lit = getComputedStyle(probe).backgroundColor; probe.remove();
       const on = getComputedStyle(document.documentElement).getPropertyValue('--on-accent').trim();
       probe.style.color = on; document.body.append(probe); const onColour = getComputedStyle(probe).color; probe.remove();
-      return [...line.querySelectorAll('.line-plays .play')].map((a) => { const site = a.querySelector('.play-site');
-        return [a.dataset.kind, getComputedStyle(a).backgroundColor === lit,
-          getComputedStyle(a.querySelector('svg.glyph')).color === onColour,
-          site ? getComputedStyle(site).color === onColour : null]; }); })()"""
-    def lit_of(rows):  # [kind, filled, glyph in --on-accent, site in --on-accent]; the last two follow the fill
-        assert all(g is f and (site is None or site is f) for _, f, g, site in rows), rows
-        return [[kind, f] for kind, f, _, _ in rows]
+      return [...line.querySelectorAll('.line-plays .play')].map((a) => {         return [a.dataset.kind, getComputedStyle(a).backgroundColor === lit,
+          getComputedStyle(a.querySelector('svg.glyph')).color === onColour]; }); })()"""
+    def lit_of(rows):  # [kind, filled, glyph in --on-accent]; the glyph follows the fill
+        assert all(g is f for _, f, g in rows), rows
+        return [[kind, f] for kind, f, _ in rows]
 
     laptop.open(shelf.as_uri())
     assert not any(lit for _, lit in lit_of(laptop.js(held)))

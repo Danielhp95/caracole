@@ -2618,14 +2618,12 @@ its **Guitar Pro** file, its **guitar tab** (Ultimate Guitar's text tab), its
 filed. A tap on one opens that one at once: the sheet viewer (see [The sheet
 viewer](#the-sheet-viewer), else the PDF, else the text), the Guitar Pro file
 in the browser when `caracole serve` shows it there (else a download), the
-harmonica tab's page, the text, the score. With a mouse, whatever the
-window's width, each is a chip that says what it is and where it came from
-("Chords · UG", "Guitar Pro · gtptabs", "Harmonica · harptabs"), its glyph
-before the words and how many versions the card lists of it after them when more
-than one. On a touch screen each is instead a filled tile 48 px square, 8 px
-from the next, its glyph with the marks of the sites its versions came from
-(two at most, the one in use first) in its bottom corner and the count in its
-top one, both inside it; its name says all of it, to a screen reader and as a tooltip ("Open
+harmonica tab's page, the text, the score. Whatever the pointer
+and the window's width, each is a filled icon tile with no words: its glyph, the
+marks of the sites its versions came from (two at most, the one in use first) in
+its bottom corner and, when the card lists more than one version of it, the
+count in its top one, both inside it. The tile is 30 px square with a mouse and
+48 px on a touch screen, 8 px from the next; its name says all of it, to a screen reader and as a tooltip ("Open
 the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
 file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
 title leaves too little room for them, they wrap to a second row beside it, and
