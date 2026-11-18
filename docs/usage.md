@@ -653,6 +653,11 @@ A nightly run that holds caracole's lock lets the lookup go first at its next
 pause ([One caracole at a time](#one-step-at-a-time)). Two lookups at once take
 turns with the lock, a request or a stage each, so both move and each site still
 gets one request at a time; the hour's lookups are counted again after each turn.
+A song another caracole took out of the book meanwhile (or merged into a song of
+the same name) ends the lookup there, a refusal that exits 1, the stages left
+skipped:
+`Nothing fetched: Radiohead - Creep left the book during this fetch (removed, or
+merged into a song of the same name).`
 
 Options:
 

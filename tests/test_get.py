@@ -708,6 +708,46 @@ def test_after_a_turn_what_follows_the_sheet_says_what_cut_it(cfg, conn, sites, 
     assert result.details["ug"] == f"{said}; tonight's run does the rest"
 
 
+@pytest.mark.parametrize("at", ["pdf", "ug"], ids=["between two stages", "in a client's pause"])
+def test_a_song_that_left_the_book_at_a_turn_ends_the_lookup_in_its_song_stages_words(cfg, conn, sites, monkeypatch,
+                                                                                         at):
+    # At a turn the song left the book (another caracole merged it into a song of the same name, or removed it): the
+    # lookup says so in its song stage and skips the rest, a refusal, never a bug, whether the turn came between two
+    # stages (after the pdf stage) or in a client's pause inside one (the ug stage's).
+    from caracole.get import STAGES, LookupRequest
+    from caracole.get import look_up as run
+
+    serve_creep(sites, conn)
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    running: list[str] = []
+
+    class Heard(Progress):
+        def stage(self, name, state, detail=""):
+            super().stage(name, state, detail)
+            if state == "running":
+                running.append(name)
+
+    def turn(cfg_, conn_=None) -> bool:
+        if running[-1:] != [at] or not list_songs(conn):
+            return False
+        _common._handoffs += 1  # the other caracole had the lock, and took the song out
+        conn.execute("DELETE FROM songs")
+        return True
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+
+    result = run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Heard(sites), runner=FakeRunner(), now=NOW)
+
+    assert result.bug is None
+    assert result.refused == ("Radiohead - Creep left the book during this fetch (removed, or merged into a song of "
+                              "the same name)")
+    assert result.states["song"] == "failed" and result.details["song"] == result.refused
+    names = [name for name, _ in STAGES]
+    after = names[names.index(at) + 1:]
+    assert all(result.states[name] == "skipped" for name in after) and not set(after) & set(running)
+    assert [result.states[name] for name in names[1:names.index(at)]] == ["done"] * (names.index(at) - 1)
+
+
 # --- errors are never misses ---------------------------------------------------------------------------
 
 

@@ -66,9 +66,11 @@ the PDF pass; ``_common.hand_over``). Another lookup in the lane takes turns wit
 it (``_common.pass_turn``): this one lets it go first before each request but a
 client's first, and between two stages (``_turn``), never inside one, and after
 a turn reads overrides.toml and its song again, as the other may have pinned a
-tab or written the song's row. Its good run at a site is what its own client was
-answered (``answered_any``), never read by its run id, which another lookup of
-the same second shares.
+tab or written the song's row; a song that left the book meanwhile (removed, or
+merged into a song of the same name) ends the lookup there, a refusal its song
+stage says, the stages left skipped (``_left``). Its good run at a site is what
+its own client was answered (``answered_any``), never read by its run id, which
+another lookup of the same second shares.
 """
 
 from __future__ import annotations
@@ -281,6 +283,8 @@ class _Lookup:
         except _Stop:
             raise
         except Exception as e:  # a bug: say so, go on with the other stages, exit 1 at the end
+            if self._gone():  # the song left the book at a turn in this stage: what failed after it is no bug
+                raise self._left() from e
             log.error("The %s stage failed: %s: %s. That's a bug in caracole; its traceback follows.", name,
                       type(e).__name__, e, exc_info=True)
             self.result.bug = self.result.bug or f"{name}: {type(e).__name__}: {e}"
@@ -296,7 +300,8 @@ class _Lookup:
         """Between two stages, the next lookup in the lane goes first (``pass_turn``: none waits, or this one isn't
         in the lane, and nothing happens), outside any transaction. After a turn, here or in a client's pause
         since the last stage, overrides.toml and the song are read again, as the other lookup may have pinned a
-        tab or written the song's row: what this one does next keeps to them, and its index.html shows them."""
+        tab or written the song's row: what this one does next keeps to them, and its index.html shows them. A song
+        that left the book meanwhile ends the lookup (``_left``)."""
         from caracole.commands._common import handoffs, overrides_since, pass_turn
         from caracole.songs import get_song
 
@@ -305,8 +310,30 @@ class _Lookup:
             return
         self.overrides = overrides_since(self.cfg, self.overrides, self.handed)
         if self.song is not None:
-            self.song = get_song(self.conn, self.song.id)
+            try:
+                self.song = get_song(self.conn, self.song.id)
+            except KeyError:
+                raise self._left() from None
         self.handed = handoffs()
+
+    def _gone(self) -> bool:
+        """Whether the lookup's song left the book after it was found (``_left``); False when the database can't
+        say."""
+        import sqlite3
+
+        if self.song is None or self.conn is None:
+            return False
+        try:
+            return self.conn.execute("SELECT 1 FROM songs WHERE id = ?", (self.song.id,)).fetchone() is None
+        except sqlite3.Error:
+            return False
+
+    def _left(self) -> _Stop:
+        """The song left the book at a turn: another caracole took it out, or merged it into a song of the same
+        name as it made the keys current. The lookup ends there, as a refusal: the song stage says so, the stages
+        that hadn't ended are skipped (``_refuse``), and nothing is a bug."""
+        return _Stop(f"{self.song.display} left the book during this fetch (removed, or merged into a song of the "
+                     "same name)")
 
     # --- clients and the sites ------------------------------------------------------------------------
 
@@ -951,18 +978,25 @@ class _Lookup:
                         self._report("song", "done", self.find_song())
                     except _Stop as e:
                         return self._refuse(str(e))
-                    for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
-                                       ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
-                                       ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
-                                       ("gametabs", self.gametabs), ("pages", self.pages),
-                                       ("songbooks", self.songbooks)):
-                        self.stage(name, work)
-                    note_looked_up(conn, self.song.id)
+                    left = None  # why the lookup ended before its last stage: its song left the book at a turn
+                    try:
+                        for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
+                                           ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
+                                           ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
+                                           ("gametabs", self.gametabs), ("pages", self.pages),
+                                           ("songbooks", self.songbooks)):
+                            self.stage(name, work)
+                    except _Stop as e:
+                        left = str(e)
+                    else:
+                        note_looked_up(conn, self.song.id)
                     # A site that answered this lookup's own client: a good run (another lookup of the same
                     # second has the same run id, so its errors are never read as this one's)
                     for provider, client in self.clients.items():
                         if provider not in self.blocked and client.answered_any():
                             record_ok(conn, provider, self.now)
+                    if left is not None:
+                        return self._refuse(left)
                 finally:
                     for provider, client in self.clients.items():
                         self.result.requests[provider] = client.requests_made
@@ -971,10 +1005,12 @@ class _Lookup:
         return self.result
 
     def _refuse(self, why: str) -> LookupResult:
+        """The lookup refused, its song stage failed with ``why``; the stages that hadn't ended, skipped."""
         self.result.refused = why
         self._report("song", "failed", why)
         for name, _ in STAGES[1:]:
-            self._report(name, "skipped", "")
+            if self.result.states.get(name, "running") == "running":
+                self._report(name, "skipped", "")
         self.result.seconds = self.clock() - self.started
         return self.result
 

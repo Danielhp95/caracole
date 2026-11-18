@@ -3275,7 +3275,10 @@ picks one).
     (`PoliteClient.answered_any`), never another lookup's errors under the same second's run id
     (`test_get.py::test_a_lookup_passes_a_turn_before_each_stage_never_inside_one`,
     `::test_after_a_turn_a_lookup_reads_overrides_and_its_song_again`,
-    `::test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_second`);
+    `::test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_second`); a song that left the book
+    at a turn (another caracole took it out, or merged it into one of the same name) ends it as a refusal, its song
+    stage saying so and the stages left skipped, never a bug (`_Lookup._left`,
+    `::test_a_song_that_left_the_book_at_a_turn_ends_the_lookup_in_its_song_stages_words`);
   - two lookups of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never
     runs two jobs of a song): accepted (the spec's part 3);
   - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for
