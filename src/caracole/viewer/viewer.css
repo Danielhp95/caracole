@@ -531,10 +531,11 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .keys { margin-right: 2px; }
   .now, .bar button.now { padding: 0; }
 }
-/* A finger's 48 px: the bar's and the pill's buttons (a minimum: the tools stay 54 px tall and --foot 63 px). Under
-   380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px phone's key 24 px. */
+/* A finger's 48 px: the bar's, Aa's box's (its theme's too) and the pill's buttons (a minimum: the tools stay 54 px
+   tall and --foot 63 px). Under 380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px
+   phone's key 24 px. */
 @media (pointer: coarse) {
-  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 48px; min-height: 48px; }
+  .bar .tool, .keys .step, .sizes button, .sizes .seg > button, .pill button { min-width: 48px; min-height: 48px; }
   .pill .ring { width: 48px; height: 48px; }
 }
 @media (pointer: coarse) and (max-width: 379.98px) {

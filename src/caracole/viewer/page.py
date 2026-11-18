@@ -2,8 +2,8 @@
 
 The page is one self-contained file. It opens from the synced library folder with
 no server: it loads nothing (a Content-Security-Policy with the hashes of its eight
-scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js, screen.js and viewer.js, and its
-stylesheet makes the browser enforce that)
+scripts, screen.js in its head, then strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js
+after its body, and its stylesheet makes the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
@@ -194,7 +194,7 @@ BUILD_FILES = (
     HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
     HERE / "kinds.js",  # the version line, its icons and its list, on a sheet's and a harmonica tab's page
-    HERE / "screen.js",  # the screen's choices, before viewer.js and harptab.js
+    HERE / "screen.js",  # the screen's choices, in the head of every viewer page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -287,10 +287,10 @@ def _kinds() -> str:
 
 @lru_cache(maxsize=1)
 def _screen() -> str:
-    """screen.js: the screen's choices kept for every viewer page, the theme (``window.caracoleScreen``), inlined
-    just before the page's own script, which calls it: after kinds.js and before viewer.js in a sheet.html and a kept
-    version's page, after layers.js and before viewer.js in a songbook.html (book.py), after kinds.js and before
-    harptab.js in a harmonica tab's page (harptab_page.py)."""
+    """screen.js: the screen's choices kept for every viewer page, the theme (``window.caracoleScreen``), inlined in
+    the head of each (``_page``'s ``head_scripts``: a sheet.html and a kept version's page, a songbook.html, book.py,
+    and a harmonica tab's page, harptab_page.py), so the theme is the page's before its body is drawn; the page's
+    own script, viewer.js or harptab.js, calls it."""
     return (HERE / "screen.js").read_text(encoding="utf-8")
 
 
@@ -370,8 +370,9 @@ def build_viewer(
               guitar=bool(guitar), names=names, pdf_traditional=pdf_traditional, credit=video is not None)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
-        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), _screen(), script),
+        scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), script),
         names=names,
+        head_scripts=(_screen(),),
     )
 
 
@@ -448,13 +449,14 @@ _NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...],
-          names: Mapping[str, Mapping[str, str]] | None = None) -> str:
-    """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, and the
-    policy that allows exactly them and the scripts, an image from a data: URI, the icon, and nothing to
-    load, no form to send, no base to change), ``body``, then the scripts, which run once the page is
-    read, in their order. The title is marked as a name the page's ``names`` convert (``zh_attr``)."""
+          names: Mapping[str, Mapping[str, str]] | None = None, head_scripts: tuple[str, ...] = ()) -> str:
+    """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, then
+    ``head_scripts``, which run before the body is read, and the policy that allows exactly them and the scripts, an
+    image from a data: URI, the icon, and nothing to load, no form to send, no base to change), ``body``, then the
+    scripts, which run once the page is read, in their order. The policy names the scripts in the page's order, the
+    head's first. The title is marked as a name the page's ``names`` convert (``zh_attr``)."""
     policy = (
-        f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
+        f"default-src 'none'; script-src {' '.join(map(sha256_source, head_scripts + scripts))}; "
         f"style-src {' '.join(map(sha256_source, styles))}; img-src data:; base-uri 'none'; form-action 'none'"
     )
     # One join, so the page is copied once: its script and stylesheet alone are some 66 kB.
@@ -466,6 +468,7 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
         PAGE_ICON,
         f"<title{zh_attr(title, names)}>{escape(title)}</title>\n",
         *(f"<style>{style}</style>\n" for style in styles),
+        *(f"<script>{script}</script>\n" for script in head_scripts),
         "</head>\n<body>\n",
         body,
         *(f"<script>{script}</script>\n" for script in scripts),

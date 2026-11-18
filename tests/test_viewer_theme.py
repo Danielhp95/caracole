@@ -10,6 +10,11 @@ next song take on, so that it holds where the browser keeps nothing (caracole se
 
 from __future__ import annotations
 
+import re
+
+import pytest
+
+from caracole.inline import sha256_source
 from caracole.viewer import build_viewer, page
 from caracole.viewer.book import BookSong, build_songbook
 from caracole.viewer.harptab_page import build_harmonica_viewer
@@ -92,22 +97,65 @@ def choose(b, theme: str) -> None:
     assert b.wait(f"document.getElementById('theme-{theme}').getAttribute('aria-pressed') === 'true'")
 
 
-def test_screen_js_is_inlined_before_each_pages_own_script():
+def test_screen_js_is_inlined_in_the_head_of_every_viewer_page():
+    # In the head, so the theme is the page's before its body is drawn: a slow phone never shows the other palette
+    # first. Allowed by its hash as every script is, the first the policy names (the page's order).
     assert page.HERE / "screen.js" in page.BUILD_FILES
     screen = inlined("screen.js")
     pages = [
-        (build_viewer(SONG), "kinds.js", "viewer.js"),
-        (build_viewer(SONG, export=False), "kinds.js", "viewer.js"),  # a kept version's page
-        (build_songbook("Book", [BookSong("Theme Song", "Artist", cho=SONG, id="aaaa")]), "layers.js", "viewer.js"),
-        (build_harmonica_viewer("4 -4 5", title="T", tab_file="harmonica-1.txt"), "kinds.js", "harptab.js"),
+        build_viewer(SONG),
+        build_viewer(SONG, export=False),  # a kept version's page
+        build_songbook("Book", [BookSong("Theme Song", "Artist", cho=SONG, id="aaaa")]),
+        build_harmonica_viewer("4 -4 5", title="T", tab_file="harmonica-1.txt"),
     ]
-    for html, after, before in pages:
-        assert html.count(screen) == 1, before
-        # before the page's own script, never right before it (a later script may come between them)
-        assert html.index(inlined(after)) < html.index(screen) < html.index(inlined(before)), (after, before)
-    # It makes no element of its own and loads nothing.
-    for word in ("innerHTML", "createElement", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function"):
+    for html in pages:
+        head = html[:html.index("</head>")]
+        assert html.count(screen) == 1 and screen in head
+        assert head.index("<style>") < head.index(screen)  # after the stylesheets, the head's last
+        assert html.index("</head>") < html.index("<body>") < html.index("<script>", html.index("<body>"))
+        assert re.search(r"script-src (\S+)", html).group(1) == sha256_source(page._screen())
+    # It makes no element of its own and loads nothing; at start-up it reads the root, the address, storage and the
+    # navigation alone, never the body (the head has none).
+    for word in ("innerHTML", "createElement", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function",
+                 "document.body", "getElementById", "querySelector"):
         assert word not in page._screen(), word
+
+
+# A script run as each document starts (``viewer``'s ``before``): the theme the root has once the body is there, read
+# at the first chance after the body is made (a microtask checkpoint comes before the body's first script runs).
+AT_BODY = """new MutationObserver((records, observer) => {
+  if (!document.body) return;
+  window.caracoleAtBody = document.documentElement.dataset.theme || null;
+  observer.disconnect();
+}).observe(document, {childList: true, subtree: true});"""
+
+
+@in_chromium
+@pytest.mark.parametrize("kind", ["sheet", "songbook", "harmonica"])
+def test_the_theme_is_the_pages_before_its_body_is(tmp_path, kind):
+    if kind == "sheet":
+        url = written(tmp_path, SONG) + "#theme=dark"
+    elif kind == "songbook":
+        path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+        path.parent.mkdir(parents=True)
+        path.write_text(build_songbook("Campfire", [BookSong("Theme Song", "Synthetic", cho=SONG, id="aaaa")]),
+                        encoding="utf-8")
+        url = path.as_uri() + "#song-1&theme=dark"
+    else:
+        path = tmp_path / "Artist" / "Title" / "harmonica-1.html"
+        path.parent.mkdir(parents=True)
+        path.write_text(build_harmonica_viewer("4 -4 5", title="T", tab_file="harmonica-1.txt"), encoding="utf-8")
+        url = path.as_uri() + "#theme=dark"
+    with viewer(tmp_path, url, before=[AT_BODY]) as b:
+        system(b, "light")
+        named = b.js("window.caracoleAtBody")
+        if kind == "sheet":  # and Dark kept by the browser, the address naming none
+            choose(b, "dark")
+            b.open(url.split("#")[0])
+            assert b.wait(READY)
+            kept = b.js("[window.caracoleAtBody, location.hash]")
+            assert kept[0] == "dark", kept
+    assert named == "dark"
 
 
 @in_chromium
@@ -221,10 +269,11 @@ def test_the_aa_box_is_whole_on_a_320_px_phone(tmp_path):
         box = b.js("""(() => { const r = document.getElementById('sizes').getBoundingClientRect();
           return {left: r.left, right: r.right, page: document.documentElement.scrollWidth,
             coarse: matchMedia('(pointer: coarse)').matches,
-            heights: [...document.querySelectorAll('#theme > button')].map((e) => e.getBoundingClientRect().height)};
+            heights: [...document.querySelectorAll('#sizes button')].map((e) => e.getBoundingClientRect().height)};
           })()""")
     assert box["coarse"] and box["left"] >= 0 and box["right"] <= 320 and box["page"] <= 320, box
-    assert len(box["heights"]) == 3 and min(box["heights"]) >= 44, box
+    # A finger's 48 px, every button of the box alike (5d's), the theme's too
+    assert len(box["heights"]) == 5 and min(box["heights"]) >= 48, box
 
 
 @in_chromium

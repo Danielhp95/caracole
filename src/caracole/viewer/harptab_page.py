@@ -1,16 +1,16 @@
 """harmonica-N.html: a harmonica tab caracole kept from harptabs.com (``harmonica-N.txt``, harptabs_fetch.py) as a
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
-It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its six scripts (strum.js, overlay.js, layers.js, kinds.js, screen.js, then harptab.js) and two stylesheets (viewer.css,
-harptab.css) by their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole
-over the syllable it is blown on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w``
-columns: a line wraps between its words, never parting a hole from its syllable), a blow in the accent colour, a draw
-in blue with its "−", a bend's ″ in purple, holes together in their brackets; rows played alone, words sung to the
-same tune and the tabber's notes as they come. What a row's notation couldn't read is shown in its place as written,
-muted ("$", "(DV)"); an effect is a small label on its hole ("wah"), notes run together a ‿ between them, the tab's
-own legend a block of its own, and a row read with low confidence (``Row.trusted``) its text as written. The header
-says how the tab was read: the symbols it used, as it writes them, and whether its own legend said so or caracole
+It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing its
+six scripts (screen.js in its head; strum.js, overlay.js, layers.js, kinds.js, then harptab.js after its body) and two
+stylesheets (viewer.css, harptab.css) by their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by
+harptab.py: each hole over the syllable it is blown on, as a chord sits over its syllable on sheet.html (page.py's
+``.s`` and ``.w`` columns: a line wraps between its words, never parting a hole from its syllable), a blow in the accent
+colour, a draw in blue with its "−", a bend's ″ in purple, holes together in their brackets; rows played alone, words
+sung to the same tune and the tabber's notes as they come. What a row's notation couldn't read is shown in its place as
+written, muted ("$", "(DV)"); an effect is a small label on its hole ("wah"), notes run together a ‿ between them, the
+tab's own legend a block of its own, and a row read with low confidence (``Row.trusted``) its text as written. The
+header says how the tab was read: the symbols it used, as it writes them, and whether its own legend said so or caracole
 guessed, how surely (harptab.py's ``Reading``). A tab harptab.py can't read (``Tab.readable``) is its text as written,
 in the page's style, and its page says so; never an error.
 
@@ -181,7 +181,8 @@ def build_harmonica_viewer(
         + (json_block("song-names", names) if names else "")
     )
     return _page(page_title, body, styles=(style, own_style),
-                 scripts=(_sound(), _overlay(), _layers(), _kinds(), _screen(), script), names=names)
+                 scripts=(_sound(), _overlay(), _layers(), _kinds(), script), names=names,
+                 head_scripts=(_screen(),))
 
 
 # --- the data ----------------------------------------------------------------------------------------------------

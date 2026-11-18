@@ -82,7 +82,8 @@ object SongbookPage {
             .append(PageConstants.CONTROLS)
             .toString()
         return SheetPage.page("$name · songbook", body, ViewerAssets.styles(ViewerAssets.Page.SONGBOOK),
-                              ViewerAssets.scripts(ViewerAssets.Page.SONGBOOK))
+                              ViewerAssets.scripts(ViewerAssets.Page.SONGBOOK),
+                              headScripts = ViewerAssets.headScripts(ViewerAssets.Page.SONGBOOK))
     }
 
     /** _contents: each song's number and title, and on a line under it its artist and, for a song with a sheet, its

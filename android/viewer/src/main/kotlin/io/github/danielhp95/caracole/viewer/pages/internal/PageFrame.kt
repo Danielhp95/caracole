@@ -11,13 +11,16 @@ import io.github.danielhp95.caracole.core.web.Inline
  * scripts; and the policy a server sends with a page caracole wrote, read back from the page's own `<meta>`.
  */
 internal object PageFrame {
-    /** _page: [title] marked as a name [names] convert, [styles] in the head, [scripts] after [body], each allowed
-     * by its hash. */
-    fun page(title: String, body: String, styles: List<String>, scripts: List<String>, names: Names? = null): String {
-        val policy = "default-src 'none'; script-src ${scripts.joinToString(" ") { Inline.sha256Source(it) }}; " +
+    /** _page: [title] marked as a name [names] convert, [styles] then [headScripts] in the head, [scripts] after
+     * [body], each allowed by its hash, the scripts in the page's order. */
+    fun page(title: String, body: String, styles: List<String>, scripts: List<String>, names: Names? = null,
+             headScripts: List<String> = emptyList()): String {
+        val policy = "default-src 'none'; " +
+            "script-src ${(headScripts + scripts).joinToString(" ") { Inline.sha256Source(it) }}; " +
             "style-src ${styles.joinToString(" ") { Inline.sha256Source(it) }}; img-src data:; base-uri 'none'; " +
             "form-action 'none'"
-        val size = body.length + styles.sumOf { it.length + 16 } + scripts.sumOf { it.length + 18 } + 2048
+        val size = body.length + styles.sumOf { it.length + 16 } + (headScripts + scripts).sumOf { it.length + 18 } +
+            2048
         return buildString(size) {
             append("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
             append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n")
@@ -26,6 +29,7 @@ internal object PageFrame {
             append(PageConstants.ICON)
             append("<title").append(PageHtml.zhAttr(title, names)).append('>').append(PyText.escape(title)).append("</title>\n")
             styles.forEach { append("<style>").append(it).append("</style>\n") }
+            headScripts.forEach { append("<script>").append(it).append("</script>\n") }
             append("</head>\n<body>\n")
             append(body)
             scripts.forEach { append("<script>").append(it).append("</script>\n") }

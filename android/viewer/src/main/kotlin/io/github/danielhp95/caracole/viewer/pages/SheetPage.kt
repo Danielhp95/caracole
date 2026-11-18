@@ -85,7 +85,8 @@ object SheetPage {
             Inline.jsonBlock("song", JsonObject(data)) +
             (if (names != null) Inline.jsonBlock("song-names", PageData.names(names)) else "")
         return page(pageTitle, body, ViewerAssets.styles(ViewerAssets.Page.SHEET),
-                    ViewerAssets.scripts(ViewerAssets.Page.SHEET), names)
+                    ViewerAssets.scripts(ViewerAssets.Page.SHEET), names,
+                    ViewerAssets.headScripts(ViewerAssets.Page.SHEET))
     }
 
     /** viewer_csp: the Content-Security-Policy a server sends with [page], a viewer caracole wrote: its own policy
@@ -120,10 +121,11 @@ object SheetPage {
     /** is_chinese: whether a sheet's words are Chinese, as its page judges them. */
     fun isChinese(cho: String): Boolean = ViewerPinyin.isChinese(SheetView.drawnLines(Sheets.parse(cho)))
 
-    /** _page: a whole page, [title] in its head with the icon, [styles], the policy allowing them and [scripts] by
-     * their hashes; [body]; then the scripts. */
+    /** _page: a whole page, [title] in its head with the icon, [styles], then [headScripts], the policy allowing them
+     * and [scripts] by their hashes; [body]; then the scripts. */
     fun page(title: String, body: String, styles: List<String>, scripts: List<String>,
-             names: Map<String, Map<String, String>>? = null): String = PageFrame.page(title, body, styles, scripts, names)
+             names: Map<String, Map<String, String>>? = null, headScripts: List<String> = emptyList()): String =
+        PageFrame.page(title, body, styles, scripts, names, headScripts)
 
     /** _read_song: the sheet read, its key and where that came from, and its data, with `tuningName`, the tuning its
      * notes name (Sheets.splitPreamble, the PDF's rule), when they name one. */

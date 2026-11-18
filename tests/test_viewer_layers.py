@@ -542,7 +542,7 @@ def test_every_viewer_page_inlines_layers_js_before_its_own_script():
     ]
     for html, after, before in pages:
         assert html.count(layers) == 1
-        # before the page's own script, never right before: kinds.js and screen.js come between them
+        # before the page's own script, never right before: kinds.js comes between them
         assert html.index(inlined(after)) < html.index(layers) < html.index(inlined(before)), (after, before)
     # kinds.js, the version line's, after layers.js and before the page's own script on a sheet and a harmonica tab's
     # page; never in a songbook

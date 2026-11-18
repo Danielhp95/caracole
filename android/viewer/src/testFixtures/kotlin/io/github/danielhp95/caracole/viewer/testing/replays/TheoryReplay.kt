@@ -185,7 +185,7 @@ object TheoryReplay : AreaReplay {
             kinds += kind
             val page = PAGES[kind] ?: throw AssertionError("no page kind $kind")
             val want = record.out!!.jsonObject
-            for ((part, got) in listOf("styles" to page.styles, "scripts" to page.scripts)) {
+            for ((part, got) in listOf("styles" to page.styles, "scripts" to page.head + page.scripts)) {
                 val names = want.getValue(part).jsonArray.map { it.jsonPrimitive.content }
                 misses.check(got == names) { "$kind's $part: $got, Python's $names" }
                 for (name in got) misses.check(ViewerAssets.text(name).isNotEmpty()) { "$name reads empty" }

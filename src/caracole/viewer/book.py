@@ -21,8 +21,8 @@ they go to, a swipe or the arrow keys go from song to song, skipping the missing
 each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
-with the hashes of its eight scripts (book.js, the viewer's strum.js, overlay.js, instruments.js, winds.js,
-layers.js, screen.js and viewer.js) and
+with the hashes of its eight scripts (the viewer's screen.js in its head; book.js, the viewer's strum.js, overlay.js,
+instruments.js, winds.js, layers.js and viewer.js after its body) and
 two stylesheets. A server serves it only while it is the page caracole wrote, with
 ``songbook_csp(page)``.
 """
@@ -153,7 +153,8 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         + _CONTROLS
     )
     return _page(f"{name} · songbook", body, styles=(style, book_style),
-                 scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), _layers(), _screen(), script))
+                 scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), _layers(), script),
+                 head_scripts=(_screen(),))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str,

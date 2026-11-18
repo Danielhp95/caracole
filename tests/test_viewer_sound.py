@@ -122,9 +122,9 @@ def test_the_synthesis_is_a_script_of_its_own_inlined_and_hashed_before_the_view
     kinds = (page.HERE / "kinds.js").read_text(encoding="utf-8")
     screen = (page.HERE / "screen.js").read_text(encoding="utf-8")
     viewer = (page.HERE / "viewer.js").read_text(encoding="utf-8")
-    assert scripts == [strum, overlay, instruments, winds, layers, kinds, screen, viewer]
-    assert (f"script-src {sha256_source(strum)} {sha256_source(overlay)} {sha256_source(instruments)} "
-            f"{sha256_source(winds)} {sha256_source(layers)} {sha256_source(kinds)} {sha256_source(screen)} "
+    assert scripts == [screen, strum, overlay, instruments, winds, layers, kinds, viewer]  # screen.js the head's
+    assert (f"script-src {sha256_source(screen)} {sha256_source(strum)} {sha256_source(overlay)} "
+            f"{sha256_source(instruments)} {sha256_source(winds)} {sha256_source(layers)} {sha256_source(kinds)} "
             f"{sha256_source(viewer)};") in csp
     assert page.HERE / "strum.js" in page.BUILD_FILES
     # It loads nothing: no worklet module, no sample, no fetch.

@@ -83,7 +83,7 @@ object PagesReplay : AreaReplay {
                 }
                 P + "_footer" -> misses.expect(record) { SheetPage.footer(text(a[0])) }
                 P + "_page" -> misses.expect(record) {
-                    SheetPage.page(text(a[0]), text(a[1]), strings(a[2]), strings(a[3]), names(a[4]))
+                    SheetPage.page(text(a[0]), text(a[1]), strings(a[2]), strings(a[3]), names(a[4]), strings(a[5]))
                 }
                 P + "viewer_csp" -> misses.expect(record) {
                     SheetPage.viewerCsp(Base64.getDecoder().decode(a[0].jsonObject.getValue("base64").jsonPrimitive.content))

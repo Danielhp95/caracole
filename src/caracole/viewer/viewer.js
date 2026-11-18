@@ -2695,7 +2695,7 @@
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
-    screenChoices(params);  // the rail, the pinyin, the characters and the instrument there too
+    screenChoices(params);  // the rail, the pinyin, the characters, the instrument and the theme there too
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };

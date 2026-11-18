@@ -380,7 +380,7 @@ def test_the_winds_script_is_inlined_after_the_instruments_and_before_the_viewer
         scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
         at = scripts.index(script)
         assert scripts[at - 1] == (page.HERE / "instruments.js").read_text(encoding="utf-8")
-        # others between it and the viewer: layers.js, kinds.js, screen.js
+        # others between it and the viewer: layers.js, kinds.js
         assert at < scripts.index((page.HERE / "viewer.js").read_text(encoding="utf-8"))
         csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
         assert sha256_source(script) in csp

@@ -26,7 +26,7 @@ a mark, or null), ``{"chords": [int or string, …]}``, ``{"text": …}``, ``{"t
 - ``_words(texts)`` (a batch): each text cut as the page cuts it (``_lyric_texts``);
 - ``facts_html(key, [[origin, capo, tuning, chords, suffix], …])``: the song's facts' HTML for each (``key`` null for
   a sheet with none, ``tuning`` null for one whose notes name none, one of ``TUNINGS``);
-- ``_footer(links)``, ``_page(title, body, styles, scripts, names)``: their HTML;
+- ``_footer(links)``, ``_page(title, body, styles, scripts, names, head_scripts)``: their HTML;
 - ``viewer_csp(page)``: ``page`` as ``{"base64": …}``, the header;
 - ``shown_html(chords, pre, sections)`` (this module's): ``_preamble_html(pre, chords)`` (null for no ``pre``) and
   ``_section_html(section, chords)`` of each section, as ``page._sheet_html`` joins them: the sheet as
@@ -280,14 +280,15 @@ def parts_records() -> list[dict[str, Any]]:
                                 for origin, capo, tuning, chords, suffix in cases]})
     for links in ("", page.pdf_line([("sheet.pdf", "PDF", "sheet (Traditional).pdf")])):
         records.append({"fn": P + "_footer", "args": [links], "out": page._footer(links)})
-    frames = [("Song · Artist", "<p>x</p>\n", ("a{}",), ("1", "2"), None),
-              ("A <b> & \"c\"", "", ("a{}", "b{color:red}"), (), None),
+    frames = [("Song · Artist", "<p>x</p>\n", ("a{}",), ("1", "2"), None, ()),
+              ("A <b> & \"c\"", "", ("a{}", "b{color:red}"), (), None, ("0",)),
               ("斑马 · 宋冬野", "<div>\n</div>\n", ("é{}",), ("console.log('ü')",),
-               page.names_table(True, ["斑马", "宋冬野", "斑马 · 宋冬野"])),
-              ("Untitled", "body", (), ("",), {"simplified": {}, "traditional": {"Untitled": "x"}})]
-    for title, body, styles, scripts, names in frames:
-        records.append({"fn": P + "_page", "args": [title, body, list(styles), list(scripts), names],
-                        "out": page._page(title, body, styles=styles, scripts=scripts, names=names)})
+               page.names_table(True, ["斑马", "宋冬野", "斑马 · 宋冬野"]), ("let ü = 1;", "2")),
+              ("Untitled", "body", (), ("",), {"simplified": {}, "traditional": {"Untitled": "x"}}, ())]
+    for title, body, styles, scripts, names, head in frames:
+        records.append({"fn": P + "_page", "args": [title, body, list(styles), list(scripts), names, list(head)],
+                        "out": page._page(title, body, styles=styles, scripts=scripts, names=names,
+                                          head_scripts=head)})
     for raw in _csp_inputs():
         records.append({"fn": P + "viewer_csp", "args": [{"base64": base64.b64encode(raw).decode("ascii")}],
                         "out": page.viewer_csp(raw)})
@@ -518,9 +519,9 @@ WHOLE = (
 def pieces(html: str) -> list[Any]:
     """``html`` as its texts and the viewer/ files it inlines whole (``{"asset": name}``), in order."""
     style, script = page._assets()
-    assets = [("viewer.css", style), ("strum.js", page._sound()), ("overlay.js", page._overlay()),
-              ("instruments.js", page._instruments()), ("winds.js", page._winds()), ("layers.js", page._layers()),
-              ("kinds.js", page._kinds()), ("screen.js", page._screen()), ("viewer.js", script)]
+    assets = [("viewer.css", style), ("screen.js", page._screen()), ("strum.js", page._sound()),
+              ("overlay.js", page._overlay()), ("instruments.js", page._instruments()), ("winds.js", page._winds()),
+              ("layers.js", page._layers()), ("kinds.js", page._kinds()), ("viewer.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

@@ -393,8 +393,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined
-    before viewer.js and harptab.js on every viewer page (no script guards it).
+  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined in
+    the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's `headScripts`), so the theme is the
+    page's before its body is drawn; at start-up it touches the root, the address, storage and the navigation alone,
+    and what needs the body waits for DOMContentLoaded; no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -439,8 +441,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 
 `harmonica-N.html` comes of `_render_harmonica`, whatever came of the sheet's PDF:
 
-- viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, strum.js,
-  overlay.js, layers.js, kinds.js and harptab.js.
+- viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, screen.js in
+  its head, and strum.js, overlay.js, layers.js, kinds.js and harptab.js after its body.
 - **Its version line and list**, the sheet's viewer's (page.py `_VERSIONS` after the artist line, `_VERSION_LIST`
   after the pill; kinds.js): render.py passes `versions=_on_page(listed, None)` (no `this`) and the song's `kinds`,
   its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
@@ -1474,7 +1476,8 @@ It is rows.js's, shared by both pages:
     for Auto, the system's; viewer.css's palette on screen, paper light):
     - localStorage `caracole-viewer-theme` (`auto`, `light`, `dark`), and `theme=` in the address while it isn't Auto,
       which `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`);
-    - applied by screen.js before the page's own script, so a songbook's contents follow it too; Reset all leaves it;
+    - applied by screen.js in the head, before the body is drawn (no other palette painted first on a slow phone), so
+      a songbook's contents follow it too; Reset all leaves it;
     - the library page is not affected (test_viewer_theme.py).
 
 #### `commands/`
