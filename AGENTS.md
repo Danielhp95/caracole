@@ -1294,8 +1294,9 @@ It is rows.js's, shared by both pages:
   keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
   `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`). A queued one's
   line counts what it waits for (`jobs.ahead`: a lookup the lane's before it, any other every one before it and every
-  lookup), and the Journal says its place among those queued in its own place, every running one under Now, oldest
-  first (feed.py; test_web_feed.py); with no lane, as one queue, the phone's.
+  lookup), and the Journal says its place among those queued in its own place, the queue's next "Queued · next,
+  after the lookups" while a lane job runs or waits (feed.py `AFTER_LOOKUPS`), every running one under Now in the
+  order they were asked (feed.py; test_web_feed.py); with no lane, as one queue, the phone's, to the byte.
 - The one line a request shows is status.py's, read from the job's steps and the song's state, never from which
   commands ran: a step's label is that line while it runs ("Adding to the book…").
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,

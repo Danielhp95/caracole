@@ -4702,10 +4702,11 @@ the library, sent as they are: they carry no badge.
   gives it, asked again every 1.5 seconds while one waits or runs and every 10
   seconds otherwise, only while the tab shows; its tab counts the requests that
   wait or run:
-  - **Now**: the requests that run, oldest first (the queue's one and up to
-    three lookups beside it), each as a card with its song, how long ago it
-    started ("started 12 s ago"), its line ("Making the PDF…") and its
-    steps, the one running highlighted and those done ticked: for a lookup,
+  - **Now**: the requests that run, in the order they were asked (the
+    queue's one and up to three lookups beside it), each as a card with
+    its song, how long ago it started ("started 12 s ago"), its line
+    ("Making the PDF…") and its steps, the one running highlighted and
+    those done ticked: for a lookup,
     Song, Match Ultimate Guitar (or Match: not on UG, plain), Sheet (Sheet
     Ultimate Guitar or Sheet LaCuerda once it asks a site, then where the
     sheet came from), PDF,
@@ -4722,7 +4723,9 @@ the library, sent as they are: they carry no badge.
     request of other commands, its commands, leaving out one skipped.
     Under them, the requests queued, in order ("Queued · next", "Queued · 2nd":
     a lookup's place among the lookups waiting for a slot, any other's in the
-    queue), each with **Cancel**, which takes it out of the queue before it
+    queue). A request in the queue waits for the lookups too, which go first:
+    while one runs or waits, its next says "Queued · next, after the lookups".
+    Each has **Cancel**, which takes it out of the queue before it
     starts (`POST /jobs/cancel`; a request that runs is never stopped halfway,
     and one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
@@ -4954,12 +4957,12 @@ time, and up to three lookups beside it, which take turns with caracole's lock
 only once no lookup runs or waits. So the server is never more aggressive than
 you at a terminal: each command takes caracole's lock, keeps the pause after
 the last request any caracole sent, and keeps the budgets and cooldowns. A
-lookup keeps the interactive pace (about a second between two requests to a
-site, six for the song, sixty an hour), and a nightly run holding the lock lets
-it go first at its next pause. The queue holds 20 requests and one per song,
-and the lookups' lane three running and ten waiting of its own: asking again
-for a song gives its request, and Fetch on a song whose request only adds it
-fetches it too.
+lookup keeps the interactive pace (`lookup_delay`, 0.125–0.375 seconds between
+two requests to a site, six for the song, sixty an hour), and a nightly run
+holding the lock lets it go first at its next pause. The queue holds 20
+requests and one per song, and the lookups' lane three running and ten
+waiting of its own: asking again for a song gives its request, and Fetch on
+a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
 loses no song, and the Journal keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the

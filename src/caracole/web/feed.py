@@ -1,11 +1,12 @@
 """The library page's Requests tab, as data: every request the queue remembers, as library_assets/requests.js draws
 it (``GET /requests.json``, jobs_routes.py).
 
-Under **Now**, the requests that run, oldest first (the queue's one, and the lookups the lane runs beside it), each
-with how long ago it started, its line and its steps (outcome.py's ``steps``, the chips the library page draws under a
-song's line), and those queued under them in order, each with its place ("Queued · next", "Queued · 2nd": a lookup's
-among the lookups queued in the lane, any other's among the queue's, ``Job.lane``) and Cancel (``POST
-/jobs/cancel``); then the finished ones, newest first under **Today** and
+Under **Now**, the requests that run, in the order they were asked (the queue's one, and the lookups the lane runs
+beside it), each with how long ago it started, its line and its steps (outcome.py's ``steps``, the chips the library
+page draws under a song's line), and those queued under them in order, each with its place ("Queued · next", "Queued ·
+2nd": a lookup's among the lookups queued in the lane, any other's among the queue's, ``Job.lane``; the queue's next
+"Queued · next, after the lookups" while a lookup runs or waits, which goes first, ``AFTER_LOOKUPS``) and Cancel
+(``POST /jobs/cancel``); then the finished ones, newest first under **Today** and
 **Earlier** (by when each ended, in the server's local time zone), each with its outcome (outcome.py's
 ``Outcome``: a word in its tone, a reason, its next step and the one beside it), a lookup's or a sheet from a
 YouTube video's steps as it left them, right after the reason (outcome.py's ``lists_steps``: one that started), and
@@ -46,6 +47,8 @@ SEARCH = "Search the index"
 _NEEDS_REVIEW = "needs review first"
 PICK_STAGE = "Not fetched: its UG sheet waits for the match. Pick it, with Fetch ticked, and we fetch it then."
 PICK_STEP = "Not fetched: caracole fetch waits for the match. Pick it, with Fetch ticked, and we fetch it then."
+# After the queue's next request's place while a lookup of the lane runs or waits: those go first (web/jobs.py).
+AFTER_LOOKUPS = ", after the lookups"
 
 
 def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, Outcome] | None = None,
@@ -65,10 +68,12 @@ def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, O
     pending = _waiting_picks(jobs, picks or {})
     active = sorted((job for job in jobs if job.active), key=lambda job: (job.state != "running", job.id))
     queued = [job for job in active if job.state == "queued"]
+    lookups = any(job.lane for job in active)  # the lane's go first: the queue's next waits for them
     groups: dict[str, list[dict[str, Any]]] = {"Now": [], "Today": [], "Earlier": []}
     for job in active:
         shown_job = (_running(job, lines.get(job.id), (facts or {}).get(job.id), now) if job.state == "running"
-                     else _queued(job, [j for j in queued if j.lane == job.lane].index(job) + 1))
+                     else _queued(job, [j for j in queued if j.lane == job.lane].index(job) + 1,
+                                  after_lookups=lookups and not job.lane))
         groups["Now"].append(shown_job | {"output": _output(job, opened=job.id in opened)})
     today = now.astimezone().date()
     over = sorted((job for job in jobs if not job.active),
@@ -101,10 +106,12 @@ def _running(job: Job, line: Line | None, facts: SongFacts | None, now: datetime
     return shown_job
 
 
-def _queued(job: Job, place: int) -> dict[str, Any]:
+def _queued(job: Job, place: int, *, after_lookups: bool = False) -> dict[str, Any]:
     """A request that waits: its place among those queued in its own place, the lane's or the queue's ("Queued ·
-    next", "Queued · 3rd"), and Cancel, which takes it out of the queue."""
-    shown_job = _head(job, "queued", f"Queued · {_ordinal(place)}")
+    next", "Queued · 3rd"; the queue's next, ``after_lookups`` while a lookup runs or waits, "Queued · next, after the
+    lookups"), and Cancel, which takes it out of the queue."""
+    said = f"Queued · {_ordinal(place)}" + (AFTER_LOOKUPS if after_lookups and place == 1 else "")
+    shown_job = _head(job, "queued", said)
     shown_job["actions"] = [{"label": "Cancel", "post": "/jobs/cancel", "fields": {"job": str(job.id)},
                              "aria": f"Cancel {job.display or job.title}", "primary": False}]
     return shown_job
