@@ -1683,6 +1683,9 @@ Back closing the card's ⋯ menu is Task 3b.5's (the plan's "Where the lanes mee
 
 #### Task 1e.2: One SVG sprite for the glyphs
 
+**Tried and reverted:** the sprite cost more than it saved (spec, "Measurements before building"); the glyphs stay inline
+SVG. The steps below are kept as written, not to be run.
+
 **Files:**
 - Modify: `src/caracole/library_assets/rows.js` (`glyph`, a `sprite()` made once)
 - Modify: `src/caracole/library_assets/rows.css` (`.glyph-sprite`)
