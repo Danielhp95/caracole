@@ -61,7 +61,7 @@ below.
    back): the lock, the lane flock and its ticket go with it, no record is written into a lock it doesn't hold, and the
    next lookup in the lane takes the lock within a second, the queue's caracole after the lane. Task 6.2
    (`test_a_lookup_killed_holding_the_lock_leaves_it_to_the_next_in_the_lane`,
-   `test_a_turn_interrupted_as_it_waits_writes_nothing_and_leaves_no_ticket`).
+   `test_a_turn_interrupted_as_it_waits_leaves_no_ticket_and_the_lock_free`).
 2. **A dead or stale lane ticket at the head of the order** (its pid gone, or untouched past `TICKET_STALE`): passed
    over at once, or after 5 s at most, never waited for. Task 6.1
    (`test_lane_tickets_go_oldest_first_passing_over_a_dead_or_stale_one`).
@@ -74,7 +74,8 @@ below.
    `test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets`).
 5. **A lane lookup run in a process that goes on** (CliRunner, a test, a command that runs another): its lane flock is
    let go with its lock, so the next caracole of that process or another never waits for a lane it is not in. Task
-   6.1 (`test_a_lookup_in_the_lane_takes_a_free_lock_at_once_and_leaves_the_lane_as_it_lets_go`).
+   6.1 (`test_a_lookup_in_the_lane_takes_a_free_lock_at_once_and_leaves_the_lane_as_it_lets_go`,
+   `test_an_acquire_interrupted_as_it_waits_leaves_the_lane_empty`).
 
 ## Where the lanes meet
 
@@ -88,7 +89,8 @@ card.js and card.css) and the sheet pages (lane 5, in `../caracole-lane5`).
    new tests/test_commands_lane.py and tests/helpers/lanes.py. The routes that queue (search_routes.py,
    library_routes.py, ug_link_routes.py, songbook_routes.py) need no change: the lane is decided in
    `JobQueue._submit_locked` from the steps, and each route's `QueueFull` words stand.
-2. **Lane 6 does not edit** src/caracole/library_assets/, library_page.py, card.js or card.css (lanes 1 and 3b),
+2. **Lane 6 does not edit** src/caracole/library_assets/, library_page.py, card.js, card.css or
+   tests/test_requests_tab.py (lanes 1 and 3b: 6.9's tests go in a new tests/test_web_feed.py),
    src/caracole/viewer/ or render.py (lane 5), web/outcome.py or web/status.py (no word moves), android/.
 3. **web/feed.py and web/jobs_routes.py** were lane 2's (merged, 139fcd18); no running lane lists them. Lane 6's edits
    there are task 6.9's few lines; a merge that meets another lane's change there keeps both.
@@ -118,7 +120,8 @@ card.js and card.css) and the sheet pages (lane 5, in `../caracole-lane5`).
   kind (part 2).
 - The lane runs on `LANE` worker threads (`caracole-lane-1` … `-3`) beside the queue's one.
 - A lane command's good run is read from its own client (`PoliteClient.answered_any()`); `health.answered_any` stays
-  for every other command, and for the phone's port.
+  for every other command, and for the phone's port, which runs one job at a time (AGENTS.md's Lookups on the phone
+  says so, 6.6).
 - What follows the sheet keeps its share after a turn through the lane client's `reserve` (get.py sets it to
   `ceil(lookup_per_hour × SHEETS_SHARE)`), and the client's `kept_back` says when a turn's cut came from it, for
   get.py's words.
@@ -128,8 +131,11 @@ card.js and card.css) and the sheet pages (lane 5, in `../caracole-lane5`).
   on the page's HTML.
 - A queue job's hand-over is tested with a bulk-pace UG client under an interactive lock (as `fetch --song` holds
   one), standing for yt-dlp's pause: `make_youtube`'s pause is the same `_patient_sleep`.
-- usage.md's One caracole at a time passage is rewritten once, in 6.6, when every lane command takes turns; AGENTS.md's
-  rules move with each lock task.
+- usage.md's One caracole at a time passage is rewritten in 6.6, when every lane command takes turns, but for its
+  "Holding the lock as a lookup, such a command lets nothing else go first in its own pauses", which changes in 6.5
+  with `get`; AGENTS.md's rules move with each lock task.
+- Two `caracole get`s of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve
+  never runs two jobs of a song): accepted, as spec part 3 has it, and said in AGENTS.md's lane bullet (6.2).
 - The audit (6.6): `lacuerda --search` checks its gate, sends its one request and records a failure in one turn (no
   turn before a client's first request); `ug --link`'s `known` decides only before its first request, and
   `record_failure` / `forget_failure` (kv `ug:link-failed`) come after its last, with no turn between; `lacuerda
@@ -178,11 +184,14 @@ already, the depth grows (the outer one's kind). Else:
   on_wait=on_wait)`.
 - else `_take_outside_handoffs` as now, and then, holding the lock with the gate free: `if not _lane_empty(cfg)`: let
   go, say once (`Another caracole is running (…); waiting for it to finish.`), `_wait_lane_empty(cfg)`, start again.
-- then the record, `_held`, `_as_lookup` (interactive or lane), `_lane`.
+- then the record, `_held`, `_as_lookup` (interactive or lane), `_lane`. An acquire that fails before it has the lock
+  (Ctrl-C in `_wait_announced`, `_announce`'s OSError) closes the lane's descriptor as well as the lock's, so a process
+  that goes on is out of the lane.
 
 **A turn**, `pass_turn(cfg: Config, conn: sqlite3.Connection | None = None) -> bool` (part 2, rule 2):
 
 ```
+if not _held: return False                       # nothing held: before it reads anything of cfg
 not held, not in the lane, conn in a transaction, or no lane ticket waits: return False
 record = pread(fd); ticket = _announce(cfg, what of the record, lane=True)   # behind every lane ticket waiting
 flock(fd, LOCK_UN)
@@ -228,8 +237,10 @@ _after_a_lookup(url), for bulk's clients and now the lane's, once handoffs() mov
 ```
 
 No deadlock: whatever holds the lock tries the gate and the lane without blocking and lets go before it waits; a lane
-process holds the lane's flock while it waits, but polls; bulk work alone blocks holding a flock (the gate), once the
-lane is empty.
+process holds the lane's flock while it waits, but polls; bulk work alone blocks holding a flock, its gate: first on
+the lane's flock (`_wait_lane_empty`, the lane's work), then on the lock once the lane is empty. That is safe: what the
+owner asked for now tries the gate without waiting, and a `caracole-admin` command holds nothing while it waits for
+it.
 
 ## Tasks
 
@@ -300,16 +311,25 @@ def test_lane_tickets_go_oldest_first_passing_over_a_dead_or_stale_one(cfg):
     assert _common.lookups_waiting(cfg)  # a lane ticket is a lookup waiting, for bulk work's pauses
 
 def test_a_waiting_lookup_tells_whom_it_waits_for_only_once_it_has_waited_a_moment(cfg, monkeypatch):
-    monkeypatch.setattr(_common, "WAIT_SAID", 0.3)
     told: list[str] = []
-    # with another_caracole(cfg): a thread in exclusive(cfg, "get A - B", lane=True, on_wait=told.append) until its
-    # ticket shows, then let go at once (a turn's moment): joined, told == []
-    # again, held until told says something (5 s at most): told == ["pid 4242: run"], then let go and joined
+    # WAIT_SAID 2.0: with another_caracole(cfg), a thread in exclusive(cfg, "get A - B", lane=True,
+    # on_wait=told.append) until its ticket shows, then let go at once (a turn's moment): joined, told == []
+    # WAIT_SAID 0.3: again, held until told says something (5 s at most): told == ["pid 4242: run"], then let go and
+    # joined
 
 def test_a_lock_taken_inside_the_lane_keeps_its_kind(cfg):
     # in a thread, joined within 5 s: with exclusive(cfg, "get A - B", lane=True): with exclusive(cfg, "ug requests"):
     # done.set() — make_client's lock never waits for a lane its own process is in
     assert done.wait(5)
+
+def test_an_acquire_interrupted_as_it_waits_leaves_the_lane_empty(cfg, monkeypatch):
+    # with another_caracole(cfg); _wait_announced faked to raise KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        with exclusive(cfg, "get A - B", lane=True):
+            pass
+    probe = os.open(cfg.state_dir / _common.LANE_NAME, os.O_RDWR)
+    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the failed acquire let go of the lane too
+    os.close(probe)
 ```
 
 - [ ] **Step 3: Run them to see them fail**
@@ -319,7 +339,8 @@ Expected: FAIL (`exclusive() got an unexpected keyword argument 'lane'`, no `LAN
 
 - [ ] **Step 4: Implement the lane in `src/caracole/commands/_common.py`**, as "The lock" says: the lane file,
   the tickets and their names, `_wait_announced` with `lane`, `ticket` and `on_wait` (told once after `WAIT_SAID`),
-  `_acquire`'s three ways, `_take_outside_handoffs`' lane check, `_release` closing the lane's descriptor at depth 0,
+  `_acquire`'s three ways (its `except BaseException` closing the lane's descriptor too), `_take_outside_handoffs`'
+  lane check, `_release` closing the lane's descriptor at depth 0,
   `exclusive(..., lane=False)` passing `interactive=interactive or lane`. `lookups_waiting` parses a lane ticket's pid
   (`_ticket_pid`), so a gone one is dropped at once. The fake `_acquire` in test_commands_lock.py:483 takes `lane=False`.
   The module docstring's "One caracole at a time" paragraph gains the lane: "Lookups take the lock in a lane of their
@@ -357,54 +378,67 @@ git commit -m "feat(lock): a lane for lookups, which keeps every other caracole 
 - Produces: `pass_turn(cfg: Config, conn: sqlite3.Connection | None = None) -> bool` (a turn counts in `handoffs()`);
   tests/helpers/lanes.py: `config_file(cfg, tmp_path, ug: str = "") -> Path` (a caracole.toml of `cfg`'s three
   folders, with `ug`'s lines under `[providers.ug]`), `start(script, config, log, *args, go: Path | None = None) ->
-  subprocess.Popen` (PYTHONPATH by `conftest.subprocess_pythonpath`; a script writes `ready <name> <t>`, then waits for
-  `go` to exist, when given, before it asks for the lock), `records(log) -> list[tuple[str, str, float, list[str]]]`
-  (each line's word, name, `time.time()` and the rest, in the order written), `wait_for(log, word, name, timeout=30) ->
-  float`, and the scripts `TURNS` (name, turns: in the lane, each turn writes `turn <name> <t> <i>`, sleeps 0.1 s and
+  subprocess.Popen` (PYTHONPATH by `conftest.subprocess_pythonpath`; every script opens the one log they share with
+  "a", line-buffered, writes `ready <name> <t>`, then waits for its own `go` file, when given, before it asks for the
+  lock), `Record(NamedTuple)` (`word: str`, `name: str`, `t: float`, `rest: list[str]`), `records(log) ->
+  list[Record]` (each line's, in the order written), `wait_for(log, word, name, timeout=30) -> float`, and the scripts `TURNS` (name, turns: in the lane, each turn writes `turn <name> <t> <i>`, sleeps 0.1 s and
   calls `pass_turn(cfg)`; then `end <name> <t>`), `HOLD` (name: in the lane, writes `holding <name> <t>`, sleeps 60 s)
   and `WAITER` (name, kind: `exclusive(cfg, f"remove {name}", interactive=kind == "asked")`, then `got <name> <t>`).
+  A test starts every process up front, each behind a `go` file of its own, and creates that file at its trigger (a
+  line seen in the log, a waiter seen waiting): never a process started at a step, nor against a time window.
 
 - [ ] **Step 1: Write the failing tests** in `tests/test_commands_lane.py`
 
 ```python
 @pytest.mark.slow
 def test_two_lookups_in_the_lane_take_turns_at_the_lock(cfg, tmp_path):
-    # TURNS a and b, 6 turns each, started together (go once both are ready)
-    turns = [r for r in records(log) if r[0] == "turn"]
-    assert {r[1] for r in turns[:2]} == {"a", "b"} and turns[1][2] - go_at < 1.0  # both move at once
-    assert sum(x[1] != y[1] for x, y in zip(turns, turns[1:])) >= 5  # by turns, not one after the other
+    # TURNS a and b, 6 turns each, started up front behind a go file each, both created once both are ready (go_at)
+    turns = [r for r in records(log) if r.word == "turn"]
+    assert {r.name for r in turns[:2]} == {"a", "b"} and turns[1].t - go_at < 2.0  # both move at once
+    assert sum(x.name != y.name for x, y in zip(turns, turns[1:])) >= 5  # by turns, not one after the other
     assert a.wait(30) == 0 and b.wait(30) == 0
 
 @pytest.mark.slow
 def test_nothing_but_a_lookup_takes_the_lock_between_two_turns(cfg, tmp_path):
-    # TURNS a and b, 10 turns each; once both have taken a turn, WAITER bulk and WAITER asked
-    lane_over = max(t for word, _, t, _ in records(log) if word == "end")
-    assert all(t > lane_over for word, _, t, _ in records(log) if word == "got")
+    # another_caracole(cfg) holds the lock; WAITER bulk, WAITER asked, TURNS a and b (10 turns each), up front behind
+    # a go file each: bulk's go, and bulk seen blocked on the lock (waiting_for before any ticket exists); asked's go,
+    # and its ticket seen; a's and b's go, and two lane tickets seen (lane_tickets); then the lock let go
+    lane_over = max(r.t for r in records(log) if r.word == "end")
+    got = [r for r in records(log) if r.word == "got"]
+    assert sorted(r.name for r in got) == ["asked", "bulk"] and all(r.t > lane_over for r in got)
 
 @pytest.mark.slow
 def test_a_lookup_killed_holding_the_lock_leaves_it_to_the_next_in_the_lane(cfg, tmp_path):
-    # HOLD a; once holding: TURNS b (2 turns) and WAITER bulk, both seen waiting (waiting_for); then a.kill()
+    # HOLD a, WAITER bulk, TURNS b (2 turns), up front behind a go file each: a's go and its "holding" line; bulk's go
+    # and bulk seen blocked on the lock before any lane ticket exists; b's go and its lane ticket seen; then a killed
+    # (killed again in a finally)
     assert wait_for(log, "turn", "b") - killed_at < 2.0
     assert wait_for(log, "got", "bulk") > wait_for(log, "end", "b")
 
-def test_no_turn_in_a_transaction_nor_outside_the_lane(cfg, conn):
-    # a lane ticket of this process, fresh, in WAITING_DIR: a lookup waits
+def test_no_turn_in_a_transaction_nor_outside_the_lane(cfg, conn, monkeypatch):
     with exclusive(cfg, "get A - B", lane=True):
+        # once it holds the lock: a fresh lane ticket of this process planted in WAITING_DIR, and _wait_announced
+        # faked to record its keywords (waited) and take the lock back (LOCK_EX on its fd)
         conn.execute("BEGIN")
         assert not _common.pass_turn(cfg, conn)
         conn.execute("ROLLBACK")
         with db.savepoint(conn, "half"):
             assert not _common.pass_turn(cfg, conn)
+        assert waited == []  # no turn begun in either
         assert not _common.hand_over(cfg, conn)  # a lane process takes turns, never hands over (a render's between)
+        assert _common.pass_turn(cfg, conn)  # in no transaction, a lookup waiting: a turn
+        assert waited[0]["lane"] is True and waited[0]["ticket"].name.startswith(_common.LANE_TICKET)
     with exclusive(cfg, "run"):
         assert not _common.pass_turn(cfg, conn)  # bulk work hands over, it has no turns
     assert not _common.pass_turn(cfg)  # nothing held
 
-def test_a_turn_interrupted_as_it_waits_writes_nothing_and_leaves_no_ticket(cfg, monkeypatch):
-    # a fresh lane ticket of this process; _wait_announced raises KeyboardInterrupt
+def test_a_turn_interrupted_as_it_waits_leaves_no_ticket_and_the_lock_free(cfg, monkeypatch):
     with pytest.raises(KeyboardInterrupt), exclusive(cfg, "get A - B", lane=True):
+        # once it holds the lock: a fresh lane ticket of this process planted; _wait_announced faked to record its
+        # keywords (waited) and raise KeyboardInterrupt
         _common.pass_turn(cfg)
-    assert [t for t in _common.lane_tickets(cfg) if t.name != planted.name] == []  # its own ticket gone
+    assert waited[0]["ticket"].name.startswith(_common.LANE_TICKET)  # interrupted waiting for its turn
+    assert not waited[0]["ticket"].exists()  # its own ticket gone
     # and a thread's exclusive(cfg, "remove A - B --yes") takes the lock within 5 s
 ```
 
@@ -416,7 +450,7 @@ Expected: FAIL (`module 'caracole.commands._common' has no attribute 'pass_turn'
 - [ ] **Step 3: Implement `pass_turn` in `src/caracole/commands/_common.py`** as "The lock" says (its docstring: "Let
   the next lookup in the lane have caracole's lock now, and take it back in turn; True when one did. Only a lane
   process calls it, holding the lock, at a turn point, in no transaction: before a request but its client's first, and
-  between two stages."), and tests/helpers/lanes.py as its Interfaces say (docstring: "Caracoles in processes of their
+  between two stages."; with nothing held it is False before it reads anything of `cfg`), and tests/helpers/lanes.py as its Interfaces say (docstring: "Caracoles in processes of their
   own, taking caracole's lock in the lane or waiting for it, each writing what it did, timed, to a log: for
   tests/test_commands_lane.py.").
 
@@ -428,7 +462,9 @@ Expected: PASS.
 - [ ] **Step 5: AGENTS.md**: the lane bullet of 6.1 gains its turns: a lane process holding the lock, at a turn point
   (a lane client's pause before each request but its first, and between two of a lookup's stages), in no transaction,
   when a lane ticket waits, writes its own (the newest), lets go, takes the lock back when its ticket heads the lane,
-  and counts a handoff (`pass_turn`), so whatever reads again after a handoff reads again after a turn.
+  and counts a handoff (`pass_turn`), so whatever reads again after a handoff reads again after a turn. Two lookups
+  of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never runs two jobs of
+  a song): accepted (the spec's part 3).
 
 - [ ] **Step 6: Commit**
 
@@ -448,7 +484,8 @@ git commit -m "feat(lock): lookups in the lane take turns with caracole's lock"
 
 **Interfaces:**
 - Consumes: 6.1's `_lane_empty`, `_wait_lane_empty`, `_wait_announced`; 6.2's helpers.
-- Produces: `hand_over(cfg, conn=None) -> bool` as "The lock" says (signature unchanged). Scripts: `BULK` (name, count:
+- Produces: `hand_over(cfg, conn=None) -> bool` as "The lock" says (signature unchanged). Scripts, each run as 6.2's
+  Interfaces say (started up front behind its own `go` file): `BULK` (name, count:
   `exclusive(cfg, "run")` and `make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")`, `count` requests) and
   `QUEUE_JOB` (name, count: `exclusive(cfg, f"fetch --song {name}", interactive=True)` and the same bulk-pace client),
   each through a recording transport (`start <name> <t> <url>`, `end <name> <t> <status>` around each request, 200
@@ -475,26 +512,30 @@ In tests/test_commands_lane.py (config: `config_file(cfg, tmp_path, "delay = [1.
 ```python
 @pytest.mark.slow
 def test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back(cfg, tmp_path):
-    # QUEUE_JOB q (2 requests); once q's first request ended: TURNS l (1 turn)
+    # QUEUE_JOB q (2 requests) and TURNS l (1 turn), up front behind a go file each: q's go; l's once q's first
+    # request's end line is in the log
     assert turn_l < q_second_start  # in q's pause, not at its end
     assert q_second_start - end_l >= 1.4  # q's pause starts again, whole, after the lookup
     assert q_done_handoffs == 1
 
 @pytest.mark.slow
 def test_the_nightly_run_takes_the_lock_back_only_once_the_lane_is_empty(cfg, tmp_path):
-    # BULK r (2 requests); once r's first ended: TURNS a (6 turns); once a's first turn: TURNS b (2 turns)
+    # BULK r (2 requests), TURNS a (6 turns), TURNS b (2 turns), up front behind a go file each: r's go; a's once r's
+    # first request ended; b's once a's first turn is in the log
     assert r_second_start > max(end_a, end_b)
     assert r_done_handoffs == 1  # one handoff, the lane's two lookups in it
 
 @pytest.mark.slow
 def test_a_nightly_run_that_let_a_queue_job_in_gives_it_back_at_its_next_pause(cfg, tmp_path):
-    # BULK r (3 requests); once r's first ended: QUEUE_JOB q (2 requests); once q's first ended: TURNS l (1 turn)
+    # BULK r (3 requests), QUEUE_JOB q (2 requests), TURNS l (1 turn), up front behind a go file each: r's go; q's once
+    # r's first request ended; l's once q's first ended
     assert turn_l < q_second_start < r_second_start  # q handed to the lane, then had it back before the run did
 ```
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q -n 0 tests/test_commands_lane.py -k "queue_job or nightly" tests/test_commands_lock.py -k asked_now`
+Run: `nix develop -c pytest -q -n 0 tests/test_commands_lane.py -k "queue_job or nightly"`, then
+`nix develop -c pytest -q tests/test_commands_lock.py -k asked_now`
 Expected: FAIL (an interactive holder hands over to no one; the queue job keeps the lock to its end).
 
 - [ ] **Step 3: Implement `hand_over`** as "The lock" says: no refusal for `_as_lookup` (its comment: "taken as
@@ -504,7 +545,7 @@ Expected: FAIL (an interactive holder hands over to no one; the queue job keeps 
 
 - [ ] **Step 4: Run them to see them pass, with the handoff tests that stay**
 
-Run: `nix develop -c pytest -q tests/test_commands_lane.py tests/test_commands_common.py tests/test_commands_lock.py tests/test_web_jobs.py -k "hand or lane or nightly or lookup_queued"`
+Run: `nix develop -c pytest -q tests/test_commands_lane.py tests/test_commands_common.py tests/test_commands_lock.py tests/test_web_jobs.py -k "hand or lane or nightly or lookup_queued or asked_now"`
 Expected: PASS, test_commands_common.py's `test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause` and
 `..._alone_never_to_another_command_waiting` unchanged.
 
@@ -514,7 +555,9 @@ Expected: PASS, test_commands_common.py's `test_the_nightly_run_hands_the_lock_t
   its models, `fetch --song`'s pauses), taking the gate only if it is free, and waits with a ticket of its own to take
   it back once the lane is empty, so bulk work that let it in gives it back at its next pause. "Bulk work hands the lock
   over": "takes it back once the lookup is done" becomes once the lane is empty and no lookup waits (`HANDOFF_TAKE`
-  bounding only a ticket nobody takes).
+  bounding only a ticket nobody takes). And the no-deadlock rule, in "The lock"'s words: bulk work alone blocks holding
+  a flock, its gate, on the lane's flock and then on the lock; what the owner asked for now tries the gate without
+  waiting, and a `caracole-admin` command holds nothing while it waits.
 
 - [ ] **Step 6: Commit**
 
@@ -538,7 +581,8 @@ git commit -m "feat(lock): what the owner asked for now lets the lane's lookups 
   `BudgetExhausted`; `_claim` calls it); `PoliteClient.answered_any() -> bool` (more requests sent than answered with
   an error or a block, as `health.answered_any` counts a run's); `_LockedClient(..., lane: bool = False)` with
   `reserve: int = 0` and `kept_back: bool = False` (made `lane=interactive and lock in _lane` by `make_client`). Script
-  `LOOKUP` (name, count): in the lane, `make_client(cfg, conn, "ug", lookup_run_id(now), interactive=True)`, `count`
+  `LOOKUP` (name, count, block=-1: the index of its request answered 403, its URL ending in `/block`; -1 none), run as
+  6.2's Interfaces say: in the lane, `make_client(cfg, conn, "ug", lookup_run_id(now), interactive=True)`, `count`
   requests through the recording transport, then `done`, `spent` (BudgetExhausted) or `blocked` (ProviderBlocked,
   recorded by `record_block(conn, "ug", now, str(e))` as get.py's asking does), each `<word> <name> <t>
   <requests_made>`.
@@ -578,7 +622,8 @@ def test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets(cfg, conn, monkeypa
 
 @pytest.mark.slow
 def test_two_lookups_requests_alternate_and_a_site_sees_one_at_a_time(cfg, tmp_path):
-    # ug: lookup_delay = [0.2, 0.2]; LOOKUP a and b, 4 requests each, started together
+    # ug: lookup_delay = [0.2, 0.2]; LOOKUP a and b, 4 requests each, up front behind a go file each, both created
+    # once both are ready
     starts, ends = ...  # every request, in the order it started
     assert abs(first_start["a"] - first_start["b"]) < 1.0
     assert sum(x.name != y.name for x, y in zip(starts, starts[1:])) >= 3
@@ -588,31 +633,35 @@ def test_two_lookups_requests_alternate_and_a_site_sees_one_at_a_time(cfg, tmp_p
 
 @pytest.mark.slow
 def test_the_hour_holds_for_two_lookups(cfg, tmp_path):
-    # ug: lookup_per_hour = 8, lookup_delay = [0.1, 0.1]; LOOKUP a and b, 6 requests each
+    # ug: lookup_per_hour = 8, lookup_delay = [0.1, 0.1]; LOOKUP a and b, 6 requests each, both let go at once
     assert len(starts) == 8
     assert {word for word, *_ in last_lines} == {"spent"}
 
 @pytest.mark.slow
 def test_one_lookups_block_stops_the_other_before_its_next_request(cfg, tmp_path):
-    # LOOKUP a's second URL ends in /block (403); LOOKUP b, 3 requests
+    # LOOKUP a, 3 requests, block=1 (its second answered 403); LOOKUP b, 3 requests; both let go at once
     assert [s.name for s in starts] == ["a", "b", "a"]  # b's second never sent
     assert get_state(conn, "ug").strikes == 1  # one block, one strike
 ```
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q -n 0 tests/test_commands_lane.py -k "client or hour or alternate or block" tests/test_http.py -k answered`
+Run: `nix develop -c pytest -q -n 0 tests/test_commands_lane.py -k "client or hour or alternate or block or reserve"`,
+then `nix develop -c pytest -q tests/test_http.py -k answered`
 Expected: FAIL (no `answered_any`, no turns in a lookup's pauses, the hour read once).
 
 - [ ] **Step 3: Implement** `_check_budget` and `answered_any` in http.py (a failed request counted in `_event` for
-  `error` and `blocked`), and the lane client in commands/_common.py as "The lock" says. `make_client`'s docstring:
+  `error` and `blocked`; `ParallelClient` calls `_event` from its workers, so the count is kept under its lock, or never
+  read there), and the lane client in commands/_common.py as "The lock" says. `make_client`'s docstring:
   a lookup's client in the lane passes a turn before each request but its first, and after one keeps what the other
   left: its block, its last request's pause, the hour, the day and its reserve.
 
 - [ ] **Step 4: Run them to see them pass**
 
-Run: `nix develop -c pytest -q tests/test_commands_lane.py tests/test_http.py tests/test_commands_common.py tests/test_get.py`
-Expected: PASS.
+Run: `nix develop -c pytest -q tests/test_commands_lane.py tests/test_http.py tests/test_http_parallel.py tests/test_commands_common.py tests/test_get.py tests/test_conformance_http.py`,
+then `nix develop -c pytest -q tests/test_ug_directory.py` three times
+Expected: PASS (vectors/http/client.jsonl holds `_claim`'s order); test_ug_directory.py's
+`test_a_block_stops_every_worker_and_raises_once_what_came_before_is_stored` may fail only as on main (3 == 4).
 
 - [ ] **Step 5: AGENTS.md**: Either pace, "One request at a time per provider (a synchronous client, and the lock
   below)": "; two lookups at once pass the lock between two requests". An interactive lookup, "(`_common.lookup_policy`,
@@ -633,12 +682,14 @@ git commit -m "feat(lock): a lookup's client passes a turn before each request, 
 - Modify: `src/caracole/get.py` (`_Lookup.run`, `stage`, a new `_turn`, `after_the_sheet`, `asking`; the module
   docstring :62-65)
 - Modify: `tests/test_get.py`, `tests/test_commands_lock.py:477-491`
-- Modify: `docs/usage.md` (`caracole get`: "A nightly run that holds caracole's lock lets the lookup go first…")
+- Modify: `docs/usage.md` (`caracole get`: "A nightly run that holds caracole's lock lets the lookup go first…"; One
+  caracole at a time: "Holding the lock as a lookup, such a command lets nothing else go first in its own pauses")
 
 **Interfaces:**
 - Consumes: 6.1's `exclusive(lane=True)`, 6.2's `pass_turn`, `handoffs`, `overrides_since`, 6.4's
   `answered_any()`, `reserve`, `kept_back`.
-- Produces: `_Lookup.handed: int` (the handoffs its overrides and song were read at); `_Lookup._turn() -> None`.
+- Produces: `_Lookup.handed: int` (the handoffs its overrides and song were read at: 0 in `__init__`, so a `stage`
+  called with no `run`, as test_conformance_lookup.py:529-555 calls it, works); `_Lookup._turn() -> None`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -673,19 +724,21 @@ def test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_s
     # cooldown over; the lookup's own requests answered
     assert get_state(conn, "ug").strikes == 0
 
-def test_what_follows_the_sheet_keeps_half_the_hour_for_sheets_through_a_turn(cfg, conn, sites, monkeypatch):
+def test_what_follows_the_sheet_sets_its_ug_clients_reserve(cfg, conn, sites, monkeypatch):
+    # what the reserve does after a turn is 6.4's test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets
     # make_client wrapped to keep each client
     assert clients["ug"].reserve == math.ceil(cfg.provider("ug").lookup_per_hour * SHEETS_SHARE)
 ```
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q tests/test_get.py -k "turn or good_run or half" tests/test_commands_lock.py -k lane`
+Run: `nix develop -c pytest -q tests/test_get.py -k "turn or good_run or reserve"`, then
+`nix develop -c pytest -q tests/test_commands_lock.py -k lane`
 Expected: FAIL (get takes the lock as interactive, no turn, its good run read by run id).
 
 - [ ] **Step 3: Implement in `src/caracole/get.py`**:
-  - `run`: `exclusive(self.cfg, f"get {self.request.display}", lane=True, on_wait=waiting)`; `self.handed =
-    handoffs()` once overrides.toml is read.
+  - `__init__`: `self.handed = 0`. `run`: `exclusive(self.cfg, f"get {self.request.display}", lane=True,
+    on_wait=waiting)`; `self.handed = handoffs()` once overrides.toml is read.
   - `stage(name, run)`: `self._turn()` first. `_turn()`: `pass_turn(self.cfg, self.conn)`; once `handoffs() !=
     self.handed`, `self.overrides = overrides_since(self.cfg, self.overrides, self.handed)`, the song read again
     (`get_song(self.conn, self.song.id)`), `self.handed = handoffs()` (a turn in a client's pause is read at the next
@@ -701,11 +754,14 @@ Expected: FAIL (get takes the lock as interactive, no turn, its good run read by
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `nix develop -c pytest -q tests/test_get.py tests/test_commands_lock.py tests/test_conformance_lookup.py`
-Expected: PASS, the corpus check unchanged.
+Expected: PASS, test_conformance_lookup.py as it is and its corpus check unchanged.
 
 - [ ] **Step 5: docs/usage.md**, `caracole get`: after "A nightly run that holds caracole's lock lets the lookup go
   first at its next pause": "Two lookups at once take turns with the lock, a request or a stage each, so both move and
-  each site still gets one request at a time; the hour's lookups are counted again after each turn."
+  each site still gets one request at a time; the hour's lookups are counted again after each turn." One caracole at
+  a time: "Holding the lock as a lookup, such a command lets nothing else go first in its own pauses" becomes: such a
+  command lets a lookup go first there (a yt-dlp pause, a YouTube sheet before its models, `fetch --song`'s pauses),
+  and gets the lock back once the lookups are done.
 
 - [ ] **Step 6: Commit**
 
@@ -729,7 +785,8 @@ git commit -m "feat(get): a lookup takes the lock in the lane and passes turns b
 
 - [ ] **Step 1: Write the failing tests**
 
-tests/test_commands_lock.py: `LANE` gains `("ug", f"--link={TAB_URL}", "--progress")`, `("lacuerda",
+tests/test_commands_lock.py: `TAB_URL = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"` beside
+its `VIDEO`, and `LANE` gains `("ug", f"--link={TAB_URL}", "--progress")`, `("lacuerda",
 "--search=calamaro flaca", "--progress")`, `("lacuerda", "--artist=andres-calamaro")` and `("harptabs",
 "--artist=Radiohead")`.
 
@@ -759,7 +816,9 @@ def test_a_lacuerda_artist_pages_good_run_is_its_own_clients(...):
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q tests/test_commands_lock.py -k lane tests/test_commands_ug.py -k "turn or good_run" tests/test_commands_lyrics.py -k "one_turn or good_run"`
+Run, one command a file: `nix develop -c pytest -q tests/test_commands_lock.py -k lane`,
+`nix develop -c pytest -q tests/test_commands_ug.py -k "turn or good_run"`,
+`nix develop -c pytest -q tests/test_commands_lyrics.py -k "one_turn or good_run"`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**: each of the four takes `exclusive(..., lane=True)` and records its good run by
@@ -783,11 +842,11 @@ Expected: PASS.
 - [ ] **Step 6: docs/usage.md**, One caracole at a time, rewritten where the lane changes it: lookups (`get`, `ug
   --link`, `lacuerda --search` and `--artist`, `harptabs --artist`) take turns with the lock, a request or a stage
   each, and while one runs or waits no other caracole takes the lock, not even between two turns
-  (`caracole.lock.lane` in the state folder); "Holding the lock as a lookup, such a command lets nothing else go first
-  in its own pauses" becomes: such a command lets a lookup go first there (a yt-dlp pause, a YouTube sheet before its
-  models, `fetch --song`'s pauses), and gets the lock back once the lookups are done; a lookup still waits for a sync,
-  an import, an index merge or a YouTube sheet's models (the owner's choice of 2026-11-18). AGENTS.md's "A lookup never
-  waits…" names the five commands.
+  (`caracole.lock.lane` in the state folder); a lookup still waits for a sync, an import, an index merge or a YouTube
+  sheet's models (the owner's choice of 2026-11-18). AGENTS.md's "A lookup never waits…" names the five commands, and
+  Lookups on the phone's "it records its own good run where its Python does: `Health.recordOk` after
+  `Health.answeredAny` of its run" says the computer's lane commands count their own client's answers since lane 6
+  (`PoliteClient.answered_any`), the phone, one job at a time, its run's.
 
 - [ ] **Step 7: Commit**
 
@@ -813,7 +872,8 @@ git commit -m "feat(lock): a pasted UG link, LaCuerda's search and an artist's p
   `JobQueue(runner, *, limit=LIMIT, keep=KEEP, max_lines=MAX_LINES, history=None, lane: int = 0, lane_waiting: int =
   LANE_WAITING)`; `JobQueue.lanes -> int`.
 
-- [ ] **Step 1: Write the failing tests** in tests/test_web_jobs.py
+- [ ] **Step 1: Write the failing tests** in tests/test_web_jobs.py, beside its `TAB_A` and `TAB_B`: `TAB = TAB_A`
+  and `VIDEO = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"`
 
 ```python
 def test_lookups_and_the_search_boxs_one_request_reads_are_the_lanes_and_the_rest_the_queues():
@@ -906,9 +966,10 @@ git commit -m "feat(serve): a lane beside the queue for lookups and the search b
 
 **Interfaces:**
 - Consumes: 6.7's `Job.lane`, `lanes`.
-- Produces: `JobQueue._next(lane: bool) -> Job | None` (the queue's worker: the first queued job outside the lane, only
-  while no lane job runs or waits; a lane worker: the first queued lane job whose `song_key_of` has no job running),
-  marking it running under the queue's lock; `CaracoleRunner` keeping a process a running command, `terminate` ending
+- Produces: `JobQueue._next(lane: bool = False) -> Job | None` (the queue's worker: the first queued job outside the
+  lane, only while no lane job runs or waits, with no lane today's; a lane worker: the first queued lane job whose
+  `song_key_of` has no job running), marking it running under the queue's lock; `_run(job)` and `_stopping` keep their
+  shape (test_conformance_queue.py:370-375 calls `queue._next()` and `queue._run(job)`, and sets `queue._stopping`); `CaracoleRunner` keeping a process a running command, `terminate` ending
   them all.
 
 - [ ] **Step 1: Write the failing tests** in tests/test_web_jobs.py, with a runner whose commands each wait for their
@@ -921,12 +982,13 @@ def test_a_lookup_asked_while_a_long_request_runs_starts_at_once_and_a_request_a
 
 def test_a_fourth_lookup_waits_for_a_slot_and_a_songs_second_job_for_its_first():
     # four lookups of four songs: three start, the fourth waits; one opened: the fourth starts
-    # a lookup of D with tab 1 runs; D with tab 2 is a job of its own, in the lane; a lookup of E asked after it starts
+    # a lookup of D with TAB_A runs; D with TAB_B is a job of its own, in the lane; a lookup of E asked after it starts
     # while D's second still waits; D's first opened and done: D's second runs
 
 def test_a_songs_own_job_keeps_its_order():
     # a removal of Muse - Uprising runs; Get it for it: a job in the queue, never the lane; it runs once the removal
-    # is done, after it (the runner's calls in that order), so its wanted.txt line brings the song back as new
+    # is done, after it (the runner's calls in that order); that its wanted.txt line then brings the song back as new
+    # is test_songs.py's test_a_wanted_line_brings_a_removed_song_back_as_new
 
 def test_cancel_takes_out_a_lookup_waiting_for_a_slot_never_one_that_runs():
     # three running, a fourth waiting: cancel(fourth) is cancelled; cancel(a running one) raises JobStarted
@@ -940,7 +1002,8 @@ def test_run_pending_runs_the_lane_before_the_queue():
 
 @pytest.mark.slow
 def test_the_runner_keeps_a_process_a_command_and_ends_them_all(tmp_path):
-    # python= a script that execs `sleep 30`; two commands from two threads; terminate(): both return -15 within 5 s
+    # python= a script that writes a marker of its own (tmp_path / f"started.{os.getpid()}") and then execs
+    # `sleep 30`; two commands from two threads; once both markers exist, terminate(): both return -15 within 5 s
 ```
 
 tests/test_commands_serve.py:
@@ -952,7 +1015,8 @@ def test_its_lookups_run_in_a_lane_of_their_own(tmp_path, started):
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q tests/test_web_jobs.py -k "lane or lookup_asked or fourth or own_order or stop or pending or runner_keeps" tests/test_commands_serve.py -k lane`
+Run: `nix develop -c pytest -q tests/test_web_jobs.py -k "lane or lookup_asked or fourth or own_job or slot or stop or pending or runner_keeps"`,
+then `nix develop -c pytest -q tests/test_commands_serve.py -k lane`
 Expected: FAIL (one worker: the lookup waits behind the add).
 
 - [ ] **Step 3: Implement**: `start()` starts the queue's worker and `lanes` lane workers (`caracole-lane-1`…), each
@@ -967,7 +1031,7 @@ Expected: FAIL (one worker: the lookup waits behind the add).
 
 - [ ] **Step 4: Run them to see them pass**
 
-Run: `nix develop -c pytest -q tests/test_web_jobs.py tests/test_commands_serve.py tests/test_web_history.py tests/test_requests_tab.py`
+Run: `nix develop -c pytest -q tests/test_web_jobs.py tests/test_commands_serve.py tests/test_web_history.py tests/test_requests_tab.py tests/test_conformance_queue.py`
 Expected: PASS.
 
 - [ ] **Step 5: Docs**: AGENTS.md, Jobs and requests: "every change runs as a `caracole` command queued in jobs.py":
@@ -976,7 +1040,8 @@ Expected: PASS.
   and up to `LANE` lookups beside it, which take turns with the lock. docs/usage.md, caracole serve's request lines: a
   lookup (Get it, Fetch, Fetch again, Fetch it now, a pasted UG link, LaCuerda's search, an artist's page) starts at
   once beside the request that runs, unless its song has a request in the queue; three at most run at once, a fourth
-  waits with its place and Cancel.
+  waits with its place and Cancel; and the "How it runs" paragraph's "The queue holds 20 requests and one per song":
+  the queue holds 20 requests and one per song, and the lookups' lane three running and ten waiting of its own.
 
 - [ ] **Step 6: Commit**
 
@@ -990,14 +1055,16 @@ git commit -m "feat(serve): the lane's lookups start at once, up to three beside
 
 **Files:**
 - Modify: `src/caracole/web/jobs_routes.py` (`_ahead` gives way to `jobs.ahead`), `src/caracole/web/feed.py` (a
-  queued request's place, in `feed`)
-- Modify: `tests/test_requests_tab.py`
+  queued request's place, in `feed`; its docstring's "Under **Now**, the request that runs": the requests that run,
+  oldest first, and those queued in each one's place)
+- Create: `tests/test_web_feed.py` (the lane's counts in /jobs.json's lines and the Journal; small helpers of its own,
+  nothing imported from lane 1's tests/test_requests_tab.py)
 - Modify: `docs/usage.md` (the Journal's Now: "the request that runs" becomes the requests that run, oldest first)
 
 **Interfaces:**
 - Consumes: 6.7's `ahead`, `Job.lane`.
 
-- [ ] **Step 1: Write the failing tests** in tests/test_requests_tab.py
+- [ ] **Step 1: Write the failing tests** in tests/test_web_feed.py
 
 ```python
 def test_a_lookup_waiting_for_a_slot_counts_the_lane_ahead_and_a_queued_request_the_lane_too():
@@ -1013,22 +1080,23 @@ def test_queued_requests_say_their_place_in_their_lane_and_every_running_one_is_
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `nix develop -c pytest -q tests/test_requests_tab.py -k "slot or their_lane"`
+Run: `nix develop -c pytest -q tests/test_web_feed.py`
 Expected: FAIL (every job before it counted; places counted across both).
 
 - [ ] **Step 3: Implement**: jobs_routes.py's two callers use `jobs.ahead(jobs, job)` and `_ahead` goes; feed.py's
-  queued place is the request's among the queued of its own place (`job.lane`), as now with no lane.
+  queued place is the request's among the queued of its own place (`job.lane`), as now with no lane; feed.py's
+  docstring as its Files line says.
 
 - [ ] **Step 4: Run them, the views' tests and the corpus to see no change**
 
-Run: `nix develop -c pytest -q tests/test_requests_tab.py tests/test_web_status.py tests/test_web_outcome.py && CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py && git status --porcelain tests/conformance`
-Expected: PASS, and no line from `git status` (the corpus doesn't move).
+Run: `nix develop -c pytest -q tests/test_web_feed.py tests/test_requests_tab.py tests/test_web_status.py tests/test_web_outcome.py && CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py && git status --porcelain tests/conformance`
+Expected: PASS (test_requests_tab.py unchanged), and no line from `git status` (the corpus doesn't move).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 nix develop -c pytest -q
-git add src/caracole/web/jobs_routes.py src/caracole/web/feed.py tests/test_requests_tab.py docs/usage.md
+git add src/caracole/web/jobs_routes.py src/caracole/web/feed.py tests/test_web_feed.py docs/usage.md
 git commit -m "feat(serve): a queued request counts what it waits for, a lookup its lane"
 ```
 
@@ -1040,8 +1108,8 @@ git commit -m "feat(serve): a queued request counts what it waits for, a lookup 
   (AGENTS.md or usage.md conflicts keep both sides' sentences, "Where the lanes meet" 4).
 
 - [ ] **Step 2: The whole suite**: `nix develop -c pytest -q`. Expected: PASS but for main's known failure the owner
-  left for later, test_ug_directory's thread race (flaky on main too: run that test again alone; it must fail no other
-  way).
+  left for later, test_ug_directory.py's `test_a_block_stops_every_worker_and_raises_once_what_came_before_is_stored`
+  failing `3 == 4` as on main (flaky: run it again alone); any other failure of it, or of any test, stops the merge.
 
 - [ ] **Step 3: The corpus, twice and checked**:
   `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py`, again, then
@@ -1051,9 +1119,10 @@ git commit -m "feat(serve): a queued request counts what it waits for, a lookup 
 
 - [ ] **Step 4: The phone**: `nix develop ./android -c gradle -p android test`. Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 5: The e2e, only if the corpus moved**:
-  `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`. Expected: PASS but for main's
-  known PhoneScenarioTest phase11 failure, left for later, failing as on main.
+- [ ] **Step 5: The e2e, whatever the corpus did** (it drives real `caracole serve` processes, whose queue 6.8
+  changed): `CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`. Expected: PASS but for
+  main's known PhoneScenarioTest phase11 failure, left for later, failing as on main ("its own version made again:
+  key=Bb&capo=0"), and nothing else.
 
 - [ ] **Step 6: `nix flake check`**. Expected: all checks pass.
 
