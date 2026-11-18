@@ -34,7 +34,7 @@
   //                    word, a tab, the title, the facts, the notes, the credit, the foot) and every control. The
   //                    sheet viewer passes it as it is, the harmonica tab's page with its own elements added.
   //
-  //   SHORT            the media query of a short screen, a phone on its side: (max-height: 500px).
+  //   SHORT            the media query of a short screen, a phone on its side: (max-height: 499.98px).
   //   autoFull({ handle, idle, changed })
   //                    the short screen's rule, written once for the pages: while SHORT matches, at start and as it
   //                    changes, html's data-full is "auto" (the page in full screen of itself, "on" being the reader's
@@ -140,7 +140,7 @@
     });
   };
 
-  const SHORT = "(max-height: 500px)";
+  const SHORT = "(max-height: 499.98px)";
   const autoFull = ({ handle, idle, changed }) => {
     const doc = document.documentElement, mq = matchMedia(SHORT);
     let slimmed = false;  // the reader ended it: no "auto" again until SHORT changes

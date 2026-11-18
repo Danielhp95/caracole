@@ -294,7 +294,19 @@ def test_escape_and_a_layer_opened_bring_them_back_too(tmp_path):
 
 
 @in_chromium
-def test_501_px_tall_is_no_short_screen(tmp_path):
-    with open_viewer(tmp_path, written(tmp_path, LONG), width=844, height=501, mobile=True) as b:
+@pytest.mark.parametrize("height, short", [(501, False), (500, False), (499, True)])
+def test_500_px_tall_is_no_short_screen_and_499_is(tmp_path, height, short):
+    with open_viewer(tmp_path, written(tmp_path, LONG), width=844, height=height, mobile=True) as b:
         time.sleep(0.3)
-        assert b.js(NOT_FULL) is True
+        assert b.js(AUTO) is short
+
+
+@in_chromium
+def test_a_hand_set_full_screen_is_left_alone_as_the_window_turns_short_and_back(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG), **PHONE) as b:
+        hide_controls(b)
+        for height in (390, 844):
+            b.send("Emulation.setDeviceMetricsOverride", deviceScaleFactor=0, mobile=True, width=844 if height == 390
+                   else 390, height=height)
+            time.sleep(0.3)
+            assert b.js(FULL) is True
