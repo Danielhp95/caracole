@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer.sheet import BAR, Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
+from caracole.viewer.sheet import BAR, Bars, Blank, ChordRow, Lyrics, Tab, Text, bars, parse_sheet, split_preamble
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 
@@ -50,6 +50,29 @@ def test_a_line_of_chords_alone_is_a_chord_row_with_its_marks():
 def test_a_bar_line_is_a_mark_that_bar_reads():
     assert [t for t in ("|", "||", "|:", ":|", ":||:", ":", "x2", "(x4)", "N.C.") if BAR.fullmatch(t)] == [
         "|", "||", "|:", ":|", ":||:"]
+
+
+def row(text):
+    return parse_sheet("{title: T}\n" + text + "\n").sections[0].lines[0]
+
+
+def test_a_line_of_chords_that_writes_bars_reads_as_bars_and_beats():
+    assert bars(row("[Am] [C] [*|] [G] [Em] [*|]")) == Bars((), (((0, 2), (1, 2)), ((2, 2), (3, 2))), ())
+    assert bars(row("[*|:] [Am] [*|] [*|] [E] [*:|] [*x2]")) == Bars((), (((0, 4),), (), ((1, 4),)), ("x2",))
+    assert bars(row("[*x2] [*|] [Am] [C] [G] [*|] [A] [B] [C] [D] [E]")) == Bars(
+        ("x2",), (((0, 2), (1, 1), (2, 1)), ((3, 1), (4, 1), (1, 1), (5, 1), (6, 1))), ())
+    assert bars(row("[Am] [*|] [*N.C.] [*|] [E]")) == Bars((), (((0, 4),), (("N.C.", 4),), ((1, 4),)), ())
+
+
+def test_a_line_with_no_bar_or_no_chord_has_no_bars():
+    assert bars(row("[G] [D] [*x2]")) is None
+    assert bars(row("[*|] [*N.C.] [*|]")) is None
+
+
+def test_a_bar_glued_to_a_chord_reads_as_bars_too():
+    # chordpro.py's overlap guard keeps a bar that touches a chord ("Am|C|"), which bars reads as any other
+    assert bars(row(to_chordpro("[ch]Am[/ch]|[ch]C[/ch]|", title="T", artist="A").splitlines()[2])) == Bars(
+        (), (((0, 4),), ((1, 4),)), ())
 
 
 def test_a_mark_in_a_sung_line_stays_a_mark():

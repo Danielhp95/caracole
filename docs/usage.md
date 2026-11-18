@@ -2973,6 +2973,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   after it, so the lyrics read without gaps. A chord never reaches past the
   edge of the screen: at the end of a row with less room left than the chord
   is wide, it goes on to the next row with its words.
+- **Bars**: an intro or a riff the tab writes in bars ("Am C | G Em |") is a
+  row of bar cells, each with its chords and a dot for each beat after a
+  chord's first. A bar has four beats, shared evenly. A line of chords
+  without bars is spaced evenly, as before. The PDF prints it as written.
 - **The tab's notes**: what a tab says before its first section or its first
   riff (the tabber's comments, a link, a chord legend) is shown small and
   muted, two lines of it; **More** opens the rest, and works without

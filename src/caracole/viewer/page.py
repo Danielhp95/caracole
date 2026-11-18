@@ -123,6 +123,8 @@ from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.viewer import hanzi, harmony_tables, harp, instruments, pinyin, winds
 from caracole.viewer.sheet import (
+    BEATS,
+    Bars,
     Blank,
     ChordRow,
     Line,
@@ -131,6 +133,7 @@ from caracole.viewer.sheet import (
     Sheet,
     Tab,
     Text,
+    bars,
     is_legend,
     parse_sheet,
     preamble_section,
@@ -857,9 +860,27 @@ def _mark_html(mark: str) -> str:
     return f'<i class="m">{escape(mark)}</i>'
 
 
+_BEAT = '<span class="beat" aria-hidden="true">·</span>'
+
+
+def _bars_html(found: Bars, names: list[str]) -> str:
+    """A line of chords alone that writes bars, as a row of bar cells (``sheet.bars``): the marks before its first
+    chord, a ``barcell`` for each bar, each item in it followed by a dot for each of its beats after its first (an
+    empty bar's four), then the marks after its last chord. One ``p.l``, as a line of chords is."""
+    def item(it: int | str) -> str:
+        return _chord_html(it, names) if isinstance(it, int) else _mark_html(it)
+
+    cells = ("".join(item(it) + _BEAT * (beats - 1) for it, beats in cell) if cell else _BEAT * BEATS
+             for cell in found.cells)
+    return ('<p class="l chords bars">' + "".join(_mark_html(m) for m in found.lead)
+            + "".join(f'<span class="barcell">{cell}</span>' for cell in cells)
+            + "".join(_mark_html(m) for m in found.tail) + "</p>")
+
+
 def _line_html(line, names: list[str]) -> str:
     """A line of the sheet as HTML: a chord legend's line (``sheet.is_legend``) is a ``legend``, whose chords
-    viewer.js leaves as written, whatever the version."""
+    viewer.js leaves as written, whatever the version. A line of chords alone that writes bars, and is no legend,
+    is a row of bar cells (``_bars_html``)."""
     legend = " legend" if is_legend(line, names) else ""
     if isinstance(line, Lyrics):
         out = []
@@ -872,6 +893,8 @@ def _line_html(line, names: list[str]) -> str:
             out += [f'<span class="w">{escape(w)}</span>' for w in words]
         return f'<p class="l{legend}">{"".join(out)}</p>'
     if isinstance(line, ChordRow):
+        if not legend and (found := bars(line)) is not None:
+            return _bars_html(found, names)
         items = [_chord_html(i, names) if isinstance(i, int) else _mark_html(i) for i in line.items]
         return f'<p class="l chords{legend}">{" ".join(items)}</p>'
     if isinstance(line, Text):

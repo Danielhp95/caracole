@@ -19,6 +19,7 @@ from helpers.browser import in_chromium
 from caracole.chordpro import to_chordpro
 from caracole.keys import SOURCES
 from caracole.viewer import build_viewer, viewer_csp
+from caracole.viewer.book import BookSong, build_songbook
 from caracole.viewer.voicings import load_voicings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -1096,3 +1097,33 @@ def test_the_address_keeps_a_swap(tmp_path):
         server.server_close()
     assert 'data-ready="1"' in dom
     assert chord_texts(dom)["0"] == "Gmaj7"  # a swap read from the address, without storage
+
+
+# --- a line of chords that writes bars -------------------------------------------------------------------------------
+
+BARS = ("{title: T}\n{artist: A}\n{comment: Intro}\n[Am] [C] [*|] [G] [*|] [*x2]\n"
+        "[G] [D]\n{comment: Verse}\n[Am]la [G]lo\n")
+
+
+@pytest.mark.parametrize("built", [
+    lambda: build_viewer(BARS), lambda: build_viewer(BARS, export=False),  # a sheet, a kept version's page
+    lambda: build_songbook("Campfire", [BookSong("T", "A", cho=BARS, id="aaaa")])])
+def test_a_line_that_writes_bars_is_a_row_of_bar_cells(built):
+    html = built()
+    chord = lambda i, name: f'<b class="c" data-c="{i}" tabindex="0" role="button">{name}</b>'  # noqa: E731
+    beat = '<span class="beat" aria-hidden="true">·</span>'
+    assert (f'<p class="l chords bars"><span class="barcell">{chord(0, "Am")}{beat}{chord(1, "C")}{beat}</span>'
+            f'<span class="barcell">{chord(2, "G")}{beat * 3}</span><i class="m">x2</i></p>') in html
+    assert f'<p class="l chords">{chord(2, "G")} {chord(3, "D")}</p>' in html  # no bars: as today
+
+
+def test_a_bar_line_is_still_a_line_of_the_song_for_the_pinyin_after_it():
+    html = build_viewer("{title: 月亮}\n{artist: A}\n{comment: Intro}\n[C] [*|] [G] [*|]\n{comment: Verse}\n"
+                        "[C]月亮代表[G]我的心\n")
+    lines = re.findall(r'<p class="l[ "]', sheet_of(html))
+    assert len(data_of(html)["pinyin"]) == len(lines) == 2 and data_of(html)["pinyin"][1]
+
+
+def test_a_legends_line_is_never_drawn_as_bars():
+    html = build_viewer("{title: T}\n{artist: A}\n[Am] [*x02210] [*|] [C] [*x32010]\n{comment: Verse}\n[Am]la\n")
+    assert '<p class="l chords legend">' in html and "barcell" not in sheet_of(html)

@@ -34,6 +34,7 @@
     "ignorecase": false
    }
   },
+  "BEATS": 4,
   "_ESCAPED_BACKSLASH": "\\u005c",
   "COMMENTS": [
    "c",

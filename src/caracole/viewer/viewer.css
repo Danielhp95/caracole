@@ -334,6 +334,17 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .l.chords .c { font-size: .92em; margin-right: .55em; }
 .m { color: var(--muted); font-style: italic; font-weight: 400; }
 .l.chords .m { font-size: .85em; }
+/* A line of chords that writes bars (page.py _bars_html): a row of bar cells, a bar line either side of each (two
+   cells side by side share theirs), each holding its chords and a muted dot for each beat after a chord's first. The
+   cells share the row's width, and the row wraps between two cells, never inside one; a repeat mark before the first
+   or after the last sits outside them. */
+.l.bars { display: flex; flex-wrap: wrap; align-items: baseline; }
+.barcell { display: inline-flex; flex: 1 0 auto; min-width: 4.5em; align-items: baseline; gap: .4em; padding: 0 .4em;
+  border-inline: 2px solid var(--border-strong); }
+.barcell + .barcell { margin-left: -2px; }
+.l.bars > .m { padding: 0 .4em; }
+.l.bars .c { margin-right: 0; }
+.beat { color: var(--muted); font-weight: 400; -webkit-user-select: none; user-select: none; }
 .tab { margin: .25em 0; padding: .55em .7em; overflow-x: auto; border-radius: 8px; background: var(--raised);
   font: .78em/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .gap { height: .65em; }

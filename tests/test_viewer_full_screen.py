@@ -167,7 +167,32 @@ def test_two_clicks_far_apart_or_from_the_keyboard_are_no_double_tap(tmp_path):
         assert b.js("caracoleLayers.MARGIN_SKIP") == (
             "a, button, input, select, textarea, summary, label, [role=button], [tabindex], .c, .s, .w, .y, .m, "
             "pre, h1, h2, h3, .artist, .facts, .versions, .sheet-ui, .bar, .pill, .handle, .necks, .strip, .tip, "
-            "details, .notice, .credit, .foot, .pager")
+            "details, .notice, .credit, .foot, .pager, .barcell, .beat")
+
+
+@in_chromium
+def test_a_double_tap_on_a_bar_cell_is_on_the_song_not_its_margins(tmp_path):
+    from test_viewer_lines import INTRO
+
+    with open_viewer(tmp_path, written(tmp_path, INTRO), **PHONE) as b:
+        gap = b.js("(() => { const cell = document.querySelectorAll('#sheet .barcell')[3]; "
+                   "const r = cell.lastElementChild.getBoundingClientRect(), box = cell.getBoundingClientRect(); "
+                   "return [(r.right + box.right) / 2, r.top + r.height / 2]; })()")
+        double_tap(b, *gap)  # in a cell, after its last beat, far from its chord
+        time.sleep(0.5)
+        assert b.js(NOT_FULL) is True
+        assert b.js("document.getElementById('card').hidden") is True  # nothing: no chord's card either
+        beat = b.js("(() => { const r = document.querySelector('#sheet .barcell .beat').getBoundingClientRect(); "
+                    "return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+        double_tap(b, *beat)  # between two beat dots: within a finger's reach of a chord, which may take it
+        time.sleep(0.5)
+        assert b.js(NOT_FULL) is True
+        b.press("Escape")  # its card, if the finger was the chord's
+        assert b.wait("document.getElementById('card').hidden")
+        row = b.js("(() => { const r = document.querySelector('#sheet .l.bars').getBoundingClientRect(); "
+                   "return r.top + r.height / 2; })()")
+        double_tap(b, 4, row)  # beside the row: the page's left padding
+        assert b.wait(FULL)
 
 
 @in_chromium

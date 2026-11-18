@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.viewer.shapes.Instruments
+import io.github.danielhp95.caracole.viewer.sheet.Bars
 import io.github.danielhp95.caracole.viewer.sheet.Blank
 import io.github.danielhp95.caracole.viewer.sheet.ChordRow
 import io.github.danielhp95.caracole.viewer.sheet.Item
@@ -168,9 +169,29 @@ internal object PageHtml {
         is Item.Mark -> markHtml(item.text)
     }
 
-    /** _line_html: a line of the sheet; a chord legend's line (sheet.is_legend) is a `legend`. */
+    private const val BEAT = "<span class=\"beat\" aria-hidden=\"true\">·</span>"
+
+    /** _bars_html: a line of chords alone that writes bars, as a row of bar cells (Sheets.bars): the marks before its
+     * first chord, a `barcell` for each bar, each item in it followed by a dot for each of its beats after its first
+     * (an empty bar's four), then the marks after its last chord. One `p.l`, as a line of chords is. */
+    fun barsHtml(bars: Bars, names: List<String>): String = buildString {
+        append("<p class=\"l chords bars\">")
+        bars.lead.forEach { append(markHtml(it)) }
+        for (cell in bars.cells) {
+            append("<span class=\"barcell\">")
+            if (cell.isEmpty()) append(BEAT.repeat(Sheets.BEATS))
+            for ((item, beats) in cell) append(itemHtml(item, names)).append(BEAT.repeat(beats - 1))
+            append("</span>")
+        }
+        bars.tail.forEach { append(markHtml(it)) }
+        append("</p>")
+    }
+
+    /** _line_html: a line of the sheet; a chord legend's line (sheet.is_legend) is a `legend`. A line of chords alone
+     * that writes bars, and is no legend, is a row of bar cells ([barsHtml]). */
     fun lineHtml(line: Line, names: List<String>): String {
         val legend = if (Sheets.isLegend(line, names)) " legend" else ""
+        if (line is ChordRow && legend.isEmpty()) Sheets.bars(line)?.let { return barsHtml(it, names) }
         return when (line) {
             is Lyrics -> {
                 val out = StringBuilder()

@@ -97,6 +97,7 @@ class ChordProTest {
     @Test fun aChordOnlyLineKeepsItsBars() {
         assertEquals(listOf("[Am] [C] [*|] [G] [Em] [*|]"), body("[ch]Am[/ch]    [ch]C[/ch]   | [ch]G[/ch]    [ch]Em[/ch]  |"))
         assertEquals(listOf("{comment: Intro}", "[*|] [G] [*||] [D] [*|]"), body("[Intro] | [ch]G[/ch] || [ch]D[/ch] |"))
+        assertEquals(listOf("[Am] [*|] [C] [*|]"), body("[ch]Am[/ch]|[ch]C[/ch]|"))  // glued: a chord's span ends where it begins
         assertEquals(listOf("[G]Hello [D]there my friend"), body("[ch]G[/ch]  |  [ch]D[/ch]\nHello there my friend"))
     }
 

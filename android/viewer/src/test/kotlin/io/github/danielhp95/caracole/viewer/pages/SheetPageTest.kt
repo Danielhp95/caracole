@@ -58,7 +58,8 @@ class SheetPageTest {
                 "role=\"button\">G</b><span class=\"y\">Jude </span></span><span class=\"w\">don&#x27;t</span>" +
                 "<span class=\"s\"><i class=\"m\">x2</i><span class=\"y\"></span></span></p>\n" +
                 "<div class=\"gap\"></div>\n" +
-                "<p class=\"l chords\"><b class=\"c\" data-c=\"0\" tabindex=\"0\" role=\"button\">G</b> <i class=\"m\">|</i></p>\n" +
+                "<p class=\"l chords bars\"><span class=\"barcell\"><b class=\"c\" data-c=\"0\" tabindex=\"0\" " +
+                "role=\"button\">G</b>" + "<span class=\"beat\" aria-hidden=\"true\">·</span>".repeat(3) + "</span></p>\n" +
                 "</section>\n",
             SheetPage.sectionHtml(section, listOf("G")),
         )

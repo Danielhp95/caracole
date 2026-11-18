@@ -1,8 +1,8 @@
 """The sheet viewer: ``sheet.html`` beside ``sheet.pdf``, a phone-friendly page for each sheet.
 
 - page.py builds the page (``build_viewer``) from the song's own ChordPro file;
-- sheet.py reads that file back; theory.py names chords and keys, changes modes
-  and finds alternatives; harmony.py, on top of it, tells what each chord does in its key
+- sheet.py reads that file back, and a line of chords' bars (``bars``); theory.py names chords and keys,
+  changes modes and finds alternatives; harmony.py, on top of it, tells what each chord does in its key
   (numerals, relations, progressions, scales); voicings.py holds the fingerings (chords-db, MIT);
   instruments.py, the instruments the viewer draws chords for (guitar, ukuleles, piano) and their shapes;
 - version.py applies a version of the page (its key, capo, mode, shapes and swaps) to the

@@ -46,6 +46,11 @@ data class Sheet(val title: String = "", val artist: String = "", val key: Strin
                  val auto: Boolean = false, val chords: List<String> = emptyList(),
                  val sections: List<Section> = emptyList(), val defines: List<String> = emptyList())
 
+/** sheet.Bars: a line of chords alone as the bars it writes ([Sheets.bars]): the marks before its first chord
+ * ([lead]), each bar's items with their beats ([cells]: a chord or a mark, and how many of [Sheets.BEATS] it holds), and
+ * the marks after its last chord ([tail]). */
+data class Bars(val lead: List<String>, val cells: List<List<Pair<Item, Int>>>, val tail: List<String>)
+
 /** sheet.Preamble: what [Sheets.splitPreamble] finds before a sheet's first section. [tabs] is always empty: the
  * rule ends the preamble at the first tab. [end] is the index of the first body line (0 for none). */
 data class Preamble(val notes: List<String>, val legend: List<Pair<Chord, Position>>, val tabs: List<Pair<Int, Int>>,
@@ -72,6 +77,10 @@ object Sheets {
     private val ESCAPED_BACKSLASH by lazy { S.text("_ESCAPED_BACKSLASH") }
     private val STANDARD by lazy { S.list("_STANDARD").toSet() }
     private val AUTO_MARKER by lazy { S.text("AUTO_MARKER") }
+    private val BAR by lazy { S.pattern("BAR") }
+
+    /** sheet.BEATS: a bar's beats, which its chords and marks share ([bars]). */
+    val BEATS: Int by lazy { S.int("BEATS") }
 
     /** sheet.COMMENTS: the directives that name a section. */
     val COMMENTS: Set<String> by lazy { java.util.Collections.unmodifiableSet(LinkedHashSet(S.list("COMMENTS"))) }
@@ -183,6 +192,32 @@ object Sheets {
         }
         if (parts.all { Str.blank(it.second) }) return ChordRow(parts.mapNotNull { it.first })
         return Lyrics(parts.toList())
+    }
+
+    private fun isBar(item: Item): Boolean = item is Item.Mark && PyRe.fullmatch(BAR, item.text) != null
+
+    /**
+     * bars: a line of chords alone as the bars it writes, or null unless it holds a chord and a bar line (sheet.BAR).
+     * The marks before its first chord are its lead, and those after its last its tail, its bar lines there dropped.
+     * From the first chord to the last, the items split at each bar line, and each piece is a bar (a cell); a piece
+     * with nothing in it, between two bar lines, is an empty bar. In a bar its chords and marks share [BEATS], evenly
+     * (the first ones one more where they don't divide it), or one beat each where there are more of them. A chord
+     * legend's line ([isLegend]) is never drawn as bars.
+     */
+    fun bars(line: ChordRow): Bars? {
+        val items = line.items
+        val first = items.indexOfFirst { it is Item.Chord }
+        if (first < 0 || items.none(::isBar)) return null
+        val last = items.indexOfLast { it is Item.Chord }
+        fun marks(part: List<Item>): List<String> = part.filter { it is Item.Mark && !isBar(it) }.map { (it as Item.Mark).text }
+        val pieces = arrayListOf(ArrayList<Item>())
+        for (item in items.subList(first, last + 1)) {
+            if (isBar(item)) pieces += ArrayList<Item>() else pieces.last() += item
+        }
+        fun beats(n: Int): List<Int> =
+            if (n <= BEATS) List(n) { i -> BEATS / n + (if (i < BEATS % n) 1 else 0) } else List(n) { 1 }
+        val cells = pieces.map { piece -> piece.zip(beats(piece.size)) }
+        return Bars(marks(items.subList(0, first)), cells, marks(items.subList(last + 1, items.size)))
     }
 
     // --- the preamble ----------------------------------------------------------------------------------------------
