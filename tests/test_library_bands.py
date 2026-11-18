@@ -193,3 +193,65 @@ def test_long_and_chinese_names_are_cut_short_never_wrapped_into_the_buttons(con
             assert line["by"] is None, (title, line)
     assert lines["Under the Bridge"]["by"]["cut"], lines["Under the Bridge"]
 
+
+
+# The laptop's line, one row: the title, its artist, the play tiles, the key, the chevron (the owner's ask, 2026-11-18).
+ORDER = """(() => {
+  const box = (n) => n && n.getBoundingClientRect();
+  return [...document.querySelectorAll('#list article.line')].map((line) => {
+    const h3 = line.querySelector('h3'), by = line.querySelector('.line-by'), plays = line.querySelector('.line-plays > .play'),
+      key = line.querySelector('.line-key'), more = line.querySelector('.line-more'), box0 = box(line), p = line.querySelector('.pick');
+    const l = (n) => (n && n.checkVisibility() ? box(n).left : null);
+    return { title: h3.textContent, h3: [box(h3).right, box(h3).top, box(h3).bottom], by: by && [box(by).left, box(by).right],
+      plays: l(plays), key: l(key), more: l(more), pick: l(p), line: [box0.top, box0.bottom, box0.right],
+      band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth }; }); })()"""
+LONG_TITLE = "A very long song title that goes on and on and on past any reasonable width of a laptop's column. " * 3
+LONG_TITLE = LONG_TITLE.strip()
+
+
+def _on_one_row(lines, selecting=False):
+    for line in lines:
+        assert line["by"] and line["plays"] is not None, line
+        left, right = line["by"]
+        assert line["h3"][0] <= left + 0.5 and left < line["plays"], line  # title, artist, tiles
+        assert right <= line["plays"] + 0.5, line  # the name never under a tile
+        end = line["key"] if selecting else line["more"]  # while selecting the chevron is gone
+        assert end is None or line["plays"] < end, line
+        assert selecting or line["key"] is None or line["key"] < line["more"], line
+        assert line["line"][0] <= line["h3"][1] and line["h3"][2] <= line["line"][1], line  # one row
+        assert (line["key"] if selecting else line["more"]) is None or (
+            (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5), line  # nothing pushed off it
+        if selecting:
+            assert line["pick"] is not None and line["pick"] < line["h3"][0], line
+
+
+@in_chromium
+@pytest.mark.parametrize("size", ["1280,800", "1024,900"])
+@pytest.mark.parametrize("selecting", [False, True])
+def test_on_a_laptop_a_line_reads_title_artist_tiles_key_chevron(conn, cfg, tmp_path, size, selecting):
+    for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE)):
+        with_sheet(conn, cfg, artist, title)
+    if selecting:  # Select on, as + New songbook turns it on: the lines get their boxes a tick later
+        script = ("document.dispatchEvent(new CustomEvent('caracole:new-songbook'));\n"
+                  "setTimeout(() => document.body.setAttribute('data-noted', JSON.stringify(%s)), 200);\n" % ORDER)
+        html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+        path = write_library_page(cfg.library_dir, with_script(html, script))
+        lines = noted(dump_dom(path, tmp_path, "#sort=title", size=size), "data-noted")
+    else:
+        lines = drawn(conn, cfg, tmp_path, ORDER, size, fragment="#sort=title")
+    assert len(lines) == 3, lines
+    _on_one_row(lines, selecting)
+    assert next(line for line in lines if line["title"] == LONG_TITLE)["cut"], lines  # the title gives way, not the rest
+
+
+@in_chromium
+def test_a_folded_one_song_artist_reads_title_artist_tiles_and_a_band_keeps_title_then_tiles(conn, cfg, tmp_path):
+    with_sheet(conn, cfg, "Eagles", "Desperado")
+    with_sheet(conn, cfg, "Oasis", "Wonderwall")
+    with_sheet(conn, cfg, "Oasis", "Live Forever")
+    lines = drawn(conn, cfg, tmp_path, ORDER, "1280,800")
+    folded = [line for line in lines if line["title"] == "Desperado"]
+    _on_one_row(folded)
+    for line in lines:
+        if line["title"] != "Desperado":  # in a band: no artist on the line, the tiles right after the title
+            assert line["band"] and line["h3"][0] <= line["plays"], line

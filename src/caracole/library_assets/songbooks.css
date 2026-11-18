@@ -195,6 +195,9 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 @media (min-width: 720px) {
   .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title by status key"; }
+  .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
+    grid-template-columns: 44px minmax(0, max-content) minmax(0, max-content) auto minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-areas: "pick name by plays . status key"; }
   .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title status key"; }
 }

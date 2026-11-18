@@ -2652,8 +2652,9 @@ the artist's colour (cut short with an ellipsis, on one line) and, on its right,
 your count of their songs, small and muted. An artist of one song has no band:
 it folds into the song's line, their name a small overline in capitals, in the
 artist's colour, over the title (cut short on one line), the line about 64 px
-tall on a touch screen; from 720 px wide their name sits in the artist's column,
-as a line sorted by title shows it. So does an artist's group among a search's
+tall on a touch screen; from 720 px wide their name sits right after the title
+(then the buttons to play from, the key and the chevron), as a line sorted by
+title shows it. So does an artist's group among a search's
 results that holds one line and nothing else, never one with "+ N more" under it
 nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
 name, on its band or as an overline, which is 24 px.
@@ -2666,7 +2667,8 @@ the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
 as it was before. There is no view of one artist's songs alone, and no tag for
 it. Sorted by title, or by when the songs were added, the lines stand alone,
 each folded as a one-song artist's is: its artist's name a small overline over
-the title on a phone, in its own column from 720 px wide (and a click on it
+the title on a phone, right after the title from 720 px wide, before the
+buttons to play from (and a click on it
 does the same as one on the name over a band).
 `#by=` in the address, an artist's name as a sheet viewer's artist line links
 to it (`index.html#by=Soda%20Stereo`), does what pressing their name does, and

@@ -220,6 +220,21 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
   letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 100%; }
 @media (pointer: coarse) { section.artist.folded .line-by, section.flat .line-by { min-height: 24px; } }
+/* From 720 px, a line that names its artist on it reads on one row: the title, their name, the play tiles, then (past a
+   gap that takes what is left) the status, the action, the key and the chevron. The title's box and the line's meta
+   dissolve into the line's grid so that the name and the tiles are columns of it; the title and the name give way
+   (an ellipsis) before the tiles, which wrap before they overlap anything. A site's line (.hit, .miss) is as before. */
+@media (min-width: 720px) {
+  section.artist.folded .line:not(.hit):not(.miss),
+  section.flat .line:not(.hit):not(.miss) { grid-template-columns: minmax(0, max-content) minmax(0, max-content) auto
+    minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-areas: "name by plays . status act key more"; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title,
+  section.flat .line:not(.hit):not(.miss) > .line-title { display: contents; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title > h3,
+  section.flat .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: name; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays; max-width: none; }
+}
 @media (max-width: 719px) {
   section.artist.folded .line,
   section.flat .line { grid-template-columns: minmax(calc(4rem - 6px), 1fr) auto auto auto var(--line-more);
