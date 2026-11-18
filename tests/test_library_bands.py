@@ -14,9 +14,11 @@ from helpers.browser import in_chromium
 from helpers.targets import FOLDED_LINE, TOKEN_PROBE, noted, noting
 from test_library_page import dump_dom, put, with_script
 
+from caracole.library import keep_file
 from caracole.library_page import WebControls, build_library_page, write_library_page
 from caracole.overrides import Overrides
 from caracole.songs import update_song
+from caracole.versions import upsert_version
 
 from conftest import add_song
 
@@ -202,53 +204,78 @@ ORDER = """(() => {
     const h3 = line.querySelector('h3'), by = line.querySelector('.line-by'), plays = line.querySelector('.line-plays > .play'),
       key = line.querySelector('.line-key'), more = line.querySelector('.line-more'), box0 = box(line), p = line.querySelector('.pick');
     const l = (n) => (n && n.checkVisibility() ? box(n).left : null);
+    const name = by && (by.querySelector('.artist-name') || by);
     return { title: h3.textContent, h3: [box(h3).right, box(h3).top, box(h3).bottom], by: by && [box(by).left, box(by).right],
       plays: l(plays), key: l(key), more: l(more), pick: l(p), line: [box0.top, box0.bottom, box0.right],
-      band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth }; }); })()"""
-LONG_TITLE = "A very long song title that goes on and on and on past any reasonable width of a laptop's column. " * 3
-LONG_TITLE = LONG_TITLE.strip()
+      band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth,
+      byCut: name && name.scrollWidth > name.clientWidth + 1, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) };
+  }); })()"""
+LONG_TITLE = ("A very long song title that goes on and on and on past any reasonable width of a laptop's column. " * 3).strip()
+RED_HOT = "Red Hot Chili Peppers"
+
+
+def keyed(conn, cfg, artist, title):
+    """A song of yours with a sheet that names its key, so that its line shows a key beside its buttons."""
+    song = add_song(conn, artist, title, added_at="2026-10-19T00:00:00Z")
+    put(cfg, song, "sheet.html", "sheet.pdf")
+    tab = f"{song.id}0001"
+    ug = upsert_version(conn, provider="ug", tab_id=tab, song_id=song.id, slot="sheet", kind="chords", rating=4.5, votes=12,
+                        version=1, label=None, url=f"https://tabs.ultimate-guitar.com/tab/{tab}", raw={"tonality_name": "Am"},
+                        now="2026-10-19T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=ug, name="sheet.json", data=json.dumps({"content": "[Am]la"}).encode(),
+              rank=1)
+    keep_file(conn, cfg.library_dir, song=song, version_id=ug, name="sheet.txt", data=b"[Am]la", rank=1)
+    update_song(conn, song.id, status="found")
+    return song
 
 
 def _on_one_row(lines, selecting=False):
     for line in lines:
-        assert line["by"] and line["plays"] is not None, line
+        assert line["by"] and line["plays"] is not None and line["key"] is not None, line  # a key shows
         left, right = line["by"]
         assert line["h3"][0] <= left + 0.5 and left < line["plays"], line  # title, artist, tiles
         assert right <= line["plays"] + 0.5, line  # the name never under a tile
-        end = line["key"] if selecting else line["more"]  # while selecting the chevron is gone
-        assert end is None or line["plays"] < end, line
-        assert selecting or line["key"] is None or line["key"] < line["more"], line
+        assert line["plays"] < line["key"], line
+        assert selecting or line["key"] < line["more"], line  # the chevron is gone while selecting
         assert line["line"][0] <= line["h3"][1] and line["h3"][2] <= line["line"][1], line  # one row
-        assert (line["key"] if selecting else line["more"]) is None or (
-            (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5), line  # nothing pushed off it
+        assert (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5, line  # nothing pushed off it
+        assert right - left <= 16 * line["rem"] + 1, line  # the artist's cap
         if selecting:
-            assert line["pick"] is not None and line["pick"] < line["h3"][0], line
+            assert line["pick"] is not None and line["pick"] < line["h3"][0], line  # the box first
+
+
+def _laid(conn, cfg, tmp_path, size, selecting):
+    if selecting:  # Select on, as + New songbook turns it on: the lines get their boxes a tick later
+        script = ("document.dispatchEvent(new CustomEvent('caracole:new-songbook'));\n"
+                  "setTimeout(() => document.body.setAttribute('data-noted', JSON.stringify(%s)), 200);\n" % ORDER)
+        html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+        path = write_library_page(cfg.library_dir, with_script(html, script))
+        return noted(dump_dom(path, tmp_path, "#sort=title", size=size), "data-noted")
+    return drawn(conn, cfg, tmp_path, ORDER, size, fragment="#sort=title")
 
 
 @in_chromium
 @pytest.mark.parametrize("size", ["1280,800", "1024,900"])
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_a_line_reads_title_artist_tiles_key_chevron(conn, cfg, tmp_path, size, selecting):
-    for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE)):
-        with_sheet(conn, cfg, artist, title)
-    if selecting:  # Select on, as + New songbook turns it on: the lines get their boxes a tick later
-        script = ("document.dispatchEvent(new CustomEvent('caracole:new-songbook'));\n"
-                  "setTimeout(() => document.body.setAttribute('data-noted', JSON.stringify(%s)), 200);\n" % ORDER)
-        html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
-        path = write_library_page(cfg.library_dir, with_script(html, script))
-        lines = noted(dump_dom(path, tmp_path, "#sort=title", size=size), "data-noted")
-    else:
-        lines = drawn(conn, cfg, tmp_path, ORDER, size, fragment="#sort=title")
-    assert len(lines) == 3, lines
+    for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE),
+                          (RED_HOT, LONG_TITLE + " (live)")):
+        keyed(conn, cfg, artist, title)
+    lines = _laid(conn, cfg, tmp_path, size, selecting)
+    assert len(lines) == 4, lines
     _on_one_row(lines, selecting)
-    assert next(line for line in lines if line["title"] == LONG_TITLE)["cut"], lines  # the title gives way, not the rest
+    for line in lines:
+        if line["title"].startswith(LONG_TITLE):  # the title gives way first, the artist keeps their whole name
+            assert line["cut"] and not line["byCut"], line
+        else:
+            assert not line["cut"] and not line["byCut"], line
 
 
 @in_chromium
 def test_a_folded_one_song_artist_reads_title_artist_tiles_and_a_band_keeps_title_then_tiles(conn, cfg, tmp_path):
-    with_sheet(conn, cfg, "Eagles", "Desperado")
-    with_sheet(conn, cfg, "Oasis", "Wonderwall")
-    with_sheet(conn, cfg, "Oasis", "Live Forever")
+    keyed(conn, cfg, "Eagles", "Desperado")
+    keyed(conn, cfg, "Oasis", "Wonderwall")
+    keyed(conn, cfg, "Oasis", "Live Forever")
     lines = drawn(conn, cfg, tmp_path, ORDER, "1280,800")
     folded = [line for line in lines if line["title"] == "Desperado"]
     _on_one_row(folded)
